@@ -76,20 +76,20 @@ impl Default for Config {
     }
 }
 
-impl Into<InnerConfig> for Config {
-    fn into(self) -> InnerConfig {
+impl From<Config> for InnerConfig {
+    fn from(x: Config) -> Self {
         InnerConfig {
-            cmd: self.cmd,
-            config_file: self.config_file,
-            log_level: self.log_level,
-            log_dir: self.log_dir,
-            admin_api_address: self.admin_api_address,
-            admin_tls_server_cert: self.admin_tls_server_cert,
-            admin_tls_server_key: self.admin_tls_server_key,
-            grpc_api_address: self.grpc_api_address,
-            grpc_tls_server_cert: self.grpc_tls_server_cert,
-            grpc_tls_server_key: self.grpc_tls_server_key,
-            raft_config: self.raft_config.into(),
+            cmd: x.cmd,
+            config_file: x.config_file,
+            log_level: x.log_level,
+            log_dir: x.log_dir,
+            admin_api_address: x.admin_api_address,
+            admin_tls_server_cert: x.admin_tls_server_cert,
+            admin_tls_server_key: x.admin_tls_server_key,
+            grpc_api_address: x.grpc_api_address,
+            grpc_tls_server_cert: x.grpc_tls_server_cert,
+            grpc_tls_server_key: x.grpc_tls_server_key,
+            raft_config: x.raft_config.into(),
         }
     }
 }
@@ -340,23 +340,23 @@ impl Default for RaftConfig {
     }
 }
 
-impl Into<InnerRaftConfig> for RaftConfig {
-    fn into(self) -> InnerRaftConfig {
+impl From<RaftConfig> for InnerRaftConfig {
+    fn from(x: RaftConfig) -> InnerRaftConfig {
         InnerRaftConfig {
-            config_id: self.config_id,
-            raft_listen_host: self.raft_listen_host,
-            raft_advertise_host: self.raft_advertise_host,
-            raft_api_port: self.raft_api_port,
-            raft_dir: self.raft_dir,
-            no_sync: self.no_sync,
-            snapshot_logs_since_last: self.snapshot_logs_since_last,
-            heartbeat_interval: self.heartbeat_interval,
-            install_snapshot_timeout: self.install_snapshot_timeout,
-            max_applied_log_to_keep: self.max_applied_log_to_keep,
-            single: self.single,
-            join: self.join,
-            id: self.id,
-            sled_tree_prefix: self.sled_tree_prefix,
+            config_id: x.config_id,
+            raft_listen_host: x.raft_listen_host,
+            raft_advertise_host: x.raft_advertise_host,
+            raft_api_port: x.raft_api_port,
+            raft_dir: x.raft_dir,
+            no_sync: x.no_sync,
+            snapshot_logs_since_last: x.snapshot_logs_since_last,
+            heartbeat_interval: x.heartbeat_interval,
+            install_snapshot_timeout: x.install_snapshot_timeout,
+            max_applied_log_to_keep: x.max_applied_log_to_keep,
+            single: x.single,
+            join: x.join,
+            id: x.id,
+            sled_tree_prefix: x.sled_tree_prefix,
         }
     }
 }

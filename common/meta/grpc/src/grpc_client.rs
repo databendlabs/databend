@@ -226,10 +226,7 @@ impl MetaGrpcClient {
     ) -> Result<Arc<ClientHandle>> {
         Self::endpoints_non_empty(&endpoints)?;
 
-        let mgr = MetaChannelManager {
-            timeout,
-            conf: conf.clone(),
-        };
+        let mgr = MetaChannelManager { timeout, conf };
 
         let rt = Runtime::with_worker_threads(1, Some("meta-client-rt".to_string()))
             .map_err(|e| e.add_message_back("when creating meta-client"))?;

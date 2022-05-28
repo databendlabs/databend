@@ -39,13 +39,9 @@ pub static METASRV_SEMVER: Lazy<Version> = Lazy::new(|| {
     let build_semver = option_env!("VERGEN_GIT_SEMVER");
     let semver = build_semver.expect("VERGEN_GIT_SEMVER can not be None");
 
-    let semver = if semver.starts_with("v") {
-        &semver[1..]
-    } else {
-        semver
-    };
+    let semver = semver.strip_prefix('v').unwrap_or(semver);
 
-    Version::parse(semver).expect(&format!("Invalid semver: {:?}", semver))
+    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
 });
 
 /// Oldest compatible nightly meta-client version
