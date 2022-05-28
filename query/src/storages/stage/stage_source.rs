@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::init_s3_operator;
 use common_io::prelude::StorageParams;
+use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
@@ -32,6 +33,7 @@ use common_streams::NDJsonSourceBuilder;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
 use futures::io::BufReader;
+use opendal::io_util::CompressAlgorithm;
 use opendal::io_util::SeekableReader;
 use opendal::BytesReader;
 use opendal::Operator;
@@ -190,20 +192,40 @@ impl StageSource {
         let path = file_name;
         let object = op.object(&path);
 
+        // TODO(xuanwo): we need to unify with MultipartFormat.
+        let compress_algo = match stage.file_format_options.compression {
+            StageFileCompression::Auto => todo!("we will support auto in the future"),
+            StageFileCompression::Gzip => Some(CompressAlgorithm::Gzip),
+            StageFileCompression::Bz2 => Some(CompressAlgorithm::Bz2),
+            StageFileCompression::Brotli => Some(CompressAlgorithm::Brotli),
+            StageFileCompression::Zstd => Some(CompressAlgorithm::Zstd),
+            StageFileCompression::Deflate => Some(CompressAlgorithm::Deflate),
+            StageFileCompression::RawDeflate => todo!("we will support raw deflate in the future"),
+            StageFileCompression::Lzo => todo!("we will support lzo in the future"),
+            StageFileCompression::Snappy => todo!("we will support snappy in the future"),
+            StageFileCompression::None => None,
+        };
+
         // Get the format(CSV, Parquet) source stream.
         let source = match &file_format {
             StageFileFormatType::Csv => Ok(Self::csv_source(
                 ctx.clone(),
                 self.schema.clone(),
                 stage,
-                Box::new(object.reader().await?),
+                match compress_algo {
+                    None => Box::new(object.reader().await?),
+                    Some(algo) => Box::new(object.decompress_reader_with(algo).await?),
+                },
             )
             .await?),
             StageFileFormatType::Json => Ok(Self::json_source(
                 ctx.clone(),
                 self.schema.clone(),
                 stage,
-                Box::new(object.reader().await?),
+                match compress_algo {
+                    None => Box::new(object.reader().await?),
+                    Some(algo) => Box::new(object.decompress_reader_with(algo).await?),
+                },
             )
             .await?),
             StageFileFormatType::Parquet => Ok(Self::parquet_source(

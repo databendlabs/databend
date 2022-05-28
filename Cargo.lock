@@ -208,6 +208,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-compression"
+version = "0.3.14"
+source = "git+https://github.com/Xuanwo/async-compression?rev=b439493#b439493d1a0b4698e7600d07e15b72e32fe84da3"
+dependencies = [
+ "brotli",
+ "bzip2",
+ "flate2",
+ "futures-core",
+ "futures-io",
+ "memchr",
+ "pin-project-lite",
+ "xz2",
+ "zstd",
+ "zstd-safe",
+]
+
+[[package]]
 name = "async-recursion"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -556,6 +573,27 @@ name = "bytes"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
+
+[[package]]
+name = "bzip2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6afcd980b5f3a45017c57e57a2fcccbb351cc43a356ce117ef760ef8052b89b0"
+dependencies = [
+ "bzip2-sys",
+ "libc",
+]
+
+[[package]]
+name = "bzip2-sys"
+version = "0.1.11+1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "736a955f3fa7875102d57c82b8cac37ec45224a07fd32d58f9f7a186b6cd4cdc"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+]
 
 [[package]]
 name = "cache-padded"
@@ -1003,6 +1041,7 @@ dependencies = [
  "hex",
  "itertools",
  "md5",
+ "memchr",
  "naive-cityhash",
  "num",
  "num-format",
@@ -3022,7 +3061,7 @@ dependencies = [
  "lazy_static",
  "log",
  "num-format",
- "quick-xml",
+ "quick-xml 0.22.0",
  "rgb",
  "str_stack",
 ]
@@ -3458,6 +3497,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lzma-sys"
+version = "0.1.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdb4b7c3eddad11d3af9e86c487607d2d2442d185d848575365c4856ba96d619"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+]
+
+[[package]]
 name = "mach"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3501,9 +3551,9 @@ checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
 
 [[package]]
 name = "memchr"
-version = "2.4.1"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
+checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
 name = "memmap"
@@ -4094,11 +4144,10 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 [[package]]
 name = "opendal"
 version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90635073f63bce2384a5bac757c5f4e29c9820a3bbe857a860a6a21fc2452570"
 dependencies = [
  "anyhow",
  "async-compat",
+ "async-compression 0.3.14",
  "async-trait",
  "backon",
  "base64 0.13.0",
@@ -4115,7 +4164,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.0",
  "pin-project",
- "quick-xml",
+ "quick-xml 0.23.0",
  "reqsign",
  "reqwest",
  "roxmltree",
@@ -4645,7 +4694,7 @@ version = "1.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0636cb735205476927fa4c0e1b2a308ea265a20880cbd80ae92d57072482604"
 dependencies = [
- "async-compression",
+ "async-compression 0.3.12",
  "async-trait",
  "bytes 1.1.0",
  "futures-util",
@@ -5049,6 +5098,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8533f14c8382aaad0d592c812ac3b826162128b65662331e1127b45c3d18536b"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9279fbdacaad3baf559d8cabe0acc3d06e30ea14931af31af79578ac0946decc"
+dependencies = [
+ "memchr",
  "serde",
 ]
 
@@ -5246,9 +5304,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.0.4"
+version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4487e3f9afe35fb836529d233cdd560ddc1b399a92310c0de6c76d62c2e4b5f"
+checksum = "34d61ab6431ae1ef7cc7d305830b5655bc0ff95f0b5980f415c6cb39d6af4065"
 dependencies = [
  "anyhow",
  "backon",
@@ -5264,7 +5322,7 @@ dependencies = [
  "log",
  "once_cell",
  "percent-encoding",
- "quick-xml",
+ "quick-xml 0.23.0",
  "reqwest",
  "rust-ini",
  "serde",
@@ -7267,6 +7325,15 @@ name = "xmlparser"
 version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "114ba2b24d2167ef6d67d7d04c8cc86522b87f490025f39f0303b7db5bf5e3d8"
+
+[[package]]
+name = "xz2"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c179869f34fc7c01830d3ce7ea2086bc3a07e0d35289b667d0a8bf910258926c"
+dependencies = [
+ "lzma-sys",
+]
 
 [[package]]
 name = "yaml-rust"

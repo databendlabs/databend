@@ -43,7 +43,7 @@ impl Default for FormatSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Compression {
     None,
     Auto,

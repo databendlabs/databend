@@ -21,12 +21,16 @@ use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_io::prelude::Compression;
 use common_io::prelude::FormatSettings;
 use csv_async::AsyncReader;
 use csv_async::AsyncReaderBuilder;
 use csv_async::Terminator;
 use futures::stream::StreamExt;
 use futures::AsyncRead;
+use opendal::io_util::CompressAlgorithm;
+use opendal::io_util::DecompressDecoder;
+use opendal::io_util::DecompressReader;
 
 use crate::Source;
 

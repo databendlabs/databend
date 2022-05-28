@@ -90,6 +90,26 @@ impl Default for StageFileCompression {
     }
 }
 
+impl FromStr for StageFileCompression {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        match s.to_ascii_lowercase().as_str() {
+            "auto" => Ok(StageFileCompression::Auto),
+            "gzip" => Ok(StageFileCompression::Gzip),
+            "bz2" => Ok(StageFileCompression::Bz2),
+            "brotli" => Ok(StageFileCompression::Brotli),
+            "zstd" => Ok(StageFileCompression::Zstd),
+            "deflate" => Ok(StageFileCompression::Deflate),
+            "rawdeflate" => Ok(StageFileCompression::RawDeflate),
+            "lzo" => Ok(StageFileCompression::Lzo),
+            "snappy" => Ok(StageFileCompression::Snappy),
+            "none" => Ok(StageFileCompression::None),
+            _ => Err("Unknown file compression type, must one of { auto | gzip | bz2 | brotli | zstd | deflate | rawdeflate | lzo | snappy | none }"
+                         .to_string()),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageFileFormatType {
     Csv,
