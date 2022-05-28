@@ -32,6 +32,7 @@ use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSession;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
+use databend_query::sessions::SessionManager;
 use databend_query::users::auth::jwt::CustomClaims;
 use databend_query::users::auth::jwt::EnsureUser;
 use headers::Header;
@@ -1129,6 +1130,28 @@ async fn test_download_killed() -> Result<()> {
         resp
     );
     assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{:?}", resp);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_no_download_in_management_mode() -> Result<()> {
+    let conf = crate::tests::ConfigBuilder::create()
+        .with_management_mode()
+        .config();
+
+    let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+    let sql = "select 1";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+
+    let mut resp = download(&ep, &result.id).await;
+    let exp = "not exists";
+    assert!(resp.take_body().into_string().await.unwrap().contains(exp));
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{:?}", result);
 
     Ok(())
 }
