@@ -163,10 +163,9 @@ impl HttpQuery {
                 session
             }
             HttpSession::Old { id } => {
-                let session = http_query_manager
-                    .get_session(id)
-                    .await
-                    .ok_or_else(|| ErrorCode::UnknownSession(id))?;
+                let session = http_query_manager.get_session(id).await.ok_or_else(|| {
+                    ErrorCode::UnknownSession(format!("unknown session-id {}, maybe expired", id))
+                })?;
                 if session.expire_state() == ExpiringState::InUse {
                     return Err(ErrorCode::BadArguments(
                         "last query on the session not finished",
