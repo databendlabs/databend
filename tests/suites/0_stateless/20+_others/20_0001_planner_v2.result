@@ -290,6 +290,7 @@ abc
 ===Array Literal===
 [1, 2, 3]
 []
+[[1, 2, 3], [1, 2, 3]]
 ====Correlated Subquery====
 0
 1

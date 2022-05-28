@@ -164,7 +164,7 @@ fn test_pop_data_value() -> Result<()> {
         },
         Test {
             name: "test null column",
-            data_type: NullType::arc(),
+            data_type: NullType::new_impl(),
             column: NullColumn::new(3).arc(),
             expected_err: "Code: 1018, displayText = Null column is empty when pop data value.",
         },

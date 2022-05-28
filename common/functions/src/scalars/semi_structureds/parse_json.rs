@@ -48,7 +48,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> ParseJsonFunctionImpl<SUPPRESS_PARSE_ERRO
         }
 
         let result_type = if args[0].data_type_id() == TypeID::Null {
-            NullType::arc()
+            NullType::new_impl()
         } else if args[0].is_nullable() || SUPPRESS_PARSE_ERROR {
             NullableType::new_impl(VariantType::new_impl())
         } else {
@@ -89,7 +89,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
     ) -> Result<ColumnRef> {
         let data_type = columns[0].field().data_type();
         if data_type.data_type_id() == TypeID::Null {
-            return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
+            return NullType::new_impl().create_constant_column(&DataValue::Null, input_rows);
         }
 
         // TODO(veeupup): check if we can use default format_settings

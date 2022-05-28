@@ -235,6 +235,7 @@ select trim(' abc ');
 select '===Array Literal===';
 select [1, 2, 3];
 select [];
+select [[1, 2, 3],[1, 2, 3]];
 
 select '====Correlated Subquery====';
 select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
