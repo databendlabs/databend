@@ -63,8 +63,9 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
 
         let (rest, mut expr_elements) = rule! { #higher_prec_expr_element+ }(i)?;
 
-        // Replace binary Plus and Minus to the unary one, if it's following another op or it's the first element.
         for (prev, curr) in (-1..(expr_elements.len() as isize)).tuple_windows() {
+            // Replace binary Plus and Minus to the unary one, if it's following another op
+            // or it's the first element.
             if prev == -1
                 || matches!(
                     expr_elements[prev as usize].elem,
@@ -87,6 +88,38 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                         };
                     }
                     _ => {}
+                }
+            }
+
+            // Replace bracket map access to an array, if it's following a prefix or infix
+            // element or it's the first element.
+            if prev == -1
+                || matches!(
+                    PrattParser::<std::iter::Once<_>>::query(
+                        &mut ExprParser,
+                        &expr_elements[prev as usize]
+                    )
+                    .unwrap(),
+                    Affix::Prefix(_) | Affix::Infix(_, _)
+                )
+            {
+                let key = match &expr_elements[curr as usize].elem {
+                    ExprElement::MapAccess {
+                        accessor: MapAccessor::Bracket { key },
+                    } => Some(key),
+                    _ => None,
+                };
+                if let Some(key) = key {
+                    let span = expr_elements[curr as usize].span;
+                    expr_elements[curr as usize] = WithSpan {
+                        span,
+                        elem: ExprElement::Array {
+                            exprs: vec![Expr::Literal {
+                                span: span.0,
+                                lit: key.clone(),
+                            }],
+                        },
+                    };
                 }
             }
         }
@@ -782,8 +815,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let literal = map(literal, |lit| ExprElement::Literal { lit });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
     let array = map(
+        // Array that contains a single literal item will be parsed as a bracket map access,
+        // and then will be converted back to an array if the map access is not following
+        // a primary element or postfix element.
         rule! {
-            "[" ~ #comma_separated_list0(subexpr(0))? ~ ","? ~ ^"]"
+            "[" ~ #comma_separated_list0_allow_trailling(subexpr(0))? ~ ","? ~ ^"]"
         },
         |(_, opt_args, _, _)| {
             let exprs = opt_args.unwrap_or_default();

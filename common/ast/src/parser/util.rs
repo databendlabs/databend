@@ -163,8 +163,13 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
 pub fn comma_separated_list0<'a, T>(
     item: impl FnMut(Input<'a>) -> IResult<'a, T>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
-    // TODO: fork one
     separated_list0(match_text(","), item)
+}
+
+pub fn comma_separated_list0_allow_trailling<'a, T>(
+    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    nom::multi::separated_list0(match_text(","), item)
 }
 
 pub fn comma_separated_list1<'a, T>(

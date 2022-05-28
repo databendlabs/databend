@@ -115,6 +115,7 @@ pub enum TokenKind {
     QuotedString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
+    #[regex(r"0[xX][a-fA-F0-9]+")]
     LiteralHex,
 
     #[regex(r"[0-9]+")]
