@@ -907,7 +907,7 @@ impl<'a> TypeChecker<'a> {
                 data_type: ArrayType::new_impl(element_type.clone()),
             }
             .into(),
-            ArrayType::new_impl(element_type.clone()),
+            ArrayType::new_impl(element_type),
         ))
     }
 
