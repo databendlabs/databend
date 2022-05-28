@@ -83,7 +83,7 @@ copyOptions ::=
 ### Unloading into an Internal Stage
 
 ```sql
-//Create a table
+-- Create a table
 CREATE TABLE test_table (
      id INTEGER,
      name VARCHAR,
