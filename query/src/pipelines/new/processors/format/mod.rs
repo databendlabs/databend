@@ -11,15 +11,5 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-mod parser_call;
-mod parser_copy;
-mod parser_database;
-mod parser_optimize;
-mod parser_select_table_at;
-mod parser_show;
-mod parser_stage;
-mod parser_table;
-mod parser_udf;
-mod parser_use;
-mod parser_user;
+mod new_pipeline_display;
+mod new_pipeline_walker;

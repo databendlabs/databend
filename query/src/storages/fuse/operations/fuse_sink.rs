@@ -18,11 +18,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_arrow::parquet::FileMetaData;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;
@@ -63,10 +60,10 @@ pub struct FuseTableSink {
     ctx: Arc<QueryContext>,
     data_accessor: Operator,
     num_block_threshold: u64,
-    data_schema: DataSchemaRef,
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
     cluster_keys_index: Vec<usize>,
+    expression_executor: Option<ExpressionExecutor>,
 }
 
 impl FuseTableSink {
@@ -75,20 +72,20 @@ impl FuseTableSink {
         ctx: Arc<QueryContext>,
         num_block_threshold: usize,
         data_accessor: Operator,
-        data_schema: Arc<DataSchema>,
         meta_locations: TableMetaLocationGenerator,
         cluster_keys_index: Vec<usize>,
+        expression_executor: Option<ExpressionExecutor>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
             input,
-            data_schema,
             data_accessor,
             meta_locations,
             state: State::None,
             accumulator: Default::default(),
             num_block_threshold: num_block_threshold as u64,
             cluster_keys_index,
+            expression_executor,
         })))
     }
 }
@@ -142,23 +139,7 @@ impl Processor for FuseTableSink {
                 )?;
 
                 // Remove unused columns before serialize
-                let input_schema = data_block.schema().clone();
-                let block = if self.data_schema != input_schema {
-                    let exprs: Vec<Expression> = input_schema
-                        .fields()
-                        .iter()
-                        .map(|f| Expression::Column(f.name().to_owned()))
-                        .collect();
-
-                    let executor = ExpressionExecutor::try_create(
-                        self.ctx.clone(),
-                        "expression executor",
-                        input_schema,
-                        self.data_schema.clone(),
-                        exprs,
-                        true,
-                    )?;
-                    executor.validate()?;
+                let block = if let Some(executor) = &self.expression_executor {
                     executor.execute(&data_block)?
                 } else {
                     data_block

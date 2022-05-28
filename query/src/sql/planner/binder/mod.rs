@@ -18,7 +18,9 @@ pub use aggregate::AggregateInfo;
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
+use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use self::subquery::SubqueryRewriter;
@@ -26,6 +28,8 @@ use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::MetadataRef;
+use crate::sql::plans::ExplainPlan;
+use crate::storages::NavigationPoint;
 use crate::storages::Table;
 
 mod aggregate;
@@ -83,7 +87,26 @@ impl<'a> Binder {
     ) -> Result<(SExpr, BindContext)> {
         match stmt {
             Statement::Query(query) => self.bind_query(bind_context, query).await,
-            _ => todo!(),
+            Statement::Explain { query, kind } => match query.as_ref() {
+                Statement::Query(query) => {
+                    let (expr, bind_context) = self.bind_query(bind_context, query).await?;
+                    let explain_plan = ExplainPlan {
+                        explain_kind: kind.clone(),
+                    };
+                    let new_expr = SExpr::create_unary(explain_plan.into(), expr);
+                    Ok((new_expr, bind_context))
+                }
+                _ => {
+                    return Err(ErrorCode::UnImplement(format!(
+                        "UnImplemented stmt {stmt} in explain"
+                    )));
+                }
+            },
+            _ => {
+                return Err(ErrorCode::UnImplement(format!(
+                    "UnImplemented stmt {stmt} in binder"
+                )));
+            }
         }
     }
 
@@ -93,10 +116,16 @@ impl<'a> Binder {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
+        travel_point: &Option<TimeTravelPoint>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
         let catalog = self.catalogs.get_catalog(catalog_name)?;
-        let table_meta = catalog.get_table(tenant, database_name, table_name).await?;
+        let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
+        if let Some(TimeTravelPoint::Snapshot(s)) = travel_point {
+            table_meta = table_meta
+                .navigate_to(self.ctx.clone(), &NavigationPoint::SnapshotID(s.to_owned()))
+                .await?;
+        }
         Ok(table_meta)
     }
 

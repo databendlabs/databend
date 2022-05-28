@@ -58,7 +58,7 @@ impl<'a> Binder {
         let database = "system";
         let tenant = self.ctx.get_tenant();
         let table_meta: Arc<dyn Table> = self
-            .resolve_data_source(tenant.as_str(), catalog, database, "one")
+            .resolve_data_source(tenant.as_str(), catalog, database, "one", &None)
             .await?;
         let source = table_meta.read_plan(self.ctx.clone(), None).await?;
         let table_index = self.metadata.write().add_table(
@@ -82,6 +82,7 @@ impl<'a> Binder {
                 database,
                 table,
                 alias,
+                travel_point,
             } => {
                 // Get catalog name
                 let catalog = catalog
@@ -108,6 +109,7 @@ impl<'a> Binder {
                         catalog.as_str(),
                         database.as_str(),
                         table.as_str(),
+                        travel_point,
                     )
                     .await?;
                 let source = table_meta.read_plan(self.ctx.clone(), None).await?;

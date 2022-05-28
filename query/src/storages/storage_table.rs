@@ -73,6 +73,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn cluster_keys(&self) -> Vec<Expression> {
+        vec![]
+    }
+
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,
@@ -148,6 +152,22 @@ pub trait Table: Sync + Send {
     async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
+
+    async fn navigate_to(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _instant: &NavigationPoint,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::UnImplement(format!(
+            "table {},  of engine type {}, do not support time travel",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+}
+
+pub enum NavigationPoint {
+    SnapshotID(String),
 }
 
 #[derive(Debug)]

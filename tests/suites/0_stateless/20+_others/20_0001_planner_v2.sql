@@ -218,7 +218,7 @@ drop table t1;
 drop table t2;
 
 -- trim function
-select '===Trim Functuon===';
+select '===Trim Function===';
 select trim(leading ' ' from '      abc');
 select trim(leading ' ' from '');
 select trim(leading 'ab' from 'abab');
@@ -239,5 +239,27 @@ select [];
 select '====Correlated Subquery====';
 select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
 select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;
+
+-- explain
+select '===Explain===';
+create table t1(a int, b int);
+create table t2(a int, b int);
+explain select t1.a from t1 where a > 0;
+select '===Explain Pipeline===';
+explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
+drop table t1;
+drop table t2;
+-- position function
+select '===Position Function===';
+SELECT POSITION('bar' IN 'foobarbar');
+SELECT POSITION('xbar' IN 'foobar');
+drop table if exists t;
+create table t (a varchar);
+insert into t values ('foo');
+select POSITION('o' IN t.a) from t;
+drop table t;
+
+select '====Tuple====';
+select ('field', number) from numbers(5);
 
 set enable_planner_v2 = 0;

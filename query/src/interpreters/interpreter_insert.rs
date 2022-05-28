@@ -242,7 +242,9 @@ impl Interpreter for InsertInterpreter {
             .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
             .await?;
 
-        let need_fill_missing_columns = table.schema() != self.plan.schema();
+        let cluster_keys = table.cluster_keys();
+        let need_fill_missing_columns =
+            table.schema() != self.plan.schema() || !cluster_keys.is_empty();
 
         let append_logs = match &self.plan.source {
             InsertInputSource::SelectPlan(plan_node) => {
@@ -261,6 +263,7 @@ impl Interpreter for InsertInterpreter {
                 let stream = if need_fill_missing_columns {
                     Box::pin(AddOnStream::try_create(
                         stream,
+                        cluster_keys,
                         self.plan.schema(),
                         table.schema(),
                         self.ctx.clone(),
@@ -281,6 +284,7 @@ impl Interpreter for InsertInterpreter {
                 let stream = if need_fill_missing_columns {
                     Box::pin(AddOnStream::try_create(
                         stream,
+                        cluster_keys,
                         self.plan.schema(),
                         table.schema(),
                         self.ctx.clone(),

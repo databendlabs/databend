@@ -45,7 +45,7 @@ serde_json = "1.0.79"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
 simdutf8 = "0.1.4"
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "45ead90" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7d74a3c" }
 strength_reduce = "0.2.3"
 twox-hash = "1.6.2"
 uuid = { version = "0.8.2", features = ["v4"] }

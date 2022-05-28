@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::DropTablePlan;
+use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -76,6 +77,21 @@ impl Interpreter for DropTableInterpreter {
 
         let catalog = self.ctx.get_catalog(catalog_name)?;
         catalog.drop_table(self.plan.clone().into()).await?;
+
+        if let Some(tbl) = tbl {
+            // if `plan.all`, truncate, then purge the historical data
+            if self.plan.all {
+                // errors of truncation are ignored
+                let _ = tbl
+                    .truncate(self.ctx.clone(), TruncateTablePlan {
+                        catalog: self.plan.catalog.clone(),
+                        db: self.plan.db.clone(),
+                        table: self.plan.table.clone(),
+                        purge: true,
+                    })
+                    .await;
+            }
+        }
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
