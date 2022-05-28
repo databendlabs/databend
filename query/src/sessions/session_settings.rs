@@ -135,9 +135,9 @@ impl Settings {
             },
             SettingValue {
                 default_value: DataValue::String("None".as_bytes().to_vec()),
-                user_setting: UserSetting::create("compress", DataValue::String("None".as_bytes().to_vec())),
+                user_setting: UserSetting::create("compression", DataValue::String("None".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
-                desc: "Compress, default value: None",
+                desc: "Format compression, default value: None",
             },
             SettingValue {
                 default_value: DataValue::String("UTC".as_bytes().to_vec()),
@@ -232,8 +232,8 @@ impl Settings {
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_compress(&self) -> Result<Vec<u8>> {
-        let key = "compress";
+    pub fn get_compression(&self) -> Result<Vec<u8>> {
+        let key = "compression";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }

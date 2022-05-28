@@ -286,7 +286,7 @@ impl QueryContextShared {
                 ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
             })?;
 
-            let compress = String::from_utf8(settings.get_compress()?).map_err(|_| {
+            let compress = String::from_utf8(settings.get_compression()?).map_err(|_| {
                 ErrorCode::LogicalError("Timezone has been checked and should be valid.")
             })?;
             format.compression = compress.parse().expect("must be valid compress");
