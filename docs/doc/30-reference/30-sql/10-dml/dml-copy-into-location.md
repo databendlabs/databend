@@ -100,7 +100,7 @@ CREATE STAGE s2;
 -- Unload the data in the table into the stage as a CSV file
 copy into @s2 from test_table FILE_FORMAT = (type = 'CSV');
 
-//Unload the data from a query into the stage as a Parquet file
+-- Unload the data from a query into the stage as a Parquet file
 copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');
 ```
 
