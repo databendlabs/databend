@@ -663,7 +663,7 @@ async fn test_auth_basic() -> Result<()> {
     post_sql_to_endpoint(&ep, &sql, 1).await?;
 
     let basic = headers::Authorization::basic(user_name, password);
-    test_auth_post(&ep, user_name, basic, &"%").await?;
+    test_auth_post(&ep, user_name, basic, "%").await?;
     Ok(())
 }
 
@@ -810,7 +810,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
-    test_auth_post(&ep, user_name, bear, &"%").await?;
+    test_auth_post(&ep, user_name, bear, "%").await?;
     Ok(())
 }
 
