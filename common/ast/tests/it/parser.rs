@@ -241,13 +241,21 @@ fn test_expr() {
     let cases = &[
         r#"a"#,
         r#"'I''m who I\'m.'"#,
-        r#"'\776 \n \t \u0053'"#,
+        r#"'\776 \n \t \u0053 \xaa'"#,
+        r#"char(0xD0, 0xBF, 0xD1)"#,
         r#"-1"#,
         r#"(1,)"#,
         r#"(1,2)"#,
         r#"(1,2,)"#,
+        r#"[1]"#,
+        r#"[1,]"#,
+        r#"[[1]]"#,
+        r#"[[1],[2]]"#,
+        r#"[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]"#,
         r#"typeof(1 + 2)"#,
         r#"- - + + - 1 + + - 2"#,
+        r#"0XFF + 0xff + 0xa + x'ffff'"#,
+        r#"1 - -(- - -1)"#,
         r#"1 + a * c.d"#,
         r#"number % 2"#,
         r#"`t`:k1.k2"#,
@@ -292,6 +300,8 @@ fn test_expr_error() {
         r#"5 * (a and ) 1"#,
         r#"a + +"#,
         r#"CAST(col1 AS foo)"#,
+        // TODO(andylokandy): This is a bug being tracking in https://github.com/segeljakt/pratt/issues/7
+        r#"1 a"#,
         r#"CAST(col1)"#,
         r#"G.E.B IS NOT NULL AND
             col1 NOT BETWEEN col2 AND
