@@ -98,7 +98,7 @@ impl MetaService for MetaServiceImpl {
             protocol_version,
             payload,
         } = req;
-        assert_eq!(protocol_version, 0); // todo(ariesdevil): define server version, return un compatible error.
+        let _ = protocol_version;
         let auth = BasicAuth::decode(&*payload).map_err(|e| Status::internal(e.to_string()))?;
 
         let user = "root";
