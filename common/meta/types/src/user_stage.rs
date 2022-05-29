@@ -93,7 +93,7 @@ impl Default for StageFileCompression {
 impl FromStr for StageFileCompression {
     type Err = String;
     fn from_str(s: &str) -> std::result::Result<Self, String> {
-        match s.to_ascii_lowercase().as_str() {
+        match s.to_lowercase().as_str() {
             "auto" => Ok(StageFileCompression::Auto),
             "gzip" => Ok(StageFileCompression::Gzip),
             "bz2" => Ok(StageFileCompression::Bz2),

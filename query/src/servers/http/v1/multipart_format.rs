@@ -278,21 +278,30 @@ impl Processor for SequentialInputFormatSource {
                         loop {
                             match decompress.state() {
                                 DecompressState::Reading => {
+                                    // If all data has been consumed, we should break with existing data directly.
+                                    if amt == data.len() {
+                                        break output;
+                                    }
+
                                     let read = decompress.fill(&data[amt..]);
                                     amt += read;
                                 }
                                 DecompressState::Decoding => {
                                     let mut buf = vec![0; 4 * 1024 * 1024];
-                                    let written = decompress
-                                        .decode(&mut buf)
-                                        .expect("decompress decode must success");
+                                    let written = decompress.decode(&mut buf).map_err(|e| {
+                                        ErrorCode::InvalidSourceFormat(format!(
+                                            "decompress source: {e}"
+                                        ))
+                                    })?;
                                     output.extend_from_slice(&buf[..written])
                                 }
                                 DecompressState::Flushing => {
                                     let mut buf = vec![0; 4 * 1024 * 1024];
-                                    let written = decompress
-                                        .finish(&mut buf)
-                                        .expect("decompress finish must success");
+                                    let written = decompress.finish(&mut buf).map_err(|e| {
+                                        ErrorCode::InvalidSourceFormat(format!(
+                                            "decompress source: {e}"
+                                        ))
+                                    })?;
                                     output.extend_from_slice(&buf[..written])
                                 }
                                 DecompressState::Done => break output,

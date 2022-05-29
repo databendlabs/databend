@@ -28,7 +28,7 @@ chrono = "0.4.19"
 chrono-tz = "0.6.1"
 futures = "0.3.21"
 lexical-core = "0.8.2"
-opendal = { version = "0.7.0", features = ["retry"] }
+opendal = { git = "https://github.com/datafuselabs/opendal", rev="1714ed7", features = ["retry"] }
 serde = { version = "1.0.136", features = ["derive"] }
 time = "0.3.9"
 

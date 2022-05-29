@@ -67,7 +67,7 @@ impl FromStr for Compression {
     type Err = ErrorCode;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s.to_ascii_lowercase().as_str() {
+        match s.to_lowercase().as_str() {
             "auto" => Ok(Compression::Auto),
             "gzip" => Ok(Compression::Gzip),
             "bz2" => Ok(Compression::Bz2),

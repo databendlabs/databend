@@ -32,6 +32,7 @@ use common_streams::CsvSourceBuilder;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
+use common_tracing::tracing::info;
 use futures::io::BufReader;
 use opendal::io_util::CompressAlgorithm;
 use opendal::io_util::SeekableReader;
@@ -193,7 +194,7 @@ impl StageSource {
         let object = op.object(&path);
 
         // TODO(xuanwo): we need to unify with MultipartFormat.
-        let compress_algo = match stage.file_format_options.compression {
+        let compression_algo = match stage.file_format_options.compression {
             StageFileCompression::Auto => todo!("we will support auto in the future"),
             StageFileCompression::Gzip => Some(CompressAlgorithm::Gzip),
             StageFileCompression::Bz2 => Some(CompressAlgorithm::Bz2),
@@ -205,6 +206,10 @@ impl StageSource {
             StageFileCompression::Snappy => todo!("we will support snappy in the future"),
             StageFileCompression::None => None,
         };
+        info!(
+            "Read stage {} file {} via compression {:?}",
+            stage.stage_name, &path, compression_algo
+        );
 
         // Get the format(CSV, Parquet) source stream.
         let source = match &file_format {
@@ -212,7 +217,7 @@ impl StageSource {
                 ctx.clone(),
                 self.schema.clone(),
                 stage,
-                match compress_algo {
+                match compression_algo {
                     None => Box::new(object.reader().await?),
                     Some(algo) => Box::new(object.decompress_reader_with(algo).await?),
                 },
@@ -222,7 +227,7 @@ impl StageSource {
                 ctx.clone(),
                 self.schema.clone(),
                 stage,
-                match compress_algo {
+                match compression_algo {
                     None => Box::new(object.reader().await?),
                     Some(algo) => Box::new(object.decompress_reader_with(algo).await?),
                 },
