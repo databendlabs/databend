@@ -31,6 +31,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/check
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -45,6 +48,9 @@ jobs:
           - aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/build_debug
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -60,6 +66,9 @@ jobs:
           - aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/build_debug
         with:
           target: ${{ matrix.target }}
@@ -69,6 +78,9 @@ jobs:
     needs: check
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_unit
         with:
           codecov_token: ${{ secrets.CODECOV_TOKEN }}
@@ -78,6 +90,9 @@ jobs:
     needs: build_linux
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_metactl
 
   test_compat:
@@ -85,6 +100,9 @@ jobs:
     needs: build_linux
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_compat
 
   test_stateless_standalone_linux:
@@ -92,6 +110,9 @@ jobs:
     needs: build_linux
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_standalone_linux
 
   # https://github.com/datafuselabs/databend/issues/5287
@@ -107,6 +128,9 @@ jobs:
     needs: build_linux
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_cluster_linux
 
   test_stateless_cluster_macos:
@@ -114,6 +138,9 @@ jobs:
     needs: build_macos
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_cluster_macos
 
   test_stateful_standalone:
@@ -121,6 +148,9 @@ jobs:
     needs: build_linux
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateful_standalone
 
   test_stateful_hive_standalone:
@@ -128,4 +158,7 @@ jobs:
     needs: check
     steps:
       - uses: actions/checkout@v2
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateful_hive_standalone
