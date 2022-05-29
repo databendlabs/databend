@@ -38,7 +38,7 @@ with NativeClient(name='client1>') as client1:
     client1.expect(prompt)
 
     client1.send(
-        "copy into ontime200 from '@named_external_stage'  PATTERN = 'ontime_200.csv' FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1);"
+        "copy into ontime200 from '@named_external_stage'  PATTERN = 'ontime_200.csv$' FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1);"
     )
     client1.expect(prompt)
 
