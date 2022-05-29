@@ -208,9 +208,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-compression"
-version = "0.3.14"
-source = "git+https://github.com/Xuanwo/async-compression?rev=b439493#b439493d1a0b4698e7600d07e15b72e32fe84da3"
+name = "async-compression-issue-150-workaround"
+version = "0.3.15-issue-150"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a1c3bfa97a4c664de1effcffe5e3345eb6df10dd4f8ff7f3c12167cc3031690"
 dependencies = [
  "brotli",
  "bzip2",
@@ -4143,11 +4144,13 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.6.3"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96d4497d1197ca2a666fd1488bbacc8a7c836396c0579eb33096ebb8f23ec1a1"
 dependencies = [
  "anyhow",
  "async-compat",
- "async-compression 0.3.14",
+ "async-compression-issue-150-workaround",
  "async-trait",
  "backon",
  "base64 0.13.0",
@@ -4694,7 +4697,7 @@ version = "1.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0636cb735205476927fa4c0e1b2a308ea265a20880cbd80ae92d57072482604"
 dependencies = [
- "async-compression 0.3.12",
+ "async-compression",
  "async-trait",
  "bytes 1.1.0",
  "futures-util",

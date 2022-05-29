@@ -32,4 +32,4 @@ futures = "0.3.21"
 pin-project-lite = "0.2.8"
 serde_json = { version = "1.0.79", default-features = false, features = ["preserve_order"] }
 tempfile = "3.3.0"
-opendal = { path ="../../../opendal", features = ["retry", "compress"] }
+opendal = { version = "0.7.0", features = ["retry", "compress"] }
