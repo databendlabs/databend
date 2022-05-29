@@ -1147,6 +1147,7 @@ dependencies = [
  "common-base",
  "common-datavalues",
  "common-exception",
+ "common-meta-app",
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
@@ -1156,6 +1157,38 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tonic",
+]
+
+[[package]]
+name = "common-meta-app"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "common-building",
+ "common-datavalues",
+ "common-exception",
+ "common-io",
+ "common-meta-types",
+ "derive_more",
+ "enumflags2",
+ "hex",
+ "maplit",
+ "num",
+ "num-derive",
+ "num-traits",
+ "once_cell",
+ "openraft",
+ "prost 0.9.0",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2 0.10.2",
+ "sled",
+ "thiserror",
+ "tonic",
+ "tonic-build 0.6.2",
 ]
 
 [[package]]
@@ -1185,6 +1218,7 @@ dependencies = [
  "common-exception",
  "common-grpc",
  "common-meta-api",
+ "common-meta-app",
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
@@ -1300,6 +1334,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-meta-app",
  "common-meta-types",
  "once_cell",
  "pretty_assertions",
@@ -1315,6 +1350,7 @@ dependencies = [
  "anyhow",
  "common-datavalues",
  "common-io",
+ "common-meta-app",
  "common-meta-types",
  "common-protos",
  "enumflags2",
@@ -1878,6 +1914,7 @@ dependencies = [
  "common-macros",
  "common-management",
  "common-meta-api",
+ "common-meta-app",
  "common-meta-embedded",
  "common-meta-grpc",
  "common-meta-raft-store",

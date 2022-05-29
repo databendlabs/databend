@@ -15,6 +15,7 @@ common-datavalues = { path = "../../common/datavalues" }
 common-io = { path = "../../common/io" }
 common-meta-types = { path = "../../common/meta/types" }
 common-protos = { path = "../../common/protos" }
+common-meta-app = { path = "../meta/app" }
 
 num = "0.4"
 thiserror = "1.0.30"

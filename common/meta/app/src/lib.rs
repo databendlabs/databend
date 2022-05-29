@@ -12,29 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_meta_app::schema::DatabaseInfo;
+//! This crate defines meta data types used by meta-client application, e.g. Schema, User, Share etc.
+//! Such as Database, Table and User etc.
+//!
+//! Types in this crate will not be used directly by databend-meta.
+//! But instead, they are used by the caller of meta-client, e.g, databend-query.
 
-use crate::databases::Database;
-use crate::databases::DatabaseContext;
-
-#[derive(Clone)]
-pub struct DefaultDatabase {
-    db_info: DatabaseInfo,
-}
-
-impl DefaultDatabase {
-    pub fn try_create(_ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
-        Ok(Box::new(Self { db_info }))
-    }
-}
-
-impl Database for DefaultDatabase {
-    fn name(&self) -> &str {
-        &self.db_info.name_ident.db_name
-    }
-
-    fn get_db_info(&self) -> &DatabaseInfo {
-        &self.db_info
-    }
-}
+pub mod schema;
+// pub mod user;
+// pub mod share;

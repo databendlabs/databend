@@ -49,6 +49,7 @@ common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
+common-meta-app = { path = "../common/meta/app" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 
