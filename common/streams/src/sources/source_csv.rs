@@ -22,7 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::FormatSettings;
-use common_tracing::tracing::info;
 use csv_async::AsyncReader;
 use csv_async::AsyncReaderBuilder;
 use csv_async::Terminator;
