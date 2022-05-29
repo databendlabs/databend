@@ -18,7 +18,6 @@ auth_type: {
     double_sha1_password
   | sha256_password
   | no_password
-  | plaintext_password
 }
 ```
 auth_type default is **double_sha1_password**.
@@ -64,17 +63,4 @@ show users;
 +-------+----------+-------------+-------------+
 | user1 | %        | no_password |             |
 +-------+----------+-------------+-------------+
-```
-
-```sql
-ALTER USER user1 IDENTIFIED WITH plaintext_password BY '123abc';
-```
-
-```sql
-show users;
-+-------+----------+--------------------+-------------+
-| name  | hostname | auth_type          | auth_string |
-+-------+----------+--------------------+-------------+
-| user1 | %        | plaintext_password | 123abc      |
-+-------+----------+--------------------+-------------+
 ```
