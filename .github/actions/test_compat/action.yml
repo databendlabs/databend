@@ -15,17 +15,8 @@ runs:
     - name: Maximize build space
       uses: ./.github/actions/cleanup
 
-    - name: Rust setup
-      run: |
-        bash ./scripts/setup/dev_setup.sh -yb
-
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
-
-    - name: Install python dependences
-      shell: bash
-      run: |
-        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql sqlalchemy clickhouse_driver
 
     - uses: actions/download-artifact@v2
       with:
