@@ -106,6 +106,10 @@ select avg(number > 314) from numbers(1000);
 
 drop table t;
 
+select '====Having alias====';
+select number as a from numbers(1) group by a having a = 0;
+select number+1 as a from numbers(1) group by a having a = 1;
+
 -- Inner join
 select '====INNER_JOIN====';
 create table t(a int);
