@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod metasrv_grpc_api;
-mod metasrv_grpc_export;
-pub mod metasrv_grpc_handshake;
-pub mod metasrv_grpc_kv_api;
-pub mod metasrv_grpc_kv_api_restart_cluster;
-pub mod metasrv_grpc_schema_api;
-pub mod metasrv_grpc_schema_api_follower_follower;
-pub mod metasrv_grpc_schema_api_leader_follower;
-pub mod metasrv_grpc_tls;
-pub mod metasrv_grpc_watch;
+fn main() {
+    common_building::setup();
+}

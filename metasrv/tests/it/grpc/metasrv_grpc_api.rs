@@ -45,7 +45,7 @@ async fn test_restart() -> anyhow::Result<()> {
 
     let (mut tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None)?;
 
     tracing::info!("--- upsert kv");
     {
@@ -105,7 +105,7 @@ async fn test_restart() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(10_000)).await;
 
     // try to reconnect the restarted server.
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
 
     tracing::info!("--- get kv");
     {
@@ -200,8 +200,8 @@ async fn test_join() -> anyhow::Result<()> {
     let addr0 = tc0.config.grpc_api_address.clone();
     let addr1 = tc1.config.grpc_api_address.clone();
 
-    let client0 = MetaGrpcClient::try_create(vec![addr0], "root", "xxx", None, None).await?;
-    let client1 = MetaGrpcClient::try_create(vec![addr1], "root", "xxx", None, None).await?;
+    let client0 = MetaGrpcClient::try_create(vec![addr0], "root", "xxx", None, None)?;
+    let client1 = MetaGrpcClient::try_create(vec![addr1], "root", "xxx", None, None)?;
 
     let clients = vec![client0, client1];
 

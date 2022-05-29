@@ -43,6 +43,7 @@ use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::ConnectionError;
+use common_meta_types::InvalidArgument;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResultError;
@@ -52,6 +53,7 @@ use common_tracing::tracing;
 use futures::stream::StreamExt;
 use prost::Message;
 use rand::Rng;
+use semver::Version;
 use serde::de::DeserializeOwned;
 use tonic::async_trait;
 use tonic::client::GrpcService;
@@ -63,10 +65,14 @@ use tonic::Code;
 use tonic::Request;
 use tonic::Status;
 
+use crate::from_digit_ver;
 use crate::grpc_action::MetaGrpcReadReq;
 use crate::grpc_action::MetaGrpcWriteReq;
 use crate::grpc_action::RequestFor;
 use crate::message;
+use crate::to_digit_ver;
+use crate::METACLI_COMMIT_SEMVER;
+use crate::MIN_METASRV_SEMVER;
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
@@ -200,9 +206,7 @@ impl MetaGrpcClient {
     ///
     /// The worker is a singleton and the returned handle is cheap to clone.
     /// When all handles are dropped the worker will quit, then the runtime will be destroyed.
-    pub async fn try_new(
-        conf: &RpcClientConf,
-    ) -> std::result::Result<Arc<ClientHandle>, ErrorCode> {
+    pub fn try_new(conf: &RpcClientConf) -> std::result::Result<Arc<ClientHandle>, ErrorCode> {
         Self::try_create(
             conf.get_endpoints(),
             &conf.username,
@@ -210,21 +214,19 @@ impl MetaGrpcClient {
             conf.timeout,
             conf.tls_conf.clone(),
         )
-        .await
     }
 
     #[tracing::instrument(level = "debug", skip(password))]
-    pub async fn try_create(
+    pub fn try_create(
         endpoints: Vec<String>,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
         conf: Option<RpcClientTlsConfig>,
     ) -> Result<Arc<ClientHandle>> {
-        let mgr = MetaChannelManager {
-            timeout,
-            conf: conf.clone(),
-        };
+        Self::endpoints_non_empty(&endpoints)?;
+
+        let mgr = MetaChannelManager { timeout, conf };
 
         let rt = Runtime::with_worker_threads(1, Some("meta-client-rt".to_string()))
             .map_err(|e| e.add_message_back("when creating meta-client"))?;
@@ -238,13 +240,12 @@ impl MetaGrpcClient {
 
         let worker = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
-            endpoints: RwLock::new(vec![]),
+            endpoints: RwLock::new(endpoints),
             username: username.to_string(),
             password: password.to_string(),
             token: RwLock::new(None),
             rt: rt.clone(),
         });
-        worker.set_endpoints(endpoints).await?;
 
         rt.spawn(Self::worker_loop(worker, rx));
 
@@ -379,8 +380,14 @@ impl MetaGrpcClient {
         let token = match t.clone() {
             Some(t) => t,
             None => {
-                let new_token =
-                    MetaGrpcClient::handshake(&mut client, &self.username, &self.password).await?;
+                let new_token = Self::handshake(
+                    &mut client,
+                    &METACLI_COMMIT_SEMVER,
+                    &MIN_METASRV_SEMVER,
+                    &self.username,
+                    &self.password,
+                )
+                .await?;
                 *t = Some(new_token.clone());
                 new_token
             }
@@ -391,14 +398,19 @@ impl MetaGrpcClient {
         Ok(client)
     }
 
+    pub fn endpoints_non_empty(endpoints: &[String]) -> std::result::Result<(), MetaError> {
+        if endpoints.is_empty() {
+            return Err(MetaError::InvalidConfig("endpoints is empty".to_string()));
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn set_endpoints(
         &self,
         endpoints: Vec<String>,
     ) -> std::result::Result<(), MetaError> {
-        if endpoints.is_empty() {
-            return Err(MetaError::InvalidConfig("endpoints is empty".to_string()));
-        }
+        Self::endpoints_non_empty(&endpoints)?;
 
         let mut eps = self.endpoints.write().await;
         *eps = endpoints;
@@ -406,9 +418,46 @@ impl MetaGrpcClient {
     }
 
     /// Handshake with metasrv.
+    ///
+    /// - Check whether the versions of this client(`C`) and the remote metasrv(`S`) are compatible.
+    /// - Authorize this client.
+    ///
+    /// ## Check compatibility
+    ///
+    /// Both client `C` and  server `S` maintains two semantic-version:
+    /// - `C` maintains the its own semver(`C.ver`) and the minimal compatible `S` semver(`C.min_srv_ver`).
+    /// - `S` maintains the its own semver(`S.ver`) and the minimal compatible `S` semver(`S.min_cli_ver`).
+    ///
+    /// When handshaking:
+    /// - `C` sends its ver `C.ver` to `S`,
+    /// - When `S` receives handshake request, `S` asserts that `C.ver >= S.min_cli_ver`.
+    /// - Then `S` replies handshake-reply with its `S.ver`.
+    /// - When `C` receives the reply, `C` asserts that `S.ver >= C.min_srv_ver`.
+    ///
+    /// Handshake succeeds if both of these two assertions hold.
+    ///
+    /// E.g.:
+    /// - `S: (ver=3, min_cli_ver=1)` is compatible with `C: (ver=3, min_srv_ver=2)`.
+    /// - `S: (ver=4, min_cli_ver=4)` is **NOT** compatible with `C: (ver=3, min_srv_ver=2)`.
+    ///   Because although `S.ver(4) >= C.min_srv_ver(3)` holds,
+    ///   but `C.ver(3) >= S.min_cli_ver(4)` does not hold.
+    ///
+    /// ```text
+    /// C.ver:    1             3      4
+    /// C --------+-------------+------+------------>
+    ///           ^      .------'      ^
+    ///           |      |             |
+    ///           '-------------.      |
+    ///                  |      |      |
+    ///                  v      |      |
+    /// S ---------------+------+------+------------>
+    /// S.ver:           2      3      4
+    /// ```
     #[tracing::instrument(level = "debug", skip(client, password))]
-    async fn handshake(
+    pub async fn handshake(
         client: &mut MetaServiceClient<Channel>,
+        client_ver: &Version,
+        min_metasrv_ver: &Version,
         username: &str,
         password: &str,
     ) -> std::result::Result<Vec<u8>, MetaError> {
@@ -419,9 +468,10 @@ impl MetaGrpcClient {
         let mut payload = vec![];
         auth.encode(&mut payload)?;
 
-        let req = Request::new(futures::stream::once(async {
+        let my_ver = to_digit_ver(client_ver);
+        let req = Request::new(futures::stream::once(async move {
             HandshakeRequest {
-                protocol_version: 0,
+                protocol_version: my_ver,
                 payload,
             }
         }));
@@ -429,7 +479,33 @@ impl MetaGrpcClient {
         let rx = client.handshake(req).await?;
         let mut rx = rx.into_inner();
 
-        let resp = rx.next().await.expect("Must respond from handshake")?;
+        let res = rx.next().await.ok_or_else(|| {
+            MetaNetworkError::ConnectionError(ConnectionError::new(
+                AnyError::error("handshake returns nothing"),
+                "",
+            ))
+        })?;
+
+        let resp = res?;
+
+        // backward compatibility: no version in handshake.
+        // TODO(xp): remove this when merged.
+        if resp.protocol_version > 0 {
+            let min_compatible = to_digit_ver(min_metasrv_ver);
+            if resp.protocol_version < min_compatible {
+                return Err(MetaError::MetaNetworkError(
+                    MetaNetworkError::InvalidArgument(InvalidArgument::new(
+                        AnyError::error(format!(
+                            "metasrv protocol_version({}) < meta-client min-compatible({})",
+                            from_digit_ver(resp.protocol_version),
+                            min_metasrv_ver,
+                        )),
+                        "",
+                    )),
+                ));
+            }
+        }
+
         let token = resp.payload;
         Ok(token)
     }

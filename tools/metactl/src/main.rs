@@ -371,8 +371,7 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 
     loop {
         i += 1;
-        let client =
-            MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None).await?;
+        let client = MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None)?;
 
         let res = client.get_kv("foo").await;
         println!("{}-th: get_kv(foo): {:?}", i, res);
