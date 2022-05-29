@@ -17,6 +17,7 @@ pub mod expr;
 pub mod query;
 pub mod statement;
 pub mod token;
+pub mod unescape;
 pub mod util;
 
 use common_exception::ErrorCode;

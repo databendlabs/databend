@@ -28,7 +28,7 @@ pub struct TypeFactory {
 static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
     let mut type_factory = TypeFactory::create();
 
-    type_factory.register(NullType::arc());
+    type_factory.register(NullType::new_impl());
     type_factory.register(BooleanType::new_impl());
     type_factory.register(StringType::new_impl());
 

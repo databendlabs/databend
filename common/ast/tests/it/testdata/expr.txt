@@ -18,6 +18,89 @@ ColumnRef {
 
 
 ---------- Input ----------
+'I''m who I\'m.'
+---------- Output ---------
+'I'm who I'm.'
+---------- AST ------------
+Literal {
+    span: [
+        QuotedString(0..16),
+    ],
+    lit: String(
+        "I'm who I'm.",
+    ),
+}
+
+
+---------- Input ----------
+'\776 \n \t \u0053 \xaa'
+---------- Output ---------
+'Ǿ 
+ 	 S ª'
+---------- AST ------------
+Literal {
+    span: [
+        QuotedString(0..24),
+    ],
+    lit: String(
+        "Ǿ \n \t S ª",
+    ),
+}
+
+
+---------- Input ----------
+char(0xD0, 0xBF, 0xD1)
+---------- Output ---------
+char(0xD0, 0xBF, 0xD1)
+---------- AST ------------
+FunctionCall {
+    span: [
+        Ident(0..4),
+        LParen(4..5),
+        LiteralHex(5..9),
+        Comma(9..10),
+        LiteralHex(11..15),
+        Comma(15..16),
+        LiteralHex(17..21),
+        RParen(21..22),
+    ],
+    distinct: false,
+    name: Identifier {
+        name: "char",
+        quote: None,
+        span: Ident(0..4),
+    },
+    args: [
+        Literal {
+            span: [
+                LiteralHex(5..9),
+            ],
+            lit: Number(
+                "0xD0",
+            ),
+        },
+        Literal {
+            span: [
+                LiteralHex(11..15),
+            ],
+            lit: Number(
+                "0xBF",
+            ),
+        },
+        Literal {
+            span: [
+                LiteralHex(17..21),
+            ],
+            lit: Number(
+                "0xD1",
+            ),
+        },
+    ],
+    params: [],
+}
+
+
+---------- Input ----------
 -1
 ---------- Output ---------
 - 1
@@ -133,6 +216,381 @@ Tuple {
 
 
 ---------- Input ----------
+[1]
+---------- Output ---------
+[1]
+---------- AST ------------
+Array {
+    span: [
+        LBracket(0..1),
+        LiteralNumber(1..2),
+        RBracket(2..3),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LBracket(0..1),
+                LiteralNumber(1..2),
+                RBracket(2..3),
+            ],
+            lit: Number(
+                "1",
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+[1,]
+---------- Output ---------
+[1]
+---------- AST ------------
+Array {
+    span: [
+        LBracket(0..1),
+        LiteralNumber(1..2),
+        Comma(2..3),
+        RBracket(3..4),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LiteralNumber(1..2),
+            ],
+            lit: Number(
+                "1",
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+[[1]]
+---------- Output ---------
+[[1]]
+---------- AST ------------
+Array {
+    span: [
+        LBracket(0..1),
+        LBracket(1..2),
+        LiteralNumber(2..3),
+        RBracket(3..4),
+        RBracket(4..5),
+    ],
+    exprs: [
+        Array {
+            span: [
+                LBracket(1..2),
+                LiteralNumber(2..3),
+                RBracket(3..4),
+            ],
+            exprs: [
+                Literal {
+                    span: [
+                        LBracket(1..2),
+                        LiteralNumber(2..3),
+                        RBracket(3..4),
+                    ],
+                    lit: Number(
+                        "1",
+                    ),
+                },
+            ],
+        },
+    ],
+}
+
+
+---------- Input ----------
+[[1],[2]]
+---------- Output ---------
+[[1], [2]]
+---------- AST ------------
+Array {
+    span: [
+        LBracket(0..1),
+        LBracket(1..2),
+        LiteralNumber(2..3),
+        RBracket(3..4),
+        Comma(4..5),
+        LBracket(5..6),
+        LiteralNumber(6..7),
+        RBracket(7..8),
+        RBracket(8..9),
+    ],
+    exprs: [
+        Array {
+            span: [
+                LBracket(1..2),
+                LiteralNumber(2..3),
+                RBracket(3..4),
+            ],
+            exprs: [
+                Literal {
+                    span: [
+                        LBracket(1..2),
+                        LiteralNumber(2..3),
+                        RBracket(3..4),
+                    ],
+                    lit: Number(
+                        "1",
+                    ),
+                },
+            ],
+        },
+        Array {
+            span: [
+                LBracket(5..6),
+                LiteralNumber(6..7),
+                RBracket(7..8),
+            ],
+            exprs: [
+                Literal {
+                    span: [
+                        LBracket(5..6),
+                        LiteralNumber(6..7),
+                        RBracket(7..8),
+                    ],
+                    lit: Number(
+                        "2",
+                    ),
+                },
+            ],
+        },
+    ],
+}
+
+
+---------- Input ----------
+[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]
+---------- Output ---------
+[[[1, 2, 3], [4, 5, 6]], [[7, 8, 9]]][0][1][2]
+---------- AST ------------
+MapAccess {
+    span: [
+        LBracket(35..36),
+        LiteralNumber(36..37),
+        RBracket(37..38),
+    ],
+    expr: MapAccess {
+        span: [
+            LBracket(32..33),
+            LiteralNumber(33..34),
+            RBracket(34..35),
+        ],
+        expr: MapAccess {
+            span: [
+                LBracket(29..30),
+                LiteralNumber(30..31),
+                RBracket(31..32),
+            ],
+            expr: Array {
+                span: [
+                    LBracket(0..1),
+                    LBracket(1..2),
+                    LBracket(2..3),
+                    LiteralNumber(3..4),
+                    Comma(4..5),
+                    LiteralNumber(5..6),
+                    Comma(6..7),
+                    LiteralNumber(7..8),
+                    RBracket(8..9),
+                    Comma(9..10),
+                    LBracket(10..11),
+                    LiteralNumber(11..12),
+                    Comma(12..13),
+                    LiteralNumber(13..14),
+                    Comma(14..15),
+                    LiteralNumber(15..16),
+                    RBracket(16..17),
+                    RBracket(17..18),
+                    Comma(18..19),
+                    LBracket(19..20),
+                    LBracket(20..21),
+                    LiteralNumber(21..22),
+                    Comma(22..23),
+                    LiteralNumber(23..24),
+                    Comma(24..25),
+                    LiteralNumber(25..26),
+                    RBracket(26..27),
+                    RBracket(27..28),
+                    RBracket(28..29),
+                ],
+                exprs: [
+                    Array {
+                        span: [
+                            LBracket(1..2),
+                            LBracket(2..3),
+                            LiteralNumber(3..4),
+                            Comma(4..5),
+                            LiteralNumber(5..6),
+                            Comma(6..7),
+                            LiteralNumber(7..8),
+                            RBracket(8..9),
+                            Comma(9..10),
+                            LBracket(10..11),
+                            LiteralNumber(11..12),
+                            Comma(12..13),
+                            LiteralNumber(13..14),
+                            Comma(14..15),
+                            LiteralNumber(15..16),
+                            RBracket(16..17),
+                            RBracket(17..18),
+                        ],
+                        exprs: [
+                            Array {
+                                span: [
+                                    LBracket(2..3),
+                                    LiteralNumber(3..4),
+                                    Comma(4..5),
+                                    LiteralNumber(5..6),
+                                    Comma(6..7),
+                                    LiteralNumber(7..8),
+                                    RBracket(8..9),
+                                ],
+                                exprs: [
+                                    Literal {
+                                        span: [
+                                            LiteralNumber(3..4),
+                                        ],
+                                        lit: Number(
+                                            "1",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralNumber(5..6),
+                                        ],
+                                        lit: Number(
+                                            "2",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralNumber(7..8),
+                                        ],
+                                        lit: Number(
+                                            "3",
+                                        ),
+                                    },
+                                ],
+                            },
+                            Array {
+                                span: [
+                                    LBracket(10..11),
+                                    LiteralNumber(11..12),
+                                    Comma(12..13),
+                                    LiteralNumber(13..14),
+                                    Comma(14..15),
+                                    LiteralNumber(15..16),
+                                    RBracket(16..17),
+                                ],
+                                exprs: [
+                                    Literal {
+                                        span: [
+                                            LiteralNumber(11..12),
+                                        ],
+                                        lit: Number(
+                                            "4",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralNumber(13..14),
+                                        ],
+                                        lit: Number(
+                                            "5",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralNumber(15..16),
+                                        ],
+                                        lit: Number(
+                                            "6",
+                                        ),
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    Array {
+                        span: [
+                            LBracket(19..20),
+                            LBracket(20..21),
+                            LiteralNumber(21..22),
+                            Comma(22..23),
+                            LiteralNumber(23..24),
+                            Comma(24..25),
+                            LiteralNumber(25..26),
+                            RBracket(26..27),
+                            RBracket(27..28),
+                        ],
+                        exprs: [
+                            Array {
+                                span: [
+                                    LBracket(20..21),
+                                    LiteralNumber(21..22),
+                                    Comma(22..23),
+                                    LiteralNumber(23..24),
+                                    Comma(24..25),
+                                    LiteralNumber(25..26),
+                                    RBracket(26..27),
+                                ],
+                                exprs: [
+                                    Literal {
+                                        span: [
+                                            LiteralNumber(21..22),
+                                        ],
+                                        lit: Number(
+                                            "7",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralNumber(23..24),
+                                        ],
+                                        lit: Number(
+                                            "8",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralNumber(25..26),
+                                        ],
+                                        lit: Number(
+                                            "9",
+                                        ),
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+            accessor: Bracket {
+                key: Number(
+                    "0",
+                ),
+            },
+        },
+        accessor: Bracket {
+            key: Number(
+                "1",
+            ),
+        },
+    },
+    accessor: Bracket {
+        key: Number(
+            "2",
+        ),
+    },
+}
+
+
+---------- Input ----------
 typeof(1 + 2)
 ---------- Output ---------
 typeof(1 + 2)
@@ -243,6 +701,116 @@ UnaryOp {
                                 },
                             },
                         },
+                    },
+                },
+            },
+        },
+    },
+}
+
+
+---------- Input ----------
+0XFF + 0xff + 0xa + x'ffff'
+---------- Output ---------
+0XFF + 0xff + 0xa + x'ffff'
+---------- AST ------------
+BinaryOp {
+    span: [
+        Plus(18..19),
+    ],
+    op: Plus,
+    left: BinaryOp {
+        span: [
+            Plus(12..13),
+        ],
+        op: Plus,
+        left: BinaryOp {
+            span: [
+                Plus(5..6),
+            ],
+            op: Plus,
+            left: Literal {
+                span: [
+                    LiteralHex(0..4),
+                ],
+                lit: Number(
+                    "0XFF",
+                ),
+            },
+            right: Literal {
+                span: [
+                    LiteralHex(7..11),
+                ],
+                lit: Number(
+                    "0xff",
+                ),
+            },
+        },
+        right: Literal {
+            span: [
+                LiteralHex(14..17),
+            ],
+            lit: Number(
+                "0xa",
+            ),
+        },
+    },
+    right: Literal {
+        span: [
+            LiteralHex(20..27),
+        ],
+        lit: Number(
+            "x'ffff'",
+        ),
+    },
+}
+
+
+---------- Input ----------
+1 - -(- - -1)
+---------- Output ---------
+1 - - - - - 1
+---------- AST ------------
+BinaryOp {
+    span: [
+        Minus(2..3),
+    ],
+    op: Minus,
+    left: Literal {
+        span: [
+            LiteralNumber(0..1),
+        ],
+        lit: Number(
+            "1",
+        ),
+    },
+    right: UnaryOp {
+        span: [
+            Minus(4..5),
+        ],
+        op: Minus,
+        expr: UnaryOp {
+            span: [
+                Minus(6..7),
+            ],
+            op: Minus,
+            expr: UnaryOp {
+                span: [
+                    Minus(8..9),
+                ],
+                op: Minus,
+                expr: UnaryOp {
+                    span: [
+                        Minus(10..11),
+                    ],
+                    op: Minus,
+                    expr: Literal {
+                        span: [
+                            LiteralNumber(11..12),
+                        ],
+                        lit: Number(
+                            "1",
+                        ),
                     },
                 },
             },

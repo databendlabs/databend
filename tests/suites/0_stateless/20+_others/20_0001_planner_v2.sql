@@ -235,6 +235,7 @@ select trim(' abc ');
 select '===Array Literal===';
 select [1, 2, 3];
 select [];
+select [[1, 2, 3],[1, 2, 3]];
 
 select '====Correlated Subquery====';
 select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
@@ -258,5 +259,14 @@ create table t (a varchar);
 insert into t values ('foo');
 select POSITION('o' IN t.a) from t;
 drop table t;
+
+select '====Tuple====';
+select ('field', number) from numbers(5);
+
+select '====View====';
+drop view if exists temp;
+create view temp as select number from numbers(1);
+select number from temp;
+drop view temp;
 
 set enable_planner_v2 = 0;

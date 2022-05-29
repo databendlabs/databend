@@ -38,6 +38,21 @@ error:
 
 
 ---------- Input ----------
+1 a
+---------- Output ---------
+1
+---------- AST ------------
+Literal {
+    span: [
+        LiteralNumber(0..1),
+    ],
+    lit: Number(
+        "1",
+    ),
+}
+
+
+---------- Input ----------
 CAST(col1)
 ---------- Output ---------
 error: 

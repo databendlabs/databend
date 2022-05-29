@@ -55,6 +55,10 @@ use super::inner::QueryConfig as InnerQueryConfig;
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct Config {
+    /// Run a command and quit
+    #[clap(long, default_value_t)]
+    pub cmd: String,
+
     #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
 
@@ -123,6 +127,7 @@ impl Config {
 impl From<InnerConfig> for Config {
     fn from(inner: InnerConfig) -> Self {
         Self {
+            cmd: inner.cmd,
             config_file: inner.config_file,
             query: inner.query.into(),
             log: inner.log.into(),
@@ -138,6 +143,7 @@ impl TryInto<InnerConfig> for Config {
 
     fn try_into(self) -> Result<InnerConfig> {
         Ok(InnerConfig {
+            cmd: self.cmd,
             config_file: self.config_file,
             query: self.query.try_into()?,
             log: self.log.try_into()?,

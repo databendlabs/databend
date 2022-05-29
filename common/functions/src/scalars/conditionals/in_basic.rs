@@ -108,7 +108,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
 
     fn return_type(&self) -> DataTypeImpl {
         if self.is_null {
-            return NullType::arc();
+            return NullType::new_impl();
         }
         BooleanType::new_impl()
     }
@@ -120,7 +120,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         input_rows: usize,
     ) -> Result<ColumnRef> {
         if self.is_null {
-            let col = NullType::arc().create_constant_column(&DataValue::Null, input_rows)?;
+            let col = NullType::new_impl().create_constant_column(&DataValue::Null, input_rows)?;
             return Ok(col);
         }
 

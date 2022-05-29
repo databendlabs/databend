@@ -40,7 +40,7 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     ver
 });
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct RaftConfig {
     /// Identify a config.
     /// This is only meant to make debugging easier with more than one Config involved.

@@ -1181,6 +1181,7 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
+ "common-building",
  "common-exception",
  "common-grpc",
  "common-meta-api",
@@ -1190,8 +1191,10 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "futures",
+ "once_cell",
  "prost 0.9.0",
  "rand 0.8.5",
+ "semver",
  "serde",
  "serde_json",
  "thiserror",
@@ -1783,6 +1786,7 @@ dependencies = [
  "clap 3.1.8",
  "common-arrow",
  "common-base",
+ "common-building",
  "common-exception",
  "common-grpc",
  "common-macros",
@@ -1804,6 +1808,7 @@ dependencies = [
  "prost 0.9.0",
  "regex",
  "reqwest",
+ "semver",
  "serde",
  "serde-bridge",
  "serde_json",
@@ -1913,6 +1918,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rsa",
+ "semver",
  "serde",
  "serde-bridge",
  "serde_json",
@@ -5685,9 +5691,9 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.4"
+version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "568a8e6258aa33c13358f81fd834adb854c6f7c9468520910a9b1e8fac068012"
+checksum = "8cb243bdfdb5936c8dc3c45762a19d12ab4550cdc753bc247637d4ec35a040fd"
 dependencies = [
  "serde",
 ]

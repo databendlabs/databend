@@ -17,8 +17,9 @@ use common_meta_types::MetaResult;
 
 use super::outer_v0::Config as OuterV0Config;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct Config {
+    pub cmd: String,
     pub config_file: String,
     pub log_level: String,
     pub log_dir: String,
@@ -35,6 +36,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            cmd: "".to_string(),
             config_file: "".to_string(),
             log_level: "INFO".to_string(),
             log_dir: "./.databend/logs".to_string(),
@@ -54,7 +56,7 @@ impl Config {
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub fn load() -> MetaResult<Self> {
-        let cfg = OuterV0Config::load()?.try_into()?;
+        let cfg = OuterV0Config::load()?.into();
 
         Ok(cfg)
     }
