@@ -15,6 +15,7 @@
 use crate::procedures::systems::ClusteringInformationProcedure;
 use crate::procedures::systems::FuseSegmentProcedure;
 use crate::procedures::systems::FuseSnapshotProcedure;
+use crate::procedures::systems::SearchTablesProcedure;
 use crate::procedures::ProcedureFactory;
 
 pub struct SystemProcedure;
@@ -32,6 +33,10 @@ impl SystemProcedure {
         factory.register(
             "system$fuse_segment",
             Box::new(FuseSegmentProcedure::try_create),
+        );
+        factory.register(
+            "system$search_tables",
+            Box::new(SearchTablesProcedure::try_create),
         );
     }
 }
