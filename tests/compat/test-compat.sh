@@ -142,7 +142,7 @@ run_test()
     echo " === Clean old meta dir"
     rm -rf .databend/meta || echo " === no meta dir to rm"
 
-    rm nohup.out
+    rm nohup.out || echo "no nohup.out"
 
     export RUST_BACKTRACE=1
 
@@ -167,6 +167,8 @@ run_test()
 }
 
 # -- main --
+
+chmod +x ./bins/current/*
 
 echo " === current metasrv ver: $(./bins/current/databend-meta --single --cmd ver | tr '\n' ' ')"
 echo " === current   query ver: $(./bins/current/databend-query --cmd ver | tr '\n' ' ')"
