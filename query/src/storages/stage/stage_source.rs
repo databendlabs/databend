@@ -195,15 +195,29 @@ impl StageSource {
 
         // TODO(xuanwo): we need to unify with MultipartFormat.
         let compression_algo = match stage.file_format_options.compression {
-            StageFileCompression::Auto => todo!("we will support auto in the future"),
+            StageFileCompression::Auto => {
+                return Err(ErrorCode::UnImplement(
+                    "compress type auto is unimplemented",
+                ))
+            }
             StageFileCompression::Gzip => Some(CompressAlgorithm::Gzip),
             StageFileCompression::Bz2 => Some(CompressAlgorithm::Bz2),
             StageFileCompression::Brotli => Some(CompressAlgorithm::Brotli),
             StageFileCompression::Zstd => Some(CompressAlgorithm::Zstd),
             StageFileCompression::Deflate => Some(CompressAlgorithm::Deflate),
-            StageFileCompression::RawDeflate => todo!("we will support raw deflate in the future"),
-            StageFileCompression::Lzo => todo!("we will support lzo in the future"),
-            StageFileCompression::Snappy => todo!("we will support snappy in the future"),
+            StageFileCompression::RawDeflate => {
+                return Err(ErrorCode::UnImplement(
+                    "compress type raw deflate is unimplemented",
+                ))
+            }
+            StageFileCompression::Lzo => {
+                return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"))
+            }
+            StageFileCompression::Snappy => {
+                return Err(ErrorCode::UnImplement(
+                    "compress type snappy is unimplemented",
+                ))
+            }
             StageFileCompression::None => None,
         };
         info!(

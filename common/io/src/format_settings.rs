@@ -78,9 +78,8 @@ impl FromStr for Compression {
             "lzo" => Ok(Compression::Lzo),
             "snappy" => Ok(Compression::Snappy),
             "none" => Ok(Compression::None),
-            _ => Err(ErrorCode::IllegalUserSettingFormat(format!(
-                "Unknown compression: {}",
-                s
+            _ => Err(ErrorCode::UnknownCompressionType(format!(
+                "Unknown compression: {s}"
             ))),
         }
     }

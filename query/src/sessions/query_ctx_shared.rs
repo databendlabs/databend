@@ -287,9 +287,9 @@ impl QueryContextShared {
             })?;
 
             let compress = String::from_utf8(settings.get_compression()?).map_err(|_| {
-                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+                ErrorCode::UnknownCompressionType("Compress type must be valid utf-8")
             })?;
-            format.compression = compress.parse().expect("must be valid compress");
+            format.compression = compress.parse()?
         }
         Ok(format)
     }

@@ -166,7 +166,7 @@ pub fn parse_copy_file_format_options(
             .as_bytes(),
     )
     .parse()
-    .map_err(|e| ErrorCode::SyntaxException(format!("File compression type error:{:?}", e)))?;
+    .map_err(ErrorCode::UnknownCompressionType)?;
 
     Ok(FileFormatOptions {
         format: file_format,

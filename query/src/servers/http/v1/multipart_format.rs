@@ -149,15 +149,29 @@ impl MultipartFormat {
     ) -> Result<(MultipartWorker, Vec<ProcessorPtr>)> {
         let compress_algo = match settings.compression {
             Compression::None => None,
-            Compression::Auto => todo!("we will support auto in the future"),
+            Compression::Auto => {
+                return Err(ErrorCode::UnImplement(
+                    "compress type auto is unimplemented",
+                ))
+            }
             Compression::Gzip => Some(CompressAlgorithm::Gzip),
             Compression::Bz2 => Some(CompressAlgorithm::Bz2),
             Compression::Brotli => Some(CompressAlgorithm::Brotli),
             Compression::Zstd => Some(CompressAlgorithm::Zstd),
             Compression::Deflate => Some(CompressAlgorithm::Deflate),
-            Compression::RawDeflate => todo!("we will support raw deflate in the future"),
-            Compression::Lzo => todo!("we will support lzo in the future"),
-            Compression::Snappy => todo!("we will support snappy in the future"),
+            Compression::RawDeflate => {
+                return Err(ErrorCode::UnImplement(
+                    "compress type raw deflate is unimplemented",
+                ))
+            }
+            Compression::Lzo => {
+                return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"))
+            }
+            Compression::Snappy => {
+                return Err(ErrorCode::UnImplement(
+                    "compress type snappy is unimplemented",
+                ))
+            }
         };
         let input_decompress = compress_algo.map(DecompressDecoder::new);
 
@@ -289,8 +303,8 @@ impl Processor for SequentialInputFormatSource {
                                 DecompressState::Decoding => {
                                     let mut buf = vec![0; 4 * 1024 * 1024];
                                     let written = decompress.decode(&mut buf).map_err(|e| {
-                                        ErrorCode::InvalidSourceFormat(format!(
-                                            "decompress source: {e}"
+                                        ErrorCode::InvalidCompressionData(format!(
+                                            "compression data invalid: {e}"
                                         ))
                                     })?;
                                     output.extend_from_slice(&buf[..written])
@@ -298,8 +312,8 @@ impl Processor for SequentialInputFormatSource {
                                 DecompressState::Flushing => {
                                     let mut buf = vec![0; 4 * 1024 * 1024];
                                     let written = decompress.finish(&mut buf).map_err(|e| {
-                                        ErrorCode::InvalidSourceFormat(format!(
-                                            "decompress source: {e}"
+                                        ErrorCode::InvalidCompressionData(format!(
+                                            "compression data invalid: {e}"
                                         ))
                                     })?;
                                     output.extend_from_slice(&buf[..written])
