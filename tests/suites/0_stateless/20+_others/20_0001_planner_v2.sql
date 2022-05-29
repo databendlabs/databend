@@ -263,4 +263,10 @@ drop table t;
 select '====Tuple====';
 select ('field', number) from numbers(5);
 
+select '====View====';
+drop view if exists temp;
+create view temp as select number from numbers(1);
+select number from temp;
+drop view temp;
+
 set enable_planner_v2 = 0;

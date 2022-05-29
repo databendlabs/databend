@@ -260,7 +260,7 @@ class SuiteRunner(object):
 
     def execute_statement(self, statement):
         if self.show_query_on_execution:
-            log.info("excuting statement, type {}\n{}\n".format(
+            log.info("executing statement, type {}\n{}\n".format(
                 statement.s_type.type, statement.text))
         if statement.s_type.type == "query":
             self.assert_execute_query(statement)
