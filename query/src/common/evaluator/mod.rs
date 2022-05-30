@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod evaluator;
-mod expression_evaluator;
-mod hashtable;
+mod eval_context;
+mod scalar;
+
+pub use eval_context::EvalContext;
+pub use eval_context::TypedVector;
+pub use scalar::ScalarEvaluator;
