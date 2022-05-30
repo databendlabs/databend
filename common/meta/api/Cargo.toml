@@ -16,10 +16,10 @@ test = false
 common-base = { path = "../../base" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../exception" }
+common-meta-app = { path = "../app" }
 common-meta-types = { path = "../types" }
 common-proto-conv = { path = "../../proto-conv" }
 common-protos = { path = "../../protos" }
-common-meta-app = { path = "../app" }
 common-tracing = { path = "../../tracing" }
 
 anyerror = "0.1.6"

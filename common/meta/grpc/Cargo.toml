@@ -19,10 +19,10 @@ common-base = { path = "../../base" }
 common-exception = { path = "../../exception" }
 common-grpc = { path = "../../grpc" }
 common-meta-api = { path = "../api" }
+common-meta-app = { path = "../app" }
 common-meta-types = { path = "../types" }
 common-proto-conv = { path = "../../proto-conv" }
 common-protos = { path = "../../protos" }
-common-meta-app = { path = "../app" }
 common-tracing = { path = "../../tracing" }
 
 derive_more = "0.99.17"

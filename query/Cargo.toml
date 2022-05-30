@@ -42,6 +42,7 @@ common-io = { path = "../common/io" }
 common-macros = { path = "../common/macros" }
 common-management = { path = "../common/management" }
 common-meta-api = { path = "../common/meta/api" }
+common-meta-app = { path = "../common/meta/app" }
 common-meta-embedded = { path = "../common/meta/embedded" }
 common-meta-grpc = { path = "../common/meta/grpc" }
 common-meta-raft-store = { path = "../common/meta/raft-store" }
@@ -49,7 +50,6 @@ common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
-common-meta-app = { path = "../common/meta/app" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 
