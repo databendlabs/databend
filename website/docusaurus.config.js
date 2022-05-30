@@ -193,7 +193,7 @@ const config = {
                 indexName: 'databend-rs-docs',
                 contextualSearch: true,
             },
-            image: 'img/databend-logo-vertical.png',
+            image: 'img/logo/databend-logo-vertical.png',
             metadata: [{name: 'twitter:card', content: 'summary_large_image'}],
         }),
 };
