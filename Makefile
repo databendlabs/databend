@@ -47,6 +47,9 @@ run: build-release
 run-debug: build-debug
 	bash ./scripts/ci/deploy/databend-query-standalone.sh
 
+run-debug-management: build-debug
+	bash ./scripts/ci/deploy/databend-query-management-mode.sh
+
 build:
 	bash ./scripts/build/build-debug.sh
 

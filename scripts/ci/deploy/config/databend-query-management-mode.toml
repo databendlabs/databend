@@ -12,6 +12,9 @@ admin_api_address = "0.0.0.0:8081"
 # Databend Query metrics RESET API.
 metric_api_address = "0.0.0.0:7071"
 
+# For flight rpc.
+flight_api_address = "0.0.0.0:9091"
+
 # Databend Query MySQL Handler.
 mysql_handler_host = "0.0.0.0"
 mysql_handler_port = 3307
@@ -50,4 +53,3 @@ type = "fs"
 # FS storage.
 [storage.fs]
 data_path = "management_data"
-
