@@ -19,11 +19,7 @@ DROP TABLE [IF EXISTS] [db.]name
 `DROP TABLE` only remove the table schema from meta service, we do not remove the underlying data from the storage.
 If you want to delete the data and table all, please use:
 
-`TRUNCATE TABLE <table_name>;`
-
-`OPTIMIZE TABLE <table_name> PURGE;`
-
-`DROP TABLE <table_name>;`
+`DROP TABLE <table_name> ALL;`
 
 :::
 
