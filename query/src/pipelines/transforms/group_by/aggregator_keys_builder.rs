@@ -65,13 +65,11 @@ impl KeysColumnBuilder<KeysRef> for SerializedKeysColumnBuilder {
     }
 }
 
-
-
 pub struct LargeFixedKeysColumnBuilder<T>
 where T: LargePrimitive
 {
     pub inner_builder: MutableStringColumn,
-    pub _t: PhantomData<T>
+    pub _t: PhantomData<T>,
 }
 
 impl<T> KeysColumnBuilder<T> for LargeFixedKeysColumnBuilder<T>
@@ -86,9 +84,10 @@ where
 
     #[inline]
     fn append_value(&mut self, v: &T) {
-        let  values = self.inner_builder.values_mut();
-        v.serialize_to(values);
-        let size = values.len();
-        self.inner_builder.offsets_mut().push(size as i64);
+        let values = self.inner_builder.values_mut();
+        let new_len = values.len() + T::BYTE_SIZE;
+        values.resize(new_len, 0);
+        v.serialize_to(&mut values[new_len - T::BYTE_SIZE..]);
+        self.inner_builder.offsets_mut().push(new_len as i64);
     }
 }

@@ -21,6 +21,8 @@ use std::ops::Not;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
+use primitive_types::U256;
+use primitive_types::U512;
 
 use crate::DataBlock;
 
@@ -127,6 +129,8 @@ pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
 pub type HashMethodKeysU32 = HashMethodFixedKeys<u32>;
 pub type HashMethodKeysU64 = HashMethodFixedKeys<u64>;
 pub type HashMethodKeysU128 = HashMethodFixedKeys<u128>;
+pub type HashMethodKeysU256 = HashMethodFixedKeys<U256>;
+pub type HashMethodKeysU512 = HashMethodFixedKeys<U512>;
 
 /// These methods are `generic` method to generate hash key,
 /// that is the 'numeric' or 'binary` representation of each column value as hash key.
@@ -138,6 +142,8 @@ pub enum HashMethodKind {
     KeysU32(HashMethodKeysU32),
     KeysU64(HashMethodKeysU64),
     KeysU128(HashMethodKeysU128),
+    KeysU256(HashMethodKeysU256),
+    KeysU512(HashMethodKeysU512),
 }
 
 impl HashMethodKind {
@@ -150,6 +156,8 @@ impl HashMethodKind {
             HashMethodKind::KeysU32(v) => v.name(),
             HashMethodKind::KeysU64(v) => v.name(),
             HashMethodKind::KeysU128(v) => v.name(),
+            HashMethodKind::KeysU256(v) => v.name(),
+            HashMethodKind::KeysU512(v) => v.name(),
         }
     }
     pub fn data_type(&self) -> DataTypeImpl {
@@ -161,6 +169,8 @@ impl HashMethodKind {
             HashMethodKind::KeysU32(_) => u32::to_data_type(),
             HashMethodKind::KeysU64(_) => u64::to_data_type(),
             HashMethodKind::KeysU128(_) => Vu8::to_data_type(),
+            HashMethodKind::KeysU256(_) => Vu8::to_data_type(),
+            HashMethodKind::KeysU512(_) => Vu8::to_data_type(),
         }
     }
 }
@@ -275,17 +285,16 @@ pub struct HashMethodFixedKeys<T> {
     t: PhantomData<T>,
 }
 
-
 impl<T> HashMethodFixedKeys<T>
-where T: PrimitiveType {
-     #[inline]
+where T: PrimitiveType
+{
+    #[inline]
     pub fn get_key(&self, column: &PrimitiveColumn<T>, row: usize) -> T {
         unsafe { column.value_unchecked(row) }
     }
 }
 
-impl<T> HashMethodFixedKeys<T>
-{
+impl<T> HashMethodFixedKeys<T> {
     pub fn default() -> Self {
         HashMethodFixedKeys { t: PhantomData }
     }
@@ -382,8 +391,7 @@ impl<T> HashMethodFixedKeys<T>
 }
 
 impl<T> HashMethod for HashMethodFixedKeys<T>
-where
-    T: std::cmp::Eq + Hash + Clone + Debug + Default + 'static,
+where T: std::cmp::Eq + Hash + Clone + Debug + Default + 'static
 {
     type HashKey<'a> = T;
 

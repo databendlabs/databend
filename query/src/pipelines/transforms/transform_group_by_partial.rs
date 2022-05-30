@@ -136,7 +136,6 @@ impl Processor for GroupByPartialTransform {
         let group_cols = self.extract_group_columns();
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let hash_method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
-        
 
         match hash_method {
             HashMethodKind::KeysU8(method) => self.aggregate(method, group_cols).await,
@@ -145,7 +144,7 @@ impl Processor for GroupByPartialTransform {
             HashMethodKind::KeysU64(method) => self.aggregate(method, group_cols).await,
             HashMethodKind::SingleString(method) => self.aggregate(method, group_cols).await,
             HashMethodKind::Serializer(method) => self.aggregate(method, group_cols).await,
-            _ =>  {
+            _ => {
                 let method = HashMethodSerializer::default();
                 self.aggregate(method, group_cols).await
             }

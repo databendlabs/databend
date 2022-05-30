@@ -143,37 +143,47 @@ impl ObjectType for VariantValue {
     }
 }
 
-
-pub trait LargePrimitive: Sized + 'static {
-     fn serialize_to(&self, v: &mut Vec<u8>);
-     fn from_bytes(v: &[u8]) -> Result<Self>;
+pub trait LargePrimitive: Default + Sized + 'static {
+    const BYTE_SIZE: usize;
+    fn serialize_to(&self, _bytes: &mut [u8]);
+    fn from_bytes(v: &[u8]) -> Result<Self>;
 }
 
 impl LargePrimitive for u128 {
-     fn serialize_to(&self, v: &mut Vec<u8>) {
+    const BYTE_SIZE: usize = 16;
+    fn serialize_to(&self, bytes: &mut [u8]) {
         let bs = self.to_le_bytes();
-        v.extend_from_slice(&bs);
+        bytes.copy_from_slice(&bs);
     }
-    
+
     fn from_bytes(v: &[u8]) -> Result<Self> {
-        let bs: [u8; 16] = v.try_into().map_err(|_| ErrorCode::StrParseError(format!("Unable to parse into u128, unexpected byte size: {}", v.len())))?;
+        let bs: [u8; 16] = v.try_into().map_err(|_| {
+            ErrorCode::StrParseError(format!(
+                "Unable to parse into u128, unexpected byte size: {}",
+                v.len()
+            ))
+        })?;
         Ok(u128::from_le_bytes(bs))
     }
 }
+
 impl LargePrimitive for U256 {
-    fn serialize_to(&self, v: &mut Vec<u8>) {
-          self.to_little_endian(v);
+    const BYTE_SIZE: usize = 32;
+    fn serialize_to(&self, bytes: &mut [u8]) {
+        self.to_little_endian(bytes);
     }
-    
+
     fn from_bytes(v: &[u8]) -> Result<Self> {
         Ok(U256::from_little_endian(v))
     }
 }
+
 impl LargePrimitive for U512 {
-    fn serialize_to(&self, v: &mut Vec<u8>) {
-          self.to_little_endian(v);
+    const BYTE_SIZE: usize = 64;
+    fn serialize_to(&self, bytes: &mut [u8]) {
+        self.to_little_endian(bytes);
     }
-    
+
     fn from_bytes(v: &[u8]) -> Result<Self> {
         Ok(U512::from_little_endian(v))
     }

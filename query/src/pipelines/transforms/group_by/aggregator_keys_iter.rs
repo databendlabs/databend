@@ -50,7 +50,6 @@ where T: PrimitiveType
     }
 }
 
-
 pub struct LargeFixedKeysColumnIter<T>
 where T: LargePrimitive
 {
@@ -61,15 +60,12 @@ impl<T> LargeFixedKeysColumnIter<T>
 where T: LargePrimitive
 {
     pub fn create(inner: &StringColumn) -> Result<Self> {
-     
         let mut result = Vec::with_capacity(inner.len());
         for bs in inner.scalar_iter() {
             result.push(T::from_bytes(bs)?);
         }
-        
-        Ok(Self {
-            inner: result,
-        })
+
+        Ok(Self { inner: result })
     }
 }
 

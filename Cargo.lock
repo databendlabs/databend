@@ -1897,6 +1897,7 @@ dependencies = [
  "petgraph",
  "poem",
  "pretty_assertions",
+ "primitive-types",
  "prost 0.9.0",
  "rand 0.8.5",
  "regex",

@@ -93,6 +93,7 @@ openssl = { version = "0.10", features = ["vendored"] }
 paste = "1.0.7"
 petgraph = "0.6.0"
 poem = { version = "=1.3.16", features = ["rustls", "multipart", "compression"] }
+primitive-types = "0.6.2"
 prost = "=0.9.0"
 rand = "0.8.5"
 regex = "1.5.5"

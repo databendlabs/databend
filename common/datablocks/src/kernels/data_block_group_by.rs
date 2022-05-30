@@ -18,7 +18,6 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::TypeID;
 use common_exception::Result;
 
-use crate::HashMethodKeysU128;
 use crate::kernels::HashMethodKeysU16;
 use crate::kernels::HashMethodKeysU32;
 use crate::kernels::HashMethodKeysU64;
@@ -27,6 +26,9 @@ use crate::kernels::HashMethodKind;
 use crate::kernels::HashMethodSerializer;
 use crate::DataBlock;
 use crate::HashMethod;
+use crate::HashMethodKeysU128;
+use crate::HashMethodKeysU256;
+use crate::HashMethodKeysU512;
 use crate::HashMethodSingleString;
 
 impl DataBlock {
@@ -82,6 +84,8 @@ impl DataBlock {
             3..=4 => Ok(HashMethodKind::KeysU32(HashMethodKeysU32::default())),
             5..=8 => Ok(HashMethodKind::KeysU64(HashMethodKeysU64::default())),
             9..=16 => Ok(HashMethodKind::KeysU128(HashMethodKeysU128::default())),
+            17..=32 => Ok(HashMethodKind::KeysU256(HashMethodKeysU256::default())),
+            33..=64 => Ok(HashMethodKind::KeysU512(HashMethodKeysU512::default())),
             // TODO support u256
             _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
         }
@@ -140,8 +144,24 @@ impl DataBlock {
                     .collect();
                 blocks
             }
-            
+
             HashMethodKind::KeysU128(s) => {
+                let blocks = s
+                    .group_by(block, column_names)?
+                    .iter()
+                    .map(|(_, _, b)| b.clone())
+                    .collect();
+                blocks
+            }
+            HashMethodKind::KeysU256(s) => {
+                let blocks = s
+                    .group_by(block, column_names)?
+                    .iter()
+                    .map(|(_, _, b)| b.clone())
+                    .collect();
+                blocks
+            }
+            HashMethodKind::KeysU512(s) => {
                 let blocks = s
                     .group_by(block, column_names)?
                     .iter()

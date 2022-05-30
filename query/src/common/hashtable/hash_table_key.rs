@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use primitive_types::U256;
+use primitive_types::U512;
+
 pub trait HashTableKeyable: Eq + Sized {
     const BEFORE_EQ_HASH: bool;
 
@@ -58,4 +61,61 @@ primitive_hasher_impl!(u16);
 primitive_hasher_impl!(u32);
 primitive_hasher_impl!(u64);
 
-primitive_hasher_impl!(u128);
+impl HashTableKeyable for u128 {
+    const BEFORE_EQ_HASH: bool = false;
+    #[inline(always)]
+    fn is_zero(&self) -> bool {
+        *self == 0u128
+    }
+
+    #[inline(always)]
+    fn fast_hash(&self) -> u64 {
+        let mut hash_value = *self;
+        hash_value ^= hash_value >> 33;
+        hash_value = hash_value.wrapping_mul(0xff51afd7ed558ccd_u128);
+        hash_value ^= hash_value >> 33;
+        hash_value = hash_value.wrapping_mul(0xc4ceb9fe1a85ec53_u128);
+        hash_value ^= hash_value >> 33;
+
+        hash_value as u64
+    }
+    #[inline(always)]
+    fn set_key(&mut self, new_value: &u128) {
+        *self = *new_value;
+    }
+}
+
+impl HashTableKeyable for U256 {
+    const BEFORE_EQ_HASH: bool = false;
+    #[inline(always)]
+    fn is_zero(&self) -> bool {
+        self.is_zero()
+    }
+    #[inline(always)]
+    fn fast_hash(&self) -> u64 {
+        self.low_u128().fast_hash() ^ (*self >> 128).low_u128().fast_hash()
+    }
+    #[inline(always)]
+    fn set_key(&mut self, new_value: &U256) {
+        *self = *new_value;
+    }
+}
+
+impl HashTableKeyable for U512 {
+    const BEFORE_EQ_HASH: bool = false;
+    #[inline(always)]
+    fn is_zero(&self) -> bool {
+        self.is_zero()
+    }
+    #[inline(always)]
+    fn fast_hash(&self) -> u64 {
+        self.low_u128().fast_hash()
+            ^ (*self >> 128).low_u128().fast_hash()
+            ^ (*self >> 256).low_u128().fast_hash()
+            ^ (*self >> 384).low_u128().fast_hash()
+    }
+    #[inline(always)]
+    fn set_key(&mut self, new_value: &U512) {
+        *self = *new_value;
+    }
+}

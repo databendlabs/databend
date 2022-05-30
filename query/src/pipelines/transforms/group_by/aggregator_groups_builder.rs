@@ -32,15 +32,13 @@ pub trait GroupColumnsBuilder<Key> {
     fn finish(self) -> Result<Vec<ColumnRef>>;
 }
 
-pub struct FixedKeysGroupColumnsBuilder<T>
-{
+pub struct FixedKeysGroupColumnsBuilder<T> {
     data: Vec<T>,
     groups_fields: Vec<DataField>,
 }
 
 impl<T> FixedKeysGroupColumnsBuilder<T>
-where
-    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
+where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>
 {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
@@ -51,8 +49,7 @@ where
 }
 
 impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
-where
-    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
+where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>
 {
     #[inline]
     fn append_value(&mut self, v: &T) {
@@ -65,7 +62,6 @@ where
         method.deserialize_group_columns(self.data, &self.groups_fields)
     }
 }
-
 
 pub struct SerializedKeysGroupColumnsBuilder {
     data: Vec<KeysRef>,

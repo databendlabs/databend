@@ -226,7 +226,8 @@ unsafe impl<T: HashTableKeyable + Send> Send for LongerFixedKeysAggregatorState<
 // will not be used multiple async, so KeyValueEntity is Sync
 unsafe impl<T: HashTableKeyable + Sync> Sync for LongerFixedKeysAggregatorState<T> {}
 
-impl<T: Send + Sync + Sized + 'static> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T>
+impl<T: Send + Sync + Sized + 'static> AggregatorState<HashMethodFixedKeys<T>>
+    for LongerFixedKeysAggregatorState<T>
 where
     for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
     for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey<'a>: HashTableKeyable,

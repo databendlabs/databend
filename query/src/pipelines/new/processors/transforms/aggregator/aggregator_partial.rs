@@ -19,7 +19,9 @@ use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKeysU128;
 use common_datablocks::HashMethodKeysU16;
+use common_datablocks::HashMethodKeysU256;
 use common_datablocks::HashMethodKeysU32;
+use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
@@ -50,7 +52,13 @@ pub type KeysU64PartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodKeysU64>;
 pub type KeysU128PartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodKeysU128>;
-    
+
+pub type KeysU256PartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodKeysU256>;
+
+pub type KeysU512PartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodKeysU512>;
+
 pub type SerializerPartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodSerializer>;
 pub type SingleStringPartialAggregator<const HAS_AGG: bool> =
