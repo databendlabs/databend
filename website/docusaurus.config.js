@@ -15,7 +15,7 @@ const config = {
     baseUrl: '/',
     onBrokenLinks: 'warn',
     onBrokenMarkdownLinks: 'warn',
-    favicon: 'img/favicon.svg',
+    favicon: 'img/logo/logo-no-text.svg',
     organizationName: 'datafuselabs',
     projectName: 'databend',
 
@@ -89,7 +89,7 @@ const config = {
                 title: 'Databend',
                 logo: {
                     alt: 'Databend Logo',
-                    src: 'img/favicon.svg',
+                    src: 'img/logo/logo-no-text.svg',
                 },
                 items: [
                     {
@@ -193,7 +193,7 @@ const config = {
                 indexName: 'databend-rs-docs',
                 contextualSearch: true,
             },
-            image: 'img/logo/databend-logo-horizontal.png',
+            image: 'img/logo/logo-no-text.png',
             metadata: [
               {name: 'twitter:card', content: 'summary_large_image'},
               {name: 'twitter:site', content: '@databend.rs'}
