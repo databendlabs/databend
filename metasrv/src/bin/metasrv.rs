@@ -102,13 +102,26 @@ fn run_cmd(conf: &Config) -> bool {
             println!("version: {}", METASRV_SEMVER.deref());
             println!("min-compatible-client-version: {}", MIN_METACLI_SEMVER);
         }
+        "show-config" => {
+            println!(
+                "config:\n{}",
+                pretty(&conf).unwrap_or_else(|e| format!("error format config: {}", e))
+            );
+        }
         _ => {
             eprintln!("Invalid cmd: {}", conf.cmd);
             eprintln!("Available cmds:");
             eprintln!("  --cmd ver");
             eprintln!("    Print version and min compatible meta-client version");
+            eprintln!("  --cmd show-config");
+            eprintln!("    Print effective config");
         }
     }
 
     true
+}
+
+fn pretty<T>(v: &T) -> Result<String, serde_json::Error>
+where T: serde::Serialize {
+    serde_json::to_string_pretty(v)
 }
