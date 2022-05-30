@@ -26,34 +26,24 @@ The release directory structure is roughly as follows:
 ├── configs
 │   ├── databend-query.toml
 │   └── databend-meta.toml
-├── docs 
-│   ├── basic-guide.md
-│   ├── faq.md
-│   └── mini-tutorial.md (?)
-├── data/ (?)
 ├── scripts/ (?)
 │   ├── bootstrap.sh
 │   └── benchmark.sh
-├── Makefile (?)
-└── README.md
+└── README.txt
 
 - `(?)` means optional.
 ```
 
 ## Required
 
-- `README.md`, basic information and important tips, useful links.
+- `README.txt`, basic information and important tips, useful links.
 - `bin`, of course, our binaries.
 - `configs`, the basic configs, to prompt for configuration usage and start the Databend service.
-- `docs`, helpful documents, frequently asked questions and basic user guide.
 
 ## Optional
 
 - `databend-metactl`, perhaps we no longer need to release databend-tools.
-- `docs/mini-tutorial.md`, like a worksheet, it will help to learn how to use Databend.
-- `data`, if we have a `mini-tutorial` in release, here is a copy of the data.
 - `scripts`, for easy installation and deployment.
-- `Makefile`, one-line commands, `install`, `run` and more.
 
 # Rationale and alternatives
 
