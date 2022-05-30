@@ -724,7 +724,7 @@ fn create_join_state(
     let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
     Ok(match method {
         HashMethodKind::Serializer(_) => Arc::new(ChainingHashTable::try_create(
-            ctx.clone(),
+            ctx,
             HashTable::SerializerHashTable(HashMap::<KeysRef, Vec<RowPtr>>::create()),
             build_expressions,
             probe_expressions,
@@ -732,7 +732,7 @@ fn create_join_state(
             probe_schema,
         )?),
         HashMethodKind::SingleString(_) => Arc::new(ChainingHashTable::try_create(
-            ctx.clone(),
+            ctx,
             HashTable::SerializerHashTable(HashMap::<KeysRef, Vec<RowPtr>>::create()),
             build_expressions,
             probe_expressions,
@@ -740,7 +740,7 @@ fn create_join_state(
             probe_schema,
         )?),
         HashMethodKind::KeysU8(_) => Arc::new(ChainingHashTable::try_create(
-            ctx.clone(),
+            ctx,
             HashTable::KeyU8HashTable(HashMap::<u8, Vec<RowPtr>>::create()),
             build_expressions,
             probe_expressions,
@@ -748,7 +748,7 @@ fn create_join_state(
             probe_schema,
         )?),
         HashMethodKind::KeysU16(_) => Arc::new(ChainingHashTable::try_create(
-            ctx.clone(),
+            ctx,
             HashTable::KeyU16HashTable(HashMap::<u16, Vec<RowPtr>>::create()),
             build_expressions,
             probe_expressions,
@@ -756,7 +756,7 @@ fn create_join_state(
             probe_schema,
         )?),
         HashMethodKind::KeysU32(_) => Arc::new(ChainingHashTable::try_create(
-            ctx.clone(),
+            ctx,
             HashTable::KeyU32HashTable(HashMap::<u32, Vec<RowPtr>>::create()),
             build_expressions,
             probe_expressions,
@@ -764,7 +764,7 @@ fn create_join_state(
             probe_schema,
         )?),
         HashMethodKind::KeysU64(_) => Arc::new(ChainingHashTable::try_create(
-            ctx.clone(),
+            ctx,
             HashTable::KeyU64HashTable(HashMap::<u64, Vec<RowPtr>>::create()),
             build_expressions,
             probe_expressions,

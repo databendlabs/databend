@@ -96,7 +96,7 @@ impl ChainingHashTable {
         let method = HashMethodFixedKeys::<Key>::default();
         let keys = method.build_keys(&probe_keys, input.num_rows())?;
         for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
-            let probe_result_ptr = hash_table.find_key(&key);
+            let probe_result_ptr = hash_table.find_key(key);
             if probe_result_ptr.is_none() {
                 // No matched row for current probe row
                 continue;
@@ -157,10 +157,7 @@ impl HashJoinState for ChainingHashTable {
             .iter()
             .map(|expr| ExpressionEvaluator::eval(&func_ctx, expr, input))
             .collect::<Result<Vec<ColumnRef>>>()?;
-        let probe_keys = probe_keys
-            .iter()
-            .map(|key| key)
-            .collect::<Vec<&ColumnRef>>();
+        let probe_keys = probe_keys.iter().collect::<Vec<&ColumnRef>>();
         let mut results: Vec<DataBlock> = vec![];
         match &*self.hash_table.read() {
             HashTable::SerializerHashTable(table) => {
@@ -303,7 +300,7 @@ where
             chunk_index: chunk_index as u32,
             row_index: row_index as u32,
         };
-        let entity = table.insert_key(&key, &mut inserted);
+        let entity = table.insert_key(key, &mut inserted);
         if inserted {
             entity.set_value(vec![ptr]);
         } else {
