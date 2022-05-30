@@ -47,11 +47,14 @@ impl Default for FormatSettings {
 pub enum Compression {
     None,
     Auto,
+    /// Deflate with gzip headers.
     Gzip,
     Bz2,
     Brotli,
     Zstd,
+    /// Deflate with zlib headers
     Deflate,
+    /// Raw default stream without any headers.
     RawDeflate,
     Lzo,
     Snappy,
@@ -74,7 +77,7 @@ impl FromStr for Compression {
             "brotli" => Ok(Compression::Brotli),
             "zstd" => Ok(Compression::Zstd),
             "deflate" => Ok(Compression::Deflate),
-            "rawdeflate" => Ok(Compression::RawDeflate),
+            "rawdeflate" | "raw_deflate" => Ok(Compression::RawDeflate),
             "lzo" => Ok(Compression::Lzo),
             "snappy" => Ok(Compression::Snappy),
             "none" => Ok(Compression::None),

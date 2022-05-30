@@ -24,6 +24,11 @@ echo "copy into ontime200 from '@s1' PATTERN = 'ontime.*parquet$' FILE_FORMAT = 
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 
+# copy auto csv
+echo "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.gz', 'ontime_200.csv.zst', 'ontime_200.csv.bz2') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = AUTO  record_delimiter = '\n' skip_header = 1);" | $MYSQL_CLIENT_CONNECT
+echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
+echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
+
 # copy gzip csv
 echo "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.gz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1);" | $MYSQL_CLIENT_CONNECT
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT

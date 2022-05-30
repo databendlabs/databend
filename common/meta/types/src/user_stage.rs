@@ -100,11 +100,11 @@ impl FromStr for StageFileCompression {
             "brotli" => Ok(StageFileCompression::Brotli),
             "zstd" => Ok(StageFileCompression::Zstd),
             "deflate" => Ok(StageFileCompression::Deflate),
-            "rawdeflate" => Ok(StageFileCompression::RawDeflate),
+            "rawdeflate" | "raw_deflate" => Ok(StageFileCompression::RawDeflate),
             "lzo" => Ok(StageFileCompression::Lzo),
             "snappy" => Ok(StageFileCompression::Snappy),
             "none" => Ok(StageFileCompression::None),
-            _ => Err("Unknown file compression type, must one of { auto | gzip | bz2 | brotli | zstd | deflate | rawdeflate | lzo | snappy | none }"
+            _ => Err("Unknown file compression type, must one of { auto | gzip | bz2 | brotli | zstd | deflate | raw_deflate | lzo | snappy | none }"
                          .to_string()),
         }
     }
