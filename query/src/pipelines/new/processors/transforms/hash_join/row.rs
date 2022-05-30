@@ -15,15 +15,19 @@
 use std::sync::RwLock;
 
 use common_datablocks::DataBlock;
+use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::SmallVu8;
 use common_exception::Result;
 use smallvec::SmallVec;
 
-pub type KeysVector = Vec<SmallVec<[u8; 16]>>;
+pub type ColumnVector = Vec<ColumnRef>;
+pub type KeysVector = Vec<SmallVu8>;
 
 pub struct Chunk {
     pub data_block: DataBlock,
-    pub keys: KeysVector,
+    pub cols: Option<ColumnVector>,
+    pub keys: Option<KeysVector>,
 }
 
 impl Chunk {
@@ -51,8 +55,28 @@ impl RowSpace {
         }
     }
 
-    pub fn push(&self, data_block: DataBlock, keys: KeysVector) -> Result<()> {
-        let chunk = Chunk { data_block, keys };
+    pub fn push_keys(&self, data_block: DataBlock, keys: KeysVector) -> Result<()> {
+        let chunk = Chunk {
+            data_block,
+            cols: None,
+            keys: Some(keys),
+        };
+
+        {
+            // Acquire write lock in current scope
+            let mut chunks = self.chunks.write().unwrap();
+            chunks.push(chunk);
+        }
+
+        Ok(())
+    }
+
+    pub fn push_cols(&self, data_block: DataBlock, cols: ColumnVector) -> Result<()> {
+        let chunk = Chunk {
+            data_block,
+            cols: Some(cols),
+            keys: None,
+        };
 
         {
             // Acquire write lock in current scope

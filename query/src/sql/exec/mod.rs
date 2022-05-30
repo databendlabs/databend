@@ -18,27 +18,36 @@ mod util;
 
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
+use common_datablocks::HashMethodKind;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
 use common_planners::RewriteHelper;
+use metrics::Key;
+use tonic::metadata::KeyRef;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
 use super::plans::RelOperator;
 use super::MetadataRef;
+use crate::common::HashMap;
+use crate::common::HashTableKind;
 use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
 use crate::pipelines::new::processors::ChainingHashTable;
 use crate::pipelines::new::processors::ExpressionTransform;
 use crate::pipelines::new::processors::HashJoinState;
+use crate::pipelines::new::processors::HashTable;
 use crate::pipelines::new::processors::ProjectionTransform;
 use crate::pipelines::new::processors::SinkBuildHashTable;
 use crate::pipelines::new::processors::Sinker;
@@ -54,6 +63,7 @@ use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
 use crate::pipelines::transforms::get_sort_descriptions;
+use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
 use crate::sql::exec::expression_builder::ExpressionBuilder;
@@ -514,13 +524,13 @@ impl PipelineBuilder {
             .map(|scalar| eb.build(scalar))
             .collect::<Result<Vec<Expression>>>()?;
 
-        let hash_join_state = Arc::new(ChainingHashTable::try_create(
+        let hash_join_state = create_join_state(
+            ctx.clone(),
             build_expressions,
             probe_expressions,
             build_schema,
             probe_schema,
-            ctx.clone(),
-        )?);
+        )?;
 
         // Build side
         self.build_sink_hash_table(hash_join_state.clone(), &mut child_pipeline)?;
@@ -701,4 +711,68 @@ impl PipelineBuilder {
         })?;
         Ok(schema_builder.build_join(input_schema, subquery_schema))
     }
+}
+
+fn create_join_state(
+    ctx: Arc<QueryContext>,
+    build_expressions: Vec<Expression>,
+    probe_expressions: Vec<Expression>,
+    build_schema: DataSchemaRef,
+    probe_schema: DataSchemaRef,
+) -> Result<Arc<ChainingHashTable>> {
+    let hash_key_types = build_expressions
+        .iter()
+        .map(|expr| expr.to_data_type(&build_schema))
+        .collect::<Result<Vec<DataTypeImpl>>>()?;
+    let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
+    Ok(match method {
+        HashMethodKind::Serializer(_) => Arc::new(ChainingHashTable::try_create(
+            ctx.clone(),
+            HashTable::SerializerHashTable(HashMap::<KeysRef, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::SingleString(_) => Arc::new(ChainingHashTable::try_create(
+            ctx.clone(),
+            HashTable::SerializerHashTable(HashMap::<KeysRef, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU8(_) => Arc::new(ChainingHashTable::try_create(
+            ctx.clone(),
+            HashTable::KeyU8HashTable(HashMap::<u8, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU16(_) => Arc::new(ChainingHashTable::try_create(
+            ctx.clone(),
+            HashTable::KeyU16HashTable(HashMap::<u16, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU32(_) => Arc::new(ChainingHashTable::try_create(
+            ctx.clone(),
+            HashTable::KeyU32HashTable(HashMap::<u32, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU64(_) => Arc::new(ChainingHashTable::try_create(
+            ctx.clone(),
+            HashTable::KeyU64HashTable(HashMap::<u64, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+    })
 }
