@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
+use common_datablocks::HashMethodKeysU128;
 use common_datablocks::HashMethodKeysU16;
 use common_datablocks::HashMethodKeysU32;
 use common_datablocks::HashMethodKeysU64;
@@ -45,6 +46,8 @@ pub type KeysU8FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, H
 pub type KeysU16FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU16>;
 pub type KeysU32FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU32>;
 pub type KeysU64FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU64>;
+pub type KeysU128FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU128>;
+
 pub type SingleStringFinalAggregator<const HAS_AGG: bool> =
     FinalAggregator<HAS_AGG, HashMethodSingleString>;
 

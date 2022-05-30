@@ -17,6 +17,7 @@ use std::sync::Arc;
 use bytes::BytesMut;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
+use common_datablocks::HashMethodKeysU128;
 use common_datablocks::HashMethodKeysU16;
 use common_datablocks::HashMethodKeysU32;
 use common_datablocks::HashMethodKeysU64;
@@ -47,6 +48,9 @@ pub type KeysU32PartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodKeysU32>;
 pub type KeysU64PartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodKeysU64>;
+pub type KeysU128PartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodKeysU128>;
+    
 pub type SerializerPartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodSerializer>;
 pub type SingleStringPartialAggregator<const HAS_AGG: bool> =

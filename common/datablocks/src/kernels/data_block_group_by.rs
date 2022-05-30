@@ -18,6 +18,7 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::TypeID;
 use common_exception::Result;
 
+use crate::HashMethodKeysU128;
 use crate::kernels::HashMethodKeysU16;
 use crate::kernels::HashMethodKeysU32;
 use crate::kernels::HashMethodKeysU64;
@@ -80,7 +81,8 @@ impl DataBlock {
             2 => Ok(HashMethodKind::KeysU16(HashMethodKeysU16::default())),
             3..=4 => Ok(HashMethodKind::KeysU32(HashMethodKeysU32::default())),
             5..=8 => Ok(HashMethodKind::KeysU64(HashMethodKeysU64::default())),
-            // TODO support u128, u256
+            9..=16 => Ok(HashMethodKind::KeysU128(HashMethodKeysU128::default())),
+            // TODO support u256
             _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
         }
     }
@@ -131,6 +133,15 @@ impl DataBlock {
                 blocks
             }
             HashMethodKind::KeysU64(s) => {
+                let blocks = s
+                    .group_by(block, column_names)?
+                    .iter()
+                    .map(|(_, _, b)| b.clone())
+                    .collect();
+                blocks
+            }
+            
+            HashMethodKind::KeysU128(s) => {
                 let blocks = s
                     .group_by(block, column_names)?
                     .iter()

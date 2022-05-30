@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::Column;
+use common_datavalues::LargePrimitive;
 use common_datavalues::PrimitiveColumn;
 use common_datavalues::PrimitiveType;
+use common_datavalues::ScalarColumn;
 use common_datavalues::StringColumn;
 use common_exception::Result;
 
@@ -44,6 +47,37 @@ where T: PrimitiveType
 {
     fn get_slice(&self) -> &[T] {
         self.inner.values()
+    }
+}
+
+
+pub struct LargeFixedKeysColumnIter<T>
+where T: LargePrimitive
+{
+    pub inner: Vec<T>,
+}
+
+impl<T> LargeFixedKeysColumnIter<T>
+where T: LargePrimitive
+{
+    pub fn create(inner: &StringColumn) -> Result<Self> {
+     
+        let mut result = Vec::with_capacity(inner.len());
+        for bs in inner.scalar_iter() {
+            result.push(T::from_bytes(bs)?);
+        }
+        
+        Ok(Self {
+            inner: result,
+        })
+    }
+}
+
+impl<T> KeysColumnIter<T> for LargeFixedKeysColumnIter<T>
+where T: LargePrimitive
+{
+    fn get_slice(&self) -> &[T] {
+        self.inner.as_slice()
     }
 }
 

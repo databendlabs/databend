@@ -57,3 +57,5 @@ primitive_hasher_impl!(u8);
 primitive_hasher_impl!(u16);
 primitive_hasher_impl!(u32);
 primitive_hasher_impl!(u64);
+
+primitive_hasher_impl!(u128);

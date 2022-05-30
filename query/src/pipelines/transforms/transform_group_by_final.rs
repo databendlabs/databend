@@ -113,7 +113,7 @@ impl Processor for GroupByFinalTransform {
         let mut stream = self.input.execute().await?;
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
-
+        
         let mut offsets_aggregate_states = Vec::with_capacity(funcs.len());
         let mut layout = None;
         if !funcs.is_empty() {
@@ -265,6 +265,9 @@ impl Processor for GroupByFinalTransform {
                     }
                     HashMethodKind::KeysU64(hash_method) => {
                         apply! { hash_method , &UInt64Column, RwLock<HashMap<u64, usize, ahash::RandomState>> }
+                    }
+                    _ => {
+                        Err(ErrorCode::UnImplement("Other hashmethod is not supported in old pipeline".to_string()))
                     }
                 }
             }};

@@ -114,7 +114,8 @@ impl AggregatorTransformParams {
         let schema_before_group_by = aggregator_params.before_schema.clone();
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
         let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
-
+        
+        eprintln!("hash method -> {:?}", method.name());
         Ok(AggregatorTransformParams {
             method,
             transform_input_port,

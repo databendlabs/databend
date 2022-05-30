@@ -19,7 +19,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::MutableColumn;
 use common_datavalues::MutableStringColumn;
-use common_datavalues::PrimitiveType;
 use common_datavalues::ScalarColumnBuilder;
 use common_datavalues::TypeDeserializer;
 use common_exception::Result;
@@ -34,7 +33,6 @@ pub trait GroupColumnsBuilder<Key> {
 }
 
 pub struct FixedKeysGroupColumnsBuilder<T>
-where T: PrimitiveType
 {
     data: Vec<T>,
     groups_fields: Vec<DataField>,
@@ -42,7 +40,6 @@ where T: PrimitiveType
 
 impl<T> FixedKeysGroupColumnsBuilder<T>
 where
-    T: PrimitiveType,
     for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
 {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
@@ -53,9 +50,8 @@ where
     }
 }
 
-impl<T> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
+impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
 where
-    T: PrimitiveType,
     for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
 {
     #[inline]
@@ -69,6 +65,7 @@ where
         method.deserialize_group_columns(self.data, &self.groups_fields)
     }
 }
+
 
 pub struct SerializedKeysGroupColumnsBuilder {
     data: Vec<KeysRef>,

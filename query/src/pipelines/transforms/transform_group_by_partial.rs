@@ -19,6 +19,7 @@ use std::time::Instant;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
+use common_datablocks::HashMethodSerializer;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Expression;
@@ -135,6 +136,7 @@ impl Processor for GroupByPartialTransform {
         let group_cols = self.extract_group_columns();
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let hash_method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
+        
 
         match hash_method {
             HashMethodKind::KeysU8(method) => self.aggregate(method, group_cols).await,
@@ -143,6 +145,10 @@ impl Processor for GroupByPartialTransform {
             HashMethodKind::KeysU64(method) => self.aggregate(method, group_cols).await,
             HashMethodKind::SingleString(method) => self.aggregate(method, group_cols).await,
             HashMethodKind::Serializer(method) => self.aggregate(method, group_cols).await,
+            _ =>  {
+                let method = HashMethodSerializer::default();
+                self.aggregate(method, group_cols).await
+            }
         }
     }
 }

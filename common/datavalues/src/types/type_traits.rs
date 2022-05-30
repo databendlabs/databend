@@ -13,7 +13,11 @@
 // limitations under the License.
 
 use common_arrow::arrow::compute::arithmetics::basic::NativeArithmetics;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use num::NumCast;
+use primitive_types::U256;
+use primitive_types::U512;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -136,5 +140,41 @@ pub trait ObjectType:
 impl ObjectType for VariantValue {
     fn data_type() -> DataTypeImpl {
         VariantType::new_impl()
+    }
+}
+
+
+pub trait LargePrimitive: Sized + 'static {
+     fn serialize_to(&self, v: &mut Vec<u8>);
+     fn from_bytes(v: &[u8]) -> Result<Self>;
+}
+
+impl LargePrimitive for u128 {
+     fn serialize_to(&self, v: &mut Vec<u8>) {
+        let bs = self.to_le_bytes();
+        v.extend_from_slice(&bs);
+    }
+    
+    fn from_bytes(v: &[u8]) -> Result<Self> {
+        let bs: [u8; 16] = v.try_into().map_err(|_| ErrorCode::StrParseError(format!("Unable to parse into u128, unexpected byte size: {}", v.len())))?;
+        Ok(u128::from_le_bytes(bs))
+    }
+}
+impl LargePrimitive for U256 {
+    fn serialize_to(&self, v: &mut Vec<u8>) {
+          self.to_little_endian(v);
+    }
+    
+    fn from_bytes(v: &[u8]) -> Result<Self> {
+        Ok(U256::from_little_endian(v))
+    }
+}
+impl LargePrimitive for U512 {
+    fn serialize_to(&self, v: &mut Vec<u8>) {
+          self.to_little_endian(v);
+    }
+    
+    fn from_bytes(v: &[u8]) -> Result<Self> {
+        Ok(U512::from_little_endian(v))
     }
 }

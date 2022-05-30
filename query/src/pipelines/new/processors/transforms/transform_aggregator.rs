@@ -79,6 +79,11 @@ impl TransformAggregator {
                     transform_params.transform_output_port,
                     SerializerFinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU128FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
             },
             false => match transform_params.method {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
@@ -110,6 +115,11 @@ impl TransformAggregator {
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
                     SerializerFinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU128FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
             },
         }
@@ -153,6 +163,11 @@ impl TransformAggregator {
                     transform_params.transform_output_port,
                     KeysU64PartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU128PartialAggregator::<false>::create(ctx, method, aggregator_params),
+                ),
                 HashMethodKind::SingleString(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
@@ -184,6 +199,11 @@ impl TransformAggregator {
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
                     KeysU64PartialAggregator::<true>::create(ctx, method, aggregator_params),
+                ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU128PartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::SingleString(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,

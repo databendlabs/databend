@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::marker::PhantomData;
+
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::prelude::*;
@@ -60,5 +62,33 @@ impl KeysColumnBuilder<KeysRef> for SerializedKeysColumnBuilder {
             let value = std::slice::from_raw_parts(v.address as *const u8, v.length);
             self.inner_builder.append_value(value);
         }
+    }
+}
+
+
+
+pub struct LargeFixedKeysColumnBuilder<T>
+where T: LargePrimitive
+{
+    pub inner_builder: MutableStringColumn,
+    pub _t: PhantomData<T>
+}
+
+impl<T> KeysColumnBuilder<T> for LargeFixedKeysColumnBuilder<T>
+where
+    T: LargePrimitive,
+    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
+{
+    #[inline]
+    fn finish(mut self) -> ColumnRef {
+        self.inner_builder.to_column()
+    }
+
+    #[inline]
+    fn append_value(&mut self, v: &T) {
+        let  values = self.inner_builder.values_mut();
+        v.serialize_to(values);
+        let size = values.len();
+        self.inner_builder.offsets_mut().push(size as i64);
     }
 }
