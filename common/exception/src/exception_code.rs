@@ -228,7 +228,8 @@ build_exceptions! {
 build_exceptions! {
     StorageNotFound(3001),
     StoragePermissionDenied(3002),
-    StorageOther(4000)
+    StorageUnavailable(3901),
+    StorageOther(4000),
 }
 
 // Cache errors [4001, 5000].

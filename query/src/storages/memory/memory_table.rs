@@ -23,7 +23,7 @@ use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_exception::Result;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;

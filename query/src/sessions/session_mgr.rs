@@ -363,9 +363,17 @@ impl SessionManager {
     // Init the storage operator by config.
     async fn init_storage_operator(conf: &Config) -> Result<Operator> {
         let op = init_operator(&conf.storage).await?;
-
         // Enable exponential backoff by default
-        Ok(op.with_backoff(backon::ExponentialBackoff::default()))
+        let op = op.with_backoff(backon::ExponentialBackoff::default());
+        // OpenDAL will send a real request to underlying storage to check whether it works or not.
+        // If this check failed, it's highly possible that the users have configured it wrongly.
+        op.check().await.map_err(|e| {
+            ErrorCode::StorageUnavailable(format!(
+                "current configured storage is not available: {e}"
+            ))
+        })?;
+
+        Ok(op)
     }
 
     pub async fn reload_config(&self) -> Result<()> {

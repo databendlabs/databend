@@ -14,10 +14,10 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::DatabaseNameIdent;
-use common_meta_types::DropDatabaseReq;
-use common_meta_types::RenameDatabaseReq;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::RenameDatabaseReq;
 use databend_query::catalogs::default::ImmutableCatalog;
 use databend_query::catalogs::Catalog;
 

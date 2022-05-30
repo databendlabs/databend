@@ -21,9 +21,9 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::rdoc::FunctionDocAsset;
 use common_functions::rdoc::FunctionDocs;
 use common_functions::scalars::FunctionFactory;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_meta_types::UserDefinedFunction;
 
 use crate::sessions::QueryContext;

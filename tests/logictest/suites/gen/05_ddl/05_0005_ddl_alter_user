@@ -26,10 +26,7 @@ statement error 2201
 ALTER USER 'test1'@'localhost' IDENTIFIED BY 'password'; 
 
 statement ok
-CREATE USER 'test-f'@'localhost' IDENTIFIED WITH plaintext_password BY 'password';
-
-statement ok
-ALTER USER 'test-f'@'localhost' IDENTIFIED WITH plaintext_password BY 'new-password';
+CREATE USER 'test-f'@'localhost' IDENTIFIED WITH sha256_password BY 'password';
 
 statement ok
 ALTER USER 'test-f'@'localhost' IDENTIFIED WITH sha256_password BY 'new-new-password';
