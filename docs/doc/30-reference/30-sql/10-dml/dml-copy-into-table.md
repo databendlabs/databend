@@ -67,7 +67,7 @@ formatTypeOptions ::=
   RECORD_DELIMITER = '<character>' 
   FIELD_DELIMITER = '<character>' 
   SKIP_HEADER = <integer>
-  COMPRESSION = GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | NONE
+  COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | NONE
 ```
 
 #### `RECORD_DELIMITER = '<character>'`
@@ -88,7 +88,7 @@ Description: Number of lines at the start of the file to skip.
 
 Default: `0`
 
-#### `COMPRESSION = GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | NONE`
+#### `COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | NONE`
 
 Description: String that represents the compression algorithm.
 
@@ -96,14 +96,16 @@ Default: `NONE`
 
 Values:
 
-| Values    | Notes                                                           | 
-|-----------|-----------------------------------------------------------------|
-| `GZIP`    |                                                                 |
-| `BZ2`     |                                                                 |
-| `BROTLI`  | Must be specified if loading/unloading Brotli-compressed files. |
-| `ZSTD`    | Zstandard v0.8 (and higher) is supported.                       |
-| `DEFLATE` | Deflate-compressed files (with zlib header, RFC1950).           |
-| `NONE`    | Indicates that the files have not been compressed.              |
+| Values        | Notes                                                           | 
+|---------------|-----------------------------------------------------------------|
+| `AUTO`        | Auto detect compression via file extensions                     |
+| `GZIP`        |                                                                 |
+| `BZ2`         |                                                                 |
+| `BROTLI`      | Must be specified if loading/unloading Brotli-compressed files. |
+| `ZSTD`        | Zstandard v0.8 (and higher) is supported.                       |
+| `DEFLATE`     | Deflate-compressed files (with zlib header, RFC1950).           |
+| `RAW_DEFLATE` | Deflate-compressed files (without any header, RFC1951).         |
+| `NONE`        | Indicates that the files have not been compressed.              |
 
 ### copyOptions
 ```
