@@ -1224,13 +1224,7 @@ impl SchemaApiTestSuite {
 
             let got = mt.get_table((tenant, db1_name, tb3_name).into()).await?;
             let want = TableInfo {
-                // TODO: use this after kv-txn rename-table replaces metasrv rename-table:
-                //    `ident: tb_ident.clone(),`
-                //     rename-table should not change the seq.
-                ident: TableIdent {
-                    table_id: tb_ident.table_id,
-                    seq: got.ident.seq,
-                },
+                ident: tb_ident.clone(),
                 desc: format!("'{}'.'{}'.'{}'", tenant, db1_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
@@ -1363,12 +1357,7 @@ impl SchemaApiTestSuite {
 
             let got = mt.get_table((tenant, db2_name, tb3_name).into()).await?;
             let want = TableInfo {
-                // TODO similar: version should not change.
-                //   ident: tb_ident2,
-                ident: TableIdent {
-                    table_id: tb_ident2.table_id,
-                    seq: got.ident.seq,
-                },
+                ident: tb_ident2,
                 desc: format!("'{}'.'{}'.'{}'", tenant, db2_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
