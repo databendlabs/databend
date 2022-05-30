@@ -15,7 +15,7 @@ const config = {
     baseUrl: '/',
     onBrokenLinks: 'warn',
     onBrokenMarkdownLinks: 'warn',
-    favicon: 'img/favicon.svg',
+    favicon: 'img/logo/logo-no-text.svg',
     organizationName: 'datafuselabs',
     projectName: 'databend',
 
@@ -89,7 +89,7 @@ const config = {
                 title: 'Databend',
                 logo: {
                     alt: 'Databend Logo',
-                    src: 'img/favicon.svg',
+                    src: 'img/logo/logo-no-text.svg',
                 },
                 items: [
                     {
