@@ -37,7 +37,7 @@ async fn test_settings_table() -> Result<()> {
         "| compression                    | None    | None    | SESSION | Format compression, default value: None                                                            | String |",
         "| empty_as_default               | 1       | 1       | SESSION | Format empty_as_default, default value: 1                                                          | UInt64 |",
         "| enable_new_processor_framework | 1       | 1       | SESSION | Enable new processor framework if value != 0, default value: 1                                     | UInt64 |",
-        "| enable_planner_v2              | 0       | 0       | SESSION | Enable planner v2 by setting this variable to 1, default value: 0                                  | UInt64 |",
+        "| enable_planner_v2              | 1       | 1       | SESSION | Enable planner v2 by setting this variable to 1, default value: 0                                  | UInt64 |",
         "| field_delimiter                | ,       | ,       | SESSION | Format field delimiter, default value: ,                                                           | String |",
         "| flight_client_timeout          | 60      | 60      | SESSION | Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds | UInt64 |",
         "| group_by_two_level_threshold   | 10000   | 10000   | SESSION | The threshold of keys to open two-level aggregation, default value: 10000                          | UInt64 |",

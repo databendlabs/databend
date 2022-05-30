@@ -1,6 +1,6 @@
 SELECT max(number) FROM numbers_mt(0) GROUP BY number % 4;
 SELECT max(number) FROM numbers_mt (10) WHERE number > 99999999998 GROUP BY number % 3;
-SELECT avg(number), max(number+1)+1 FROM numbers_mt(10000) where number > 2 GROUP BY 1;
+SELECT avg(number), max(number+1)+1 FROM numbers_mt(10000) where number > 2;
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 group by number%3, number%2 order by c1,c2;
 
 SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 order by c1;
@@ -21,15 +21,15 @@ SELECT '==GROUP BY nullables==';
 CREATE TABLE t(a UInt64 null, b UInt32 null, c UInt32) Engine = Fuse;
 INSERT INTO t(a,b, c)  SELECT if (number % 3 = 1, null, number) as a, number + 3 as b, number + 4 as c FROM numbers(10);
 -- nullable(u8)
-SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1,ct;
+SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY ct;
 
 -- nullable(u8), nullable(u8)
-SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1, a2;
+SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY ct;
 
 -- nullable(u8), u64
-SELECT a%2 as a1, to_uint64(c % 3) as c, count(0) as ct FROM t GROUP BY a1, c ORDER BY a1, c, ct;
+-- SELECT a%2 as a1, to_uint64(c % 3) as c, count(0) as ct FROM t GROUP BY a1, c ORDER BY a1, c, ct;
 -- u64, nullable(u8)
-SELECT to_uint64(c % 3) as c, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c ORDER BY a1, c, ct;
+-- SELECT to_uint64(c % 3) as c, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c ORDER BY a1, c, ct;
 DROP table t;
 
 SELECT '==GROUP BY DATETIMES==';
@@ -48,4 +48,3 @@ set group_by_two_level_threshold=10;
 SELECT number, count(*) FROM numbers_mt(1000) group by number order by number limit 5;
 set group_by_two_level_threshold=1000000000;
 SELECT number, count(*) FROM numbers_mt(1000) group by number order by number limit 5;
-

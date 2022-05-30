@@ -179,6 +179,7 @@ pub enum Expr<'a> {
 pub enum Literal {
     // Numeric literal value
     Number(String),
+    HexNumber(String),
     // Quoted string literal value
     String(String),
     Boolean(bool),
@@ -478,6 +479,9 @@ impl Display for Literal {
         match self {
             Literal::Number(val) => {
                 write!(f, "{val}")
+            }
+            Literal::HexNumber(val) => {
+                write!(f, "0x{val}")
             }
             Literal::String(val) => {
                 write!(f, "\'{val}\'")

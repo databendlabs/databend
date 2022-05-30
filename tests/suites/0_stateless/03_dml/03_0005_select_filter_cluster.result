@@ -1,9 +1,0 @@
-2
-1	2
-2	3
-RedistributeStage[expr: 0]
-  Projection: number as c1:UInt64, (number + 1) as c2:UInt64
-    Expression: number:UInt64, (number + 1):UInt64 (Before Projection)
-      Filter: (number > 1)
-        ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 3, read_bytes: 24, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(number > 1)]]
-2	3

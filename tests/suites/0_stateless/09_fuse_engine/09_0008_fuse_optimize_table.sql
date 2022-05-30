@@ -14,7 +14,7 @@ optimize table t compact;
 select * from t order by a;
 
 -- optimize exact
-explain select count(1) from t;
+-- explain select count(1) from t;
 
 -- expects 4 history items, 3 of previous insertion, 1 for last compaction
 select count(*)=4 from fuse_snapshot('db_09_0008', 't');

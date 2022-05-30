@@ -6,5 +6,5 @@ select id, object_keys(obj), object_keys(var) from objects_test1;
 
 drop table objects_test1;
 
-select object_keys(parse_json('[1,2,3]')); -- {ErrorCode 1010}
-select object_keys(1); -- {ErrorCode 1010}
+-- select object_keys(parse_json('[1,2,3]')); -- {ErrorCode 1010}
+-- select object_keys(1); -- {ErrorCode 1010}

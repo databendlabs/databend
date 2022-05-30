@@ -147,6 +147,6 @@ INSERT INTO t16 (id, arr) VALUES(1, [1,2,3,4]), (2, [5,6,7,8]), (3, null);
 
 select * from t16;
 select arr[0], arr[1] from t16;
-select arr[0], arr[1] from t16 where arr[1] = 6 order by arr[2] desc;
+select arr[0], arr[1] as a from t16 where arr[1] = 6 order by a desc;
 
 DROP DATABASE db1;

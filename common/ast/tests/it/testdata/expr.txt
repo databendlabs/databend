@@ -57,11 +57,11 @@ FunctionCall {
     span: [
         Ident(0..4),
         LParen(4..5),
-        LiteralHex(5..9),
+        LiteralHexPrefix0x(5..9),
         Comma(9..10),
-        LiteralHex(11..15),
+        LiteralHexPrefix0x(11..15),
         Comma(15..16),
-        LiteralHex(17..21),
+        LiteralHexPrefix0x(17..21),
         RParen(21..22),
     ],
     distinct: false,
@@ -73,26 +73,26 @@ FunctionCall {
     args: [
         Literal {
             span: [
-                LiteralHex(5..9),
+                LiteralHexPrefix0x(5..9),
             ],
-            lit: Number(
-                "0xD0",
+            lit: HexNumber(
+                "D0",
             ),
         },
         Literal {
             span: [
-                LiteralHex(11..15),
+                LiteralHexPrefix0x(11..15),
             ],
-            lit: Number(
-                "0xBF",
+            lit: HexNumber(
+                "BF",
             ),
         },
         Literal {
             span: [
-                LiteralHex(17..21),
+                LiteralHexPrefix0x(17..21),
             ],
-            lit: Number(
-                "0xD1",
+            lit: HexNumber(
+                "D1",
             ),
         },
     ],
@@ -712,7 +712,7 @@ UnaryOp {
 ---------- Input ----------
 0XFF + 0xff + 0xa + x'ffff'
 ---------- Output ---------
-0XFF + 0xff + 0xa + x'ffff'
+0xFF + 0xff + 0xa + 0x'ffff'
 ---------- AST ------------
 BinaryOp {
     span: [
@@ -731,36 +731,36 @@ BinaryOp {
             op: Plus,
             left: Literal {
                 span: [
-                    LiteralHex(0..4),
+                    LiteralHexPrefix0x(0..4),
                 ],
-                lit: Number(
-                    "0XFF",
+                lit: HexNumber(
+                    "FF",
                 ),
             },
             right: Literal {
                 span: [
-                    LiteralHex(7..11),
+                    LiteralHexPrefix0x(7..11),
                 ],
-                lit: Number(
-                    "0xff",
+                lit: HexNumber(
+                    "ff",
                 ),
             },
         },
         right: Literal {
             span: [
-                LiteralHex(14..17),
+                LiteralHexPrefix0x(14..17),
             ],
-            lit: Number(
-                "0xa",
+            lit: HexNumber(
+                "a",
             ),
         },
     },
     right: Literal {
         span: [
-            LiteralHex(20..27),
+            LiteralHexPrefixX(20..27),
         ],
-        lit: Number(
-            "x'ffff'",
+        lit: HexNumber(
+            "'ffff'",
         ),
     },
 }

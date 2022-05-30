@@ -846,7 +846,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         },
     );
     let (rest, (span, elem)) = consumed(alt((
-        rule! (
+        rule!(
             #is_null : "`... IS [NOT] NULL`"
             | #in_list : "`[NOT] IN (<expr>, ...)`"
             | #in_subquery : "`[NOT] IN (SELECT ...)`"
@@ -924,12 +924,26 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
 pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(literal_string, Literal::String);
     // TODO(andylokandy): handle hex numbers in parser
-    let number = map(
-        rule! {
-            LiteralHex | LiteralNumber
-        },
-        |number| Literal::Number(number.text().to_string()),
-    );
+    let number = alt((
+        map(
+            rule! {
+                LiteralNumber
+            },
+            |number| Literal::Number(number.text().to_string()),
+        ),
+        map(
+            rule! {
+                LiteralHexPrefix0x
+            },
+            |number| Literal::HexNumber(number.text()[2..].to_string()),
+        ),
+        map(
+            rule! {
+                LiteralHexPrefixX
+            },
+            |number| Literal::HexNumber(number.text()[1..].to_string()),
+        ),
+    ));
     let boolean = alt((
         value(Literal::Boolean(true), rule! { TRUE }),
         value(Literal::Boolean(false), rule! { FALSE }),

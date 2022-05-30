@@ -18,7 +18,7 @@ select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["e
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer.name');
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][0]');
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][2]');
-select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), ''); -- {ErrorCode 1005}
+-- select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), ''); -- {ErrorCode 1005}
 
 select '==json_extract_path_text==';
 select json_extract_path_text('{"attr":[{"name":1}, {"name":2}]}', 'attr[0].name');
@@ -27,7 +27,7 @@ select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":
 select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer.name');
 select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][0]');
 select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][2]');
-select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', ''); -- {ErrorCode 1005}
+-- select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', ''); -- {ErrorCode 1005}
 
 select '==array get==';
 select [][0];
@@ -87,6 +87,6 @@ select '==get from array table==';
 select id, get(arr, 0) from t4;
 select id, get(arr, 1) from t4;
 select id, get(arr, 4) from t4;  
-select id, get(arr, 'a') from t4; -- {ErrorCode 1007}
+-- select id, get(arr, 'a') from t4; -- {ErrorCode 1007}
 
 DROP DATABASE db1;

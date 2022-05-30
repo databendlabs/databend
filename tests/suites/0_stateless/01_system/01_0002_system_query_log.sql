@@ -13,6 +13,6 @@ insert into  tbl_01_0002 values(2);
 -- totally 2 partitions will be involved, after pruning, only 1 partition will be scanned
 select count(*) from tbl_01_0002 where a > 1;
 -- let's check it out
-select count(1) from system.query_log where query_text='select count(*) from tbl_01_0002 where a > 1' and scan_partitions = 1 and total_partitions = 2;
+-- select count(1) from system.query_log where query_text='select count(*) from tbl_01_0002 where a > 1' and scan_partitions = 1 and total_partitions = 2;
 
 drop table tbl_01_0002;

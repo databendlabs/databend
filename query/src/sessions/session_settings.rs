@@ -104,8 +104,8 @@ impl Settings {
             },
             // enable_planner_v2
             SettingValue {
-                default_value: DataValue::UInt64(0),
-                user_setting: UserSetting::create("enable_planner_v2", DataValue::UInt64(0)),
+                default_value: DataValue::UInt64(1),
+                user_setting: UserSetting::create("enable_planner_v2", DataValue::UInt64(1)),
                 level: ScopeLevel::Session,
                 desc: "Enable planner v2 by setting this variable to 1, default value: 0",
             },

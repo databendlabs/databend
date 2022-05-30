@@ -23,7 +23,7 @@ fn test_lexer() {
     assert_lex(
         "x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '",
         &[
-            (LiteralHex, "x'deadbeef'", 0..11),
+            (LiteralHexPrefixX, "x'deadbeef'", 0..11),
             (
                 QuotedString,
                 "'a string literal\n escape quote by '' or \\'. '",

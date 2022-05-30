@@ -297,15 +297,15 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
                 let interpreter: Arc<dyn Interpreter> =
                     if settings.get_enable_new_processor_framework()? != 0
-                        && context.get_cluster().is_empty()
                         && settings.get_enable_planner_v2()? != 0
+                        && context.get_cluster().is_empty()
                         && matches!(stmts.get(0), Some(DfStatement::Query(_)))
                     {
                         // New planner is enabled, and the statement is ensured to be `SELECT` statement.
                         SelectInterpreterV2::try_create(context.clone(), query)?
                     } else if settings.get_enable_new_processor_framework()? != 0
-                        && context.get_cluster().is_empty()
                         && settings.get_enable_planner_v2()? != 0
+                        && context.get_cluster().is_empty()
                         && matches!(stmts.get(0), Some(DfStatement::Explain(_)))
                     {
                         ExplainInterpreterV2::try_create(context.clone(), query)?

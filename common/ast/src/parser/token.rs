@@ -114,9 +114,11 @@ pub enum TokenKind {
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     QuotedString,
 
-    #[regex(r"[xX]'[a-fA-F0-9]*'")]
     #[regex(r"0[xX][a-fA-F0-9]+")]
-    LiteralHex,
+    LiteralHexPrefix0x, // Hexadecimal literal with "0x" as prefix
+
+    #[regex(r"[xX]'[a-fA-F0-9]*'")]
+    LiteralHexPrefixX, // Hexadecimal literal with "x" as prefix
 
     #[regex(r"[0-9]+")]
     #[regex(r"[0-9]+e[+-]?[0-9]+")]
@@ -620,7 +622,8 @@ impl TokenKind {
             self,
             Ident
                 | QuotedString
-                | LiteralHex
+                | LiteralHexPrefix0x
+                | LiteralHexPrefixX
                 | LiteralNumber
                 | DoubleEq
                 | Eq
@@ -748,7 +751,7 @@ impl TokenKind {
             // | TokenKind::SOME
             | TokenKind::SUBSTRING
             // | TokenKind::SYMMETRIC
-            | TokenKind::TABLE
+            // | TokenKind::TABLE
             | TokenKind::THEN
             // | TokenKind::TIME
             | TokenKind::TIMESTAMP
@@ -871,7 +874,7 @@ impl TokenKind {
             // | TokenKind::SIMILAR
             // | TokenKind::SOME
             // | TokenKind::SYMMETRIC
-            | TokenKind::TABLE
+            // | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING

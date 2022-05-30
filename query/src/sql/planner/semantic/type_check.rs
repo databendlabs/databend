@@ -30,9 +30,9 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::IntervalKind;
 use common_datavalues::IntervalType;
-use common_datavalues::NullType;
 use common_datavalues::StringType;
 use common_datavalues::TimestampType;
+use common_datavalues::UInt8Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -864,6 +864,7 @@ impl<'a> TypeChecker<'a> {
         // TODO(leiysky): try cast value to required type
         let value = match literal {
             Literal::Number(string) => DataValue::try_from_literal(string, None)?,
+            Literal::HexNumber(string) => DataValue::try_from_literal(string, Some(16))?,
             Literal::String(string) => DataValue::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => DataValue::Boolean(*boolean),
             Literal::Null => DataValue::Null,
@@ -895,7 +896,8 @@ impl<'a> TypeChecker<'a> {
             }
         }
         let element_type = if elems.is_empty() {
-            NullType::new_impl()
+            // TODO(leiysky): I don't know why but it is UInt8
+            UInt8Type::new_impl()
         } else {
             types
                 .iter()

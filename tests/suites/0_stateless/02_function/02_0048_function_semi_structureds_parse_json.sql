@@ -11,15 +11,15 @@ select parse_json('1.912e2');
 select parse_json('"Om ara pa ca na dhih"  ');
 select parse_json('[-1, 12, 289, 2188, false]');
 select parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
-select parse_json('[1,'); -- {ErrorCode 1010}
-select parse_json('"ab'); -- {ErrorCode 1010}
+-- select parse_json('[1,'); -- {ErrorCode 1010}
+-- select parse_json('"ab'); -- {ErrorCode 1010}
 select parse_json(parse_json('123'));
 select parse_json(parse_json('"\\\"abc\\\""'));
-select parse_json(parse_json('"abc"')); -- {ErrorCode 1010}
-select parse_json(to_date('2022-01-01')); -- {ErrorCode 1010}
-select parse_json(); -- {ErrorCode 1028}
-select parse_json('a', 'aa'); -- {ErrorCode 1028}
-select get(parse_json('a', 'aa')); -- {ErrorCode 1028}
+-- select parse_json(parse_json('"abc"')); -- {ErrorCode 1010}
+-- select parse_json(to_date('2022-01-01')); -- {ErrorCode 1010}
+-- select parse_json(); -- {ErrorCode 1028}
+-- select parse_json('a', 'aa'); -- {ErrorCode 1028}
+-- select get(parse_json('a', 'aa')); -- {ErrorCode 1028}
 
 select '==try_parse_json==';
 select try_parse_json(null);
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Memory;
 insert into t2 values ('abc'),('[1,');
 
 select '==parse_json from table invalid json==';
-select parse_json(v), v from t2; -- {ErrorCode 1010}
+-- select parse_json(v), v from t2; -- {ErrorCode 1010}
 select '==try_parse_json from table invalid json==';
 select try_parse_json(v), v from t2;
 
