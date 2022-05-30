@@ -21,7 +21,7 @@ use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::{BufferReadExt, MemoryReader};
+use common_io::prelude::{BufferReadExt, MemoryReader, position1, position2, position4};
 
 
 use common_io::prelude::FormatSettings;
@@ -102,31 +102,40 @@ impl CsvInputFormat {
     }
 
     fn find_quotes(buf: &[u8], pos: usize, state: &mut CsvInputState) -> usize {
-        for (index, byte) in buf.iter().enumerate().skip(pos) {
-            if *byte == b'"' || *byte == b'\'' {
-                state.quotes = 0;
-                return index + 1;
-            }
+        let index = pos + position2::<true, b'"', b'\''>(&buf[pos..]);
+
+        if index != buf.len() {
+            state.quotes = 0;
+            return index + 1;
         }
 
         buf.len()
     }
 
     fn find_delimiter(&self, buf: &[u8], pos: usize, state: &mut CsvInputState) -> usize {
-        for index in pos..buf.len() {
-            if buf[index] == b'"' || buf[index] == b'\'' {
-                state.quotes = buf[index];
-                return index + 1;
-            }
+        if let Some(b) = &self.row_delimiter {
+            for index in pos..buf.len() {
+                if buf[index] == b'"' || buf[index] == b'\'' {
+                    state.quotes = buf[index];
+                    return index + 1;
+                }
 
-            if let Some(b) = &self.row_delimiter {
                 if buf[index] == *b {
                     return self.accept_row::<0>(buf, pos, state, index);
                 }
-            } else if buf[index] == b'\r' {
-                return self.accept_row::<b'\n'>(buf, pos, state, index);
-            } else if buf[index] == b'\n' {
-                return self.accept_row::<b'\r'>(buf, pos, state, index);
+            }
+        } else {
+            let position = pos + position4::<true, b'"', b'\'', b'\r', b'\n'>(&buf[pos..]);
+
+            if position != buf.len() {
+                if buf[position] == b'"' || buf[position] == b'\'' {
+                    state.quotes = buf[position];
+                    return position + 1;
+                } else if buf[position] == b'\r' {
+                    return self.accept_row::<b'\n'>(buf, pos, state, position);
+                } else if buf[position] == b'\n' {
+                    return self.accept_row::<b'\r'>(buf, pos, state, position);
+                }
             }
         }
 
@@ -280,6 +289,8 @@ impl InputFormat for CsvInputFormat {
                     return Ok(index);
                 }
             }
+
+            return Ok(buf.len());
         }
 
         Ok(0)

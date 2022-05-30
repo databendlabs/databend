@@ -49,3 +49,5 @@ pub use crate::options_deserializer::OptionsDeserializerError;
 pub use crate::stat_buffer::StatBuffer;
 pub use crate::unmarshal::Unmarshal;
 pub use crate::utils::*;
+
+pub use crate::position::*;
