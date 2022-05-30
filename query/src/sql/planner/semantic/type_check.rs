@@ -863,7 +863,8 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<(DataValue, DataTypeImpl)> {
         // TODO(leiysky): try cast value to required type
         let value = match literal {
-            Literal::Number(string) => DataValue::try_from_literal(string, None)?,
+            Literal::Integer(uint) => DataValue::UInt64(*uint),
+            Literal::Float(float) => DataValue::Float64(*float),
             Literal::String(string) => DataValue::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => DataValue::Boolean(*boolean),
             Literal::Null => DataValue::Null,
