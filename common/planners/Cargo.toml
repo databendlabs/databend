@@ -16,6 +16,7 @@ common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-functions = { path = "../functions" }
+common-meta-app = { path = "../meta/app" }
 common-meta-types = { path = "../meta/types" }
 
 # Github dependencies
