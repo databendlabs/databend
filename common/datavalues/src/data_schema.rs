@@ -131,7 +131,7 @@ impl DataSchema {
 
     /// project will do column pruning.
     #[must_use]
-    pub fn project(&self, projection: Vec<usize>) -> Self {
+    pub fn project(&self, projection: &[usize]) -> Self {
         let fields = projection
             .iter()
             .map(|idx| self.fields()[*idx].clone())

@@ -18,6 +18,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
 use common_tracing::tracing;
@@ -48,7 +49,7 @@ impl BlockPruner {
         ctx: &QueryContext,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
-    ) -> Result<Vec<BlockMeta>> {
+    ) -> Result<Vec<(usize, BlockMeta)>> {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
                 // for the time being, we only handle the first expr
@@ -79,24 +80,33 @@ impl BlockPruner {
         let accumulated_rows = AtomicUsize::new(0);
 
         // A !Copy Wrapper of u64
-        struct NonCopy(u64);
+        struct NonCopy<T>(T);
 
         // convert u64 (which is Copy) into NonCopy( struct which is !Copy)
         // so that "async move" can be avoided in the latter async block
         // See https://github.com/rust-lang/rust/issues/81653
-        let segment_locs = segment_locs.into_iter().map(|(s, v)| (s, NonCopy(v)));
+        let segment_locs = segment_locs
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (loc, ver))| (NonCopy(idx), (loc, NonCopy(ver))));
 
         let stream = futures::stream::iter(segment_locs)
-            .map(|(seg_loc, u)| async {
+            .map(|(idx, (seg_loc, u))| async {
                 let version = { u }.0; // use block expression to force moving
+                let idx = { idx }.0;
                 if accumulated_rows.load(Ordering::Acquire) < limit {
                     let reader = MetaReaders::segment_info_reader(ctx);
                     let segment_info = reader.read(seg_loc, None, version).await?;
-                    Self::filter_segment(
-                        segment_info.as_ref(),
-                        &block_pred,
-                        &accumulated_rows,
-                        limit,
+                    Ok::<_, ErrorCode>(
+                        Self::filter_segment(
+                            segment_info.as_ref(),
+                            &block_pred,
+                            &accumulated_rows,
+                            limit,
+                        )?
+                        .into_iter()
+                        .map(|v| (idx, v))
+                        .collect::<Vec<_>>(),
                     )
                 } else {
                     Ok(vec![])

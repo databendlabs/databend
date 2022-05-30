@@ -258,7 +258,8 @@ impl Table for FuseTable {
         truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         self.check_mutable()?;
-        self.do_truncate(ctx, truncate_plan).await
+        self.do_truncate(ctx, truncate_plan.purge, truncate_plan.catalog.as_str())
+            .await
     }
 
     async fn optimize(&self, ctx: Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {

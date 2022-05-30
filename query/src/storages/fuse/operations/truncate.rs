@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_planners::TruncateTablePlan;
 use uuid::Uuid;
 
 use crate::sessions::QueryContext;
@@ -30,7 +29,12 @@ use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
     #[inline]
-    pub async fn do_truncate(&self, ctx: Arc<QueryContext>, plan: TruncateTablePlan) -> Result<()> {
+    pub async fn do_truncate(
+        &self,
+        ctx: Arc<QueryContext>,
+        purge: bool,
+        catalog_name: &str,
+    ) -> Result<()> {
         if let Some(prev_snapshot) = self.read_table_snapshot(ctx.as_ref()).await? {
             let prev_id = prev_snapshot.snapshot_id;
 
@@ -49,7 +53,7 @@ impl FuseTable {
             let bytes = serde_json::to_vec(&new_snapshot)?;
             operator.object(&new_snapshot_loc).write(bytes).await?;
 
-            if plan.purge {
+            if purge {
                 let keep_last_snapshot = false;
                 self.do_gc(&ctx, keep_last_snapshot).await?
             }
@@ -65,7 +69,7 @@ impl FuseTable {
 
             let table_id = self.table_info.ident.table_id;
             let table_version = self.table_info.ident.seq;
-            ctx.get_catalog(&plan.catalog)?
+            ctx.get_catalog(catalog_name)?
                 .update_table_meta(UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table_version),

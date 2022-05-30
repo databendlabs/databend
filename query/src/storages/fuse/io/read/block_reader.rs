@@ -59,7 +59,7 @@ impl BlockReader {
         schema: DataSchemaRef,
         projection: Vec<usize>,
     ) -> Result<Arc<BlockReader>> {
-        let projected_schema = DataSchemaRef::new(schema.project(projection.clone()));
+        let projected_schema = DataSchemaRef::new(schema.project(&projection));
 
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
@@ -72,7 +72,7 @@ impl BlockReader {
         }))
     }
 
-    fn to_deserialize(
+    fn to_array_iter(
         meta: &ColumnMeta,
         chunk: Vec<u8>,
         rows: usize,
@@ -138,7 +138,7 @@ impl BlockReader {
             let field = self.arrow_schema.fields[idx].clone();
             let column_descriptor = &self.parquet_schema_descriptor.columns()[idx];
             let column_meta = &part.columns_meta[&idx];
-            columns_array_iter.push(Self::to_deserialize(
+            columns_array_iter.push(Self::to_array_iter(
                 column_meta,
                 column_chunk,
                 rows,
@@ -167,7 +167,7 @@ impl BlockReader {
             let field = self.arrow_schema.fields[index].clone();
             let column_descriptor = &self.parquet_schema_descriptor.columns()[index];
             let column_meta = &part.columns_meta[&index];
-            columns_array_iter.push(Self::to_deserialize(
+            columns_array_iter.push(Self::to_array_iter(
                 column_meta,
                 column_chunk,
                 num_rows,

@@ -240,9 +240,6 @@ impl DfQueryStatement {
                 name_parts,
                 ..
             } => {
-                // TODO
-                // shall we put the catalog name in the table_info?
-                // table already resolved here
                 let catalog_name = Self::resolve_catalog(&ctx, &name_parts)?;
                 let source_plan = table
                     .read_plan_with_catalog(ctx.clone(), catalog_name, push_downs)

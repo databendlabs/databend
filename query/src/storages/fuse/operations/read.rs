@@ -45,7 +45,8 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
-        let block_reader = self.create_block_reader(&ctx, push_downs)?;
+        let block_reader =
+            self.create_block_reader(&ctx, self.projection_of_push_downs(push_downs))?;
 
         let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(1) {
             Err(_) => None,
@@ -66,12 +67,18 @@ impl FuseTable {
         Ok(Box::pin(stream))
     }
 
-    fn create_block_reader(
+    pub fn create_block_reader(
         &self,
         ctx: &Arc<QueryContext>,
-        push_downs: &Option<Extras>,
+        projection: Vec<usize>,
     ) -> Result<Arc<BlockReader>> {
-        let projection = if let Some(Extras {
+        let operator = ctx.get_storage_operator()?;
+        let table_schema = self.table_info.schema();
+        BlockReader::create(operator, table_schema, projection)
+    }
+
+    pub fn projection_of_push_downs(&self, push_downs: &Option<Extras>) -> Vec<usize> {
+        if let Some(Extras {
             projection: Some(prj),
             ..
         }) = push_downs
@@ -81,11 +88,7 @@ impl FuseTable {
             (0..self.table_info.schema().fields().len())
                 .into_iter()
                 .collect::<Vec<usize>>()
-        };
-
-        let operator = ctx.get_storage_operator()?;
-        let table_schema = self.table_info.schema();
-        BlockReader::create(operator, table_schema, projection)
+        }
     }
 
     #[inline]
@@ -95,7 +98,8 @@ impl FuseTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
-        let block_reader = self.create_block_reader(&ctx, &plan.push_downs)?;
+        let block_reader =
+            self.create_block_reader(&ctx, self.projection_of_push_downs(&plan.push_downs))?;
 
         let parts_len = plan.parts.len();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;

@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,18 +12,5 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod append;
-mod commit;
-mod del;
-mod fuse_sink;
-mod gc;
-mod navigate;
-mod operation_log;
-mod read;
-mod read_partitions;
-mod truncate;
-mod util;
-
-pub use fuse_sink::FuseTableSink;
-pub use operation_log::AppendOperationLogEntry;
-pub use operation_log::TableOperationLog;
+mod collector;
+mod delete;

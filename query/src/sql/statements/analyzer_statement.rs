@@ -165,6 +165,7 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::ShowGrants(v) => v.analyze(ctx).await,
             DfStatement::KillStatement(v) => v.analyze(ctx).await,
             DfStatement::InsertQuery(v) => v.analyze(ctx).await,
+            DfStatement::Delete(v) => v.analyze(ctx).await,
             DfStatement::SetVariable(v) => v.analyze(ctx).await,
             DfStatement::CreateUser(v) => v.analyze(ctx).await,
             DfStatement::AlterUser(v) => v.analyze(ctx).await,

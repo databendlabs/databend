@@ -38,6 +38,7 @@ use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUserUDFPlan;
 use crate::CreateViewPlan;
+use crate::DeletePlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
@@ -131,6 +132,9 @@ pub trait PlanRewriter: Sized {
 
             // Insert.
             PlanNode::Insert(plan) => self.rewrite_insert_into(plan),
+
+            // Delete.
+            PlanNode::Delete(plan) => self.rewrite_delete_into(plan),
 
             // Copy.
             PlanNode::Copy(plan) => self.rewrite_copy(plan),
@@ -417,6 +421,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_insert_into(&mut self, plan: &InsertPlan) -> Result<PlanNode> {
         Ok(PlanNode::Insert(plan.clone()))
+    }
+
+    fn rewrite_delete_into(&mut self, plan: &DeletePlan) -> Result<PlanNode> {
+        Ok(PlanNode::Delete(plan.clone()))
     }
 
     fn rewrite_copy(&mut self, plan: &CopyPlan) -> Result<PlanNode> {
