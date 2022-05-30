@@ -14,13 +14,13 @@ statement query T
 SELECT TO_BASE64(NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT FROM_BASE64(NULL);
 
 ----  
-None
+NULL
 
 statement error 1060
 SELECT FROM_BASE64('1'); 
