@@ -108,3 +108,46 @@ async fn test_scalar_evaluator() -> Result<()> {
     assert_eq!(result.vector().get(2), DataValue::Float64(-36.0));
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_eval_const() -> Result<()> {
+    // POW(1 + 3, 2)
+    let scalar = Scalar::FunctionCall(FunctionCall {
+        arguments: vec![
+            FunctionCall {
+                arguments: vec![
+                    ConstantExpr {
+                        value: DataValue::Int64(1),
+                        data_type: Int32Type::new_impl(),
+                    }
+                    .into(),
+                    ConstantExpr {
+                        value: DataValue::Int64(3),
+                        data_type: Int32Type::new_impl(),
+                    }
+                    .into(),
+                ],
+                func_name: "plus".to_string(),
+                arg_types: vec![Int32Type::new_impl(), Int32Type::new_impl()],
+                return_type: Int32Type::new_impl(),
+            }
+            .into(),
+            ConstantExpr {
+                value: DataValue::Int64(2),
+                data_type: Int32Type::new_impl(),
+            }
+            .into(),
+        ],
+        func_name: "pow".to_string(),
+        arg_types: vec![Int32Type::new_impl(), Int32Type::new_impl()],
+        return_type: Float64Type::new_impl(),
+    });
+
+    let func_ctx = create_query_context().await?.try_get_function_context()?;
+    let eval = ScalarEvaluator::try_create(&scalar)?;
+    let (result, result_type) = eval.try_eval_const(&func_ctx)?;
+
+    assert_eq!(result, DataValue::Float64(16.0));
+    assert_eq!(result_type, Float64Type::new_impl());
+    Ok(())
+}

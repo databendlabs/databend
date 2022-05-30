@@ -167,8 +167,15 @@ impl ScalarEvaluator {
         self.eval_impl(&self.eval_tree, func_ctx, eval_ctx)
     }
 
-    pub fn try_eval_const(&self, func_ctx: &FunctionContext) -> Result<TypedVector> {
+    pub fn try_eval_const(&self, func_ctx: &FunctionContext) -> Result<(DataValue, DataTypeImpl)> {
         let eval_ctx = EmptyEvalContext;
-        self.eval_impl(&self.eval_tree, func_ctx, &eval_ctx)
+        let vector = self.eval_impl(&self.eval_tree, func_ctx, &eval_ctx)?;
+        if vector.vector().is_const() {
+            Ok((vector.vector().get(0), vector.logical_type()))
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Non-constant column can not be evaluated by try_eval_const",
+            ))
+        }
     }
 }
