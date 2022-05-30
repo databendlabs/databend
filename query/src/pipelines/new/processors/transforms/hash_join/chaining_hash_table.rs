@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::borrow::BorrowMut;
-
+use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -21,23 +21,19 @@ use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
-
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataSchemaRef;
-
-
-
+use common_datavalues::PrimitiveType;
 use common_exception::Result;
 use common_planners::Expression;
 
-
 use crate::common::ExpressionEvaluator;
 use crate::common::HashMap;
-
-
+use crate::common::HashTableKeyable;
+use crate::pipelines::new::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::new::processors::HashJoinState;
@@ -87,31 +83,47 @@ impl ChainingHashTable {
         })
     }
 
-    fn generate_result_block(
+    fn generate_result_block<Key>(
         &self,
-        idx: usize,
-        probe_result_ptrs: &Vec<RowPtr>,
+        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        probe_keys: Vec<&ColumnRef>,
         input: &DataBlock,
-    ) -> Result<DataBlock> {
-        let build_block = self.row_space.gather(probe_result_ptrs)?;
-        let probe_block = DataBlock::block_take_by_indices(input, &[idx as u32])?;
-        let mut replicated_probe_block = DataBlock::empty();
-        for (i, col) in probe_block.columns().iter().enumerate() {
-            let replicated_col = ConstColumn::new(col.clone(), build_block.num_rows()).arc();
+    ) -> Result<Vec<DataBlock>>
+    where
+        Key: HashTableKeyable + PrimitiveType + Hash,
+    {
+        let mut results: Vec<DataBlock> = vec![];
+        let method = HashMethodFixedKeys::<Key>::default();
+        let keys = method.build_keys(&probe_keys, input.num_rows())?;
+        for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
+            let probe_result_ptr = hash_table.find_key(&key);
+            if probe_result_ptr.is_none() {
+                // No matched row for current probe row
+                continue;
+            }
+            let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
+            // `result_block` is the block of build table
+            let result_block = self.row_space.gather(probe_result_ptrs)?;
+            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
+            let mut replicated_probe_block = DataBlock::empty();
+            for (i, col) in probe_block.columns().iter().enumerate() {
+                let replicated_col = ConstColumn::new(col.clone(), result_block.num_rows()).arc();
 
-            replicated_probe_block = replicated_probe_block
-                .add_column(replicated_col, probe_block.schema().field(i).clone())?;
-        }
-        for (col, field) in build_block
-            .columns()
-            .iter()
-            .zip(build_block.schema().fields().iter())
-        {
-            replicated_probe_block =
-                replicated_probe_block.add_column(col.clone(), field.clone())?;
-        }
+                replicated_probe_block = replicated_probe_block
+                    .add_column(replicated_col, probe_block.schema().field(i).clone())?;
+            }
+            for (col, field) in result_block
+                .columns()
+                .iter()
+                .zip(result_block.schema().fields().iter())
+            {
+                replicated_probe_block =
+                    replicated_probe_block.add_column(col.clone(), field.clone())?;
+            }
 
-        Ok(replicated_probe_block)
+            results.push(replicated_probe_block);
+        }
+        Ok(results)
     }
 }
 
@@ -166,60 +178,39 @@ impl HashJoinState for ChainingHashTable {
                         continue;
                     }
                     let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-                    results.push(self.generate_result_block(i, probe_result_ptrs, input)?);
+                    let result_block = self.row_space.gather(probe_result_ptrs)?;
+                    let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
+                    let mut replicated_probe_block = DataBlock::empty();
+                    for (i, col) in probe_block.columns().iter().enumerate() {
+                        let replicated_col =
+                            ConstColumn::new(col.clone(), result_block.num_rows()).arc();
+
+                        replicated_probe_block = replicated_probe_block
+                            .add_column(replicated_col, probe_block.schema().field(i).clone())?;
+                    }
+                    for (col, field) in result_block
+                        .columns()
+                        .iter()
+                        .zip(result_block.schema().fields().iter())
+                    {
+                        replicated_probe_block =
+                            replicated_probe_block.add_column(col.clone(), field.clone())?;
+                    }
+
+                    results.push(replicated_probe_block);
                 }
             }
             HashTable::KeyU8HashTable(table) => {
-                let method = HashMethodFixedKeys::<u8>::default();
-                let keys = method.build_keys(&probe_keys, input.num_rows())?;
-                for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
-                    let probe_result_ptr = table.find_key(&key);
-                    if probe_result_ptr.is_none() {
-                        // No matched row for current probe row
-                        continue;
-                    }
-                    let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-                    results.push(self.generate_result_block(i, probe_result_ptrs, input)?);
-                }
+                return self.generate_result_block(table, probe_keys, input);
             }
             HashTable::KeyU16HashTable(table) => {
-                let method = HashMethodFixedKeys::<u16>::default();
-                let keys = method.build_keys(&probe_keys, input.num_rows())?;
-                for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
-                    let probe_result_ptr = table.find_key(&key);
-                    if probe_result_ptr.is_none() {
-                        // No matched row for current probe row
-                        continue;
-                    }
-                    let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-                    results.push(self.generate_result_block(i, probe_result_ptrs, input)?);
-                }
+                return self.generate_result_block(table, probe_keys, input);
             }
             HashTable::KeyU32HashTable(table) => {
-                let method = HashMethodFixedKeys::<u32>::default();
-                let keys = method.build_keys(&probe_keys, input.num_rows())?;
-                for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
-                    let probe_result_ptr = table.find_key(&key);
-                    if probe_result_ptr.is_none() {
-                        // No matched row for current probe row
-                        continue;
-                    }
-                    let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-                    results.push(self.generate_result_block(i, probe_result_ptrs, input)?);
-                }
+                return self.generate_result_block(table, probe_keys, input);
             }
             HashTable::KeyU64HashTable(table) => {
-                let method = HashMethodFixedKeys::<u64>::default();
-                let keys = method.build_keys(&probe_keys, input.num_rows())?;
-                for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
-                    let probe_result_ptr = table.find_key(&key);
-                    if probe_result_ptr.is_none() {
-                        // No matched row for current probe row
-                        continue;
-                    }
-                    let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-                    results.push(self.generate_result_block(i, probe_result_ptrs, input)?);
-                }
+                return self.generate_result_block(table, probe_keys, input);
             }
         }
         Ok(results)
@@ -252,7 +243,6 @@ impl HashJoinState for ChainingHashTable {
         let chunks = self.row_space.chunks.write().unwrap();
         for chunk_index in 0..chunks.len() {
             let chunk = &chunks[chunk_index];
-            let mut inserted = true;
             let mut columns = vec![];
             if let Some(cols) = chunk.cols.as_ref() {
                 columns = Vec::with_capacity(cols.len());
@@ -264,6 +254,7 @@ impl HashJoinState for ChainingHashTable {
                 HashTable::SerializerHashTable(table) => {
                     if let Some(keys) = chunk.keys.as_ref() {
                         for (row_index, key) in keys.iter().enumerate().take(chunk.num_rows()) {
+                            let mut inserted = true;
                             let ptr = RowPtr {
                                 chunk_index: chunk_index as u32,
                                 row_index: row_index as u32,
@@ -278,73 +269,46 @@ impl HashJoinState for ChainingHashTable {
                         }
                     }
                 }
-                HashTable::KeyU8HashTable(table) => {
-                    let method = HashMethodFixedKeys::<u8>::default();
-                    let build_keys = method.build_keys(&columns, chunk.num_rows())?;
-                    for (row_index, key) in build_keys.iter().enumerate().take(chunk.num_rows()) {
-                        let ptr = RowPtr {
-                            chunk_index: chunk_index as u32,
-                            row_index: row_index as u32,
-                        };
-                        let entity = table.insert_key(&key, &mut inserted);
-                        if inserted {
-                            entity.set_value(vec![ptr]);
-                        } else {
-                            entity.get_mut_value().push(ptr);
-                        }
-                    }
-                }
+                HashTable::KeyU8HashTable(table) => insert_key(table, chunk, columns, chunk_index)?,
                 HashTable::KeyU16HashTable(table) => {
-                    let method = HashMethodFixedKeys::<u16>::default();
-                    let build_keys = method.build_keys(&columns, chunk.num_rows())?;
-                    for (row_index, key) in build_keys.iter().enumerate().take(chunk.num_rows()) {
-                        let ptr = RowPtr {
-                            chunk_index: chunk_index as u32,
-                            row_index: row_index as u32,
-                        };
-                        let entity = table.insert_key(&key, &mut inserted);
-                        if inserted {
-                            entity.set_value(vec![ptr]);
-                        } else {
-                            entity.get_mut_value().push(ptr);
-                        }
-                    }
+                    insert_key(table, chunk, columns, chunk_index)?
                 }
                 HashTable::KeyU32HashTable(table) => {
-                    let method = HashMethodFixedKeys::<u32>::default();
-                    let build_keys = method.build_keys(&columns, chunk.num_rows())?;
-                    for (row_index, key) in build_keys.iter().enumerate().take(chunk.num_rows()) {
-                        let ptr = RowPtr {
-                            chunk_index: chunk_index as u32,
-                            row_index: row_index as u32,
-                        };
-                        let entity = table.insert_key(&key, &mut inserted);
-                        if inserted {
-                            entity.set_value(vec![ptr]);
-                        } else {
-                            entity.get_mut_value().push(ptr);
-                        }
-                    }
+                    insert_key(table, chunk, columns, chunk_index)?
                 }
                 HashTable::KeyU64HashTable(table) => {
-                    let method = HashMethodFixedKeys::<u64>::default();
-                    let build_keys = method.build_keys(&columns, chunk.num_rows())?;
-                    for (row_index, key) in build_keys.iter().enumerate().take(chunk.num_rows()) {
-                        let ptr = RowPtr {
-                            chunk_index: chunk_index as u32,
-                            row_index: row_index as u32,
-                        };
-                        let entity = table.insert_key(&key, &mut inserted);
-                        if inserted {
-                            entity.set_value(vec![ptr]);
-                        } else {
-                            entity.get_mut_value().push(ptr);
-                        }
-                    }
+                    insert_key(table, chunk, columns, chunk_index)?
                 }
             }
         }
 
         Ok(())
     }
+}
+
+fn insert_key<Key>(
+    table: &mut HashMap<Key, Vec<RowPtr>>,
+    chunk: &Chunk,
+    columns: Vec<&ColumnRef>,
+    chunk_index: usize,
+) -> Result<()>
+where
+    Key: HashTableKeyable + PrimitiveType + Hash,
+{
+    let method = HashMethodFixedKeys::<Key>::default();
+    let build_keys = method.build_keys(&columns, chunk.num_rows())?;
+    for (row_index, key) in build_keys.iter().enumerate().take(chunk.num_rows()) {
+        let mut inserted = true;
+        let ptr = RowPtr {
+            chunk_index: chunk_index as u32,
+            row_index: row_index as u32,
+        };
+        let entity = table.insert_key(&key, &mut inserted);
+        if inserted {
+            entity.set_value(vec![ptr]);
+        } else {
+            entity.get_mut_value().push(ptr);
+        }
+    }
+    Ok(())
 }

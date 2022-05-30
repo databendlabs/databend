@@ -31,15 +31,12 @@ use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
 use common_planners::RewriteHelper;
-
-
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
 use super::plans::RelOperator;
 use super::MetadataRef;
 use crate::common::HashMap;
-
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::AggregatorParams;

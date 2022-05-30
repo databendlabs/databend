@@ -20,7 +20,6 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::SmallVu8;
 use common_exception::Result;
 
-
 pub type ColumnVector = Vec<ColumnRef>;
 pub type KeysVector = Vec<SmallVu8>;
 
