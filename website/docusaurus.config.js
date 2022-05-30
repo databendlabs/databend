@@ -192,7 +192,8 @@ const config = {
                 apiKey: 'cb5d6af612410c0fced698ff39ccd47a',
                 indexName: 'databend-rs-docs',
                 contextualSearch: true,
-            }
+            },
+            image: 'img/databend-logo-vertical.png'
         }),
 };
 
