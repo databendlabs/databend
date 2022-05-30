@@ -19,7 +19,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableStatistics;
+use common_meta_app::schema::TableStatistics;
 use futures::TryStreamExt;
 
 use crate::sessions::QueryContext;

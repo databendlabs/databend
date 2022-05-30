@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::SinkPlan;

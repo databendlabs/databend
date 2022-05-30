@@ -17,9 +17,7 @@
 
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
-use common_meta_types as mt;
-use common_meta_types::DatabaseIdent;
-use common_meta_types::DatabaseNameIdent;
+use common_meta_app::schema as mt;
 use common_protos::pb;
 
 use crate::check_ver;
@@ -42,8 +40,8 @@ impl FromToProto<pb::DatabaseInfo> for mt::DatabaseInfo {
         };
 
         let v = Self {
-            ident: DatabaseIdent::from_pb(p.ident.ok_or_else(missing("DatabaseInfo.ident"))?)?,
-            name_ident: DatabaseNameIdent::from_pb(
+            ident: mt::DatabaseIdent::from_pb(p.ident.ok_or_else(missing("DatabaseInfo.ident"))?)?,
+            name_ident: mt::DatabaseNameIdent::from_pb(
                 p.name_ident
                     .ok_or_else(missing("DatabaseInfo.name_ident"))?,
             )?,
