@@ -141,6 +141,8 @@ build_exceptions! {
     NetworkRequestError(1073),
 
     UnknownFormat(1074),
+    UnknownCompressionType(1075),
+    InvalidCompressionData(1076),
 
     // Tenant error codes.
     TenantIsEmpty(1101),
@@ -150,6 +152,7 @@ build_exceptions! {
     LayoutError(1103),
 
     PanicError(1104),
+
 }
 
 // Metasvr errors [2001, 3000].

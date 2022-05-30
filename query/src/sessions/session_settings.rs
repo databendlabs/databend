@@ -134,6 +134,12 @@ impl Settings {
                 desc: "Whether to skip the input header, default value: 0",
             },
             SettingValue {
+                default_value: DataValue::String("None".as_bytes().to_vec()),
+                user_setting: UserSetting::create("compression", DataValue::String("None".as_bytes().to_vec())),
+                level: ScopeLevel::Session,
+                desc: "Format compression, default value: None",
+            },
+            SettingValue {
                 default_value: DataValue::String("UTC".as_bytes().to_vec()),
                 user_setting: UserSetting::create("timezone", DataValue::String("UTC".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
@@ -222,6 +228,12 @@ impl Settings {
 
     pub fn get_record_delimiter(&self) -> Result<Vec<u8>> {
         let key = "record_delimiter";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_compression(&self) -> Result<Vec<u8>> {
+        let key = "compression";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }

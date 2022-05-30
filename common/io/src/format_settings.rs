@@ -43,7 +43,7 @@ impl Default for FormatSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Compression {
     None,
     Auto,
@@ -67,7 +67,7 @@ impl FromStr for Compression {
     type Err = ErrorCode;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s.to_ascii_lowercase().as_str() {
+        match s.to_lowercase().as_str() {
             "auto" => Ok(Compression::Auto),
             "gzip" => Ok(Compression::Gzip),
             "bz2" => Ok(Compression::Bz2),
@@ -78,9 +78,8 @@ impl FromStr for Compression {
             "lzo" => Ok(Compression::Lzo),
             "snappy" => Ok(Compression::Snappy),
             "none" => Ok(Compression::None),
-            _ => Err(ErrorCode::IllegalUserSettingFormat(format!(
-                "Unknown compression: {}",
-                s
+            _ => Err(ErrorCode::UnknownCompressionType(format!(
+                "Unknown compression: {s}"
             ))),
         }
     }
