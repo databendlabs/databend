@@ -194,7 +194,10 @@ const config = {
                 contextualSearch: true,
             },
             image: 'img/logo/databend-logo-vertical.png',
-            metadata: [{name: 'twitter:card', content: 'summary_large_image'}],
+            metadata: [
+              {name: 'twitter:card', content: 'summary'},
+              {name: 'twitter:site', content: '@databend.rs'}
+            ],
         }),
 };
 
