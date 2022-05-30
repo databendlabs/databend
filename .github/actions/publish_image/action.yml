@@ -39,7 +39,8 @@ runs:
       with:
         name: release-${{ github.sha }}-${{ inputs.target }}
         path: ./target/release
-    - run: chmod +x ./target/release/databend-*
+    - shell: bash
+      run: chmod +x ./target/release/databend-*
 
     - name: Build and publish databend image
       id: docker_build
