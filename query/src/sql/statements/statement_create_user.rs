@@ -108,6 +108,7 @@ impl AnalyzableStatement for DfCreateUser {
                     &self.auth_option.by_value,
                 )?,
                 user_option,
+                if_not_exists: self.if_not_exists,
             },
         ))))
     }
