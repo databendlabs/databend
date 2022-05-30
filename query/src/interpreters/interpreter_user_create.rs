@@ -64,7 +64,9 @@ impl Interpreter for CreateUserInterpreter {
             quota: UserQuota::no_limit(),
             option: plan.user_option,
         };
-        user_mgr.add_user(&tenant, user_info, false).await?;
+        user_mgr
+            .add_user(&tenant, user_info, plan.if_not_exists)
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
