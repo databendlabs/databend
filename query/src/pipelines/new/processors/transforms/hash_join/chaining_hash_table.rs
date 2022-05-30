@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::borrow::BorrowMut;
-use std::ops::Index;
+
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -21,23 +21,23 @@ use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
-use common_datablocks::HashMethodKind;
+
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::Series;
-use common_datavalues::SmallVu8;
+
+
+
 use common_exception::Result;
 use common_planners::Expression;
-use http::Method;
+
 
 use crate::common::ExpressionEvaluator;
 use crate::common::HashMap;
-use crate::common::HashTableKeyable;
-use crate::common::KeyValueEntity;
+
+
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::new::processors::HashJoinState;
