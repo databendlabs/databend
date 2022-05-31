@@ -52,7 +52,7 @@ impl HttpHandler {
         let json = r#"{"foo": "bar"}"#;
         format!(
             r#" examples:
-curl --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
+curl -u root: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
 echo '{}' | curl '{:?}/clickhouse/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
             sock, json, sock
         )

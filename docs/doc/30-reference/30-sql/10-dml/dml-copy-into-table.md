@@ -46,11 +46,11 @@ externalLocation (for Amazon S3) ::=
   [ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]
 ```
 
-| Parameters  | Description | Required |
-| ----------- | ----------- | --- |
-| `s3://<bucket>/[<path>]`  | Files are in the specified external location (S3-like bucket) | YES |
-| `[ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
-| `[ ENDPOINT_URL = '<endpoint_url>' ]`  | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com` |  Optional |
+| Parameters                                                                                  | Description                                                                                                             | Required  |
+|---------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|-----------|
+| `s3://<bucket>/[<path>]`                                                                    | Files are in the specified external location (S3-like bucket)                                                           | YES       |
+| `[ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]` | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. | Optional  |
+| `[ ENDPOINT_URL = '<endpoint_url>' ]`                                                       | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com`                                            |  Optional |
 
 ### FILES = ( 'file_name' [ , 'file_name' ... ] )
 
@@ -61,18 +61,51 @@ Specifies a list of one or more files names (separated by commas) to be loaded.
 A regular expression pattern string, enclosed in single quotes, specifying the file names to match.
 
 ### formatTypeOptions
+
 ```
 formatTypeOptions ::=
   RECORD_DELIMITER = '<character>' 
   FIELD_DELIMITER = '<character>' 
   SKIP_HEADER = <integer>
+  COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | NONE
 ```
 
-| Parameters  | Description | Required |
-| ----------- | ----------- | --- |
-| `RECORD_DELIMITER = '<character>'`  | One characters that separate records in an input file. Default `'\n'` | Optional |
-| `FIELD_DELIMITER = '<character>'`  | One characters that separate fields in an input file. Default `','` | Optional |
-| `SKIP_HEADER = <integer>`  | Number of lines at the start of the file to skip. Default `0` | Optional |
+#### `RECORD_DELIMITER = '<character>'`
+
+Description: One character that separate records in an input file.
+
+Default: `'\n'`
+
+#### `FIELD_DELIMITER = '<character>'`
+
+Description: One character that separate fields in an input file.
+
+Default: `','` (comma)
+
+#### `SKIP_HEADER = '<integer>'`
+
+Description: Number of lines at the start of the file to skip.
+
+Default: `0`
+
+#### `COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | NONE`
+
+Description: String that represents the compression algorithm.
+
+Default: `NONE`
+
+Values:
+
+| Values        | Notes                                                           | 
+|---------------|-----------------------------------------------------------------|
+| `AUTO`        | Auto detect compression via file extensions                     |
+| `GZIP`        |                                                                 |
+| `BZ2`         |                                                                 |
+| `BROTLI`      | Must be specified if loading/unloading Brotli-compressed files. |
+| `ZSTD`        | Zstandard v0.8 (and higher) is supported.                       |
+| `DEFLATE`     | Deflate-compressed files (with zlib header, RFC1950).           |
+| `RAW_DEFLATE` | Deflate-compressed files (without any header, RFC1951).         |
+| `NONE`        | Indicates that the files have not been compressed.              |
 
 ### copyOptions
 ```
@@ -89,16 +122,19 @@ copyOptions ::=
 ### Loading Files from Internal Stage
 
 First, create a named internal stage:
+
 ```sql
 CREATE STAGE my_internal_s1;
 ```
 
 Then, PUT a local file to `my_internal_s1` stage with [PUT to Stage](../../00-api/10-put-to-stage.md) API:
+
 ```shell
 curl  -H "stage_name:my_internal_s1" -F "upload=@books.parquet" -XPUT "http://localhost:8081/v1/upload_to_stage"
 ```
 
 Final, copy the file into `mytable` from the `my_internal_s1` named internal stage:
+
 ```sql
 LIST @my_internal_s1;
 COPY INTO mytable FROM '@my_internal_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
@@ -107,10 +143,13 @@ COPY INTO mytable FROM '@my_internal_s1' pattern = 'books.*parquet' file_format 
 ### Loading Files from External Stage
 
 First, create a named external stage:
+
 ```sql
 CREATE STAGE my_external_s1 url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');
 ```
+
 Then, copy the file into `mytable` from the `my_external_s1` named external stage:
+
 ```sql
 COPY INTO mytable FROM '@my_external_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
@@ -120,9 +159,19 @@ COPY INTO mytable FROM '@my_external_s1' pattern = 'books.*parquet' file_format 
 **Amazon S3**
 
 Try to read 10 rows from csv and insert into the `mytable`.
+
 ```sql
 COPY INTO mytable
   FROM s3://mybucket/data.csv
   credentials=(aws_key_id='<AWS_ACCESS_KEY_ID>' aws_secret_key='<AWS_SECRET_ACCESS_KEY>')
   FILE_FORMAT = (type = "CSV" field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
+```
+
+Try to load data from a gzip compressed csv and insert into `mytable`
+
+```sql
+COPY INTO mytable
+  FROM s3://mybucket/data.csv.gz
+  credentials=(aws_key_id='<AWS_ACCESS_KEY_ID>' aws_secret_key='<AWS_SECRET_ACCESS_KEY>')
+  FILE_FORMAT = (type = "CSV" field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = GZIP) size_limit=10;
 ```

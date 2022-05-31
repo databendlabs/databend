@@ -209,10 +209,7 @@ impl<'a> MetaLeader<'a> {
         match write_rst {
             Ok(resp) => {
                 let data = resp.data;
-                match data {
-                    AppliedState::AppError(ae) => Err(MetaError::from(ae)),
-                    _ => Ok(data),
-                }
+                Ok(data)
             }
 
             Err(cli_write_err) => match cli_write_err {

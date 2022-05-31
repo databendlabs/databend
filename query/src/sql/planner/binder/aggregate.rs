@@ -335,11 +335,11 @@ impl<'a> Binder {
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
-                lit: Literal::Number(number_str),
+                lit: Literal::Integer(index),
                 ..
             } = expr
             {
-                let (scalar, alias) = Self::resolve_index_item(expr, number_str, select_list)?;
+                let (scalar, alias) = Self::resolve_index_item(expr, *index, select_list)?;
                 let key = format!("{:?}", &scalar);
                 if let Entry::Vacant(entry) = bind_context.aggregate_info.group_items_map.entry(key)
                 {
@@ -402,25 +402,19 @@ impl<'a> Binder {
 
     fn resolve_index_item(
         expr: &Expr<'a>,
-        index_string: &str,
+        index: u64,
         select_list: &SelectList<'a>,
     ) -> Result<(Scalar, String)> {
-        let index = index_string.parse::<i32>().map_err(|_| {
-            ErrorCode::SemanticError(
-                expr.span()
-                    .display_error("non-integer constant in GROUP BY".to_string()),
-            )
-        })?;
         // Convert to zero-based index
-        let index = index - 1;
-        if index < 0 || index > (select_list.items.len() as i32) {
+        let index = index as usize - 1;
+        if index >= select_list.items.len() {
             return Err(ErrorCode::SemanticError(expr.span().display_error(
                 format!("GROUP BY position {} is not in select list", index),
             )));
         }
         let item = select_list
             .items
-            .get(index as usize)
+            .get(index)
             .ok_or_else(|| ErrorCode::LogicalError("Should not fail"))?;
 
         let scalar = item.scalar.clone();

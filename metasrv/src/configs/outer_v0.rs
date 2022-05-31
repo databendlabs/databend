@@ -15,6 +15,7 @@
 use std::env;
 
 use clap::Parser;
+use common_meta_raft_store::config::get_default_raft_advertise_host;
 use common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
 use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
@@ -35,6 +36,7 @@ pub struct Config {
     ///
     /// Supported commands:
     /// - `ver`: print version and quit.
+    /// - `show-config`: print effective config and quit.
     #[clap(long, default_value = "")]
     pub cmd: String,
 
@@ -277,7 +279,7 @@ pub struct RaftConfig {
     /// This host should be stored in raft store and be replicated to the raft cluster,
     /// i.e., when calling add_node().
     /// Use `localhost` by default.
-    #[clap(long, default_value = "localhost")]
+    #[clap(long, default_value_t = get_default_raft_advertise_host())]
     pub raft_advertise_host: String,
 
     /// The listening port for metadata communication.

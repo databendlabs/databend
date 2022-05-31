@@ -31,6 +31,7 @@ use crate::parser::error::Error;
 use crate::parser::error::ErrorKind;
 use crate::parser::query::*;
 use crate::parser::token::*;
+use crate::parser::unescape::unescape;
 use crate::parser::util::*;
 use crate::rule;
 
@@ -923,13 +924,17 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
 
 pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(literal_string, Literal::String);
-    // TODO(andylokandy): handle hex numbers in parser
-    let number = map(
-        rule! {
-            LiteralHex | LiteralNumber
-        },
-        |number| Literal::Number(number.text().to_string()),
-    );
+    let integer = map(literal_u64, Literal::Integer);
+    let float = map(literal_f64, Literal::Float);
+    let bigint = map(rule!(LiteralInteger), |lit| Literal::BigInt {
+        lit: lit.text().to_string(),
+        is_hex: false,
+    });
+    let bigint_hex = map(literal_hex_str, |lit| Literal::BigInt {
+        lit: lit.to_string(),
+        is_hex: true,
+    });
+
     let boolean = alt((
         value(Literal::Boolean(true), rule! { TRUE }),
         value(Literal::Boolean(false), rule! { FALSE }),
@@ -939,10 +944,78 @@ pub fn literal(i: Input) -> IResult<Literal> {
 
     rule!(
         #string
-        | #number
+        | #integer
+        | #float
+        | #bigint
+        | #bigint_hex
         | #boolean
         | #current_timestamp
         | #null
+    )(i)
+}
+
+pub fn literal_hex_str(i: Input) -> IResult<&str> {
+    // 0XFFFF
+    let mysql_hex = map(
+        rule! {
+            MySQLLiteralHex
+        },
+        |token| &token.text()[2..],
+    );
+    // x'FFFF'
+    let pg_hex = map(
+        rule! {
+            PGLiteralHex
+        },
+        |token| &token.text()[2..token.text().len() - 1],
+    );
+
+    rule!(
+        #mysql_hex
+        | #pg_hex
+    )(i)
+}
+
+#[allow(clippy::from_str_radix_10)]
+pub fn literal_u64(i: Input) -> IResult<u64> {
+    let decimal = map_res(
+        rule! {
+            LiteralInteger
+        },
+        |token| Ok(u64::from_str_radix(token.text(), 10)?),
+    );
+    let hex = map_res(literal_hex_str, |lit| Ok(u64::from_str_radix(lit, 16)?));
+
+    rule!(
+        #decimal
+        | #hex
+    )(i)
+}
+
+pub fn literal_f64(i: Input) -> IResult<f64> {
+    map_res(
+        rule! {
+            LiteralFloat
+        },
+        |token| Ok(fast_float::parse(token.text())?),
+    )(i)
+}
+
+pub fn literal_string(i: Input) -> IResult<String> {
+    map_res(
+        rule! {
+            QuotedString
+        },
+        |token| {
+            if token.text().starts_with('\'') {
+                let str = &token.text()[1..token.text().len() - 1];
+                let unescaped =
+                    unescape(str, '\'').ok_or(ErrorKind::Other("invalid escape or unicode"))?;
+                Ok(unescaped)
+            } else {
+                Err(ErrorKind::ExpectToken(QuotedString))
+            }
+        },
     )(i)
 }
 

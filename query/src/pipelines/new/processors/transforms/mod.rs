@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod aggregator;
-mod hash_join;
+pub(crate) mod hash_join;
 mod transform;
 mod transform_addon;
 mod transform_aggregator;
@@ -36,6 +36,7 @@ pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
 pub use hash_join::ChainingHashTable;
 pub use hash_join::HashJoinState;
+pub use hash_join::HashTable;
 pub use transform_addon::TransformAddOn;
 pub use transform_aggregator::TransformAggregator;
 pub use transform_apply::TransformApply;

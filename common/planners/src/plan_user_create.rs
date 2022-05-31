@@ -25,6 +25,7 @@ pub struct CreateUserPlan {
     pub user: UserIdentity,
     pub auth_info: AuthInfo,
     pub user_option: UserOption,
+    pub if_not_exists: bool,
 }
 
 impl CreateUserPlan {

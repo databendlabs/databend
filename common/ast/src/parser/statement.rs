@@ -668,7 +668,6 @@ pub fn user_identity(i: Input) -> IResult<UserIdentity> {
 pub fn auth_type(i: Input) -> IResult<AuthType> {
     alt((
         value(AuthType::NoPassword, rule! { NO_PASSWORD }),
-        value(AuthType::PlaintextPassword, rule! { PLAINTEXT_PASSWORD }),
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),

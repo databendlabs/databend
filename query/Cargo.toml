@@ -42,6 +42,7 @@ common-io = { path = "../common/io" }
 common-macros = { path = "../common/macros" }
 common-management = { path = "../common/management" }
 common-meta-api = { path = "../common/meta/api" }
+common-meta-app = { path = "../common/meta/app" }
 common-meta-embedded = { path = "../common/meta/embedded" }
 common-meta-grpc = { path = "../common/meta/grpc" }
 common-meta-raft-store = { path = "../common/meta/raft-store" }
@@ -56,7 +57,7 @@ common-tracing = { path = "../common/tracing" }
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "15786d3", package = "opensrv-clickhouse" }
 opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "967477f1", package = "opensrv-mysql" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7d74a3c" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "13f8f76" }
 
 # Crates.io dependencies
 ahash = "0.7.6"
@@ -93,7 +94,8 @@ openssl = { version = "0.10", features = ["vendored"] }
 paste = "1.0.7"
 petgraph = "0.6.0"
 poem = { version = "=1.3.16", features = ["rustls", "multipart", "compression"] }
-prost = "=0.9.0"
+primitive-types = "0.6.2"
+prost = "=0.10.1"
 rand = "0.8.5"
 regex = "1.5.5"
 reqwest = "0.11.10"
@@ -113,7 +115,7 @@ thrift = { version = "0.15", optional = true }
 time = "0.3.9"
 tokio-rustls = "0.23.3"
 tokio-stream = { version = "0.1.8", features = ["net"] }
-tonic = "=0.6.2"
+tonic = "=0.7.2"
 twox-hash = "1.6.2"
 typetag = "0.1.8"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }

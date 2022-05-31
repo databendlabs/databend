@@ -27,7 +27,7 @@ use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
 
-macro_rules! test_parse {
+macro_rules! run_parser {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
         let tokens = Tokenizer::new($source).collect::<Result<Vec<_>>>().unwrap();
         let backtrace = Backtrace::new();
@@ -210,7 +210,7 @@ fn test_query() {
     ];
 
     for case in cases {
-        test_parse!(file, query, case);
+        run_parser!(file, query, case);
     }
 }
 
@@ -229,7 +229,7 @@ fn test_query_error() {
     ];
 
     for case in cases {
-        test_parse!(file, query, case);
+        run_parser!(file, query, case);
     }
 }
 
@@ -243,6 +243,10 @@ fn test_expr() {
         r#"'I''m who I\'m.'"#,
         r#"'\776 \n \t \u0053 \xaa'"#,
         r#"char(0xD0, 0xBF, 0xD1)"#,
+        r#"[42, 3.5, 4., .001, 5e2, 1.925e-3, .38e+7, 1.e-01, 0xfff, x'deedbeef']"#,
+        r#"123456789012345678901234567890"#,
+        r#"x'123456789012345678901234567890'"#,
+        r#"1e100000000000000"#,
         r#"-1"#,
         r#"(1,)"#,
         r#"(1,2)"#,
@@ -287,7 +291,7 @@ fn test_expr() {
     ];
 
     for case in cases {
-        test_parse!(file, expr, case);
+        run_parser!(file, expr, case);
     }
 }
 
@@ -309,6 +313,6 @@ fn test_expr_error() {
     ];
 
     for case in cases {
-        test_parse!(file, expr, case);
+        run_parser!(file, expr, case);
     }
 }
