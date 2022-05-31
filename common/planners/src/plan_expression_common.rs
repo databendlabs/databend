@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
 
 use crate::validate_function_arg;
@@ -523,6 +524,9 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 Ok(self)
             }
             Expression::WindowFunction {
+                op,
+                params,
+                args,
                 partition_by,
                 order_by,
                 ..
@@ -530,6 +534,24 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 for _ in 0..partition_by.len() + order_by.len() {
                     self.stack.remove(0);
                 }
+
+                if !AggregateFunctionFactory::instance().check(op) {
+                    return Err(ErrorCode::LogicalError(
+                        "not yet support non aggr window function",
+                    ));
+                }
+
+                let mut fields = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    let arg_type = self.stack.remove(0);
+                    fields.push(DataField::new(&arg.column_name(), arg_type));
+                }
+
+                let aggregate_window_function =
+                    AggregateFunctionFactory::instance().get(op, params.clone(), fields);
+                let return_type = aggregate_window_function.unwrap().return_type().unwrap();
+
+                self.stack.push(return_type);
                 Ok(self)
             }
             Expression::Cast { data_type, .. } => {

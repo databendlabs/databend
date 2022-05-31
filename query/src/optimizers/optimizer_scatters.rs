@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
@@ -32,6 +33,7 @@ use common_planners::SortPlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
 use common_planners::WindowFuncPlan;
+use enum_extract::let_extract;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
@@ -111,11 +113,58 @@ impl ScattersOptimizerImpl {
     }
 
     fn cluster_window(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
-        todo!()
+        self.running_mode = RunningMode::Cluster;
+
+        match self.input.take() {
+            None => Err(ErrorCode::LogicalError("Cluster window input is None")),
+            Some(input) => {
+                let_extract!(
+                    Expression::WindowFunction {
+                        op: _op,
+                        params: _params,
+                        args: _args,
+                        partition_by: partition_by,
+                        order_by: _order_by,
+                        window_frame: _window_frame
+                    },
+                    &plan.window_func,
+                    panic!()
+                );
+                // let sample_block = DataBlock::empty_with_schema(input.schema());
+                // let method = DataBlock::choose_hash_method(
+                //     &sample_block,
+                //     &partition_by
+                //         .iter()
+                //         .map(|expr| expr.column_name())
+                //         .collect::<Vec<_>>(),
+                // )?;
+                let scatters_expr = Expression::ScalarFunction {
+                    op: String::from("sipHash"),
+                    args: partition_by.to_owned(),
+                };
+
+                let scatter_plan = PlanNode::Stage(StagePlan {
+                    scatters_expr,
+                    kind: StageKind::Normal,
+                    input,
+                });
+
+                Ok(PlanNode::WindowFunc(WindowFuncPlan {
+                    window_func: plan.window_func.to_owned(),
+                    input: Arc::new(scatter_plan),
+                    schema: plan.schema.to_owned(),
+                }))
+            }
+        }
     }
 
     fn standalone_window(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
-        todo!()
+        match self.input.take() {
+            None => Err(ErrorCode::LogicalError("Standalone window input is None")),
+            Some(input) => PlanBuilder::from(input.as_ref())
+                .window_func(plan.window_func.to_owned())?
+                .build(),
+        }
     }
 
     fn cluster_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
