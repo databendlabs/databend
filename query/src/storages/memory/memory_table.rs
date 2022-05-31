@@ -344,7 +344,7 @@ impl SyncSource for MemoryTableSource {
     }
 }
 
-struct MemoryTableSink {
+pub struct MemoryTableSink {
     ctx: Arc<QueryContext>,
 }
 

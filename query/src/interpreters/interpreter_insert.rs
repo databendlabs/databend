@@ -52,14 +52,16 @@ pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
     plan: InsertPlan,
     source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
+    async_insert: bool
 }
 
 impl InsertInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: InsertPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: InsertPlan, async_insert: bool) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertInterpreter {
             ctx,
             plan,
             source_pipe_builder: Mutex::new(None),
+            async_insert,
         }))
     }
 
@@ -68,6 +70,7 @@ impl InsertInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
+
         let settings = self.ctx.get_settings();
         let table = self
             .ctx
@@ -76,68 +79,78 @@ impl InsertInterpreter {
 
         let mut pipeline = self.create_new_pipeline()?;
         let mut builder = SourcePipeBuilder::create();
-        match &self.plan.source {
-            InsertInputSource::Values(values) => {
-                let blocks = Arc::new(Mutex::new(VecDeque::from_iter(vec![values.block.clone()])));
 
-                for _index in 0..settings.get_max_threads()? {
-                    let output = OutputPort::create();
-                    builder.add_source(
-                        output.clone(),
-                        BlocksSource::create(self.ctx.clone(), output.clone(), blocks.clone())?,
+        if self.async_insert {
+            pipeline.add_pipe(
+                ((*self.source_pipe_builder.lock()).clone())
+                    .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
+                    .finalize(),
+            );
+            println!("open async insert");
+        } else {
+            match &self.plan.source {
+                InsertInputSource::Values(values) => {
+                    let blocks = Arc::new(Mutex::new(VecDeque::from_iter(vec![values.block.clone()])));
+    
+                    for _index in 0..settings.get_max_threads()? {
+                        let output = OutputPort::create();
+                        builder.add_source(
+                            output.clone(),
+                            BlocksSource::create(self.ctx.clone(), output.clone(), blocks.clone())?,
+                        );
+                    }
+                    pipeline.add_pipe(builder.finalize());
+                }
+                InsertInputSource::StreamingWithFormat(_) => {
+                    pipeline.add_pipe(
+                        ((*self.source_pipe_builder.lock()).clone())
+                            .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
+                            .finalize(),
                     );
                 }
-                pipeline.add_pipe(builder.finalize());
-            }
-            InsertInputSource::StreamingWithFormat(_) => {
-                pipeline.add_pipe(
-                    ((*self.source_pipe_builder.lock()).clone())
-                        .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
-                        .finalize(),
-                );
-            }
-            InsertInputSource::SelectPlan(plan) => {
-                let select_interpreter =
-                    SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
-                        input: Arc::new((**plan).clone()),
-                    })?;
-                pipeline = select_interpreter.create_new_pipeline()?;
-
-                if self.check_schema_cast(plan)? {
-                    let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
-                    for (target_field, original_field) in self
-                        .plan
-                        .schema()
-                        .fields()
-                        .iter()
-                        .zip(plan.schema().fields().iter())
-                    {
-                        let target_type_name = target_field.data_type().name();
-                        let from_type = original_field.data_type().clone();
-                        let cast_function =
-                            CastFunction::create("cast", &target_type_name, from_type).unwrap();
-                        functions.push(cast_function);
+                InsertInputSource::SelectPlan(plan) => {
+                    let select_interpreter =
+                        SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
+                            input: Arc::new((**plan).clone()),
+                        })?;
+                    pipeline = select_interpreter.create_new_pipeline()?;
+    
+                    if self.check_schema_cast(plan)? {
+                        let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
+                        for (target_field, original_field) in self
+                            .plan
+                            .schema()
+                            .fields()
+                            .iter()
+                            .zip(plan.schema().fields().iter())
+                        {
+                            let target_type_name = target_field.data_type().name();
+                            let from_type = original_field.data_type().clone();
+                            let cast_function =
+                                CastFunction::create("cast", &target_type_name, from_type).unwrap();
+                            functions.push(cast_function);
+                        }
+                        let tz = self.ctx.get_settings().get_timezone()?;
+                        let tz = String::from_utf8(tz).map_err(|_| {
+                            ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+                        })?;
+                        let tz = tz.parse::<Tz>().map_err(|_| {
+                            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+                        })?;
+                        let func_ctx = FunctionContext { tz };
+                        pipeline.add_transform(|transform_input_port, transform_output_port| {
+                            TransformCastSchema::try_create(
+                                transform_input_port,
+                                transform_output_port,
+                                self.plan.schema(),
+                                functions.clone(),
+                                func_ctx.clone(),
+                            )
+                        })?;
                     }
-                    let tz = self.ctx.get_settings().get_timezone()?;
-                    let tz = String::from_utf8(tz).map_err(|_| {
-                        ErrorCode::LogicalError("Timezone has been checked and should be valid.")
-                    })?;
-                    let tz = tz.parse::<Tz>().map_err(|_| {
-                        ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-                    })?;
-                    let func_ctx = FunctionContext { tz };
-                    pipeline.add_transform(|transform_input_port, transform_output_port| {
-                        TransformCastSchema::try_create(
-                            transform_input_port,
-                            transform_output_port,
-                            self.plan.schema(),
-                            functions.clone(),
-                            func_ctx.clone(),
-                        )
-                    })?;
                 }
-            }
-        };
+            };
+        }
 
         let need_fill_missing_columns = table.schema() != plan.schema();
         if need_fill_missing_columns {
@@ -156,15 +169,33 @@ impl InsertInterpreter {
 
         let async_runtime = self.ctx.get_storage_runtime();
 
+        println!("interpreter0");
+        println!("session_id:{}", self.ctx.get_connection_id());
+
         pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
         let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
         executor.execute()?;
         drop(executor);
 
+        println!("interpreter1");
+
         let overwrite = self.plan.overwrite;
         let catalog_name = self.plan.catalog_name.clone();
         let context = self.ctx.clone();
-        let append_entries = self.ctx.consume_precommit_blocks();
+        let append_entries = self.ctx.clone().consume_precommit_blocks();
+
+
+        // let stream = Box::pin(DataBlockStream::create(
+        //     self.plan.schema(),
+        //     None,
+        //     append_entries,
+        // ));
+
+        // let tmp = table.append_data(self.ctx.clone(), stream).await?;
+
+        // println!("entries:{}", &append_entries.len());
+
+        
 
         // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
         let handler = self.ctx.get_storage_runtime().spawn(async move {
@@ -181,6 +212,7 @@ impl InsertInterpreter {
                 cause
             ))),
         }?;
+
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

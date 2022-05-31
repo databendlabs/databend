@@ -21,8 +21,10 @@ use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
+// use common_base::base::tokio::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::PlanNode;
 use common_tracing::tracing;
 use futures::StreamExt;
 use serde::Deserialize;
@@ -39,6 +41,8 @@ use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 use crate::storages::result::ResultQueryInfo;
 use crate::storages::result::ResultTableWriter;
+
+use common_planners::PlanNode::Insert;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum ExecuteStateKind {
@@ -153,6 +157,7 @@ impl ExecuteState {
         let sql = &request.sql;
         let start_time = Instant::now();
         ctx.attach_query_str(sql);
+        println!("execute state");
         let plan = match PlanParser::parse(ctx.clone(), sql).await {
             Ok(p) => p,
             Err(e) => {
@@ -160,6 +165,9 @@ impl ExecuteState {
                 return Err(e);
             }
         };
+
+        println!("session_id:{}", ctx.get_connection_id());
+
 
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         // Write Start to query log table.
@@ -182,7 +190,7 @@ impl ExecuteState {
         let ctx_clone = ctx.clone();
         ctx.try_spawn(async move {
             if let Err(err) =
-                execute(interpreter, ctx_clone, block_buffer, executor_clone.clone()).await
+                execute(interpreter, ctx_clone, block_buffer, executor_clone.clone(), Arc::new(plan)).await
             {
                 let kill = err.message().starts_with("aborted");
                 Executor::stop(&executor_clone, Err(err), kill).await
@@ -198,7 +206,23 @@ async fn execute(
     ctx: Arc<QueryContext>,
     block_buffer: Arc<BlockBuffer>,
     executor: Arc<RwLock<Executor>>,
+    plan: Arc<PlanNode>
 ) -> Result<()> {
+
+    if ctx.clone().get_config().query.enable_async_insert {
+        match &*plan {
+            Insert(insert_plan) => {
+                let queue = ctx.get_current_session().get_session_manager().get_async_insert_queue().read().clone().unwrap();
+                queue.clone().push(Arc::new(insert_plan.to_owned()), ctx.clone());
+                println!("haha2");
+                queue.clone().wait_for_processing_insert(ctx.get_id(), common_base::base::tokio::time::Duration::from_millis(100));
+                Executor::stop(&executor, Ok(()), false).await;
+                return Ok(())
+            }
+            _ => todo!(),
+        }
+    }
+
     let data_stream = interpreter.execute(None).await?;
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
 

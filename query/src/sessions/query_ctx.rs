@@ -52,6 +52,7 @@ use opendal::Operator;
 use crate::catalogs::Catalog;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
+use crate::interpreters::AsyncInsertQueue;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
@@ -66,6 +67,7 @@ use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
 use crate::Config;
 
+use common_base::base::tokio::time::Duration;
 #[derive(Clone)]
 pub struct QueryContext {
     version: String,

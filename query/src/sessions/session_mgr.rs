@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::rc::Weak;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -35,6 +36,7 @@ use opendal::Operator;
 
 use crate::catalogs::CatalogManager;
 use crate::clusters::ClusterDiscovery;
+use crate::interpreters::AsyncInsertQueue;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
@@ -59,6 +61,7 @@ pub struct SessionManager {
     storage_operator: RwLock<Operator>,
     storage_runtime: Arc<Runtime>,
     _guards: Vec<WorkerGuard>,
+    async_insert_queue: Arc<RwLock<Option<Arc<AsyncInsertQueue>>>>,
 }
 
 impl SessionManager {
@@ -77,6 +80,8 @@ impl SessionManager {
             Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
         };
 
+        
+
         // NOTE: Magic happens here. We will add a layer upon original storage operator
         // so that all underlying storage operations will send to storage runtime.
         let storage_operator = Self::init_storage_operator(&conf)
@@ -94,8 +99,21 @@ impl SessionManager {
             (Vec::new(), None)
         };
 
+        let storage_runtime = Arc::new(storage_runtime);
+
+        let async_insert_queue = Arc::new(RwLock::new(Some(
+            Arc::new(
+            AsyncInsertQueue::try_create(
+                Arc::new(RwLock::new(None)), 
+                storage_runtime.clone(),
+                conf.clone().query.async_max_data_size, 
+                tokio::time::Duration::from_millis(conf.query.async_insert_busy_timeout.clone()),
+                tokio::time::Duration::from_millis(conf.query.async_insert_stale_timeout.clone()))
+            )
+        )));
+
         Ok(Arc::new(SessionManager {
-            conf: RwLock::new(conf),
+            conf: RwLock::new(conf.clone()),
             catalogs: RwLock::new(catalogs),
             discovery: RwLock::new(discovery),
             http_query_manager,
@@ -105,8 +123,9 @@ impl SessionManager {
             query_logger: RwLock::new(query_logger),
             status,
             storage_operator: RwLock::new(storage_operator),
-            storage_runtime: Arc::new(storage_runtime),
+            storage_runtime: storage_runtime.clone(),
             _guards,
+            async_insert_queue: async_insert_queue.clone(),
         }))
     }
 
@@ -342,4 +361,9 @@ impl SessionManager {
     pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
         self.query_logger.write().to_owned()
     }
+
+    pub fn get_async_insert_queue(&self) -> Arc<RwLock<Option<Arc<AsyncInsertQueue>>>> {
+        self.async_insert_queue.clone()
+    }
+    
 }

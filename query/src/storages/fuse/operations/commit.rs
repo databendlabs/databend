@@ -144,7 +144,9 @@ impl FuseTable {
         operation_log: &TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
+        println!("try_commit");
         let prev = self.read_table_snapshot(ctx).await?;
+        println!("try_commit1");
         let prev_version = self.snapshot_format_version();
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(operation_log)?;
@@ -192,6 +194,7 @@ impl FuseTable {
             snapshot_loc.clone(),
         )
         .await;
+        println!("try_commit2");
 
         match result {
             Ok(_) => {

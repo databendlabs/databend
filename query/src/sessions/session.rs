@@ -126,13 +126,11 @@ impl Session {
     /// We can bind the environment to the context in create_context method.
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
         let shared = self.get_shared_query_context().await?;
-
         Ok(QueryContext::create_from_shared(shared))
     }
 
     pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
         let discovery = self.session_mgr.get_cluster_discovery();
-
         let session = self.clone();
         let cluster = discovery.discover().await?;
         let shared = QueryContextShared::try_create(session, cluster).await?;

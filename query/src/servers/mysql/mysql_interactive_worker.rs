@@ -15,6 +15,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
+use common_planners::PlanNode::Insert;
 
 use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
@@ -33,6 +34,10 @@ use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
+
+use common_base::base::tokio::time::Duration;
+
+use crate::interpreters::AsyncInsertQueue;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -288,6 +293,24 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let (stmts, hints) =
                     DfParser::parse_sql(query, context.get_current_session().get_type())?;
 
+                dbg!(&stmts);
+
+                // if matches!(stmts.get(0), Some(DfStatement::InsertQuery(_))) {
+                //     let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
+                //     match plan.unwrap() {
+                //         Insert(insert_plan) => {
+                //             let queue = self.session.get_session_manager().get_async_insert_queue().write().clone().unwrap();
+                //             queue.clone().push(Arc::new(insert_plan), context.clone());
+                            
+                //             // queue.wait_for_processing_insert(context.get_id(), Duration::from_millis(100));
+
+                //             return Ok((vec![DataBlock::empty()], String::from("success insert in")));
+                //         }
+                //         _ => todo!()
+                //     }
+                //     return Err(ErrorCode::BadAddressFormat("test"));
+                // }
+                
                 let interpreter: Arc<dyn Interpreter> =
                     if settings.get_enable_new_processor_framework()? != 0
                         && context.get_cluster().is_empty()
@@ -318,8 +341,13 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                                 return Err(e);
                             }
                         };
+
+                        let p = serde_json::to_string(&plan).unwrap();
+                        println!("serde:{}", p);
+
                         tracing::debug!("Get logic plan:\n{:?}", plan);
                         InterpreterFactory::get(context.clone(), plan)?
+                        
                     };
 
                 match hints
@@ -357,6 +385,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     ) -> Result<(Vec<DataBlock>, String)> {
         let instant = Instant::now();
 
+        // fkuner
         let query_result = context.try_spawn(
             async move {
                 // Write start query log.

@@ -145,6 +145,18 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "The threshold of keys to open two-level aggregation, default value: 10000",
             },
+            SettingValue {
+                default_value: DataValue::UInt64(0),
+                user_setting: UserSetting::create("enable_async_insert", DataValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "Enable async insert if value != 0, default value: 0",
+            },
+            SettingValue {
+                default_value: DataValue::UInt64(200),
+                user_setting: UserSetting::create("async_insert_stale_timeout", DataValue::UInt64(200)),
+                level: ScopeLevel::Session,
+                desc: "Async insert stale timeout time, default value: 200ms",
+            }
         ];
 
         let settings = Arc::new(RwLock::new(HashMap::default()));
@@ -251,6 +263,26 @@ impl Settings {
     // Set group by two level threshold
     pub fn set_group_by_two_level_threshold(&self, val: u64) -> Result<()> {
         let key = "group_by_two_level_threshold";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_enable_async_insert(&self) -> Result<u64> {
+        let key = "enable_async_insert";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_enable_async_insert(&self, val: u64) -> Result<()> {
+        let key = "enable_async_insert";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_async_insert_stale_time(&self) -> Result<u64> {
+        let key = "async_insert_stale_time";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_async_insert_stale_time(&self, val: u64) -> Result<()> {
+        let key = "async_insert_stale_time";
         self.try_set_u64(key, val, false)
     }
 

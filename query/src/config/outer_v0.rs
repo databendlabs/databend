@@ -607,6 +607,22 @@ pub struct QueryConfig {
 
     #[clap(long, default_value_t)]
     pub jwt_key_file: String,
+
+    /// TODO(fkuner)
+    #[clap(long)]
+    pub enable_async_insert: bool,
+
+    /// TODO(fkuner)
+    #[clap(long, default_value="10000")]
+    pub async_max_data_size: u64,
+
+    /// TODO(fkuner)
+    #[clap(long, default_value="200")]
+    pub async_insert_busy_timeout: u64,
+
+    /// TODO(fkuner)
+    #[clap(long, default_value="0")]
+    pub async_insert_stale_timeout: u64,
 }
 
 impl Default for QueryConfig {
@@ -657,6 +673,10 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_disk_cache_mb_size: self.table_disk_cache_mb_size,
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
+            enable_async_insert: self.enable_async_insert,
+            async_max_data_size: self.async_max_data_size,
+            async_insert_busy_timeout: self.async_insert_busy_timeout,
+            async_insert_stale_timeout: self.async_insert_stale_timeout,
         })
     }
 }
@@ -701,6 +721,10 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_disk_cache_mb_size: inner.table_disk_cache_mb_size,
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
+            enable_async_insert: inner.enable_async_insert,
+            async_max_data_size: inner.async_max_data_size,
+            async_insert_busy_timeout: inner.async_insert_busy_timeout,
+            async_insert_stale_timeout: inner.async_insert_stale_timeout,
         }
     }
 }

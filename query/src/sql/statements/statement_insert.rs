@@ -80,6 +80,7 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
         self.is_supported()?;
 
         let (catalog_name, database_name, table_name) = self.resolve_table(&ctx)?;
+
         let write_table = ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
