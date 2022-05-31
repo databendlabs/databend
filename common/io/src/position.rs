@@ -84,9 +84,10 @@ pub fn position16<
     const C13: u8, const C14: u8, const C15: u8, const C16: u8
 >(buf: &[u8]) -> usize {
     #[cfg(all(any(target_arch = "aarch64"), target_feature = "neon"))]
-    {
-        return position_neon::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16>(buf);
-    }
+    return position_neon::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16>(buf);
+
+    #[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
+    return position_sse42::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16>(buf);
 
     position16_from_index::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16>(buf, 0)
 }
@@ -133,22 +134,72 @@ pub fn position_neon<
     }
 }
 
-// #[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
-// fn position_sse42<
-//     const POSITIVE: bool,
-//     const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8,
-//     const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8, const C12: u8,
-//     const C13: u8, const C14: u8, const C15: u8, const C16: u8
-// >(buf: &[u8]) -> usize {
-//     unsafe {
-//         use std::arch::x86_64::*;
-//         // std::arch::x86_64::
-//     }
-//     // __m128i
-//     // set = _mm_setr_epi8(c01, c02, c03, c04, c05, c06, c07, c08, c09, C10, C11, C12, C13, C14, C15, C16);
-//
-//     unimplemented!()
-// }
+#[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
+fn position_sse42<
+    const POSITIVE: bool,
+    const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8,
+    const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8, const C12: u8,
+    const C13: u8, const C14: u8, const C15: u8, const C16: u8
+>(buf: &[u8]) -> usize {
+    unsafe {
+        use std::arch::x86_64::*;
+        let chars_set = _mm_setr_epi8(C1 as i8, C2 as i8, C3 as i8, C4 as i8, C5 as i8, C6 as i8, C7 as i8, C8 as i8, C9 as i8, C10 as i8, C11 as i8, C12 as i8, C13 as i8, C14 as i8, C15 as i8, C16 as i8);
+
+        let mut index = 0;
+
+        let chars_count = if C16 != 0 {
+            16
+        } else if C15 != 0 {
+            15
+        } else if C14 != 0 {
+            14
+        } else if C13 != 0 {
+            13
+        } else if C12 != 0 {
+            12
+        } else if C11 != 0 {
+            11
+        } else if C10 != 0 {
+            10
+        } else if C9 != 0 {
+            9
+        } else if C8 != 0 {
+            8
+        } else if C7 != 0 {
+            7
+        } else if C6 != 0 {
+            6
+        } else if C5 != 0 {
+            5
+        } else if C4 != 0 {
+            4
+        } else if C3 != 0 {
+            3
+        } else if C2 != 0 {
+            2
+        } else {
+            1
+        };
+
+        while index + 15 < buf.len() {
+            let bytes = _mm_loadu_si128(buf.as_ptr().add(index) as *const _);
+
+            if POSITIVE {
+                if _mm_cmpestrc::<0>(chars_set, chars_count, bytes, 16) > 0 {
+                    return index + _mm_cmpestri::<0>(chars_set, chars_count, bytes, 16);
+                }
+            } else {
+                if _mm_cmpestrc::<_SIDD_NEGATIVE_POLARITY>(chars_set, chars_count, bytes, 16) > 0 {
+                    return index + _mm_cmpestri::<_SIDD_NEGATIVE_POLARITY>(chars_set, chars_count, bytes, 16);
+                }
+            }
+
+            index += 16;
+        }
+
+        position16_from_index::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16>(buf, index)
+    }
+}
 
 #[inline(always)]
 fn position16_from_index<
