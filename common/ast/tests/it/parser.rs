@@ -27,7 +27,7 @@ use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
 
-macro_rules! test_parse {
+macro_rules! run_parser {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
         let tokens = Tokenizer::new($source).collect::<Result<Vec<_>>>().unwrap();
         let backtrace = Backtrace::new();
@@ -138,7 +138,7 @@ fn test_statements_in_legacy_suites() {
         // TODO(andylokandy): support all cases eventually
         // Remove currently unimplemented cases
         let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|HISTORY).*\n",
+            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES).*\n",
         )
         .unwrap()
         .replace_all(&file_str, "")
@@ -210,7 +210,7 @@ fn test_query() {
     ];
 
     for case in cases {
-        test_parse!(file, query, case);
+        run_parser!(file, query, case);
     }
 }
 
@@ -229,7 +229,7 @@ fn test_query_error() {
     ];
 
     for case in cases {
-        test_parse!(file, query, case);
+        run_parser!(file, query, case);
     }
 }
 
@@ -240,12 +240,26 @@ fn test_expr() {
 
     let cases = &[
         r#"a"#,
+        r#"'I''m who I\'m.'"#,
+        r#"'\776 \n \t \u0053 \xaa'"#,
+        r#"char(0xD0, 0xBF, 0xD1)"#,
+        r#"[42, 3.5, 4., .001, 5e2, 1.925e-3, .38e+7, 1.e-01, 0xfff, x'deedbeef']"#,
+        r#"123456789012345678901234567890"#,
+        r#"x'123456789012345678901234567890'"#,
+        r#"1e100000000000000"#,
         r#"-1"#,
         r#"(1,)"#,
         r#"(1,2)"#,
         r#"(1,2,)"#,
+        r#"[1]"#,
+        r#"[1,]"#,
+        r#"[[1]]"#,
+        r#"[[1],[2]]"#,
+        r#"[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]"#,
         r#"typeof(1 + 2)"#,
         r#"- - + + - 1 + + - 2"#,
+        r#"0XFF + 0xff + 0xa + x'ffff'"#,
+        r#"1 - -(- - -1)"#,
         r#"1 + a * c.d"#,
         r#"number % 2"#,
         r#"`t`:k1.k2"#,
@@ -277,7 +291,7 @@ fn test_expr() {
     ];
 
     for case in cases {
-        test_parse!(file, expr, case);
+        run_parser!(file, expr, case);
     }
 }
 
@@ -290,6 +304,8 @@ fn test_expr_error() {
         r#"5 * (a and ) 1"#,
         r#"a + +"#,
         r#"CAST(col1 AS foo)"#,
+        // TODO(andylokandy): This is a bug being tracking in https://github.com/segeljakt/pratt/issues/7
+        r#"1 a"#,
         r#"CAST(col1)"#,
         r#"G.E.B IS NOT NULL AND
             col1 NOT BETWEEN col2 AND
@@ -297,6 +313,6 @@ fn test_expr_error() {
     ];
 
     for case in cases {
-        test_parse!(file, expr, case);
+        run_parser!(file, expr, case);
     }
 }

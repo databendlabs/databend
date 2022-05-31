@@ -17,6 +17,7 @@ ALTER USER <name> IDENTIFIED [WITH auth_type ] BY 'auth_string'
 auth_type: {
     double_sha1_password
   | sha256_password
+  | no_password
 }
 ```
 auth_type default is **double_sha1_password**.
@@ -49,4 +50,17 @@ SHOW USERS;
 +-------+----------+-----------------+------------------------------------------------------------------+
 | user1 | %        | sha256_password | dd130a849d7b29e5541b05d2f7f86a4acd4f1ec598c1c9438783f56bc4f0ff80 |
 +-------+----------+-----------------+------------------------------------------------------------------+
+```
+
+```sql
+ALTER USER 'user1' IDENTIFIED WITH no_password;
+```
+
+```sql
+show users;
++-------+----------+-------------+-------------+
+| name  | hostname | auth_type   | auth_string |
++-------+----------+-------------+-------------+
+| user1 | %        | no_password |             |
++-------+----------+-------------+-------------+
 ```

@@ -39,7 +39,7 @@ pub struct EltFunction {
 impl EltFunction {
     pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let result_type = if args[0].is_null() {
-            NullType::arc()
+            NullType::new_impl()
         } else {
             let arg = remove_nullable(args[0]);
             assert_numeric(&arg)?;

@@ -21,6 +21,8 @@ use std::net::SocketAddr;
 use anyhow::anyhow;
 use clap::Parser;
 use common_base::base::tokio;
+use common_meta_api::KVApi;
+use common_meta_grpc::MetaGrpcClient;
 use common_meta_raft_store::config::get_default_raft_advertise_host;
 use common_meta_raft_store::sled_key_spaces::KeySpaceKV;
 use common_meta_sled_store::get_sled_db;
@@ -38,6 +40,10 @@ use tokio::net::TcpSocket;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
 #[clap(about, version, author)]
 struct Config {
+    /// Run a command
+    #[clap(long, default_value = "")]
+    pub cmd: String,
+
     #[clap(long, default_value = "INFO")]
     pub log_level: String,
 
@@ -189,7 +195,25 @@ async fn main() -> anyhow::Result<()> {
     eprintln!("╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝       ╚═════╝   ╚═╝   ╚══════╝");
     eprintln!();
 
-    eprintln!("raft_config: {}", pretty(raft_config)?);
+    eprintln!("config: {}", pretty(&config)?);
+
+    if !config.cmd.is_empty() {
+        return match config.cmd.as_str() {
+            "bench-client-conn-num" => {
+                bench_client_num_conn(&config).await?;
+                Ok(())
+            }
+
+            _ => {
+                eprintln!("valid commands are");
+                eprintln!("  --cmd bench-client-conn-num");
+                eprintln!("    Keep create new connections to metasrv.");
+                eprintln!("    Requires --grpc-api-address.");
+
+                Err(anyhow::anyhow!("unknown cmd: {}", config.cmd))
+            }
+        };
+    }
 
     if config.export {
         // export from grpc api if metasrv is running
@@ -332,4 +356,26 @@ async fn service_is_running(addr: SocketAddr) -> Result<bool, io::Error> {
     let stream = socket.connect(addr).await;
 
     Ok(stream.is_ok())
+}
+
+async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
+    let addr = &conf.grpc_api_address;
+
+    println!(
+        "loop: connect to metasrv {}, get_kv('foo'), do not drop the connection",
+        addr
+    );
+
+    let mut clients = vec![];
+    let mut i = 0;
+
+    loop {
+        i += 1;
+        let client = MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None)?;
+
+        let res = client.get_kv("foo").await;
+        println!("{}-th: get_kv(foo): {:?}", i, res);
+
+        clients.push(client);
+    }
 }

@@ -271,15 +271,7 @@ impl StateMachine {
             Ok(None)
         });
 
-        let opt_applied_state = match result {
-            Ok(x) => x,
-            Err(meta_sto_err) => {
-                return match meta_sto_err {
-                    MetaStorageError::AppError(app_err) => Ok(AppliedState::AppError(app_err)),
-                    _ => Err(meta_sto_err),
-                }
-            }
-        };
+        let opt_applied_state = result?;
 
         tracing::debug!("sled tx done: {:?}", entry);
 

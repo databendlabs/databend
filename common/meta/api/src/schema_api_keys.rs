@@ -16,12 +16,12 @@
 
 use std::fmt::Debug;
 
-use common_meta_types::DBIdTableName;
-use common_meta_types::DatabaseId;
-use common_meta_types::DatabaseNameIdent;
-use common_meta_types::DbIdListKey;
-use common_meta_types::TableId;
-use common_meta_types::TableIdListKey;
+use common_meta_app::schema::DBIdTableName;
+use common_meta_app::schema::DatabaseId;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DbIdListKey;
+use common_meta_app::schema::TableId;
+use common_meta_app::schema::TableIdListKey;
 use kv_api_key::check_segment;
 use kv_api_key::check_segment_absent;
 use kv_api_key::check_segment_present;

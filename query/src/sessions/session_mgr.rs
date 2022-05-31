@@ -45,6 +45,7 @@ use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
 use crate::storages::cache::CacheManager;
+use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
 use crate::Config;
 
@@ -65,6 +66,7 @@ pub struct SessionManager {
     _guards: Vec<WorkerGuard>,
 
     user_api_provider: RwLock<Arc<UserApiProvider>>,
+    role_cache_manager: RwLock<Arc<RoleCacheMgr>>,
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
@@ -105,9 +107,11 @@ impl SessionManager {
             (Vec::new(), None)
         };
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
+        let user_api_provider = UserApiProvider::create_global(conf.clone()).await?;
+        let role_cache_manager = Arc::new(RoleCacheMgr::new(user_api_provider.clone()));
 
         Ok(Arc::new(SessionManager {
-            conf: RwLock::new(conf.clone()),
+            conf: RwLock::new(conf),
             catalogs: RwLock::new(catalogs),
             discovery: RwLock::new(discovery),
             http_query_manager,
@@ -119,7 +123,8 @@ impl SessionManager {
             storage_operator: RwLock::new(storage_operator),
             storage_runtime: Arc::new(storage_runtime),
             _guards,
-            user_api_provider: RwLock::new(UserApiProvider::create_global(conf).await?),
+            user_api_provider: RwLock::new(user_api_provider),
+            role_cache_manager: RwLock::new(role_cache_manager),
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
         }))
@@ -155,6 +160,10 @@ impl SessionManager {
 
     pub fn get_user_api_provider(&self) -> Arc<UserApiProvider> {
         self.user_api_provider.read().clone()
+    }
+
+    pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
+        self.role_cache_manager.read().clone()
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
@@ -354,9 +363,17 @@ impl SessionManager {
     // Init the storage operator by config.
     async fn init_storage_operator(conf: &Config) -> Result<Operator> {
         let op = init_operator(&conf.storage).await?;
-
         // Enable exponential backoff by default
-        Ok(op.with_backoff(backon::ExponentialBackoff::default()))
+        let op = op.with_backoff(backon::ExponentialBackoff::default());
+        // OpenDAL will send a real request to underlying storage to check whether it works or not.
+        // If this check failed, it's highly possible that the users have configured it wrongly.
+        op.check().await.map_err(|e| {
+            ErrorCode::StorageUnavailable(format!(
+                "current configured storage is not available: {e}"
+            ))
+        })?;
+
+        Ok(op)
     }
 
     pub async fn reload_config(&self) -> Result<()> {
@@ -394,7 +411,10 @@ impl SessionManager {
 
         {
             let x = UserApiProvider::create_global(config).await?;
-            *self.user_api_provider.write() = x;
+            *self.user_api_provider.write() = x.clone();
+
+            let role_cache_manager = RoleCacheMgr::new(x);
+            *self.role_cache_manager.write() = Arc::new(role_cache_manager);
         }
 
         Ok(())

@@ -73,7 +73,9 @@ impl Display for FormatContext {
             RelOperator::Sort(op) => format_sort(f, &self.metadata, op),
             RelOperator::Limit(op) => format_limit(f, &self.metadata, op),
             RelOperator::CrossApply(op) => format_cross_apply(f, &self.metadata, op),
+            RelOperator::Max1Row(_) => write!(f, "Max1Row"),
             RelOperator::Pattern(_) => write!(f, "Pattern"),
+            RelOperator::Explain(_) => write!(f, ""),
         }
     }
 }
@@ -200,10 +202,22 @@ pub fn format_physical_scan(
 
 pub fn format_project(
     f: &mut std::fmt::Formatter<'_>,
-    _metadata: &MetadataRef,
-    _op: &Project,
+    metadata: &MetadataRef,
+    op: &Project,
 ) -> std::fmt::Result {
-    write!(f, "Project")
+    let column_names = metadata
+        .read()
+        .columns()
+        .iter()
+        .map(|entry| entry.name.clone())
+        .collect::<Vec<String>>();
+    let project_columns = op
+        .columns
+        .iter()
+        .map(|idx| column_names[*idx].clone())
+        .collect::<Vec<String>>()
+        .join(",");
+    write!(f, "Project: [{}]", project_columns)
 }
 
 pub fn format_eval_scalar(

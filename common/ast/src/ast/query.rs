@@ -116,6 +116,12 @@ pub enum Indirection<'a> {
     Star,
 }
 
+// Time Travel specification
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimeTravelPoint {
+    Snapshot(String),
+}
+
 // A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableReference<'a> {
@@ -125,6 +131,7 @@ pub enum TableReference<'a> {
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
         alias: Option<TableAlias<'a>>,
+        travel_point: Option<TimeTravelPoint>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
@@ -214,11 +221,17 @@ impl<'a> Display for TableReference<'a> {
                 database,
                 table,
                 alias,
+                travel_point,
             } => {
                 write_period_separated_list(
                     f,
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
+
+                if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
+                    write!(f, " AT (SNAPSHOT => {sid})")?;
+                }
+
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }

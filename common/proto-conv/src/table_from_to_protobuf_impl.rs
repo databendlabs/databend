@@ -20,7 +20,7 @@ use std::sync::Arc;
 use common_datavalues as dv;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
-use common_meta_types as mt;
+use common_meta_app::schema as mt;
 use common_protos::pb;
 
 use crate::check_ver;
@@ -126,7 +126,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: p.engine,
             engine_options: p.engine_options,
             options: p.options,
-            order_keys: p.order_keys,
+            cluster_keys: p.cluster_keys,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
             drop_on: match p.drop_on {
@@ -150,7 +150,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             options: self.options.clone(),
-            order_keys: self.order_keys.clone(),
+            cluster_keys: self.cluster_keys.clone(),
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
             drop_on: match self.drop_on {

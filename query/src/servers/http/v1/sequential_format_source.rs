@@ -15,6 +15,10 @@
 use std::mem::replace;
 use std::sync::Arc;
 
+use common_io::prelude::Compression;
+use opendal::io_util::CompressAlgorithm;
+use opendal::io_util::DecompressDecoder;
+use opendal::io_util::DecompressState;
 use common_base::base::tokio::io::AsyncReadExt;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
@@ -154,6 +158,7 @@ pub struct SequentialInputFormatSource {
     scan_progress: Arc<Progress>,
     input_state: Box<dyn InputState>,
     input_format: Box<dyn InputFormat>,
+    input_decompress: Option<DecompressDecoder>,
     data_receiver: Receiver<common_exception::Result<Vec<u8>>>,
 }
 
@@ -162,6 +167,7 @@ impl SequentialInputFormatSource {
         output: Arc<OutputPort>,
         input_format: Box<dyn InputFormat>,
         data_receiver: Receiver<Result<Vec<u8>>>,
+        input_decompress: Option<DecompressDecoder>,
         scan_progress: Arc<Progress>,
     ) -> Result<ProcessorPtr> {
         let input_state = input_format.create_state();
@@ -170,6 +176,7 @@ impl SequentialInputFormatSource {
                 output,
                 input_state,
                 input_format,
+                input_decompress,
                 data_receiver,
                 scan_progress,
                 finished: false,
@@ -217,6 +224,47 @@ impl Processor for SequentialInputFormatSource {
         let mut progress_values = ProgressValues::default();
         match replace(&mut self.state, State::NeedReceiveData) {
             State::ReceivedData(data) => {
+                let data = match &mut self.input_decompress {
+                    None => data,
+                    Some(decompress) => {
+                        let mut output = Vec::new();
+                        let mut amt = 0;
+
+                        loop {
+                            match decompress.state() {
+                                DecompressState::Reading => {
+                                    // If all data has been consumed, we should break with existing data directly.
+                                    if amt == data.len() {
+                                        break output;
+                                    }
+
+                                    let read = decompress.fill(&data[amt..]);
+                                    amt += read;
+                                }
+                                DecompressState::Decoding => {
+                                    let mut buf = vec![0; 4 * 1024 * 1024];
+                                    let written = decompress.decode(&mut buf).map_err(|e| {
+                                        ErrorCode::InvalidCompressionData(format!(
+                                            "compression data invalid: {e}"
+                                        ))
+                                    })?;
+                                    output.extend_from_slice(&buf[..written])
+                                }
+                                DecompressState::Flushing => {
+                                    let mut buf = vec![0; 4 * 1024 * 1024];
+                                    let written = decompress.finish(&mut buf).map_err(|e| {
+                                        ErrorCode::InvalidCompressionData(format!(
+                                            "compression data invalid: {e}"
+                                        ))
+                                    })?;
+                                    output.extend_from_slice(&buf[..written])
+                                }
+                                DecompressState::Done => break output,
+                            }
+                        }
+                    }
+                };
+
                 let mut data_slice: &[u8] = &data;
                 progress_values.bytes += data.len();
 

@@ -132,11 +132,6 @@ impl MetaSrvTestContext {
             config.admin_api_address = format!("{}:{}", host, http_port);
         }
 
-        {
-            let metric_port = next_port();
-            config.metric_api_address = format!("{}:{}", host, metric_port);
-        }
-
         tracing::info!("new test context config: {:?}", config);
 
         MetaSrvTestContext {
@@ -153,7 +148,7 @@ impl MetaSrvTestContext {
     pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle>> {
         let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
         Ok(client)
     }
 

@@ -141,9 +141,9 @@ impl SessionContext {
         lock.take()
     }
 
-    pub fn query_context_shared_is_none(&self) -> bool {
+    pub fn get_current_query_id(&self) -> Option<String> {
         let lock = self.query_context_shared.read();
-        lock.is_none()
+        lock.as_ref().map(|ctx| ctx.init_query_id.read().clone())
     }
 
     pub fn get_query_context_shared(&self) -> Option<Arc<QueryContextShared>> {

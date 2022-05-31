@@ -48,8 +48,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let client =
-        MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, Some(tls_conf)).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, Some(tls_conf))?;
 
     let r = client
         .get_table(("do not care", "do not care", "do not care").into())
@@ -91,7 +90,6 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         None,
         Some(tls_conf),
     )
-    .await
     .unwrap();
 
     let c = r.get_kv("foo").await;

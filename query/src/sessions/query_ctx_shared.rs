@@ -76,7 +76,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
-    pub(in crate::sessions) role_cache_manager: Arc<RoleCacheMgr>,
 }
 
 impl QueryContextShared {
@@ -107,7 +106,6 @@ impl QueryContextShared {
             dal_ctx: Arc::new(Default::default()),
             user_manager: user_manager.clone(),
             auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
-            role_cache_manager: Arc::new(RoleCacheMgr::new(user_manager)),
         }))
     }
 
@@ -172,7 +170,7 @@ impl QueryContextShared {
     }
 
     pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
-        self.role_cache_manager.clone()
+        self.session.get_role_cache_manager()
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
@@ -280,12 +278,18 @@ impl QueryContextShared {
             format.field_delimiter = settings.get_field_delimiter()?;
             format.empty_as_default = settings.get_empty_as_default()? > 0;
             format.skip_header = settings.get_skip_header()? > 0;
+
             let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
                 ErrorCode::LogicalError("Timezone has been checked and should be valid.")
             })?;
             format.timezone = tz.parse::<Tz>().map_err(|_| {
                 ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
             })?;
+
+            let compress = String::from_utf8(settings.get_compression()?).map_err(|_| {
+                ErrorCode::UnknownCompressionType("Compress type must be valid utf-8")
+            })?;
+            format.compression = compress.parse()?
         }
         Ok(format)
     }

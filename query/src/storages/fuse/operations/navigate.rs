@@ -19,20 +19,48 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableStatistics;
+use common_meta_app::schema::TableStatistics;
 use futures::TryStreamExt;
 
 use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::io::MetaReaders;
+use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
-    pub async fn navigate(
+    pub async fn navigate_to_time_point(
         &self,
         ctx: &Arc<QueryContext>,
         time_point: DateTime<Utc>,
     ) -> Result<Arc<FuseTable>> {
+        self.find(ctx.as_ref(), |snapshot| {
+            if let Some(ts) = snapshot.timestamp {
+                ts <= time_point
+            } else {
+                false
+            }
+        })
+        .await
+    }
+    pub async fn navigate_to_snapshot(
+        &self,
+        ctx: &QueryContext,
+        snapshot_id: &str,
+    ) -> Result<Arc<FuseTable>> {
+        self.find(ctx, |snapshot| {
+            snapshot
+                .snapshot_id
+                .to_simple()
+                .to_string()
+                .as_str()
+                .starts_with(snapshot_id)
+        })
+        .await
+    }
+
+    pub async fn find<P>(&self, ctx: &QueryContext, mut pred: P) -> Result<Arc<FuseTable>>
+    where P: FnMut(&TableSnapshot) -> bool {
         let snapshot_location = if let Some(loc) = self.snapshot_loc() {
             loc
         } else {
@@ -56,12 +84,9 @@ impl FuseTable {
         // Find the instant which matches ths given `time_point`.
         let mut instant = None;
         while let Some(snapshot) = snapshots.try_next().await? {
-            if let Some(ts) = snapshot.timestamp {
-                // break on the first one
-                if ts <= time_point {
-                    instant = Some(snapshot);
-                    break;
-                }
+            if pred(snapshot.as_ref()) {
+                instant = Some(snapshot);
+                break;
             }
         }
 

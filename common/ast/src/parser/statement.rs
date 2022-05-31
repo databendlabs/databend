@@ -102,12 +102,13 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let show_tables = map(
         rule! {
-            SHOW ~ FULL? ~ TABLES ~ ( FROM ~ ^#ident )? ~ #show_limit?
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( FROM ~ ^#ident )? ~ #show_limit?
         },
-        |(_, opt_full, _, opt_database, limit)| Statement::ShowTables {
+        |(_, opt_full, _, opt_history, opt_database, limit)| Statement::ShowTables {
             database: opt_database.map(|(_, database)| database),
             full: opt_full.is_some(),
             limit,
+            with_history: opt_history.is_some(),
         },
     );
     let show_create_table = map(
@@ -176,10 +177,20 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let drop_table = map(
         rule! {
-            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
+            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ( ALL )?
         },
-        |(_, _, opt_if_exists, opt_database, table)| Statement::DropTable {
+        |(_, _, opt_if_exists, opt_database, table, opt_all)| Statement::DropTable {
             if_exists: opt_if_exists.is_some(),
+            database: opt_database.map(|(database, _)| database),
+            table,
+            all: opt_all.is_some(),
+        },
+    );
+    let undrop_table = map(
+        rule! {
+            UNDROP ~ TABLE ~ ( #ident ~ "." )? ~ #ident
+        },
+        |(_, _, opt_database, table)| Statement::UnDropTable {
             database: opt_database.map(|(database, _)| database),
             table,
         },
@@ -421,6 +432,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`"
             | #describe : "`DESCRIBE [<database>.]<table>`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
+            | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
@@ -656,7 +668,6 @@ pub fn user_identity(i: Input) -> IResult<UserIdentity> {
 pub fn auth_type(i: Input) -> IResult<AuthType> {
     alt((
         value(AuthType::NoPassword, rule! { NO_PASSWORD }),
-        value(AuthType::PlaintextPassword, rule! { PLAINTEXT_PASSWORD }),
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),

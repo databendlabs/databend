@@ -34,6 +34,7 @@ use crate::storages::result::result_table::ResultTableMeta;
 use crate::storages::result::ResultQueryInfo;
 
 pub struct ResultTableWriter {
+    stopped: bool,
     pub query_info: ResultQueryInfo,
     pub data_accessor: Operator,
     pub locations: ResultLocations,
@@ -49,17 +50,25 @@ impl ResultTableWriter {
             locations: ResultLocations::new(&query_id),
             data_accessor,
             accumulator: StatisticsAccumulator::new(),
+            stopped: false,
         })
     }
 
-    pub async fn abort(&self) -> Result<()> {
+    pub async fn abort(&mut self) -> Result<()> {
+        if self.stopped {
+            return Ok(());
+        }
         for meta in &self.accumulator.blocks_metas {
             self.data_accessor.object(&meta.location.0).delete().await?;
         }
+        self.stopped = true;
         Ok(())
     }
 
     pub async fn commit(&mut self) -> Result<()> {
+        if self.stopped {
+            return Ok(());
+        }
         let acc = std::mem::take(&mut self.accumulator);
         let col_stats = acc.summary()?;
         let segment_info = SegmentInfo::new(acc.blocks_metas, FuseMetaStatistics {
@@ -81,6 +90,7 @@ impl ResultTableWriter {
             .object(&meta_location)
             .write(meta_data)
             .await?;
+        self.stopped = true;
         Ok(())
     }
 

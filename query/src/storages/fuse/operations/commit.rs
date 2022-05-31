@@ -24,11 +24,11 @@ use common_cache::Cache;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableStatistics;
+use common_meta_app::schema::UpdateTableMetaReply;
+use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_meta_types::TableInfo;
-use common_meta_types::TableStatistics;
-use common_meta_types::UpdateTableMetaReply;
-use common_meta_types::UpdateTableMetaReq;
 use common_tracing::tracing;
 use uuid::Uuid;
 
@@ -285,7 +285,6 @@ impl FuseTable {
             new_table_meta,
         };
 
-        //catalog.upsert_table_option(req).await
         catalog.update_table_meta(req).await
     }
 

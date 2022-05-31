@@ -34,11 +34,12 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::block_buffer::BlockBuffer;
+use crate::servers::http::v1::query::block_buffer::BlockBufferWriterMemOnly;
+use crate::servers::http::v1::query::block_buffer::BlockBufferWriterWithResultTable;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 use crate::storages::result::ResultQueryInfo;
-use crate::storages::result::ResultTableWriter;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum ExecuteStateKind {
@@ -55,8 +56,8 @@ pub(crate) enum ExecuteState {
 impl ExecuteState {
     pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode>) {
         match self {
-            ExecuteState::Running(_) => (ExecuteStateKind::Running, None),
-            ExecuteState::Stopped(v) => match &v.reason {
+            Running(_) => (ExecuteStateKind::Running, None),
+            Stopped(v) => match &v.reason {
                 Ok(_) => (ExecuteStateKind::Succeeded, None),
                 Err(e) => (ExecuteStateKind::Failed, Some(e.clone())),
             },
@@ -186,7 +187,7 @@ impl ExecuteState {
                 execute(interpreter, ctx_clone, block_buffer, executor_clone.clone()).await
             {
                 Executor::stop(&executor_clone, Err(err), false).await;
-                block_buffer_clone.stop_push().await;
+                block_buffer_clone.stop_push().await.unwrap();
             };
         })?;
 
@@ -202,47 +203,48 @@ async fn execute(
 ) -> Result<()> {
     let data_stream = interpreter.execute(None).await?;
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
+    let use_result_cache = !ctx.get_config().query.management_mode;
 
-    let mut result_table_writer: Option<ResultTableWriter> = None;
+    match data_stream.next().await {
+        None => {
+            Executor::stop(&executor, Ok(()), false).await;
+            block_buffer.stop_push().await?;
+        }
+        Some(Err(err)) => {
+            Executor::stop(&executor, Err(err), false).await;
+            block_buffer.stop_push().await?;
+        }
+        Some(Ok(block)) => {
+            let mut block_writer = if use_result_cache {
+                BlockBufferWriterWithResultTable::create(
+                    block_buffer.clone(),
+                    ctx.clone(),
+                    ResultQueryInfo {
+                        query_id: ctx.get_id(),
+                        schema: block.schema().clone(),
+                        user: ctx.get_current_user()?.identity(),
+                    },
+                )
+                .await?
+            } else {
+                Box::new(BlockBufferWriterMemOnly(block_buffer))
+            };
 
-    while let Some(block_r) = data_stream.next().await {
-        match block_r {
-            Ok(block) => {
-                if result_table_writer.is_none() {
-                    result_table_writer = Some(
-                        ResultTableWriter::new(ctx.clone(), ResultQueryInfo {
-                            query_id: ctx.get_id(),
-                            schema: block.schema().clone(),
-                            user: ctx.get_current_user()?.identity(),
-                        })
-                        .await?,
-                    );
-                    {
-                        block_buffer
-                            .init_reader(ctx.clone(), block.schema().clone())
-                            .await?;
+            block_writer.push(block).await?;
+            while let Some(block_r) = data_stream.next().await {
+                match block_r {
+                    Ok(block) => {
+                        block_writer.push(block.clone()).await?;
+                    }
+                    Err(err) => {
+                        block_writer.stop_push(true).await?;
+                        return Err(err);
                     }
                 };
-                let part_ptr = result_table_writer
-                    .as_mut()
-                    .ok_or_else(|| ErrorCode::UnknownException("server error"))?
-                    .append_block(block.clone())
-                    .await?;
-                block_buffer.push(block.clone(), part_ptr).await;
             }
-            Err(err) => {
-                block_buffer.stop_push().await;
-                if let Some(writer) = result_table_writer {
-                    writer.abort().await?;
-                }
-                return Err(err);
-            }
-        };
-    }
-    Executor::stop(&executor, Ok(()), false).await;
-    block_buffer.stop_push().await;
-    if let Some(mut writer) = result_table_writer {
-        writer.commit().await?;
+            Executor::stop(&executor, Ok(()), false).await;
+            block_writer.stop_push(false).await?;
+        }
     }
     Ok(())
 }

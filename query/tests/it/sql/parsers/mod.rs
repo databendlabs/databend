@@ -16,6 +16,7 @@ mod parser_call;
 mod parser_copy;
 mod parser_database;
 mod parser_optimize;
+mod parser_select_table_at;
 mod parser_show;
 mod parser_stage;
 mod parser_table;

@@ -37,7 +37,7 @@ async fn test_export() -> anyhow::Result<()> {
     async {
         let (_tc, addr) = crate::tests::start_metasrv().await?;
 
-        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
 
         tracing::info!("--- upsert kv");
         {

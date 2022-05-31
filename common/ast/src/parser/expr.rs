@@ -31,6 +31,7 @@ use crate::parser::error::Error;
 use crate::parser::error::ErrorKind;
 use crate::parser::query::*;
 use crate::parser::token::*;
+use crate::parser::unescape::unescape;
 use crate::parser::util::*;
 use crate::rule;
 
@@ -63,8 +64,9 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
 
         let (rest, mut expr_elements) = rule! { #higher_prec_expr_element+ }(i)?;
 
-        // Replace binary Plus and Minus to the unary one, if it's following another op or it's the first element.
         for (prev, curr) in (-1..(expr_elements.len() as isize)).tuple_windows() {
+            // Replace binary Plus and Minus to the unary one, if it's following another op
+            // or it's the first element.
             if prev == -1
                 || matches!(
                     expr_elements[prev as usize].elem,
@@ -87,6 +89,38 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                         };
                     }
                     _ => {}
+                }
+            }
+
+            // Replace bracket map access to an array, if it's following a prefix or infix
+            // element or it's the first element.
+            if prev == -1
+                || matches!(
+                    PrattParser::<std::iter::Once<_>>::query(
+                        &mut ExprParser,
+                        &expr_elements[prev as usize]
+                    )
+                    .unwrap(),
+                    Affix::Prefix(_) | Affix::Infix(_, _)
+                )
+            {
+                let key = match &expr_elements[curr as usize].elem {
+                    ExprElement::MapAccess {
+                        accessor: MapAccessor::Bracket { key },
+                    } => Some(key),
+                    _ => None,
+                };
+                if let Some(key) = key {
+                    let span = expr_elements[curr as usize].span;
+                    expr_elements[curr as usize] = WithSpan {
+                        span,
+                        elem: ExprElement::Array {
+                            exprs: vec![Expr::Literal {
+                                span: span.0,
+                                lit: key.clone(),
+                            }],
+                        },
+                    };
                 }
             }
         }
@@ -782,8 +816,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let literal = map(literal, |lit| ExprElement::Literal { lit });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
     let array = map(
+        // Array that contains a single literal item will be parsed as a bracket map access,
+        // and then will be converted back to an array if the map access is not following
+        // a primary element or postfix element.
         rule! {
-            "[" ~ #comma_separated_list0(subexpr(0))? ~ ","? ~ ^"]"
+            "[" ~ #comma_separated_list0_allow_trailling(subexpr(0))? ~ ","? ~ ^"]"
         },
         |(_, opt_args, _, _)| {
             let exprs = opt_args.unwrap_or_default();
@@ -887,13 +924,17 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
 
 pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(literal_string, Literal::String);
-    // TODO(andylokandy): handle hex numbers in parser
-    let number = map(
-        rule! {
-            LiteralHex | LiteralNumber
-        },
-        |number| Literal::Number(number.text().to_string()),
-    );
+    let integer = map(literal_u64, Literal::Integer);
+    let float = map(literal_f64, Literal::Float);
+    let bigint = map(rule!(LiteralInteger), |lit| Literal::BigInt {
+        lit: lit.text().to_string(),
+        is_hex: false,
+    });
+    let bigint_hex = map(literal_hex_str, |lit| Literal::BigInt {
+        lit: lit.to_string(),
+        is_hex: true,
+    });
+
     let boolean = alt((
         value(Literal::Boolean(true), rule! { TRUE }),
         value(Literal::Boolean(false), rule! { FALSE }),
@@ -903,10 +944,78 @@ pub fn literal(i: Input) -> IResult<Literal> {
 
     rule!(
         #string
-        | #number
+        | #integer
+        | #float
+        | #bigint
+        | #bigint_hex
         | #boolean
         | #current_timestamp
         | #null
+    )(i)
+}
+
+pub fn literal_hex_str(i: Input) -> IResult<&str> {
+    // 0XFFFF
+    let mysql_hex = map(
+        rule! {
+            MySQLLiteralHex
+        },
+        |token| &token.text()[2..],
+    );
+    // x'FFFF'
+    let pg_hex = map(
+        rule! {
+            PGLiteralHex
+        },
+        |token| &token.text()[2..token.text().len() - 1],
+    );
+
+    rule!(
+        #mysql_hex
+        | #pg_hex
+    )(i)
+}
+
+#[allow(clippy::from_str_radix_10)]
+pub fn literal_u64(i: Input) -> IResult<u64> {
+    let decimal = map_res(
+        rule! {
+            LiteralInteger
+        },
+        |token| Ok(u64::from_str_radix(token.text(), 10)?),
+    );
+    let hex = map_res(literal_hex_str, |lit| Ok(u64::from_str_radix(lit, 16)?));
+
+    rule!(
+        #decimal
+        | #hex
+    )(i)
+}
+
+pub fn literal_f64(i: Input) -> IResult<f64> {
+    map_res(
+        rule! {
+            LiteralFloat
+        },
+        |token| Ok(fast_float::parse(token.text())?),
+    )(i)
+}
+
+pub fn literal_string(i: Input) -> IResult<String> {
+    map_res(
+        rule! {
+            QuotedString
+        },
+        |token| {
+            if token.text().starts_with('\'') {
+                let str = &token.text()[1..token.text().len() - 1];
+                let unescaped =
+                    unescape(str, '\'').ok_or(ErrorKind::Other("invalid escape or unicode"))?;
+                Ok(unescaped)
+            } else {
+                Err(ErrorKind::ExpectToken(QuotedString))
+            }
+        },
     )(i)
 }
 
@@ -991,25 +1100,16 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
 }
 
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
-    let year = value(IntervalKind::Year, rule! { YEAR });
-    let month = value(IntervalKind::Month, rule! { MONTH });
-    let day = value(IntervalKind::Day, rule! { DAY });
-    let hour = value(IntervalKind::Hour, rule! { HOUR });
-    let minute = value(IntervalKind::Minute, rule! { MINUTE });
-    let second = value(IntervalKind::Second, rule! { SECOND });
-    let doy = value(IntervalKind::Doy, rule! { DOY });
-    let dow = value(IntervalKind::Dow, rule! { DOW });
-
-    rule!(
-        #year
-        | #month
-        | #day
-        | #hour
-        | #minute
-        | #second
-        | #doy
-        | #dow
-    )(i)
+    alt((
+        value(IntervalKind::Year, rule! { YEAR }),
+        value(IntervalKind::Month, rule! { MONTH }),
+        value(IntervalKind::Day, rule! { DAY }),
+        value(IntervalKind::Hour, rule! { HOUR }),
+        value(IntervalKind::Minute, rule! { MINUTE }),
+        value(IntervalKind::Second, rule! { SECOND }),
+        value(IntervalKind::Doy, rule! { DOY }),
+        value(IntervalKind::Dow, rule! { DOW }),
+    ))(i)
 }
 
 pub fn map_access(i: Input) -> IResult<MapAccessor> {

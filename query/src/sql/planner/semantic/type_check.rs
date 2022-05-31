@@ -22,12 +22,15 @@ use common_ast::ast::Query;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::error::DisplayError;
+use common_datavalues::type_coercion::merge_types;
+use common_datavalues::ArrayType;
 use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::IntervalKind;
 use common_datavalues::IntervalType;
+use common_datavalues::NullType;
 use common_datavalues::StringType;
 use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
@@ -35,6 +38,7 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::TupleFunction;
 
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
@@ -348,6 +352,11 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
+            Expr::Exists { subquery, .. } => {
+                self.resolve_subquery(SubqueryType::Exists, subquery, true, None)
+                    .await
+            }
+
             Expr::Subquery { subquery, .. } => {
                 self.resolve_subquery(SubqueryType::Scalar, subquery, false, None)
                     .await
@@ -414,6 +423,17 @@ impl<'a> TypeChecker<'a> {
             } => self.try_resolve_trim_function(expr, trim_where).await,
 
             Expr::Array { exprs, .. } => self.resolve_array(exprs).await,
+
+            Expr::Position {
+                substr_expr,
+                str_expr,
+                ..
+            } => {
+                self.resolve_function("locate", &[substr_expr.as_ref(), str_expr.as_ref()], None)
+                    .await
+            }
+
+            Expr::Tuple { exprs, .. } => self.resolve_tuple(exprs).await,
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
@@ -722,7 +742,7 @@ impl<'a> TypeChecker<'a> {
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
         let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
 
-        if output_context.columns.len() > 1 {
+        if typ == SubqueryType::Scalar && output_context.columns.len() > 1 {
             return Err(ErrorCode::SemanticError(
                 "Scalar subquery must return only one column",
             ));
@@ -736,7 +756,6 @@ impl<'a> TypeChecker<'a> {
         let subquery_expr = SubqueryExpr {
             subquery: s_expr,
             data_type: data_type.clone(),
-            output_context: Box::new(output_context),
             allow_multi_rows,
             typ,
             outer_columns: rel_prop.outer_columns,
@@ -844,7 +863,8 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<(DataValue, DataTypeImpl)> {
         // TODO(leiysky): try cast value to required type
         let value = match literal {
-            Literal::Number(string) => DataValue::try_from_literal(string, None)?,
+            Literal::Integer(uint) => DataValue::UInt64(*uint),
+            Literal::Float(float) => DataValue::Float64(*float),
             Literal::String(string) => DataValue::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => DataValue::Boolean(*boolean),
             Literal::Null => DataValue::Null,
@@ -858,41 +878,59 @@ impl<'a> TypeChecker<'a> {
         Ok((value, data_type))
     }
 
-    async fn resolve_array(&self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
-        let mut values = Vec::with_capacity(exprs.len());
-        let mut first_data_type = None;
+    // TODO(leiysky): use an array builder function instead, since we should allow declaring
+    // an array with variable as element.
+    async fn resolve_array(&mut self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
+        let mut elems = Vec::with_capacity(exprs.len());
+        let mut types = Vec::with_capacity(exprs.len());
         for expr in exprs.iter() {
-            match expr {
-                Expr::Literal { lit, .. } => {
-                    let (value, data_type) = self.resolve_literal(lit, None)?;
-                    if let Some(dy) = first_data_type.as_ref() {
-                        if !data_type.eq(dy) {
-                            return Err(ErrorCode::SemanticError(expr.span().display_error(
-                                "Values in array should have same type".to_string(),
-                            )));
-                        }
-                    } else {
-                        first_data_type = Some(data_type);
-                    }
-                    values.push(value);
-                }
-                _ => {
-                    return Err(ErrorCode::SemanticError(
-                        expr.span()
-                            .display_error("Array only supports literal exprs".to_string()),
-                    ));
-                }
+            let (arg, data_type) = self.resolve(expr, None).await?;
+            types.push(data_type);
+            if let Scalar::ConstantExpr(elem) = arg {
+                elems.push(elem.value);
+            } else {
+                return Err(ErrorCode::SemanticError(
+                    expr.span()
+                        .display_error("Array element must be literal".to_string()),
+                ));
             }
         }
-        let array = DataValue::Array(values);
-        let data_type = array.data_type();
+        let element_type = if elems.is_empty() {
+            NullType::new_impl()
+        } else {
+            types
+                .iter()
+                .fold(Ok(types[0].clone()), |acc, v| merge_types(&acc?, v))?
+        };
         Ok((
             ConstantExpr {
-                value: array,
-                data_type: data_type.clone(),
+                value: DataValue::Array(elems),
+                data_type: ArrayType::new_impl(element_type.clone()),
             }
             .into(),
-            data_type,
+            ArrayType::new_impl(element_type),
+        ))
+    }
+
+    async fn resolve_tuple(&mut self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
+        let mut args = Vec::with_capacity(exprs.len());
+        let mut arg_types = Vec::with_capacity(exprs.len());
+        for expr in exprs {
+            let (arg, data_type) = self.resolve(expr, None).await?;
+            args.push(arg);
+            arg_types.push(data_type);
+        }
+        let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
+        let tuple_func = TupleFunction::try_create_func("", &arg_types_ref)?;
+        Ok((
+            FunctionCall {
+                arguments: args,
+                func_name: "tuple".to_string(),
+                arg_types,
+                return_type: tuple_func.return_type(),
+            }
+            .into(),
+            tuple_func.return_type(),
         ))
     }
 }

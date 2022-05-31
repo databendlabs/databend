@@ -158,12 +158,22 @@ pub fn parse_copy_file_format_options(
             .as_bytes(),
     );
 
+    // Compression delimiter.
+    let compression = parse_escape_string(
+        file_format_options
+            .get("compression")
+            .unwrap_or(&"none".to_string())
+            .as_bytes(),
+    )
+    .parse()
+    .map_err(ErrorCode::UnknownCompressionType)?;
+
     Ok(FileFormatOptions {
         format: file_format,
         skip_header,
         field_delimiter,
         record_delimiter,
-        compression: Default::default(),
+        compression,
     })
 }
 

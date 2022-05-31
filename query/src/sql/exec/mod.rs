@@ -18,40 +18,51 @@ mod util;
 
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
+use common_datablocks::HashMethodKind;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
 use common_planners::RewriteHelper;
+use primitive_types::U256;
+use primitive_types::U512;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
 use super::plans::RelOperator;
 use super::MetadataRef;
+use crate::common::HashMap;
 use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
 use crate::pipelines::new::processors::ChainingHashTable;
 use crate::pipelines::new::processors::ExpressionTransform;
 use crate::pipelines::new::processors::HashJoinState;
+use crate::pipelines::new::processors::HashTable;
 use crate::pipelines::new::processors::ProjectionTransform;
 use crate::pipelines::new::processors::SinkBuildHashTable;
 use crate::pipelines::new::processors::Sinker;
 use crate::pipelines::new::processors::SortMergeCompactor;
 use crate::pipelines::new::processors::TransformAggregator;
+use crate::pipelines::new::processors::TransformApply;
 use crate::pipelines::new::processors::TransformFilter;
 use crate::pipelines::new::processors::TransformHashJoinProbe;
 use crate::pipelines::new::processors::TransformLimit;
+use crate::pipelines::new::processors::TransformMax1Row;
 use crate::pipelines::new::processors::TransformSortMerge;
 use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
 use crate::pipelines::transforms::get_sort_descriptions;
+use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
 use crate::sql::exec::expression_builder::ExpressionBuilder;
@@ -59,6 +70,7 @@ use crate::sql::exec::util::check_physical;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::AndExpr;
+use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LimitPlan;
@@ -75,7 +87,7 @@ pub struct PipelineBuilder {
     metadata: MetadataRef,
     result_columns: Vec<(IndexType, String)>,
     expression: SExpr,
-    pipelines: Vec<NewPipeline>,
+    pub pipelines: Vec<NewPipeline>,
     limit: Option<usize>,
     offset: usize,
 }
@@ -147,17 +159,17 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_pipeline(
+    pub fn build_pipeline(
         &mut self,
         context: Arc<QueryContext>,
-        expression: &SExpr,
+        s_expr: &SExpr,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
-        if !check_physical(expression) {
+        if !check_physical(s_expr) {
             return Err(ErrorCode::LogicalError("Invalid physical plan"));
         }
 
-        let plan = expression.plan();
+        let plan = s_expr.plan();
 
         match plan {
             RelOperator::PhysicalScan(physical_scan) => {
@@ -165,31 +177,31 @@ impl PipelineBuilder {
             }
             RelOperator::Project(project) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_project(context, project, input_schema, pipeline)
             }
             RelOperator::EvalScalar(eval_scalar) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_eval_scalar(context, eval_scalar, input_schema, pipeline)
             }
             RelOperator::Filter(filter) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_filter(context, filter, input_schema, pipeline)
             }
             RelOperator::Aggregate(aggregate) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_aggregate(context, aggregate, input_schema, pipeline)
             }
             RelOperator::PhysicalHashJoin(hash_join) => {
                 let probe_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 let mut child_pipeline = NewPipeline::create();
                 let build_schema = self.build_pipeline(
                     QueryContext::create_from(context.clone()),
-                    &expression.children()[1],
+                    s_expr.child(1)?,
                     &mut child_pipeline,
                 )?;
                 self.build_hash_join(
@@ -203,13 +215,30 @@ impl PipelineBuilder {
             }
             RelOperator::Sort(sort_plan) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_order_by(context, sort_plan, input_schema, pipeline)
             }
             RelOperator::Limit(limit_plan) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_limit(context, limit_plan, input_schema, pipeline)
+            }
+            RelOperator::CrossApply(apply_plan) => {
+                let input_schema =
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
+                self.build_apply(
+                    context,
+                    apply_plan,
+                    s_expr.child(1)?,
+                    input_schema,
+                    pipeline,
+                )
+            }
+            RelOperator::Max1Row(_) => {
+                let input_schema = self.build_pipeline(context, s_expr.child(0)?, pipeline)?;
+                pipeline
+                    .add_transform(|input, output| Ok(TransformMax1Row::create(input, output)))?;
+                Ok(input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
@@ -494,13 +523,13 @@ impl PipelineBuilder {
             .map(|scalar| eb.build(scalar))
             .collect::<Result<Vec<Expression>>>()?;
 
-        let hash_join_state = Arc::new(ChainingHashTable::try_create(
+        let hash_join_state = create_join_state(
+            ctx.clone(),
             build_expressions,
             probe_expressions,
             build_schema,
             probe_schema,
-            ctx.clone(),
-        )?);
+        )?;
 
         // Build side
         self.build_sink_hash_table(hash_join_state.clone(), &mut child_pipeline)?;
@@ -646,4 +675,127 @@ impl PipelineBuilder {
 
         Ok(input_schema)
     }
+
+    fn build_apply(
+        &mut self,
+        ctx: Arc<QueryContext>,
+        apply_plan: &CrossApply,
+        subquery: &SExpr,
+        input_schema: DataSchemaRef,
+        pipeline: &mut NewPipeline,
+    ) -> Result<DataSchemaRef> {
+        let schema_builder = DataSchemaBuilder::new(self.metadata.clone());
+        let subquery_schema = DataSchemaRefExt::create(
+            apply_plan
+                .subquery_output
+                .iter()
+                .map(|index| {
+                    let col = self.metadata.read().column(*index).clone();
+                    DataField::new(
+                        format_field_name(col.name.as_str(), col.column_index).as_str(),
+                        col.data_type.clone(),
+                    )
+                })
+                .collect(),
+        );
+        pipeline.add_transform(|input, output| {
+            Ok(TransformApply::create(
+                input,
+                output,
+                ctx.clone(),
+                self.metadata.clone(),
+                apply_plan.correlated_columns.clone(),
+                subquery.clone(),
+            ))
+        })?;
+        Ok(schema_builder.build_join(input_schema, subquery_schema))
+    }
+}
+
+fn create_join_state(
+    ctx: Arc<QueryContext>,
+    build_expressions: Vec<Expression>,
+    probe_expressions: Vec<Expression>,
+    build_schema: DataSchemaRef,
+    probe_schema: DataSchemaRef,
+) -> Result<Arc<ChainingHashTable>> {
+    let hash_key_types = build_expressions
+        .iter()
+        .map(|expr| expr.to_data_type(&build_schema))
+        .collect::<Result<Vec<DataTypeImpl>>>()?;
+    let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
+    Ok(match method {
+        HashMethodKind::Serializer(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::SerializerHashTable(HashMap::<KeysRef, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::SingleString(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::SerializerHashTable(HashMap::<KeysRef, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU8(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::KeyU8HashTable(HashMap::<u8, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU16(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::KeyU16HashTable(HashMap::<u16, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU32(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::KeyU32HashTable(HashMap::<u32, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU64(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::KeyU64HashTable(HashMap::<u64, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU128(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::KeyU128HashTable(HashMap::<u128, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU256(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::KeyU256HashTable(HashMap::<U256, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU512(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::KeyU512HashTable(HashMap::<U512, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+    })
 }

@@ -16,9 +16,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_app::schema::TableStatistics;
+use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_meta_types::TableStatistics;
-use common_meta_types::UpdateTableMetaReq;
 use common_planners::TruncateTablePlan;
 use uuid::Uuid;
 
@@ -51,7 +51,7 @@ impl FuseTable {
 
             if plan.purge {
                 let keep_last_snapshot = false;
-                self.do_optimize(ctx.clone(), keep_last_snapshot).await?
+                self.do_gc(&ctx, keep_last_snapshot).await?
             }
 
             let mut new_table_meta = self.table_info.meta.clone();

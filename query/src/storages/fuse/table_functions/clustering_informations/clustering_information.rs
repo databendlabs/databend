@@ -28,6 +28,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::FuseTable;
+use crate::storages::Table;
 
 pub struct ClusteringInformation<'a> {
     pub ctx: Arc<QueryContext>,

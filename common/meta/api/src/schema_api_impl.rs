@@ -16,77 +16,78 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use anyerror::AnyError;
+use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
+use common_meta_app::schema::CreateDatabaseReply;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateTableReply;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DBIdTableName;
+use common_meta_app::schema::DatabaseId;
+use common_meta_app::schema::DatabaseIdent;
+use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DbIdList;
+use common_meta_app::schema::DbIdListKey;
+use common_meta_app::schema::DropDatabaseReply;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListTableReq;
+use common_meta_app::schema::RenameDatabaseReply;
+use common_meta_app::schema::RenameDatabaseReq;
+use common_meta_app::schema::RenameTableReply;
+use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableId;
+use common_meta_app::schema::TableIdList;
+use common_meta_app::schema::TableIdListKey;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
+use common_meta_app::schema::UndropTableReply;
+use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateTableMetaReply;
+use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableOptionReply;
+use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_types::app_error::AppError;
+use common_meta_types::app_error::CreateDatabaseWithDropTime;
+use common_meta_types::app_error::CreateTableWithDropTime;
+use common_meta_types::app_error::DatabaseAlreadyExists;
+use common_meta_types::app_error::DropDbWithDropTime;
+use common_meta_types::app_error::DropTableWithDropTime;
+use common_meta_types::app_error::TableAlreadyExists;
+use common_meta_types::app_error::TableVersionMismatched;
+use common_meta_types::app_error::UndropDbHasNoHistory;
+use common_meta_types::app_error::UndropDbWithNoDropTime;
+use common_meta_types::app_error::UndropTableAlreadyExists;
+use common_meta_types::app_error::UndropTableHasNoHistory;
+use common_meta_types::app_error::UndropTableWithNoDropTime;
+use common_meta_types::app_error::UnknownDatabase;
+use common_meta_types::app_error::UnknownTable;
+use common_meta_types::app_error::UnknownTableId;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op::Request;
-use common_meta_types::AppError;
 use common_meta_types::ConditionResult;
-use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateDatabaseWithDropTime;
-use common_meta_types::CreateTableReply;
-use common_meta_types::CreateTableReq;
-use common_meta_types::CreateTableWithDropTime;
-use common_meta_types::DBIdTableName;
-use common_meta_types::DatabaseAlreadyExists;
-use common_meta_types::DatabaseId;
-use common_meta_types::DatabaseIdent;
-use common_meta_types::DatabaseInfo;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::DatabaseNameIdent;
-use common_meta_types::DbIdList;
-use common_meta_types::DbIdListKey;
-use common_meta_types::DropDatabaseReply;
-use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropDbWithDropTime;
-use common_meta_types::DropTableReply;
-use common_meta_types::DropTableReq;
-use common_meta_types::DropTableWithDropTime;
-use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetTableReq;
-use common_meta_types::ListDatabaseReq;
-use common_meta_types::ListTableReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::Operation;
-use common_meta_types::RenameDatabaseReply;
-use common_meta_types::RenameDatabaseReq;
-use common_meta_types::RenameTableReply;
-use common_meta_types::RenameTableReq;
-use common_meta_types::TableAlreadyExists;
-use common_meta_types::TableId;
-use common_meta_types::TableIdList;
-use common_meta_types::TableIdListKey;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
-use common_meta_types::TableNameIdent;
-use common_meta_types::TableVersionMismatched;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnOpResponse;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
-use common_meta_types::UndropDatabaseReply;
-use common_meta_types::UndropDatabaseReq;
-use common_meta_types::UndropDbHasNoHistory;
-use common_meta_types::UndropDbWithNoDropTime;
-use common_meta_types::UndropTableAlreadyExists;
-use common_meta_types::UndropTableHasNoHistory;
-use common_meta_types::UndropTableReply;
-use common_meta_types::UndropTableReq;
-use common_meta_types::UndropTableWithNoDropTime;
-use common_meta_types::UnknownDatabase;
-use common_meta_types::UnknownTable;
-use common_meta_types::UnknownTableId;
-use common_meta_types::UpdateTableMetaReply;
-use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertKVReq;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
 use common_proto_conv::FromToProto;
 use common_tracing::tracing;
 use txn_condition::Target;
@@ -97,6 +98,8 @@ use crate::KVApi;
 use crate::KVApiKey;
 use crate::SchemaApi;
 use crate::TableIdGen;
+
+const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 
 /// SchemaApi is implemented upon KVApi.
 /// Thus every type that impl KVApi impls SchemaApi.
@@ -522,6 +525,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let db_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut db_info_list = vec![];
+        let utc: DateTime<Utc> = Utc::now();
         for db_id_list_key in db_id_list_keys.iter() {
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist = DbIdListKey {
@@ -551,6 +555,10 @@ impl<KV: KVApi> SchemaApi for KV {
                     tracing::error!("get_database_history cannot find {:?} db_meta", db_id);
                     continue;
                 }
+                let db_meta = db_meta.unwrap();
+                if is_db_out_of_retention_time(&db_meta, &utc) {
+                    continue;
+                }
 
                 let db = DatabaseInfo {
                     ident: DatabaseIdent {
@@ -561,7 +569,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         tenant: db_id_list_key.tenant.clone(),
                         db_name: db_id_list_key.db_name.clone(),
                     },
-                    meta: db_meta.unwrap(),
+                    meta: db_meta,
                 };
 
                 db_info_list.push(Arc::new(db));
@@ -1211,6 +1219,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let table_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut tb_info_list = vec![];
+        let utc: DateTime<Utc> = Utc::now();
         for table_id_list_key in table_id_list_keys.iter() {
             // get table id list from _fd_table_id_list/db_id/table_name
             let dbid_tbname_idlist = TableIdListKey {
@@ -1245,6 +1254,12 @@ impl<KV: KVApi> SchemaApi for KV {
                     continue;
                 }
 
+                // Safe unwrap() because: tb_meta_seq > 0
+                let tb_meta = tb_meta.unwrap();
+                if is_table_out_of_retention_time(&tb_meta, &utc) {
+                    continue;
+                }
+
                 let tenant_dbname_tbname: TableNameIdent = TableNameIdent {
                     tenant: tenant_dbname.tenant.clone(),
                     db_name: tenant_dbname.db_name.clone(),
@@ -1258,8 +1273,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     },
                     desc: tenant_dbname_tbname.to_string(),
                     name: table_id_list_key.table_name.clone(),
-                    // Safe unwrap() because: tb_meta_seq > 0
-                    meta: tb_meta.unwrap(),
+                    meta: tb_meta,
                 };
 
                 tb_info_list.push(Arc::new(tb_info));
@@ -1483,6 +1497,26 @@ impl<KV: KVApi> SchemaApi for KV {
     fn name(&self) -> String {
         "SchemaApiImpl".to_string()
     }
+}
+
+// Return true if table is out of `DATA_RETENTION_TIME_IN_DAYS option,
+// use DEFAULT_DATA_RETENTION_SECONDS by default.
+fn is_table_out_of_retention_time(table_meta: &TableMeta, now: &DateTime<Utc>) -> bool {
+    if let Some(drop_on) = table_meta.drop_on {
+        return now.timestamp() - drop_on.timestamp() > DEFAULT_DATA_RETENTION_SECONDS;
+    }
+
+    false
+}
+
+// Return true if db is out of `DATA_RETENTION_TIME_IN_DAYS option,
+// use DEFAULT_DATA_RETENTION_SECONDS by default.
+fn is_db_out_of_retention_time(db_meta: &DatabaseMeta, now: &DateTime<Utc>) -> bool {
+    if let Some(drop_on) = db_meta.drop_on {
+        return now.timestamp() - drop_on.timestamp() > DEFAULT_DATA_RETENTION_SECONDS;
+    }
+
+    false
 }
 
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)

@@ -140,7 +140,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
 }
 
 async fn create_connection(port: u16) -> Result<mysql_async::Conn> {
-    let uri = &format!("mysql://127.0.0.1:{}", port);
+    let uri = &format!("mysql://root@127.0.0.1:{}", port);
     let opts = mysql_async::Opts::from_url(uri).unwrap();
     mysql_async::Conn::new(opts)
         .await

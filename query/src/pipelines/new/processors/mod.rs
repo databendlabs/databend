@@ -15,11 +15,12 @@
 pub mod port;
 pub mod processor;
 
+mod format;
 mod port_trigger;
 mod resize_processor;
 mod sinks;
 mod sources;
-mod transforms;
+pub(crate) mod transforms;
 
 pub use port::connect;
 pub use port_trigger::DirectedEdge;
@@ -50,12 +51,14 @@ pub use transforms::BlockCompactor;
 pub use transforms::ChainingHashTable;
 pub use transforms::ExpressionTransform;
 pub use transforms::HashJoinState;
+pub use transforms::HashTable;
 pub use transforms::ProjectionTransform;
 pub use transforms::SinkBuildHashTable;
 pub use transforms::SortMergeCompactor;
 pub use transforms::SubQueriesPuller;
 pub use transforms::TransformAddOn;
 pub use transforms::TransformAggregator;
+pub use transforms::TransformApply;
 pub use transforms::TransformBlockCompact;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCompact;
@@ -66,5 +69,6 @@ pub use transforms::TransformHashJoinProbe;
 pub use transforms::TransformHaving;
 pub use transforms::TransformLimit;
 pub use transforms::TransformLimitBy;
+pub use transforms::TransformMax1Row;
 pub use transforms::TransformSortMerge;
 pub use transforms::TransformSortPartial;

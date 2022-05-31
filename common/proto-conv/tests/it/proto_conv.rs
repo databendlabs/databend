@@ -18,9 +18,9 @@ use std::sync::Arc;
 use common_datavalues as dv;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
-use common_meta_types as mt;
-use common_meta_types::DatabaseIdent;
-use common_meta_types::DatabaseNameIdent;
+use common_meta_app::schema as mt;
+use common_meta_app::schema::DatabaseIdent;
+use common_meta_app::schema::DatabaseNameIdent;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_protos::pb;
@@ -108,7 +108,7 @@ fn new_table_info() -> mt::TableInfo {
             engine: "44".to_string(),
             engine_options: btreemap! {s("abc") => s("def")},
             options: btreemap! {s("xyz") => s("foo")},
-            order_keys: Some("(a + 2, b)".to_string()),
+            cluster_keys: Some("(a + 2, b)".to_string()),
             created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
             updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
             comment: s("table_comment"),
@@ -315,7 +315,7 @@ fn test_load_old() -> anyhow::Result<()> {
                 engine: "44".to_string(),
                 engine_options: btreemap! {s("abc") => s("def")},
                 options: btreemap! {s("xyz") => s("foo")},
-                order_keys: Some("(a + 2, b)".to_string()),
+                cluster_keys: Some("(a + 2, b)".to_string()),
                 created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
                 updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
                 comment: s("table_comment"),

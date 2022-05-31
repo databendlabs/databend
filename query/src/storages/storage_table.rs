@@ -20,8 +20,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
-use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -71,6 +71,10 @@ pub trait Table: Sync + Send {
     /// whether table has the exact number of total rows
     fn has_exact_total_row_count(&self) -> bool {
         false
+    }
+
+    fn cluster_keys(&self) -> Vec<Expression> {
+        vec![]
     }
 
     // defaults to generate one single part and empty statistics
@@ -148,6 +152,22 @@ pub trait Table: Sync + Send {
     async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
+
+    async fn navigate_to(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _instant: &NavigationPoint,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::UnImplement(format!(
+            "table {},  of engine type {}, do not support time travel",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+}
+
+pub enum NavigationPoint {
+    SnapshotID(String),
 }
 
 #[derive(Debug)]

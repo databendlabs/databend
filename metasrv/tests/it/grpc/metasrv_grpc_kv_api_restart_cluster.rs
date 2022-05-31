@@ -189,8 +189,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         "xxx",
         None,
         None,
-    )
-    .await?;
+    )?;
 
     tracing::info!("--- test write on a fresh cluster");
     let key_suffix = "1st";

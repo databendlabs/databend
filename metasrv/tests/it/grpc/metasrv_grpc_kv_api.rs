@@ -37,9 +37,7 @@ impl KVApiBuilder<Arc<ClientHandle>> for Builder {
     async fn build(&self) -> Arc<ClientHandle> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
-        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)
-            .await
-            .unwrap();
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).unwrap();
 
         {
             let mut tcs = self.test_contexts.lock().unwrap();

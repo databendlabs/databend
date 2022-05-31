@@ -115,12 +115,16 @@ pub enum TokenKind {
     QuotedString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
-    LiteralHex,
+    PGLiteralHex,
+    #[regex(r"0[xX][a-fA-F0-9]+")]
+    MySQLLiteralHex,
 
     #[regex(r"[0-9]+")]
+    LiteralInteger,
+
     #[regex(r"[0-9]+e[+-]?[0-9]+")]
     #[regex(r"([0-9]*\.[0-9]+(e[+-]?[0-9]+)?)|([0-9]+\.[0-9]*(e[+-]?[0-9]+)?)")]
-    LiteralNumber,
+    LiteralFloat,
 
     // Symbols
     #[token("==")]
@@ -240,6 +244,8 @@ pub enum TokenKind {
     ARRAY,
     #[token("AS", ignore(ascii_case))]
     AS,
+    #[token("AT", ignore(ascii_case))]
+    AT,
     #[token("ASC", ignore(ascii_case))]
     ASC,
     #[token("AWS_KEY_ID", ignore(ascii_case))]
@@ -374,6 +380,8 @@ pub enum TokenKind {
     GROUP,
     #[token("HAVING", ignore(ascii_case))]
     HAVING,
+    #[token("HISTORY", ignore(ascii_case))]
+    HISTORY,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
     #[token("IDENTIFIED", ignore(ascii_case))]
@@ -524,6 +532,8 @@ pub enum TokenKind {
     SKIP_HEADER,
     #[token("SMALLINT", ignore(ascii_case))]
     SMALLINT,
+    #[token("SNAPSHOT", ignore(ascii_case))]
+    SNAPSHOT,
     #[token("STAGE", ignore(ascii_case))]
     STAGE,
     #[token("STATUS", ignore(ascii_case))]
@@ -572,6 +582,8 @@ pub enum TokenKind {
     UINT64,
     #[token("UINT8", ignore(ascii_case))]
     UINT8,
+    #[token("UNDROP", ignore(ascii_case))]
+    UNDROP,
     #[token("UNSIGNED", ignore(ascii_case))]
     UNSIGNED,
     #[token("URL", ignore(ascii_case))]
@@ -611,8 +623,10 @@ impl TokenKind {
             self,
             Ident
                 | QuotedString
-                | LiteralHex
-                | LiteralNumber
+                | PGLiteralHex
+                | MySQLLiteralHex
+                | LiteralInteger
+                | LiteralFloat
                 | DoubleEq
                 | Eq
                 | NotEq
@@ -749,7 +763,7 @@ impl TokenKind {
             | TokenKind::TRUE
             | TokenKind::TRY_CAST
             // | TokenKind::UNIQUE
-            | TokenKind::USER
+            //| TokenKind::USER
             | TokenKind::USING
             | TokenKind::VALUES
             | TokenKind::VARCHAR
@@ -868,7 +882,7 @@ impl TokenKind {
             | TokenKind::TRAILING
             | TokenKind::TRUE
             // | TokenKind::UNIQUE
-            | TokenKind::USER
+            //| TokenKind::USER
             | TokenKind::USING
             // | TokenKind::VARIADIC
             // | TokenKind::VERBOSE

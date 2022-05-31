@@ -41,3 +41,4 @@ mod version;
 
 pub use config::Config;
 pub use version::DATABEND_COMMIT_VERSION;
+pub use version::QUERY_SEMVER;

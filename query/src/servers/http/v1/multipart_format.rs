@@ -15,8 +15,12 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
+use common_io::prelude::Compression;
 use common_io::prelude::FormatSettings;
+use opendal::io_util::CompressAlgorithm;
+use opendal::io_util::DecompressDecoder;
+use opendal::io_util::DecompressState;
 use poem::web::Multipart;
 
 use crate::formats::FormatFactory;
@@ -75,6 +79,30 @@ impl MultipartFormat {
                 source_pipe_builder,
             ))
         } else {
+            let compress_algo = match settings.compression {
+                Compression::None => None,
+                Compression::Auto => {
+                    return Err(ErrorCode::UnImplement(
+                        "compress type auto is unimplemented",
+                    ));
+                }
+                Compression::Gzip => Some(CompressAlgorithm::Gzip),
+                Compression::Bz2 => Some(CompressAlgorithm::Bz2),
+                Compression::Brotli => Some(CompressAlgorithm::Brotli),
+                Compression::Zstd => Some(CompressAlgorithm::Zstd),
+                Compression::Deflate => Some(CompressAlgorithm::Zlib),
+                Compression::RawDeflate => Some(CompressAlgorithm::Deflate),
+                Compression::Lzo => {
+                    return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"));
+                }
+                Compression::Snappy => {
+                    return Err(ErrorCode::UnImplement(
+                        "compress type snappy is unimplemented",
+                    ));
+                }
+            };
+            let input_decompress = compress_algo.map(DecompressDecoder::new);
+
             let output = OutputPort::create();
 
             let (tx, rx) = common_base::base::tokio::sync::mpsc::channel(2);
@@ -85,6 +113,7 @@ impl MultipartFormat {
                     output,
                     input_format,
                     rx,
+                    input_decompress,
                     ctx.get_scan_progress(),
                 )?,
             );

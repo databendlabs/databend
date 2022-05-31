@@ -21,7 +21,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableMeta;
 use common_planners::validate_expression;
 use common_planners::CreateTablePlan;
 use common_planners::PlanNode;
@@ -50,7 +50,7 @@ pub struct DfCreateTable {
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub engine: String,
-    pub order_keys: Vec<Expr>,
+    pub cluster_keys: Vec<Expr>,
     pub options: BTreeMap<String, String>,
 
     // The table name after "create .. like" statement.
@@ -96,17 +96,17 @@ impl AnalyzableStatement for DfCreateTable {
             None => None,
         };
 
-        let mut order_keys = vec![];
-        for k in self.order_keys.iter() {
+        let mut cluster_keys = vec![];
+        for k in self.cluster_keys.iter() {
             let expr = expression_analyzer.analyze_sync(k)?;
             validate_expression(&expr, &table_meta.schema)?;
-            order_keys.push(expr);
+            cluster_keys.push(expr);
         }
 
-        if !order_keys.is_empty() {
-            let order_keys: Vec<String> = order_keys.iter().map(|e| e.column_name()).collect();
-            let order_keys_sql = format!("({})", order_keys.join(", "));
-            table_meta.order_keys = Some(order_keys_sql);
+        if !cluster_keys.is_empty() {
+            let cluster_keys: Vec<String> = cluster_keys.iter().map(|e| e.column_name()).collect();
+            let order_keys_sql = format!("({})", cluster_keys.join(", "));
+            table_meta.cluster_keys = Some(order_keys_sql);
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
@@ -117,7 +117,7 @@ impl AnalyzableStatement for DfCreateTable {
                 db,
                 table,
                 table_meta,
-                order_keys,
+                cluster_keys,
                 as_select: as_select_plan_node,
             }),
         )))

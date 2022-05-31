@@ -141,6 +141,8 @@ build_exceptions! {
     NetworkRequestError(1073),
 
     UnknownFormat(1074),
+    UnknownCompressionType(1075),
+    InvalidCompressionData(1076),
 
     // Tenant error codes.
     TenantIsEmpty(1101),
@@ -150,6 +152,7 @@ build_exceptions! {
     LayoutError(1103),
 
     PanicError(1104),
+
 }
 
 // Metasvr errors [2001, 3000].
@@ -158,6 +161,7 @@ build_exceptions! {
     MetaServiceError(2001),
     InvalidConfig(2002),
     MetaStorageError(2003),
+    InvalidArgument(2004),
 
     TableVersionMismatched(2009),
     OCCRetryFailure(2011),
@@ -224,7 +228,8 @@ build_exceptions! {
 build_exceptions! {
     StorageNotFound(3001),
     StoragePermissionDenied(3002),
-    StorageOther(4000)
+    StorageUnavailable(3901),
+    StorageOther(4000),
 }
 
 // Cache errors [4001, 5000].

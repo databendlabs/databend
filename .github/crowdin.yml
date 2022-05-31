@@ -1,5 +1,6 @@
 project_id: "2"
 api_token_env: CROWDIN_PERSONAL_TOKEN
+preserve_hierarchy: true
 
 # See docs from https://docusaurus.io/docs/i18n/crowdin
 files:

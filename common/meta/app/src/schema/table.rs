@@ -23,10 +23,10 @@ use std::sync::Arc;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
+use common_meta_types::MatchSeq;
 use maplit::hashmap;
 
-use crate::database::DatabaseNameIdent;
-use crate::MatchSeq;
+use crate::schema::database::DatabaseNameIdent;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -174,7 +174,7 @@ pub struct TableMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
-    pub order_keys: Option<String>,
+    pub cluster_keys: Option<String>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
@@ -237,7 +237,7 @@ impl Default for TableMeta {
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),
-            order_keys: None,
+            cluster_keys: None,
             created_on: Default::default(),
             updated_on: Default::default(),
             comment: "".to_string(),

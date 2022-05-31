@@ -7,6 +7,7 @@ ShowTables {
     database: None,
     full: false,
     limit: None,
+    with_history: false,
 }
 
 
@@ -90,6 +91,7 @@ Explain {
                                 span: Ident(31..32),
                             },
                             alias: None,
+                            travel_point: None,
                         },
                     ),
                     selection: None,
@@ -185,10 +187,10 @@ CreateTable {
                     default_expr: Some(
                         Literal {
                             span: [
-                                LiteralNumber(59..60),
+                                LiteralInteger(59..60),
                             ],
-                            lit: Number(
-                                "1",
+                            lit: Integer(
+                                1,
                             ),
                         },
                     ),
@@ -246,10 +248,10 @@ CreateTable {
                     default_expr: Some(
                         Literal {
                             span: [
-                                LiteralNumber(50..51),
+                                LiteralInteger(50..51),
                             ],
-                            lit: Number(
-                                "1",
+                            lit: Integer(
+                                1,
                             ),
                         },
                     ),
@@ -303,6 +305,7 @@ CreateTable {
                                 span: Ident(90..91),
                             },
                             alias: None,
+                            travel_point: None,
                         },
                     ),
                     selection: None,
@@ -445,6 +448,7 @@ DropTable {
         quote: None,
         span: Ident(11..12),
     },
+    all: false,
 }
 
 
@@ -469,6 +473,7 @@ DropTable {
         ),
         span: QuotedString(23..26),
     },
+    all: false,
 }
 
 
@@ -608,6 +613,7 @@ DropTable {
         quote: None,
         span: Ident(11..17),
     },
+    all: false,
 }
 
 
@@ -624,6 +630,7 @@ DropTable {
         quote: None,
         span: Ident(21..27),
     },
+    all: false,
 }
 
 
@@ -766,10 +773,10 @@ CreateTable {
                     default_expr: Some(
                         Literal {
                             span: [
-                                LiteralNumber(30..31),
+                                LiteralInteger(30..31),
                             ],
-                            lit: Number(
-                                "1",
+                            lit: Integer(
+                                1,
                             ),
                         },
                     ),
@@ -820,11 +827,11 @@ Query(
             WHERE(35..40),
             Ident(41..42),
             Eq(43..44),
-            LiteralNumber(45..46),
+            LiteralInteger(45..46),
             AND(47..50),
             Ident(51..52),
             Minus(53..54),
-            LiteralNumber(55..56),
+            LiteralInteger(55..56),
             Lt(57..58),
             Ident(59..60),
             GROUP(61..66),
@@ -833,7 +840,7 @@ Query(
             HAVING(72..78),
             Ident(79..80),
             Eq(81..82),
-            LiteralNumber(83..84),
+            LiteralInteger(83..84),
         ],
         body: Select(
             SelectStmt {
@@ -851,11 +858,11 @@ Query(
                     WHERE(35..40),
                     Ident(41..42),
                     Eq(43..44),
-                    LiteralNumber(45..46),
+                    LiteralInteger(45..46),
                     AND(47..50),
                     Ident(51..52),
                     Minus(53..54),
-                    LiteralNumber(55..56),
+                    LiteralInteger(55..56),
                     Lt(57..58),
                     Ident(59..60),
                     GROUP(61..66),
@@ -864,7 +871,7 @@ Query(
                     HAVING(72..78),
                     Ident(79..80),
                     Eq(81..82),
-                    LiteralNumber(83..84),
+                    LiteralInteger(83..84),
                 ],
                 distinct: true,
                 select_list: [
@@ -905,6 +912,7 @@ Query(
                             span: Ident(33..34),
                         },
                         alias: None,
+                        travel_point: None,
                     },
                 ),
                 selection: Some(
@@ -932,10 +940,10 @@ Query(
                             },
                             right: Literal {
                                 span: [
-                                    LiteralNumber(45..46),
+                                    LiteralInteger(45..46),
                                 ],
-                                lit: Number(
-                                    "1",
+                                lit: Integer(
+                                    1,
                                 ),
                             },
                         },
@@ -963,10 +971,10 @@ Query(
                                 },
                                 right: Literal {
                                     span: [
-                                        LiteralNumber(55..56),
+                                        LiteralInteger(55..56),
                                     ],
-                                    lit: Number(
-                                        "1",
+                                    lit: Integer(
+                                        1,
                                     ),
                                 },
                             },
@@ -1019,10 +1027,10 @@ Query(
                         },
                         right: Literal {
                             span: [
-                                LiteralNumber(83..84),
+                                LiteralInteger(83..84),
                             ],
-                            lit: Number(
-                                "1",
+                            lit: Integer(
+                                1,
                             ),
                         },
                     },
@@ -1076,6 +1084,7 @@ Query(
                             span: Ident(14..16),
                         },
                         alias: None,
+                        travel_point: None,
                     },
                 ),
                 selection: None,
@@ -1140,6 +1149,7 @@ Query(
                             span: Ident(17..19),
                         },
                         alias: None,
+                        travel_point: None,
                     },
                 ),
                 selection: None,
@@ -1210,6 +1220,7 @@ Query(
                                             span: Ident(14..15),
                                         },
                                         alias: None,
+                                        travel_point: None,
                                     },
                                     right: Table {
                                         catalog: None,
@@ -1220,6 +1231,7 @@ Query(
                                             span: Ident(17..18),
                                         },
                                         alias: None,
+                                        travel_point: None,
                                     },
                                 },
                             ),
@@ -1232,6 +1244,7 @@ Query(
                                     span: Ident(20..21),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                         },
                     ),
@@ -1359,6 +1372,7 @@ Query(
                                     span: Ident(14..15),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                             right: Table {
                                 catalog: None,
@@ -1369,6 +1383,7 @@ Query(
                                     span: Ident(21..22),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                         },
                     ),
@@ -1500,6 +1515,7 @@ Query(
                                     span: Ident(14..15),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                             right: Table {
                                 catalog: None,
@@ -1510,6 +1526,7 @@ Query(
                                     span: Ident(32..33),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                         },
                     ),
@@ -1641,6 +1658,7 @@ Query(
                                     span: Ident(14..15),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                             right: Table {
                                 catalog: None,
@@ -1651,6 +1669,7 @@ Query(
                                     span: Ident(33..34),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                         },
                     ),
@@ -1782,6 +1801,7 @@ Query(
                                     span: Ident(14..15),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                             right: Table {
                                 catalog: None,
@@ -1792,6 +1812,7 @@ Query(
                                     span: Ident(32..33),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                         },
                     ),
@@ -1921,6 +1942,7 @@ Query(
                                     span: Ident(14..15),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                             right: Table {
                                 catalog: None,
@@ -1931,6 +1953,7 @@ Query(
                                     span: Ident(27..28),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                         },
                     ),
@@ -2015,6 +2038,7 @@ Query(
                                     span: Ident(14..15),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                             right: Table {
                                 catalog: None,
@@ -2025,6 +2049,7 @@ Query(
                                     span: Ident(32..33),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                         },
                     ),
@@ -2109,6 +2134,7 @@ Query(
                                     span: Ident(14..15),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                             right: Table {
                                 catalog: None,
@@ -2119,6 +2145,7 @@ Query(
                                     span: Ident(33..34),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                         },
                     ),
@@ -2203,6 +2230,7 @@ Query(
                                     span: Ident(14..15),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                             right: Table {
                                 catalog: None,
@@ -2213,6 +2241,7 @@ Query(
                                     span: Ident(32..33),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                         },
                     ),
@@ -2295,6 +2324,7 @@ Query(
                                     span: Ident(14..15),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                             right: Table {
                                 catalog: None,
@@ -2305,6 +2335,7 @@ Query(
                                     span: Ident(27..28),
                                 },
                                 alias: None,
+                                travel_point: None,
                             },
                         },
                     ),
@@ -2349,15 +2380,15 @@ Insert {
     source: Values {
         values_tokens: [
             LParen(30..31),
-            LiteralNumber(31..32),
+            LiteralInteger(31..32),
             Comma(32..33),
-            LiteralNumber(34..35),
+            LiteralInteger(34..35),
             RParen(35..36),
             Comma(36..37),
             LParen(38..39),
-            LiteralNumber(39..40),
+            LiteralInteger(39..40),
             Comma(40..41),
-            LiteralNumber(42..43),
+            LiteralInteger(42..43),
             RParen(43..44),
         ],
     },
@@ -2432,6 +2463,7 @@ Insert {
                                 span: Ident(34..36),
                             },
                             alias: None,
+                            travel_point: None,
                         },
                     ),
                     selection: None,
@@ -2465,7 +2497,7 @@ Query(
             Period(38..39),
             Ident(39..41),
             LBracket(41..42),
-            LiteralNumber(42..43),
+            LiteralInteger(42..43),
             RBracket(43..44),
         ],
         body: Select(
@@ -2479,7 +2511,7 @@ Query(
                     Period(38..39),
                     Ident(39..41),
                     LBracket(41..42),
-                    LiteralNumber(42..43),
+                    LiteralInteger(42..43),
                     RBracket(43..44),
                 ],
                 distinct: false,
@@ -2488,7 +2520,7 @@ Query(
                         expr: MapAccess {
                             span: [
                                 LBracket(41..42),
-                                LiteralNumber(42..43),
+                                LiteralInteger(42..43),
                                 RBracket(43..44),
                             ],
                             expr: MapAccess {
@@ -2530,8 +2562,8 @@ Query(
                                 },
                             },
                             accessor: Bracket {
-                                key: Number(
-                                    "0",
+                                key: Integer(
+                                    0,
                                 ),
                             },
                         },
