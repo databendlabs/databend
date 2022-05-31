@@ -48,9 +48,6 @@ pub enum MetaError {
     MetaStoreNotFound,
 
     #[error("{0}")]
-    LoadConfigError(String),
-
-    #[error("{0}")]
     StartMetaServiceError(String),
 
     #[error("{0}")]
