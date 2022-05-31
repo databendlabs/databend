@@ -17,10 +17,12 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DeletePlan;
+use common_planners::Expression;
 use common_planners::Extras;
 
 use super::filter::delete_from_block;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::del::collector::Deletion;
 use crate::storages::fuse::operations::del::collector::DeletionCollector;
 use crate::storages::fuse::pruning::BlockPruner;
@@ -60,10 +62,21 @@ impl FuseTable {
                 .await;
         };
 
-        let mut deletion_collector = DeletionCollector::new(self, ctx.as_ref());
+        self.delete_blocks(ctx, &snapshot, filter, push_downs).await
+    }
+
+    async fn delete_blocks(
+        &self,
+        ctx: Arc<QueryContext>,
+        snapshot: &Arc<TableSnapshot>,
+        filter: &Expression,
+        push_downs: &Option<Extras>,
+    ) -> Result<()> {
+        let mut deletion_collector =
+            DeletionCollector::new(ctx.as_ref(), &self.meta_location_generator, snapshot);
         let schema = self.table_info.schema();
         let block_metas = BlockPruner::new(snapshot.clone())
-            .apply(ctx.as_ref(), schema, &push_downs)
+            .apply(ctx.as_ref(), schema, push_downs)
             .await?;
 
         // delete block one by one.

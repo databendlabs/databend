@@ -204,6 +204,7 @@ impl BlockStatistics {
         })
     }
 
+    // TODO is this a duplication of `acc_columns`?
     pub fn columns_statistics(data_block: &DataBlock) -> Result<ColumnsStatistics> {
         let mut statistics = ColumnsStatistics::new();
 

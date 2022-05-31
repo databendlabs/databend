@@ -20,15 +20,17 @@ use common_exception::Result;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::write_block;
 use crate::storages::fuse::io::MetaReaders;
+use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::Compression;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
+use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::util::column_metas;
+use crate::storages::fuse::statistics::reduce_block_stats;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
-use crate::storages::fuse::FuseTable;
 
 pub enum Deletion {
     NothingDeleted,
@@ -45,23 +47,28 @@ pub type SegmentIndex = usize;
 
 pub struct DeletionCollector<'a> {
     mutations: HashMap<SegmentIndex, Vec<Replacement>>,
-    table: &'a FuseTable,
     ctx: &'a QueryContext,
+    location_generator: &'a TableMetaLocationGenerator,
+    base_snapshot: &'a TableSnapshot,
 }
 
 impl<'a> DeletionCollector<'a> {
-    pub fn new(table: &'a FuseTable, ctx: &'a QueryContext) -> Self {
+    pub fn new(
+        ctx: &'a QueryContext,
+        location_generator: &'a TableMetaLocationGenerator,
+        base_snapshot: &'a TableSnapshot,
+    ) -> Self {
         Self {
             mutations: HashMap::new(),
-            table,
             ctx,
+            location_generator,
+            base_snapshot,
         }
     }
 
     pub async fn new_snapshot(self) -> Result<TableSnapshot> {
-        // TODO remove this unwrap
-        let snapshot = self.table.read_table_snapshot(self.ctx).await?.unwrap();
-        let mut new_snapshot = snapshot.as_ref().clone();
+        let snapshot = self.base_snapshot;
+        let mut new_snapshot = snapshot.clone();
         let seg_reader = MetaReaders::segment_info_reader(self.ctx);
         for (seg_idx, replacements) in self.mutations {
             let seg_loc = &snapshot.segments[seg_idx];
@@ -75,12 +82,41 @@ impl<'a> DeletionCollector<'a> {
                     .unwrap();
                 new_segment.blocks[position] = replacement.new_block_meta
             }
-            // TODO update the summary of segment
 
-            let new_seg_loc = self
-                .table
-                .meta_location_generator
-                .gen_segment_info_location();
+            // TODO move the stats parts to statistics::reducers
+
+            // update the summary of segment
+            let col_stats = new_segment
+                .blocks
+                .iter()
+                .map(|v| &v.col_stats)
+                .collect::<Vec<_>>();
+            let merged_col_stats = reduce_block_stats(&col_stats)?;
+
+            let mut row_count: u64 = 0;
+            let mut block_count: u64 = 0;
+            let mut uncompressed_byte_size: u64 = 0;
+            let mut compressed_byte_size: u64 = 0;
+
+            new_segment.blocks.iter().for_each(|b| {
+                row_count += b.row_count;
+                block_count += 1;
+                uncompressed_byte_size += b.block_size;
+                compressed_byte_size += b.file_size;
+            });
+
+            let new_stats = Statistics {
+                row_count,
+                block_count,
+                uncompressed_byte_size,
+                compressed_byte_size,
+                col_stats: merged_col_stats,
+                cluster_stats: None,
+            };
+
+            new_segment.summary = new_stats;
+
+            let new_seg_loc = self.location_generator.gen_segment_info_location();
             // TODO write the new segment out (and keep it in undo log)
             new_snapshot.segments[seg_idx] = (new_seg_loc, SegmentInfo::VERSION);
             // TODO update the summary of snapshot
@@ -109,7 +145,7 @@ impl<'a> DeletionCollector<'a> {
     }
 
     async fn write_new_block(&mut self, block: DataBlock) -> Result<BlockMeta> {
-        let location = self.table.meta_location_generator.gen_block_location();
+        let location = self.location_generator.gen_block_location();
         let data_accessor = self.ctx.get_storage_operator()?;
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
