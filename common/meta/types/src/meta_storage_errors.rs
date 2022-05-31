@@ -577,45 +577,6 @@ impl From<ErrorWithContext<sled::Error>> for MetaStorageError {
     }
 }
 
-pub trait ToMetaStorageError<T, E, CtxFn>
-where E: Display + Send + Sync + 'static
-{
-    /// Wrap the error value with MetaError. It is lazily evaluated:
-    /// only when an error does occur.
-    ///
-    /// `err_code_fn` is one of the MetaError builder function such as `MetaError::Ok`.
-    /// `context_fn` builds display_text for the MetaError.
-    fn map_error_to_meta_storage_error<ErrFn, D>(
-        self,
-        err_code_fn: ErrFn,
-        context_fn: CtxFn,
-    ) -> MetaStorageResult<T>
-    where
-        ErrFn: FnOnce(String) -> MetaStorageError,
-        D: Display,
-        CtxFn: FnOnce() -> D;
-}
-
-impl<T, E, CtxFn> ToMetaStorageError<T, E, CtxFn> for std::result::Result<T, E>
-where E: Display + Send + Sync + 'static
-{
-    fn map_error_to_meta_storage_error<ErrFn, D>(
-        self,
-        make_exception: ErrFn,
-        context_fn: CtxFn,
-    ) -> MetaStorageResult<T>
-    where
-        ErrFn: FnOnce(String) -> MetaStorageError,
-        D: Display,
-        CtxFn: FnOnce() -> D,
-    {
-        self.map_err(|error| {
-            let err_text = format!("meta storage error: {}, cause: {}", context_fn(), error);
-            make_exception(err_text)
-        })
-    }
-}
-
 impl From<UnabortableTransactionError> for MetaStorageError {
     fn from(error: UnabortableTransactionError) -> Self {
         match error {
