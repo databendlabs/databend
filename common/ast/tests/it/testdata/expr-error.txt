@@ -44,10 +44,10 @@ error:
 ---------- AST ------------
 Literal {
     span: [
-        LiteralNumber(0..1),
+        LiteralInteger(0..1),
     ],
-    lit: Number(
-        "1",
+    lit: Integer(
+        1,
     ),
 }
 
@@ -59,7 +59,7 @@ error:
   --> SQL:1:10
   |
 1 | CAST(col1)
-  | ----     ^ expected `AS`, `,`, `(`, `.`, `IS`, `NOT`, or 47 more ...
+  | ----     ^ expected `AS`, `,`, `(`, `.`, `IS`, `NOT`, or 49 more ...
   | |         
   | while parsing `CAST(... AS ...)`
   | while parsing expression
