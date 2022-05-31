@@ -19,10 +19,14 @@ use common_exception::Result;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::write_block;
+use crate::storages::fuse::io::MetaReaders;
+use crate::storages::fuse::meta::BlockMeta;
+use crate::storages::fuse::meta::Compression;
 use crate::storages::fuse::meta::Location;
+use crate::storages::fuse::meta::SegmentInfo;
+use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::util::column_metas;
-use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::fuse::FuseTable;
 
@@ -34,7 +38,7 @@ pub enum Deletion {
 #[allow(dead_code)]
 pub struct Replacement {
     original_block_loc: Location,
-    new_block_loc: Location,
+    new_block_meta: BlockMeta,
 }
 
 pub type SegmentIndex = usize;
@@ -43,19 +47,46 @@ pub struct DeletionCollector<'a> {
     mutations: HashMap<SegmentIndex, Vec<Replacement>>,
     table: &'a FuseTable,
     ctx: &'a QueryContext,
-    statistics_accumulator: Option<StatisticsAccumulator>,
 }
 
 impl<'a> DeletionCollector<'a> {
     pub fn new(table: &'a FuseTable, ctx: &'a QueryContext) -> Self {
         Self {
-            mutations: Default::default(),
+            mutations: HashMap::new(),
             table,
             ctx,
-            statistics_accumulator: Default::default(),
         }
     }
 
+    pub async fn new_snapshot(self) -> Result<TableSnapshot> {
+        // TODO remove this unwrap
+        let snapshot = self.table.read_table_snapshot(self.ctx).await?.unwrap();
+        let mut new_snapshot = snapshot.as_ref().clone();
+        let seg_reader = MetaReaders::segment_info_reader(self.ctx);
+        for (seg_idx, replacements) in self.mutations {
+            let seg_loc = &snapshot.segments[seg_idx];
+            let segment = seg_reader.read(&seg_loc.0, None, seg_loc.1).await?;
+            let mut new_segment = SegmentInfo::new(segment.blocks.clone(), segment.summary.clone());
+            for replacement in replacements {
+                let position = new_segment
+                    .blocks
+                    .iter()
+                    .position(|v| v.location == replacement.original_block_loc)
+                    .unwrap();
+                new_segment.blocks[position] = replacement.new_block_meta
+            }
+            // TODO update the summary of segment
+
+            let new_seg_loc = self
+                .table
+                .meta_location_generator
+                .gen_segment_info_location();
+            // TODO write the new segment out (and keep it in undo log)
+            new_snapshot.segments[seg_idx] = (new_seg_loc, SegmentInfo::VERSION);
+            // TODO update the summary of snapshot
+        }
+        Ok(new_snapshot)
+    }
     ///Replaces the block located at `block_meta.location`,
     /// of segment indexed by `seg_idx`, with a new block `r`
     pub async fn replace_with(
@@ -65,28 +96,36 @@ impl<'a> DeletionCollector<'a> {
         replace_with: DataBlock,
     ) -> Result<()> {
         // write new block, and keep the mutations
-        let new_block_loc = self.write_new_block(replace_with).await?;
+        let new_block_meta = self.write_new_block(replace_with).await?;
         let original_block_loc = block_location.clone();
         self.mutations
             .entry(seg_idx)
             .or_default()
             .push(Replacement {
                 original_block_loc,
-                new_block_loc,
+                new_block_meta,
             });
         Ok(())
     }
 
-    async fn write_new_block(&mut self, block: DataBlock) -> Result<Location> {
-        let cluster_keys = vec![]; // TODO build this from table info in the constructor
-        let cluster_stats = BlockStatistics::clusters_statistics(cluster_keys, &block)?;
-        let acc = self.statistics_accumulator.take().unwrap_or_default();
-        let partial_acc = acc.begin(&block, cluster_stats)?;
+    async fn write_new_block(&mut self, block: DataBlock) -> Result<BlockMeta> {
         let location = self.table.meta_location_generator.gen_block_location();
         let data_accessor = self.ctx.get_storage_operator()?;
+        let row_count = block.num_rows() as u64;
+        let block_size = block.memory_size() as u64;
+        let col_stats = StatisticsAccumulator::acc_columns(&block)?;
         let (file_size, file_meta_data) = write_block(block, data_accessor, &location).await?;
         let col_metas = column_metas(&file_meta_data)?;
-        self.statistics_accumulator = Some(partial_acc.end(file_size, location.clone(), col_metas));
-        Ok((location, DataBlock::VERSION))
+        let block_meta = BlockMeta {
+            row_count,
+            block_size,
+            file_size,
+            col_stats,
+            col_metas,
+            cluster_stats: None, // TODO confirm this with zhyass
+            location: (location, DataBlock::VERSION),
+            compression: Compression::Lz4,
+        };
+        Ok(block_meta)
     }
 }

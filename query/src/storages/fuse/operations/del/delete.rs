@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DeletePlan;
 use common_planners::Extras;
@@ -32,50 +33,64 @@ impl FuseTable {
         push_downs: &Option<Extras>,
         plan: &DeletePlan,
     ) -> Result<()> {
-        let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
-        if let Some(snapshot) = snapshot {
-            if let Some(Extras { filters, .. }) = &push_downs {
-                let filter = &filters[0]; // TODO err handling, filters.len SHOULD equal one
-                let mut deleter = DeletionCollector::new(self, ctx.as_ref());
-                let schema = self.table_info.schema();
-                let block_metas = BlockPruner::new(snapshot.clone())
-                    .apply(ctx.as_ref(), schema, &push_downs)
-                    .await?;
+        let snapshot_opt = self.read_table_snapshot(ctx.as_ref()).await?;
 
-                // delete block one by one.
-                // this could be executed in a distributed manner, till new planner, pipeline settled down totally
-                for (seg_idx, block_meta) in block_metas {
-                    let proj = self.projection_of_push_downs(push_downs);
-                    match delete_from_block(self, &block_meta, &ctx, proj, filter).await? {
-                        Deletion::NothingDeleted => {
-                            // false positive, we should keep the whole block
-                            continue;
-                        }
-                        Deletion::Remains(r) => {
-                            // after deletion, the data block `r` remains, let keep it  by replacing the block
-                            // located at `block_meta.location`, of segment indexed by `seg_idx`, with a new block `r`
-                            deleter
-                                .replace_with(seg_idx, &block_meta.location, r)
-                                .await?
-                        }
-                    }
-                }
-                self.commit(deleter)
-            } else {
-                // deleting the whole table... just a truncate
-                let purge = false;
-                self.do_truncate(ctx.clone(), purge, plan.catalog_name.as_str())
-                    .await
-            }
+        // check if table is empty
+        let snapshot = if let Some(s) = snapshot_opt {
+            s
         } else {
             // no snapshot, no deletion
-            Ok(())
+            return Ok(());
+        };
+
+        // check if unconditional deletion
+        let filter = if let Some(Extras { filters, .. }) = &push_downs {
+            if filters.len() != 1 {
+                return Err(ErrorCode::LogicalError(
+                    "there should be exact one expression(conj or disjunction) for the where-clause of a delete statement",
+                ));
+            } else {
+                &filters[0]
+            }
+        } else {
+            // deleting the whole table... just a truncate
+            let purge = false;
+            return self
+                .do_truncate(ctx.clone(), purge, plan.catalog_name.as_str())
+                .await;
+        };
+
+        let mut deletion_collector = DeletionCollector::new(self, ctx.as_ref());
+        let schema = self.table_info.schema();
+        let block_metas = BlockPruner::new(snapshot.clone())
+            .apply(ctx.as_ref(), schema, &push_downs)
+            .await?;
+
+        // delete block one by one.
+        // this could be executed in a distributed manner, till new planner, pipeline settled down totally
+        for (seg_idx, block_meta) in block_metas {
+            let proj = self.projection_of_push_downs(push_downs);
+            match delete_from_block(self, &block_meta, &ctx, proj, filter).await? {
+                Deletion::NothingDeleted => {
+                    // false positive, we should keep the whole block
+                    continue;
+                }
+                Deletion::Remains(r) => {
+                    // after deletion, the data block `r` remains, let keep it  by replacing the block
+                    // located at `block_meta.location`, of segment indexed by `seg_idx`, with a new block `r`
+                    deletion_collector
+                        .replace_with(seg_idx, &block_meta.location, r)
+                        .await?
+                }
+            }
         }
+        self.commit_deletion(deletion_collector).await
     }
 
-    fn commit(&self, _del_holder: DeletionCollector) -> Result<()> {
+    async fn commit_deletion(&self, del_holder: DeletionCollector<'_>) -> Result<()> {
         //  let new_snapshot = self.update_snapshot(del_holder.updated_segments());
         // // try commit and detect conflicts
+        let _new_snapshot = del_holder.new_snapshot().await?;
         todo!()
     }
 }
