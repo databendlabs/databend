@@ -62,6 +62,12 @@ for i in "${copy_from_named_external_stage_cases[@]}"; do
   echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 done
 
+
+## List stage use http API
+
+curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' -d '{"sql": "list @s1;"}'  | grep -o 'ontime_200.csv'
+ 
+
 ## Drop table.
 echo "drop table ontime200" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists named_external_stage" | $MYSQL_CLIENT_CONNECT
