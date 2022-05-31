@@ -871,7 +871,7 @@ dependencies = [
  "lz4",
  "naive-cityhash",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "pin-project-lite",
  "rand 0.8.5",
  "slab",
@@ -990,7 +990,7 @@ dependencies = [
  "futures",
  "hyper",
  "libc",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "poem",
  "pprof",
  "serde",
@@ -1721,7 +1721,7 @@ dependencies = [
  "crossterm_winapi",
  "libc",
  "mio",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -3842,9 +3842,9 @@ dependencies = [
 
 [[package]]
 name = "miniz_oxide"
-version = "0.5.1"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2b29bd4bc3f33391105ebee3589c19197c4271e3e5a9ec9bfe8127eeff8f082"
+checksum = "6f5c75688da582b8ffc1f1799e9db273f32133c49e048f614d22ec3256773ccc"
 dependencies = [
  "adler",
 ]
@@ -4326,7 +4326,7 @@ dependencies = [
  "metrics",
  "minitrace",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "pin-project",
  "quick-xml",
  "reqsign",
@@ -4586,9 +4586,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f5ec2493a61ac0506c0f4199f99070cbe83857b0337006a30f3e6719b8ef58"
+checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
 dependencies = [
  "lock_api",
  "parking_lot_core 0.9.3",
@@ -4888,7 +4888,7 @@ dependencies = [
  "hyper",
  "mime",
  "multer",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "percent-encoding",
  "pin-project-lite",
  "poem-derive",
@@ -4946,7 +4946,7 @@ dependencies = [
  "log",
  "nix 0.23.1",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "protobuf",
  "protobuf-codegen-pure",
  "smallvec",
@@ -5103,7 +5103,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "memchr",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "procfs",
  "protobuf",
  "thiserror",
@@ -6643,7 +6643,7 @@ dependencies = [
  "mio",
  "num_cpus",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
@@ -7065,7 +7065,7 @@ dependencies = [
  "lazy_static",
  "log",
  "lru-cache",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "resolv-conf",
  "smallvec",
  "thiserror",
