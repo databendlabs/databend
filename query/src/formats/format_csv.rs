@@ -21,7 +21,7 @@ use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::{BufferReadExt, MemoryReader, position1, position2, position4};
+use common_io::prelude::{BufferReadExt, MemoryReader, position2, position4};
 
 
 use common_io::prelude::FormatSettings;
