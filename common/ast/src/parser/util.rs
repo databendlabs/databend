@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::ParseIntError;
 use std::ops::Range;
 use std::ops::RangeFrom;
 use std::ops::RangeFull;
@@ -27,7 +26,6 @@ use crate::parser::error::Backtrace;
 use crate::parser::error::Error;
 use crate::parser::error::ErrorKind;
 use crate::parser::token::*;
-use crate::parser::unescape::unescape;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
@@ -128,36 +126,6 @@ fn non_reserved_keyword(
             ErrorKind::ExpectToken(Ident),
         ))),
     }
-}
-
-pub fn literal_string(i: Input) -> IResult<String> {
-    match_token(QuotedString)(i).and_then(|(i2, token)| {
-        if token.text().starts_with('\'') {
-            let str = &token.text()[1..token.text().len() - 1];
-            let unescaped = unescape(str, '\'').ok_or_else(|| {
-                nom::Err::Failure(Error::from_error_kind(
-                    i,
-                    ErrorKind::Other("invalid escape or unicode"),
-                ))
-            })?;
-            Ok((i2, unescaped))
-        } else {
-            Err(nom::Err::Error(Error::from_error_kind(
-                i,
-                ErrorKind::ExpectToken(QuotedString),
-            )))
-        }
-    })
-}
-
-pub fn literal_u64(i: Input) -> IResult<u64> {
-    match_token(LiteralNumber)(i).and_then(|(i2, token)| {
-        token
-            .text()
-            .parse()
-            .map(|num| (i2, num))
-            .map_err(|err: ParseIntError| nom::Err::Failure(Error::from_error_kind(i, err.into())))
-    })
 }
 
 pub fn comma_separated_list0<'a, T>(
@@ -282,6 +250,25 @@ where
                     }
                 }
             }
+        }
+    }
+}
+
+/// A fork of `map_res` from nom, but doesn't require `FromExternalError`.
+pub fn map_res<'a, O1, O2, F, G>(
+    mut parser: F,
+    mut f: G,
+) -> impl FnMut(Input<'a>) -> IResult<'a, O2>
+where
+    F: nom::Parser<Input<'a>, O1, Error<'a>>,
+    G: FnMut(O1) -> Result<O2, ErrorKind>,
+{
+    move |input: Input| {
+        let i = input;
+        let (input, o1) = parser.parse(input)?;
+        match f(o1) {
+            Ok(o2) => Ok((input, o2)),
+            Err(e) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
         }
     }
 }

@@ -115,13 +115,16 @@ pub enum TokenKind {
     QuotedString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
+    PGLiteralHex,
     #[regex(r"0[xX][a-fA-F0-9]+")]
-    LiteralHex,
+    MySQLLiteralHex,
 
     #[regex(r"[0-9]+")]
+    LiteralInteger,
+
     #[regex(r"[0-9]+e[+-]?[0-9]+")]
     #[regex(r"([0-9]*\.[0-9]+(e[+-]?[0-9]+)?)|([0-9]+\.[0-9]*(e[+-]?[0-9]+)?)")]
-    LiteralNumber,
+    LiteralFloat,
 
     // Symbols
     #[token("==")]
@@ -620,8 +623,10 @@ impl TokenKind {
             self,
             Ident
                 | QuotedString
-                | LiteralHex
-                | LiteralNumber
+                | PGLiteralHex
+                | MySQLLiteralHex
+                | LiteralInteger
+                | LiteralFloat
                 | DoubleEq
                 | Eq
                 | NotEq
