@@ -278,12 +278,18 @@ impl QueryContextShared {
             format.field_delimiter = settings.get_field_delimiter()?;
             format.empty_as_default = settings.get_empty_as_default()? > 0;
             format.skip_header = settings.get_skip_header()? > 0;
+
             let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
                 ErrorCode::LogicalError("Timezone has been checked and should be valid.")
             })?;
             format.timezone = tz.parse::<Tz>().map_err(|_| {
                 ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
             })?;
+
+            let compress = String::from_utf8(settings.get_compression()?).map_err(|_| {
+                ErrorCode::UnknownCompressionType("Compress type must be valid utf-8")
+            })?;
+            format.compression = compress.parse()?
         }
         Ok(format)
     }

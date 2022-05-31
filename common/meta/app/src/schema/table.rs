@@ -23,10 +23,10 @@ use std::sync::Arc;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
+use common_meta_types::MatchSeq;
 use maplit::hashmap;
 
-use crate::database::DatabaseNameIdent;
-use crate::MatchSeq;
+use crate::schema::database::DatabaseNameIdent;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]

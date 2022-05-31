@@ -24,7 +24,11 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::Compression;
 use common_io::prelude::FormatSettings;
+use opendal::io_util::CompressAlgorithm;
+use opendal::io_util::DecompressDecoder;
+use opendal::io_util::DecompressState;
 use poem::web::Multipart;
 
 use crate::formats::FormatFactory;
@@ -143,6 +147,30 @@ impl MultipartFormat {
         settings: FormatSettings,
         ports: Vec<Arc<OutputPort>>,
     ) -> Result<(MultipartWorker, Vec<ProcessorPtr>)> {
+        let compress_algo = match settings.compression {
+            Compression::None => None,
+            Compression::Auto => {
+                return Err(ErrorCode::UnImplement(
+                    "compress type auto is unimplemented",
+                ))
+            }
+            Compression::Gzip => Some(CompressAlgorithm::Gzip),
+            Compression::Bz2 => Some(CompressAlgorithm::Bz2),
+            Compression::Brotli => Some(CompressAlgorithm::Brotli),
+            Compression::Zstd => Some(CompressAlgorithm::Zstd),
+            Compression::Deflate => Some(CompressAlgorithm::Zlib),
+            Compression::RawDeflate => Some(CompressAlgorithm::Deflate),
+            Compression::Lzo => {
+                return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"))
+            }
+            Compression::Snappy => {
+                return Err(ErrorCode::UnImplement(
+                    "compress type snappy is unimplemented",
+                ))
+            }
+        };
+        let input_decompress = compress_algo.map(DecompressDecoder::new);
+
         let input_format = FormatFactory::instance().get_input(name, schema, settings)?;
 
         if ports.len() != 1 || input_format.support_parallel() {
@@ -161,6 +189,7 @@ impl MultipartFormat {
             vec![SequentialInputFormatSource::create(
                 ports[0].clone(),
                 input_format,
+                input_decompress,
                 rx,
                 ctx.get_scan_progress(),
             )?],
@@ -183,6 +212,7 @@ pub struct SequentialInputFormatSource {
     scan_progress: Arc<Progress>,
     input_state: Box<dyn InputState>,
     input_format: Box<dyn InputFormat>,
+    input_decompress: Option<DecompressDecoder>,
     data_receiver: Receiver<Result<Vec<u8>>>,
 }
 
@@ -190,15 +220,18 @@ impl SequentialInputFormatSource {
     pub fn create(
         output: Arc<OutputPort>,
         input_format: Box<dyn InputFormat>,
+        input_decompress: Option<DecompressDecoder>,
         data_receiver: Receiver<Result<Vec<u8>>>,
         scan_progress: Arc<Progress>,
     ) -> Result<ProcessorPtr> {
         let input_state = input_format.create_state();
+
         Ok(ProcessorPtr::create(Box::new(
             SequentialInputFormatSource {
                 output,
                 input_state,
                 input_format,
+                input_decompress,
                 data_receiver,
                 scan_progress,
                 finished: false,
@@ -246,6 +279,47 @@ impl Processor for SequentialInputFormatSource {
         let mut progress_values = ProgressValues::default();
         match replace(&mut self.state, State::NeedReceiveData) {
             State::ReceivedData(data) => {
+                let data = match &mut self.input_decompress {
+                    None => data,
+                    Some(decompress) => {
+                        let mut output = Vec::new();
+                        let mut amt = 0;
+
+                        loop {
+                            match decompress.state() {
+                                DecompressState::Reading => {
+                                    // If all data has been consumed, we should break with existing data directly.
+                                    if amt == data.len() {
+                                        break output;
+                                    }
+
+                                    let read = decompress.fill(&data[amt..]);
+                                    amt += read;
+                                }
+                                DecompressState::Decoding => {
+                                    let mut buf = vec![0; 4 * 1024 * 1024];
+                                    let written = decompress.decode(&mut buf).map_err(|e| {
+                                        ErrorCode::InvalidCompressionData(format!(
+                                            "compression data invalid: {e}"
+                                        ))
+                                    })?;
+                                    output.extend_from_slice(&buf[..written])
+                                }
+                                DecompressState::Flushing => {
+                                    let mut buf = vec![0; 4 * 1024 * 1024];
+                                    let written = decompress.finish(&mut buf).map_err(|e| {
+                                        ErrorCode::InvalidCompressionData(format!(
+                                            "compression data invalid: {e}"
+                                        ))
+                                    })?;
+                                    output.extend_from_slice(&buf[..written])
+                                }
+                                DecompressState::Done => break output,
+                            }
+                        }
+                    }
+                };
+
                 let mut data_slice: &[u8] = &data;
                 progress_values.bytes += data.len();
 

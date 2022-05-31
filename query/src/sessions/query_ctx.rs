@@ -34,7 +34,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
 use common_planners::Expression;
 use common_planners::PartInfoPtr;

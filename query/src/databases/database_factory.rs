@@ -19,7 +19,7 @@ use std::sync::Arc;
 use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::DatabaseInfo;
+use common_meta_app::schema::DatabaseInfo;
 
 use crate::databases::default::DefaultDatabase;
 use crate::databases::github::GithubDatabase;

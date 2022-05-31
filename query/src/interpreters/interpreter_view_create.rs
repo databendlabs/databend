@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::CreateTableReq;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableNameIdent;
 use common_meta_types::GrantObject;
-use common_meta_types::TableMeta;
-use common_meta_types::TableNameIdent;
 use common_meta_types::UserPrivilegeType;
 use common_planners::CreateViewPlan;
 use common_streams::DataBlockStream;

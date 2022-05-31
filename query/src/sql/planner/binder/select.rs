@@ -67,7 +67,12 @@ impl<'a> Binder {
 
         let (mut scalar_items, projections) = self.analyze_projection(&select_list)?;
 
+        // This will potentially add some alias group items to `from_context` if find some.
+        self.analyze_group_items(&mut from_context, &select_list, &stmt.group_by)
+            .await?;
+
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
+
         let having = if let Some(having) = &stmt.having {
             Some(
                 self.analyze_aggregate_having(&mut from_context, having)
@@ -76,6 +81,7 @@ impl<'a> Binder {
         } else {
             None
         };
+
         let order_items = self.analyze_order_items(
             &from_context,
             &scalar_items,
@@ -88,9 +94,7 @@ impl<'a> Binder {
             || !stmt.group_by.is_empty()
             || stmt.having.is_some()
         {
-            s_expr = self
-                .bind_aggregate(&mut from_context, &select_list, &stmt.group_by, s_expr)
-                .await?;
+            s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
 
             if let Some(having) = having {
                 s_expr = self.bind_having(&from_context, having, s_expr).await?;

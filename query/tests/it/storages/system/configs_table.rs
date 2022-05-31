@@ -20,6 +20,11 @@ use databend_query::storages::system::ConfigsTable;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table() -> Result<()> {
@@ -112,8 +117,17 @@ async fn test_configs_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table_redact() -> Result<()> {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("HEAD"))
+        .and(path("/test/.opendal"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&mock_server)
+        .await;
+
     let mut conf = crate::tests::ConfigBuilder::create().config();
     conf.storage.params = StorageParams::S3(StorageS3Config {
+        region: "us-east-2".to_string(),
+        endpoint_url: mock_server.uri(),
         bucket: "test".to_string(),
         access_key_id: "access_key_id".to_string(),
         secret_access_key: "secret_access_key".to_string(),
@@ -129,6 +143,11 @@ async fn test_configs_table_redact() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
+
+    let endpoint_url_link = format!(
+        "| storage | s3.endpoint_url                      | {:<24}  |             |",
+        mock_server.uri()
+    );
 
     let expected = vec![
         "+---------+--------------------------------------+---------------------------+-------------+",
@@ -193,14 +212,15 @@ async fn test_configs_table_redact() -> Result<()> {
         "| storage | num_cpus                             | 0                         |             |",
         "| storage | s3.access_key_id                     | ******_id                 |             |",
         "| storage | s3.bucket                            | test                      |             |",
-        "| storage | s3.endpoint_url                      | https://s3.amazonaws.com  |             |",
+        &endpoint_url_link,
         "| storage | s3.master_key                        |                           |             |",
-        "| storage | s3.region                            |                           |             |",
+        "| storage | s3.region                            | us-east-2                 |             |",
         "| storage | s3.root                              |                           |             |",
         "| storage | s3.secret_access_key                 | ******key                 |             |",
         "| storage | type                                 | s3                        |             |",
         "+---------+--------------------------------------+---------------------------+-------------+",
     ];
+
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     Ok(())
 }

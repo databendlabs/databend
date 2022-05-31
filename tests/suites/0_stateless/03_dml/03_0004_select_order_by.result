@@ -34,3 +34,29 @@ Projection: (number % 3) as c1:UInt8, (number % 2) as c2:UInt8
 2	NULL
 1	NULL
 0	NULL
+==Variant==
+6	true
+4	10
+2	"abcd"
+1	{"k":"v"}
+3	[1,2,3]
+5	null
+5	null
+3	[1,2,3]
+1	{"k":"v"}
+2	"abcd"
+4	10
+6	true
+==Array(Int32)==
+3	[]
+1	[1, 2, 3]
+2	[1, 2, 4]
+4	[3, 4, 5]
+5	[4]
+6	[4, 5]
+6	[4, 5]
+5	[4]
+4	[3, 4, 5]
+2	[1, 2, 4]
+1	[1, 2, 3]
+3	[]

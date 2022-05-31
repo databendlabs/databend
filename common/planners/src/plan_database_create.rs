@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::DatabaseNameIdent;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::DatabaseNameIdent;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabasePlan {
