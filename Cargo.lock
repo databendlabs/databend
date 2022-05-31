@@ -1231,7 +1231,6 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "common-meta-types",
- "common-mock",
  "common-proto-conv",
  "common-protos",
  "common-tracing",
@@ -1286,7 +1285,6 @@ dependencies = [
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
- "common-mock",
  "common-tracing",
  "once_cell",
  "tempfile",
@@ -1333,7 +1331,6 @@ dependencies = [
  "common-meta-api",
  "common-meta-sled-store",
  "common-meta-types",
- "common-mock",
  "common-tracing",
  "derive_more",
  "hostname",
@@ -1407,14 +1404,6 @@ dependencies = [
  "prometheus-parse",
  "serde",
  "tokio",
-]
-
-[[package]]
-name = "common-mock"
-version = "0.1.0"
-dependencies = [
- "common-datavalues",
- "common-exception",
 ]
 
 [[package]]
@@ -1923,7 +1912,6 @@ dependencies = [
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
- "common-mock",
  "common-tracing",
  "env_logger",
  "futures",

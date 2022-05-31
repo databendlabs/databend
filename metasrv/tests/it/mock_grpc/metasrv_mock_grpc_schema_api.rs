@@ -19,7 +19,7 @@ use common_meta_grpc::MetaGrpcClient;
 use crate::init_meta_ut;
 use crate::tests::start_metasrv;
 
-#[cfg(feature = "mock_utc")]
+#[cfg(feature = "create_with_drop_time")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_gpc_client_table_drop_out_of_retention_time_history() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
@@ -34,7 +34,7 @@ async fn test_meta_gpc_client_table_drop_out_of_retention_time_history() -> anyh
         .await
 }
 
-#[cfg(feature = "mock_utc")]
+#[cfg(feature = "create_with_drop_time")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_gpc_client_database_drop_out_of_retention_time_history() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();

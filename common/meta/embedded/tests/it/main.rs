@@ -12,7 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#![allow(unused_imports)]
+
 mod kv_api_impl;
-#[cfg(feature = "mock_utc")]
 mod mock;
 mod schema_api_impl;

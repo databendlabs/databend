@@ -16,6 +16,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use anyerror::AnyError;
+use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
@@ -87,7 +88,6 @@ use common_meta_types::TxnOpResponse;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReq;
-use common_mock::utc_now;
 use common_proto_conv::FromToProto;
 use common_tracing::tracing;
 use txn_condition::Target;
@@ -111,12 +111,12 @@ impl<KV: KVApi> SchemaApi for KV {
     ) -> Result<CreateDatabaseReply, MetaError> {
         let name_key = &req.name_ident;
 
+        #[cfg(not(feature = "create_with_drop_time"))]
         if req.meta.drop_on.is_some() {
             return Err(MetaError::AppError(AppError::CreateDatabaseWithDropTime(
                 CreateDatabaseWithDropTime::new(&name_key.db_name),
             )));
         }
-
         loop {
             // Get db by name to ensure absence
             let (db_id_seq, db_id) = get_id_value(self, name_key).await?;
@@ -525,7 +525,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let db_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut db_info_list = vec![];
-        let now = utc_now().timestamp();
+        let now = Utc::now().timestamp();
         for db_id_list_key in db_id_list_keys.iter() {
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist = DbIdListKey {
@@ -556,7 +556,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     continue;
                 }
                 let db_meta = db_meta.unwrap();
-                if is_db_out_of_retention_time(&db_meta, now) {
+                if is_drop_time_out_of_retention_time(&db_meta.drop_on, now) {
                     continue;
                 }
 
@@ -638,6 +638,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
 
+        #[cfg(not(feature = "create_with_drop_time"))]
         if req.table_meta.drop_on.is_some() {
             return Err(MetaError::AppError(AppError::CreateTableWithDropTime(
                 CreateTableWithDropTime::new(&tenant_dbname_tbname.table_name),
@@ -1219,7 +1220,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let table_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut tb_info_list = vec![];
-        let now = utc_now().timestamp();
+        let now = Utc::now().timestamp();
         for table_id_list_key in table_id_list_keys.iter() {
             // get table id list from _fd_table_id_list/db_id/table_name
             let dbid_tbname_idlist = TableIdListKey {
@@ -1256,7 +1257,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 // Safe unwrap() because: tb_meta_seq > 0
                 let tb_meta = tb_meta.unwrap();
-                if is_table_out_of_retention_time(&tb_meta, now) {
+                if is_drop_time_out_of_retention_time(&tb_meta.drop_on, now) {
                     continue;
                 }
 
@@ -1499,20 +1500,10 @@ impl<KV: KVApi> SchemaApi for KV {
     }
 }
 
-// Return true if table is out of `DATA_RETENTION_TIME_IN_DAYS option,
+// Return true if drop time is out of `DATA_RETENTION_TIME_IN_DAYS option,
 // use DEFAULT_DATA_RETENTION_SECONDS by default.
-fn is_table_out_of_retention_time(table_meta: &TableMeta, now: i64) -> bool {
-    if let Some(drop_on) = table_meta.drop_on {
-        return now - drop_on.timestamp() >= DEFAULT_DATA_RETENTION_SECONDS;
-    }
-
-    false
-}
-
-// Return true if db is out of `DATA_RETENTION_TIME_IN_DAYS option,
-// use DEFAULT_DATA_RETENTION_SECONDS by default.
-fn is_db_out_of_retention_time(db_meta: &DatabaseMeta, now: i64) -> bool {
-    if let Some(drop_on) = db_meta.drop_on {
+fn is_drop_time_out_of_retention_time(drop_on: &Option<DateTime<Utc>>, now: i64) -> bool {
+    if let Some(drop_on) = drop_on {
         return now - drop_on.timestamp() >= DEFAULT_DATA_RETENTION_SECONDS;
     }
 

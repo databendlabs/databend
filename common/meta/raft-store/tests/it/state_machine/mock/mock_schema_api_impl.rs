@@ -17,7 +17,7 @@ use common_meta_raft_store::state_machine::StateMachine;
 
 use crate::testing::new_raft_test_context;
 
-#[cfg(feature = "mock_utc")]
+#[cfg(feature = "create_with_drop_time")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_drop_out_of_retention_time_history() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_raft_store_ut!();
@@ -30,7 +30,7 @@ async fn test_meta_embedded_table_drop_out_of_retention_time_history() -> anyhow
         .await
 }
 
-#[cfg(feature = "mock_utc")]
+#[cfg(feature = "create_with_drop_time")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_database_drop_out_of_retention_time_history() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_raft_store_ut!();

@@ -9,7 +9,7 @@ edition = "2021"
 
 [features]
 default = []
-mock_utc = ["common-mock/mock_utc"]
+create_with_drop_time = ["common-meta-api/create_with_drop_time"]
 
 [lib]
 doctest = false
@@ -19,11 +19,10 @@ test = false
 # Workspace dependencies
 common-base = { path = "../../base" }
 common-exception = { path = "../../exception" }
-common-meta-api = { path = "../api" }
+common-meta-api = { path = "../api", features=["create_with_drop_time"] }
 common-meta-raft-store = { path = "../raft-store" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-types = { path = "../types" }
-common-mock = { path = "../../mock" }
 common-tracing = { path = "../../tracing" }
 
 # Crates.io dependencies

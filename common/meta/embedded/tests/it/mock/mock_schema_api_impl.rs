@@ -16,7 +16,7 @@ use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_embedded::MetaEmbedded;
 
-#[cfg(feature = "mock_utc")]
+#[cfg(feature = "create_with_drop_time")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_drop_out_of_retention_time_history() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
@@ -25,7 +25,7 @@ async fn test_meta_embedded_table_drop_out_of_retention_time_history() -> anyhow
         .await
 }
 
-#[cfg(feature = "mock_utc")]
+#[cfg(feature = "create_with_drop_time")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_database_drop_out_of_retention_time_history() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;

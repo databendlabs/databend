@@ -9,7 +9,6 @@ members = [
     "common/contexts",
     "common/datablocks",
     "common/datavalues",
-    "common/mock",
     "common/exception",
     "common/functions",
     "common/grpc",

@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+#![allow(unused_imports)]
 extern crate common_meta_types;
 
 mod kv_api;

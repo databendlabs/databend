@@ -16,12 +16,12 @@
 // error[[E0275](https://doc.rust-lang.org/error-index.html#E0275)]: overflow evaluating the requirement `(...)`
 // When compiling `impl KVApiBuilder<MetaGrpcClient> for Builder`.
 #![recursion_limit = "1024"]
+#![allow(unused_imports)]
 
 mod api;
 mod configs;
 mod grpc;
 mod meta_node;
-#[cfg(feature = "mock_utc")]
 mod mock_grpc;
 mod store;
 mod tests;
