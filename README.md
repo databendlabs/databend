@@ -19,7 +19,7 @@
 <img src="https://img.shields.io/github/workflow/status/datafuselabs/databend/Release" alt="CI Status" />
 </a>
 
-<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="patform" />
+<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
 
 <a href="https://opensource.org/licenses/Apache-2.0">
 <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="license" />
