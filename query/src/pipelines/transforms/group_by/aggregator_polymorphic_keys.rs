@@ -128,7 +128,7 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16> {
     type State = ShortFixedKeysAggregatorState<u16>;
     fn aggregate_state(&self) -> Self::State {
-        Self::State::create((u8::MAX as usize) + 1)
+        Self::State::create((u16::MAX as usize) + 1)
     }
     type ColumnBuilder = FixedKeysColumnBuilder<u16>;
     fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder {

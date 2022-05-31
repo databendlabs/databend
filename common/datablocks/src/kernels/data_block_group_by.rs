@@ -86,7 +86,6 @@ impl DataBlock {
             9..=16 => Ok(HashMethodKind::KeysU128(HashMethodKeysU128::default())),
             17..=32 => Ok(HashMethodKind::KeysU256(HashMethodKeysU256::default())),
             33..=64 => Ok(HashMethodKind::KeysU512(HashMethodKeysU512::default())),
-            // TODO support u256
             _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
         }
     }
