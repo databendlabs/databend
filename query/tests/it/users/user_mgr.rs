@@ -40,7 +40,7 @@ async fn test_user_manager() -> Result<()> {
 
     let auth_info = AuthInfo::Password {
         hash_value: Vec::from(pwd),
-        hash_method: PasswordHashMethod::PlainText,
+        hash_method: PasswordHashMethod::Sha256,
     };
 
     // add user hostname.
@@ -183,7 +183,7 @@ async fn test_user_manager() -> Result<()> {
         let pwd = "test";
         let auth_info = AuthInfo::Password {
             hash_value: Vec::from(pwd),
-            hash_method: PasswordHashMethod::PlainText,
+            hash_method: PasswordHashMethod::Sha256,
         };
         let user_info: UserInfo = User::new(user, hostname, auth_info.clone()).into();
         user_mgr.add_user(tenant, user_info.clone(), false).await?;

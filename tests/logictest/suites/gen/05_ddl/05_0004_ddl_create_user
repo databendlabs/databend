@@ -20,9 +20,6 @@ statement error 2202
 CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'; 
 
 statement ok
-CREATE USER 'test-a'@'localhost' IDENTIFIED WITH plaintext_password BY 'password';
-
-statement ok
 CREATE USER 'test-b'@'localhost' IDENTIFIED WITH sha256_password BY 'password';
 
 statement ok

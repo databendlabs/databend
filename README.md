@@ -196,6 +196,13 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 - [How to Create a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-create-view)
 - [How to Drop a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-drop-view)
 - [How to Alter a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-alter-view)
+
+## User-Defined Functions
+
+- [How to Create a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-create-function)
+- [How to Drop a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-drop-function)
+- [How to Alter a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-alter-function)
+
  
 ### Load Data
 

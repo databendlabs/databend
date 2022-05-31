@@ -20,30 +20,30 @@ use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
-use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DatabaseInfo;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::DatabaseNameIdent;
-use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropTableReq;
-use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetTableReq;
-use common_meta_types::ListDatabaseReq;
-use common_meta_types::ListTableReq;
+use common_meta_app::schema::CreateDatabaseReply;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListTableReq;
+use common_meta_app::schema::RenameDatabaseReq;
+use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::TableStatistics;
+use common_meta_app::schema::UndropDatabaseReq;
+use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MatchSeq;
-use common_meta_types::RenameDatabaseReq;
-use common_meta_types::RenameTableReq;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
-use common_meta_types::TableNameIdent;
-use common_meta_types::TableStatistics;
-use common_meta_types::UndropDatabaseReq;
-use common_meta_types::UndropTableReq;
-use common_meta_types::UpdateTableMetaReq;
-use common_meta_types::UpsertTableOptionReq;
 use common_mock::*;
 use common_tracing::tracing;
 
@@ -1227,13 +1227,7 @@ impl SchemaApiTestSuite {
 
             let got = mt.get_table((tenant, db1_name, tb3_name).into()).await?;
             let want = TableInfo {
-                // TODO: use this after kv-txn rename-table replaces metasrv rename-table:
-                //    `ident: tb_ident.clone(),`
-                //     rename-table should not change the seq.
-                ident: TableIdent {
-                    table_id: tb_ident.table_id,
-                    seq: got.ident.seq,
-                },
+                ident: tb_ident.clone(),
                 desc: format!("'{}'.'{}'.'{}'", tenant, db1_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
@@ -1366,12 +1360,7 @@ impl SchemaApiTestSuite {
 
             let got = mt.get_table((tenant, db2_name, tb3_name).into()).await?;
             let want = TableInfo {
-                // TODO similar: version should not change.
-                //   ident: tb_ident2,
-                ident: TableIdent {
-                    table_id: tb_ident2.table_id,
-                    seq: got.ident.seq,
-                },
+                ident: tb_ident2,
                 desc: format!("'{}'.'{}'.'{}'", tenant, db2_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),

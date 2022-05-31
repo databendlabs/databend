@@ -19,7 +19,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::MutableColumn;
 use common_datavalues::MutableStringColumn;
-use common_datavalues::PrimitiveType;
 use common_datavalues::ScalarColumnBuilder;
 use common_datavalues::TypeDeserializer;
 use common_exception::Result;
@@ -33,17 +32,13 @@ pub trait GroupColumnsBuilder<Key> {
     fn finish(self) -> Result<Vec<ColumnRef>>;
 }
 
-pub struct FixedKeysGroupColumnsBuilder<T>
-where T: PrimitiveType
-{
+pub struct FixedKeysGroupColumnsBuilder<T> {
     data: Vec<T>,
     groups_fields: Vec<DataField>,
 }
 
 impl<T> FixedKeysGroupColumnsBuilder<T>
-where
-    T: PrimitiveType,
-    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
+where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>
 {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
@@ -53,10 +48,8 @@ where
     }
 }
 
-impl<T> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
-where
-    T: PrimitiveType,
-    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
+impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
+where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>
 {
     #[inline]
     fn append_value(&mut self, v: &T) {

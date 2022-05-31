@@ -39,7 +39,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
     let password = "test";
     let auth_info = AuthInfo::Password {
         hash_value: Vec::from(password),
-        hash_method: PasswordHashMethod::PlainText,
+        hash_method: PasswordHashMethod::Sha256,
     };
 
     let user_mgr = ctx.get_user_manager();

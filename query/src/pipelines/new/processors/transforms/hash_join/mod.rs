@@ -14,7 +14,8 @@
 
 mod chaining_hash_table;
 mod hash_table;
-mod row;
+pub(crate) mod row;
 
 pub use chaining_hash_table::ChainingHashTable;
+pub use chaining_hash_table::HashTable;
 pub use hash_table::HashJoinState;

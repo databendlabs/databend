@@ -37,6 +37,9 @@ fn build_proto() {
         println!("cargo:rerun-if-changed={}", proto.to_str().unwrap());
     }
 
+    let mut config = prost_build::Config::new();
+    config.protoc_arg("--experimental_allow_proto3_optional");
+
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     tonic_build::configure()
         .file_descriptor_set_path(out_dir.join("meta_descriptor.bin"))
@@ -116,6 +119,6 @@ fn build_proto() {
             "Event",
             "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
         )
-        .compile(&protos, &[&proto_dir])
+        .compile_with_config(config, &protos, &[&proto_dir])
         .unwrap();
 }

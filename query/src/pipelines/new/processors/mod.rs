@@ -20,7 +20,7 @@ mod port_trigger;
 mod resize_processor;
 mod sinks;
 mod sources;
-mod transforms;
+pub(crate) mod transforms;
 
 pub use port::connect;
 pub use port_trigger::DirectedEdge;
@@ -51,6 +51,7 @@ pub use transforms::BlockCompactor;
 pub use transforms::ChainingHashTable;
 pub use transforms::ExpressionTransform;
 pub use transforms::HashJoinState;
+pub use transforms::HashTable;
 pub use transforms::ProjectionTransform;
 pub use transforms::SinkBuildHashTable;
 pub use transforms::SortMergeCompactor;
