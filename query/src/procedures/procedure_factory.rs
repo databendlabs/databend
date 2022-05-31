@@ -21,6 +21,7 @@ use common_meta_types::UserOptionFlag;
 use once_cell::sync::Lazy;
 
 use crate::procedures::admins::AdminProcedure;
+use crate::procedures::stats::StatsProcedure;
 use crate::procedures::systems::SystemProcedure;
 use crate::procedures::Procedure;
 
@@ -79,6 +80,7 @@ pub struct ProcedureFactory {
 static FUNCTION_FACTORY: Lazy<Arc<ProcedureFactory>> = Lazy::new(|| {
     let mut factory = ProcedureFactory::create();
     SystemProcedure::register(&mut factory);
+    StatsProcedure::register(&mut factory);
     AdminProcedure::register(&mut factory);
     Arc::new(factory)
 });

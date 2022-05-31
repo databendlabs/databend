@@ -17,15 +17,26 @@ use common_exception::Result;
 use common_io::prelude::StorageFsConfig;
 use common_io::prelude::StorageParams;
 use common_io::prelude::StorageS3Config;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-// This test need network
 async fn test_get_storage_accessor_s3() -> Result<()> {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("HEAD"))
+        .and(path("/bucket/.opendal"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&mock_server)
+        .await;
+
     let mut conf = crate::tests::ConfigBuilder::create().config();
 
     conf.storage.params = StorageParams::S3(StorageS3Config {
         region: "us-east-2".to_string(),
-        endpoint_url: "http://s3.amazonaws.com".to_string(),
+        endpoint_url: mock_server.uri(),
         access_key_id: "".to_string(),
         secret_access_key: "".to_string(),
         bucket: "bucket".to_string(),

@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::CreateTableReq;
-use common_meta_types::TableMeta;
-use common_meta_types::TableNameIdent;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableNameIdent;
 
 use crate::storages::github::github_client::create_github_client;
 use crate::storages::github::GithubDataGetter;

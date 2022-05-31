@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::TableNameIdent;
-use common_meta_types::UndropTableReq;
+use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::UndropTableReq;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct UnDropTablePlan {

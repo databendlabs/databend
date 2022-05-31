@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableMeta;
 use common_planners::*;
 
 #[test]
