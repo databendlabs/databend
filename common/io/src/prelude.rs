@@ -46,8 +46,7 @@ pub use crate::operator::init_operator;
 pub use crate::operator::init_s3_operator;
 pub use crate::options_deserializer::OptionsDeserializer;
 pub use crate::options_deserializer::OptionsDeserializerError;
+pub use crate::position::*;
 pub use crate::stat_buffer::StatBuffer;
 pub use crate::unmarshal::Unmarshal;
 pub use crate::utils::*;
-
-pub use crate::position::*;

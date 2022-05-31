@@ -17,7 +17,6 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use lexical_core::FromLexical;
 
-
 use super::BufferRead;
 use super::BufferReadExt;
 
@@ -27,7 +26,7 @@ pub trait BufferReadNumberExt: BufferRead {
 }
 
 impl<R> BufferReadNumberExt for R
-    where R: BufferRead
+where R: BufferRead
 {
     fn read_int_text<T: FromLexical>(&mut self) -> Result<T> {
         // TODO: reuse the buf

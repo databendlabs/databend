@@ -123,7 +123,9 @@ pub trait BufferReadExt: BufferRead {
     }
 }
 
-impl<R> BufferReadExt for R where R: BufferRead {
+impl<R> BufferReadExt for R
+where R: BufferRead
+{
     fn ignores(&mut self, f: impl Fn(u8) -> bool) -> Result<usize> {
         let mut bytes = 0;
 
@@ -135,8 +137,8 @@ impl<R> BufferReadExt for R where R: BufferRead {
                     return Ok(bytes);
                 }
 
-                for index in 0..available.len() {
-                    if !f(available[index]) {
+                for (index, byt) in available.iter().enumerate() {
+                    if !f(*byt) {
                         self.consume(index);
                         return Ok(bytes + index);
                     }
@@ -155,7 +157,7 @@ impl<R> BufferReadExt for R where R: BufferRead {
         let available = self.fill_buf()?;
 
         if available.is_empty() {
-            return Ok(false);
+            Ok(false)
         } else if f(available[0]) {
             self.consume(1);
             Ok(true)
@@ -180,8 +182,11 @@ impl<R> BufferReadExt for R where R: BufferRead {
 
             let min_size = std::cmp::min(available.len(), bs.len());
 
-            if let Some(position) = available[..min_size].iter().zip(&bs[..min_size])
-                .position(|(x, y)| x != y) {
+            if let Some(position) = available[..min_size]
+                .iter()
+                .zip(&bs[..min_size])
+                .position(|(x, y)| x != y)
+            {
                 self.consume(position);
                 return Ok(false);
             }
@@ -205,8 +210,11 @@ impl<R> BufferReadExt for R where R: BufferRead {
 
             let min_size = std::cmp::min(available.len(), bs.len());
 
-            if let Some(position) = available[..min_size].iter().zip(&bs[..min_size])
-                .position(|(x, y)| !x.eq_ignore_ascii_case(y)) {
+            if let Some(position) = available[..min_size]
+                .iter()
+                .zip(&bs[..min_size])
+                .position(|(x, y)| !x.eq_ignore_ascii_case(y))
+            {
                 self.consume(position);
                 return Ok(false);
             }

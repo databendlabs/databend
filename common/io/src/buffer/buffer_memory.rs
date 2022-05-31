@@ -12,15 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use std::fmt;
 use std::io;
 use std::io::IoSliceMut;
 use std::io::Read;
 use std::io::ReadBuf;
 use std::io::Result;
-
-
 
 use crate::buffer::BufferRead;
 
@@ -83,11 +80,11 @@ impl Read for MemoryReader {
 
 impl BufferRead for MemoryReader {
     fn working_buf(&self) -> &[u8] {
-        &self.inner
+        self.inner
     }
 
     fn fill_buf(&mut self) -> Result<&[u8]> {
-        Ok(&self.inner)
+        Ok(self.inner)
     }
 
     fn consume(&mut self, amt: usize) {
@@ -97,7 +94,7 @@ impl BufferRead for MemoryReader {
     fn preadd_buf(&mut self, buf: &[u8]) -> Result<()> {
         unsafe {
             let mut new_inner = buf.to_vec();
-            new_inner.extend_from_slice(&self.inner);
+            new_inner.extend_from_slice(self.inner);
             self.owned_memory = new_inner;
             let memory_ptr = self.owned_memory.as_mut_ptr();
             let memory_size = self.owned_memory.len();

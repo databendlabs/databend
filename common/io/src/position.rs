@@ -1,4 +1,16 @@
-use std::arch::aarch64::uint8x16_t;
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #[inline]
 pub fn position1<const POSITIVE: bool, const C1: u8>(buf: &[u8]) -> usize {
@@ -11,67 +23,225 @@ pub fn position2<const POSITIVE: bool, const C1: u8, const C2: u8>(buf: &[u8]) -
 }
 
 #[inline]
-pub fn position3<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8>(buf: &[u8]) -> usize {
+pub fn position3<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position4<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8>(buf: &[u8]) -> usize {
+pub fn position4<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position5<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8>(buf: &[u8]) -> usize {
+pub fn position5<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position6<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8>(buf: &[u8]) -> usize {
+pub fn position6<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position7<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8, const C7: u8>(buf: &[u8]) -> usize {
+pub fn position7<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, 0, 0, 0, 0, 0, 0, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position8<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8, const C7: u8, const C8: u8>(buf: &[u8]) -> usize {
+pub fn position8<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, 0, 0, 0, 0, 0, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position9<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8, const C7: u8, const C8: u8, const C9: u8>(buf: &[u8]) -> usize {
+pub fn position9<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, 0, 0, 0, 0, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position10<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8, const C7: u8, const C8: u8, const C9: u8, const C10: u8>(buf: &[u8]) -> usize {
+pub fn position10<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+    const C10: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, 0, 0, 0, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position11<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8, const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8>(buf: &[u8]) -> usize {
+pub fn position11<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+    const C10: u8,
+    const C11: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, 0, 0, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position12<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8, const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8, const C12: u8>(buf: &[u8]) -> usize {
+pub fn position12<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+    const C10: u8,
+    const C11: u8,
+    const C12: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, 0, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position13<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8, const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8, const C12: u8, const C13: u8>(buf: &[u8]) -> usize {
+pub fn position13<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+    const C10: u8,
+    const C11: u8,
+    const C12: u8,
+    const C13: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, 0, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position14<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8, const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8, const C12: u8, const C13: u8, const C14: u8>(buf: &[u8]) -> usize {
+pub fn position14<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+    const C10: u8,
+    const C11: u8,
+    const C12: u8,
+    const C13: u8,
+    const C14: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, 0, 0>(buf)
 }
 
 #[inline]
-pub fn position15<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8, const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8, const C12: u8, const C13: u8, const C14: u8, const C15: u8>(buf: &[u8]) -> usize {
+pub fn position15<
+    const POSITIVE: bool,
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+    const C10: u8,
+    const C11: u8,
+    const C12: u8,
+    const C13: u8,
+    const C14: u8,
+    const C15: u8,
+>(
+    buf: &[u8],
+) -> usize {
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, 0>(buf)
 }
 
@@ -79,26 +249,110 @@ pub fn position15<const POSITIVE: bool, const C1: u8, const C2: u8, const C3: u8
 #[allow(unreachable_code)]
 pub fn position16<
     const POSITIVE: bool,
-    const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8,
-    const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8, const C12: u8,
-    const C13: u8, const C14: u8, const C15: u8, const C16: u8
->(buf: &[u8]) -> usize {
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+    const C10: u8,
+    const C11: u8,
+    const C12: u8,
+    const C13: u8,
+    const C14: u8,
+    const C15: u8,
+    const C16: u8,
+>(
+    buf: &[u8],
+) -> usize {
     #[cfg(all(any(target_arch = "aarch64"), target_feature = "neon"))]
-    return position_neon::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16>(buf);
+    return position_neon::<
+        POSITIVE,
+        C1,
+        C2,
+        C3,
+        C4,
+        C5,
+        C6,
+        C7,
+        C8,
+        C9,
+        C10,
+        C11,
+        C12,
+        C13,
+        C14,
+        C15,
+        C16,
+    >(buf);
 
     #[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
-    return position_sse42::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16>(buf);
+    return position_sse42::<
+        POSITIVE,
+        C1,
+        C2,
+        C3,
+        C4,
+        C5,
+        C6,
+        C7,
+        C8,
+        C9,
+        C10,
+        C11,
+        C12,
+        C13,
+        C14,
+        C15,
+        C16,
+    >(buf);
 
-    position16_from_index::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16>(buf, 0)
+    position16_from_index::<
+        POSITIVE,
+        C1,
+        C2,
+        C3,
+        C4,
+        C5,
+        C6,
+        C7,
+        C8,
+        C9,
+        C10,
+        C11,
+        C12,
+        C13,
+        C14,
+        C15,
+        C16,
+    >(buf, 0)
 }
 
 #[cfg(all(any(target_arch = "aarch64"), target_feature = "neon"))]
 pub fn position_neon<
     const POSITIVE: bool,
-    const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8,
-    const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8, const C12: u8,
-    const C13: u8, const C14: u8, const C15: u8, const C16: u8
->(buf: &[u8]) -> usize {
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+    const C10: u8,
+    const C11: u8,
+    const C12: u8,
+    const C13: u8,
+    const C14: u8,
+    const C15: u8,
+    const C16: u8,
+>(
+    buf: &[u8],
+) -> usize {
     unsafe {
         use std::arch::aarch64::*;
 
@@ -116,11 +370,11 @@ pub fn position_neon<
                 };
             }
 
-            neno_match!(C2,C3,C4,C5,C6,C7,C8,C9,C10,C11,C12,C13,C14,C15,C16,);
+            neno_match!(C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16,);
 
             let bit_mask = match POSITIVE {
                 true => neno_mm_movemask_epi8(res),
-                false => !neno_mm_movemask_epi8(res)
+                false => !neno_mm_movemask_epi8(res),
             };
 
             if bit_mask > 0 {
@@ -130,20 +384,56 @@ pub fn position_neon<
             index += 16;
         }
 
-        position16_from_index::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16>(buf, index)
+        position16_from_index::<
+            POSITIVE,
+            C1,
+            C2,
+            C3,
+            C4,
+            C5,
+            C6,
+            C7,
+            C8,
+            C9,
+            C10,
+            C11,
+            C12,
+            C13,
+            C14,
+            C15,
+            C16,
+        >(buf, index)
     }
 }
 
 #[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
 fn position_sse42<
     const POSITIVE: bool,
-    const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8,
-    const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8, const C12: u8,
-    const C13: u8, const C14: u8, const C15: u8, const C16: u8
->(buf: &[u8]) -> usize {
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+    const C10: u8,
+    const C11: u8,
+    const C12: u8,
+    const C13: u8,
+    const C14: u8,
+    const C15: u8,
+    const C16: u8,
+>(
+    buf: &[u8],
+) -> usize {
     unsafe {
         use std::arch::x86_64::*;
-        let chars_set = _mm_setr_epi8(C1 as i8, C2 as i8, C3 as i8, C4 as i8, C5 as i8, C6 as i8, C7 as i8, C8 as i8, C9 as i8, C10 as i8, C11 as i8, C12 as i8, C13 as i8, C14 as i8, C15 as i8, C16 as i8);
+        let chars_set = _mm_setr_epi8(
+            C1 as i8, C2 as i8, C3 as i8, C4 as i8, C5 as i8, C6 as i8, C7 as i8, C8 as i8,
+            C9 as i8, C10 as i8, C11 as i8, C12 as i8, C13 as i8, C14 as i8, C15 as i8, C16 as i8,
+        );
 
         let mut index = 0;
 
@@ -190,42 +480,84 @@ fn position_sse42<
                 }
             } else {
                 if _mm_cmpestrc::<_SIDD_NEGATIVE_POLARITY>(chars_set, chars_count, bytes, 16) > 0 {
-                    return index + _mm_cmpestri::<_SIDD_NEGATIVE_POLARITY>(chars_set, chars_count, bytes, 16);
+                    return index
+                        + _mm_cmpestri::<_SIDD_NEGATIVE_POLARITY>(
+                            chars_set,
+                            chars_count,
+                            bytes,
+                            16,
+                        );
                 }
             }
 
             index += 16;
         }
 
-        position16_from_index::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16>(buf, index)
+        position16_from_index::<
+            POSITIVE,
+            C1,
+            C2,
+            C3,
+            C4,
+            C5,
+            C6,
+            C7,
+            C8,
+            C9,
+            C10,
+            C11,
+            C12,
+            C13,
+            C14,
+            C15,
+            C16,
+        >(buf, index)
     }
 }
 
 #[inline(always)]
 fn position16_from_index<
     const POSITIVE: bool,
-    const C1: u8, const C2: u8, const C3: u8, const C4: u8, const C5: u8, const C6: u8,
-    const C7: u8, const C8: u8, const C9: u8, const C10: u8, const C11: u8, const C12: u8,
-    const C13: u8, const C14: u8, const C15: u8, const C16: u8
->(buf: &[u8], begin: usize) -> usize {
+    const C1: u8,
+    const C2: u8,
+    const C3: u8,
+    const C4: u8,
+    const C5: u8,
+    const C6: u8,
+    const C7: u8,
+    const C8: u8,
+    const C9: u8,
+    const C10: u8,
+    const C11: u8,
+    const C12: u8,
+    const C13: u8,
+    const C14: u8,
+    const C15: u8,
+    const C16: u8,
+>(
+    buf: &[u8],
+    begin: usize,
+) -> usize {
     let mut index = begin;
     while index < buf.len() {
-        if POSITIVE == (buf[index] == C1
-            || (C2 != 0 && buf[index] == C2)
-            || (C3 != 0 && buf[index] == C3)
-            || (C4 != 0 && buf[index] == C4)
-            || (C5 != 0 && buf[index] == C5)
-            || (C6 != 0 && buf[index] == C6)
-            || (C7 != 0 && buf[index] == C7)
-            || (C8 != 0 && buf[index] == C8)
-            || (C9 != 0 && buf[index] == C9)
-            || (C10 != 0 && buf[index] == C10)
-            || (C11 != 0 && buf[index] == C11)
-            || (C12 != 0 && buf[index] == C12)
-            || (C13 != 0 && buf[index] == C13)
-            || (C14 != 0 && buf[index] == C14)
-            || (C15 != 0 && buf[index] == C15)
-            || (C16 != 0 && buf[index] == C16)) {
+        if POSITIVE
+            == (buf[index] == C1
+                || (C2 != 0 && buf[index] == C2)
+                || (C3 != 0 && buf[index] == C3)
+                || (C4 != 0 && buf[index] == C4)
+                || (C5 != 0 && buf[index] == C5)
+                || (C6 != 0 && buf[index] == C6)
+                || (C7 != 0 && buf[index] == C7)
+                || (C8 != 0 && buf[index] == C8)
+                || (C9 != 0 && buf[index] == C9)
+                || (C10 != 0 && buf[index] == C10)
+                || (C11 != 0 && buf[index] == C11)
+                || (C12 != 0 && buf[index] == C12)
+                || (C13 != 0 && buf[index] == C13)
+                || (C14 != 0 && buf[index] == C14)
+                || (C15 != 0 && buf[index] == C15)
+                || (C16 != 0 && buf[index] == C16))
+        {
             return index;
         }
 
@@ -235,10 +567,13 @@ fn position16_from_index<
     index
 }
 
-unsafe fn neno_mm_movemask_epi8(input: uint8x16_t) -> u16 {
+#[cfg(all(any(target_arch = "aarch64"), target_feature = "neon"))]
+unsafe fn neno_mm_movemask_epi8(input: std::arch::aarch64::uint8x16_t) -> u16 {
     use std::arch::aarch64::*;
 
-    let xr = vec![-7_i8, -6, -5, -4, -3, -2, -1, 0, -7_i8, -6, -5, -4, -3, -2, -1, 0];
+    let xr = vec![
+        -7_i8, -6, -5, -4, -3, -2, -1, 0, -7_i8, -6, -5, -4, -3, -2, -1, 0,
+    ];
     let xr = xr.as_ptr();
 
     let mask_and = vdupq_n_u8(0x80);

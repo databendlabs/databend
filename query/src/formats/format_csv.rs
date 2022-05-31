@@ -14,17 +14,17 @@
 
 use std::any::Any;
 
-
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::{BufferReadExt, MemoryReader, position2, position4};
-
-
+use common_io::prelude::position2;
+use common_io::prelude::position4;
+use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
+use common_io::prelude::MemoryReader;
 
 use crate::formats::FormatFactory;
 use crate::formats::InputFormat;
@@ -196,7 +196,7 @@ impl InputFormat for CsvInputFormat {
 
         let mut state = std::mem::replace(state, self.create_state());
         let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
-        let memory = std::mem::replace(&mut state.memory, vec![]);
+        let memory = std::mem::take(&mut state.memory);
         let mut memory_reader = MemoryReader::new(memory);
 
         let mut row_index = 0;
@@ -205,12 +205,10 @@ impl InputFormat for CsvInputFormat {
                 if memory_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
                     deserializers[column_index].de_default(&self.settings);
                 } else {
-                    deserializers[column_index]
-                        .de_text_csv(&mut memory_reader, &self.settings)?;
+                    deserializers[column_index].de_text_csv(&mut memory_reader, &self.settings)?;
 
                     if column_index + 1 != deserializers.len() {
-                        memory_reader
-                            .must_ignore_white_spaces_and_byte(self.field_delimiter)?;
+                        memory_reader.must_ignore_white_spaces_and_byte(self.field_delimiter)?;
                     }
                 }
             }

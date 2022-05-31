@@ -15,10 +15,6 @@
 use std::mem::replace;
 use std::sync::Arc;
 
-use common_io::prelude::Compression;
-use opendal::io_util::CompressAlgorithm;
-use opendal::io_util::DecompressDecoder;
-use opendal::io_util::DecompressState;
 use common_base::base::tokio::io::AsyncReadExt;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
@@ -27,6 +23,8 @@ use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use opendal::io_util::DecompressDecoder;
+use opendal::io_util::DecompressState;
 use poem::web::Multipart;
 
 use crate::formats::InputFormat;

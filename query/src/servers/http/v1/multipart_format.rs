@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_io::prelude::Compression;
 use common_io::prelude::FormatSettings;
 use opendal::io_util::CompressAlgorithm;
 use opendal::io_util::DecompressDecoder;
-use opendal::io_util::DecompressState;
 use poem::web::Multipart;
 
 use crate::formats::FormatFactory;
