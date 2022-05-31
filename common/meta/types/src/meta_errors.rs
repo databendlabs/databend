@@ -33,7 +33,7 @@ pub enum MetaError {
     MetaRaftError(#[from] MetaRaftError),
 
     #[error(transparent)]
-    MetaStorageError(MetaStorageError),
+    MetaStorageError(#[from] MetaStorageError),
 
     #[error(transparent)]
     MetaResultError(#[from] MetaResultError),
@@ -84,12 +84,3 @@ pub type MetaResult<T> = std::result::Result<T, MetaError>;
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[error("InvalidMembership")]
 pub struct InvalidMembership {}
-
-impl From<MetaStorageError> for MetaError {
-    fn from(e: MetaStorageError) -> Self {
-        match e {
-            MetaStorageError::AppError(app_err) => MetaError::AppError(app_err),
-            _ => MetaError::MetaStorageError(e),
-        }
-    }
-}

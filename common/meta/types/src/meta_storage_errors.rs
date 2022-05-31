@@ -45,10 +45,6 @@ pub enum MetaStorageError {
     /// An internal error that inform txn to retry.
     #[error("Conflict when execute transaction, just retry")]
     TransactionConflict,
-
-    /// An application error that cause transaction to abort.
-    #[error("{0}")]
-    AppError(#[from] AppError),
 }
 
 /// Output message for end users, with sensitive info stripped.
@@ -549,10 +545,7 @@ pub type MetaStorageResult<T> = std::result::Result<T, MetaStorageError>;
 
 impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
-        match e {
-            MetaStorageError::AppError(app_err) => app_err.into(),
-            _ => ErrorCode::MetaStorageError(e.to_string()),
-        }
+        ErrorCode::MetaStorageError(e.to_string())
     }
 }
 
