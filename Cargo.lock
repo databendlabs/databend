@@ -118,21 +118,21 @@ checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 
 [[package]]
 name = "arrow-format"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2333f8ccf0d597ba779863c57a0b61f635721187fb2fdeabae92691d7d582fe5"
+checksum = "216249afef413d7e9e9b4b543e73b3e371ace3a812380af98f1c871521572cdd"
 dependencies = [
  "planus",
- "prost 0.9.0",
- "prost-derive 0.9.0",
+ "prost 0.10.1",
+ "prost-derive 0.10.1",
  "serde",
- "tonic 0.6.2",
+ "tonic 0.7.2",
 ]
 
 [[package]]
 name = "arrow2"
 version = "0.11.2"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=826a2b8#826a2b8ed8598a614c5df9115ea657d1e3c40184"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=48a3087#48a308772fcc18fce890447b0bfa30611fc813e6"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -1028,6 +1028,8 @@ dependencies = [
  "common-io",
  "pretty_assertions",
  "regex",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1067,13 +1069,13 @@ dependencies = [
  "common-arrow",
  "octocrab",
  "paste",
- "prost 0.9.0",
+ "prost 0.10.1",
  "serde",
  "serde_json",
  "sqlparser",
  "thiserror",
  "time 0.3.9",
- "tonic 0.6.2",
+ "tonic 0.7.2",
 ]
 
 [[package]]
@@ -1133,7 +1135,7 @@ dependencies = [
  "once_cell",
  "serde",
  "thiserror",
- "tonic 0.6.2",
+ "tonic 0.7.2",
  "trust-dns-resolver",
 ]
 
@@ -1211,7 +1213,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tonic 0.6.2",
+ "tonic 0.7.2",
 ]
 
 [[package]]
@@ -1281,13 +1283,13 @@ dependencies = [
  "derive_more",
  "futures",
  "once_cell",
- "prost 0.9.0",
+ "prost 0.10.1",
  "rand 0.8.5",
  "semver",
  "serde",
  "serde_json",
  "thiserror",
- "tonic 0.6.2",
+ "tonic 0.7.2",
 ]
 
 [[package]]
@@ -1351,7 +1353,8 @@ dependencies = [
  "num-traits",
  "once_cell",
  "openraft",
- "prost 0.9.0",
+ "prost 0.10.1",
+ "prost-build 0.10.1",
  "regex",
  "serde",
  "serde_json",
@@ -1359,8 +1362,8 @@ dependencies = [
  "sha2 0.10.2",
  "sled",
  "thiserror",
- "tonic 0.6.2",
- "tonic-build 0.6.2",
+ "tonic 0.7.2",
+ "tonic-build 0.7.2",
 ]
 
 [[package]]
@@ -1419,9 +1422,9 @@ version = "0.1.0"
 dependencies = [
  "num-derive",
  "num-traits",
- "prost 0.10.4",
- "prost-build 0.10.4",
- "tonic 0.6.2",
+ "prost 0.10.1",
+ "prost-build 0.10.1",
+ "tonic 0.7.2",
  "tonic-build 0.7.2",
 ]
 
@@ -1456,7 +1459,7 @@ dependencies = [
  "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
- "tonic 0.6.2",
+ "tonic 0.7.2",
  "tracing",
  "tracing-appender",
  "tracing-bunyan-formatter",
@@ -1481,7 +1484,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06c5fd425783d81668ed68ec98408a80498fb4ae2fd607797539e1a9dfa3618f"
 dependencies = [
- "prost 0.10.4",
+ "prost 0.10.1",
  "prost-types 0.10.1",
  "tonic 0.7.2",
  "tracing-core",
@@ -1894,7 +1897,7 @@ dependencies = [
  "poem",
  "pretty_assertions",
  "prometheus",
- "prost 0.9.0",
+ "prost 0.10.1",
  "regex",
  "reqwest",
  "semver",
@@ -1906,7 +1909,7 @@ dependencies = [
  "temp-env",
  "tempfile",
  "tokio-stream",
- "tonic 0.6.2",
+ "tonic 0.7.2",
  "tonic-reflection",
 ]
 
@@ -1927,7 +1930,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio-stream",
- "tonic 0.6.2",
+ "tonic 0.7.2",
 ]
 
 [[package]]
@@ -2003,7 +2006,7 @@ dependencies = [
  "petgraph",
  "poem",
  "pretty_assertions",
- "prost 0.9.0",
+ "prost 0.10.1",
  "rand 0.8.5",
  "regex",
  "reqwest",
@@ -2026,7 +2029,7 @@ dependencies = [
  "tokio-rustls 0.23.4",
  "tokio-stream",
  "toml",
- "tonic 0.6.2",
+ "tonic 0.7.2",
  "twox-hash",
  "typetag",
  "url",
@@ -4825,7 +4828,7 @@ dependencies = [
  "pin-project-lite",
  "poem-derive",
  "regex",
- "rustls-pemfile",
+ "rustls-pemfile 0.3.0",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -5053,9 +5056,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.10.4"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71adf41db68aa0daaefc69bb30bcd68ded9b9abaad5d1fbb6304c4fb390e083e"
+checksum = "a07b0857a71a8cb765763950499cae2413c3f9cede1133478c43600d9e146890"
 dependencies = [
  "bytes 1.1.0",
  "prost-derive 0.10.1",
@@ -5083,9 +5086,9 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.10.4"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ae5a4388762d5815a9fc0dea33c56b021cdc8dde0c55e0c9ca57197254b0cab"
+checksum = "120fbe7988713f39d780a58cf1a7ef0d7ef66c6d87e5aa3438940c05357929f4"
 dependencies = [
  "bytes 1.1.0",
  "cfg-if",
@@ -5096,7 +5099,7 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prost 0.10.4",
+ "prost 0.10.1",
  "prost-types 0.10.1",
  "regex",
  "tempfile",
@@ -5146,7 +5149,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d0a014229361011dc8e69c8a1ec6c2e8d0f2af7c91e3ea3f5b2170298461e68"
 dependencies = [
  "bytes 1.1.0",
- "prost 0.10.4",
+ "prost 0.10.1",
 ]
 
 [[package]]
@@ -5680,10 +5683,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-native-certs"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0167bac7a9f490495f3c33013e7722b53cb087ecbe082fb0c6387c96f634ea50"
+dependencies = [
+ "openssl-probe",
+ "rustls-pemfile 1.0.0",
+ "schannel",
+ "security-framework",
+]
+
+[[package]]
 name = "rustls-pemfile"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ee86d63972a7c661d1536fefe8c3c8407321c3df668891286de28abcd087360"
+dependencies = [
+ "base64 0.13.0",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7522c9de787ff061458fe9a829dc790a3f5b22dc571694fc5883f448b94d9a9"
 dependencies = [
  "base64 0.13.0",
 ]
@@ -6662,7 +6686,7 @@ dependencies = [
  "pin-project",
  "prost 0.9.0",
  "prost-derive 0.9.0",
- "rustls-native-certs",
+ "rustls-native-certs 0.5.0",
  "tokio",
  "tokio-rustls 0.22.0",
  "tokio-stream",
@@ -6694,9 +6718,12 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding",
  "pin-project",
- "prost 0.10.4",
+ "prost 0.10.1",
  "prost-derive 0.10.1",
+ "rustls-native-certs 0.6.2",
+ "rustls-pemfile 1.0.0",
  "tokio",
+ "tokio-rustls 0.23.4",
  "tokio-stream",
  "tokio-util 0.7.2",
  "tower",
@@ -6726,24 +6753,24 @@ checksum = "d9263bf4c9bfaae7317c1c2faf7f18491d2fe476f70c414b73bf5d445b00ffa1"
 dependencies = [
  "prettyplease",
  "proc-macro2",
- "prost-build 0.10.4",
+ "prost-build 0.10.1",
  "quote",
  "syn",
 ]
 
 [[package]]
 name = "tonic-reflection"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "228cc5aa5d3e6e0624b5f756a7558038ee86428d1d58d8c6e551b389b12cf355"
+checksum = "d1d786fcf313b48f1aac280142eae249f3c03495355c7906aa49872a41955015"
 dependencies = [
  "bytes 1.1.0",
- "prost 0.9.0",
- "prost-types 0.9.0",
+ "prost 0.10.1",
+ "prost-types 0.10.1",
  "tokio",
  "tokio-stream",
- "tonic 0.6.2",
- "tonic-build 0.6.2",
+ "tonic 0.7.2",
+ "tonic-build 0.7.2",
 ]
 
 [[package]]
