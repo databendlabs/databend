@@ -205,6 +205,16 @@ pub struct LongerFixedKeysAggregatorState<T: HashTableKeyable> {
     pub two_level_flag: bool,
 }
 
+impl<T: HashTableKeyable> Default for LongerFixedKeysAggregatorState<T> {
+    fn default() -> Self {
+        Self {
+            area: Bump::new(),
+            data: HashMapKind::create_hash_table(),
+            two_level_flag: false,
+        }
+    }
+}
+
 // TODO:(Winter) Hack:
 // The *mut KeyValueEntity needs to be used externally, but we can ensure that *mut KeyValueEntity
 // will not be used multiple async, so KeyValueEntity is Send
@@ -216,9 +226,9 @@ unsafe impl<T: HashTableKeyable + Send> Send for LongerFixedKeysAggregatorState<
 // will not be used multiple async, so KeyValueEntity is Sync
 unsafe impl<T: HashTableKeyable + Sync> Sync for LongerFixedKeysAggregatorState<T> {}
 
-impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T>
+impl<T: Send + Sync + Sized + 'static> AggregatorState<HashMethodFixedKeys<T>>
+    for LongerFixedKeysAggregatorState<T>
 where
-    T: PrimitiveType,
     for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
     for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey<'a>: HashTableKeyable,
 {
