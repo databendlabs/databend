@@ -44,7 +44,6 @@ impl From<MetaError> for ErrorCode {
             MetaError::MetaStoreNotFound => {
                 ErrorCode::MetaServiceError("MetaStoreNotFound".to_string())
             }
-            MetaError::LoadConfigError(e) => ErrorCode::MetaServiceError(e),
             MetaError::StartMetaServiceError(e) => ErrorCode::MetaServiceError(e),
             MetaError::ConcurrentSnapshotInstall(e) => ErrorCode::MetaServiceError(e),
             MetaError::MetaServiceError(e) => ErrorCode::MetaServiceError(e),
