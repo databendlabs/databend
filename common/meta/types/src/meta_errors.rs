@@ -17,7 +17,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::AppError;
+use crate::app_error::AppError;
 use crate::MetaNetworkError;
 use crate::MetaRaftError;
 use crate::MetaResultError;
