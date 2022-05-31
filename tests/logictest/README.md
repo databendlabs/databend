@@ -19,8 +19,16 @@ The database return right with different handlers, for example mysql and http
 ## Generate sqllogic test cases from Stateless Test
 1. python3 gen_suites.py
 
-## Run logic test
-1. python3 main.py
+## Usage
+You can simply run all tests with:
+```shell
+python main.py
+```
+
+Get help with:
+```shell
+python main.py -h
+```
 
 ## Docker
 
@@ -32,9 +40,7 @@ docker build -t sqllogic/test:latest .
 
 1. Image release: public.ecr.aws/k3y0u5f2/sqllogic/test:latest
 2. Set envs
-- DISABLE_MYSQL_LOGIC_TEST (if anything set, will skip mysql handler)
-- DISABLE_HTTP_LOGIC_TEST (if anything set, will skip http handler)
-- SKIP_TEST_FILES (skip test case, set file name here split by , )
+- SKIP_TEST_FILES (skip test case, set file name here split by `,` )
 - QUERY_MYSQL_HANDLER_HOST
 - QUERY_MYSQL_HANDLER_PORT
 - QUERY_HTTP_HANDLER_HOST
