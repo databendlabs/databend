@@ -30,17 +30,16 @@ fn test_length_function() -> Result<()> {
             expect: Series::from_data(vec![3_u64, 0_u64]),
             error: "",
         },
-        // TODO(fkuner): after b41sh's pr
-        // ScalarFunctionTest {
-        //     name: "length_array",
-        //     columns: vec![Series::from_data(vec![
-        //         ArrayValue::new(vec![1_i64.into(), 2_i64.into(), 3_i64.into()]),
-        //         ArrayValue::new(vec![4_i64.into()]),
-        //         ArrayValue::new(vec![]),
-        //     ])],
-        //     expect: Series::from_data(vec![3_u64, 1_u64, 0_u64]),
-        //     error: ""
-        // },
+        ScalarFunctionTest {
+            name: "length_array",
+            columns: vec![Series::from_data(vec![
+                ArrayValue::new(vec![1_i64.into(), 2_i64.into(), 3_i64.into()]),
+                ArrayValue::new(vec![4_i64.into()]),
+                ArrayValue::new(vec![]),
+            ])],
+            expect: Series::from_data(vec![3_u64, 1_u64, 0_u64]),
+            error: "",
+        },
         ScalarFunctionTest {
             name: "length",
             columns: vec![Series::from_data(vec![

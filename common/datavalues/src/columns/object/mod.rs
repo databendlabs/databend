@@ -239,7 +239,13 @@ pub type VariantColumn = ObjectColumn<VariantValue>;
 
 impl<T: ObjectType> std::fmt::Debug for ObjectColumn<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO(b41sh): implement display_fmt
-        write!(f, "ObjectColumn")
+        let mut data = Vec::with_capacity(self.len());
+        for idx in 0..self.len() {
+            let x = self.get(idx);
+            data.push(format!("{}", x));
+        }
+        let head = T::column_name();
+        let iter = data.iter();
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
     }
 }
