@@ -1,0 +1,10 @@
+---------- Input ----------
+select †∑∂ from t;
+---------- Output ---------
+error: 
+  --> SQL:1:8
+  |
+1 | select †∑∂ from t;
+  |        ^^^^^^^^^^^ unable to recognize the rest tokens
+
+

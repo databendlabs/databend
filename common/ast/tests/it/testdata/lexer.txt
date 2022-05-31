@@ -1,0 +1,30 @@
+---------- Input ----------
+
+---------- Output ---------
+[(EOI, "", 0..0)]
+
+
+---------- Input ----------
+x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '
+---------- Output ---------
+[(PGLiteralHex, "x'deadbeef'", 0..11), (EOI, "", 79..79)]
+
+
+---------- Input ----------
+'中文' '日本語'
+---------- Output ---------
+[(QuotedString, "'中文'", 0..8), (QuotedString, "'日本語'", 9..20), (EOI, "", 20..20)]
+
+
+---------- Input ----------
+42 3.5 4. .001 5e2 1.925e-3 .38e+7 1.e-01 0xfff x'deedbeef'
+---------- Output ---------
+[(LiteralInteger, "42", 0..2), (LiteralFloat, "3.5", 3..6), (LiteralFloat, "4.", 7..9), (LiteralFloat, ".001", 10..14), (LiteralFloat, "5e2", 15..18), (LiteralFloat, "1.925e-3", 19..27), (LiteralFloat, ".38e+7", 28..34), (LiteralFloat, "1.e-01", 35..41), (MySQLLiteralHex, "0xfff", 42..47), (PGLiteralHex, "x'deedbeef'", 48..59), (EOI, "", 59..59)]
+
+
+---------- Input ----------
+create table "user" (id int, name varchar /* the user name */);
+---------- Output ---------
+[(CREATE, "create", 0..6), (TABLE, "table", 7..12), (QuotedString, "\"user\"", 13..19), (LParen, "(", 20..21), (Ident, "id", 21..23), (INT, "int", 24..27), (Comma, ",", 27..28), (Ident, "name", 29..33), (VARCHAR, "varchar", 34..41), (RParen, ")", 61..62), (SemiColon, ";", 62..63), (EOI, "", 63..63)]
+
+
