@@ -74,7 +74,7 @@ statement query T
 SELECT HUMANIZE_SIZE(NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT HUMANIZE_NUMBER(1);
@@ -134,5 +134,5 @@ statement query T
 SELECT HUMANIZE_NUMBER(NULL);
 
 ----  
-None
+NULL
 

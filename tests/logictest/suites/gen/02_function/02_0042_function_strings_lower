@@ -14,5 +14,5 @@ statement query T
 SELECT LOWER(NULL);
 
 ----  
-None
+NULL
 

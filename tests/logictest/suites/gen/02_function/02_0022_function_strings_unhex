@@ -17,5 +17,5 @@ statement query T
 select unhex(null);
 
 ----  
-None
+NULL
 

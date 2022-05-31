@@ -8,31 +8,31 @@ statement query T
 SELECT SUBSTRING_INDEX(NULL, '.', 1);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT SUBSTRING_INDEX('www', NULL, 1);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT SUBSTRING_INDEX('www', '.', NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT SUBSTRING_INDEX('www', NULL, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT SUBSTRING_INDEX(NULL, NULL, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT '=== const, const, const ===';

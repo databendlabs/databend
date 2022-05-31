@@ -2,7 +2,7 @@ statement query T
 SELECT CHAR_LENGTH(NULL);
 
 ----  
-None
+NULL
 
 statement query I 
 SELECT CHAR_LENGTH('');
@@ -26,7 +26,7 @@ statement query T
 SELECT CHARACTER_LENGTH(NULL);
 
 ----  
-None
+NULL
 
 statement query I 
 SELECT CHARACTER_LENGTH('');

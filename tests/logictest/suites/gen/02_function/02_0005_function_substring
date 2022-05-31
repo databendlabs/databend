@@ -8,19 +8,19 @@ statement query T
 SELECT SUBSTRING('12345', null);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT SUBSTRING(null, 2);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT SUBSTRING(null, null);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT '=== const, const ===';

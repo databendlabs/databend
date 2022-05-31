@@ -34,6 +34,7 @@ docker build -t sqllogic/test:latest .
 2. Set envs
 - DISABLE_MYSQL_LOGIC_TEST (if anything set, will skip mysql handler)
 - DISABLE_HTTP_LOGIC_TEST (if anything set, will skip http handler)
+- SKIP_TEST_FILES (skip test case, set file name here split by , )
 - QUERY_MYSQL_HANDLER_HOST
 - QUERY_MYSQL_HANDLER_PORT
 - QUERY_HTTP_HANDLER_HOST

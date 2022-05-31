@@ -8,43 +8,43 @@ statement query T
 SELECT LPAD(NULL, NULL, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT LPAD('a', NULL, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT LPAD(NULL, 1, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT LPAD('a', 1, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT LPAD(NULL, NULL, 'b');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT LPAD('a', NULL, 'b');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT LPAD(NULL, 1, 'b');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT '=== LPAD const, const, const ===';
@@ -222,43 +222,43 @@ statement query T
 SELECT RPAD(NULL, NULL, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT RPAD('a', NULL, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT RPAD(NULL, 1, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT RPAD('a', 1, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT RPAD(NULL, NULL, 'b');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT RPAD('a', NULL, 'b');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT RPAD(NULL, 1, 'b');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT '=== RPAD const, const, const ===';
