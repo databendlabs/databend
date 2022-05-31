@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::BorrowMut;
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -26,9 +27,10 @@ use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::PrimitiveType;
 use common_exception::Result;
 use common_planners::Expression;
+use primitive_types::U256;
+use primitive_types::U512;
 
 use crate::common::ExpressionEvaluator;
 use crate::common::HashMap;
@@ -46,6 +48,9 @@ pub enum HashTable {
     KeyU16HashTable(HashMap<u16, Vec<RowPtr>>),
     KeyU32HashTable(HashMap<u32, Vec<RowPtr>>),
     KeyU64HashTable(HashMap<u64, Vec<RowPtr>>),
+    KeyU128HashTable(HashMap<u128, Vec<RowPtr>>),
+    KeyU256HashTable(HashMap<U256, Vec<RowPtr>>),
+    KeyU512HashTable(HashMap<U512, Vec<RowPtr>>),
 }
 
 pub struct ChainingHashTable {
@@ -90,7 +95,7 @@ impl ChainingHashTable {
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        Key: HashTableKeyable + PrimitiveType + Hash,
+        Key: HashTableKeyable + Hash + Clone + Default + Debug + 'static,
     {
         let mut results: Vec<DataBlock> = vec![];
         let method = HashMethodFixedKeys::<Key>::default();
@@ -209,6 +214,15 @@ impl HashJoinState for ChainingHashTable {
             HashTable::KeyU64HashTable(table) => {
                 return self.generate_result_block(table, probe_keys, input);
             }
+            HashTable::KeyU128HashTable(table) => {
+                return self.generate_result_block(table, probe_keys, input);
+            }
+            HashTable::KeyU256HashTable(table) => {
+                return self.generate_result_block(table, probe_keys, input);
+            }
+            HashTable::KeyU512HashTable(table) => {
+                return self.generate_result_block(table, probe_keys, input);
+            }
         }
         Ok(results)
     }
@@ -276,6 +290,15 @@ impl HashJoinState for ChainingHashTable {
                 HashTable::KeyU64HashTable(table) => {
                     insert_key(table, chunk, columns, chunk_index)?
                 }
+                HashTable::KeyU128HashTable(table) => {
+                    insert_key(table, chunk, columns, chunk_index)?
+                }
+                HashTable::KeyU256HashTable(table) => {
+                    insert_key(table, chunk, columns, chunk_index)?
+                }
+                HashTable::KeyU512HashTable(table) => {
+                    insert_key(table, chunk, columns, chunk_index)?
+                }
             }
         }
 
@@ -290,7 +313,7 @@ fn insert_key<Key>(
     chunk_index: usize,
 ) -> Result<()>
 where
-    Key: HashTableKeyable + PrimitiveType + Hash,
+    Key: HashTableKeyable + Hash + Clone + Default + Debug + 'static,
 {
     let method = HashMethodFixedKeys::<Key>::default();
     let build_keys = method.build_keys(&columns, chunk.num_rows())?;

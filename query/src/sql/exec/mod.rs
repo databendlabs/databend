@@ -31,6 +31,8 @@ use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
 use common_planners::RewriteHelper;
+use primitive_types::U256;
+use primitive_types::U512;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
@@ -766,6 +768,30 @@ fn create_join_state(
         HashMethodKind::KeysU64(_) => Arc::new(ChainingHashTable::try_create(
             ctx,
             HashTable::KeyU64HashTable(HashMap::<u64, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU128(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::KeyU128HashTable(HashMap::<u128, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU256(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::KeyU256HashTable(HashMap::<U256, Vec<RowPtr>>::create()),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU512(_) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            HashTable::KeyU512HashTable(HashMap::<U512, Vec<RowPtr>>::create()),
             build_expressions,
             probe_expressions,
             build_schema,
