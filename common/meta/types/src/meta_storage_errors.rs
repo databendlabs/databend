@@ -38,9 +38,6 @@ pub enum MetaStorageError {
     #[error(transparent)]
     SledError(AnyError),
 
-    #[error(transparent)]
-    Damaged(AnyError),
-
     /// Error that is related to snapshot
     #[error(transparent)]
     SnapshotError(AnyError),
