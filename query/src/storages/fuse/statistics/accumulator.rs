@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use common_arrow::parquet::FileMetaData;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::eval_aggr;
 
@@ -27,6 +26,7 @@ use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::ColumnMeta;
 use crate::storages::fuse::meta::Compression;
 use crate::storages::fuse::meta::Versioned;
+use crate::storages::fuse::operations::column_metas;
 use crate::storages::index::ClusterStatistics;
 use crate::storages::index::ColumnStatistics;
 use crate::storages::index::ColumnsStatistics;
@@ -92,55 +92,11 @@ impl StatisticsAccumulator {
             block_size: statistics.block_bytes_size,
             col_stats: statistics.block_column_statistics.clone(),
             location: (statistics.block_file_location, DataBlock::VERSION),
-            col_metas: Self::column_metas(&meta)?,
+            col_metas: column_metas(&meta)?,
             cluster_stats: statistics.block_cluster_statistics,
         });
 
         Ok(())
-    }
-
-    fn column_metas(file_meta: &FileMetaData) -> Result<HashMap<ColumnId, ColumnMeta>> {
-        // currently we use one group only
-        let num_row_groups = file_meta.row_groups.len();
-        if num_row_groups != 1 {
-            return Err(ErrorCode::ParquetError(format!(
-                "invalid parquet file, expects only one row group, but got {}",
-                num_row_groups
-            )));
-        }
-        let row_group = &file_meta.row_groups[0];
-        let mut col_metas = HashMap::with_capacity(row_group.columns.len());
-        for (idx, col_chunk) in row_group.columns.iter().enumerate() {
-            match &col_chunk.meta_data {
-                Some(chunk_meta) => {
-                    let col_start =
-                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                            dict_page_offset
-                        } else {
-                            chunk_meta.data_page_offset
-                        };
-                    let col_len = chunk_meta.total_compressed_size;
-                    assert!(
-                        col_start >= 0 && col_len >= 0,
-                        "column start and length should not be negative"
-                    );
-                    let num_values = chunk_meta.num_values as u64;
-                    let res = ColumnMeta {
-                        offset: col_start as u64,
-                        len: col_len as u64,
-                        num_values,
-                    };
-                    col_metas.insert(idx as u32, res);
-                }
-                None => {
-                    return Err(ErrorCode::ParquetError(format!(
-                        "invalid parquet file, meta data of column idx {} is empty",
-                        idx
-                    )));
-                }
-            }
-        }
-        Ok(col_metas)
     }
 
     pub fn summary(&self) -> Result<ColumnsStatistics> {
@@ -291,7 +247,7 @@ impl BlockStatistics {
 
     pub fn clusters_statistics(
         cluster_keys: Vec<usize>,
-        block: DataBlock,
+        block: &DataBlock,
     ) -> Result<Option<ClusterStatistics>> {
         if cluster_keys.is_empty() {
             return Ok(None);

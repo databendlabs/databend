@@ -42,6 +42,7 @@ use opendal::Operator;
 
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
+use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::Compression;
 
 #[derive(Clone)]
@@ -101,6 +102,71 @@ impl BlockReader {
             field,
             rows,
         )?)
+    }
+
+    // TODO refine these
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<DataBlock> {
+        let (num_rows, columns_array_iter) = self.read_columns_with_block_meta(meta).await?;
+        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
+        self.try_next_block(&mut deserializer)
+    }
+    // TODO refine these
+
+    pub async fn read_columns_with_block_meta(
+        &self,
+        meta: &BlockMeta,
+    ) -> Result<(usize, Vec<ArrayIter<'static>>)> {
+        let rows = meta.row_count as usize;
+        let num_cols = self.projection.len();
+        let mut column_chunk_futs = Vec::with_capacity(num_cols);
+        let mut col_idx = Vec::with_capacity(num_cols);
+        for index in &self.projection {
+            let column_meta = meta
+                .col_metas
+                .get(&(*index as u32))
+                .ok_or_else(|| ErrorCode::LogicalError(format!("index out of bound {}", index)))?;
+            let column_reader = self.operator.object(&meta.location.0);
+            let fut = async move {
+                let column_chunk = column_reader
+                    .range_read(column_meta.offset..column_meta.offset + column_meta.len)
+                    .await?;
+                Ok::<_, ErrorCode>(column_chunk)
+            }
+            .instrument(debug_span!("read_col_chunk"));
+            column_chunk_futs.push(fut);
+            col_idx.push(index);
+        }
+
+        let chunks = futures::stream::iter(column_chunk_futs)
+            .buffered(std::cmp::min(10, num_cols))
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        let mut columns_array_iter = Vec::with_capacity(num_cols);
+        for (i, column_chunk) in chunks.into_iter().enumerate() {
+            let idx = *col_idx[i];
+            let field = self.arrow_schema.fields[idx].clone();
+            let column_descriptor = &self.parquet_schema_descriptor.columns()[idx];
+            //let column_meta = &part.columns_meta[&idx];
+            let column_meta = &meta
+                .col_metas
+                .get(&(i as u32))
+                .ok_or_else(|| ErrorCode::LogicalError(format!("index out of bound {}", i)))?;
+            let part_col_meta =
+                ColumnMeta::create(column_meta.offset, column_meta.len, column_meta.num_values);
+            columns_array_iter.push(Self::to_array_iter(
+                &part_col_meta,
+                column_chunk,
+                rows,
+                column_descriptor,
+                field,
+                &meta.compression,
+            )?);
+        }
+
+        Ok((rows, columns_array_iter))
     }
 
     async fn read_columns(&self, part: PartInfoPtr) -> Result<(usize, Vec<ArrayIter<'static>>)> {

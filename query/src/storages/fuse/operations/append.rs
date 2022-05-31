@@ -69,7 +69,7 @@ impl FuseTable {
             self.table_info.schema().clone(),
             self.cluster_keys.clone(),
         )
-        .await;
+        .await?;
 
         let locs = self.meta_location_generator().clone();
         let segment_info_cache = ctx.get_storage_cache_manager().get_table_segment_cache();

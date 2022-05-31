@@ -12,30 +12,26 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use common_planners::Expression;
+use common_planners::DeletePlan;
 use common_planners::Extras;
-use common_planners::PartInfoPtr;
-use common_planners::TruncateTablePlan;
 
-use crate::pipelines::transforms::ExpressionExecutor;
+use super::filter::delete_from_block;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::fuse_part::ColumnMeta;
-use crate::storages::fuse::fuse_part::FusePartInfo;
-use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::operations::del::collector::Deletion;
 use crate::storages::fuse::operations::del::collector::DeletionCollector;
 use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
-use crate::storages::Table;
 
 impl FuseTable {
-    pub async fn delete(&self, ctx: Arc<QueryContext>, push_downs: &Option<Extras>) -> Result<()> {
+    pub async fn delete(
+        &self,
+        ctx: Arc<QueryContext>,
+        push_downs: &Option<Extras>,
+        plan: &DeletePlan,
+    ) -> Result<()> {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         if let Some(snapshot) = snapshot {
             if let Some(Extras { filters, .. }) = &push_downs {
@@ -50,10 +46,7 @@ impl FuseTable {
                 // this could be executed in a distributed manner, till new planner, pipeline settled down totally
                 for (seg_idx, block_meta) in block_metas {
                     let proj = self.projection_of_push_downs(push_downs);
-                    match self
-                        .delete_from_block(&block_meta, &ctx, proj, filter)
-                        .await?
-                    {
+                    match delete_from_block(self, &block_meta, &ctx, proj, filter).await? {
                         Deletion::NothingDeleted => {
                             // false positive, we should keep the whole block
                             continue;
@@ -70,13 +63,9 @@ impl FuseTable {
                 self.commit(deleter)
             } else {
                 // deleting the whole table... just a truncate
-                self.truncate(ctx.clone(), TruncateTablePlan {
-                    catalog: "default".to_string(),
-                    db: "".to_string(),
-                    table: "".to_string(),
-                    purge: false,
-                })
-                .await
+                let purge = false;
+                self.do_truncate(ctx.clone(), purge, plan.catalog_name.as_str())
+                    .await
             }
         } else {
             // no snapshot, no deletion
@@ -84,87 +73,9 @@ impl FuseTable {
         }
     }
 
-    async fn delete_from_block(
-        &self,
-        block_meta: &BlockMeta,
-        ctx: &Arc<QueryContext>,
-        projection: Vec<usize>,
-        expr: &Expression,
-    ) -> Result<Deletion> {
-        let part = projection_part(&block_meta, &projection);
-        let reader = self.create_block_reader(ctx, projection)?;
-
-        // read the cols that we are going to filter
-        let data_block = reader.read(part).await?; // TODO refine this
-
-        let schema = self.table_info.schema();
-        let expr_field = expr.to_data_field(&schema)?;
-        let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
-
-        // TODO inverse the expr
-        let exec = ExpressionExecutor::try_create(
-            ctx.clone(),
-            "filter expression executor (delete) ",
-            schema.clone(),
-            expr_schema,
-            vec![expr.clone()],
-            false,
-        )?;
-
-        // TODO optimize this, check if filter_block are all zeros / ones before we return the block
-
-        let filter_block = exec.execute(&data_block)?;
-        // duplicated code
-        let whole_table_proj = (0..self.table_info.schema().fields().len())
-            .into_iter()
-            .collect::<Vec<usize>>();
-        let part_of_whole_table = projection_part(&block_meta, &whole_table_proj);
-
-        // read the cols that we are going to filter
-        // TODO enhance the reader, read without the PartInfor
-        let whole_block = reader.read(part_of_whole_table).await?;
-
-        // returns the data remains after deletion
-        let data_block = DataBlock::filter_block(&whole_block, filter_block.column(0))?;
-        let res = if data_block.num_rows() == block_meta.row_count as usize {
-            // TODO: this works , but not acceptableA (the whole data block is cloned here)
-            Deletion::NothingDeleted
-        } else {
-            Deletion::Remains(data_block)
-        };
-        Ok(res)
-    }
-    fn commit(&self, del_holder: DeletionCollector) -> Result<()> {
+    fn commit(&self, _del_holder: DeletionCollector) -> Result<()> {
         //  let new_snapshot = self.update_snapshot(del_holder.updated_segments());
         // // try commit and detect conflicts
         todo!()
     }
-}
-
-// TODO duplicated code
-fn projection_part(meta: &BlockMeta, projections: &[usize]) -> PartInfoPtr {
-    let mut columns_meta = HashMap::with_capacity(projections.len());
-
-    for projection in projections {
-        let column_meta = &meta.col_metas[&(*projection as u32)];
-
-        columns_meta.insert(
-            *projection,
-            ColumnMeta::create(column_meta.offset, column_meta.len, column_meta.num_values),
-        );
-    }
-
-    let rows_count = meta.row_count;
-    let location = meta.location.0.clone();
-    let format_version = meta.location.1;
-    // TODO
-    // row_count should be a hint value of  LIMIT,
-    // not the count the rows in this partition
-    FusePartInfo::create(
-        location,
-        format_version,
-        rows_count,
-        columns_meta,
-        meta.compression,
-    )
 }

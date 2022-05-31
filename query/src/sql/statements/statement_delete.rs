@@ -41,7 +41,6 @@ pub struct DfDeleteStatement {
 impl AnalyzableStatement for DfDeleteStatement {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let tenant = ctx.get_tenant();
         let (catalog_name, database_name, table_name) =
             resolve_table(&ctx, &self.name, "DELETE from TABLE")?;
 

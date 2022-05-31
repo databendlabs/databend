@@ -50,7 +50,7 @@ async fn test_fuse_table_block_appender() -> Result<()> {
         schema.clone(),
         vec![],
     )
-    .await
+    .await?
     .collect::<Vec<_>>()
     .await;
 
@@ -78,7 +78,7 @@ async fn test_fuse_table_block_appender() -> Result<()> {
         schema.clone(),
         vec![],
     )
-    .await
+    .await?
     .collect::<Vec<_>>()
     .await;
 
@@ -99,7 +99,7 @@ async fn test_fuse_table_block_appender() -> Result<()> {
         schema,
         vec![],
     )
-    .await
+    .await?
     .collect::<Vec<_>>()
     .await;
 
@@ -269,7 +269,7 @@ async fn test_block_stream_writer() -> Result<()> {
             DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]),
             vec![],
         )
-        .await;
+        .await?;
         let segs = stream.try_collect::<Vec<_>>().await?;
 
         // verify the number of blocks

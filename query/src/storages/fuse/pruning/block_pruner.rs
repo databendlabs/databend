@@ -53,9 +53,9 @@ impl BlockPruner {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
                 // for the time being, we only handle the first expr
-                let verifiable_expression =
+                let range_filter =
                     RangeFilter::try_create(Arc::new(ctx.clone()), &exprs.filters[0], schema)?;
-                Box::new(move |v: &ColumnsStatistics| verifiable_expression.eval(v))
+                Box::new(move |v: &ColumnsStatistics| range_filter.eval(v))
             }
             _ => Box::new(|_: &ColumnsStatistics| Ok(true)),
         };

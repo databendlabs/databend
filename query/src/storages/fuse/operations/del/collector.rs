@@ -15,9 +15,15 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
+use common_exception::Result;
 
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io::write_block;
 use crate::storages::fuse::meta::Location;
+use crate::storages::fuse::meta::Versioned;
+use crate::storages::fuse::operations::util::column_metas;
+use crate::storages::fuse::statistics::accumulator::BlockStatistics;
+use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::fuse::FuseTable;
 
 pub enum Deletion {
@@ -33,13 +39,21 @@ pub struct Replacement {
 
 pub type SegmentIndex = usize;
 
-pub struct DeletionCollector {
+pub struct DeletionCollector<'a> {
     mutations: HashMap<SegmentIndex, Vec<Replacement>>,
+    table: &'a FuseTable,
+    ctx: &'a QueryContext,
+    statistics_accumulator: Option<StatisticsAccumulator>,
 }
 
-impl DeletionCollector {
-    pub fn new(table: &FuseTable, ctx: &QueryContext) -> Self {
-        todo!()
+impl<'a> DeletionCollector<'a> {
+    pub fn new(table: &'a FuseTable, ctx: &'a QueryContext) -> Self {
+        Self {
+            mutations: Default::default(),
+            table,
+            ctx,
+            statistics_accumulator: Default::default(),
+        }
     }
 
     ///Replaces the block located at `block_meta.location`,
@@ -49,7 +63,7 @@ impl DeletionCollector {
         seg_idx: usize,
         block_location: &Location,
         replace_with: DataBlock,
-    ) -> common_exception::Result<()> {
+    ) -> Result<()> {
         // write new block, and keep the mutations
         let new_block_loc = self.write_new_block(replace_with).await?;
         let original_block_loc = block_location.clone();
@@ -63,7 +77,16 @@ impl DeletionCollector {
         Ok(())
     }
 
-    async fn write_new_block(&self, block: DataBlock) -> common_exception::Result<Location> {
-        todo!()
+    async fn write_new_block(&mut self, block: DataBlock) -> Result<Location> {
+        let cluster_keys = vec![]; // TODO build this from table info in the constructor
+        let cluster_stats = BlockStatistics::clusters_statistics(cluster_keys, &block)?;
+        let acc = self.statistics_accumulator.take().unwrap_or_default();
+        let partial_acc = acc.begin(&block, cluster_stats)?;
+        let location = self.table.meta_location_generator.gen_block_location();
+        let data_accessor = self.ctx.get_storage_operator()?;
+        let (file_size, file_meta_data) = write_block(block, data_accessor, &location).await?;
+        let col_metas = column_metas(&file_meta_data)?;
+        self.statistics_accumulator = Some(partial_acc.end(file_size, location.clone(), col_metas));
+        Ok((location, DataBlock::VERSION))
     }
 }

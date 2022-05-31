@@ -135,7 +135,7 @@ impl Processor for FuseTableSink {
             State::NeedSerialize(data_block) => {
                 let cluster_stats = BlockStatistics::clusters_statistics(
                     self.cluster_keys_index.clone(),
-                    data_block.clone(),
+                    &data_block,
                 )?;
 
                 // Remove unused columns before serialize
