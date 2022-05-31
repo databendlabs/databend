@@ -145,8 +145,8 @@ impl<'a> Binder {
                     .bind_limit(
                         &bind_context,
                         s_expr,
-                        Some(&query.limit[0]),
-                        &Some(query.limit[1].clone()),
+                        Some(&query.limit[1]),
+                        &Some(query.limit[0].clone()),
                     )
                     .await?;
             }

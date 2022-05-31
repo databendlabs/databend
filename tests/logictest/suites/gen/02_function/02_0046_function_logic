@@ -47,7 +47,7 @@ statement query B
 SELECT 1 and null;
 
 ----  
-None
+NULL
 
 statement query B label(mysql,http)
 SELECT 0 and null;
@@ -62,7 +62,7 @@ statement query B
 SELECT null and null;
 
 ----  
-None
+NULL
 
 statement query I 
 SELECT number from numbers(10) WHERE number > 5 AND number < 8 ORDER BY number;
@@ -138,7 +138,7 @@ statement query B
 SELECT 0 OR null;
 
 ----  
-None
+NULL
 
 statement query B label(mysql,http)
 SELECT null OR 1;
@@ -153,7 +153,7 @@ statement query B
 SELECT null OR null;
 
 ----  
-None
+NULL
 
 statement query I 
 SELECT number from numbers(10) WHERE number > 7 OR number < 2 ORDER BY number;
@@ -204,13 +204,13 @@ statement query T
 SELECT null XOR true;
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT false XOR null;
 
 ----  
-None
+NULL
 
 statement query B label(mysql,http)
 SELECT not true;
@@ -252,5 +252,5 @@ statement query T
 SELECT not null;
 
 ----  
-None
+NULL
 

@@ -31,7 +31,7 @@ statement query T
 SELECT NULL IN (1, 2, 3);
 
 ----  
-None
+NULL
 
 statement query B label(mysql,http)
 SELECT 1 IN (1, 2, NULL);
@@ -136,7 +136,7 @@ statement query T
 SELECT NULL in ('2021-08-30');
 
 ----  
-None
+NULL
 
 statement ok
 DROP TABLE IF EXISTS t1;

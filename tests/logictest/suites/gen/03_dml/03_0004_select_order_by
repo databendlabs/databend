@@ -77,7 +77,7 @@ statement query IT
 SELECT number, null from numbers(3) order by number desc;
 
 ----  
-2 None
-1 None
-0 None
+2 NULL
+1 NULL
+0 NULL
 

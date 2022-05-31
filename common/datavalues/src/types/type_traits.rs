@@ -135,11 +135,17 @@ pub trait ObjectType:
     + Scalar
 {
     fn data_type() -> DataTypeImpl;
+
+    fn column_name() -> &'static str;
 }
 
 impl ObjectType for VariantValue {
     fn data_type() -> DataTypeImpl {
         VariantType::new_impl()
+    }
+
+    fn column_name() -> &'static str {
+        "VariantColumn"
     }
 }
 
