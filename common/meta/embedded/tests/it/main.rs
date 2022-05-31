@@ -13,4 +13,6 @@
 //  limitations under the License.
 
 mod kv_api_impl;
+#[cfg(feature = "mock_utc")]
+mod mock;
 mod schema_api_impl;

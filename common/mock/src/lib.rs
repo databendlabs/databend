@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Because the compiler complains about recursion limit for a trait requirement check...
-// error[[E0275](https://doc.rust-lang.org/error-index.html#E0275)]: overflow evaluating the requirement `(...)`
-// When compiling `impl KVApiBuilder<MetaGrpcClient> for Builder`.
-#![recursion_limit = "1024"]
+//! Provides conversion from and to protobuf defined meta data, which is used for transport.
+//!
+//! Thus protobuf messages has the maximized compatibility.
+//! I.e., a protobuf message is able to contain several different versions of metadata in one format.
+//! This mod will convert protobuf message to the current version of meta data used in databend-query.
 
-mod api;
-mod configs;
-mod grpc;
-mod meta_node;
-#[cfg(feature = "mock_utc")]
-mod mock_grpc;
-mod store;
-mod tests;
+mod utc;
+
+pub use utc::*;

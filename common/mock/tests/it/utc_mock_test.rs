@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Because the compiler complains about recursion limit for a trait requirement check...
-// error[[E0275](https://doc.rust-lang.org/error-index.html#E0275)]: overflow evaluating the requirement `(...)`
-// When compiling `impl KVApiBuilder<MetaGrpcClient> for Builder`.
-#![recursion_limit = "1024"]
+use common_datavalues::chrono::Duration;
+use common_exception::Result;
+use common_mock::set_utc_mock_time;
+use common_mock::utc_now;
 
-mod api;
-mod configs;
-mod grpc;
-mod meta_node;
-#[cfg(feature = "mock_utc")]
-mod mock_grpc;
-mod store;
-mod tests;
+#[test]
+fn test_mock_utc() -> Result<()> {
+    let now = utc_now();
+    let next = now + Duration::days(1);
+    set_utc_mock_time(next);
+    assert_eq!(next, utc_now());
+
+    Ok(())
+}

@@ -12,16 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Because the compiler complains about recursion limit for a trait requirement check...
-// error[[E0275](https://doc.rust-lang.org/error-index.html#E0275)]: overflow evaluating the requirement `(...)`
-// When compiling `impl KVApiBuilder<MetaGrpcClient> for Builder`.
-#![recursion_limit = "1024"]
-
-mod api;
-mod configs;
-mod grpc;
-mod meta_node;
 #[cfg(feature = "mock_utc")]
-mod mock_grpc;
-mod store;
-mod tests;
+mod utc_mock_test;

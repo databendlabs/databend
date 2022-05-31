@@ -15,6 +15,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use anyhow::Ok;
+use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -42,6 +44,7 @@ use common_meta_types::UndropDatabaseReq;
 use common_meta_types::UndropTableReq;
 use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReq;
+use common_mock::*;
 use common_tracing::tracing;
 
 use crate::SchemaApi;
@@ -1649,6 +1652,177 @@ impl SchemaApiTestSuite {
                 assert_eq!(table.options().get("key1"), Some(&"val1".into()));
             }
         }
+        Ok(())
+    }
+
+    pub async fn database_drop_out_of_retention_time_history<MT: SchemaApi>(
+        self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant1_database_drop_out_of_retention_time_history";
+        let db_name = "db1_database_drop_out_of_retention_time_history";
+        let db_name_ident = DatabaseNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+        };
+
+        tracing::info!("--- create and drop db1");
+        {
+            // first create database
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: db_name_ident.clone(),
+                meta: DatabaseMeta {
+                    engine: "github".to_string(),
+                    ..Default::default()
+                },
+            };
+
+            let res = mt.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.db_id, "first database id is 1");
+
+            let res = mt
+                .get_database_history(ListDatabaseReq {
+                    tenant: tenant.to_string(),
+                })
+                .await?;
+            calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
+                name: db_name_ident.to_string(),
+                desc: "".to_string(),
+                drop_on_cnt: 0,
+                non_drop_on_cnt: 1,
+            }]);
+
+            // then drop db1
+            mt.drop_database(DropDatabaseReq {
+                if_exists: false,
+                name_ident: db_name_ident.clone(),
+            })
+            .await?;
+
+            // change now time to one day after
+            let now = utc_now();
+            let next = now + Duration::days(1);
+            set_utc_mock_time(next);
+            assert_eq!(next, utc_now());
+
+            let res = mt
+                .get_database_history(ListDatabaseReq {
+                    tenant: tenant.to_string(),
+                })
+                .await?;
+            clear_utc_mock_time();
+
+            // assert not return out of retention time data
+            assert_eq!(res.len(), 0);
+        }
+
+        Ok(())
+    }
+
+    pub async fn table_drop_out_of_retention_time_history<MT: SchemaApi>(
+        self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant_table_drop_history";
+        let db_name = "table_table_drop_history_db1";
+        let tbl_name = "table_table_drop_history_tb1";
+        let tbl_name_ident = TableNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+            table_name: tbl_name.to_string(),
+        };
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        tracing::info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            tracing::info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.db_id, "first database id is 1");
+        }
+
+        let created_on = Utc::now();
+        let create_table_meta = table_meta(created_on);
+        tracing::info!("--- create and get table");
+        {
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: tbl_name_ident.clone(),
+                table_meta: create_table_meta.clone(),
+            };
+
+            let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+            let res = mt.create_table(req.clone()).await?;
+            let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(res.table_id >= 1, "table id >= 1");
+
+            let res = mt
+                .get_table_history(ListTableReq::new(tenant, db_name))
+                .await?;
+
+            calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
+                name: tbl_name.to_string(),
+                desc: tbl_name_ident.to_string(),
+                drop_on_cnt: 0,
+                non_drop_on_cnt: 1,
+            }]);
+        }
+
+        {
+            // first drop the table
+            mt.drop_table(DropTableReq {
+                if_exists: false,
+                name_ident: tbl_name_ident.clone(),
+            })
+            .await?;
+
+            // change now time to one day after
+            let now = utc_now();
+            let next = now + Duration::days(1);
+            set_utc_mock_time(next);
+            assert_eq!(next, utc_now());
+
+            let res = mt
+                .get_table_history(ListTableReq::new(tenant, db_name))
+                .await?;
+            clear_utc_mock_time();
+
+            // assert not return out of retention time data
+            assert_eq!(res.len(), 0);
+        }
+
         Ok(())
     }
 

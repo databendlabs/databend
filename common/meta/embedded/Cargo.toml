@@ -7,6 +7,10 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[features]
+default = []
+mock_utc = ["common-mock/mock_utc"]
+
 [lib]
 doctest = false
 test = false
@@ -20,6 +24,7 @@ common-meta-raft-store = { path = "../raft-store" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-types = { path = "../types" }
 common-tracing = { path = "../../tracing" }
+common-mock = { path = "../../mock" }
 
 # Crates.io dependencies
 async-trait = "0.1.53"

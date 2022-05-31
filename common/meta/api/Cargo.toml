@@ -20,6 +20,7 @@ common-meta-types = { path = "../types" }
 common-proto-conv = { path = "../../proto-conv" }
 common-protos = { path = "../../protos" }
 common-tracing = { path = "../../tracing" }
+common-mock = { path = "../../mock" }
 
 anyerror = "0.1.6"
 anyhow = "1.0.56"

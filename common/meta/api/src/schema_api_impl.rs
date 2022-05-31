@@ -16,7 +16,6 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use anyerror::AnyError;
-use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op::Request;
@@ -88,6 +87,7 @@ use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertKVReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
+use common_mock::utc_now;
 use common_proto_conv::FromToProto;
 use common_tracing::tracing;
 use txn_condition::Target;
@@ -525,7 +525,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let db_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut db_info_list = vec![];
-        let utc: DateTime<Utc> = Utc::now();
+        let now = utc_now().timestamp();
         for db_id_list_key in db_id_list_keys.iter() {
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist = DbIdListKey {
@@ -556,7 +556,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     continue;
                 }
                 let db_meta = db_meta.unwrap();
-                if is_db_out_of_retention_time(&db_meta, &utc) {
+                if is_db_out_of_retention_time(&db_meta, now) {
                     continue;
                 }
 
@@ -1219,7 +1219,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let table_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut tb_info_list = vec![];
-        let utc: DateTime<Utc> = Utc::now();
+        let now = utc_now().timestamp();
         for table_id_list_key in table_id_list_keys.iter() {
             // get table id list from _fd_table_id_list/db_id/table_name
             let dbid_tbname_idlist = TableIdListKey {
@@ -1256,7 +1256,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 // Safe unwrap() because: tb_meta_seq > 0
                 let tb_meta = tb_meta.unwrap();
-                if is_table_out_of_retention_time(&tb_meta, &utc) {
+                if is_table_out_of_retention_time(&tb_meta, now) {
                     continue;
                 }
 
@@ -1501,9 +1501,9 @@ impl<KV: KVApi> SchemaApi for KV {
 
 // Return true if table is out of `DATA_RETENTION_TIME_IN_DAYS option,
 // use DEFAULT_DATA_RETENTION_SECONDS by default.
-fn is_table_out_of_retention_time(table_meta: &TableMeta, now: &DateTime<Utc>) -> bool {
+fn is_table_out_of_retention_time(table_meta: &TableMeta, now: i64) -> bool {
     if let Some(drop_on) = table_meta.drop_on {
-        return now.timestamp() - drop_on.timestamp() > DEFAULT_DATA_RETENTION_SECONDS;
+        return now - drop_on.timestamp() >= DEFAULT_DATA_RETENTION_SECONDS;
     }
 
     false
@@ -1511,9 +1511,9 @@ fn is_table_out_of_retention_time(table_meta: &TableMeta, now: &DateTime<Utc>) -
 
 // Return true if db is out of `DATA_RETENTION_TIME_IN_DAYS option,
 // use DEFAULT_DATA_RETENTION_SECONDS by default.
-fn is_db_out_of_retention_time(db_meta: &DatabaseMeta, now: &DateTime<Utc>) -> bool {
+fn is_db_out_of_retention_time(db_meta: &DatabaseMeta, now: i64) -> bool {
     if let Some(drop_on) = db_meta.drop_on {
-        return now.timestamp() - drop_on.timestamp() > DEFAULT_DATA_RETENTION_SECONDS;
+        return now - drop_on.timestamp() >= DEFAULT_DATA_RETENTION_SECONDS;
     }
 
     false
