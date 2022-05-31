@@ -55,6 +55,13 @@ title: Guides
 * [How to Drop a View](../30-reference/30-sql/00-ddl/60-view/ddl-drop-view.md)
 * [How to Alter a View](../30-reference/30-sql/00-ddl/60-view/ddl-alter-view.md)
 
+
+## User-Defined Functions
+
+* [How to Create a User-Defined Function](../30-reference/30-sql/00-ddl/50-udf/ddl-create-function.md)
+* [How to Drop a User-Defined Function](../30-reference/30-sql/00-ddl/50-udf/ddl-drop-function.md)
+* [How to Alter a User-Defined Function](../30-reference/30-sql/00-ddl/50-udf/ddl-alter-function.md)
+
 ## Load Data
 
 * [How to Load Data From Local File System](../21-load-data/00-local.md)
