@@ -22,8 +22,8 @@ common-io = { path = "../../io" }
 common-meta-api = { path = "../api" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-types = { path = "../types" }
-common-tracing = { path = "../../tracing" }
 common-mock = { path = "../../mock" }
+common-tracing = { path = "../../tracing" }
 
 # crates.io deps
 anyhow = "1.0.56"

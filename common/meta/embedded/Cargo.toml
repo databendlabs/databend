@@ -23,8 +23,8 @@ common-meta-api = { path = "../api" }
 common-meta-raft-store = { path = "../raft-store" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-types = { path = "../types" }
-common-tracing = { path = "../../tracing" }
 common-mock = { path = "../../mock" }
+common-tracing = { path = "../../tracing" }
 
 # Crates.io dependencies
 async-trait = "0.1.53"

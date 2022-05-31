@@ -20,5 +20,4 @@ common-exception = { path = "../exception" }
 
 [build-dependencies]
 
-
 [dev-dependencies]

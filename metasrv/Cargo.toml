@@ -35,8 +35,8 @@ common-meta-grpc = { path = "../common/meta/grpc" }
 common-meta-raft-store = { path = "../common/meta/raft-store" }
 common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-types = { path = "../common/meta/types" }
+common-mock = { path = "../common/mock", features = ["mock_utc"] }
 common-tracing = { path = "../common/tracing" }
-common-mock = { path = "../common/mock", features=["mock_utc"] }
 
 # Github dependencies
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
