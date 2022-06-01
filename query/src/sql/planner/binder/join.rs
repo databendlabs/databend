@@ -127,12 +127,12 @@ impl<'a> Binder {
         left_child: SExpr,
         right_child: SExpr,
     ) -> Result<SExpr> {
-        if join_type == JoinType::CrossJoin {
-            if !left_conditions.is_empty() || !right_conditions.is_empty() {
-                return Err(ErrorCode::SemanticError(
-                    "Join conditions should be empty in cross join",
-                ));
-            }
+        if join_type == JoinType::CrossJoin
+            && (!left_conditions.is_empty() || !right_conditions.is_empty())
+        {
+            return Err(ErrorCode::SemanticError(
+                "Join conditions should be empty in cross join",
+            ));
         }
         let inner_join = LogicalJoin {
             left_conditions,

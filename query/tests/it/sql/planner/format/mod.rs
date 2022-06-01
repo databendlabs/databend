@@ -25,6 +25,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::Statistics;
 use databend_query::sql::optimizer::SExpr;
+use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::FilterPlan;
@@ -139,6 +140,7 @@ fn test_format() {
                 },
             }
             .into()],
+            join_type: JoinType::InnerJoin,
         }
         .into(),
         SExpr::create_unary(
