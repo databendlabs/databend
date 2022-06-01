@@ -16,8 +16,10 @@ pub mod block_buffer;
 mod download;
 mod result_locations;
 mod result_table;
+mod result_table_sink;
 mod writer;
 
 pub use result_table::ResultQueryInfo;
 pub use result_table::ResultTable;
+pub use result_table_sink::ResultTableSink;
 pub use writer::ResultTableWriter;
