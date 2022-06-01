@@ -359,7 +359,7 @@ pub fn position_neon<
         let mut index = 0;
 
         while index + 15 < buf.len() {
-            let bytes = vld1q_u8(buf.as_ptr());
+            let bytes = vld1q_u8(buf.as_ptr().add(index));
             let mut res = vceqq_u8(bytes, vdupq_n_u8(C1));
 
             macro_rules! neno_match {

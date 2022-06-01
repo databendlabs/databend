@@ -95,6 +95,7 @@ impl MultipartWorker for ParallelMultipartWorker {
                         let filename = field.file_name().unwrap_or("Unknown file name").to_string();
 
                         let mut buf = vec![0; 1048576];
+                        let mut has_data_in_state = false;
                         let mut state = self.input_format.create_state();
                         let mut async_reader = field.into_async_read();
 
@@ -146,7 +147,9 @@ impl MultipartWorker for ParallelMultipartWorker {
                                                 }
                                             };
 
+                                        has_data_in_state = true;
                                         if read_size < buf_slice.len() {
+                                            has_data_in_state = false;
                                             let new_state = self.input_format.create_state();
                                             let prepared_state = replace(&mut state, new_state);
 
@@ -177,6 +180,15 @@ impl MultipartWorker for ParallelMultipartWorker {
 
                                     break 'outer;
                                 }
+                            }
+                        }
+
+                        if has_data_in_state {
+                            let new_state = self.input_format.create_state();
+                            let prepared_state = replace(&mut state, new_state);
+
+                            if !Self::send(&tx, Ok(prepared_state)).await {
+                                break 'outer;
                             }
                         }
                     }

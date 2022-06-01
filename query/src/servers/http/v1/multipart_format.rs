@@ -52,7 +52,10 @@ impl MultipartFormat {
             FormatFactory::instance().get_input(name, schema.clone(), settings.clone())?;
 
         let query_settings = ctx.get_settings();
-        if query_settings.get_max_threads()? != 1 && input_format.support_parallel() {
+        if query_settings.get_max_threads()? != 1
+            && input_format.support_parallel()
+            && settings.compression == Compression::None
+        {
             let max_threads = query_settings.get_max_threads()? as usize;
 
             let (tx, rx) = async_channel::bounded(10);
