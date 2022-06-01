@@ -94,8 +94,8 @@ impl AnalyzableStatement for DfDeleteStatement {
             if let Some((idx, _)) = schema.column_with_name(col_name.as_str()) {
                 projection.push(idx);
             } else {
-                return Err(ErrorCode::LogicalError(format!(
-                    "col not found {}, in delete statement",
+                return Err(ErrorCode::UnknownColumn(format!(
+                    "Column [{}] not found",
                     col_name
                 )));
             }

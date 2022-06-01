@@ -22,7 +22,7 @@ use common_planners::Expression;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::operations::del::collector::Deletion;
+use crate::storages::fuse::operations::del::mutations_collector::Deletion;
 use crate::storages::fuse::FuseTable;
 
 pub async fn delete_from_block(
@@ -30,22 +30,37 @@ pub async fn delete_from_block(
     block_meta: &BlockMeta,
     ctx: &Arc<QueryContext>,
     filter_column_ids: Vec<usize>,
-    expr: &Expression,
+    filter_expr: &Expression,
 ) -> Result<Deletion> {
-    // read the cols that we are going to filtering on
-    let data_block = {
-        let reader = table.create_block_reader(ctx, filter_column_ids)?;
-        reader.read_with_block_meta(block_meta).await?
+    let mut filtering_whole_block = false;
+
+    // extract the columns that are going to be filtered on
+    let col_ids = {
+        if filter_column_ids.is_empty() {
+            filtering_whole_block = true;
+            // To be optimized (in `interpreter_delete`, if we adhere the style of interpreter_select)
+            // In this case, the expr being evaluated is unrelated to the value of rows:
+            // - if the `filter_expr` is of "constant" function:
+            //   for the whole block, whether all of the rows should be kept or dropped
+            // - but, the expr may NOT be deterministic, e.g.
+            //   A nullary non-constant func, which returns true, false or NULL randomly
+            all_the_columns_ids(table)
+        } else {
+            filter_column_ids
+        }
     };
+    // read the cols that we are going to filtering on
+    let reader = table.create_block_reader(ctx, col_ids)?;
+    let data_block = reader.read_with_block_meta(block_meta).await?;
 
     // inverse the expr
-    let inversed_expr = Expression::UnaryExpression {
+    let inverse_expr = Expression::UnaryExpression {
         op: "not".to_string(),
-        expr: Box::new(expr.clone()),
+        expr: Box::new(filter_expr.clone()),
     };
 
     let schema = table.table_info.schema();
-    let expr_field = inversed_expr.to_data_field(&schema)?;
+    let expr_field = inverse_expr.to_data_field(&schema)?;
     let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
 
     let expr_exec = ExpressionExecutor::try_create(
@@ -53,7 +68,7 @@ pub async fn delete_from_block(
         "filter expression executor (delete) ",
         schema.clone(),
         expr_schema,
-        vec![inversed_expr],
+        vec![inverse_expr],
         false,
     )?;
 
@@ -61,10 +76,10 @@ pub async fn delete_from_block(
     let filter_block = expr_exec.execute(&data_block)?;
 
     // read the whole block
-    let whole_block = {
-        let whole_table_proj = (0..table.table_info.schema().fields().len())
-            .into_iter()
-            .collect::<Vec<usize>>();
+    let whole_block = if filtering_whole_block {
+        data_block
+    } else {
+        let whole_table_proj = all_the_columns_ids(table);
         let whole_block_reader = table.create_block_reader(ctx, whole_table_proj)?;
         whole_block_reader.read_with_block_meta(block_meta).await?
     };
@@ -78,4 +93,10 @@ pub async fn delete_from_block(
         Deletion::Remains(data_block)
     };
     Ok(res)
+}
+
+fn all_the_columns_ids(table: &FuseTable) -> Vec<usize> {
+    (0..table.table_info.schema().fields().len())
+        .into_iter()
+        .collect::<Vec<usize>>()
 }

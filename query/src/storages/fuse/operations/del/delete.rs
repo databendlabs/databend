@@ -20,11 +20,11 @@ use common_planners::Expression;
 use common_planners::Extras;
 use common_tracing::tracing::debug;
 
-use super::filter::delete_from_block;
+use super::block_filter::delete_from_block;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::operations::del::collector::Deletion;
-use crate::storages::fuse::operations::del::collector::DeletionCollector;
+use crate::storages::fuse::operations::del::mutations_collector::Deletion;
+use crate::storages::fuse::operations::del::mutations_collector::DeletionCollector;
 use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;

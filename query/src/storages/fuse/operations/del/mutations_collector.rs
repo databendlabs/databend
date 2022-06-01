@@ -40,7 +40,7 @@ pub enum Deletion {
 #[allow(dead_code)]
 pub struct Replacement {
     original_block_loc: Location,
-    new_block_meta: BlockMeta,
+    new_block_meta: Option<BlockMeta>,
 }
 
 pub type SegmentIndex = usize;
@@ -75,6 +75,7 @@ impl<'a> DeletionCollector<'a> {
         for (seg_idx, replacements) in self.mutations {
             let seg_loc = &snapshot.segments[seg_idx];
             let segment = seg_reader.read(&seg_loc.0, None, seg_loc.1).await?;
+            // TODO handle empty segment
             let mut new_segment = SegmentInfo::new(segment.blocks.clone(), segment.summary.clone());
             for replacement in replacements {
                 let position = new_segment
@@ -82,7 +83,11 @@ impl<'a> DeletionCollector<'a> {
                     .iter()
                     .position(|v| v.location == replacement.original_block_loc)
                     .unwrap();
-                new_segment.blocks[position] = replacement.new_block_meta
+                if let Some(block_meta) = replacement.new_block_meta {
+                    new_segment.blocks[position] = block_meta;
+                } else {
+                    new_segment.blocks.remove(position);
+                }
             }
 
             let new_summary = reduce_block_metas(&new_segment.blocks)?;
@@ -133,7 +138,11 @@ impl<'a> DeletionCollector<'a> {
         replace_with: DataBlock,
     ) -> Result<()> {
         // write new block, and keep the mutations
-        let new_block_meta = self.write_new_block(replace_with).await?;
+        let new_block_meta = if replace_with.num_rows() == 0 {
+            None
+        } else {
+            Some(self.write_new_block(replace_with).await?)
+        };
         let original_block_loc = block_location.clone();
         self.mutations
             .entry(seg_idx)
@@ -161,7 +170,7 @@ impl<'a> DeletionCollector<'a> {
             col_metas,
             cluster_stats: None, // TODO confirm this with zhyass
             location: (location, DataBlock::VERSION),
-            compression: Compression::Lz4Raw,
+            compression: Compression::Lz4Raw, // TODO hide this
         };
         Ok(block_meta)
     }

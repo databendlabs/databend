@@ -131,6 +131,7 @@ pub use plan_expression_common::expr_as_column_expr;
 pub use plan_expression_common::extract_aliases;
 pub use plan_expression_common::find_aggregate_exprs;
 pub use plan_expression_common::find_aggregate_exprs_in_expr;
+pub use plan_expression_common::find_column_exprs;
 pub use plan_expression_common::find_columns_not_satisfy_exprs;
 pub use plan_expression_common::rebase_expr;
 pub use plan_expression_common::rebase_expr_from_input;
