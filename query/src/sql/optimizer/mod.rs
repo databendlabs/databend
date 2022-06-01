@@ -51,7 +51,10 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
             bind_context,
             metadata,
         }),
-        Plan::Explain { kind, plan } => Ok(Plan::Explain { kind, plan }),
+        Plan::Explain { kind, plan } => Ok(Plan::Explain {
+            kind,
+            plan: Box::new(optimize(*plan)?),
+        }),
     }
 }
 
