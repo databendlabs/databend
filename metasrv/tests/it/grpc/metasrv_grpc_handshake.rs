@@ -35,11 +35,8 @@ use crate::tests::start_metasrv;
 
 /// - Test client version < serverside min-compatible-client-ver.
 /// - Test metasrv version < client min-compatible-metasrv-ver.
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_metasrv_handshake() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     fn smaller_ver(v: &Version) -> Version {
         if v.major > 0 {
             Version::new(v.major - 1, v.minor, v.patch)

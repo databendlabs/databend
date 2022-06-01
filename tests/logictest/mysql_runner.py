@@ -54,7 +54,7 @@ class TestMySQL(logictest.SuiteRunner, ABC):
                 if isinstance(v, NoneType):
                     vals.append("NULL")
                     continue
-                
+
                 if query_type[i] == 'I':
                     if not isinstance(v, int):
                         log.error(
