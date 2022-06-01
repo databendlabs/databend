@@ -84,6 +84,20 @@ fn test_cast_function() -> Result<()> {
             expect: Series::from_data(vec![1614906061000000i64, 1635070210000000]),
             error: "",
         }),
+        ("to_datetime", ScalarFunctionTest {
+            name: "cast-int64-to-datetime-passed",
+            columns: vec![Series::from_data(vec![
+                1630833797i64,
+                1630833797123,
+                1630833797123456,
+            ])],
+            expect: Series::from_data(vec![
+                1630833797000000i64,
+                1630833797123000,
+                1630833797123456,
+            ]),
+            error: "",
+        }),
     ];
 
     for (op, test) in tests {
