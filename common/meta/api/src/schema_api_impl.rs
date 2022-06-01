@@ -116,7 +116,6 @@ impl<KV: KVApi> SchemaApi for KV {
                 CreateDatabaseWithDropTime::new(&name_key.db_name),
             )));
         }
-
         loop {
             // Get db by name to ensure absence
             let (db_id_seq, db_id) = get_id_value(self, name_key).await?;
@@ -525,7 +524,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let db_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut db_info_list = vec![];
-        let utc: DateTime<Utc> = Utc::now();
+        let now = Utc::now();
         for db_id_list_key in db_id_list_keys.iter() {
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist = DbIdListKey {
@@ -556,7 +555,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     continue;
                 }
                 let db_meta = db_meta.unwrap();
-                if is_db_out_of_retention_time(&db_meta, &utc) {
+                if is_drop_time_out_of_retention_time(&db_meta.drop_on, &now) {
                     continue;
                 }
 
@@ -1219,7 +1218,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let table_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut tb_info_list = vec![];
-        let utc: DateTime<Utc> = Utc::now();
+        let now = Utc::now();
         for table_id_list_key in table_id_list_keys.iter() {
             // get table id list from _fd_table_id_list/db_id/table_name
             let dbid_tbname_idlist = TableIdListKey {
@@ -1256,7 +1255,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 // Safe unwrap() because: tb_meta_seq > 0
                 let tb_meta = tb_meta.unwrap();
-                if is_table_out_of_retention_time(&tb_meta, &utc) {
+                if is_drop_time_out_of_retention_time(&tb_meta.drop_on, &now) {
                     continue;
                 }
 
@@ -1499,21 +1498,14 @@ impl<KV: KVApi> SchemaApi for KV {
     }
 }
 
-// Return true if table is out of `DATA_RETENTION_TIME_IN_DAYS option,
+// Return true if drop time is out of `DATA_RETENTION_TIME_IN_DAYS option,
 // use DEFAULT_DATA_RETENTION_SECONDS by default.
-fn is_table_out_of_retention_time(table_meta: &TableMeta, now: &DateTime<Utc>) -> bool {
-    if let Some(drop_on) = table_meta.drop_on {
-        return now.timestamp() - drop_on.timestamp() > DEFAULT_DATA_RETENTION_SECONDS;
-    }
-
-    false
-}
-
-// Return true if db is out of `DATA_RETENTION_TIME_IN_DAYS option,
-// use DEFAULT_DATA_RETENTION_SECONDS by default.
-fn is_db_out_of_retention_time(db_meta: &DatabaseMeta, now: &DateTime<Utc>) -> bool {
-    if let Some(drop_on) = db_meta.drop_on {
-        return now.timestamp() - drop_on.timestamp() > DEFAULT_DATA_RETENTION_SECONDS;
+fn is_drop_time_out_of_retention_time(
+    drop_on: &Option<DateTime<Utc>>,
+    now: &DateTime<Utc>,
+) -> bool {
+    if let Some(drop_on) = drop_on {
+        return now.timestamp() - drop_on.timestamp() >= DEFAULT_DATA_RETENTION_SECONDS;
     }
 
     false
@@ -1787,7 +1779,7 @@ fn deserialize_id(v: &[u8]) -> Result<u64, MetaError> {
     Ok(id)
 }
 
-fn serialize_struct<PB: common_protos::prost::Message>(
+pub(crate) fn serialize_struct<PB: common_protos::prost::Message>(
     value: &impl FromToProto<PB>,
 ) -> Result<Vec<u8>, MetaError> {
     let p = value.to_pb().map_err(meta_encode_err)?;

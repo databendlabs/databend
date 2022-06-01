@@ -15,12 +15,14 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
@@ -32,6 +34,7 @@ use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -42,8 +45,14 @@ use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaError;
+use common_meta_types::Operation;
+use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 
+use crate::serialize_struct;
+use crate::KVApi;
+use crate::KVApiKey;
 use crate::SchemaApi;
 
 /// Test suite of `SchemaApi`.
@@ -123,6 +132,24 @@ fn calc_and_compare_drop_on_table_result(result: Vec<Arc<TableInfo>>, expected: 
     }
 
     assert_eq!(get, expected_map);
+}
+
+async fn upsert_test_data(
+    kv_api: &impl KVApi,
+    key: &impl KVApiKey,
+    value: Vec<u8>,
+) -> std::result::Result<u64, MetaError> {
+    let res = kv_api
+        .upsert_kv(UpsertKVReq {
+            key: key.to_key(),
+            seq: MatchSeq::Any,
+            value: Operation::Update(value),
+            value_meta: None,
+        })
+        .await?;
+
+    let seq_v = res.result.unwrap();
+    Ok(seq_v.seq)
 }
 
 impl SchemaApiTestSuite {
@@ -1638,6 +1665,159 @@ impl SchemaApiTestSuite {
                 assert_eq!(table.options().get("key1"), Some(&"val1".into()));
             }
         }
+        Ok(())
+    }
+
+    pub async fn database_drop_out_of_retention_time_history<MT: SchemaApi>(
+        self,
+        mt: &MT,
+        kv_api: &impl KVApi,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant1_database_drop_out_of_retention_time_history";
+        let db_name = "db1_database_drop_out_of_retention_time_history";
+        let db_name_ident = DatabaseNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+        };
+
+        tracing::info!("--- create and drop db1");
+        {
+            let drop_on = Some(Utc::now() - Duration::days(1));
+
+            // first create database
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: db_name_ident.clone(),
+                meta: DatabaseMeta {
+                    engine: "github".to_string(),
+                    //drop_on,
+                    ..Default::default()
+                },
+            };
+
+            let res = mt.create_database(req).await?;
+            let db_id = res.db_id;
+            tracing::info!("create database res: {:?}", res);
+
+            let res = mt
+                .get_database_history(ListDatabaseReq {
+                    tenant: tenant.to_string(),
+                })
+                .await?;
+
+            // assert not return out of retention time data
+            assert_eq!(res.len(), 1);
+
+            let drop_data = DatabaseMeta {
+                engine: "github".to_string(),
+                drop_on,
+                ..Default::default()
+            };
+            let id_key = DatabaseId { db_id };
+            let data = serialize_struct(&drop_data)?;
+            upsert_test_data(kv_api, &id_key, data).await?;
+
+            let res = mt
+                .get_database_history(ListDatabaseReq {
+                    tenant: tenant.to_string(),
+                })
+                .await?;
+
+            // assert not return out of retention time data
+            assert_eq!(res.len(), 0);
+        }
+
+        Ok(())
+    }
+
+    pub async fn table_drop_out_of_retention_time_history<MT: SchemaApi>(
+        self,
+        mt: &MT,
+        kv_api: &impl KVApi,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant_table_drop_history";
+        let db_name = "table_table_drop_history_db1";
+        let tbl_name = "table_table_drop_history_tb1";
+        let tbl_name_ident = TableNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+            table_name: tbl_name.to_string(),
+        };
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        tracing::info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            tracing::info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.db_id, "first database id is 1");
+        }
+
+        let created_on = Utc::now();
+        let create_table_meta = TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            created_on,
+            //drop_on: Some(created_on - Duration::days(1)),
+            ..TableMeta::default()
+        };
+        tracing::info!("--- create and get table");
+        {
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: tbl_name_ident.clone(),
+                table_meta: create_table_meta.clone(),
+            };
+
+            let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+            let res = mt.create_table(req.clone()).await?;
+            let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+            assert!(old_db.ident.seq < cur_db.ident.seq);
+            let table_id = res.table_id;
+            assert!(table_id >= 1, "table id >= 1");
+
+            let res = mt
+                .get_table_history(ListTableReq::new(tenant, db_name))
+                .await?;
+
+            assert_eq!(res.len(), 1);
+
+            let tbid = TableId { table_id };
+            let create_drop_table_meta = TableMeta {
+                schema: schema(),
+                engine: "JSON".to_string(),
+                created_on,
+                drop_on: Some(created_on - Duration::days(1)),
+                ..TableMeta::default()
+            };
+            let data = serialize_struct(&create_drop_table_meta)?;
+            upsert_test_data(kv_api, &tbid, data).await?;
+            // assert not return out of retention time data
+            let res = mt
+                .get_table_history(ListTableReq::new(tenant, db_name))
+                .await?;
+
+            assert_eq!(res.len(), 0);
+        }
+
         Ok(())
     }
 
