@@ -7,10 +7,10 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set Swap Space to 10GB
+    - name: Set Swap Space to 4GB
       uses: pierotofy/set-swap-space@v1.0
       with:
-        swap-size-gb: 10
+        swap-size-gb: 4
 
     - name: Maximize build space
       uses: ./.github/actions/cleanup
