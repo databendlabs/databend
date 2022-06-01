@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hive_meta_store::TThriftHiveMetastoreSyncClient;
 use common_hive_meta_store::ThriftHiveMetastoreSyncClient;
-use common_meta_app::schema::CountTableReply;
+use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
@@ -217,7 +217,7 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTableReply> {
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
         unimplemented!()
     }
 

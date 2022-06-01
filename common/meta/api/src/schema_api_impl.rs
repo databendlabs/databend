@@ -640,6 +640,9 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
+        let mut tbcount_found = false;
+        let mut tb_count = 0;
+        let mut tb_count_seq;
 
         if req.table_meta.drop_on.is_some() {
             return Err(MetaError::AppError(AppError::CreateTableWithDropTime(
@@ -695,12 +698,16 @@ impl<KV: KVApi> SchemaApi for KV {
             let tb_count_key = CountTablesKey {
                 tenant: tenant_dbname.tenant.clone(),
             };
-            let (tb_count_seq, tb_count) = {
+            (tb_count_seq, tb_count) = {
                 let (seq, count) = get_u64_value(self, &tb_count_key).await?;
                 if seq > 0 {
                     (seq, count)
-                } else {
+                } else if !tbcount_found {
+                    // only count_tables for the first time.
+                    tbcount_found = true;
                     (0, count_tables(self, &tb_count_key).await?)
+                } else {
+                    (0, tb_count)
                 }
             };
             // Create table by inserting these record:
@@ -766,6 +773,9 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
+        let mut tbcount_found = false;
+        let mut tb_count = 0;
+        let mut tb_count_seq;
 
         loop {
             // Get db by name to ensure presence
@@ -803,12 +813,16 @@ impl<KV: KVApi> SchemaApi for KV {
             let tb_count_key = CountTablesKey {
                 tenant: tenant_dbname.tenant.clone(),
             };
-            let (tb_count_seq, tb_count) = {
+            (tb_count_seq, tb_count) = {
                 let (seq, count) = get_u64_value(self, &tb_count_key).await?;
                 if seq > 0 {
                     (seq, count)
-                } else {
+                } else if !tbcount_found {
+                    // only count_tables for the first time.
+                    tbcount_found = true;
                     (0, count_tables(self, &tb_count_key).await?)
+                } else {
+                    (0, tb_count)
                 }
             };
             // Delete table by these operations:
@@ -876,6 +890,9 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, MetaError> {
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
+        let mut tbcount_found = false;
+        let mut tb_count = 0;
+        let mut tb_count_seq;
 
         loop {
             // Get db by name to ensure presence
@@ -940,12 +957,16 @@ impl<KV: KVApi> SchemaApi for KV {
             let tb_count_key = CountTablesKey {
                 tenant: tenant_dbname.tenant.clone(),
             };
-            let (tb_count_seq, tb_count) = {
+            (tb_count_seq, tb_count) = {
                 let (seq, count) = get_u64_value(self, &tb_count_key).await?;
                 if seq > 0 {
                     (seq, count)
-                } else {
+                } else if !tbcount_found {
+                    // only count_tables for the first time.
+                    tbcount_found = true;
                     (0, count_tables(self, &tb_count_key).await?)
+                } else {
+                    (0, tb_count)
                 }
             };
             // add drop_on time on table meta
@@ -1542,6 +1563,12 @@ impl<KV: KVApi> SchemaApi for KV {
         }
     }
 
+    /// Get the count of tables for one tenant.
+    ///
+    /// Accept tenant name and returns the count of tables for the tenant.
+    ///
+    /// It get the count from kv space first,
+    /// if not found, it will compute the count by listing all databases and table ids.
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, MetaError> {
         let key = CountTablesKey {
             tenant: req.tenant.to_string(),
@@ -1549,29 +1576,37 @@ impl<KV: KVApi> SchemaApi for KV {
 
         let count = loop {
             let (seq, cnt) = {
+                // get the count from kv space first
                 let (seq, c) = get_u64_value(self, &key).await?;
                 if seq > 0 {
-                    (seq, c)
-                } else {
-                    (0, count_tables(self, &key).await?)
+                    // if seq > 0, we can get the count directly
+                    break c;
                 }
-            };
 
-            if seq > 0 {
-                break cnt;
-            }
+                // if not, we should compute the count from by listing all databases and table ids
+
+                // this line of codes will only be executed once,
+                // because if `send_txn` failed, it means another txn will put the count value into the kv space，
+                // and then the next loop will get the count value through `get_u64_value`.
+                (0, count_tables(self, &key).await?)
+            };
 
             let key = CountTablesKey {
                 tenant: req.tenant.clone(),
             };
 
             let txn_req = TxnRequest {
+                // table count should not be changed.
                 condition: vec![txn_cond_seq(&key, Eq, seq)?],
                 if_then: vec![txn_op_put(&key, serialize_u64(cnt)?)?],
                 else_then: vec![],
             };
 
-            send_txn(self, txn_req).await?;
+            let (succ, _) = send_txn(self, txn_req).await?;
+            // if txn succeeds, count can be returned safely
+            if succ {
+                break cnt;
+            }
         };
 
         tracing::debug!(
