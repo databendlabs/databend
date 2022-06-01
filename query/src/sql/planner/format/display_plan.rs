@@ -12,27 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod display_rel_operator;
-use std::fmt::Display;
-mod display_plan;
-mod indent_format;
+use common_exception::Result;
 
-pub struct FormatTreeNode<T: Display> {
-    payload: T,
-    children: Vec<Self>,
-}
+use crate::sql::plans::Plan;
 
-impl<T> FormatTreeNode<T>
-where T: Display
-{
-    pub fn new(payload: T) -> Self {
-        Self {
-            payload,
-            children: vec![],
+impl Plan {
+    pub fn format_indent(&self) -> Result<String> {
+        match self {
+            Plan::Query {
+                s_expr, metadata, ..
+            } => s_expr.to_format_tree(metadata).format_indent(),
+            Plan::Explain { kind, plan } => {
+                let result = plan.format_indent()?;
+                Ok(format!("{:?}:\n{}", kind, result))
+            }
         }
-    }
-
-    pub fn with_children(payload: T, children: Vec<Self>) -> Self {
-        Self { payload, children }
     }
 }

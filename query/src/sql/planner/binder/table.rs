@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
+use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
 use common_ast::parser::error::Backtrace;
 use common_ast::parser::error::DisplayError;
@@ -128,7 +129,14 @@ impl<'a> Binder {
                         if stmts.len() > 1 {
                             return Err(ErrorCode::UnImplement("unsupported multiple statements"));
                         }
-                        self.bind_statement(bind_context, &stmts[0]).await
+                        if let Statement::Query(query) = &stmts[0] {
+                            self.bind_query(bind_context, query).await
+                        } else {
+                            Err(ErrorCode::LogicalError(format!(
+                                "Invalid VIEW object: {}",
+                                table_meta.name()
+                            )))
+                        }
                     }
                     _ => {
                         let source = table_meta
