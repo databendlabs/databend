@@ -74,7 +74,6 @@ impl InsertInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
-
         let settings = self.ctx.get_settings();
         let table = self
             .ctx
@@ -185,7 +184,7 @@ impl InsertInterpreter {
         let overwrite = self.plan.overwrite;
         let catalog_name = self.plan.catalog_name.clone();
         let context = self.ctx.clone();
-        let append_entries = self.ctx.clone().consume_precommit_blocks();
+        let append_entries = self.ctx.consume_precommit_blocks();
 
         // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
         let handler = self.ctx.get_storage_runtime().spawn(async move {

@@ -222,10 +222,8 @@ impl Table for FuseTable {
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        let a = self
-            .do_commit(ctx, catalog_name, append_log_entries, overwrite)
-            .await;
-        return a;
+        self.do_commit(ctx, catalog_name, append_log_entries, overwrite)
+            .await
     }
 
     async fn truncate(

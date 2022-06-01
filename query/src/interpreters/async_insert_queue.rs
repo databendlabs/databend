@@ -65,6 +65,7 @@ impl Hash for InsertKey {
             self.plan.catalog_name, self.plan.database_name, self.plan.table_name
         );
         state.write(table.as_bytes());
+        // TODO(fkuner)
         // self.settings.hash(state);
     }
 }
@@ -279,14 +280,12 @@ impl AsyncInsertQueue {
     }
 
     fn schedule(self: Arc<Self>, key: InsertKey, data: InsertData) {
-        // let self_arc = self.clone();
         self.runtime.as_ref().inner().spawn(async {
             self.process(key, data).await;
         });
     }
 
     async fn process(self: Arc<Self>, key: InsertKey, data: InsertData) {
-        // let self_arc = self.clone();
         let insert_plan = key.plan;
 
         let session_mgr = self.session_mgr.read().clone().unwrap();
@@ -318,7 +317,6 @@ impl AsyncInsertQueue {
     }
 
     fn busy_check(self: Arc<Self>) -> Duration {
-        // let self_arc = self.clone();
         let mut keys = Vec::new();
         let mut queue = self.queue.write();
 
@@ -345,7 +343,6 @@ impl AsyncInsertQueue {
     }
 
     fn stale_check(self: Arc<Self>) {
-        // let self_arc = self.clone();
         let mut keys = Vec::new();
         let mut queue = self.queue.write();
 

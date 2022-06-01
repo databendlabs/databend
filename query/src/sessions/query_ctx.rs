@@ -65,6 +65,7 @@ use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
 use crate::Config;
+
 #[derive(Clone)]
 pub struct QueryContext {
     version: String,

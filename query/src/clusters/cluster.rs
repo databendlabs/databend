@@ -88,9 +88,7 @@ impl ClusterDiscovery {
     }
 
     pub async fn discover(&self) -> Result<Arc<Cluster>> {
-        let tmp = self.api_provider.get_nodes().await;
-
-        match tmp {
+        match self.api_provider.get_nodes().await {
             Err(cause) => Err(cause.add_message_back("(while cluster api get_nodes).")),
             Ok(cluster_nodes) => {
                 let mut res = Vec::with_capacity(cluster_nodes.len());

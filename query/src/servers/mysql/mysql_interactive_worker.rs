@@ -318,7 +318,6 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                                 return Err(e);
                             }
                         };
-
                         tracing::debug!("Get logic plan:\n{:?}", plan);
                         InterpreterFactory::get(context.clone(), plan)?
                     };
@@ -358,7 +357,6 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     ) -> Result<(Vec<DataBlock>, String)> {
         let instant = Instant::now();
 
-        // fkuner
         let query_result = context.try_spawn(
             async move {
                 // Write start query log.

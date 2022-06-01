@@ -108,7 +108,7 @@ impl SessionManager {
             )))));
 
         Ok(Arc::new(SessionManager {
-            conf: RwLock::new(conf.clone()),
+            conf: RwLock::new(conf),
             catalogs: RwLock::new(catalogs),
             discovery: RwLock::new(discovery),
             http_query_manager,

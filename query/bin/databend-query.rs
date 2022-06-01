@@ -58,7 +58,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     tracing::info!("DatabendQuery {}", *databend_query::DATABEND_COMMIT_VERSION);
 
     let session_manager = SessionManager::from_conf(conf.clone()).await?;
-
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
 
     // MySQL handler.
@@ -152,20 +151,22 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Async Insert Queue
     {
-        let queue = session_manager
+        let async_insert_queue = session_manager
             .clone()
             .get_async_insert_queue()
             .read()
             .clone()
             .unwrap();
 
-        let b = queue.clone();
+        // let b = queue.clone();
 
-        let mut a = b.session_mgr.write();
-        *a = Some(session_manager.clone());
+        let mut queue = async_insert_queue.session_mgr.write();
+        *queue = Some(session_manager.clone());
 
-        let c = queue.clone();
-        c.start().await;
+        // let c = async_insert_queue.clone();
+        // c.start().await;
+
+        async_insert_queue.clone().start().await;
     }
 
     tracing::info!("Ready for connections.");

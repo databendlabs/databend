@@ -14,8 +14,6 @@
 
 mod access;
 mod async_insert_queue;
-// mod async_insert_queue_instance;
-// mod interpreter_async_insert;
 mod interpreter;
 mod interpreter_call;
 mod interpreter_common;
@@ -78,7 +76,6 @@ mod stream;
 
 pub use access::ManagementModeAccess;
 pub use async_insert_queue::AsyncInsertQueue;
-// pub use async_insert_queue_instance::AsyncInsertQueueInstance;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;
