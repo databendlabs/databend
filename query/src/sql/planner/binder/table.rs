@@ -131,7 +131,9 @@ impl<'a> Binder {
                         self.bind_statement(bind_context, &stmts[0]).await
                     }
                     _ => {
-                        let source = table_meta.read_plan(self.ctx.clone(), None).await?;
+                        let source = table_meta
+                            .read_plan_with_catalog(self.ctx.clone(), catalog.clone(), None)
+                            .await?;
                         let table_index = self
                             .metadata
                             .write()

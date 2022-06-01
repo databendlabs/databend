@@ -157,7 +157,7 @@ select number from numbers(100) order by number asc limit 10;
 select '==================';
 select number*2 as number from numbers(100) order by number limit 10;
 select '=== Test limit n, m ===';
-select number from numbers(100) order by number asc limit 10, 10;
+select number from numbers(100) order by number asc limit 9, 11;
 select '==================';
 select number-2 as number from numbers(100) order by number asc limit 10, 10;
 select '=== Test limit with offset ===';

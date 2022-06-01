@@ -41,7 +41,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
         for (ri, row) in enumerate(results):
             for (i, v) in enumerate(row):
                 if isinstance(v, NoneType):
-                    vals.append("None")
+                    vals.append("NULL")
                     continue
 
                 if query_type[i] == 'I':

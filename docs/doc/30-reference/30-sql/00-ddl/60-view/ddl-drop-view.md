@@ -17,6 +17,6 @@ DROP VIEW [IF EXISTS] [db.]view_name
 ```sql
 DROP VIEW IF EXISTS tmp_view;
 
-SELECT * from tmp_view;
+SELECT * FROM tmp_view;
 ERROR 1105 (HY000): Code: 1025, displayText = Unknown table 'tmp_view'.
 ```

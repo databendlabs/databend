@@ -1,7 +1,5 @@
+<img src="https://repository-images.githubusercontent.com/302827809/a01c8064-0196-45d9-b326-1762d6d3062b" alt="databend" />
 <div align="center">
-
-<p align="center"><img alt="Databend Logo" src="website/static/img/favicon.svg" width="20%"/></p>
-<p align="center">A Modern Cloud Data Warehouse with the Elasticity and Performance both on Object Storage</p>
  
 <h4 align="center">
   <a href="https://databend.rs/doc">Documentation</a>  |
@@ -19,7 +17,7 @@
 <img src="https://img.shields.io/github/workflow/status/datafuselabs/databend/Release" alt="CI Status" />
 </a>
 
-<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="patform" />
+<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
 
 <a href="https://opensource.org/licenses/Apache-2.0">
 <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="license" />
@@ -196,6 +194,13 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 - [How to Create a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-create-view)
 - [How to Drop a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-drop-view)
 - [How to Alter a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-alter-view)
+
+## User-Defined Functions
+
+- [How to Create a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-create-function)
+- [How to Drop a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-drop-function)
+- [How to Alter a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-alter-function)
+
  
 ### Load Data
 

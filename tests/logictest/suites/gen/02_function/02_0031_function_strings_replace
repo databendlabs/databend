@@ -8,25 +8,25 @@ statement query T
 SELECT REPLACE(NULL, 'a', 'b');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT REPLACE('aaa', 'a', NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT REPLACE('aaa', NULL, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT REPLACE(NULL, NULL, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT '=== const, const, const ===';

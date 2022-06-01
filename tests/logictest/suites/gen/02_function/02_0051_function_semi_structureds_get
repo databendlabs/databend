@@ -14,7 +14,7 @@ statement query T
 select get(parse_json('[2.71, 3.14]'), 2);
 
 ----  
-None
+NULL
 
 statement query T 
 select get(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'aA');
@@ -26,7 +26,7 @@ statement query T
 select get(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
 
 ----  
-None
+NULL
 
 statement query T 
 select '==get_ignore_case==';
@@ -92,7 +92,7 @@ statement query T
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][2]');
 
 ----  
-None
+NULL
 
 statement error 1005
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), ''); 
@@ -137,7 +137,7 @@ statement query T
 select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][2]');
 
 ----  
-None
+NULL
 
 statement error 1005
 select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', ''); 

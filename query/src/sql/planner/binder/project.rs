@@ -45,7 +45,10 @@ impl<'a> Binder {
         let mut scalars = HashMap::new();
         for item in select_list.items.iter() {
             let column_binding = if let Scalar::BoundColumnRef(ref column_ref) = item.scalar {
-                column_ref.column.clone()
+                let mut column_binding = column_ref.column.clone();
+                // We should apply alias for the ColumnBinding, since it comes from table
+                column_binding.column_name = item.alias.clone();
+                column_binding
             } else {
                 let column_binding =
                     self.create_column_binding(None, item.alias.clone(), item.scalar.data_type());
