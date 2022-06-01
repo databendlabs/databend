@@ -524,7 +524,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let db_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut db_info_list = vec![];
-        let now = Utc::now().timestamp();
+        let now = Utc::now();
         for db_id_list_key in db_id_list_keys.iter() {
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist = DbIdListKey {
@@ -555,7 +555,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     continue;
                 }
                 let db_meta = db_meta.unwrap();
-                if is_drop_time_out_of_retention_time(&db_meta.drop_on, now) {
+                if is_drop_time_out_of_retention_time(&db_meta.drop_on, &now) {
                     continue;
                 }
 
@@ -1218,7 +1218,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let table_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut tb_info_list = vec![];
-        let now = Utc::now().timestamp();
+        let now = Utc::now();
         for table_id_list_key in table_id_list_keys.iter() {
             // get table id list from _fd_table_id_list/db_id/table_name
             let dbid_tbname_idlist = TableIdListKey {
@@ -1255,7 +1255,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 // Safe unwrap() because: tb_meta_seq > 0
                 let tb_meta = tb_meta.unwrap();
-                if is_drop_time_out_of_retention_time(&tb_meta.drop_on, now) {
+                if is_drop_time_out_of_retention_time(&tb_meta.drop_on, &now) {
                     continue;
                 }
 
@@ -1500,9 +1500,12 @@ impl<KV: KVApi> SchemaApi for KV {
 
 // Return true if drop time is out of `DATA_RETENTION_TIME_IN_DAYS option,
 // use DEFAULT_DATA_RETENTION_SECONDS by default.
-fn is_drop_time_out_of_retention_time(drop_on: &Option<DateTime<Utc>>, now: i64) -> bool {
+fn is_drop_time_out_of_retention_time(
+    drop_on: &Option<DateTime<Utc>>,
+    now: &DateTime<Utc>,
+) -> bool {
     if let Some(drop_on) = drop_on {
-        return now - drop_on.timestamp() >= DEFAULT_DATA_RETENTION_SECONDS;
+        return now.timestamp() - drop_on.timestamp() >= DEFAULT_DATA_RETENTION_SECONDS;
     }
 
     false
