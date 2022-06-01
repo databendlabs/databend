@@ -40,7 +40,7 @@ pub use hash_join::PhysicalHashJoin;
 pub use limit::LimitPlan;
 pub use logical_get::LogicalGet;
 pub use logical_join::JoinType;
-pub use logical_join::LogicalJoin;
+pub use logical_join::LogicalInnerJoin;
 pub use max_one_row::Max1Row;
 pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
@@ -84,7 +84,7 @@ pub trait PhysicalPlan {
 pub enum PlanType {
     // Logical operators
     LogicalGet,
-    LogicalJoin,
+    LogicalInnerJoin,
 
     // Physical operators
     PhysicalScan,
@@ -112,7 +112,7 @@ pub enum PlanType {
 #[derive(Clone, Debug)]
 pub enum RelOperator {
     LogicalGet(LogicalGet),
-    LogicalJoin(LogicalJoin),
+    LogicalInnerJoin(LogicalInnerJoin),
 
     PhysicalScan(PhysicalScan),
     PhysicalHashJoin(PhysicalHashJoin),

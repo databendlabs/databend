@@ -95,7 +95,7 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(plan.into(), input))
             }
 
-            RelOperator::LogicalJoin(_) => Ok(SExpr::create_binary(
+            RelOperator::LogicalInnerJoin(_) => Ok(SExpr::create_binary(
                 s_expr.plan().clone(),
                 self.rewrite(s_expr.child(0)?)?,
                 self.rewrite(s_expr.child(1)?)?,

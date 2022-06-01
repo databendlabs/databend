@@ -35,15 +35,15 @@ pub enum JoinType {
 }
 
 #[derive(Clone, Debug)]
-pub struct LogicalJoin {
+pub struct LogicalInnerJoin {
     pub left_conditions: Vec<Scalar>,
     pub right_conditions: Vec<Scalar>,
     pub join_type: JoinType,
 }
 
-impl Operator for LogicalJoin {
+impl Operator for LogicalInnerJoin {
     fn plan_type(&self) -> PlanType {
-        PlanType::LogicalJoin
+        PlanType::LogicalInnerJoin
     }
 
     fn is_physical(&self) -> bool {
@@ -63,7 +63,7 @@ impl Operator for LogicalJoin {
     }
 }
 
-impl LogicalPlan for LogicalJoin {
+impl LogicalPlan for LogicalInnerJoin {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;

@@ -35,7 +35,7 @@ use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::JoinType;
-use crate::sql::plans::LogicalJoin;
+use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::BindContext;
@@ -134,7 +134,7 @@ impl<'a> Binder {
                 "Join conditions should be empty in cross join",
             ));
         }
-        let inner_join = LogicalJoin {
+        let inner_join = LogicalInnerJoin {
             left_conditions,
             right_conditions,
             join_type,
