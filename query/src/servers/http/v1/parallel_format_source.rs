@@ -170,11 +170,11 @@ impl MultipartWorker for ParallelMultipartWorker {
                                         ))))
                                         .await
                                     {
-                                        // common_tracing::tracing::warn!(
-                                        //     "Multipart channel disconnect. {}, filename: '{}'",
-                                        //     cause,
-                                        //     filename
-                                        // );
+                                        common_tracing::tracing::warn!(
+                                            "Multipart channel disconnect. {}, filename: '{}'",
+                                            cause,
+                                            filename
+                                        );
                                         break 'outer;
                                     }
 

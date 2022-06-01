@@ -245,7 +245,7 @@ pub fn position15<
     position16::<POSITIVE, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, 0>(buf)
 }
 
-#[inline]
+#[inline(always)]
 #[allow(unreachable_code)]
 pub fn position16<
     const POSITIVE: bool,
@@ -268,27 +268,6 @@ pub fn position16<
 >(
     buf: &[u8],
 ) -> usize {
-    #[cfg(all(any(target_arch = "aarch64"), target_feature = "neon"))]
-    return position_neon::<
-        POSITIVE,
-        C1,
-        C2,
-        C3,
-        C4,
-        C5,
-        C6,
-        C7,
-        C8,
-        C9,
-        C10,
-        C11,
-        C12,
-        C13,
-        C14,
-        C15,
-        C16,
-    >(buf);
-
     #[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
     return position_sse42::<
         POSITIVE,
@@ -331,82 +310,8 @@ pub fn position16<
     >(buf, 0)
 }
 
-#[cfg(all(any(target_arch = "aarch64"), target_feature = "neon"))]
-pub fn position_neon<
-    const POSITIVE: bool,
-    const C1: u8,
-    const C2: u8,
-    const C3: u8,
-    const C4: u8,
-    const C5: u8,
-    const C6: u8,
-    const C7: u8,
-    const C8: u8,
-    const C9: u8,
-    const C10: u8,
-    const C11: u8,
-    const C12: u8,
-    const C13: u8,
-    const C14: u8,
-    const C15: u8,
-    const C16: u8,
->(
-    buf: &[u8],
-) -> usize {
-    unsafe {
-        use std::arch::aarch64::*;
-
-        let mut index = 0;
-
-        while index + 15 < buf.len() {
-            let bytes = vld1q_u8(buf.as_ptr().add(index));
-            let mut res = vceqq_u8(bytes, vdupq_n_u8(C1));
-
-            macro_rules! neno_match {
-                ($($name:ident,)*) => {
-                    $(if $name != 0 {
-                        res = vorrq_u8(res, vceqq_u8(bytes, vdupq_n_u8($name)));
-                    })*
-                };
-            }
-
-            neno_match!(C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16,);
-
-            let bit_mask = match POSITIVE {
-                true => neno_mm_movemask_epi8(res),
-                false => !neno_mm_movemask_epi8(res),
-            };
-
-            if bit_mask > 0 {
-                return index + (bit_mask.trailing_zeros() as usize);
-            }
-
-            index += 16;
-        }
-
-        position16_from_index::<
-            POSITIVE,
-            C1,
-            C2,
-            C3,
-            C4,
-            C5,
-            C6,
-            C7,
-            C8,
-            C9,
-            C10,
-            C11,
-            C12,
-            C13,
-            C14,
-            C15,
-            C16,
-        >(buf, index)
-    }
-}
-
 #[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
+#[inline(always)]
 fn position_sse42<
     const POSITIVE: bool,
     const C1: u8,
@@ -434,8 +339,6 @@ fn position_sse42<
             C1 as i8, C2 as i8, C3 as i8, C4 as i8, C5 as i8, C6 as i8, C7 as i8, C8 as i8,
             C9 as i8, C10 as i8, C11 as i8, C12 as i8, C13 as i8, C14 as i8, C15 as i8, C16 as i8,
         );
-
-        let mut index = 0;
 
         let chars_count = if C16 != 0 {
             16
@@ -470,6 +373,8 @@ fn position_sse42<
         } else {
             1
         };
+
+        let mut index = 0;
 
         while index + 15 < buf.len() {
             let bytes = _mm_loadu_si128(buf.as_ptr().add(index) as *const _);
@@ -565,25 +470,4 @@ fn position16_from_index<
     }
 
     index
-}
-
-#[cfg(all(any(target_arch = "aarch64"), target_feature = "neon"))]
-unsafe fn neno_mm_movemask_epi8(input: std::arch::aarch64::uint8x16_t) -> u16 {
-    use std::arch::aarch64::*;
-
-    let xr = vec![
-        -7_i8, -6, -5, -4, -3, -2, -1, 0, -7_i8, -6, -5, -4, -3, -2, -1, 0,
-    ];
-    let xr = xr.as_ptr();
-
-    let mask_and = vdupq_n_u8(0x80);
-    let mask_shift = vld1q_s8(xr);
-
-    let mut temp = vshlq_u8(vandq_u8(input, mask_and), mask_shift);
-
-    temp = vpaddq_u8(temp, temp);
-    temp = vpaddq_u8(temp, temp);
-    temp = vpaddq_u8(temp, temp);
-
-    vgetq_lane_u16::<0>(vreinterpretq_u16_u8(temp))
 }
