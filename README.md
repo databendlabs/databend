@@ -1,7 +1,5 @@
+<img src="https://repository-images.githubusercontent.com/302827809/a01c8064-0196-45d9-b326-1762d6d3062b" alt="databend" />
 <div align="center">
-
-<p align="center"><img alt="Databend Logo" src="website/static/img/favicon.svg" width="20%"/></p>
-<p align="center">A Modern Cloud Data Warehouse with the Elasticity and Performance both on Object Storage</p>
  
 <h4 align="center">
   <a href="https://databend.rs/doc">Documentation</a>  |
