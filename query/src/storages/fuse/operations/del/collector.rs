@@ -90,6 +90,12 @@ impl<'a> DeletionCollector<'a> {
 
             let new_seg_loc = self.location_generator.gen_segment_info_location();
             let loc = (new_seg_loc, SegmentInfo::VERSION);
+
+            // write the new segment, TODO update cache
+            let bytes = serde_json::to_vec(&new_segment)?;
+            let operator = self.ctx.get_storage_operator()?;
+            operator.object(loc.0.as_str()).write(bytes).await?;
+
             new_snapshot.segments[seg_idx] = loc;
         }
 
@@ -155,7 +161,7 @@ impl<'a> DeletionCollector<'a> {
             col_metas,
             cluster_stats: None, // TODO confirm this with zhyass
             location: (location, DataBlock::VERSION),
-            compression: Compression::Lz4,
+            compression: Compression::Lz4Raw,
         };
         Ok(block_meta)
     }

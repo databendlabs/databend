@@ -18,12 +18,16 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::TableIdent;
 
+use crate::Expression;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DeletePlan {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
     pub table_id: TableIdent,
+    pub selection: Option<Expression>,
+    pub projection: Vec<usize>,
 }
 
 impl DeletePlan {

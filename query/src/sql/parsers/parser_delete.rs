@@ -25,6 +25,7 @@ use crate::sql::DfStatement;
 impl<'a> DfParser<'a> {
     // DELETE.
     pub(crate) fn parse_delete(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        self.parser.next_token();
         let native_query = self.parser.parse_delete()?;
         match native_query {
             Statement::Delete {

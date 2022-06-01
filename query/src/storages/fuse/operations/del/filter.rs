@@ -40,7 +40,7 @@ pub async fn delete_from_block(
 
     // inverse the expr
     let inversed_expr = Expression::UnaryExpression {
-        op: "!".to_string(),
+        op: "not".to_string(),
         expr: Box::new(expr.clone()),
     };
 

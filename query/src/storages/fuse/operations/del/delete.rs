@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
+use common_tracing::tracing::debug;
 
 use super::filter::delete_from_block;
 use crate::sessions::QueryContext;
@@ -30,77 +30,83 @@ use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
 
 impl FuseTable {
-    pub async fn delete(
-        &self,
-        ctx: Arc<QueryContext>,
-        push_downs: &Option<Extras>,
-        plan: &DeletePlan,
-    ) -> Result<()> {
+    pub async fn do_delete(&self, ctx: Arc<QueryContext>, plan: &DeletePlan) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot(ctx.as_ref()).await?;
 
         // check if table is empty
-        let snapshot = if let Some(s) = snapshot_opt {
-            s
+        let snapshot = if let Some(val) = snapshot_opt {
+            val
         } else {
             // no snapshot, no deletion
             return Ok(());
         };
 
+        if snapshot.summary.row_count == 0 {
+            // empty snapshot, no deletion
+            return Ok(());
+        }
+
         // check if unconditional deletion
-        let filter = if let Some(Extras { filters, .. }) = &push_downs {
-            if filters.len() != 1 {
-                return Err(ErrorCode::LogicalError(
-                    "there should be exact one expression(conj or disjunction) for the where-clause of a delete statement",
-                ));
-            } else {
-                &filters[0]
-            }
+        let filter = if let Some(val) = &plan.selection {
+            val
         } else {
             // deleting the whole table... just a truncate
             let purge = false;
+            debug!(
+                "unconditionally delete from table, {}.{}.{}",
+                plan.catalog_name, plan.database_name, plan.table_name
+            );
             return self
                 .do_truncate(ctx.clone(), purge, plan.catalog_name.as_str())
                 .await;
         };
 
-        self.delete_blocks(ctx, &snapshot, filter, push_downs, &plan.catalog_name)
-            .await
+        self.delete_rows(ctx, &snapshot, filter, plan).await
     }
 
-    async fn delete_blocks(
+    async fn delete_rows(
         &self,
         ctx: Arc<QueryContext>,
         snapshot: &Arc<TableSnapshot>,
         filter: &Expression,
-        push_downs: &Option<Extras>,
-        catalog_name: &str,
+        plan: &DeletePlan,
     ) -> Result<()> {
         let mut deletion_collector =
             DeletionCollector::new(ctx.as_ref(), &self.meta_location_generator, snapshot);
         let schema = self.table_info.schema();
+        // TODO refine pruner
+        let extras = Extras {
+            projection: Some(plan.projection.clone()),
+            filters: vec![filter.clone()],
+            limit: None,
+            order_by: vec![],
+        };
+        let push_downs = Some(extras);
         let block_metas = BlockPruner::new(snapshot.clone())
-            .apply(ctx.as_ref(), schema, push_downs)
+            .apply(ctx.as_ref(), schema, &push_downs)
             .await?;
 
         // delete block one by one.
         // this could be executed in a distributed manner, till new planner, pipeline settled down totally
         for (seg_idx, block_meta) in block_metas {
-            let proj = self.projection_of_push_downs(push_downs);
+            let proj = plan.projection.clone(); // TODO WTF
             match delete_from_block(self, &block_meta, &ctx, proj, filter).await? {
                 Deletion::NothingDeleted => {
+                    debug!("Nothing deleted");
                     // false positive, we should keep the whole block
                     continue;
                 }
                 Deletion::Remains(r) => {
                     // after deletion, the data block `r` remains, let keep it  by replacing the block
                     // located at `block_meta.location`, of segment indexed by `seg_idx`, with a new block `r`
+                    debug!("got remains {:?}", &r);
                     deletion_collector
                         .replace_with(seg_idx, &block_meta.location, r)
                         .await?
                 }
             }
         }
-        self.commit_deletion(ctx.as_ref(), deletion_collector, catalog_name)
+        self.commit_deletion(ctx.as_ref(), deletion_collector, &plan.catalog_name)
             .await
     }
 

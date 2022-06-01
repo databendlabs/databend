@@ -21,6 +21,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -287,5 +288,9 @@ impl Table for FuseTable {
             .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
             .await?;
         Ok(res)
+    }
+
+    async fn delete(&self, ctx: Arc<QueryContext>, delete_plan: DeletePlan) -> Result<()> {
+        self.do_delete(ctx, &delete_plan).await
     }
 }
