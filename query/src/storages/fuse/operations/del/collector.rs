@@ -28,9 +28,9 @@ use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::util::column_metas;
+use crate::storages::fuse::statistics::accumulator;
 use crate::storages::fuse::statistics::reducers::reduce_block_metas;
 use crate::storages::fuse::statistics::reducers::reduce_statistics;
-use crate::storages::fuse::statistics::StatisticsAccumulator;
 
 pub enum Deletion {
     NothingDeleted,
@@ -150,7 +150,7 @@ impl<'a> DeletionCollector<'a> {
         let data_accessor = self.ctx.get_storage_operator()?;
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
-        let col_stats = StatisticsAccumulator::acc_columns(&block)?;
+        let col_stats = accumulator::columns_statistics(&block)?;
         let (file_size, file_meta_data) = write_block(block, data_accessor, &location).await?;
         let col_metas = column_metas(&file_meta_data)?;
         let block_meta = BlockMeta {

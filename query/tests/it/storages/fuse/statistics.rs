@@ -27,7 +27,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let block = DataBlock::create(schema, vec![Series::from_data(vec![1, 2, 3])]);
-    let r = StatisticsAccumulator::acc_columns(&block)?;
+    let r = accumulator::columns_statistics(&block)?;
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, DataValue::Int64(1));
@@ -44,7 +44,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
     let col_stats = blocks
         .iter()
-        .map(|b| StatisticsAccumulator::acc_columns(&b.clone().unwrap()))
+        .map(|b| accumulator::columns_statistics(&b.clone().unwrap()))
         .collect::<common_exception::Result<Vec<_>>>()?;
     let r = reducers::reduce_block_statistics(&col_stats);
     assert!(r.is_ok());

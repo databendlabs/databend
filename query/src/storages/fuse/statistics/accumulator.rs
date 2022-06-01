@@ -58,7 +58,7 @@ impl StatisticsAccumulator {
         self.summary_block_count += 1;
         self.summary_row_count += row_count;
         self.in_memory_size += block_in_memory_size;
-        let block_stats = Self::acc_columns(block)?;
+        let block_stats = columns_statistics(block)?;
         self.blocks_statistics.push(block_stats.clone());
         self.cluster_statistics.push(cluster_stats.clone());
         Ok(PartiallyAccumulated {
@@ -105,47 +105,6 @@ impl StatisticsAccumulator {
 
     pub fn summary_clusters(&self) -> Option<ClusterStatistics> {
         super::reduce_cluster_stats(&self.cluster_statistics)
-    }
-
-    pub fn acc_columns(data_block: &DataBlock) -> common_exception::Result<StatisticsOfColumns> {
-        let mut statistics = StatisticsOfColumns::new();
-
-        let rows = data_block.num_rows();
-        for idx in 0..data_block.num_columns() {
-            let col = data_block.column(idx);
-            let field = data_block.schema().field(idx);
-            let column_field = ColumnWithField::new(col.clone(), field.clone());
-
-            let mut min = DataValue::Null;
-            let mut max = DataValue::Null;
-
-            let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
-            let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
-
-            if mins.len() > 0 {
-                min = mins.get(0);
-            }
-            if maxs.len() > 0 {
-                max = maxs.get(0);
-            }
-            let (is_all_null, bitmap) = col.validity();
-            let null_count = match (is_all_null, bitmap) {
-                (true, _) => rows,
-                (false, Some(bitmap)) => bitmap.null_count(),
-                (false, None) => 0,
-            };
-
-            let in_memory_size = col.memory_size() as u64;
-            let col_stats = ColumnStatistics {
-                min,
-                max,
-                null_count: null_count as u64,
-                in_memory_size,
-            };
-
-            statistics.insert(idx as u32, col_stats);
-        }
-        Ok(statistics)
     }
 }
 
@@ -199,51 +158,9 @@ impl BlockStatistics {
             block_file_location: location,
             block_rows_size: data_block.num_rows() as u64,
             block_bytes_size: data_block.memory_size() as u64,
-            block_column_statistics: Self::columns_statistics(data_block)?,
+            block_column_statistics: columns_statistics(data_block)?,
             block_cluster_statistics: cluster_stats,
         })
-    }
-
-    // TODO is this a duplication of `acc_columns`?
-    pub fn columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
-        let mut statistics = StatisticsOfColumns::new();
-
-        let rows = data_block.num_rows();
-        for idx in 0..data_block.num_columns() {
-            let col = data_block.column(idx);
-            let field = data_block.schema().field(idx);
-            let column_field = ColumnWithField::new(col.clone(), field.clone());
-
-            let mut min = DataValue::Null;
-            let mut max = DataValue::Null;
-
-            let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
-            let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
-
-            if mins.len() > 0 {
-                min = mins.get(0);
-            }
-            if maxs.len() > 0 {
-                max = maxs.get(0);
-            }
-            let (is_all_null, bitmap) = col.validity();
-            let null_count = match (is_all_null, bitmap) {
-                (true, _) => rows,
-                (false, Some(bitmap)) => bitmap.null_count(),
-                (false, None) => 0,
-            };
-
-            let in_memory_size = col.memory_size() as u64;
-            let col_stats = ColumnStatistics {
-                min,
-                max,
-                null_count: null_count as u64,
-                in_memory_size,
-            };
-
-            statistics.insert(idx as u32, col_stats);
-        }
-        Ok(statistics)
     }
 
     pub fn clusters_statistics(
@@ -265,4 +182,45 @@ impl BlockStatistics {
 
         Ok(Some(ClusterStatistics { min, max }))
     }
+}
+
+pub fn columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
+    let mut statistics = StatisticsOfColumns::new();
+
+    let rows = data_block.num_rows();
+    for idx in 0..data_block.num_columns() {
+        let col = data_block.column(idx);
+        let field = data_block.schema().field(idx);
+        let column_field = ColumnWithField::new(col.clone(), field.clone());
+
+        let mut min = DataValue::Null;
+        let mut max = DataValue::Null;
+
+        let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
+        let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
+
+        if mins.len() > 0 {
+            min = mins.get(0);
+        }
+        if maxs.len() > 0 {
+            max = maxs.get(0);
+        }
+        let (is_all_null, bitmap) = col.validity();
+        let null_count = match (is_all_null, bitmap) {
+            (true, _) => rows,
+            (false, Some(bitmap)) => bitmap.null_count(),
+            (false, None) => 0,
+        };
+
+        let in_memory_size = col.memory_size() as u64;
+        let col_stats = ColumnStatistics {
+            min,
+            max,
+            null_count: null_count as u64,
+            in_memory_size,
+        };
+
+        statistics.insert(idx as u32, col_stats);
+    }
+    Ok(statistics)
 }
