@@ -129,20 +129,40 @@ impl<'a> DfParser<'a> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
 
-        if self.parser.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
-            let new_table_name = self.parser.parse_object_name()?;
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::RENAME => {
+                    self.parser.expect_keyword(Keyword::TO)?;
+                    let new_table_name = self.parser.parse_object_name()?;
 
-            let rename = DfAlterTable {
-                if_exists,
-                table_name,
-                action: AlterTableAction::RenameTable(new_table_name),
-            };
+                    let rename = DfAlterTable {
+                        if_exists,
+                        table_name,
+                        action: AlterTableAction::RenameTable(new_table_name),
+                    };
 
-            Ok(DfStatement::AlterTable(rename))
-        } else {
-            Err(ParserError::ParserError(String::from(
-                "Alter table only support rename for now!",
-            )))
+                    Ok(DfStatement::AlterTable(rename))
+                }
+                Keyword::CLUSTER => {
+                    self.parser.expect_keyword(Keyword::BY)?;
+
+                    self.parser.expect_token(&Token::LParen)?;
+                    let cluster_keys = self.parser.parse_comma_separated(Parser::parse_expr)?;
+                    self.parser.expect_token(&Token::RParen)?;
+
+                    let cluster_by = DfAlterTable {
+                        if_exists,
+                        table_name,
+                        action: AlterTableAction::ClusterBy(cluster_keys),
+                    };
+
+                    Ok(DfStatement::AlterTable(cluster_by))
+                }
+                _ => Err(ParserError::ParserError(String::from(
+                    "Unsupported alter table statement!",
+                ))),
+            },
+            unexpected => self.expected("alter table statement", unexpected),
         }
     }
 

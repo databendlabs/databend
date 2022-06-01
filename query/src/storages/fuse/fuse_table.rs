@@ -82,7 +82,7 @@ impl FuseTable {
         StorageDescription {
             engine_name: "FUSE".to_string(),
             comment: "FUSE Storage Engine".to_string(),
-            support_order_key: true,
+            support_cluster_key: true,
         }
     }
 

@@ -294,6 +294,7 @@ pub enum AlterDatabaseAction<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AlterTableAction<'a> {
     RenameTable { new_table: Identifier<'a> },
+    ClusterBy { cluster_by: Vec<Expr<'a>> },
     // TODO(wuzhiguo): AddColumn etc
 }
 
@@ -578,6 +579,10 @@ impl<'a> Display for Statement<'a> {
                 match action {
                     AlterTableAction::RenameTable { new_table } => {
                         write!(f, " RENAME TO {new_table}")?;
+                    }
+                    AlterTableAction::ClusterBy { cluster_by } => {
+                        write!(f, " CLUSTER BY ")?;
+                        write_comma_separated_list(f, cluster_by)?;
                     }
                 }
             }

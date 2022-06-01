@@ -77,6 +77,13 @@ pub trait Table: Sync + Send {
         vec![]
     }
 
+    async fn alter_cluster_keys(&self) -> Result<()> {
+        Err(ErrorCode::UnsupportedEngineParams(format!(
+            "Unsupported cluster key for engine: {}",
+            self.engine()
+        )))
+    }
+
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,
