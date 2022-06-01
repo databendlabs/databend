@@ -9,7 +9,6 @@ edition = "2021"
 
 [features]
 default = []
-create_with_drop_time = ["common-meta-api/create_with_drop_time"]
 
 [lib]
 doctest = false
@@ -19,7 +18,7 @@ test = false
 common-exception = { path = "../../exception" }
 common-grpc = { path = "../../grpc" }
 common-io = { path = "../../io" }
-common-meta-api = { path = "../api", features = ["create_with_drop_time"] }
+common-meta-api = { path = "../api" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-types = { path = "../types" }
 common-tracing = { path = "../../tracing" }

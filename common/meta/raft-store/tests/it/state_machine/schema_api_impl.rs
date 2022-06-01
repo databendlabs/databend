@@ -145,6 +145,30 @@ async fn test_meta_embedded_table_list() -> anyhow::Result<()> {
     SchemaApiTestSuite {}.table_list(&sm).await
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_embedded_table_drop_out_of_retention_time_history() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_raft_store_ut!();
+    let _ent = ut_span.enter();
+    let tc = new_raft_test_context();
+    let sm = StateMachine::open(&tc.raft_config, 1).await?;
+
+    SchemaApiTestSuite {}
+        .table_drop_out_of_retention_time_history(&sm, &sm)
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_embedded_database_drop_out_of_retention_time_history() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_raft_store_ut!();
+    let _ent = ut_span.enter();
+    let tc = new_raft_test_context();
+    let sm = StateMachine::open(&tc.raft_config, 1).await?;
+
+    SchemaApiTestSuite {}
+        .database_drop_out_of_retention_time_history(&sm, &sm)
+        .await
+}
+
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // async fn test_meta_embedded_share_create_get_drop() -> anyhow::Result<()> {
 //     let (_log_guards, ut_span) = init_raft_store_ut!();

@@ -14,7 +14,6 @@ test = false
 
 [features]
 default = []
-create_with_drop_time = []
 
 [dependencies]
 common-base = { path = "../../base" }

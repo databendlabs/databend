@@ -21,7 +21,6 @@ test = false
 default = ["simd"]
 simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
-create_with_drop_time = ["common-meta-api/create_with_drop_time"]
 
 [dependencies]
 # Workspace dependencies
@@ -30,7 +29,7 @@ common-base = { path = "../common/base" }
 common-exception = { path = "../common/exception" }
 common-grpc = { path = "../common/grpc" }
 common-macros = { path = "../common/macros" }
-common-meta-api = { path = "../common/meta/api", features = ["create_with_drop_time"] }
+common-meta-api = { path = "../common/meta/api" }
 common-meta-grpc = { path = "../common/meta/grpc" }
 common-meta-raft-store = { path = "../common/meta/raft-store" }
 common-meta-sled-store = { path = "../common/meta/sled-store" }

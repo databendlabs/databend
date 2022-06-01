@@ -38,7 +38,6 @@ use pretty_assertions::assert_eq;
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
-mod mock;
 mod placement;
 mod schema_api_impl;
 

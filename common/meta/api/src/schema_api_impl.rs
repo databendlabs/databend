@@ -111,7 +111,6 @@ impl<KV: KVApi> SchemaApi for KV {
     ) -> Result<CreateDatabaseReply, MetaError> {
         let name_key = &req.name_ident;
 
-        #[cfg(not(feature = "create_with_drop_time"))]
         if req.meta.drop_on.is_some() {
             return Err(MetaError::AppError(AppError::CreateDatabaseWithDropTime(
                 CreateDatabaseWithDropTime::new(&name_key.db_name),
@@ -638,7 +637,6 @@ impl<KV: KVApi> SchemaApi for KV {
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
 
-        #[cfg(not(feature = "create_with_drop_time"))]
         if req.table_meta.drop_on.is_some() {
             return Err(MetaError::AppError(AppError::CreateTableWithDropTime(
                 CreateTableWithDropTime::new(&tenant_dbname_tbname.table_name),
@@ -1778,7 +1776,7 @@ fn deserialize_id(v: &[u8]) -> Result<u64, MetaError> {
     Ok(id)
 }
 
-fn serialize_struct<PB: common_protos::prost::Message>(
+pub(crate) fn serialize_struct<PB: common_protos::prost::Message>(
     value: &impl FromToProto<PB>,
 ) -> Result<Vec<u8>, MetaError> {
     let p = value.to_pb().map_err(meta_encode_err)?;

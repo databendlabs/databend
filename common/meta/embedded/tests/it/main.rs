@@ -15,5 +15,4 @@
 #![allow(unused_imports)]
 
 mod kv_api_impl;
-mod mock;
 mod schema_api_impl;
