@@ -37,6 +37,7 @@ pub use database::UndropDatabaseReq;
 pub use table::CountTablesKey;
 pub use table::CountTablesReply;
 pub use table::CountTablesReq;
+pub use table::ClusterKeyMeta;
 pub use table::CreateTableReply;
 pub use table::CreateTableReq;
 pub use table::DBIdTableName;

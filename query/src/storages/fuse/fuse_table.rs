@@ -66,7 +66,7 @@ impl FuseTable {
     pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let mut cluster_keys = Vec::new();
-        if let Some(order) = &table_info.meta.cluster_keys {
+        if let Some(order) = &table_info.cluster_keys() {
             cluster_keys = PlanParser::parse_exprs(order)?;
         }
 

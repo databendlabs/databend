@@ -126,7 +126,10 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: p.engine,
             engine_options: p.engine_options,
             options: p.options,
-            cluster_keys: p.cluster_keys,
+            cluster_keys_meta: p
+                .cluster_keys_meta
+                .map(mt::ClusterKeyMeta::from_pb)
+                .transpose()?,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
             drop_on: match p.drop_on {
@@ -150,7 +153,11 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             options: self.options.clone(),
-            cluster_keys: self.cluster_keys.clone(),
+            cluster_keys_meta: self
+                .cluster_keys_meta
+                .as_ref()
+                .map(|x| x.to_pb())
+                .transpose()?,
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
             drop_on: match self.drop_on {
@@ -185,6 +192,28 @@ impl FromToProto<pb::TableStatistics> for mt::TableStatistics {
             data_bytes: self.data_bytes,
             compressed_data_bytes: self.compressed_data_bytes,
             index_data_bytes: self.index_data_bytes,
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::ClusterKeyMeta> for mt::ClusterKeyMeta {
+    fn from_pb(p: pb::ClusterKeyMeta) -> Result<Self, Incompatible> {
+        check_ver(p.ver)?;
+
+        let v = Self {
+            cluster_keys_vec: p.cluster_keys_vec,
+            default_cluster_key_id: p.default_cluster_key_id,
+        };
+
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::ClusterKeyMeta, Incompatible> {
+        let p = pb::ClusterKeyMeta {
+            ver: VER,
+            cluster_keys_vec: self.cluster_keys_vec.clone(),
+            default_cluster_key_id: self.default_cluster_key_id,
         };
         Ok(p)
     }

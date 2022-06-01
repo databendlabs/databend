@@ -165,6 +165,14 @@ pub struct TableStatistics {
     pub index_data_bytes: u64,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct ClusterKeyMeta {
+    // The vector of cluster keys.
+    pub cluster_keys_vec: Vec<String>,
+    // The default cluster keys id.
+    pub default_cluster_key_id: u32,
+}
+
 /// The essential state that defines what a table is.
 ///
 /// It is what a meta store just needs to save.
@@ -174,7 +182,7 @@ pub struct TableMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
-    pub cluster_keys: Option<String>,
+    pub cluster_keys_meta: Option<ClusterKeyMeta>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
@@ -228,6 +236,14 @@ impl TableInfo {
         self.meta.schema = schema;
         self
     }
+
+    pub fn cluster_keys(&self) -> Option<String> {
+        self.meta.cluster_keys_meta.as_ref().and_then(|v| {
+            v.cluster_keys_vec
+                .get(v.default_cluster_key_id as usize)
+                .cloned()
+        })
+    }
 }
 
 impl Default for TableMeta {
@@ -237,13 +253,31 @@ impl Default for TableMeta {
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),
-            cluster_keys: None,
+            cluster_keys_meta: None,
             created_on: Default::default(),
             updated_on: Default::default(),
             comment: "".to_string(),
             drop_on: None,
             statistics: Default::default(),
         }
+    }
+}
+
+impl TableMeta {
+    pub fn set_cluster_keys_meta(mut self, cluster_keys: String) -> Self {
+        match self.cluster_keys_meta {
+            Some(ref mut v) => {
+                v.cluster_keys_vec.push(cluster_keys);
+                v.default_cluster_key_id = v.cluster_keys_vec.len() as u32 - 1;
+            }
+            None => {
+                self.cluster_keys_meta = Some(ClusterKeyMeta {
+                    cluster_keys_vec: vec![cluster_keys],
+                    default_cluster_key_id: 0,
+                });
+            }
+        }
+        self
     }
 }
 
