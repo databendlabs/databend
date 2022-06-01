@@ -44,7 +44,6 @@ use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_types::txn_op::Request;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;

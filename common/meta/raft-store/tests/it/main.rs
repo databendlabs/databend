@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-#![allow(unused_imports)]
 mod log;
 #[macro_use]
 mod testing;

@@ -12,9 +12,6 @@ edition = "2021"
 doctest = false
 test = false
 
-[features]
-default = []
-
 [dependencies]
 common-base = { path = "../../base" }
 common-datavalues = { path = "../../datavalues" }
