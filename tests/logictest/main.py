@@ -10,17 +10,19 @@ from config import mysql_config, http_config
 import fire
 
 
-def run(pattern=".*", enable_mysql=True, enable_http=True):
+def run(pattern=".*"):
     """
     Run tests
     """
-    if enable_mysql:
+    disable_mysql_test = os.getenv("DISABLE_MYSQL_LOGIC_TEST")
+    if disable_mysql_test is None:
         mysql_test = TestMySQL("mysql", pattern)
         mysql_test.set_driver(mysql_config)
         mysql_test.set_label("mysql")
         mysql_test.run_sql_suite()
 
-    if enable_http:
+    disable_http_test = os.getenv("DISABLE_HTTP_LOGIC_TEST")
+    if disable_http_test is None:
         http = TestHttp("http", pattern)
         http.set_driver(http_config)
         http.set_label("http")
