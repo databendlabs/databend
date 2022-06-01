@@ -23,6 +23,7 @@ use common_io::prelude::StorageFsConfig;
 use common_io::prelude::StorageParams;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::TableMeta;
+use common_planners::col;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::Expression;
@@ -34,6 +35,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
+use databend_query::storages::fuse::table_functions::ClusteringInformationTable;
 use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
@@ -133,10 +135,11 @@ impl TestFixture {
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
                 .into(),
+                order_keys: Some("(id)".to_string()),
                 ..Default::default()
             },
             as_select: None,
-            order_keys: vec![],
+            order_keys: vec![col("id")],
         }
     }
 
@@ -231,6 +234,20 @@ pub async fn test_drive_with_args_and_ctx(
     ctx: std::sync::Arc<QueryContext>,
 ) -> Result<SendableDataBlockStream> {
     let func = FuseSnapshotTable::create("system", "fuse_snapshot", 1, tbl_args)?;
+    let source_plan = func
+        .clone()
+        .as_table()
+        .read_plan(ctx.clone(), Some(Extras::default()))
+        .await?;
+    ctx.try_set_partitions(source_plan.parts.clone())?;
+    func.read(ctx, &source_plan).await
+}
+
+pub async fn test_drive_clustering_information(
+    tbl_args: TableArgs,
+    ctx: std::sync::Arc<QueryContext>,
+) -> Result<SendableDataBlockStream> {
+    let func = ClusteringInformationTable::create("system", "clustering_information", 1, tbl_args)?;
     let source_plan = func
         .clone()
         .as_table()

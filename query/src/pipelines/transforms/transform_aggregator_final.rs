@@ -141,7 +141,7 @@ impl Processor for AggregatorFinalTransform {
         for (idx, func) in funcs.iter().enumerate() {
             let place = places[idx].into();
             let array: &mut dyn MutableColumn = aggr_values[idx].borrow_mut();
-            let _ = func.merge_result(place, array)?;
+            func.merge_result(place, array)?;
         }
 
         let mut columns = Vec::with_capacity(funcs_len);

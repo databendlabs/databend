@@ -18,6 +18,7 @@ use super::get_path::GetPathFunction;
 use super::json_extract_path_text::JsonExtractPathTextFunction;
 use super::parse_json::ParseJsonFunction;
 use super::parse_json::TryParseJsonFunction;
+use super::ObjectKeysFunction;
 use crate::scalars::CheckJsonFunction;
 use crate::scalars::FunctionFactory;
 
@@ -35,5 +36,6 @@ impl SemiStructuredFunction {
             "json_extract_path_text",
             JsonExtractPathTextFunction::desc(),
         );
+        factory.register("object_keys", ObjectKeysFunction::desc())
     }
 }

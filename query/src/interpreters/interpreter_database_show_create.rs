@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -63,7 +64,8 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
                 .collect::<Vec<_>>()
                 .join(", ");
             if !engine_options.is_empty() {
-                info.push_str(&format!("{}({})", engine, engine_options));
+                write!(info, "{}({})", engine, engine_options)
+                    .expect("write to string must succeed");
             } else {
                 info.push_str(&engine);
             }

@@ -99,23 +99,27 @@ impl BlockBufferInner {
         Ok(())
     }
 
-    async fn pop(&mut self) -> Option<BlockDataOrInfo> {
-        let b = self.blocks.pop_front()?;
-        self.curr_rows -= b.num_rows();
-        Some(b)
+    async fn pop(&mut self) -> (Option<BlockDataOrInfo>, bool) {
+        let block = self.blocks.pop_front();
+        if let Some(ref b) = block {
+            self.curr_rows -= b.num_rows();
+        }
+        let done = self.is_pop_done();
+        (block, done)
+    }
+
+    fn is_pop_done(&self) -> bool {
+        self.push_stopped && self.blocks.is_empty()
     }
 
     fn stop_push(&mut self) {
-        self.push_stopped = true
+        self.push_stopped = true;
+        self.block_notify.notify_one();
     }
 
     pub fn stop_pop(&mut self) {
         self.pop_stopped = true;
         self.blocks.truncate(0)
-    }
-
-    fn pop_done(&self) -> bool {
-        self.push_stopped && self.blocks.is_empty()
     }
 }
 
@@ -146,8 +150,8 @@ impl BlockBuffer {
         guard.init_reader(ctx, schema)
     }
 
-    pub async fn pop(self: &Arc<Self>) -> Result<Option<DataBlock>> {
-        let block = {
+    pub async fn pop(self: &Arc<Self>) -> Result<(Option<DataBlock>, bool)> {
+        let (block, done) = {
             let mut guard = self.buffer.lock().await;
             guard.pop().await
         };
@@ -165,7 +169,7 @@ impl BlockBuffer {
                 }
             },
         };
-        Ok(r)
+        Ok((r, done))
     }
 
     pub async fn push(self: &Arc<Self>, block: DataBlock, part_info: PartInfoPtr) {
@@ -183,8 +187,8 @@ impl BlockBuffer {
         guard.stop_pop()
     }
 
-    pub async fn pop_done(self: &Arc<Self>) -> bool {
+    pub async fn is_pop_done(self: &Arc<Self>) -> bool {
         let guard = self.buffer.lock().await;
-        guard.pop_done()
+        guard.is_pop_done()
     }
 }

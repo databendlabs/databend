@@ -101,6 +101,12 @@ impl Column for ArrayColumn {
         "Array".to_string()
     }
 
+    fn column_meta(&self) -> ColumnMeta {
+        ColumnMeta::Array {
+            data_type: self.data_type.clone(),
+        }
+    }
+
     fn len(&self) -> usize {
         self.offsets.len() - 1
     }
@@ -135,23 +141,16 @@ impl Column for ArrayColumn {
         }
     }
 
-    fn scatter(&self, _indices: &[usize], _scattered_size: usize) -> Vec<ColumnRef> {
-        todo!()
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        scatter_scalar_column(self, indices, scattered_size)
     }
 
-    fn filter(&self, _filter: &BooleanColumn) -> ColumnRef {
-        todo!()
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        filter_scalar_column(self, filter)
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
-        debug_assert!(
-            offsets.len() == self.len(),
-            "Size of offsets must match size of column"
-        );
-
-        // match datatypes
-        // TODO: see https://github.com/ClickHouse/ClickHouse/blob/340b53ef853348758c9042b16a8599120ebc8d22/src/Columns/ColumnArray.cpp
-        todo!()
+        replicate_scalar_column(self, offsets)
     }
 
     fn convert_full_column(&self) -> ColumnRef {

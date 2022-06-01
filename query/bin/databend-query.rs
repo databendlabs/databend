@@ -151,15 +151,18 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Async Insert Queue
     {
-        let async_insert_queue = session_manager
+        if conf.query.enable_async_insert {
+            let async_insert_queue = session_manager
             .clone()
             .get_async_insert_queue()
             .read()
             .clone()
             .unwrap();
-        let mut queue = async_insert_queue.session_mgr.write();
-        *queue = Some(session_manager.clone());
-        async_insert_queue.clone().start().await;
+            let mut queue = async_insert_queue.session_mgr.write();
+            *queue = Some(session_manager.clone());
+            async_insert_queue.clone().start().await;
+            tracing::info!("Databend async insert has been enabled.")
+        }
     }
 
     tracing::info!("Ready for connections.");

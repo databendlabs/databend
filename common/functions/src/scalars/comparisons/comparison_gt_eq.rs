@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
+
 use common_arrow::arrow::compute::comparison::Simd8;
 use common_arrow::arrow::compute::comparison::Simd8PartialOrd;
 use common_datavalues::prelude::*;
@@ -50,6 +52,11 @@ impl ComparisonImpl for ComparisonGtEqImpl {
 
     fn eval_binary(l: &[u8], r: &[u8], _ctx: &mut EvalContext) -> bool {
         l >= r
+    }
+
+    fn eval_variant(l: &VariantValue, r: &VariantValue, _ctx: &mut EvalContext) -> bool {
+        let result = l.cmp(r);
+        result == Ordering::Equal || result == Ordering::Greater
     }
 }
 

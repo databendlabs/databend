@@ -166,12 +166,12 @@ pub fn cast_with_type(
     if nonull_data_type.data_type_id() == TypeID::Date {
         let viewer = i32::try_create_viewer(&result)?;
         for x in viewer {
-            let _ = check_date(x)?;
+            check_date(x)?;
         }
     } else if nonull_data_type.data_type_id() == TypeID::Timestamp {
         let viewer = i64::try_create_viewer(&result)?;
         for x in viewer {
-            let _ = check_timestamp(x)?;
+            check_timestamp(x)?;
         }
     } else if nonull_data_type.data_type_id() == TypeID::Array {
         return Err(ErrorCode::BadDataValueType(format!(

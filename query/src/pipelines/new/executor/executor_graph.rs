@@ -316,8 +316,8 @@ impl ScheduleQueue {
 
     fn schedule_async(&mut self, _: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
         if let Some(processor) = self.async_queue.pop_front() {
-            let workers_notify = ctx.get_workers_notify();
-            workers_notify.inc_active_async_worker();
+            let workers_condvar = ctx.get_workers_condvar();
+            workers_condvar.inc_active_async_worker();
             ctx.set_task(ExecutorTask::Async(processor));
         }
     }

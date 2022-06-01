@@ -351,6 +351,18 @@ impl QueryContext {
             .await
     }
 
+    // Get session id by mysql connection id.
+    pub async fn get_id_by_mysql_conn_id(
+        self: &Arc<Self>,
+        conn_id: &Option<u32>,
+    ) -> Option<String> {
+        self.shared
+            .session
+            .get_session_manager()
+            .get_id_by_mysql_conn_id(conn_id)
+            .await
+    }
+
     // Get all the processes list info.
     pub async fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
         self.shared

@@ -26,6 +26,7 @@ mod null;
 mod nullable;
 mod number;
 mod string;
+mod struct_;
 mod timestamp;
 mod variant;
 
@@ -36,6 +37,7 @@ pub use null::*;
 pub use nullable::*;
 pub use number::*;
 pub use string::*;
+pub use struct_::*;
 pub use timestamp::*;
 pub use variant::*;
 
@@ -116,8 +118,6 @@ pub enum TypeDeserializerImpl {
     Interval(DateDeserializer<i64>),
     Timestamp(TimestampDeserializer),
     String(StringDeserializer),
-    // TODO
-    // Array(ArrayDeserializer),
-    // Struct(StructDeserializer),
+    Struct(StructDeserializer),
     Variant(VariantDeserializer),
 }
