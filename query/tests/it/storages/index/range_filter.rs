@@ -21,8 +21,8 @@ use common_planners::*;
 use databend_query::storages::index::range_filter::build_verifiable_expr;
 use databend_query::storages::index::range_filter::left_bound_for_like_pattern;
 use databend_query::storages::index::range_filter::right_bound_for_like_pattern;
-use databend_query::storages::index::range_filter::ColumnsStatistics;
 use databend_query::storages::index::range_filter::StatColumns;
+use databend_query::storages::index::range_filter::StatisticsOfColumns;
 use databend_query::storages::index::ColumnStatistics;
 use databend_query::storages::index::RangeFilter;
 
@@ -36,7 +36,7 @@ async fn test_range_filter() -> Result<()> {
         DataField::new("c", Vu8::to_data_type()),
     ]);
 
-    let mut stats: ColumnsStatistics = HashMap::new();
+    let mut stats: StatisticsOfColumns = HashMap::new();
     stats.insert(0u32, ColumnStatistics {
         min: DataValue::Int64(1),
         max: DataValue::Int64(20),

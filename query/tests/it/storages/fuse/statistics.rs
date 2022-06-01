@@ -46,7 +46,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
         .iter()
         .map(|b| StatisticsAccumulator::acc_columns(&b.clone().unwrap()))
         .collect::<common_exception::Result<Vec<_>>>()?;
-    let r = reducers::reduce_block_stats(&col_stats);
+    let r = reducers::reduce_block_statistics(&col_stats);
     assert!(r.is_ok());
     let r = r.unwrap();
     assert_eq!(1, r.len());

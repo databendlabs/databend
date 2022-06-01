@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,12 +12,24 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub mod accumulator;
-pub mod reducers;
-mod trim;
+use std::cmp;
 
-pub use accumulator::PartiallyAccumulated;
-pub use accumulator::StatisticsAccumulator;
-pub use reducers::merge_statistics;
-pub use reducers::reduce_block_statistics;
-pub use reducers::reduce_cluster_stats;
+use common_datavalues::DataValue;
+
+pub trait Trim {
+    fn trim(self) -> Self;
+}
+
+impl Trim for DataValue {
+    fn trim(self) -> Self {
+        match self {
+            DataValue::String(v) => {
+                // take at most 5 **bytes, NOT characters** from the underlying `Vec<u8>`
+                let l = cmp::min(5, v.len());
+                let trimmed = v.as_slice()[..l].to_vec();
+                DataValue::String(trimmed)
+            }
+            other => other,
+        }
+    }
+}

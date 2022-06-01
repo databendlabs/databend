@@ -25,11 +25,10 @@ use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::Compression;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::util::column_metas;
-use crate::storages::fuse::statistics::reduce_block_stats;
+use crate::storages::fuse::statistics::reducers::reduce_block_metas;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 
 pub enum Deletion {
@@ -83,44 +82,14 @@ impl<'a> DeletionCollector<'a> {
                 new_segment.blocks[position] = replacement.new_block_meta
             }
 
-            // TODO move the stats parts to statistics::reducers
-
-            // update the summary of segment
-            let col_stats = new_segment
-                .blocks
-                .iter()
-                .map(|v| &v.col_stats)
-                .collect::<Vec<_>>();
-            let merged_col_stats = reduce_block_stats(&col_stats)?;
-
-            let mut row_count: u64 = 0;
-            let mut block_count: u64 = 0;
-            let mut uncompressed_byte_size: u64 = 0;
-            let mut compressed_byte_size: u64 = 0;
-
-            new_segment.blocks.iter().for_each(|b| {
-                row_count += b.row_count;
-                block_count += 1;
-                uncompressed_byte_size += b.block_size;
-                compressed_byte_size += b.file_size;
-            });
-
-            let new_stats = Statistics {
-                row_count,
-                block_count,
-                uncompressed_byte_size,
-                compressed_byte_size,
-                col_stats: merged_col_stats,
-                cluster_stats: None,
-            };
-
-            new_segment.summary = new_stats;
+            let new_summary = reduce_block_metas(&new_segment.blocks)?;
+            new_segment.summary = new_summary;
 
             let new_seg_loc = self.location_generator.gen_segment_info_location();
-            // TODO write the new segment out (and keep it in undo log)
             new_snapshot.segments[seg_idx] = (new_seg_loc, SegmentInfo::VERSION);
-            // TODO update the summary of snapshot
         }
+        // TODO update the summary of snapshot
+        // write the new segment out (and keep it in undo log)
         Ok(new_snapshot)
     }
     ///Replaces the block located at `block_meta.location`,

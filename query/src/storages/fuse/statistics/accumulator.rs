@@ -29,12 +29,12 @@ use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::column_metas;
 use crate::storages::index::ClusterStatistics;
 use crate::storages::index::ColumnStatistics;
-use crate::storages::index::ColumnsStatistics;
+use crate::storages::index::StatisticsOfColumns;
 
 #[derive(Default)]
 pub struct StatisticsAccumulator {
     pub blocks_metas: Vec<BlockMeta>,
-    pub blocks_statistics: Vec<ColumnsStatistics>,
+    pub blocks_statistics: Vec<StatisticsOfColumns>,
     pub cluster_statistics: Vec<Option<ClusterStatistics>>,
     pub summary_row_count: u64,
     pub summary_block_count: u64,
@@ -99,16 +99,16 @@ impl StatisticsAccumulator {
         Ok(())
     }
 
-    pub fn summary(&self) -> Result<ColumnsStatistics> {
-        super::reduce_block_stats(&self.blocks_statistics)
+    pub fn summary(&self) -> Result<StatisticsOfColumns> {
+        super::reduce_block_statistics(&self.blocks_statistics)
     }
 
     pub fn summary_clusters(&self) -> Option<ClusterStatistics> {
         super::reduce_cluster_stats(&self.cluster_statistics)
     }
 
-    pub fn acc_columns(data_block: &DataBlock) -> common_exception::Result<ColumnsStatistics> {
-        let mut statistics = ColumnsStatistics::new();
+    pub fn acc_columns(data_block: &DataBlock) -> common_exception::Result<StatisticsOfColumns> {
+        let mut statistics = StatisticsOfColumns::new();
 
         let rows = data_block.num_rows();
         for idx in 0..data_block.num_columns() {
@@ -205,8 +205,8 @@ impl BlockStatistics {
     }
 
     // TODO is this a duplication of `acc_columns`?
-    pub fn columns_statistics(data_block: &DataBlock) -> Result<ColumnsStatistics> {
-        let mut statistics = ColumnsStatistics::new();
+    pub fn columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
+        let mut statistics = StatisticsOfColumns::new();
 
         let rows = data_block.num_rows();
         for idx in 0..data_block.num_columns() {

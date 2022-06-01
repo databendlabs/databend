@@ -307,7 +307,7 @@ impl FuseTable {
                     (stats.col_stats.clone(), stats.cluster_stats.clone())
                 } else {
                     (
-                        statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats])?,
+                        statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?,
                         statistics::reduce_cluster_stats(&[
                             &acc.cluster_stats,
                             &stats.cluster_stats,
