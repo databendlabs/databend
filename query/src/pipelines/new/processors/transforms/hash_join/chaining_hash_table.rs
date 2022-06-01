@@ -41,6 +41,7 @@ use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
+use crate::sql::planner::plans::JoinType;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
@@ -106,11 +107,13 @@ pub struct ChainingHashTable {
     /// A shared big hash table stores all the rows from build side
     hash_table: RwLock<HashTable>,
     row_space: RowSpace,
+    join_type: JoinType,
 }
 
 impl ChainingHashTable {
     pub fn try_create(
         ctx: Arc<QueryContext>,
+        join_type: JoinType,
         hash_table: HashTable,
         build_expressions: Vec<Expression>,
         probe_expressions: Vec<Expression>,
@@ -125,10 +128,11 @@ impl ChainingHashTable {
             probe_expressions,
             ctx,
             hash_table: RwLock::new(hash_table),
+            join_type,
         })
     }
 
-    fn generate_result_block<Key>(
+    fn result_blocks<Key>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         method: &HashMethodFixedKeys<Key>,
@@ -147,26 +151,44 @@ impl ChainingHashTable {
                 continue;
             }
             let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-            // `result_block` is the block of build table
-            let result_block = self.row_space.gather(probe_result_ptrs)?;
+            let build_block = self.row_space.gather(probe_result_ptrs)?;
             let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-            let mut replicated_probe_block = DataBlock::empty();
-            for (i, col) in probe_block.columns().iter().enumerate() {
-                let replicated_col = ConstColumn::new(col.clone(), result_block.num_rows()).arc();
+            results.push(self.merge_block(&build_block, &probe_block)?);
+        }
+        Ok(results)
+    }
 
-                replicated_probe_block = replicated_probe_block
-                    .add_column(replicated_col, probe_block.schema().field(i).clone())?;
-            }
-            for (col, field) in result_block
-                .columns()
-                .iter()
-                .zip(result_block.schema().fields().iter())
-            {
-                replicated_probe_block =
-                    replicated_probe_block.add_column(col.clone(), field.clone())?;
-            }
+    // Merge build block and probe block
+    fn merge_block(&self, build_block: &DataBlock, probe_block: &DataBlock) -> Result<DataBlock> {
+        let mut replicated_probe_block = DataBlock::empty();
+        for (i, col) in probe_block.columns().iter().enumerate() {
+            let replicated_col = ConstColumn::new(col.clone(), build_block.num_rows()).arc();
 
-            results.push(replicated_probe_block);
+            replicated_probe_block = replicated_probe_block
+                .add_column(replicated_col, probe_block.schema().field(i).clone())?;
+        }
+        for (col, field) in build_block
+            .columns()
+            .iter()
+            .zip(build_block.schema().fields().iter())
+        {
+            replicated_probe_block =
+                replicated_probe_block.add_column(col.clone(), field.clone())?;
+        }
+        Ok(replicated_probe_block)
+    }
+
+    fn probe_cross_join(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+        let chunks = self.row_space.chunks.read().unwrap();
+        let build_blocks = (*chunks)
+            .iter()
+            .map(|chunk| chunk.data_block.clone())
+            .collect::<Vec<DataBlock>>();
+        let build_block = DataBlock::concat_blocks(&build_blocks)?;
+        let mut results: Vec<DataBlock> = Vec::with_capacity(input.num_rows());
+        for i in 0..input.num_rows() {
+            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
+            results.push(self.merge_block(&build_block, &probe_block)?);
         }
         Ok(results)
     }
@@ -198,6 +220,9 @@ impl HashJoinState for ChainingHashTable {
     }
 
     fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+        if self.join_type == JoinType::CrossJoin {
+            return self.probe_cross_join(input);
+        }
         let func_ctx = self.ctx.try_get_function_context()?;
         let probe_keys = self
             .probe_expressions
@@ -208,8 +233,9 @@ impl HashJoinState for ChainingHashTable {
         let mut results: Vec<DataBlock> = vec![];
         match &*self.hash_table.read() {
             HashTable::SerializerHashTable(table) => {
-                let method = HashMethodSerializer::default();
-                let serialized_probe_keys = method.build_keys(&probe_keys, input.num_rows())?;
+                let serialized_probe_keys = table
+                    .hash_method
+                    .build_keys(&probe_keys, input.num_rows())?;
                 for (i, key) in serialized_probe_keys
                     .iter()
                     .enumerate()
@@ -222,30 +248,13 @@ impl HashJoinState for ChainingHashTable {
                         continue;
                     }
                     let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-                    let result_block = self.row_space.gather(probe_result_ptrs)?;
+                    let build_block = self.row_space.gather(probe_result_ptrs)?;
                     let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                    let mut replicated_probe_block = DataBlock::empty();
-                    for (i, col) in probe_block.columns().iter().enumerate() {
-                        let replicated_col =
-                            ConstColumn::new(col.clone(), result_block.num_rows()).arc();
-
-                        replicated_probe_block = replicated_probe_block
-                            .add_column(replicated_col, probe_block.schema().field(i).clone())?;
-                    }
-                    for (col, field) in result_block
-                        .columns()
-                        .iter()
-                        .zip(result_block.schema().fields().iter())
-                    {
-                        replicated_probe_block =
-                            replicated_probe_block.add_column(col.clone(), field.clone())?;
-                    }
-
-                    results.push(replicated_probe_block);
+                    results.push(self.merge_block(&build_block, &probe_block)?);
                 }
             }
             HashTable::KeyU8HashTable(table) => {
-                return self.generate_result_block(
+                return self.result_blocks(
                     &table.hash_table,
                     &table.hash_method,
                     probe_keys,
@@ -253,7 +262,7 @@ impl HashJoinState for ChainingHashTable {
                 );
             }
             HashTable::KeyU16HashTable(table) => {
-                return self.generate_result_block(
+                return self.result_blocks(
                     &table.hash_table,
                     &table.hash_method,
                     probe_keys,
@@ -261,7 +270,7 @@ impl HashJoinState for ChainingHashTable {
                 );
             }
             HashTable::KeyU32HashTable(table) => {
-                return self.generate_result_block(
+                return self.result_blocks(
                     &table.hash_table,
                     &table.hash_method,
                     probe_keys,
@@ -269,7 +278,7 @@ impl HashJoinState for ChainingHashTable {
                 );
             }
             HashTable::KeyU64HashTable(table) => {
-                return self.generate_result_block(
+                return self.result_blocks(
                     &table.hash_table,
                     &table.hash_method,
                     probe_keys,
@@ -277,7 +286,7 @@ impl HashJoinState for ChainingHashTable {
                 );
             }
             HashTable::KeyU128HashTable(table) => {
-                return self.generate_result_block(
+                return self.result_blocks(
                     &table.hash_table,
                     &table.hash_method,
                     probe_keys,
@@ -285,7 +294,7 @@ impl HashJoinState for ChainingHashTable {
                 );
             }
             HashTable::KeyU256HashTable(table) => {
-                return self.generate_result_block(
+                return self.result_blocks(
                     &table.hash_table,
                     &table.hash_method,
                     probe_keys,
@@ -293,7 +302,7 @@ impl HashJoinState for ChainingHashTable {
                 );
             }
             HashTable::KeyU512HashTable(table) => {
-                return self.generate_result_block(
+                return self.result_blocks(
                     &table.hash_table,
                     &table.hash_method,
                     probe_keys,

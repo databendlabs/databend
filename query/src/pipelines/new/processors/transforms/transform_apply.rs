@@ -125,7 +125,7 @@ impl OuterRefRewriter {
             }
 
             RelOperator::LogicalGet(_)
-            | RelOperator::LogicalInnerJoin(_)
+            | RelOperator::LogicalJoin(_)
             | RelOperator::Pattern(_)
             | RelOperator::Explain(_) => Err(ErrorCode::LogicalError("Invalid plan type")),
         }

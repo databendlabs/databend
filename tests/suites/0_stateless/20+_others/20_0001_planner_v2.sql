@@ -273,4 +273,14 @@ create view temp as select number from numbers(1);
 select number from temp;
 drop view temp;
 
+-- cross join
+select '====Cross Join====';
+create table t1(a int, b int);
+create table t2(c int, d int);
+insert into t1 values(1, 2), (2, 3), (3 ,4);
+insert into t2 values(2,2), (3, 5), (7 ,8);
+select * from t1, t2;
+drop table t1;
+drop table t2;
+
 set enable_planner_v2 = 0;

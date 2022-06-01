@@ -34,7 +34,8 @@ use crate::sql::planner::binder::Binder;
 use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::FilterPlan;
-use crate::sql::plans::LogicalInnerJoin;
+use crate::sql::plans::JoinType;
+use crate::sql::plans::LogicalJoin;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::BindContext;
@@ -82,7 +83,8 @@ impl<'a> Binder {
             .await?;
 
         let mut s_expr = match &join.op {
-            JoinOperator::Inner => self.bind_inner_join(
+            JoinOperator::Inner => self.bind_join_with_type(
+                JoinType::InnerJoin,
                 left_join_conditions,
                 right_join_conditions,
                 left_child,
@@ -97,9 +99,13 @@ impl<'a> Binder {
             JoinOperator::FullOuter => Err(ErrorCode::UnImplement(
                 "Unsupported join type: FULL OUTER JOIN",
             )),
-            JoinOperator::CrossJoin => {
-                Err(ErrorCode::UnImplement("Unsupported join type: CROSS JOIN"))
-            }
+            JoinOperator::CrossJoin => self.bind_join_with_type(
+                JoinType::CrossJoin,
+                left_join_conditions,
+                right_join_conditions,
+                left_child,
+                right_child,
+            ),
         }?;
 
         if !other_conditions.is_empty() {
@@ -113,16 +119,25 @@ impl<'a> Binder {
         Ok((s_expr, bind_context))
     }
 
-    fn bind_inner_join(
+    fn bind_join_with_type(
         &mut self,
+        join_type: JoinType,
         left_conditions: Vec<Scalar>,
         right_conditions: Vec<Scalar>,
         left_child: SExpr,
         right_child: SExpr,
     ) -> Result<SExpr> {
-        let inner_join = LogicalInnerJoin {
+        if join_type == JoinType::CrossJoin {
+            if !left_conditions.is_empty() || !right_conditions.is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "Join conditions should be empty in cross join",
+                ));
+            }
+        }
+        let inner_join = LogicalJoin {
             left_conditions,
             right_conditions,
+            join_type,
         };
         let expr = SExpr::create_binary(inner_join.into(), left_child, right_child);
 
@@ -225,9 +240,7 @@ impl<'a> JoinConditionResolver<'a> {
                 self.resolve_using(using_columns, left_join_conditions, right_join_conditions)
                     .await?
             }
-            JoinCondition::None => {
-                return Err(ErrorCode::UnImplement("JOIN without condition is not supported yet. Please specify join condition with ON clause."));
-            }
+            JoinCondition::None => {}
         }
         Ok(())
     }

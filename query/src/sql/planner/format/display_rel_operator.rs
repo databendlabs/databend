@@ -27,7 +27,7 @@ use crate::sql::plans::EvalScalar;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LimitPlan;
 use crate::sql::plans::LogicalGet;
-use crate::sql::plans::LogicalInnerJoin;
+use crate::sql::plans::LogicalJoin;
 use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::Project;
@@ -63,7 +63,7 @@ impl Display for FormatContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.rel_operator {
             RelOperator::LogicalGet(op) => format_logical_get(f, &self.metadata, op),
-            RelOperator::LogicalInnerJoin(op) => format_logical_inner_join(f, &self.metadata, op),
+            RelOperator::LogicalJoin(op) => format_logical_join(f, &self.metadata, op),
             RelOperator::PhysicalScan(op) => format_physical_scan(f, &self.metadata, op),
             RelOperator::PhysicalHashJoin(op) => format_hash_join(f, &self.metadata, op),
             RelOperator::Project(op) => format_project(f, &self.metadata, op),
@@ -136,10 +136,10 @@ pub fn format_logical_get(
     )
 }
 
-pub fn format_logical_inner_join(
+pub fn format_logical_join(
     f: &mut std::fmt::Formatter<'_>,
     metadata: &MetadataRef,
-    op: &LogicalInnerJoin,
+    op: &LogicalJoin,
 ) -> std::fmt::Result {
     let preds: Vec<Scalar> = op
         .left_conditions
@@ -160,7 +160,7 @@ pub fn format_logical_inner_join(
             right: Box::new(next.clone()),
         })
     });
-    write!(f, "LogicalInnerJoin: {}", format_scalar(metadata, &pred))
+    write!(f, "LogicalJoin: {}", format_scalar(metadata, &pred))
 }
 
 pub fn format_hash_join(

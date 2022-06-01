@@ -23,15 +23,27 @@ use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::Scalar;
 
-#[derive(Clone, Debug)]
-pub struct LogicalInnerJoin {
-    pub left_conditions: Vec<Scalar>,
-    pub right_conditions: Vec<Scalar>,
+#[derive(Clone, Debug, PartialEq)]
+pub enum JoinType {
+    InnerJoin,
+    LeftJoin,
+    RightJoin,
+    FullJoin,
+    SemiJoin,
+    AntiJoin,
+    CrossJoin,
 }
 
-impl Operator for LogicalInnerJoin {
+#[derive(Clone, Debug)]
+pub struct LogicalJoin {
+    pub left_conditions: Vec<Scalar>,
+    pub right_conditions: Vec<Scalar>,
+    pub join_type: JoinType,
+}
+
+impl Operator for LogicalJoin {
     fn plan_type(&self) -> PlanType {
-        PlanType::LogicalInnerJoin
+        PlanType::LogicalJoin
     }
 
     fn is_physical(&self) -> bool {
@@ -51,7 +63,7 @@ impl Operator for LogicalInnerJoin {
     }
 }
 
-impl LogicalPlan for LogicalInnerJoin {
+impl LogicalPlan for LogicalJoin {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
