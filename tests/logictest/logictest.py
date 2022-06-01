@@ -238,7 +238,7 @@ class SuiteRunner(object):
     # return all files under the path
     # format: a list of file absolute path and name(relative path)
     def fetch_files(self):
-        skip_files=os.getenv("SKIP_TEST_FILES")
+        skip_files = os.getenv("SKIP_TEST_FILES")
         skip_tests = skip_files.split(",") if skip_files is not None else []
         log.debug("Skip test file list {}".format(skip_tests))
         for filename in glob.iglob('{}/**'.format(self.path), recursive=True):
