@@ -29,6 +29,7 @@ use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::util::column_metas;
 use crate::storages::fuse::statistics::reducers::reduce_block_metas;
+use crate::storages::fuse::statistics::reducers::reduce_statistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 
 pub enum Deletion {
@@ -65,10 +66,12 @@ impl<'a> DeletionCollector<'a> {
         }
     }
 
-    pub async fn new_snapshot(self) -> Result<TableSnapshot> {
+    pub async fn into_new_snapshot(self) -> Result<(TableSnapshot, String)> {
         let snapshot = self.base_snapshot;
-        let mut new_snapshot = snapshot.clone();
+        let mut new_snapshot = TableSnapshot::from_previous(snapshot);
         let seg_reader = MetaReaders::segment_info_reader(self.ctx);
+
+        //let new_segment_summaries = HashMap::new();
         for (seg_idx, replacements) in self.mutations {
             let seg_loc = &snapshot.segments[seg_idx];
             let segment = seg_reader.read(&seg_loc.0, None, seg_loc.1).await?;
@@ -86,11 +89,34 @@ impl<'a> DeletionCollector<'a> {
             new_segment.summary = new_summary;
 
             let new_seg_loc = self.location_generator.gen_segment_info_location();
-            new_snapshot.segments[seg_idx] = (new_seg_loc, SegmentInfo::VERSION);
+            let loc = (new_seg_loc, SegmentInfo::VERSION);
+            new_snapshot.segments[seg_idx] = loc;
         }
-        // TODO update the summary of snapshot
+
+        new_snapshot.prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version()));
+
+        // TODO refine this: newly generated segment could be kept in cache
+        let mut new_segment_summaries = vec![];
+        let segment_reader = MetaReaders::segment_info_reader(self.ctx);
+        for (loc, ver) in &new_snapshot.segments {
+            let seg = segment_reader.read(loc, None, *ver).await?;
+            // only need the summary, drop the reference to segment ASAP
+            new_segment_summaries.push(seg.summary.clone())
+        }
+
+        // update the summary of new snapshot
+        let new_summary = reduce_statistics(&new_segment_summaries)?;
+        new_snapshot.summary = new_summary;
+
         // write the new segment out (and keep it in undo log)
-        Ok(new_snapshot)
+        let snapshot_loc = self.location_generator.snapshot_location_from_uuid(
+            &new_snapshot.snapshot_id,
+            new_snapshot.format_version(),
+        )?;
+        let bytes = serde_json::to_vec(&new_snapshot)?;
+        let operator = self.ctx.get_storage_operator()?;
+        operator.object(&snapshot_loc).write(bytes).await?;
+        Ok((new_snapshot, snapshot_loc))
     }
     ///Replaces the block located at `block_meta.location`,
     /// of segment indexed by `seg_idx`, with a new block `r`

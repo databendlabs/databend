@@ -146,6 +146,14 @@ pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
     Ok(s)
 }
 
+pub fn reduce_statistics<T: Borrow<Statistics>>(stats: &[T]) -> Result<Statistics> {
+    let mut statistics = Statistics::default();
+    for item in stats {
+        statistics = merge_statistics(&statistics, item.borrow())?
+    }
+    Ok(statistics)
+}
+
 pub fn reduce_block_metas<T: Borrow<BlockMeta>>(block_metas: &[T]) -> Result<Statistics> {
     let mut row_count: u64 = 0;
     let mut block_count: u64 = 0;

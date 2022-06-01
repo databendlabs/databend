@@ -249,7 +249,7 @@ impl FuseTable {
         Ok(new_snapshot)
     }
 
-    async fn commit_to_meta_server(
+    pub async fn commit_to_meta_server(
         ctx: &QueryContext,
         catalog_name: &str,
         table_info: &TableInfo,

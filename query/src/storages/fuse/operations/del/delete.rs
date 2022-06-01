@@ -27,6 +27,7 @@ use crate::storages::fuse::operations::del::collector::Deletion;
 use crate::storages::fuse::operations::del::collector::DeletionCollector;
 use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
+use crate::storages::Table;
 
 impl FuseTable {
     pub async fn delete(
@@ -62,7 +63,8 @@ impl FuseTable {
                 .await;
         };
 
-        self.delete_blocks(ctx, &snapshot, filter, push_downs).await
+        self.delete_blocks(ctx, &snapshot, filter, push_downs, &plan.catalog_name)
+            .await
     }
 
     async fn delete_blocks(
@@ -71,6 +73,7 @@ impl FuseTable {
         snapshot: &Arc<TableSnapshot>,
         filter: &Expression,
         push_downs: &Option<Extras>,
+        catalog_name: &str,
     ) -> Result<()> {
         let mut deletion_collector =
             DeletionCollector::new(ctx.as_ref(), &self.meta_location_generator, snapshot);
@@ -97,13 +100,26 @@ impl FuseTable {
                 }
             }
         }
-        self.commit_deletion(deletion_collector).await
+        self.commit_deletion(ctx.as_ref(), deletion_collector, catalog_name)
+            .await
     }
 
-    async fn commit_deletion(&self, del_holder: DeletionCollector<'_>) -> Result<()> {
-        //  let new_snapshot = self.update_snapshot(del_holder.updated_segments());
-        // // try commit and detect conflicts
-        let _new_snapshot = del_holder.new_snapshot().await?;
-        todo!()
+    async fn commit_deletion(
+        &self,
+        ctx: &QueryContext,
+        del_holder: DeletionCollector<'_>,
+        catalog_name: &str,
+    ) -> Result<()> {
+        let (new_snapshot, loc) = del_holder.into_new_snapshot().await?;
+        Self::commit_to_meta_server(
+            ctx,
+            catalog_name,
+            self.get_table_info(),
+            loc,
+            &new_snapshot.summary,
+        )
+        .await?;
+        // TODO check if error is recoverable, and try to resolve the conflict
+        Ok(())
     }
 }
