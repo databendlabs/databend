@@ -23,9 +23,7 @@ use common_exception::Result;
 pub use plans::ScalarExpr;
 
 use crate::sessions::QueryContext;
-use crate::sql::exec::PipelineBuilder;
 use crate::sql::optimizer::optimize;
-use crate::sql::optimizer::SExpr;
 pub use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 
@@ -43,7 +41,6 @@ pub use metadata::MetadataRef;
 pub use metadata::TableEntry;
 
 use self::plans::Plan;
-use crate::pipelines::new::NewPipeline;
 
 pub struct Planner {
     ctx: Arc<QueryContext>,
@@ -53,12 +50,6 @@ impl Planner {
     pub fn new(ctx: Arc<QueryContext>) -> Self {
         Planner { ctx }
     }
-
-    // pub async fn plan_sql(&mut self, sql: &str) -> Result<(NewPipeline, Vec<NewPipeline>)> {
-    //     let (optimized_expr, bind_context, metadata) = self.build_sexpr(sql).await?;
-    //     self.build_pipeline(optimized_expr, bind_context, metadata)
-    //         .await
-    // }
 
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef)> {
         // Step 1: parse SQL text into AST
@@ -80,17 +71,5 @@ impl Planner {
         let optimized_plan = optimize(plan)?;
 
         Ok((optimized_plan, metadata.clone()))
-    }
-
-    pub async fn build_pipeline(
-        &mut self,
-        optimized_expr: SExpr,
-        bind_context: BindContext,
-        metadata: MetadataRef,
-    ) -> Result<(NewPipeline, Vec<NewPipeline>)> {
-        // Step 4: build executable Pipeline with SExpr
-        let result_columns = bind_context.result_columns();
-        let pb = PipelineBuilder::new(self.ctx.clone(), result_columns, metadata, optimized_expr);
-        pb.spawn()
     }
 }

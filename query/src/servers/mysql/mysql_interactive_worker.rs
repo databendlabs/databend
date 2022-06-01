@@ -300,7 +300,6 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         && settings.get_enable_planner_v2()? != 0
                         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
                     {
-                        // New planner is enabled, and the statement is ensured to be `SELECT` statement.
                         let mut planner = Planner::new(context.clone());
                         let (plan, _) = planner.plan_sql(query).await?;
                         InterpreterFactoryV2::get(context.clone(), &plan)?
