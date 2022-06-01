@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_base::base::tokio;
+use common_tracing::tracing;
 use databend_meta::api::http::v1::metrics::metrics_handler;
 use databend_meta::meta_service::MetaNode;
 use poem::get;
@@ -28,11 +29,8 @@ use pretty_assertions::assert_eq;
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 
-#[tokio::test]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_metrics() -> common_exception::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let tc = MetaSrvTestContext::new(0);
 
     let meta_node = MetaNode::start(&tc.config.raft_config).await?;

@@ -232,6 +232,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-entry"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c54fb3976c0d3c2730a4c0904061fb6b3d255e7e67a56939955ef8ce6aa4175f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "async-recursion"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1899,6 +1910,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "async-entry",
  "async-trait",
  "clap 3.1.18",
  "common-arrow",

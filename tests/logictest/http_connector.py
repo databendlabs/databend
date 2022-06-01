@@ -121,19 +121,22 @@ class HttpConnector():
         query_sql = {'sql': parseSQL(statement)}
         if session is not None:
             query_sql['session'] = session
-        log.debug("http headers: {}".format({**headers,**self._additonal_headers}))
-        if "Authorization" not in self._additonal_headers:  
+        log.debug("http headers: {}".format({
+            **headers,
+            **self._additonal_headers
+        }))
+        if "Authorization" not in self._additonal_headers:
             response = requests.post(url,
-                                 data=json.dumps(query_sql),
-                                 auth=(self._user, ""),
-                                 headers=headers)
+                                     data=json.dumps(query_sql),
+                                     auth=(self._user, ""),
+                                     headers=headers)
         else:
             response = requests.post(url,
-                                 data=json.dumps(query_sql),
-                                 headers={
-                                     **headers,
-                                     **self._additonal_headers
-                                 })
+                                     data=json.dumps(query_sql),
+                                     headers={
+                                         **headers,
+                                         **self._additonal_headers
+                                     })
 
         try:
             return json.loads(response.content)

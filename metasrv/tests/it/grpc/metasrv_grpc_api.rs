@@ -32,16 +32,13 @@ use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
     // - Start a metasrv server.
     // - create db and create table
     // - restart
     // - Test read the db and read the table.
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let (mut tc, addr) = crate::tests::start_metasrv().await?;
 
@@ -126,14 +123,11 @@ async fn test_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_retry_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
     // - Test metasrv retry cluster case
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let mut tc0 = MetaSrvTestContext::new(0);
     start_metasrv_with_context(&mut tc0).await?;
@@ -179,14 +173,11 @@ async fn test_retry_join() -> anyhow::Result<()> {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
     // - Test metasrv api
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let mut tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
