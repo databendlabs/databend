@@ -18,6 +18,9 @@ use std::sync::Arc;
 use anyerror::AnyError;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
+use common_meta_app::schema::CountTablesKey;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReply;
@@ -119,7 +122,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
         loop {
             // Get db by name to ensure absence
-            let (db_id_seq, db_id) = get_id_value(self, name_key).await?;
+            let (db_id_seq, db_id) = get_u64_value(self, name_key).await?;
             tracing::debug!(db_id_seq, db_id, ?name_key, "get_database");
 
             if db_id_seq > 0 {
@@ -172,7 +175,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq)?,
                     ],
                     if_then: vec![
-                        txn_op_put(name_key, serialize_id(db_id)?)?, // (tenant, db_name) -> db_id
+                        txn_op_put(name_key, serialize_u64(db_id)?)?, // (tenant, db_name) -> db_id
                         txn_op_put(&id_key, serialize_struct(&req.meta)?)?, // (db_id) -> db_meta
                         txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?)?, // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
                     ],
@@ -342,7 +345,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_cond_seq(&dbid, Eq, db_meta_seq)?,
                     ],
                     if_then: vec![
-                        txn_op_put(name_key, serialize_id(db_id)?)?, // (tenant, db_name) -> db_id
+                        txn_op_put(name_key, serialize_u64(db_id)?)?, // (tenant, db_name) -> db_id
                         txn_op_put(&dbid, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
                     ],
                     else_then: vec![],
@@ -375,7 +378,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
         loop {
             // get old db, not exists return err
-            let (old_db_id_seq, old_db_id) = get_id_value(self, tenant_dbname).await?;
+            let (old_db_id_seq, old_db_id) = get_u64_value(self, tenant_dbname).await?;
             if req.if_exists {
                 if old_db_id_seq == 0 {
                     return Ok(RenameDatabaseReply {});
@@ -391,7 +394,7 @@ impl<KV: KVApi> SchemaApi for KV {
             );
 
             // get new db, exists return err
-            let (db_id_seq, _db_id) = get_id_value(self, &tenant_newdbname).await?;
+            let (db_id_seq, _db_id) = get_u64_value(self, &tenant_newdbname).await?;
             db_has_to_not_exist(db_id_seq, &tenant_newdbname, "rename_database")?;
 
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
@@ -470,7 +473,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     if_then: vec![
                         txn_op_del(tenant_dbname)?, // del old_db_name
                         //Renaming db should not affect the seq of db_meta. Just modify db name.
-                        txn_op_put(&tenant_newdbname, serialize_id(old_db_id)?)?, // (tenant, new_db_name) -> old_db_id
+                        txn_op_put(&tenant_newdbname, serialize_u64(old_db_id)?)?, // (tenant, new_db_name) -> old_db_id
                         txn_op_put(&new_dbid_idlist, serialize_struct(&new_db_id_list)?)?, // _fd_db_id_list/tenant/new_db_name -> new_db_id_list
                         txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?)?, // _fd_db_id_list/tenant/db_name -> db_id_list
                     ],
@@ -590,7 +593,7 @@ impl<KV: KVApi> SchemaApi for KV {
         };
 
         // Pairs of db-name and db_id with seq
-        let (tenant_dbnames, db_ids) = list_id_value(self, &name_key).await?;
+        let (tenant_dbnames, db_ids) = list_u64_value(self, &name_key).await?;
 
         // Keys for fetching serialized DatabaseMeta from KVApi
         let mut kv_keys = Vec::with_capacity(db_ids.len());
@@ -657,7 +660,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 table_name: req.name_ident.table_name.clone(),
             };
 
-            let (tb_id_seq, tb_id) = get_id_value(self, &dbid_tbname).await?;
+            let (tb_id_seq, tb_id) = get_u64_value(self, &dbid_tbname).await?;
             if tb_id_seq > 0 {
                 return if req.if_not_exists {
                     Ok(CreateTableReply { table_id: tb_id })
@@ -688,6 +691,18 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             };
 
+            // get current table count from _fd_table_count/tenant
+            let tb_count_key = CountTablesKey {
+                tenant: tenant_dbname.tenant.clone(),
+            };
+            let (tb_count_seq, tb_count) = {
+                let (seq, count) = get_u64_value(self, &tb_count_key).await?;
+                if seq > 0 {
+                    (seq, count)
+                } else {
+                    (0, count_tables(self, &tb_count_key).await?)
+                }
+            };
             // Create table by inserting these record:
             // (db_id, table_name) -> table_id
             // (table_id) -> table_meta
@@ -716,15 +731,18 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_cond_seq(&dbid_tbname, Eq, 0)?,
                         // no other table id with the same name is append.
                         txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq)?,
+                        // update table count atomicly
+                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq)?,
                     ],
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
-                        txn_op_put(&dbid_tbname, serialize_id(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
+                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
                         txn_op_put(&tbid, serialize_struct(&req.table_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
                         txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
+                        txn_op_put(&tb_count_key, serialize_u64(tb_count + 1)?)?, // _fd_table_count/tenant -> tb_count
                     ],
                     else_then: vec![],
                 };
@@ -762,7 +780,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 table_name: req.name_ident.table_name.clone(),
             };
 
-            let (tb_id_seq, table_id) = get_id_value(self, &dbid_tbname).await?;
+            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
             if tb_id_seq == 0 {
                 return if req.if_exists {
                     Ok(DropTableReply {})
@@ -781,6 +799,18 @@ impl<KV: KVApi> SchemaApi for KV {
             let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
                 get_struct_value(self, &tbid).await?;
 
+            // get current table count from _fd_table_count/tenant
+            let tb_count_key = CountTablesKey {
+                tenant: tenant_dbname.tenant.clone(),
+            };
+            let (tb_count_seq, tb_count) = {
+                let (seq, count) = get_u64_value(self, &tb_count_key).await?;
+                if seq > 0 {
+                    (seq, count)
+                } else {
+                    (0, count_tables(self, &tb_count_key).await?)
+                }
+            };
             // Delete table by these operations:
             // del (db_id, table_name) -> table_id
             // set table_meta.drop_on = now and update (table_id) -> table_meta
@@ -812,6 +842,8 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
                         // table is not changed
                         txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
+                        // update table count atomicly
+                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq)?,
                     ],
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
@@ -820,6 +852,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
                         txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
                         txn_op_put(&tbid, serialize_struct(&tb_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
+                        txn_op_put(&tb_count_key, serialize_u64(tb_count - 1)?)?, // _fd_table_count/tenant -> tb_count
                     ],
                     else_then: vec![],
                 };
@@ -858,7 +891,7 @@ impl<KV: KVApi> SchemaApi for KV {
             };
 
             // If table id already exists, return error.
-            let (tb_id_seq, table_id) = get_id_value(self, &dbid_tbname).await?;
+            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
             if tb_id_seq > 0 || table_id > 0 {
                 return Err(MetaError::AppError(AppError::UndropTableAlreadyExists(
                     UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
@@ -903,6 +936,18 @@ impl<KV: KVApi> SchemaApi for KV {
             let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
                 get_struct_value(self, &tbid).await?;
 
+            // get current table count from _fd_table_count/tenant
+            let tb_count_key = CountTablesKey {
+                tenant: tenant_dbname.tenant.clone(),
+            };
+            let (tb_count_seq, tb_count) = {
+                let (seq, count) = get_u64_value(self, &tb_count_key).await?;
+                if seq > 0 {
+                    (seq, count)
+                } else {
+                    (0, count_tables(self, &tb_count_key).await?)
+                }
+            };
             // add drop_on time on table meta
             // (db_id, table_name) -> table_id
 
@@ -932,15 +977,18 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
                         // table is not changed
                         txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
+                        // update table count atomicly
+                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq)?,
                     ],
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
-                        txn_op_put(&dbid_tbname, serialize_id(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
+                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
                         //txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
                         txn_op_put(&tbid, serialize_struct(&tb_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
+                        txn_op_put(&tb_count_key, serialize_u64(tb_count + 1)?)?, // _fd_table_count/tenant -> tb_count
                     ],
                     else_then: vec![],
                 };
@@ -983,7 +1031,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 table_name: tenant_dbname_tbname.table_name.clone(),
             };
 
-            let (tb_id_seq, table_id) = get_id_value(self, &dbid_tbname).await?;
+            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
             if req.if_exists {
                 if tb_id_seq == 0 {
                     // TODO: table does not exist, can not return table id.
@@ -1054,7 +1102,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 db_id: new_db_id,
                 table_name: req.new_table_name.clone(),
             };
-            let (new_tb_id_seq, _new_tb_id) = get_id_value(self, &newdbid_newtbname).await?;
+            let (new_tb_id_seq, _new_tb_id) = get_u64_value(self, &newdbid_newtbname).await?;
             table_has_to_not_exist(new_tb_id_seq, &tenant_newdbname_newtbname, "rename_table")?;
 
             let new_dbid_tbname_idlist = TableIdListKey {
@@ -1097,7 +1145,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 let mut then_ops = vec![
                     txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
-                    txn_op_put(&newdbid_newtbname, serialize_id(table_id)?)?, // (db_id, new_tb_name) -> tb_id
+                    txn_op_put(&newdbid_newtbname, serialize_u64(table_id)?)?, // (db_id, new_tb_name) -> tb_id
                     // Changing a table in a db has to update the seq of db_meta,
                     // to block the batch-delete-tables when deleting a db.
                     // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
@@ -1145,7 +1193,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
         // Get db by name to ensure presence
 
-        let (db_id_seq, db_id) = get_id_value(self, &tenant_dbname).await?;
+        let (db_id_seq, db_id) = get_u64_value(self, &tenant_dbname).await?;
         tracing::debug!(db_id_seq, db_id, ?tenant_dbname_tbname, "get database");
 
         db_has_to_exist(
@@ -1161,7 +1209,7 @@ impl<KV: KVApi> SchemaApi for KV {
             table_name: tenant_dbname_tbname.table_name.clone(),
         };
 
-        let (tb_id_seq, table_id) = get_id_value(self, &dbid_tbname).await?;
+        let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
         table_has_to_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
 
         let tbid = TableId { table_id };
@@ -1200,7 +1248,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
         // Get db by name to ensure presence
 
-        let (db_id_seq, db_id) = get_id_value(self, tenant_dbname).await?;
+        let (db_id_seq, db_id) = get_u64_value(self, tenant_dbname).await?;
         tracing::debug!(
             db_id_seq,
             db_id,
@@ -1288,7 +1336,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
         // Get db by name to ensure presence
 
-        let (db_id_seq, db_id) = get_id_value(self, tenant_dbname).await?;
+        let (db_id_seq, db_id) = get_u64_value(self, tenant_dbname).await?;
         tracing::debug!(
             db_id_seq,
             db_id,
@@ -1306,7 +1354,7 @@ impl<KV: KVApi> SchemaApi for KV {
             table_name: "".to_string(),
         };
 
-        let (dbid_tbnames, ids) = list_id_value(self, &dbid_tbname).await?;
+        let (dbid_tbnames, ids) = list_u64_value(self, &dbid_tbname).await?;
 
         let mut tb_meta_keys = Vec::with_capacity(ids.len());
         for (i, _name_key) in dbid_tbnames.iter().enumerate() {
@@ -1494,6 +1542,47 @@ impl<KV: KVApi> SchemaApi for KV {
         }
     }
 
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, MetaError> {
+        let key = CountTablesKey {
+            tenant: req.tenant.to_string(),
+        };
+
+        let count = loop {
+            let (seq, cnt) = {
+                let (seq, c) = get_u64_value(self, &key).await?;
+                if seq > 0 {
+                    (seq, c)
+                } else {
+                    (0, count_tables(self, &key).await?)
+                }
+            };
+
+            if seq > 0 {
+                break cnt;
+            }
+
+            let key = CountTablesKey {
+                tenant: req.tenant.clone(),
+            };
+
+            let txn_req = TxnRequest {
+                condition: vec![txn_cond_seq(&key, Eq, seq)?],
+                if_then: vec![txn_op_put(&key, serialize_u64(cnt)?)?],
+                else_then: vec![],
+            };
+
+            send_txn(self, txn_req).await?;
+        };
+
+        tracing::debug!(
+            tenant = display(req.tenant),
+            count = display(count),
+            "count tables for a tenant"
+        );
+
+        Ok(CountTablesReply { count })
+    }
+
     fn name(&self) -> String {
         "SchemaApiImpl".to_string()
     }
@@ -1525,7 +1614,7 @@ async fn get_db_or_err(
     name_key: &DatabaseNameIdent,
     msg: impl Display,
 ) -> Result<(u64, u64, u64, DatabaseMeta), MetaError> {
-    let (db_id_seq, db_id) = get_id_value(kv_api, name_key).await?;
+    let (db_id_seq, db_id) = get_u64_value(kv_api, name_key).await?;
     db_has_to_exist(db_id_seq, name_key, &msg)?;
 
     let id_key = DatabaseId { db_id };
@@ -1621,35 +1710,32 @@ fn table_has_to_not_exist(
     }
 }
 
-/// Get value that is formatted as it is an `id`, i.e., `u64`.
+/// Get value that its type is `u64`.
 ///
-/// It expects the kv-value is an id, such as:
+/// It expects the kv-value's type is `u64`, such as:
 /// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
 /// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
 ///
-/// It returns (seq, xx_id).
+/// It returns (seq, `u64` value).
 /// If not found, (0,0) is returned.
-async fn get_id_value<T: KVApiKey>(
-    kv_api: &impl KVApi,
-    name_ident: &T,
-) -> Result<(u64, u64), MetaError> {
-    let res = kv_api.get_kv(&name_ident.to_key()).await?;
+async fn get_u64_value<T: KVApiKey>(kv_api: &impl KVApi, key: &T) -> Result<(u64, u64), MetaError> {
+    let res = kv_api.get_kv(&key.to_key()).await?;
 
     if let Some(seq_v) = res {
-        Ok((seq_v.seq, deserialize_id(&seq_v.data)?))
+        Ok((seq_v.seq, deserialize_u64(&seq_v.data)?))
     } else {
         Ok((0, 0))
     }
 }
 
-/// List kvs whose value is formatted as it is an `id`, i.e., `u64`.
+/// List kvs whose value's type is `u64`.
 ///
-/// It expects the kv-value is an id, such as:
+/// It expects the kv-value' type is `u64`, such as:
 /// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
 /// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
 ///
-/// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of id.
-async fn list_id_value<K: KVApiKey>(
+/// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of `u64`.
+async fn list_u64_value<K: KVApiKey>(
     kv_api: &impl KVApi,
     key: &K,
 ) -> Result<(Vec<K>, Vec<u64>), MetaError> {
@@ -1658,11 +1744,11 @@ async fn list_id_value<K: KVApiKey>(
     let n = res.len();
 
     let mut structured_keys = Vec::with_capacity(n);
-    let mut ids = Vec::with_capacity(n);
+    let mut values = Vec::with_capacity(n);
 
-    for (str_key, seq_id) in res.iter() {
-        let id = deserialize_id(&seq_id.data).map_err(meta_encode_err)?;
-        ids.push(id);
+    for (str_key, seqv) in res.iter() {
+        let id = deserialize_u64(&seqv.data).map_err(meta_encode_err)?;
+        values.push(id);
 
         // Parse key and get db_name:
 
@@ -1670,7 +1756,7 @@ async fn list_id_value<K: KVApiKey>(
         structured_keys.push(struct_key);
     }
 
-    Ok((structured_keys, ids))
+    Ok((structured_keys, values))
 }
 
 /// It returns a vec of structured key(such as DatabaseNameIdent), such as:
@@ -1777,12 +1863,12 @@ async fn send_txn(
     Ok((succ, responses))
 }
 
-fn serialize_id(id: u64) -> Result<Vec<u8>, MetaError> {
-    let v = serde_json::to_vec(&id).map_err(meta_encode_err)?;
+fn serialize_u64(value: u64) -> Result<Vec<u8>, MetaError> {
+    let v = serde_json::to_vec(&value).map_err(meta_encode_err)?;
     Ok(v)
 }
 
-fn deserialize_id(v: &[u8]) -> Result<u64, MetaError> {
+fn deserialize_u64(v: &[u8]) -> Result<u64, MetaError> {
     let id = serde_json::from_slice(v).map_err(meta_encode_err)?;
     Ok(id)
 }
@@ -1809,4 +1895,29 @@ where
 
 fn meta_encode_err<E: std::error::Error + 'static>(e: E) -> MetaError {
     MetaError::EncodeError(AnyError::new(&e))
+}
+
+/// Get the count of tables for one tenant by listing databases and table ids.
+///
+/// It returns (seq, `u64` value).
+/// If the count value is not in the kv space, (0, `u64` value) is returned.
+async fn count_tables(kv_api: &impl KVApi, key: &CountTablesKey) -> Result<u64, MetaError> {
+    // For backward compatibility:
+    // If the table count of a tenant is not found in kv space,,
+    // we should compute the count by listing all tables of the tenant.
+    let databases = kv_api
+        .list_databases(ListDatabaseReq {
+            tenant: key.tenant.clone(),
+        })
+        .await?;
+    let mut count = 0;
+    for db in databases.into_iter() {
+        let dbid_tbname = DBIdTableName {
+            db_id: db.ident.db_id,
+            table_name: "".to_string(),
+        };
+        let (_, ids) = list_u64_value(kv_api, &dbid_tbname).await?;
+        count += ids.len() as u64;
+    }
+    Ok(count)
 }

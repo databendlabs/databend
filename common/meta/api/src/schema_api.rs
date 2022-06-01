@@ -15,6 +15,8 @@
 
 use std::sync::Arc;
 
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReply;
@@ -110,6 +112,8 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, MetaError>;
+
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, MetaError>;
 
     // TODO: Disabled temporarily: Consider move them to another trait such as `ShareApi` or else.
     //       Since `share` has nothing really to do with database or table.
