@@ -47,6 +47,7 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use futures::future::AbortHandle;
 use opendal::Operator;
 
 use crate::catalogs::Catalog;
@@ -266,6 +267,10 @@ impl QueryContext {
         let (abort_handle, abort_stream) = AbortStream::try_create(input)?;
         self.shared.add_source_abort_handle(abort_handle);
         Ok(abort_stream)
+    }
+
+    pub fn add_source_abort_handle(&self, abort_handle: AbortHandle) {
+        self.shared.add_source_abort_handle(abort_handle);
     }
 
     pub fn get_current_catalog(&self) -> String {
