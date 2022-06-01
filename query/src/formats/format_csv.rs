@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::io::Cursor;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -21,10 +20,11 @@ use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::position2;
+use common_io::prelude::position4;
 use common_io::prelude::BufferReadExt;
-use common_io::prelude::BufferReader;
-use common_io::prelude::CheckpointReader;
 use common_io::prelude::FormatSettings;
+use common_io::prelude::MemoryReader;
 
 use crate::formats::FormatFactory;
 use crate::formats::InputFormat;
@@ -102,31 +102,40 @@ impl CsvInputFormat {
     }
 
     fn find_quotes(buf: &[u8], pos: usize, state: &mut CsvInputState) -> usize {
-        for (index, byte) in buf.iter().enumerate().skip(pos) {
-            if *byte == b'"' || *byte == b'\'' {
-                state.quotes = 0;
-                return index + 1;
-            }
+        let index = pos + position2::<true, b'"', b'\''>(&buf[pos..]);
+
+        if index != buf.len() {
+            state.quotes = 0;
+            return index + 1;
         }
 
         buf.len()
     }
 
     fn find_delimiter(&self, buf: &[u8], pos: usize, state: &mut CsvInputState) -> usize {
-        for index in pos..buf.len() {
-            if buf[index] == b'"' || buf[index] == b'\'' {
-                state.quotes = buf[index];
-                return index + 1;
-            }
+        if let Some(b) = &self.row_delimiter {
+            for index in pos..buf.len() {
+                if buf[index] == b'"' || buf[index] == b'\'' {
+                    state.quotes = buf[index];
+                    return index + 1;
+                }
 
-            if let Some(b) = &self.row_delimiter {
                 if buf[index] == *b {
                     return self.accept_row::<0>(buf, pos, state, index);
                 }
-            } else if buf[index] == b'\r' {
-                return self.accept_row::<b'\n'>(buf, pos, state, index);
-            } else if buf[index] == b'\n' {
-                return self.accept_row::<b'\r'>(buf, pos, state, index);
+            }
+        } else {
+            let position = pos + position4::<true, b'"', b'\'', b'\r', b'\n'>(&buf[pos..]);
+
+            if position != buf.len() {
+                if buf[position] == b'"' || buf[position] == b'\'' {
+                    state.quotes = buf[position];
+                    return position + 1;
+                } else if buf[position] == b'\r' {
+                    return self.accept_row::<b'\n'>(buf, pos, state, position);
+                } else if buf[position] == b'\n' {
+                    return self.accept_row::<b'\r'>(buf, pos, state, position);
+                }
             }
         }
 
@@ -163,6 +172,10 @@ impl CsvInputFormat {
 }
 
 impl InputFormat for CsvInputFormat {
+    fn support_parallel(&self) -> bool {
+        true
+    }
+
     fn create_state(&self) -> Box<dyn InputState> {
         Box::new(CsvInputState {
             quotes: 0,
@@ -183,31 +196,28 @@ impl InputFormat for CsvInputFormat {
 
         let mut state = std::mem::replace(state, self.create_state());
         let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
-        let cursor = Cursor::new(&state.memory);
-        let reader = BufferReader::new(cursor);
-        let mut checkpoint_reader = CheckpointReader::new(reader);
+        let memory = std::mem::take(&mut state.memory);
+        let mut memory_reader = MemoryReader::new(memory);
 
         let mut row_index = 0;
-        while !checkpoint_reader.eof()? {
+        while !memory_reader.eof()? {
             for column_index in 0..deserializers.len() {
-                if checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
+                if memory_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
                     deserializers[column_index].de_default(&self.settings);
                 } else {
-                    deserializers[column_index]
-                        .de_text_csv(&mut checkpoint_reader, &self.settings)?;
+                    deserializers[column_index].de_text_csv(&mut memory_reader, &self.settings)?;
 
                     if column_index + 1 != deserializers.len() {
-                        checkpoint_reader
-                            .must_ignore_white_spaces_and_byte(self.field_delimiter)?;
+                        memory_reader.must_ignore_white_spaces_and_byte(self.field_delimiter)?;
                     }
                 }
             }
 
-            checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)?;
+            memory_reader.ignore_white_spaces_and_byte(self.field_delimiter)?;
 
             if let Some(delimiter) = &self.row_delimiter {
-                if !checkpoint_reader.ignore_white_spaces_and_byte(*delimiter)?
-                    && !checkpoint_reader.eof()?
+                if !memory_reader.ignore_white_spaces_and_byte(*delimiter)?
+                    && !memory_reader.eof()?
                 {
                     return Err(ErrorCode::BadBytes(format!(
                         "Parse csv error at line {}",
@@ -215,9 +225,9 @@ impl InputFormat for CsvInputFormat {
                     )));
                 }
             } else {
-                if (!checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?
-                    & !checkpoint_reader.ignore_white_spaces_and_byte(b'\r')?)
-                    && !checkpoint_reader.eof()?
+                if (!memory_reader.ignore_white_spaces_and_byte(b'\n')?
+                    & !memory_reader.ignore_white_spaces_and_byte(b'\r')?)
+                    && !memory_reader.eof()?
                 {
                     return Err(ErrorCode::BadBytes(format!(
                         "Parse csv error at line {}",
@@ -226,7 +236,7 @@ impl InputFormat for CsvInputFormat {
                 }
 
                 // \r\n
-                checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?;
+                memory_reader.ignore_white_spaces_and_byte(b'\n')?;
             }
 
             row_index += 1;
@@ -277,6 +287,8 @@ impl InputFormat for CsvInputFormat {
                     return Ok(index);
                 }
             }
+
+            return Ok(buf.len());
         }
 
         Ok(0)
