@@ -39,6 +39,7 @@ pub use filter::FilterPlan;
 pub use hash_join::PhysicalHashJoin;
 pub use limit::LimitPlan;
 pub use logical_get::LogicalGet;
+pub use logical_join::JoinType;
 pub use logical_join::LogicalInnerJoin;
 pub use max_one_row::Max1Row;
 pub use pattern::PatternPlan;

@@ -61,12 +61,13 @@ impl Rule for RuleImplementHashJoin {
 
     fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()> {
         let plan = expression.plan().clone();
-        let logical_inner_join: LogicalInnerJoin = plan.try_into()?;
+        let logical_join: LogicalInnerJoin = plan.try_into()?;
 
         let result = SExpr::create(
             PhysicalHashJoin {
-                build_keys: logical_inner_join.right_conditions,
-                probe_keys: logical_inner_join.left_conditions,
+                build_keys: logical_join.right_conditions,
+                probe_keys: logical_join.left_conditions,
+                join_type: logical_join.join_type,
             }
             .into(),
             expression.children().to_vec(),

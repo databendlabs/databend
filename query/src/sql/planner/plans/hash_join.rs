@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::JoinType;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalPlan;
@@ -24,6 +25,7 @@ use crate::sql::plans::Scalar;
 pub struct PhysicalHashJoin {
     pub build_keys: Vec<Scalar>,
     pub probe_keys: Vec<Scalar>,
+    pub join_type: JoinType,
 }
 
 impl Operator for PhysicalHashJoin {
