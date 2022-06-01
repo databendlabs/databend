@@ -33,12 +33,13 @@ use super::http_query::HttpQueryRequest;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
-use crate::servers::http::v1::query::block_buffer::BlockBuffer;
-use crate::servers::http::v1::query::block_buffer::BlockBufferWriterMemOnly;
-use crate::servers::http::v1::query::block_buffer::BlockBufferWriterWithResultTable;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
+use crate::sql::Planner;
+use crate::storages::result::block_buffer::BlockBuffer;
+use crate::storages::result::block_buffer::BlockBufferWriterMemOnly;
+use crate::storages::result::block_buffer::BlockBufferWriterWithResultTable;
 use crate::storages::result::ResultQueryInfo;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]

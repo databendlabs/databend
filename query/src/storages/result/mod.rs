@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod block_buffer;
 mod download;
 mod result_locations;
 mod result_table;

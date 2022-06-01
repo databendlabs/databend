@@ -26,7 +26,6 @@ use common_io::prelude::FormatSettings;
 use serde::Deserialize;
 
 use super::HttpQueryContext;
-use crate::servers::http::v1::query::block_buffer::BlockBuffer;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
 use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
@@ -37,6 +36,7 @@ use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
 use crate::sessions::SessionType;
+use crate::storages::result::block_buffer::BlockBuffer;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
