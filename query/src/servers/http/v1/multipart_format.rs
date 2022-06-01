@@ -282,13 +282,15 @@ impl Processor for SequentialInputFormatSource {
                 let data = match &mut self.input_decompress {
                     None => data,
                     Some(decompress) => {
-                        let mut output = Vec::new();
+                        // Alloc with 10 times of input data at once to avoid too many alloc.
+                        let mut output = Vec::with_capacity(10 * data.len());
+                        let mut buf = vec![0; 1024 * 1024];
                         let mut amt = 0;
 
                         loop {
                             match decompress.state() {
                                 DecompressState::Reading => {
-                                    // If all data has been consumed, we should break with existing data directly.
+                                    // All data has been consumed, break with existing data directly.
                                     if amt == data.len() {
                                         break output;
                                     }
@@ -297,7 +299,6 @@ impl Processor for SequentialInputFormatSource {
                                     amt += read;
                                 }
                                 DecompressState::Decoding => {
-                                    let mut buf = vec![0; 4 * 1024 * 1024];
                                     let written = decompress.decode(&mut buf).map_err(|e| {
                                         ErrorCode::InvalidCompressionData(format!(
                                             "compression data invalid: {e}"
@@ -306,7 +307,6 @@ impl Processor for SequentialInputFormatSource {
                                     output.extend_from_slice(&buf[..written])
                                 }
                                 DecompressState::Flushing => {
-                                    let mut buf = vec![0; 4 * 1024 * 1024];
                                     let written = decompress.finish(&mut buf).map_err(|e| {
                                         ErrorCode::InvalidCompressionData(format!(
                                             "compression data invalid: {e}"
@@ -314,7 +314,9 @@ impl Processor for SequentialInputFormatSource {
                                     })?;
                                     output.extend_from_slice(&buf[..written])
                                 }
-                                DecompressState::Done => break output,
+                                DecompressState::Done => {
+                                    break output;
+                                }
                             }
                         }
                     }

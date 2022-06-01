@@ -29,7 +29,7 @@ async-trait = "0.1.53"
 chrono-tz = "0.6.1"
 csv-async = "1.2.4"
 futures = "0.3.21"
-opendal = { version = "0.7.1", features = ["retry", "compress"] }
+opendal = { version = "0.7.2", features = ["retry", "compress"] }
 pin-project-lite = "0.2.8"
 serde_json = { version = "1.0.79", default-features = false, features = ["preserve_order"] }
 tempfile = "3.3.0"
