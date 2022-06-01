@@ -19,7 +19,7 @@ test = false
 # Workspace dependencies
 common-base = { path = "../../base" }
 common-exception = { path = "../../exception" }
-common-meta-api = { path = "../api", features=["create_with_drop_time"] }
+common-meta-api = { path = "../api", features = ["create_with_drop_time"] }
 common-meta-raft-store = { path = "../raft-store" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-types = { path = "../types" }
