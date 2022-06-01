@@ -21,23 +21,13 @@ error:
 
 
 ---------- Input ----------
-select * from t inner join t1
----------- Output ---------
-error: 
-  --> SQL:1:30
-  |
-1 | select * from t inner join t1
-  |                              ^ expected `(`, `.`, `AT`, <Ident>, <QuotedString>, `AS`, or 2 more ...
-
-
----------- Input ----------
 select * from customer natural inner join orders on a = b
 ---------- Output ---------
 error: 
   --> SQL:1:50
   |
 1 | select * from customer natural inner join orders on a = b
-  |                                                  ^^ expected `(`, `.`, `AT`, <Ident>, <QuotedString>, `AS`, or 14 more ...
+  |                                                  ^^ expected `(`, `.`, `AT`, <Ident>, <QuotedString>, `AS`, or 15 more ...
 
 
 ---------- Input ----------

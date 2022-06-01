@@ -63,6 +63,22 @@ impl<'a> Binder {
             bind_context.add_column_binding(column.clone());
         }
 
+        match &join.op {
+            JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter
+                if join.condition == JoinCondition::None =>
+            {
+                return Err(ErrorCode::SemanticError(
+                    "outer join should contain join conditions".to_string(),
+                ))
+            }
+            JoinOperator::CrossJoin if join.condition != JoinCondition::None => {
+                return Err(ErrorCode::SemanticError(
+                    "cross join should not contain join conditions".to_string(),
+                ))
+            }
+            _ => (),
+        };
+
         let mut left_join_conditions: Vec<Scalar> = vec![];
         let mut right_join_conditions: Vec<Scalar> = vec![];
         let mut other_conditions: Vec<Scalar> = vec![];

@@ -187,6 +187,8 @@ fn test_query() {
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
         r#"select * from a limit 3 offset 4 format csv"#,
+        r#"select * from customer inner join orders"#,
+        r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on a = b limit 1"#,
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
@@ -221,7 +223,6 @@ fn test_query_error() {
     let cases = &[
         r#"select * from customer join where a = b"#,
         r#"select * from join customer"#,
-        r#"select * from t inner join t1"#,
         r#"select * from customer natural inner join orders on a = b"#,
         r#"select * order a"#,
         r#"select * order"#,
