@@ -21,14 +21,14 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 
 #[derive(Clone, Debug)]
 pub struct Max1Row;
 
 impl Operator for Max1Row {
-    fn plan_type(&self) -> PlanType {
-        PlanType::Max1Row
+    fn plan_type(&self) -> RelOp {
+        RelOp::Max1Row
     }
 
     fn is_physical(&self) -> bool {

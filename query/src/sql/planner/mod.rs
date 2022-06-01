@@ -23,10 +23,7 @@ use common_exception::Result;
 pub use plans::ScalarExpr;
 
 use crate::sessions::QueryContext;
-use crate::sql::exec::PipelineBuilder;
 use crate::sql::optimizer::optimize;
-use crate::sql::optimizer::OptimizeContext;
-use crate::sql::optimizer::SExpr;
 pub use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 
@@ -43,7 +40,7 @@ pub use metadata::Metadata;
 pub use metadata::MetadataRef;
 pub use metadata::TableEntry;
 
-use crate::pipelines::new::NewPipeline;
+use self::plans::Plan;
 
 pub struct Planner {
     ctx: Arc<QueryContext>,
@@ -54,13 +51,7 @@ impl Planner {
         Planner { ctx }
     }
 
-    pub async fn plan_sql(&mut self, sql: &str) -> Result<(NewPipeline, Vec<NewPipeline>)> {
-        let (optimized_expr, bind_context, metadata) = self.build_sexpr(sql).await?;
-        self.build_pipeline(optimized_expr, bind_context, metadata)
-            .await
-    }
-
-    pub async fn build_sexpr(&mut self, sql: &str) -> Result<(SExpr, BindContext, MetadataRef)> {
+    pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef)> {
         // Step 1: parse SQL text into AST
         let tokens = tokenize_sql(sql)?;
 
@@ -73,24 +64,11 @@ impl Planner {
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
         let metadata = Arc::new(RwLock::new(Metadata::create()));
         let binder = Binder::new(self.ctx.clone(), self.ctx.get_catalogs(), metadata.clone());
-        let bind_result = binder.bind(&stmts[0]).await?;
+        let plan = binder.bind(&stmts[0]).await?;
 
         // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr
-        let optimize_context = OptimizeContext::create_with_bind_context(&bind_result.bind_context);
-        let optimized_expr = optimize(bind_result.s_expr, optimize_context)?;
+        let optimized_plan = optimize(plan)?;
 
-        Ok((optimized_expr, bind_result.bind_context, metadata.clone()))
-    }
-
-    pub async fn build_pipeline(
-        &mut self,
-        optimized_expr: SExpr,
-        bind_context: BindContext,
-        metadata: MetadataRef,
-    ) -> Result<(NewPipeline, Vec<NewPipeline>)> {
-        // Step 4: build executable Pipeline with SExpr
-        let result_columns = bind_context.result_columns();
-        let pb = PipelineBuilder::new(self.ctx.clone(), result_columns, metadata, optimized_expr);
-        pb.spawn()
+        Ok((optimized_plan, metadata.clone()))
     }
 }

@@ -75,7 +75,6 @@ impl Display for FormatContext {
             RelOperator::CrossApply(op) => format_cross_apply(f, &self.metadata, op),
             RelOperator::Max1Row(_) => write!(f, "Max1Row"),
             RelOperator::Pattern(_) => write!(f, "Pattern"),
-            RelOperator::Explain(_) => write!(f, ""),
         }
     }
 }
