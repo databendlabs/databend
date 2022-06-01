@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_base::base::RuntimeTracker;
-use common_base::infallible::RwLock;
 use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
 use common_metrics::init_default_metrics_recorder;
@@ -24,7 +23,6 @@ use common_tracing::set_panic_hook;
 use common_tracing::tracing;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
-use databend_query::interpreters::AsyncInsertQueue;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::HttpHandler;
@@ -33,8 +31,6 @@ use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
 use databend_query::Config;
-
-use common_base::base::tokio::time::Duration;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
@@ -63,8 +59,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     let session_manager = SessionManager::from_conf(conf.clone()).await?;
 
-    
-    
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
 
     // MySQL handler.
@@ -158,10 +152,15 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Async Insert Queue
     {
-        let queue = session_manager.clone().get_async_insert_queue().read().clone().unwrap();
-        
+        let queue = session_manager
+            .clone()
+            .get_async_insert_queue()
+            .read()
+            .clone()
+            .unwrap();
+
         let b = queue.clone();
-        
+
         let mut a = b.session_mgr.write();
         *a = Some(session_manager.clone());
 

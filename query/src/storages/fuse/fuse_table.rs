@@ -222,10 +222,9 @@ impl Table for FuseTable {
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        println!("commit_insertion1");
-        let a = self.do_commit(ctx, catalog_name, append_log_entries, overwrite)
+        let a = self
+            .do_commit(ctx, catalog_name, append_log_entries, overwrite)
             .await;
-        println!("commit_insertion2");
         return a;
     }
 

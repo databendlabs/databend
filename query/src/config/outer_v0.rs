@@ -613,16 +613,24 @@ pub struct QueryConfig {
     pub enable_async_insert: bool,
 
     /// TODO(fkuner)
-    #[clap(long, default_value="10000")]
-    pub async_max_data_size: u64,
+    #[clap(long, default_value = "10000")]
+    pub async_insert_max_data_size: u64,
 
     /// TODO(fkuner)
-    #[clap(long, default_value="200")]
+    #[clap(long, default_value = "200")]
     pub async_insert_busy_timeout: u64,
 
     /// TODO(fkuner)
-    #[clap(long, default_value="0")]
+    #[clap(long, default_value = "0")]
     pub async_insert_stale_timeout: u64,
+
+    /// TODO(fkuner)
+    #[clap(long)]
+    pub wait_for_async_insert: bool,
+
+    /// TODO(fkuner)
+    #[clap(long, default_value = "100")]
+    pub wait_for_async_insert_timeout: u64,
 }
 
 impl Default for QueryConfig {
@@ -674,9 +682,11 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
             enable_async_insert: self.enable_async_insert,
-            async_max_data_size: self.async_max_data_size,
+            async_insert_max_data_size: self.async_insert_max_data_size,
             async_insert_busy_timeout: self.async_insert_busy_timeout,
             async_insert_stale_timeout: self.async_insert_stale_timeout,
+            wait_for_async_insert: self.wait_for_async_insert,
+            wait_for_async_insert_timeout: self.wait_for_async_insert_timeout,
         })
     }
 }
@@ -722,9 +732,11 @@ impl From<InnerQueryConfig> for QueryConfig {
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
             enable_async_insert: inner.enable_async_insert,
-            async_max_data_size: inner.async_max_data_size,
+            async_insert_max_data_size: inner.async_insert_max_data_size,
             async_insert_busy_timeout: inner.async_insert_busy_timeout,
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
+            wait_for_async_insert: inner.wait_for_async_insert,
+            wait_for_async_insert_timeout: inner.wait_for_async_insert_timeout,
         }
     }
 }

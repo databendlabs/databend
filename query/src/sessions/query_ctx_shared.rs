@@ -43,8 +43,6 @@ use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
 use crate::Config;
 
-use crate::interpreters::AsyncInsertQueue;
-
 type DatabaseAndTable = (String, String, String);
 
 /// Data that needs to be shared in a query context.
@@ -79,7 +77,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) role_cache_manager: Arc<RoleCacheMgr>,
-    // pub(in crate::sessions) async_insert_queue: Arc<Option<AsyncInsertQueue>>
 }
 
 impl QueryContextShared {
@@ -298,14 +295,6 @@ impl QueryContextShared {
     pub async fn reload_config(&self) -> Result<()> {
         self.session.session_mgr.reload_config().await
     }
-
-    // pub fn get_async_insert_queue(&self) -> Result<Arc<AsyncInsertQueue>> {
-
-    // }
-
-    // pub fn set_async_insert_queue(&self) -> Result<()> {
-    //     Ok(())
-    // }
 }
 
 impl Session {

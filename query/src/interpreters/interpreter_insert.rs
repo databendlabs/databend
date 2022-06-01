@@ -52,11 +52,15 @@ pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
     plan: InsertPlan,
     source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
-    async_insert: bool
+    async_insert: bool,
 }
 
 impl InsertInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: InsertPlan, async_insert: bool) -> Result<InterpreterPtr> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        plan: InsertPlan,
+        async_insert: bool,
+    ) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertInterpreter {
             ctx,
             plan,
@@ -86,12 +90,12 @@ impl InsertInterpreter {
                     .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
                     .finalize(),
             );
-            println!("open async insert");
         } else {
             match &self.plan.source {
                 InsertInputSource::Values(values) => {
-                    let blocks = Arc::new(Mutex::new(VecDeque::from_iter(vec![values.block.clone()])));
-    
+                    let blocks =
+                        Arc::new(Mutex::new(VecDeque::from_iter(vec![values.block.clone()])));
+
                     for _index in 0..settings.get_max_threads()? {
                         let output = OutputPort::create();
                         builder.add_source(
@@ -114,7 +118,7 @@ impl InsertInterpreter {
                             input: Arc::new((**plan).clone()),
                         })?;
                     pipeline = select_interpreter.create_new_pipeline()?;
-    
+
                     if self.check_schema_cast(plan)? {
                         let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
                         for (target_field, original_field) in self
@@ -132,10 +136,14 @@ impl InsertInterpreter {
                         }
                         let tz = self.ctx.get_settings().get_timezone()?;
                         let tz = String::from_utf8(tz).map_err(|_| {
-                            ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+                            ErrorCode::LogicalError(
+                                "Timezone has been checked and should be valid.",
+                            )
                         })?;
                         let tz = tz.parse::<Tz>().map_err(|_| {
-                            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+                            ErrorCode::InvalidTimezone(
+                                "Timezone has been checked and should be valid",
+                            )
                         })?;
                         let func_ctx = FunctionContext { tz };
                         pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -169,33 +177,15 @@ impl InsertInterpreter {
 
         let async_runtime = self.ctx.get_storage_runtime();
 
-        println!("interpreter0");
-        println!("session_id:{}", self.ctx.get_connection_id());
-
         pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
         let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
         executor.execute()?;
         drop(executor);
 
-        println!("interpreter1");
-
         let overwrite = self.plan.overwrite;
         let catalog_name = self.plan.catalog_name.clone();
         let context = self.ctx.clone();
         let append_entries = self.ctx.clone().consume_precommit_blocks();
-
-
-        // let stream = Box::pin(DataBlockStream::create(
-        //     self.plan.schema(),
-        //     None,
-        //     append_entries,
-        // ));
-
-        // let tmp = table.append_data(self.ctx.clone(), stream).await?;
-
-        // println!("entries:{}", &append_entries.len());
-
-        
 
         // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
         let handler = self.ctx.get_storage_runtime().spawn(async move {
@@ -212,7 +202,6 @@ impl InsertInterpreter {
                 cause
             ))),
         }?;
-
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

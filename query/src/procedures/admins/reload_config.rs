@@ -44,7 +44,6 @@ impl Procedure for ReloadConfigProcedure {
     async fn inner_eval(&self, ctx: Arc<QueryContext>, _: Vec<String>) -> Result<DataBlock> {
         // TODO: check permissions
         ctx.reload_config().await?;
-        println!("reload config");
         Ok(DataBlock::empty())
     }
 

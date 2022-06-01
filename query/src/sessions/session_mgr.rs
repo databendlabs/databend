@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::rc::Weak;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -80,8 +79,6 @@ impl SessionManager {
             Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
         };
 
-        
-
         // NOTE: Magic happens here. We will add a layer upon original storage operator
         // so that all underlying storage operations will send to storage runtime.
         let storage_operator = Self::init_storage_operator(&conf)
@@ -101,16 +98,14 @@ impl SessionManager {
 
         let storage_runtime = Arc::new(storage_runtime);
 
-        let async_insert_queue = Arc::new(RwLock::new(Some(
-            Arc::new(
-            AsyncInsertQueue::try_create(
-                Arc::new(RwLock::new(None)), 
+        let async_insert_queue =
+            Arc::new(RwLock::new(Some(Arc::new(AsyncInsertQueue::try_create(
+                Arc::new(RwLock::new(None)),
                 storage_runtime.clone(),
-                conf.clone().query.async_max_data_size, 
-                tokio::time::Duration::from_millis(conf.query.async_insert_busy_timeout.clone()),
-                tokio::time::Duration::from_millis(conf.query.async_insert_stale_timeout.clone()))
-            )
-        )));
+                conf.clone().query.async_insert_max_data_size,
+                tokio::time::Duration::from_millis(conf.query.async_insert_busy_timeout),
+                tokio::time::Duration::from_millis(conf.query.async_insert_stale_timeout),
+            )))));
 
         Ok(Arc::new(SessionManager {
             conf: RwLock::new(conf.clone()),
@@ -123,9 +118,9 @@ impl SessionManager {
             query_logger: RwLock::new(query_logger),
             status,
             storage_operator: RwLock::new(storage_operator),
-            storage_runtime: storage_runtime.clone(),
+            storage_runtime,
             _guards,
-            async_insert_queue: async_insert_queue.clone(),
+            async_insert_queue,
         }))
     }
 
@@ -365,5 +360,4 @@ impl SessionManager {
     pub fn get_async_insert_queue(&self) -> Arc<RwLock<Option<Arc<AsyncInsertQueue>>>> {
         self.async_insert_queue.clone()
     }
-    
 }

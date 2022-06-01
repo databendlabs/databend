@@ -103,11 +103,7 @@ impl ClusterApi for ClusterMgr {
     }
 
     async fn get_nodes(&self) -> Result<Vec<NodeInfo>> {
-        println!("get_nodes1");
         let values = self.kv_api.prefix_list_kv(&self.cluster_prefix).await?;
-
-        println!("get_nodes2");
-
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;

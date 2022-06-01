@@ -146,9 +146,11 @@ pub struct QueryConfig {
     pub management_mode: bool,
     pub jwt_key_file: String,
     pub enable_async_insert: bool,
-    pub async_max_data_size: u64,
+    pub async_insert_max_data_size: u64,
     pub async_insert_busy_timeout: u64,
     pub async_insert_stale_timeout: u64,
+    pub wait_for_async_insert: bool,
+    pub wait_for_async_insert_timeout: u64,
 }
 
 impl Default for QueryConfig {
@@ -192,9 +194,11 @@ impl Default for QueryConfig {
             management_mode: false,
             jwt_key_file: "".to_string(),
             enable_async_insert: false,
-            async_max_data_size: 10000,
+            async_insert_max_data_size: 10000,
             async_insert_busy_timeout: 200,
             async_insert_stale_timeout: 0,
+            wait_for_async_insert: true,
+            wait_for_async_insert_timeout: 100,
         }
     }
 }
