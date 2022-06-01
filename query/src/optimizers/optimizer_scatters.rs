@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
@@ -130,18 +129,16 @@ impl ScattersOptimizerImpl {
                     &plan.window_func,
                     panic!()
                 );
-                // let sample_block = DataBlock::empty_with_schema(input.schema());
-                // let method = DataBlock::choose_hash_method(
-                //     &sample_block,
-                //     &partition_by
-                //         .iter()
-                //         .map(|expr| expr.column_name())
-                //         .collect::<Vec<_>>(),
-                // )?;
-                let scatters_expr = Expression::ScalarFunction {
-                    op: String::from("sipHash"),
-                    args: partition_by.to_owned(),
-                };
+
+                let mut concat_ws_args = vec![Expression::create_literal(DataValue::String(
+                    "#".as_bytes().to_vec(),
+                ))];
+                concat_ws_args.extend(partition_by.to_owned());
+                let concat_partition_by =
+                    Expression::create_scalar_function("concat_ws", concat_ws_args);
+
+                let scatters_expr =
+                    Expression::create_scalar_function("sipHash", vec![concat_partition_by]);
 
                 let scatter_plan = PlanNode::Stage(StagePlan {
                     scatters_expr,
