@@ -54,22 +54,6 @@ impl TryFrom<ast::WindowFrame> for WindowFrame {
             )))
         } else {
             let units = value.units.into();
-            if units == WindowFrameUnits::Range {
-                for bound in &[start_bound, end_bound] {
-                    match bound {
-                        WindowFrameBound::Preceding(Some(v))
-                        | WindowFrameBound::Following(Some(v))
-                        if *v > 0 =>
-                            {
-                                Err(ErrorCode::UnImplement(format!(
-                                    "With WindowFrameUnits={}, the bound cannot be {} PRECEDING or FOLLOWING at the moment",
-                                    units, v
-                                )))
-                            }
-                        _ => Ok(()),
-                    }?;
-                }
-            }
             Ok(Self {
                 units,
                 start_bound,
@@ -116,7 +100,6 @@ impl From<ast::WindowFrameUnits> for WindowFrameUnits {
     }
 }
 
-// todo u64 -> Expression
 #[derive(Debug, Clone, Copy, Eq, serde::Serialize, serde::Deserialize)]
 pub enum WindowFrameBound {
     Preceding(Option<u64>),

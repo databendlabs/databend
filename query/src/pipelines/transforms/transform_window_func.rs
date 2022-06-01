@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::cmp::Ordering;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -23,12 +24,15 @@ use common_datablocks::DataBlock;
 use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 use common_datavalues::Series;
 use common_functions::aggregates::eval_aggr;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::assert_numeric;
 use common_functions::window::WindowFrame;
 use common_functions::window::WindowFrameBound;
 use common_functions::window::WindowFrameUnits;
+use common_planners::sort;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -61,7 +65,7 @@ impl WindowFuncTransform {
         }
     }
 
-    /// evaluate window function for each frame and return the result column
+    /// evaluate window function for each frame and return the result block
     async fn evaluate_window_func(&self, block: &DataBlock) -> common_exception::Result<DataBlock> {
         // extract the window function
         let_extract!(
@@ -166,120 +170,232 @@ impl WindowFuncTransform {
         start: WindowFrameBound,
         end: WindowFrameBound,
     ) -> Vec<Range<usize>> {
+        let partition_by_arrow_array = partition_by
+            .iter()
+            .map(|expr| {
+                block
+                    .try_column_by_name(&expr.column_name())
+                    .unwrap()
+                    .as_arrow_array()
+            })
+            .collect::<Vec<ArrayRef>>();
+        let partition_by_sort_column = partition_by_arrow_array
+            .iter()
+            .map(|array| SortColumn {
+                values: array.as_ref(),
+                options: None,
+            })
+            .collect::<Vec<SortColumn>>();
+
+        let mut partition_boundaries =
+            lexicographical_partition_ranges(&partition_by_sort_column).unwrap();
+        let mut partition = partition_boundaries.next().unwrap();
+
         match (frame_units, start, end) {
-            (_, WindowFrameBound::Preceding(None), WindowFrameBound::Following(None)) => {
-                let partition_by_arrow_array = partition_by
-                    .iter()
-                    .map(|expr| {
-                        block
-                            .try_column_by_name(&expr.column_name())
-                            .unwrap()
-                            .as_arrow_array()
-                    })
-                    .collect::<Vec<ArrayRef>>();
-                let partition_by_sort_column = partition_by_arrow_array
-                    .iter()
-                    .map(|array| SortColumn {
-                        values: array.as_ref(),
-                        options: None,
-                    })
-                    .collect::<Vec<SortColumn>>();
-                let mut partition_boundaries =
-                    lexicographical_partition_ranges(&partition_by_sort_column).unwrap();
-                let mut partition = partition_boundaries.next().unwrap();
-                (0..block.num_rows())
-                    .map(|i| {
-                        if i >= partition.end && i < block.num_rows() {
-                            partition = partition_boundaries.next().unwrap();
+            (_, WindowFrameBound::Preceding(None), WindowFrameBound::Following(None)) => (0..block
+                .num_rows())
+                .map(|i| {
+                    if i >= partition.end && i < block.num_rows() {
+                        partition = partition_boundaries.next().unwrap();
+                    }
+                    partition.clone()
+                })
+                .collect::<Vec<_>>(),
+            (WindowFrameUnits::Rows, frame_start, frame_end) => (0..block.num_rows())
+                .map(|i| {
+                    if i >= partition.end && i < block.num_rows() {
+                        partition = partition_boundaries.next().unwrap();
+                    }
+                    let mut start = partition.start;
+                    let mut end = partition.end;
+                    match frame_start {
+                        WindowFrameBound::Preceding(Some(preceding)) => {
+                            start = std::cmp::max(
+                                start,
+                                if i < preceding as usize {
+                                    0
+                                } else {
+                                    i - preceding as usize
+                                },
+                            );
                         }
-                        partition.clone()
-                    })
-                    .collect::<Vec<_>>()
-            }
-            (frame_unit, frame_start, frame_end) => {
-                let partition_by_arrow_array = partition_by
-                    .iter()
-                    .map(|expr| {
-                        block
-                            .try_column_by_name(&expr.column_name())
-                            .unwrap()
-                            .as_arrow_array()
-                    })
-                    .collect::<Vec<ArrayRef>>();
-                let mut partition_by_sort_column = partition_by_arrow_array
-                    .iter()
-                    .map(|array| SortColumn {
-                        values: array.as_ref(),
-                        options: None,
-                    })
-                    .collect::<Vec<SortColumn>>();
-
-                let order_by_arrow_array = order_by
-                    .iter()
-                    .map(|expr| {
-                        block
-                            .try_column_by_name(&expr.column_name())
-                            .unwrap()
-                            .as_arrow_array()
-                    })
-                    .collect::<Vec<ArrayRef>>();
-                let order_by_sort_column = order_by_arrow_array
-                    .iter()
-                    .map(|array| SortColumn {
-                        values: array.as_ref(),
-                        options: None,
-                    })
-                    .collect::<Vec<SortColumn>>();
-                partition_by_sort_column.extend(order_by_sort_column);
-
-                let mut frame_boundaries =
-                    lexicographical_partition_ranges(&partition_by_sort_column).unwrap();
-
-                match frame_unit {
-                    WindowFrameUnits::Rows => {
-                        let mut frame_bound = frame_boundaries.next().unwrap();
-
-                        (0..block.num_rows())
-                            .map(|i| {
-                                if i >= frame_bound.end && i < block.num_rows() {
-                                    frame_bound = frame_boundaries.next().unwrap();
-                                }
-                                let mut start = frame_bound.start;
-                                let mut end = frame_bound.end;
-                                match frame_start {
-                                    WindowFrameBound::Preceding(Some(preceding)) => {
-                                        start = std::cmp::max(
-                                            start,
-                                            if i < preceding as usize {
-                                                0
-                                            } else {
-                                                i - preceding as usize
-                                            },
-                                        );
-                                    }
-                                    WindowFrameBound::CurrentRow => {
-                                        start = i;
-                                    }
-                                    _ => (),
-                                }
-                                match frame_end {
-                                    WindowFrameBound::CurrentRow => {
-                                        end = i;
-                                    }
-                                    WindowFrameBound::Following(Some(following)) => {
-                                        end = std::cmp::min(end, i + 1 + following as usize);
-                                    }
-                                    _ => (),
-                                }
-                                start..end
-                            })
-                            .collect::<Vec<_>>()
+                        WindowFrameBound::CurrentRow => {
+                            start = i;
+                        }
+                        WindowFrameBound::Following(Some(following)) => {
+                            start = std::cmp::min(end, i + following as usize)
+                        }
+                        _ => (),
                     }
-                    WindowFrameUnits::Range => {
-                        todo!()
+                    match frame_end {
+                        WindowFrameBound::Preceding(Some(preceding)) => {
+                            end = std::cmp::max(start, i + 1 - preceding as usize);
+                        }
+                        WindowFrameBound::CurrentRow => {
+                            end = i + 1;
+                        }
+                        WindowFrameBound::Following(Some(following)) => {
+                            end = std::cmp::min(end, i + 1 + following as usize);
+                        }
+                        _ => (),
                     }
+                    start..end
+                })
+                .collect::<Vec<_>>(),
+            (WindowFrameUnits::Range, frame_start, frame_end) => match (frame_start, frame_end) {
+                (WindowFrameBound::Preceding(None), WindowFrameBound::CurrentRow) => {
+                    let mut partition_by_sort_column = partition_by_sort_column;
+                    let order_by_arrow_array = order_by
+                        .iter()
+                        .map(|expr| {
+                            block
+                                .try_column_by_name(&expr.column_name())
+                                .unwrap()
+                                .as_arrow_array()
+                        })
+                        .collect::<Vec<ArrayRef>>();
+                    let order_by_sort_column = order_by_arrow_array
+                        .iter()
+                        .map(|array| SortColumn {
+                            values: array.as_ref(),
+                            options: None,
+                        })
+                        .collect::<Vec<SortColumn>>();
+                    partition_by_sort_column.extend(order_by_sort_column);
+
+                    let mut peered_boundaries =
+                        lexicographical_partition_ranges(&partition_by_sort_column).unwrap();
+                    let mut peered = peered_boundaries.next().unwrap();
+                    (0..block.num_rows())
+                        .map(|i| {
+                            if i >= partition.end && i < block.num_rows() {
+                                partition = partition_boundaries.next().unwrap();
+                            }
+                            if i >= peered.end && i < block.num_rows() {
+                                peered = peered_boundaries.next().unwrap();
+                            }
+                            partition.start..peered.end
+                        })
+                        .collect::<Vec<_>>()
                 }
-            }
+                (WindowFrameBound::CurrentRow, WindowFrameBound::Following(None)) => {
+                    let mut partition_by_sort_column = partition_by_sort_column;
+                    let order_by_arrow_array = order_by
+                        .iter()
+                        .map(|expr| {
+                            block
+                                .try_column_by_name(&expr.column_name())
+                                .unwrap()
+                                .as_arrow_array()
+                        })
+                        .collect::<Vec<ArrayRef>>();
+                    let order_by_sort_column = order_by_arrow_array
+                        .iter()
+                        .map(|array| SortColumn {
+                            values: array.as_ref(),
+                            options: None,
+                        })
+                        .collect::<Vec<SortColumn>>();
+                    partition_by_sort_column.extend(order_by_sort_column);
+
+                    let mut peered_boundaries =
+                        lexicographical_partition_ranges(&partition_by_sort_column).unwrap();
+                    let mut peered = peered_boundaries.next().unwrap();
+                    (0..block.num_rows())
+                        .map(|i| {
+                            if i >= partition.end && i < block.num_rows() {
+                                partition = partition_boundaries.next().unwrap();
+                            }
+                            if i >= peered.end && i < block.num_rows() {
+                                peered = peered_boundaries.next().unwrap();
+                            }
+                            peered.start..partition.end
+                        })
+                        .collect::<Vec<_>>()
+                }
+                (frame_start, frame_end) => {
+                    assert_eq!(
+                            order_by.len(),
+                            1,
+                            "Range mode is only possible if the query has exactly one numeric order by expression."
+                        );
+                    assert_numeric(
+                            block
+                                .schema()
+                                .field_with_name(&order_by[0].column_name())
+                                .unwrap()
+                                .data_type(),
+                        )
+                            .expect(
+                                "Range mode is only possible if the query has exactly one numeric order by expression.",
+                            );
+
+                    let order_by_values = block
+                        .try_column_by_name(&order_by[0].column_name())
+                        .unwrap()
+                        .to_values();
+
+                    (0..block.num_rows())
+                        .map(|i| {
+                            let current_value = &order_by_values[i];
+                            if i >= partition.end && i < block.num_rows() {
+                                partition = partition_boundaries.next().unwrap();
+                            }
+                            let mut start = partition.start;
+                            let mut end = partition.end;
+                            match frame_start {
+                                WindowFrameBound::Preceding(Some(preceding)) => {
+                                    let idx = order_by_values.partition_point(|x| {
+                                        let min = DataValue::from(
+                                            current_value.as_f64().unwrap() - preceding as f64,
+                                        );
+                                        x.cmp(&min) == Ordering::Less
+                                    });
+                                    start = std::cmp::max(start, idx);
+                                }
+                                WindowFrameBound::CurrentRow => {
+                                    start = i;
+                                }
+                                WindowFrameBound::Following(Some(following)) => {
+                                    let idx = order_by_values.partition_point(|x| {
+                                        let max = DataValue::from(
+                                            current_value.as_f64().unwrap() + following as f64,
+                                        );
+                                        x.cmp(&max) == Ordering::Less
+                                    });
+                                    start = std::cmp::min(end, idx);
+                                }
+                                _ => (),
+                            }
+                            match frame_end {
+                                WindowFrameBound::Preceding(Some(preceding)) => {
+                                    let idx = order_by_values.partition_point(|x| {
+                                        let min = DataValue::from(
+                                            current_value.as_f64().unwrap() - preceding as f64,
+                                        );
+                                        x.cmp(&min) != Ordering::Greater
+                                    });
+                                    end = std::cmp::max(start, idx);
+                                }
+                                WindowFrameBound::CurrentRow => {
+                                    end = i + 1;
+                                }
+                                WindowFrameBound::Following(Some(following)) => {
+                                    let idx = order_by_values.partition_point(|x| {
+                                        let max = DataValue::from(
+                                            current_value.as_f64().unwrap() + following as f64,
+                                        );
+                                        x.cmp(&max) != Ordering::Greater
+                                    });
+                                    end = std::cmp::min(end, idx);
+                                }
+                                _ => (),
+                            }
+                            start..end
+                        })
+                        .collect::<Vec<_>>()
+                }
+            },
         }
     }
 }
