@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::time::Duration;
+
 #[derive(Clone, Debug, Default)]
 pub struct RpcClientTlsConfig {
     pub rpc_tls_server_root_ca_cert: String,
@@ -28,13 +30,36 @@ impl RpcClientTlsConfig {
 #[derive(Clone, Debug, Default)]
 pub struct RpcClientConf {
     pub address: String,
+    pub endpoints: Vec<String>,
     pub username: String,
     pub password: String,
     pub tls_conf: Option<RpcClientTlsConfig>,
+
+    /// Timeout for an RPC
+    pub timeout: Option<Duration>,
 }
 
 impl RpcClientConf {
+    /// Whether a remote metasrv is specified.
+    ///
+    /// - `address` is an old config that accept only one address.
+    /// - `endpoints` accepts multiple endpoint candidates.
+    ///
+    /// If either of these two is configured(non-empty), use remote metasrv.
+    /// Otherwise, use a local embedded meta
     pub fn local_mode(&self) -> bool {
-        self.address.is_empty()
+        self.address.is_empty() && self.endpoints.is_empty()
+    }
+
+    /// Returns a list of endpoints.
+    ///
+    /// It is compatible with the old single `address` config, by converting it to a vec.
+    pub fn get_endpoints(&self) -> Vec<String> {
+        if !self.endpoints.is_empty() {
+            self.endpoints.clone()
+        } else {
+            let addr = self.address.to_string();
+            vec![addr]
+        }
     }
 }

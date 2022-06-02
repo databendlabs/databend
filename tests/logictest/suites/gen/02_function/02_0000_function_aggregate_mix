@@ -1,0 +1,144 @@
+statement query I 
+SELECT sum(number) from numbers_mt(10000);
+
+----  
+49995000
+
+statement query I 
+SELECT min(number) from numbers_mt(10000);
+
+----  
+0
+
+statement query I 
+SELECT max(number) from numbers_mt(10000);
+
+----  
+9999
+
+statement query F 
+SELECT avg(number) from numbers_mt(10000);
+
+----  
+4999.5
+
+statement query I 
+SELECT count(number) from numbers_mt(10000);
+
+----  
+10000
+
+statement query F 
+SELECT sum(number)/count(number) from numbers_mt(10000);
+
+----  
+4999.5
+
+statement query I 
+SELECT arg_min(number, number) from numbers_mt(10000);
+
+----  
+0
+
+statement query I 
+SELECT arg_min(a, b) from (select number + 5 as a, number - 5 as b from numbers_mt(10000));
+
+----  
+5
+
+statement query I 
+SELECT arg_min(b, a) from (select number + 5 as a, number - 5 as b from numbers_mt(10000));
+
+----  
+-5
+
+statement query I 
+SELECT arg_max(number, number) from numbers_mt(10000);
+
+----  
+9999
+
+statement query I 
+SELECT arg_max(a, b) from (select number + 5 as a, number - 5 as b from numbers_mt(10000));
+
+----  
+10004
+
+statement query I 
+SELECT arg_max(b, a) from (select number + 5 as a, number - 5 as b from numbers_mt(10000));
+
+----  
+9994
+
+statement query I 
+SELECT arg_max(a, b) from (select number + 5 as a, cast(number as varchar(255)) as b from numbers_mt(10000)) ;
+
+----  
+10004
+
+statement query T 
+SELECT arg_max(b, a) from (select number + 5 as a, cast(number as varchar(255)) as b from numbers_mt(10000)) ;
+
+----  
+9999
+
+statement query I 
+select count(distinct number, number + 1 , number + 3 ) from ( select number % 100 as number from numbers(100000));
+
+----  
+100
+
+statement query I 
+select count(distinct 3) from numbers(10000);
+
+----  
+1
+
+statement query B label(mysql,http)
+select uniq(number, number + 1 , number + 3 )  =  count(distinct number, number + 1 , number + 3 ) from ( select number % 100 as number from numbers(100000));
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT std(number) between  2886.751 and 2886.752 from numbers_mt(10000);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT stddev(number) between  2886.751 and 2886.752 from numbers_mt(10000);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT stddev_pop(number) between  2886.751 and 2886.752 from numbers_mt(10000);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query F 
+SELECT covar_samp(number, number) from (select * from numbers_mt(5) order by number asc);
+
+----  
+2.5
+
+statement query F 
+SELECT covar_pop(number, number) from (select * from numbers_mt(5) order by number asc);
+
+----  
+2.0
+

@@ -1,0 +1,99 @@
+statement query T 
+SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 2);
+
+----  
+def
+
+statement query T 
+SELECT REGEXP_SUBSTR('abc def GHI', '[a-z]+', 1, 3, 'c');
+
+----  
+NULL
+
+statement query T 
+SELECT REGEXP_SUBSTR('Customers - (NY)','\\([[:alnum:]\-]+\\)');
+
+----  
+(NY)
+
+statement query T 
+SELECT REGEXP_SUBSTR('周周周周', '.*', 2);
+
+----  
+周周周
+
+statement query T 
+SELECT REGEXP_SUBSTR('🍣🍣b', 'b', 2);
+
+----  
+b
+
+statement query T 
+SELECT REGEXP_SUBSTR('µå周çб周周', '周+', 3, 2);
+
+----  
+周周
+
+statement query T 
+SELECT REGEXP_SUBSTR('周 周周 周周周 周周周周', '周+', 2, 3);
+
+----  
+周周周周
+
+statement query T 
+SELECT REGEXP_SUBSTR('周 周周', '周+', 5);
+
+----  
+NULL
+
+statement query T 
+SELECT REGEXP_SUBSTR(NULL, '');
+
+----  
+NULL
+
+statement query T 
+SELECT REGEXP_SUBSTR('abc def ghi', NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 2, NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT '======';
+
+----  
+======
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE TABLE t1(s String NULL, pat String NULL, pos Int64 NULL, occu Int64 NULL, mt String NULL) Engine = Memory;
+
+statement ok
+INSERT INTO t1 (s, pat, pos, occu, mt) VALUES (NULL, '[a-z]+', 1, 1, ''), ('abc def ghi', NULL, 1, 1, 'c'), ('abc def ghi', '[a-z]+', NULL, 1, 'c'), ('abc def ghi', '[a-z]+', 1, NULL, 'c'), ('abc def ghi', '[a-z]+', 1, 1, NULL), ('abc def ghi', '[a-z]+', 1, 1, 'c');
+
+statement query T 
+SELECT s FROM t1 WHERE REGEXP_SUBSTR(s, pat, pos, occu, mt) = 'abc';
+
+----  
+abc def ghi
+

@@ -20,7 +20,6 @@ use common_arrow::arrow::compute::comparison;
 use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::with_match_physical_primitive_type;
-use common_datavalues::with_match_physical_primitive_type_error;
 use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -87,8 +86,8 @@ impl Function for ComparisonFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        BooleanType::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        BooleanType::new_impl()
     }
 
     fn eval(
@@ -113,7 +112,10 @@ pub struct ComparisonFunctionCreator<T> {
 }
 
 impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
-    pub fn try_create_func(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        display_name: &str,
+        args: &[&DataTypeImpl],
+    ) -> Result<Box<dyn Function>> {
         // expect array & struct
         let has_array_struct = args
             .iter()
@@ -129,6 +131,15 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
         let lhs_id = args[0].data_type_id();
         let rhs_id = args[1].data_type_id();
 
+        if lhs_id.is_variant() && rhs_id.is_variant() {
+            let func = Arc::new(ComparisonScalarImpl::<VariantValue, VariantValue, _>::new(
+                args[0].clone(),
+                false,
+                T::eval_variant,
+            ));
+            return ComparisonFunction::try_create_func(display_name, func);
+        }
+
         if args[0].eq(args[1]) {
             return with_match_physical_primitive_type!(lhs_id.to_physical_type(), |$T| {
                 let func = Arc::new(ComparisonPrimitiveImpl::<$T, _>::new(args[0].clone(), false, T::eval_simd::<$T>));
@@ -140,7 +151,7 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
                         ComparisonFunction::try_create_func(display_name, func)
                     },
                     TypeID::String => {
-                        let func = Arc::new(ComparisonScalarImpl::<Vu8, Vu8, _>::new(T::eval_binary));
+                        let func = Arc::new(ComparisonScalarImpl::<Vu8, Vu8, _>::new(args[0].clone(), false, T::eval_binary));
                         ComparisonFunction::try_create_func(display_name, func)
                     },
                     _ => Err(ErrorCode::IllegalDataType(format!(
@@ -154,16 +165,31 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
         if lhs_id.is_numeric() && rhs_id.is_numeric() {
             return with_match_primitive_types_error!(lhs_id, |$T| {
                 with_match_primitive_types_error!(rhs_id, |$D| {
-                    let func = Arc::new(ComparisonScalarImpl::<$T, $D, _>::new(T::eval_primitive::<$T, $D, <($T, $D) as ResultTypeOfBinary>::LeastSuper>));
+                    let func = Arc::new(ComparisonScalarImpl::<$T, $D, _>::new(args[0].clone(), false, T::eval_primitive::<$T, $D, <($T, $D) as ResultTypeOfBinary>::LeastSuper>));
                     ComparisonFunction::try_create_func(display_name, func)
                 })
             });
         }
 
         let least_supertype = compare_coercion(args[0], args[1])?;
-        with_match_physical_primitive_type_error!(least_supertype.data_type_id().to_physical_type(), |$T| {
+        with_match_physical_primitive_type!(least_supertype.data_type_id().to_physical_type(), |$T| {
             let func = Arc::new(ComparisonPrimitiveImpl::<$T, _>::new(least_supertype, true, T::eval_simd::<$T>));
             ComparisonFunction::try_create_func(display_name, func)
+        }, {
+            match least_supertype.data_type_id() {
+                TypeID::Boolean => {
+                    let func = Arc::new(ComparisonBooleanImpl::<T::BooleanSimd>::new());
+                    ComparisonFunction::try_create_func(display_name, func)
+                },
+                TypeID::String => {
+                    let func = Arc::new(ComparisonScalarImpl::<Vu8, Vu8, _>::new(least_supertype, true, T::eval_binary));
+                    ComparisonFunction::try_create_func(display_name, func)
+                },
+                _ => Err(ErrorCode::IllegalDataType(format!(
+                    "Can not compare {:?} with {:?}",
+                    args[0], args[1]
+                ))),
+            }
         })
     }
 
@@ -172,7 +198,6 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -183,8 +208,15 @@ pub struct StringSearchCreator<const NEGATED: bool, T> {
 }
 
 impl<const NEGATED: bool, T: StringSearchImpl> StringSearchCreator<NEGATED, T> {
-    pub fn try_create_func(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        display_name: &str,
+        args: &[&DataTypeImpl],
+    ) -> Result<Box<dyn Function>> {
         for arg in args {
+            // variant data can compare with string
+            if arg.data_type_id().is_variant() {
+                continue;
+            }
             assert_string(*arg)?;
         }
 
@@ -202,7 +234,6 @@ impl<const NEGATED: bool, T: StringSearchImpl> StringSearchCreator<NEGATED, T> {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -227,6 +258,8 @@ pub trait ComparisonImpl: Sync + Send + Clone + 'static {
         M: PrimitiveType;
 
     fn eval_binary(_l: &[u8], _r: &[u8], _ctx: &mut EvalContext) -> bool;
+
+    fn eval_variant(_l: &VariantValue, _r: &VariantValue, _ctx: &mut EvalContext) -> bool;
 }
 
 pub trait ComparisonExpression: Sync + Send {
@@ -234,6 +267,8 @@ pub trait ComparisonExpression: Sync + Send {
 }
 
 pub struct ComparisonScalarImpl<L: Scalar, R: Scalar, F> {
+    least_supertype: DataTypeImpl,
+    need_cast: bool,
     func: F,
     _phantom: PhantomData<(L, R)>,
 }
@@ -241,8 +276,10 @@ pub struct ComparisonScalarImpl<L: Scalar, R: Scalar, F> {
 impl<L: Scalar, R: Scalar, F> ComparisonScalarImpl<L, R, F>
 where F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool
 {
-    pub fn new(func: F) -> Self {
+    pub fn new(least_supertype: DataTypeImpl, need_cast: bool, func: F) -> Self {
         Self {
+            least_supertype,
+            need_cast,
             func,
             _phantom: PhantomData,
         }
@@ -256,17 +293,23 @@ where
     F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool + Send + Sync + Clone,
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
-        scalar_binary_op(
-            l.column(),
-            r.column(),
-            self.func.clone(),
-            &mut EvalContext::default(),
-        )
+        let func_ctx = FunctionContext::default();
+        let lhs = if self.need_cast && l.data_type() != &self.least_supertype {
+            cast_column_field(l, l.data_type(), &self.least_supertype, &func_ctx)?
+        } else {
+            l.column().clone()
+        };
+        let rhs = if self.need_cast && r.data_type() != &self.least_supertype {
+            cast_column_field(r, r.data_type(), &self.least_supertype, &func_ctx)?
+        } else {
+            r.column().clone()
+        };
+        scalar_binary_op(&lhs, &rhs, self.func.clone(), &mut EvalContext::default())
     }
 }
 
 pub struct ComparisonPrimitiveImpl<T: PrimitiveType, F> {
-    least_supertype: DataTypePtr,
+    least_supertype: DataTypeImpl,
     need_cast: bool,
     func: F,
     _phantom: PhantomData<T>,
@@ -277,7 +320,7 @@ where
     T: PrimitiveType + comparison::Simd8,
     F: Fn(T::Simd, T::Simd) -> u8,
 {
-    pub fn new(least_supertype: DataTypePtr, need_cast: bool, func: F) -> Self {
+    pub fn new(least_supertype: DataTypeImpl, need_cast: bool, func: F) -> Self {
         Self {
             least_supertype,
             need_cast,
@@ -293,14 +336,15 @@ where
     F: Fn(T::Simd, T::Simd) -> u8 + Send + Sync + Clone,
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
+        let func_ctx = FunctionContext::default();
         let lhs = if self.need_cast && l.data_type() != &self.least_supertype {
-            cast_column_field(l, &self.least_supertype)?
+            cast_column_field(l, l.data_type(), &self.least_supertype, &func_ctx)?
         } else {
             l.column().clone()
         };
 
         let rhs = if self.need_cast && r.data_type() != &self.least_supertype {
-            cast_column_field(r, &self.least_supertype)?
+            cast_column_field(r, r.data_type(), &self.least_supertype, &func_ctx)?
         } else {
             r.column().clone()
         };
@@ -322,22 +366,41 @@ impl<F: BooleanSimdImpl> ComparisonBooleanImpl<F> {
 
 impl<F: BooleanSimdImpl> ComparisonExpression for ComparisonBooleanImpl<F> {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
-        let lhs = l.column();
-        let rhs = r.column();
+        let func_ctx = FunctionContext::default();
+        let lhs = if l.data_type().data_type_id() != TypeID::Boolean {
+            cast_column_field(
+                l,
+                l.data_type(),
+                &DataTypeImpl::Boolean(BooleanType::default()),
+                &func_ctx,
+            )?
+        } else {
+            l.column().clone()
+        };
+        let rhs = if r.data_type().data_type_id() != TypeID::Boolean {
+            cast_column_field(
+                r,
+                r.data_type(),
+                &DataTypeImpl::Boolean(BooleanType::default()),
+                &func_ctx,
+            )?
+        } else {
+            r.column().clone()
+        };
         let res = match (lhs.is_const(), rhs.is_const()) {
             (false, false) => {
-                let lhs: &BooleanColumn = Series::check_get(lhs)?;
-                let rhs: &BooleanColumn = Series::check_get(rhs)?;
+                let lhs: &BooleanColumn = Series::check_get(&lhs)?;
+                let rhs: &BooleanColumn = Series::check_get(&rhs)?;
                 F::vector_vector(lhs, rhs)
             }
             (false, true) => {
-                let lhs: &BooleanColumn = Series::check_get(lhs)?;
+                let lhs: &BooleanColumn = Series::check_get(&lhs)?;
                 let r = rhs.get_bool(0)?;
                 F::vector_const(lhs, r)
             }
             (true, false) => {
                 let l = lhs.get_bool(0)?;
-                let rhs: &BooleanColumn = Series::check_get(rhs)?;
+                let rhs: &BooleanColumn = Series::check_get(&rhs)?;
                 F::const_vector(l, rhs)
             }
             (true, true) => unreachable!(),
@@ -364,17 +427,36 @@ impl<T: StringSearchImpl> ComparisonStringImpl<T> {
 
 impl<T: StringSearchImpl> ComparisonExpression for ComparisonStringImpl<T> {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
-        let lhs = l.column();
-        let rhs = r.column();
+        let func_ctx = FunctionContext::default();
+        let lhs = if !l.data_type().data_type_id().is_string() {
+            cast_column_field(
+                l,
+                l.data_type(),
+                &DataTypeImpl::String(StringType::default()),
+                &func_ctx,
+            )?
+        } else {
+            l.column().clone()
+        };
+        let rhs = if !r.data_type().data_type_id().is_string() {
+            cast_column_field(
+                r,
+                r.data_type(),
+                &DataTypeImpl::String(StringType::default()),
+                &func_ctx,
+            )?
+        } else {
+            r.column().clone()
+        };
         let res = match rhs.is_const() {
             true => {
-                let lhs: &StringColumn = Series::check_get(lhs)?;
+                let lhs: &StringColumn = Series::check_get(&lhs)?;
                 let r = rhs.get_string(0)?;
                 T::vector_const(lhs, &r, self.op)
             }
             false => {
-                let lhs: &StringColumn = Series::check_get(lhs)?;
-                let rhs: &StringColumn = Series::check_get(rhs)?;
+                let lhs: &StringColumn = Series::check_get(&lhs)?;
+                let rhs: &StringColumn = Series::check_get(&rhs)?;
                 T::vector_vector(lhs, rhs, self.op)
             }
         };

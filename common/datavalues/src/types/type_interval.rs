@@ -28,7 +28,7 @@ pub struct IntervalType {
     kind: IntervalKind,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntervalKind {
     Year,
     Month,
@@ -36,6 +36,8 @@ pub enum IntervalKind {
     Hour,
     Minute,
     Second,
+    Doy,
+    Dow,
 }
 
 impl fmt::Display for IntervalKind {
@@ -47,6 +49,8 @@ impl fmt::Display for IntervalKind {
             IntervalKind::Hour => "HOUR",
             IntervalKind::Minute => "MINUTE",
             IntervalKind::Second => "SECOND",
+            IntervalKind::Doy => "DOY",
+            IntervalKind::Dow => "DOW",
         })
     }
 }
@@ -60,14 +64,20 @@ impl From<String> for IntervalKind {
             "HOUR" => IntervalKind::Hour,
             "MINUTE" => IntervalKind::Minute,
             "SECOND" => IntervalKind::Second,
+            "DOY" => IntervalKind::Doy,
+            "DOW" => IntervalKind::Dow,
             _ => unreachable!(),
         }
     }
 }
 
 impl IntervalType {
-    pub fn arc(kind: IntervalKind) -> DataTypePtr {
-        Arc::new(Self { kind })
+    pub fn new(kind: IntervalKind) -> Self {
+        Self { kind }
+    }
+
+    pub fn new_impl(kind: IntervalKind) -> DataTypeImpl {
+        DataTypeImpl::Interval(Self { kind })
     }
 
     pub fn kind(&self) -> &IntervalKind {
@@ -75,7 +85,6 @@ impl IntervalType {
     }
 }
 
-#[typetag::serde]
 impl DataType for IntervalType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Interval
@@ -86,8 +95,8 @@ impl DataType for IntervalType {
         self
     }
 
-    fn name(&self) -> &str {
-        "Interval"
+    fn name(&self) -> String {
+        format!("Interval({})", self.kind)
     }
 
     fn default_value(&self) -> DataValue {
@@ -116,18 +125,19 @@ impl DataType for IntervalType {
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
         mp.insert(ARROW_EXTENSION_NAME.to_string(), "Interval".to_string());
-        mp.insert(ARROW_EXTENSION_META.to_string(), format!("{}", self.kind));
+        mp.insert(ARROW_EXTENSION_META.to_string(), self.kind.to_string());
         Some(mp)
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateSerializer::<i64>::default())
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        DateSerializer::<i64>::default().into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(DateDeserializer::<i64> {
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        DateDeserializer::<i64> {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
-        })
+        }
+        .into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

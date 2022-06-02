@@ -16,7 +16,9 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::{AggregatorFinalPlan, RemotePlan};
+use crate::RemotePlan;
+use crate::plan_table_undrop::UnDropTablePlan;
+use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
@@ -57,6 +59,7 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::V1RemotePlan;
+use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;
@@ -155,10 +158,12 @@ pub trait PlanVisitor {
             PlanNode::CreateDatabase(plan) => self.visit_create_database(plan),
             PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
             PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
+            PlanNode::RenameDatabase(plan) => self.visit_rename_database(plan),
 
             // Table.
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
+            PlanNode::UnDropTable(plan) => self.visit_undrop_table(plan),
             PlanNode::RenameTable(plan) => self.visit_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
@@ -321,6 +326,10 @@ pub trait PlanVisitor {
         Ok(())
     }
 
+    fn visit_rename_database(&mut self, _: &RenameDatabasePlan) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_create_table(&mut self, _: &CreateTablePlan) -> Result<()> {
         Ok(())
     }
@@ -382,6 +391,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_drop_table(&mut self, _: &DropTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_undrop_table(&mut self, _: &UnDropTablePlan) -> Result<()> {
         Ok(())
     }
 

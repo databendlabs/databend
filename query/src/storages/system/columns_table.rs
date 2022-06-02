@@ -17,11 +17,11 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
@@ -50,8 +50,10 @@ impl AsyncSystemTable for ColumnsTable {
             names.push(field.name().clone().into_bytes());
             tables.push(table_name.into_bytes());
             databases.push(database_name.into_bytes());
-            let type_str = format!("{:?}", field.data_type());
-            data_types.push(type_str.into_bytes());
+
+            let non_null_type = remove_nullable(field.data_type());
+            let data_type = format_data_type_sql(&non_null_type);
+            data_types.push(data_type.into_bytes());
             is_nullables.push(field.is_nullable());
         }
 
@@ -94,7 +96,7 @@ impl ColumnsTable {
         ctx: Arc<QueryContext>,
     ) -> Result<Vec<(String, String, DataField)>> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog();
+        let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
 
         let mut rows: Vec<(String, String, DataField)> = vec![];

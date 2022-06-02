@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
@@ -19,7 +20,6 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::concatenate;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde_json::Value as JsonValue;
 
 use crate::prelude::*;
 use crate::Column;
@@ -36,8 +36,9 @@ impl Series {
     /// Can be useful for fast comparisons.
     /// # Safety
     /// Assumes that the `column` is  T.
-    pub unsafe fn static_cast<T>(column: &ColumnRef) -> &T {
+    pub unsafe fn static_cast<T: Any>(column: &ColumnRef) -> &T {
         let object = column.as_ref();
+        debug_assert!(object.as_any().is::<T>());
         &*(object as *const dyn Column as *const T)
     }
 
@@ -191,15 +192,15 @@ impl SeriesFrom<Vec<String>, Vec<String>> for Series {
     }
 }
 
-impl SeriesFrom<Vec<JsonValue>, Vec<JsonValue>> for Series {
-    fn from_data(v: Vec<JsonValue>) -> ColumnRef {
-        JsonColumn::new_from_vec(v).arc()
+impl SeriesFrom<Vec<VariantValue>, Vec<VariantValue>> for Series {
+    fn from_data(v: Vec<VariantValue>) -> ColumnRef {
+        VariantColumn::new_from_vec(v).arc()
     }
 }
 
-impl SeriesFrom<Vec<Option<JsonValue>>, Vec<Option<JsonValue>>> for Series {
-    fn from_data(v: Vec<Option<JsonValue>>) -> ColumnRef {
-        type Builder = <<JsonValue as Scalar>::ColumnType as ScalarColumn>::Builder;
+impl SeriesFrom<Vec<Option<VariantValue>>, Vec<Option<VariantValue>>> for Series {
+    fn from_data(v: Vec<Option<VariantValue>>) -> ColumnRef {
+        type Builder = <<VariantValue as Scalar>::ColumnType as ScalarColumn>::Builder;
         let mut builder = Builder::with_capacity(v.len());
         let mut bitmap = MutableBitmap::with_capacity(v.len());
 
@@ -211,12 +212,28 @@ impl SeriesFrom<Vec<Option<JsonValue>>, Vec<Option<JsonValue>>> for Series {
                 }
                 None => {
                     bitmap.push(false);
-                    builder.push(&JsonValue::default());
+                    builder.push(&VariantValue::default());
                 }
             }
         }
         let column = builder.finish();
         NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
+    }
+}
+
+impl SeriesFrom<Vec<ArrayValue>, Vec<ArrayValue>> for Series {
+    fn from_data(vals: Vec<ArrayValue>) -> ColumnRef {
+        let inner_data_type = match vals.iter().find(|&x| x.inner_type().is_some()) {
+            Some(array_value) => array_value.inner_type().unwrap(),
+            None => Int64Type::new_impl(),
+        };
+        let mut builder = MutableArrayColumn::with_capacity_meta(vals.len(), ColumnMeta::Array {
+            inner_type: inner_data_type,
+        });
+        for val in vals {
+            builder.append_value(val);
+        }
+        builder.finish().arc()
     }
 }
 
@@ -284,7 +301,7 @@ macro_rules! impl_from_option_slices {
 for_all_scalar_types! { impl_from_option_iterator }
 for_all_scalar_types! { impl_from_option_slices }
 
-impl<'a, T: AsRef<[Option<Vu8>]>> SeriesFrom<T, [Option<Vu8>; 2]> for Series {
+impl<T: AsRef<[Option<Vu8>]>> SeriesFrom<T, [Option<Vu8>; 2]> for Series {
     fn from_data(v: T) -> ColumnRef {
         let iter = v.as_ref().iter();
         let capacity = get_iter_capacity(&iter);

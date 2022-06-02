@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_meta_types::DatabaseInfo;
+use common_meta_app::schema::DatabaseInfo;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -31,7 +31,7 @@ impl DefaultDatabase {
 
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
-        &self.db_info.db
+        &self.db_info.name_ident.db_name
     }
 
     fn get_db_info(&self) -> &DatabaseInfo {

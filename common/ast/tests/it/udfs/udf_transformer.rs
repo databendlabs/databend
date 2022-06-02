@@ -14,7 +14,6 @@
 
 use async_trait::async_trait;
 use common_ast::udfs::*;
-use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
@@ -30,12 +29,10 @@ struct TestFetcher;
 
 #[async_trait]
 impl UDFFetcher for TestFetcher {
-    async fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition> {
+    fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition> {
         if name == "test_transformer" {
             let mut parser = UDFParser::default();
-            let expr = parser
-                .parse(name, &["p".to_string()], "not(is_null(p))")
-                .await?;
+            let expr = parser.parse(name, &["p".to_string()], "not(is_null(p))")?;
 
             Ok(UDFDefinition::new(vec!["p".to_string()], expr))
         } else {
@@ -44,8 +41,8 @@ impl UDFFetcher for TestFetcher {
     }
 }
 
-#[tokio::test]
-async fn test_udf_transformer() -> Result<()> {
+#[test]
+fn test_udf_transformer() -> Result<()> {
     let fetcher = &TestFetcher {};
     let result = UDFTransformer::transform_function(
         &Function {
@@ -64,8 +61,7 @@ async fn test_udf_transformer() -> Result<()> {
             distinct: false,
         },
         fetcher,
-    )
-    .await?;
+    )?;
 
     assert_eq!(result, Expr::UnaryOp {
         op: UnaryOperator::Not,
@@ -104,7 +100,6 @@ async fn test_udf_transformer() -> Result<()> {
         },
         fetcher
     )
-    .await
     .is_err());
 
     Ok(())

@@ -14,13 +14,14 @@
 
 use std::sync::Arc;
 
-use common_base::mask_string;
+use common_base::base::mask_string;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
+use itertools::Itertools;
 use serde_json::Value;
 
 use crate::sessions::QueryContext;
@@ -40,7 +41,7 @@ impl SyncSystemTable for ConfigsTable {
     }
 
     fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
-        let config = ctx.get_config();
+        let config = ctx.get_config().into_outer();
 
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
@@ -80,13 +81,15 @@ impl SyncSystemTable for ConfigsTable {
             meta_config_value,
         );
 
-        let masked_access_key_id = mask_string(&config.storage.s3.access_key_id[..], 3);
-        let masked_secret_access_key = mask_string(&config.storage.s3.secret_access_key[..], 3);
+        // Clone storage config to avoid change it's value.
+        //
+        // TODO(xuanwo):
+        // Refactor into config so that config can  decide which value needs mask.
         let mut storage_config = config.storage;
-        // mask sensitive data in storage.s3
-        storage_config.s3.access_key_id = masked_access_key_id;
-        storage_config.s3.secret_access_key = masked_secret_access_key;
-
+        storage_config.s3.access_key_id = mask_string(&storage_config.s3.access_key_id, 3);
+        storage_config.s3.secret_access_key = mask_string(&storage_config.s3.secret_access_key, 3);
+        storage_config.azblob.account_name = mask_string(&storage_config.azblob.account_name, 3);
+        storage_config.azblob.account_key = mask_string(&storage_config.azblob.account_key, 3);
         let storage_config_value = serde_json::to_value(storage_config)?;
         ConfigsTable::extract_config(
             &mut names,
@@ -102,9 +105,9 @@ impl SyncSystemTable for ConfigsTable {
         let groups: Vec<&str> = groups.iter().map(|x| x.as_str()).collect();
         let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
         Ok(DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(groups),
             Series::from_data(names),
             Series::from_data(values),
-            Series::from_data(groups),
             Series::from_data(descs),
         ]))
     }
@@ -113,9 +116,9 @@ impl SyncSystemTable for ConfigsTable {
 impl ConfigsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
+            DataField::new("group", Vu8::to_data_type()),
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("value", Vu8::to_data_type()),
-            DataField::new("group", Vu8::to_data_type()),
             DataField::new("description", Vu8::to_data_type()),
         ]);
 
@@ -192,6 +195,17 @@ impl ConfigsTable {
                     descs,
                     k.to_string(),
                     b.to_string(),
+                    group.clone(),
+                    "".to_string(),
+                    name_prefix.clone(),
+                ),
+                Value::Array(v) => ConfigsTable::push_config(
+                    names,
+                    values,
+                    groups,
+                    descs,
+                    k.to_string(),
+                    v.iter().join(","),
                     group.clone(),
                     "".to_string(),
                     name_prefix.clone(),

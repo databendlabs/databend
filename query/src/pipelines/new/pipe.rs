@@ -53,8 +53,16 @@ impl NewPipe {
             NewPipe::ResizePipe { outputs_port, .. } => outputs_port.len(),
         }
     }
+
+    pub fn processor_by_index(&self, index: usize) -> ProcessorPtr {
+        match self {
+            NewPipe::SimplePipe { processors, .. } => processors[index].clone(),
+            NewPipe::ResizePipe { processor, .. } => processor.clone(),
+        }
+    }
 }
 
+#[derive(Clone)]
 pub struct SourcePipeBuilder {
     processors: Vec<ProcessorPtr>,
     outputs_port: Vec<Arc<OutputPort>>,

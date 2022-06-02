@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_planners::PartInfo;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -67,6 +67,7 @@ impl Test {
         };
 
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {
+            catalog: "default".to_owned(),
             source_info: SourceInfo::TableSource(TableInfo::simple("system", "numbers_mt", schema)),
             scan_fields: None,
             parts: Self::generate_partitions(8, total as u64),

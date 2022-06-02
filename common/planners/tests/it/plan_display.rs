@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableMeta;
 use common_planners::*;
 
 #[test]
@@ -32,6 +32,7 @@ fn test_plan_display_indent() -> Result<()> {
     let plan_create = PlanNode::CreateTable(CreateTablePlan {
         if_not_exists: true,
         tenant: "tenant1".into(),
+        catalog: "default".into(),
         db: "foo".into(),
         table: "bar".into(),
         table_meta: TableMeta {
@@ -41,6 +42,7 @@ fn test_plan_display_indent() -> Result<()> {
             ..Default::default()
         },
         as_select: None,
+        cluster_keys: vec![],
     });
 
     assert_eq!(

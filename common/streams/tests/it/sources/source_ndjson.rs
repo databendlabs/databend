@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::assert_blocks_eq;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::Source;
 
@@ -36,8 +37,7 @@ async fn test_source_ndjson() -> Result<()> {
     .as_bytes();
 
     let reader = futures::io::Cursor::new(bytes);
-
-    let builder = NDJsonSourceBuilder::create(schema);
+    let builder = NDJsonSourceBuilder::create(schema, FormatSettings::default());
     let mut json_source = builder.build(reader).unwrap();
     // expects `page_nums_expects` blocks, and
     while let Some(block) = json_source.read().await? {

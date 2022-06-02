@@ -4,6 +4,8 @@ sidebar_label: With Wasabi
 description:
   How to deploy Databend with Wasabi object storage
 ---
+import GetLatest from '@site/src/components/GetLatest';
+
 
 :::tip
 
@@ -40,7 +42,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nightly/databend-v0.7.14-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -50,7 +52,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nig
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.14-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -63,7 +65,7 @@ databend-meta is a global service for the meta data(such as user, table schema e
 ### 2.1 Create databend-meta.toml
 
 ```shell title="databend-meta.toml"
-log_dir = "metadata/_logs"
+dir = "metadata/_logs"
 admin_api_address = "127.0.0.1:8101"
 grpc_api_address = "127.0.0.1:9101"
 
@@ -94,8 +96,8 @@ Check the response is `HTTP/1.1 200 OK`.
 
 ```shell title="databend-query.toml"
 [log]
-log_level = "INFO"
-log_dir = "benddata/_logs"
+level = "INFO"
+dir = "benddata/_logs"
 
 [query]
 # For admin RESET API.
@@ -123,15 +125,13 @@ tenant_id = "tenant1"
 cluster_id = "cluster1"
 
 [meta]
-meta_address = "127.0.0.1:9101"
-meta_username = "root"
-meta_password = "root"
+address = "127.0.0.1:9101"
+username = "root"
+password = "root"
 
 [storage]
-# fs|s3
-storage_type = "s3"
-
-[storage.fs]
+# s3
+type = "s3"
 
 [storage.s3]
 # How to create a bucket:
@@ -148,8 +148,6 @@ endpoint_url = "https://s3.us-east-2.wasabisys.com"
 access_key_id = "<your-key-id>"
 // highlight-next-line
 secret_access_key = "<your-access-key>"
-
-[storage.azure_storage_blob]
 ```
 
 :::tip
@@ -185,7 +183,9 @@ INSERT INTO t1 VALUES(1), (2);
 ```
 
 ```sql
-SELECT * FROM t1
+SELECT * FROM t1;
+```
+```
 +------+
 | a    |
 +------+
@@ -193,3 +193,5 @@ SELECT * FROM t1
 |    2 |
 +------+
 ```
+
+<GetLatest/>

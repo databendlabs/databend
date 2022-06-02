@@ -12,6 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod metric_service;
+mod meta_metrics;
 
-pub use metric_service::MetricService;
+pub use meta_metrics::incr_meta_metrics_applying_snapshot;
+pub use meta_metrics::incr_meta_metrics_leader_change;
+pub use meta_metrics::incr_meta_metrics_proposals_failed;
+pub use meta_metrics::incr_meta_metrics_proposals_pending;
+pub use meta_metrics::incr_meta_metrics_read_failed;
+pub use meta_metrics::incr_meta_metrics_watchers;
+pub use meta_metrics::init_meta_metrics_recorder;
+pub use meta_metrics::meta_metrics_to_prometheus_string;
+pub use meta_metrics::set_meta_metrics_has_leader;
+pub use meta_metrics::set_meta_metrics_is_leader;
+pub use meta_metrics::set_meta_metrics_proposals_applied;

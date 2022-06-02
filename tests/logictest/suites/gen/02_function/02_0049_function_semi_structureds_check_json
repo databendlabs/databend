@@ -1,0 +1,144 @@
+statement query T 
+select '==check_json==';
+
+----  
+==check_json==
+
+statement query T 
+select check_json(null);
+
+----  
+NULL
+
+statement query T 
+select check_json(true);
+
+----  
+NULL
+
+statement query T 
+select check_json(123);
+
+----  
+NULL
+
+statement query T 
+select check_json(12.34);
+
+----  
+NULL
+
+statement query T 
+select check_json('null');
+
+----  
+NULL
+
+statement query T 
+select check_json('true');
+
+----  
+NULL
+
+statement query T 
+select check_json('-17');
+
+----  
+NULL
+
+statement query T 
+select check_json('123.12');
+
+----  
+NULL
+
+statement query T 
+select check_json('1.912e2');
+
+----  
+NULL
+
+statement query T 
+select check_json('"Om ara pa ca na dhih"  ');
+
+----  
+NULL
+
+statement query T 
+select check_json('[-1, 12, 289, 2188, false]');
+
+----  
+NULL
+
+statement query T 
+select check_json('{ "x" : "abc", "y" : false, "z": 10} ');
+
+----  
+NULL
+
+statement query T 
+select check_json('[1,');
+
+----  
+EOF while parsing a value at line 1 column 3
+
+statement query T 
+select check_json('"ab');
+
+----  
+EOF while parsing a string at line 1 column 3
+
+statement query T 
+select check_json(to_date('2022-01-01'));
+
+----  
+Date is not a valid JSON
+
+statement query T 
+select check_json(to_datetime('2022-01-01 20:20:20'));
+
+----  
+Timestamp is not a valid JSON
+
+statement ok
+DROP DATABASE IF EXISTS db1;
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+USE db1;
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Memory;
+
+statement ok
+insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}');
+
+statement query T 
+select '==check_json from table==';
+
+----  
+==check_json from table==
+
+statement ok
+select check_json(v), v from t1;
+
+statement ok
+CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Memory;
+
+statement ok
+insert into t2 values ('abc'),('[1,');
+
+statement query T 
+select '==check_json from table invalid json==';
+
+----  
+==check_json from table invalid json==
+
+statement ok
+select check_json(v), v from t2;
+
+statement ok
+DROP DATABASE db1;
+

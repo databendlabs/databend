@@ -15,28 +15,18 @@
 use std::fmt;
 
 use openraft::NodeId;
-use serde::de;
 use serde::Deserialize;
-use serde::Deserializer;
 use serde::Serialize;
 
-use crate::compatibility::cmd_00000000_20220413;
-use crate::CreateDatabaseReq;
-use crate::CreateShareReq;
-use crate::CreateTableReq;
-use crate::DropDatabaseReq;
-use crate::DropShareReq;
-use crate::DropTableReq;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
-use crate::RenameTableReq;
-use crate::UpsertTableOptionReq;
+use crate::TxnRequest;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Cmd {
     /// Increment the sequence number generator specified by `key` and returns the new value.
@@ -50,34 +40,21 @@ pub enum Cmd {
         node: Node,
     },
 
-    /// Add a database if absent
-    CreateDatabase(CreateDatabaseReq),
+    /// Remove node
+    RemoveNode {
+        node_id: NodeId,
+    },
 
-    /// Drop a database if absent
-    DropDatabase(DropDatabaseReq),
+    /// Add MetaSrv addr if absent
+    AddMetaSrvAddr {
+        metasrv_name: String,
+        metasrv_addr: String,
+    },
 
-    /// Create a table if absent
-    CreateTable(CreateTableReq),
-
-    /// Drop a table if absent
-    DropTable(DropTableReq),
-
-    /// Rename a table
-    RenameTable(RenameTableReq),
-
-    /// Create a share if absent
-    CreateShare(CreateShareReq),
-
-    DropShare(DropShareReq),
-
-    /// Update, remove or insert table options.
-    ///
-    /// This Cmd requires a present table to operate on.
-    /// Otherwise an `UnknownTableId` is returned.
-    ///
-    /// With mismatched seq, it returns a unchanged state: (prev:TableMeta, prev:TableMeta)
-    /// Otherwise it returns the TableMeta before and after update.
-    UpsertTableOptions(UpsertTableOptionReq),
+    /// Remove MetaSrv addr
+    RemoveMetaSrvAddr {
+        metasrv_name: String,
+    },
 
     /// Update or insert a general purpose kv store
     UpsertKV {
@@ -95,6 +72,8 @@ pub enum Cmd {
         /// Meta data of a value.
         value_meta: Option<KVMeta>,
     },
+
+    Transaction(TxnRequest),
 }
 
 impl fmt::Display for Cmd {
@@ -106,14 +85,18 @@ impl fmt::Display for Cmd {
             Cmd::AddNode { node_id, node } => {
                 write!(f, "add_node:{}={}", node_id, node)
             }
-            Cmd::CreateDatabase(req) => req.fmt(f),
-            Cmd::DropDatabase(req) => req.fmt(f),
-            Cmd::CreateTable(req) => req.fmt(f),
-            Cmd::DropTable(req) => req.fmt(f),
-            Cmd::RenameTable(req) => req.fmt(f),
-            Cmd::UpsertTableOptions(req) => req.fmt(f),
-            Cmd::CreateShare(req) => req.fmt(f),
-            Cmd::DropShare(req) => req.fmt(f),
+            Cmd::RemoveNode { node_id } => {
+                write!(f, "remove_node:{}", node_id)
+            }
+            Cmd::AddMetaSrvAddr {
+                metasrv_name,
+                metasrv_addr,
+            } => {
+                write!(f, "add_metasrv_addr: {}={}", metasrv_name, metasrv_addr)
+            }
+            Cmd::RemoveMetaSrvAddr { metasrv_name } => {
+                write!(f, "remove_metasrv_addr: {}", metasrv_name)
+            }
             Cmd::UpsertKV {
                 key,
                 seq,
@@ -126,134 +109,9 @@ impl fmt::Display for Cmd {
                     key, seq, value, value_meta
                 )
             }
+            Cmd::Transaction(txn) => {
+                write!(f, "txn:{:?}", txn)
+            }
         }
-    }
-}
-
-impl<'de> Deserialize<'de> for Cmd {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
-        let c: cmd_00000000_20220413::Cmd = de::Deserialize::deserialize(deserializer)?;
-        let latest = match c {
-            cmd_00000000_20220413::Cmd::IncrSeq { key } => Cmd::IncrSeq { key },
-            cmd_00000000_20220413::Cmd::AddNode { node_id, node } => Cmd::AddNode { node_id, node },
-            cmd_00000000_20220413::Cmd::CreateDatabase {
-                if_not_exists,
-                tenant,
-                name,
-                db_name,
-                meta,
-            } => {
-                if let Some(x) = if_not_exists {
-                    // latest
-                    Cmd::CreateDatabase(CreateDatabaseReq {
-                        if_not_exists: x,
-                        tenant,
-                        db_name: db_name.unwrap(),
-                        meta,
-                    })
-                } else {
-                    // 20220413
-                    Cmd::CreateDatabase(CreateDatabaseReq {
-                        if_not_exists: false,
-                        tenant,
-                        db_name: name.unwrap(),
-                        meta,
-                    })
-                }
-            }
-            cmd_00000000_20220413::Cmd::DropDatabase {
-                if_exists,
-                tenant,
-                name,
-                db_name,
-            } => {
-                if let Some(x) = if_exists {
-                    // latest
-                    Cmd::DropDatabase(DropDatabaseReq {
-                        if_exists: x,
-                        tenant,
-                        db_name: db_name.unwrap(),
-                    })
-                } else {
-                    // 20220413
-                    Cmd::DropDatabase(DropDatabaseReq {
-                        if_exists: false,
-                        tenant,
-                        db_name: name.unwrap(),
-                    })
-                }
-            }
-            cmd_00000000_20220413::Cmd::CreateTable {
-                if_not_exists,
-                tenant,
-                db_name,
-                table_name,
-                table_meta,
-            } => {
-                // since 20220413 there is an `if_exists` field.
-                let if_not_exists = if_not_exists.unwrap_or_default();
-
-                Cmd::CreateTable(CreateTableReq {
-                    if_not_exists,
-                    tenant,
-                    db_name,
-                    table_name,
-                    table_meta,
-                })
-            }
-            cmd_00000000_20220413::Cmd::DropTable {
-                if_exists,
-                tenant,
-                db_name,
-                table_name,
-            } => {
-                // since 20220413 there is an `if_exists` field.
-                let if_exists = if_exists.unwrap_or_default();
-
-                Cmd::DropTable(DropTableReq {
-                    if_exists,
-                    tenant,
-                    db_name,
-                    table_name,
-                })
-            }
-            cmd_00000000_20220413::Cmd::RenameTable {
-                if_exists,
-                tenant,
-                db_name,
-                table_name,
-                new_db_name,
-                new_table_name,
-            } => {
-                // since 20220413 there is an `if_exists` field.
-                let if_exists = if_exists.unwrap_or_default();
-
-                Cmd::RenameTable(RenameTableReq {
-                    if_exists,
-                    tenant,
-                    db_name,
-                    table_name,
-                    new_db_name,
-                    new_table_name,
-                })
-            }
-            cmd_00000000_20220413::Cmd::CreateShare(x) => Cmd::CreateShare(x),
-            cmd_00000000_20220413::Cmd::DropShare(x) => Cmd::DropShare(x),
-            cmd_00000000_20220413::Cmd::UpsertTableOptions(x) => Cmd::UpsertTableOptions(x),
-            cmd_00000000_20220413::Cmd::UpsertKV {
-                key,
-                seq,
-                value,
-                value_meta,
-            } => Cmd::UpsertKV {
-                key,
-                seq,
-                value,
-                value_meta,
-            },
-        };
-
-        Ok(latest)
     }
 }

@@ -13,8 +13,17 @@
 //  limitations under the License.
 //
 
-mod fuse_history_table;
-mod table_arg_util;
+mod clustering_informations;
+mod fuse_segments;
+mod fuse_snapshots;
+mod table_args;
 
-pub use fuse_history_table::FuseHistoryTable;
-pub use fuse_history_table::FUSE_FUNC_HIST;
+pub use clustering_informations::get_cluster_keys;
+pub use clustering_informations::ClusteringInformation;
+pub use clustering_informations::ClusteringInformationTable;
+pub use fuse_segments::FuseSegment;
+pub use fuse_segments::FuseSegmentTable;
+pub use fuse_snapshots::FuseSnapshot;
+pub use fuse_snapshots::FuseSnapshotTable;
+pub use table_args::string_literal;
+pub use table_args::string_value;

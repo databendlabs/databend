@@ -33,6 +33,7 @@ use super::aggregate_scalar_state::CmpMax;
 use super::aggregate_scalar_state::CmpMin;
 use super::aggregate_scalar_state::ScalarState;
 use super::aggregate_scalar_state::ScalarStateFunc;
+use super::aggregate_scalar_state::VariantState;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
@@ -58,7 +59,7 @@ where
         "AggregateMinMaxFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(self.arguments[0].data_type().clone())
     }
 
@@ -129,6 +130,15 @@ where
         state.merge_result(array)?;
         Ok(())
     }
+
+    fn need_manual_drop_state(&self) -> bool {
+        <S::RefType<'_>>::has_alloc_beyond_bump()
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        let state = place.get::<State>();
+        std::ptr::drop_in_place(state);
+    }
 }
 
 impl<S, C, State> fmt::Display for AggregateMinMaxFunction<S, C, State> {
@@ -165,14 +175,30 @@ pub fn try_create_aggregate_minmax_function<const IS_MIN: bool>(
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
     let data_type = arguments[0].data_type().clone();
-    let phid = data_type.data_type_id().to_physical_type();
+    let mut phid = data_type.data_type_id().to_physical_type();
+
+    // null use dummy func, it's already covered in `AggregateNullResultFunction`
+    if data_type.is_null() {
+        phid = PhysicalTypeID::UInt8;
+    }
+
     let result = with_match_scalar_types_error!(phid, |$T| {
-        if IS_MIN {
-            type State = ScalarState<$T, CmpMin>;
-            AggregateMinMaxFunction::<$T, CmpMin, State>::try_create(display_name, arguments)
+        if phid == PhysicalTypeID::Variant {
+            if IS_MIN {
+                type State = VariantState<CmpMin>;
+                AggregateMinMaxFunction::<VariantValue, CmpMin, State>::try_create(display_name, arguments)
+            } else {
+                type State = VariantState<CmpMax>;
+                AggregateMinMaxFunction::<VariantValue, CmpMax, State>::try_create(display_name, arguments)
+            }
         } else {
-            type State = ScalarState<$T, CmpMax>;
-            AggregateMinMaxFunction::<$T, CmpMax, State>::try_create(display_name, arguments)
+            if IS_MIN {
+                type State = ScalarState<$T, CmpMin>;
+                AggregateMinMaxFunction::<$T, CmpMin, State>::try_create(display_name, arguments)
+            } else {
+                type State = ScalarState<$T, CmpMax>;
+                AggregateMinMaxFunction::<$T, CmpMax, State>::try_create(display_name, arguments)
+            }
         }
     });
 

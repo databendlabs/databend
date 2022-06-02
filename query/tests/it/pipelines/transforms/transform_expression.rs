@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::pipelines::processors::*;
@@ -43,10 +43,10 @@ async fn test_transform_expression() -> Result<()> {
         let ctx = create_query_context().await?;
         pipeline.add_simple_transform(move || {
             Ok(Box::new(ExpressionTransform::try_create(
+                ctx.clone(),
                 plan.input.schema(),
                 plan.schema.clone(),
                 plan.exprs.clone(),
-                ctx.clone(),
             )?))
         })?;
     }
@@ -89,7 +89,7 @@ async fn test_transform_expression_error() -> Result<()> {
         col("number"),
         add(col("number"), lit(1u8)),
     ]);
-    let actual = format!("{}", result.err().unwrap());
+    let actual = result.err().unwrap().to_string();
     let expect =
         "Code: 1006, displayText = Unable to get field named \"xnumber\". Valid fields: [\"number\"].";
     assert_eq!(expect, actual);

@@ -17,6 +17,7 @@ ALTER USER <name> IDENTIFIED [WITH auth_type ] BY 'auth_string'
 auth_type: {
     double_sha1_password
   | sha256_password
+  | no_password
 }
 ```
 auth_type default is **double_sha1_password**.
@@ -24,15 +25,12 @@ auth_type default is **double_sha1_password**.
 ## Examples
 
 
-```sql title='mysql>'
-create user user1 IDENTIFIED BY 'abc123';
-```
-
-```sql title='mysql>'
-show users;
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 ```sql
+SHOW USERS;
 +-----------+----------+----------------------+------------------------------------------+
 | name      | hostname | auth_type            | auth_string                              |
 +-----------+----------+----------------------+------------------------------------------+
@@ -41,18 +39,28 @@ show users;
 ```
 
 
-```sql title='mysql>'
-alter user user1 IDENTIFIED WITH sha256_password BY '123abc';
-```
-
-```sql title='mysql>'
-show users;
+```sql
+ALTER USER user1 IDENTIFIED WITH sha256_password BY '123abc';
 ```
 
 ```sql
+SHOW USERS;
 +-------+----------+-----------------+------------------------------------------------------------------+
 | name  | hostname | auth_type       | auth_string                                                      |
 +-------+----------+-----------------+------------------------------------------------------------------+
 | user1 | %        | sha256_password | dd130a849d7b29e5541b05d2f7f86a4acd4f1ec598c1c9438783f56bc4f0ff80 |
 +-------+----------+-----------------+------------------------------------------------------------------+
+```
+
+```sql
+ALTER USER 'user1' IDENTIFIED WITH no_password;
+```
+
+```sql
+show users;
++-------+----------+-------------+-------------+
+| name  | hostname | auth_type   | auth_string |
++-------+----------+-------------+-------------+
+| user1 | %        | no_password |             |
++-------+----------+-------------+-------------+
 ```

@@ -28,7 +28,7 @@ fn test_raft_config() -> anyhow::Result<()> {
         assert_eq!(
             r,
             Err(MetaError::InvalidConfig(String::from(
-                "--join and --single can not be both set",
+                "at least one of `single` and `join` needs to be enabled",
             )))
         )
     }

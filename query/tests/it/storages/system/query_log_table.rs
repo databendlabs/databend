@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
@@ -30,8 +30,9 @@ async fn test_query_log_table() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
     ctx.get_settings().set_max_threads(2)?;
 
-    let mut query_log = QueryLogTable::create(0);
-    query_log.set_max_rows(2);
+    let max_rows = 2;
+    let table_id = 0;
+    let query_log = QueryLogTable::create(table_id, max_rows);
     let schema = query_log.schema();
     let table: Arc<dyn Table> = Arc::new(query_log);
 

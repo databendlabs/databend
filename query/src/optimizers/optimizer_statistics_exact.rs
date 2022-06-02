@@ -24,6 +24,7 @@ use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
 use crate::storages::ToReadDataSourcePlan;
@@ -61,7 +62,11 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                 let table_name = "one";
 
                 futures::executor::block_on(async move {
-                    let table = self.ctx.get_table(db_name, table_name).await?;
+                    // TODO constant "default"
+                    let table = self
+                        .ctx
+                        .get_table(CATALOG_DEFAULT, db_name, table_name)
+                        .await?;
                     let source_plan = table.read_plan(self.ctx.clone(), None).await?;
                     let dummy_read_plan = PlanNode::ReadSource(source_plan);
 

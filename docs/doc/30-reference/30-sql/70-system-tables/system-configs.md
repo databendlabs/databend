@@ -5,7 +5,7 @@ title: system.configs
 Contains information about Databend server configs.
 
 ```sql
-SELECT * from  configs;
+SELECT * FROM system.configs;
 +--------------------------------------+------------------+-------+-------------+
 | name                                 | value            | group | description |
 +--------------------------------------+------------------+-------+-------------+
@@ -32,8 +32,6 @@ SELECT * from  configs;
 | rpc_tls_server_key                   |                  | query |             |
 | rpc_tls_query_server_root_ca_cert    |                  | query |             |
 | rpc_tls_query_service_domain_name    | localhost        | query |             |
-| table_engine_csv_enabled             | false            | query |             |
-| table_engine_parquet_enabled         | false            | query |             |
 | table_engine_memory_enabled          | true             | query |             |
 | database_engine_github_enabled       | true             | query |             |
 | wait_timeout_mills                   | 5000             | query |             |

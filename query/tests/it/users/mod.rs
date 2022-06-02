@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod auth;
 mod role_cache_mgr;
 mod role_mgr;
 mod user_mgr;
 mod user_udf;
-mod user_warehouse;

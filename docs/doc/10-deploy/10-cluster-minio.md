@@ -2,7 +2,7 @@
 title: Start a Local Query Cluster
 sidebar_label: Local Cluster
 description:
-  How to Deploy a Local Query Cluster.
+  How to deploy a local query cluster.
 ---
 
 :::tip
@@ -36,8 +36,8 @@ Install Databend with standalone mode, please see [Install Databend with MinIO](
 
 ```shell title="databend-query-node2.toml"
 [log]
-log_level = "INFO"
-log_dir = "benddata/_logs"
+level = "INFO"
+dir = "benddata/_logs"
 
 [query]
 # For admin RESET API.
@@ -74,10 +74,8 @@ meta_password = "root"
 
 
 [storage]
-# fs|s3
-storage_type = "s3"
-
-[storage.fs]
+# s3
+type = "s3"
 
 # The storage should be same for the cluster.
 [storage.s3]
@@ -107,11 +105,10 @@ Check the response is `HTTP/1.1 200 OK`.
 mysql -h127.0.0.1 -uroot -P3308
 ```
 
-```shell title='mysql>'
-SELECT * from system.clusters
-```
-
 ```sql
+SELECT * FROM system.clusters
+```
+```
 +------------------------+-----------+------+
 | name                   | host      | port |
 +------------------------+-----------+------+
@@ -122,7 +119,7 @@ SELECT * from system.clusters
 
 ## Step 3. Distributed query
 
-```sql
+```text
 EXPLAIN SELECT max(number), sum(number) FROM numbers_mt(10000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10;
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                           |

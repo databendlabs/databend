@@ -15,11 +15,13 @@
 use std::env;
 use std::sync::Arc;
 
-use common_base::tokio::runtime::Runtime;
-use common_base::Thread;
+use common_base::base::tokio::runtime::Runtime;
+use common_base::base::Thread;
 use common_exception::Result;
-use databend_query::configs::Config;
+use common_io::prelude::StorageFsConfig;
+use common_io::prelude::StorageParams;
 use databend_query::sessions::SessionManager;
+use databend_query::Config;
 
 async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     let sessions = SessionManager::from_conf(config.clone()).await?;
@@ -122,13 +124,14 @@ impl SessionManagerBuilder {
 
     pub fn fs_storage_path(self, path: String) -> SessionManagerBuilder {
         let mut new_config = self.config;
-        new_config.storage.fs.data_path = path;
+
+        new_config.storage.params = StorageParams::Fs(StorageFsConfig { root: path });
         SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn log_dir_with_relative(self, path: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
-        new_config.log.log_dir = env::current_dir()
+        new_config.log.dir = env::current_dir()
             .unwrap()
             .join(path.into())
             .display()

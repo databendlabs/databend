@@ -79,7 +79,7 @@ where
         "AggregateAvgFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(f64::to_data_type())
     }
 
@@ -178,6 +178,10 @@ where
         builder.append_value(val);
         Ok(())
     }
+
+    fn convert_const_to_full(&self) -> bool {
+        true
+    }
 }
 
 impl<T, SumT> fmt::Display for AggregateAvgFunction<T, SumT> {
@@ -215,7 +219,14 @@ pub fn try_create_aggregate_avg_function(
     if data_type.data_type_id() == TypeID::Boolean {
         return AggregateAvgFunction::<u8, u64>::try_create(display_name, arguments);
     }
-    with_match_primitive_type_id!(data_type.data_type_id(), |$T| {
+
+    let mut phid = data_type.data_type_id();
+    // null use dummy func, it's already covered in `AggregateNullResultFunction`
+    if data_type.is_null() {
+        phid = TypeID::UInt8;
+    }
+
+    with_match_primitive_type_id!(phid, |$T| {
         AggregateAvgFunction::<$T, <$T as PrimitiveType>::LargestType>::try_create(
             display_name,
             arguments,

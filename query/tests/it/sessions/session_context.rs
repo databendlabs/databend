@@ -14,22 +14,21 @@
 //
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use databend_query::clusters::Cluster;
-use databend_query::configs::Config;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionType;
+use databend_query::Config;
 
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {
-    let conf = Config::load_from_args();
+    let conf = Config::load()?;
     let session_ctx = SessionContext::try_create(conf)?;
 
     // Abort status.
@@ -58,7 +57,7 @@ async fn test_session_context() -> Result<()> {
 
     // Current user.
     {
-        let user_info = UserInfo::new_no_auth("user1".to_string(), "".to_string());
+        let user_info = UserInfo::new_no_auth("user1", "");
         session_ctx.set_current_user(user_info);
 
         let val = session_ctx.get_current_user().unwrap();
@@ -80,12 +79,9 @@ async fn test_session_context() -> Result<()> {
     // context shared.
     {
         let sessions = SessionManagerBuilder::create().build()?;
-        let dummy_session = sessions.create_session(SessionType::Test).await?;
-        let shared = QueryContextShared::try_create(
-            Arc::new(dummy_session.as_ref().clone()),
-            Cluster::empty(),
-        )
-        .await?;
+        let dummy_session = sessions.create_session(SessionType::Dummy).await?;
+        let shared =
+            QueryContextShared::try_create((*dummy_session).clone(), Cluster::empty()).await?;
 
         session_ctx.set_query_context_shared(Some(shared.clone()));
         let val = session_ctx.get_query_context_shared();

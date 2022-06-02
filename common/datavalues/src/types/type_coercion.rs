@@ -13,14 +13,13 @@
 // limitations under the License.
 
 use std::cmp;
-use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::prelude::TypeID::*;
 use crate::prelude::*;
-use crate::types::data_type::DataTypePtr;
+use crate::types::data_type::DataTypeImpl;
 use crate::DataValueBinaryOperator;
 use crate::DataValueUnaryOperator;
 
@@ -35,27 +34,27 @@ pub fn construct_numeric_type(
     is_signed: bool,
     is_floating: bool,
     byte_size: usize,
-) -> Result<DataTypePtr> {
+) -> Result<DataTypeImpl> {
     match (is_signed, is_floating, byte_size) {
-        (false, false, 1) => Ok(UInt8Type::arc()),
-        (false, false, 2) => Ok(UInt16Type::arc()),
-        (false, false, 4) => Ok(UInt32Type::arc()),
-        (false, false, 8) => Ok(UInt64Type::arc()),
-        (false, true, 4) => Ok(Float32Type::arc()),
-        (false, true, 8) => Ok(Float64Type::arc()),
-        (true, false, 1) => Ok(Int8Type::arc()),
-        (true, false, 2) => Ok(Int16Type::arc()),
-        (true, false, 4) => Ok(Int32Type::arc()),
-        (true, false, 8) => Ok(Int64Type::arc()),
-        (true, true, 1) => Ok(Float32Type::arc()),
-        (true, true, 2) => Ok(Float32Type::arc()),
-        (true, true, 4) => Ok(Float32Type::arc()),
-        (true, true, 8) => Ok(Float64Type::arc()),
+        (false, false, 1) => Ok(UInt8Type::new_impl()),
+        (false, false, 2) => Ok(UInt16Type::new_impl()),
+        (false, false, 4) => Ok(UInt32Type::new_impl()),
+        (false, false, 8) => Ok(UInt64Type::new_impl()),
+        (false, true, 4) => Ok(Float32Type::new_impl()),
+        (false, true, 8) => Ok(Float64Type::new_impl()),
+        (true, false, 1) => Ok(Int8Type::new_impl()),
+        (true, false, 2) => Ok(Int16Type::new_impl()),
+        (true, false, 4) => Ok(Int32Type::new_impl()),
+        (true, false, 8) => Ok(Int64Type::new_impl()),
+        (true, true, 1) => Ok(Float32Type::new_impl()),
+        (true, true, 2) => Ok(Float32Type::new_impl()),
+        (true, true, 4) => Ok(Float32Type::new_impl()),
+        (true, true, 8) => Ok(Float64Type::new_impl()),
 
         // TODO support bigint and decimal types, now we just let's overflow
-        (false, false, d) if d > 8 => Ok(Int64Type::arc()),
-        (true, false, d) if d > 8 => Ok(UInt64Type::arc()),
-        (_, true, d) if d > 8 => Ok(Float64Type::arc()),
+        (false, false, d) if d > 8 => Ok(Int64Type::new_impl()),
+        (true, false, d) if d > 8 => Ok(UInt64Type::new_impl()),
+        (_, true, d) if d > 8 => Ok(Float64Type::new_impl()),
 
         _ => Result::Err(ErrorCode::BadDataValueType(format!(
             "Can't construct type from is_signed: {}, is_floating: {}, byte_size: {}",
@@ -68,10 +67,10 @@ pub fn construct_numeric_type(
 /// can be casted to for numerical calculation, while maintaining
 /// maximum precision
 pub fn numerical_coercion(
-    lhs_type: &DataTypePtr,
-    rhs_type: &DataTypePtr,
+    lhs_type: &DataTypeImpl,
+    rhs_type: &DataTypeImpl,
     allow_overflow: bool,
-) -> Result<DataTypePtr> {
+) -> Result<DataTypeImpl> {
     let lhs_id = lhs_type.data_type_id();
     let rhs_id = rhs_type.data_type_id();
 
@@ -152,9 +151,9 @@ pub fn numerical_coercion(
 #[inline]
 pub fn numerical_arithmetic_coercion(
     op: &DataValueBinaryOperator,
-    lhs_type: &DataTypePtr,
-    rhs_type: &DataTypePtr,
-) -> Result<DataTypePtr> {
+    lhs_type: &DataTypeImpl,
+    rhs_type: &DataTypeImpl,
+) -> Result<DataTypeImpl> {
     let lhs_id = lhs_type.data_type_id();
     let rhs_id = rhs_type.data_type_id();
 
@@ -177,11 +176,11 @@ pub fn numerical_arithmetic_coercion(
 
         DataValueBinaryOperator::Modulo => {
             if has_float {
-                return Ok(Float64Type::arc());
+                return Ok(Float64Type::new_impl());
             }
             // From clickhouse: NumberTraits.h
             // If modulo of division can yield negative number, we need larger type to accommodate it.
-            // Example: toInt32(-199) % toUInt8(200) will return -199 that does not fit in Int8, only in Int16.
+            // Example: to_int32(-199) % to_uint8(200) will return -199 that does not fit in Int8, only in Int16.
             let result_is_signed = lhs_id.is_signed_numeric();
             let right_size = rhs_id.numeric_byte_size()?;
             let size_of_result = if result_is_signed {
@@ -194,7 +193,7 @@ pub fn numerical_arithmetic_coercion(
         DataValueBinaryOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))
         }
-        DataValueBinaryOperator::Div => Ok(Float64Type::arc()),
+        DataValueBinaryOperator::Div => Ok(Float64Type::new_impl()),
         DataValueBinaryOperator::IntDiv => construct_numeric_type(has_signed, false, max_size),
     }
 }
@@ -202,8 +201,8 @@ pub fn numerical_arithmetic_coercion(
 #[inline]
 pub fn numerical_unary_arithmetic_coercion(
     op: &DataValueUnaryOperator,
-    val_type: &DataTypePtr,
-) -> Result<DataTypePtr> {
+    val_type: &DataTypeImpl,
+) -> Result<DataTypeImpl> {
     let type_id = val_type.data_type_id();
     // error on any non-numeric type
     if !type_id.is_numeric() {
@@ -229,7 +228,7 @@ pub fn numerical_unary_arithmetic_coercion(
 }
 
 // coercion rules for compare operations. This is a superset of all numerical coercion rules.
-pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<DataTypePtr> {
+pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Result<DataTypeImpl> {
     let lhs_id = lhs_type.data_type_id();
     let rhs_id = rhs_type.data_type_id();
 
@@ -255,7 +254,7 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
 
     // one of is String and other is number
     if (lhs_id.is_numeric() && rhs_id.is_string()) || (rhs_id.is_numeric() && lhs_id.is_string()) {
-        return Ok(Float64Type::arc());
+        return Ok(Float64Type::new_impl());
     }
 
     // one of is datetime and other is number or string
@@ -271,20 +270,27 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
 
     if lhs_id.is_date_or_date_time() && rhs_id.is_date_or_date_time() {
         return match (lhs_id, rhs_id) {
-            (TypeID::Date16, _) => Ok(rhs_type.clone()),
-            (_, TypeID::Date16) => Ok(lhs_type.clone()),
-            (TypeID::Date32, TypeID::DateTime32) => Ok(DateTime64Type::arc(0, None)),
-            (TypeID::DateTime32, TypeID::Date32) => Ok(DateTime64Type::arc(0, None)),
-            (TypeID::Date32 | TypeID::DateTime32, TypeID::DateTime64) => Ok(rhs_type.clone()),
-            (TypeID::DateTime64, TypeID::Date32 | TypeID::DateTime32) => Ok(lhs_type.clone()),
-            (TypeID::DateTime64, TypeID::DateTime64) => {
-                let lhs: &DateTime64Type = lhs_type.as_any().downcast_ref().unwrap();
-                let rhs: &DateTime64Type = rhs_type.as_any().downcast_ref().unwrap();
+            (TypeID::Date, _) => Ok(rhs_type.clone()),
+            (_, TypeID::Date) => Ok(lhs_type.clone()),
+            (TypeID::Timestamp, TypeID::Timestamp) => {
+                let lhs: &TimestampType = lhs_type.as_any().downcast_ref().unwrap();
+                let rhs: &TimestampType = rhs_type.as_any().downcast_ref().unwrap();
                 let precision = cmp::max(lhs.precision(), rhs.precision());
-                Ok(DateTime64Type::arc(precision, None))
+                Ok(TimestampType::new_impl(precision))
             }
             _ => unreachable!(),
         };
+    }
+
+    // one of type is variant
+    {
+        if lhs_id.is_variant() {
+            return Ok(rhs_type.clone());
+        }
+
+        if rhs_id.is_variant() {
+            return Ok(lhs_type.clone());
+        }
     }
 
     Err(ErrorCode::IllegalDataType(format!(
@@ -295,7 +301,7 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
 
 // aggregate_types aggregates data types for a multi-argument function.
 #[inline]
-pub fn aggregate_types(args: &[DataTypePtr]) -> Result<DataTypePtr> {
+pub fn aggregate_types(args: &[DataTypeImpl]) -> Result<DataTypeImpl> {
     match args.len() {
         0 => Result::Err(ErrorCode::BadArguments("Can't aggregate empty args")),
         1 => Ok(args[0].clone()),
@@ -307,7 +313,7 @@ pub fn aggregate_types(args: &[DataTypePtr]) -> Result<DataTypePtr> {
     }
 }
 
-pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<DataTypePtr> {
+pub fn merge_types(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Result<DataTypeImpl> {
     if lhs_type.is_nullable() || rhs_type.is_nullable() {
         let lhs_type = remove_nullable(lhs_type);
         let rhs_type = remove_nullable(rhs_type);
@@ -327,7 +333,7 @@ pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<Dat
             let b = rhs_type.as_any().downcast_ref::<ArrayType>().unwrap();
 
             let typ = merge_types(a.inner_type(), b.inner_type())?;
-            Ok(Arc::new(ArrayType::create(typ)))
+            Ok(DataTypeImpl::Array(ArrayType::create(typ)))
         }
         (Struct, Struct) => {
             let a = lhs_type.as_any().downcast_ref::<StructType>().unwrap();
@@ -345,7 +351,10 @@ pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<Dat
                 .map(|(a, b)| merge_types(a, b))
                 .collect::<Result<Vec<_>>>()?;
 
-            Ok(Arc::new(StructType::create(a.names().clone(), types)))
+            Ok(DataTypeImpl::Struct(StructType::create(
+                a.names().clone(),
+                types,
+            )))
         }
         _ => {
             if lhs_id == rhs_id {

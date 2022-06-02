@@ -134,7 +134,7 @@ impl RaftLog {
     }
 
     /// Insert a single log.
-    #[tracing::instrument(level = "debug", skip(self, log), fields(log_id=format!("{}",log.log_id).as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, log), fields(log_id=log.log_id.to_string().as_str()))]
     pub async fn insert(
         &self,
         log: &Entry<LogEntry>,

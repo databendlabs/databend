@@ -26,7 +26,7 @@ Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return
 
 ### Knowledge before writing the eval function
 
-####  Logical datatypes and physical datatypes.
+#### Logical datatypes and physical datatypes.
 
 Logical datatypes are the datatypes that we use in Databend, and physical datatypes are the datatypes that we use in the execution/compute engine.
 Such as `Date32`, it's a logical data type, but its physical is `Int32`, so its column is represented by `Int32Column`.
@@ -34,7 +34,7 @@ Such as `Date32`, it's a logical data type, but its physical is `Int32`, so its 
 We can get logical datatype by `data_type` function of `DataField` , and the physical datatype by `data_type` function in `ColumnRef`.
 `ColumnsWithField` has `data_type` function which returns the logical datatype.
 
-####  Arrow's memory layout
+#### Arrow's memory layout
 
 Databend's memory layout is based on the Arrow system, you can find Arrow's memory layout [here] (https://arrow.apache.org/docs/format/Columnar.html#format-columnar).
 
@@ -121,7 +121,7 @@ pub struct SqrtFunction {
 
 ```rust
 impl SqrtFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
         Ok(Box::new(SqrtFunction {
             display_name: display_name.to_string(),
@@ -158,11 +158,11 @@ impl Function for SqrtFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        Float64Type::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        Float64Type::new_impl()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize, _func_ctx: FunctionContext) -> Result<ColumnRef>{
+    fn eval(&self, _func_ctx: FunctionContext, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
              let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), sqrt::<$S>, &mut ctx)?;
@@ -203,9 +203,9 @@ To be a good engineer, don't forget to test your codes, please add unit tests an
 
 ```sql
 
-SELECT sqrt(-3), sqrt(3), sqrt(0), sqrt(3.0), sqrt( toUInt64(3) ), sqrt(null) ;
+SELECT sqrt(-3), sqrt(3), sqrt(0), sqrt(3.0), sqrt( to_uint64(3) ), sqrt(null) ;
 +----------+--------------------+---------+--------------------+--------------------+------------+
-| sqrt(-3) | sqrt(3)            | sqrt(0) | sqrt(3)            | sqrt(toUInt64(3))  | sqrt(NULL) |
+| sqrt(-3) | sqrt(3)            | sqrt(0) | sqrt(3)            | sqrt(to_uint64(3)) | sqrt(NULL) |
 +----------+--------------------+---------+--------------------+--------------------+------------+
 |      NaN | 1.7320508075688772 |       0 | 1.7320508075688772 | 1.7320508075688772 |       NULL |
 +----------+--------------------+---------+--------------------+--------------------+------------+

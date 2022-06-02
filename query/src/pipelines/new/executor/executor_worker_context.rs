@@ -16,12 +16,12 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_base::TrySpawn;
+use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::new::executor::executor_notify::WorkersNotify;
+use crate::pipelines::new::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::new::executor::executor_tasks::CompletedAsyncTask;
 use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -37,14 +37,14 @@ pub enum ExecutorTask {
 pub struct ExecutorWorkerContext {
     worker_num: usize,
     task: ExecutorTask,
-    workers_notify: Arc<WorkersNotify>,
+    workers_condvar: Arc<WorkersCondvar>,
 }
 
 impl ExecutorWorkerContext {
-    pub fn create(worker_num: usize, workers_notify: Arc<WorkersNotify>) -> Self {
+    pub fn create(worker_num: usize, workers_condvar: Arc<WorkersCondvar>) -> Self {
         ExecutorWorkerContext {
             worker_num,
-            workers_notify,
+            workers_condvar,
             task: ExecutorTask::None,
         }
     }
@@ -88,21 +88,33 @@ impl ExecutorWorkerContext {
         executor: &PipelineExecutor,
     ) -> Result<Option<NodeIndex>> {
         let worker_id = self.worker_num;
-        let workers_notify = self.get_workers_notify().clone();
+        let workers_condvar = self.get_workers_condvar().clone();
         let tasks_queue = executor.global_tasks_queue.clone();
+        let clone_processor = processor.clone();
+        let join_handle = executor
+            .async_runtime
+            .spawn(async move { processor.async_process().await });
         executor.async_runtime.spawn(async move {
-            let res = processor.async_process().await;
-            let task = CompletedAsyncTask::create(processor, worker_id, res);
-            tasks_queue.completed_async_task(task);
-            workers_notify.dec_active_async_worker();
-            workers_notify.wakeup(worker_id);
+            let res = match join_handle.await {
+                Ok(Ok(_)) => Ok(()),
+                Ok(Err(cause)) => Err(cause),
+                Err(cause) => Err(ErrorCode::PanicError(format!(
+                    "Panic error, cause {}",
+                    cause
+                ))),
+            };
+
+            tasks_queue.completed_async_task(
+                workers_condvar,
+                CompletedAsyncTask::create(clone_processor, worker_id, res),
+            );
         });
 
         Ok(None)
     }
 
-    pub fn get_workers_notify(&self) -> &Arc<WorkersNotify> {
-        &self.workers_notify
+    pub fn get_workers_condvar(&self) -> &Arc<WorkersCondvar> {
+        &self.workers_condvar
     }
 }
 

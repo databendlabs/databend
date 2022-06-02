@@ -104,8 +104,8 @@ impl BloomFilterIndexer {
     /// Create a bloom filter block from source data.
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
-    #[allow(dead_code)]
-    pub fn try_create(source_data_blocks: &[DataBlock], ctx: Arc<QueryContext>) -> Result<Self> {
+
+    pub fn try_create(ctx: Arc<QueryContext>, source_data_blocks: &[DataBlock]) -> Result<Self> {
         let seed = Self::create_seed();
         Self::try_create_with_seed(source_data_blocks, seed, ctx)
     }
@@ -154,7 +154,8 @@ impl BloomFilterIndexer {
                 // create bloom filter column
                 let serialized_bytes = bloom_filter.to_vec()?;
                 let bloom_value = DataValue::String(serialized_bytes);
-                let bloom_column: ColumnRef = bloom_value.as_const_column(&StringType::arc(), 1)?;
+                let bloom_column: ColumnRef =
+                    bloom_value.as_const_column(&StringType::new_impl(), 1)?;
                 bloom_columns.push(bloom_column);
             }
         }
@@ -172,7 +173,7 @@ impl BloomFilterIndexer {
         &self,
         column_name: &str,
         target: DataValue,
-        typ: DataTypePtr,
+        typ: DataTypeImpl,
         ctx: Arc<QueryContext>,
     ) -> Result<BloomFilterExprEvalResult> {
         let bloom_column = Self::to_bloom_column_name(column_name);
@@ -197,7 +198,7 @@ impl BloomFilterIndexer {
     /// Returns false when the expression must be false, otherwise true.
     /// The 'true' doesn't really mean the expression is true, but 'maybe true'.
     /// That is to say, you still need the load all data and run the execution.
-    #[allow(dead_code)]
+
     pub fn maybe_true(&self, expr: &Expression) -> Result<bool> {
         Ok(self.eval(expr)? != BloomFilterExprEvalResult::False)
     }
@@ -433,7 +434,7 @@ impl BloomFilter {
     ///
     /// Nulls are not added to the Bloom
     /// filter, so any null related filter requires reading the data file. "
-    pub fn is_supported_type(data_type: &DataTypePtr) -> bool {
+    pub fn is_supported_type(data_type: &DataTypeImpl) -> bool {
         // we support nullable column but Nulls are not added into the bloom filter.
         let inner_type = remove_nullable(data_type);
         let data_type_id = inner_type.data_type_id();
@@ -449,10 +450,8 @@ impl BloomFilter {
                 | TypeID::Int64
                 | TypeID::Float32
                 | TypeID::Float64
-                | TypeID::Date16
-                | TypeID::Date32
-                | TypeID::DateTime32
-                | TypeID::DateTime64
+                | TypeID::Date
+                | TypeID::Timestamp
                 | TypeID::Interval
                 | TypeID::String
         )
@@ -497,14 +496,14 @@ impl BloomFilter {
         let input_schema = Arc::new(DataSchema::new(vec![input_field]));
         let args = vec![
             Expression::Column(String::from(input_column)),
-            Expression::create_literal_with_type(DataValue::UInt64(seed), UInt64Type::arc()),
+            Expression::create_literal_with_type(DataValue::UInt64(seed), UInt64Type::new_impl()),
         ];
 
         let output_column = "output";
         let output_data_type = if column.is_nullable() {
-            wrap_nullable(&UInt64Type::arc())
+            wrap_nullable(&UInt64Type::new_impl())
         } else {
-            UInt64Type::arc()
+            UInt64Type::new_impl()
         };
         let output_field = DataField::new(output_column, output_data_type);
         let output_schema = DataSchemaRefExt::create(vec![output_field]);
@@ -514,12 +513,12 @@ impl BloomFilter {
             Box::new(Expression::create_scalar_function("city64WithSeed", args)),
         );
         let expr_executor = ExpressionExecutor::try_create(
+            ctx,
             "calculate cityhash64",
             input_schema.clone(),
             output_schema,
             vec![expr],
             true,
-            ctx,
         )?;
 
         let data_block = DataBlock::create(input_schema, vec![column.clone()]);
@@ -593,7 +592,7 @@ impl BloomFilter {
     fn compute_data_value_double_hashes(
         &self,
         data_value: DataValue,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         ctx: Arc<QueryContext>,
     ) -> Result<(u64, u64)> {
         let col = data_value.as_const_column(&data_type, 1)?;
@@ -626,7 +625,7 @@ impl BloomFilter {
     ///     let not_exist = BloomFilter::is_supported_type(data_type) && !bloom.find(data_value, data_type)?;
     ///
     /// ```
-    pub fn find(&self, val: DataValue, typ: DataTypePtr, ctx: Arc<QueryContext>) -> Result<bool> {
+    pub fn find(&self, val: DataValue, typ: DataTypeImpl, ctx: Arc<QueryContext>) -> Result<bool> {
         if !Self::is_supported_type(&typ) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {:?} ",

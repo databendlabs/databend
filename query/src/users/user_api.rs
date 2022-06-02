@@ -15,22 +15,20 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_management::QuotaApi;
+use common_management::QuotaMgr;
 use common_management::RoleApi;
 use common_management::RoleMgr;
-use common_management::SettingApi;
-use common_management::SettingMgr;
 use common_management::StageApi;
 use common_management::StageMgr;
 use common_management::UdfApi;
 use common_management::UdfMgr;
 use common_management::UserApi;
 use common_management::UserMgr;
-use common_management::WarehouseApi;
-use common_management::WarehouseMgr;
 use common_meta_api::KVApi;
 
-use crate::common::MetaClientProvider;
-use crate::configs::Config;
+use crate::common::MetaStoreProvider;
+use crate::Config;
 
 pub struct UserApiProvider {
     client: Arc<dyn KVApi>,
@@ -38,11 +36,12 @@ pub struct UserApiProvider {
 
 impl UserApiProvider {
     pub async fn create_global(conf: Config) -> Result<Arc<UserApiProvider>> {
-        let client = MetaClientProvider::new(conf.meta.to_grpc_client_config())
-            .try_get_kv_client()
+        let client = MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf())
+            .try_get_meta_store()
             .await?;
-
-        Ok(Arc::new(UserApiProvider { client }))
+        Ok(Arc::new(UserApiProvider {
+            client: client.arc(),
+        }))
     }
 
     pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<dyn UserApi>> {
@@ -61,11 +60,7 @@ impl UserApiProvider {
         Ok(Arc::new(UdfMgr::create(self.client.clone(), tenant)?))
     }
 
-    pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
-        Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
-    }
-
-    pub fn get_warehouse_api_client(&self, tenant: &str) -> Result<Arc<dyn WarehouseApi>> {
-        Ok(Arc::new(WarehouseMgr::create(self.client.clone(), tenant)?))
+    pub fn get_tenant_quota_api_client(&self, tenant: &str) -> Result<Arc<dyn QuotaApi>> {
+        Ok(Arc::new(QuotaMgr::create(self.client.clone(), tenant)?))
     }
 }

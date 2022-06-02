@@ -18,19 +18,17 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
-use common_meta_types::UserSetting;
 use itertools::Itertools;
 
-use crate::configs::Config;
-use crate::sessions::SessionContext;
-use crate::users::UserApiProvider;
+use crate::Config;
 
 #[derive(Clone)]
 enum ScopeLevel {
+    #[allow(dead_code)]
     Global,
     Session,
 }
@@ -53,7 +51,6 @@ pub struct SettingValue {
     // Default value of this setting.
     default_value: DataValue,
     user_setting: UserSetting,
-    // The scope of the setting is GLOBAL(metasrv) or SESSION.
     level: ScopeLevel,
     desc: &'static str,
 }
@@ -61,18 +58,10 @@ pub struct SettingValue {
 #[derive(Clone)]
 pub struct Settings {
     settings: Arc<RwLock<HashMap<String, SettingValue>>>,
-    #[allow(dead_code)]
-    user_api: Arc<UserApiProvider>,
-    #[allow(dead_code)]
-    session_ctx: Arc<SessionContext>,
 }
 
 impl Settings {
-    pub fn try_create(
-        conf: &Config,
-        session_ctx: Arc<SessionContext>,
-        user_api: Arc<UserApiProvider>,
-    ) -> Result<Settings> {
+    pub fn try_create(conf: &Config) -> Result<Settings> {
         let values = vec![
             // max_block_size
             SettingValue {
@@ -106,30 +95,6 @@ impl Settings {
                 desc: "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
             },
 
-            // storage_backoff_init_delay_ms
-            SettingValue {
-                default_value: DataValue::UInt64(5),
-                user_setting: UserSetting::create("storage_occ_backoff_init_delay_ms", DataValue::UInt64(5)),
-                level: ScopeLevel::Session,
-                desc: "The initial retry delay in millisecond. By default, it is 5 ms.",
-            },
-
-            // storage_occ_backoff_max_delay_ms
-            SettingValue {
-                default_value: DataValue::UInt64(20 * 1000),
-                user_setting: UserSetting::create("storage_occ_backoff_max_delay_ms", DataValue::UInt64(20 * 1000)),
-                level: ScopeLevel::Session,
-                desc: "The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds.",
-            },
-
-            // storage_occ_backoff_max_elapsed_ms
-            SettingValue {
-                default_value: DataValue::UInt64(120 * 1000),
-                user_setting: UserSetting::create("storage_occ_backoff_max_elapsed_ms", DataValue::UInt64(120 * 1000)),
-                level: ScopeLevel::Session,
-                desc: "The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.",
-            },
-
             // enable_new_processor_framework
             SettingValue {
                 default_value: DataValue::UInt64(1),
@@ -137,40 +102,54 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "Enable new processor framework if value != 0, default value: 1",
             },
-
+            // enable_planner_v2
+            SettingValue {
+                default_value: DataValue::UInt64(0),
+                user_setting: UserSetting::create("enable_planner_v2", DataValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "Enable planner v2 by setting this variable to 1, default value: 0",
+            },
             SettingValue {
                 default_value: DataValue::String("\n".as_bytes().to_vec()),
                 user_setting: UserSetting::create("record_delimiter", DataValue::String("\n".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
                 desc: "Format record_delimiter, default value: \n",
             },
-
             SettingValue {
-                default_value:DataValue::String(",".as_bytes().to_vec()),
+                default_value: DataValue::String(",".as_bytes().to_vec()),
                 user_setting: UserSetting::create("field_delimiter", DataValue::String(",".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
                 desc: "Format field delimiter, default value: ,",
             },
-
             SettingValue {
                 default_value: DataValue::UInt64(1),
                 user_setting: UserSetting::create("empty_as_default", DataValue::UInt64(1)),
                 level: ScopeLevel::Session,
                 desc: "Format empty_as_default, default value: 1",
             },
-
             SettingValue {
                 default_value: DataValue::UInt64(0),
                 user_setting: UserSetting::create("skip_header", DataValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "Whether to skip the input header, default value: 0",
             },
-
             SettingValue {
-                default_value:DataValue::String("UTC".as_bytes().to_vec()),
+                default_value: DataValue::String("None".as_bytes().to_vec()),
+                user_setting: UserSetting::create("compression", DataValue::String("None".as_bytes().to_vec())),
+                level: ScopeLevel::Session,
+                desc: "Format compression, default value: None",
+            },
+            SettingValue {
+                default_value: DataValue::String("UTC".as_bytes().to_vec()),
                 user_setting: UserSetting::create("timezone", DataValue::String("UTC".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
                 desc: "Timezone, default value: UTC,",
+            },
+            SettingValue {
+                default_value: DataValue::UInt64(10000),
+                user_setting: UserSetting::create("group_by_two_level_threshold", DataValue::UInt64(10000)),
+                level: ScopeLevel::Session,
+                desc: "The threshold of keys to open two-level aggregation, default value: 10000",
             },
         ];
 
@@ -185,11 +164,7 @@ impl Settings {
             }
         }
 
-        let ret = Settings {
-            settings,
-            user_api,
-            session_ctx,
-        };
+        let ret = Settings { settings };
 
         // Overwrite settings from conf.
         {
@@ -235,27 +210,14 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    // Get storage occ backoff init delay in ms.
-    pub fn get_storage_occ_backoff_init_delay_ms(&self) -> Result<u64> {
-        let key = "storage_occ_backoff_init_delay_ms";
-        self.try_get_u64(key)
-    }
-
-    // Get storage occ backoff max delay in ms.
-    pub fn get_storage_occ_backoff_max_delay_ms(&self) -> Result<u64> {
-        let key = "storage_occ_backoff_max_delay_ms";
-        self.try_get_u64(key)
-    }
-
-    // Get storage occ backoff max elapsed in ms.
-    pub fn get_storage_occ_backoff_max_elapsed_ms(&self) -> Result<u64> {
-        let key = "storage_occ_backoff_max_elapsed_ms";
-        self.try_get_u64(key)
-    }
-
     pub fn get_enable_new_processor_framework(&self) -> Result<u64> {
         let key = "enable_new_processor_framework";
         self.try_get_u64(key)
+    }
+
+    pub fn get_enable_planner_v2(&self) -> Result<u64> {
+        static KEY: &str = "enable_planner_v2";
+        self.try_get_u64(KEY)
     }
 
     pub fn get_field_delimiter(&self) -> Result<Vec<u8>> {
@@ -266,6 +228,12 @@ impl Settings {
 
     pub fn get_record_delimiter(&self) -> Result<Vec<u8>> {
         let key = "record_delimiter";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_compression(&self) -> Result<Vec<u8>> {
+        let key = "compression";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
@@ -284,6 +252,18 @@ impl Settings {
         let key = "timezone";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    // Get group by two level threshold
+    pub fn get_group_by_two_level_threshold(&self) -> Result<u64> {
+        let key = "group_by_two_level_threshold";
+        self.try_get_u64(key)
+    }
+
+    // Set group by two level threshold
+    pub fn set_group_by_two_level_threshold(&self, val: u64) -> Result<()> {
+        let key = "group_by_two_level_threshold";
+        self.try_set_u64(key, val, false)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {
@@ -306,42 +286,23 @@ impl Settings {
     }
 
     // Set u64 value to settings map, if is_global will write to metasrv.
-    fn try_set_u64(&self, key: &str, val: u64, is_global: bool) -> Result<()> {
+    fn try_set_u64(&self, key: &str, val: u64, _is_global: bool) -> Result<()> {
         let mut settings = self.settings.write();
         let mut setting = settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         setting.user_setting.value = DataValue::UInt64(val);
 
-        if is_global {
-            self.set_to_global(setting)?;
-        }
-
         Ok(())
     }
 
-    fn try_set_string(&self, key: &str, val: Vec<u8>, is_global: bool) -> Result<()> {
+    fn try_set_string(&self, key: &str, val: Vec<u8>, _is_global: bool) -> Result<()> {
         let mut settings = self.settings.write();
         let mut setting = settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         setting.user_setting.value = DataValue::String(val);
 
-        if is_global {
-            self.set_to_global(setting)?;
-        }
-
-        Ok(())
-    }
-
-    fn set_to_global(&self, setting: &mut SettingValue) -> Result<()> {
-        let tenant = self.session_ctx.get_tenant();
-        let _ = futures::executor::block_on(
-            self.user_api
-                .get_setting_api_client(&tenant)?
-                .set_setting(setting.user_setting.clone()),
-        )?;
-        setting.level = ScopeLevel::Global;
         Ok(())
     }
 
@@ -398,5 +359,23 @@ impl Settings {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct UserSetting {
+    // The name of the setting.
+    pub name: String,
+
+    // The value of the setting.
+    pub value: DataValue,
+}
+
+impl UserSetting {
+    pub fn create(name: &str, value: DataValue) -> UserSetting {
+        UserSetting {
+            name: name.to_string(),
+            value,
+        }
     }
 }

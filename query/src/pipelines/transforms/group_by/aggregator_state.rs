@@ -23,8 +23,8 @@ use common_datablocks::HashMethodSingleString;
 use common_datavalues::prelude::*;
 use common_functions::aggregates::StateAddr;
 
-use crate::common::HashMap;
-use crate::common::HashMapIterator;
+use crate::common::HashMapIteratorKind;
+use crate::common::HashMapKind;
 use crate::common::HashTableEntity;
 use crate::common::HashTableKeyable;
 use crate::common::KeyValueEntity;
@@ -54,31 +54,39 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
 
     fn alloc_place(&self, layout: Layout) -> StateAddr;
 
-    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
-        let place: StateAddr = self.alloc_place(params.layout);
+    fn alloc_layout(&self, params: &AggregatorParams) -> Option<StateAddr> {
+        params.layout?;
+        let place: StateAddr = self.alloc_place(params.layout.unwrap());
 
         for idx in 0..params.offsets_aggregate_states.len() {
             let aggr_state = params.offsets_aggregate_states[idx];
             let aggr_state_place = place.next(aggr_state);
             params.aggregate_functions[idx].init_state(aggr_state_place);
         }
-        place
+        Some(place)
     }
 
-    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr {
-        let place: StateAddr = self.alloc_place(params.layout);
+    fn alloc_layout2(&self, params: &NewAggregatorParams) -> Option<StateAddr> {
+        params.layout?;
+        let place: StateAddr = self.alloc_place(params.layout.unwrap());
 
         for idx in 0..params.offsets_aggregate_states.len() {
             let aggr_state = params.offsets_aggregate_states[idx];
             let aggr_state_place = place.next(aggr_state);
             params.aggregate_functions[idx].init_state(aggr_state_place);
         }
-        place
+        Some(place)
     }
 
     fn entity(&mut self, key: &Method::HashKey<'_>, inserted: &mut bool) -> *mut Self::Entity;
 
     fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity;
+
+    fn is_two_level(&self) -> bool {
+        false
+    }
+
+    fn convert_to_two_level(&mut self) {}
 }
 
 /// The fixed length array is used as the data structure to locate the key by subscript
@@ -87,6 +95,7 @@ pub struct ShortFixedKeysAggregatorState<T: ShortFixedKeyable> {
     size: usize,
     max_size: usize,
     data: *mut ShortFixedKeysStateEntity<T>,
+    two_level_flag: bool,
 }
 
 // TODO:(Winter) Hack:
@@ -113,6 +122,7 @@ impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {
                 data: raw_ptr as *mut ShortFixedKeysStateEntity<T>,
                 size: 0,
                 max_size,
+                two_level_flag: false,
             }
         }
     }
@@ -177,11 +187,32 @@ where
     fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
         self.entity(key, inserted)
     }
+
+    #[inline(always)]
+    fn is_two_level(&self) -> bool {
+        self.two_level_flag
+    }
+
+    #[inline(always)]
+    fn convert_to_two_level(&mut self) {
+        self.two_level_flag = true;
+    }
 }
 
 pub struct LongerFixedKeysAggregatorState<T: HashTableKeyable> {
     pub area: Bump,
-    pub data: HashMap<T, usize>,
+    pub data: HashMapKind<T, usize>,
+    pub two_level_flag: bool,
+}
+
+impl<T: HashTableKeyable> Default for LongerFixedKeysAggregatorState<T> {
+    fn default() -> Self {
+        Self {
+            area: Bump::new(),
+            data: HashMapKind::create_hash_table(),
+            two_level_flag: false,
+        }
+    }
 }
 
 // TODO:(Winter) Hack:
@@ -195,15 +226,15 @@ unsafe impl<T: HashTableKeyable + Send> Send for LongerFixedKeysAggregatorState<
 // will not be used multiple async, so KeyValueEntity is Sync
 unsafe impl<T: HashTableKeyable + Sync> Sync for LongerFixedKeysAggregatorState<T> {}
 
-impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T>
+impl<T: Send + Sync + Sized + 'static> AggregatorState<HashMethodFixedKeys<T>>
+    for LongerFixedKeysAggregatorState<T>
 where
-    T: PrimitiveType,
     for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
     for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey<'a>: HashTableKeyable,
 {
     type Key = T;
     type Entity = KeyValueEntity<T, usize>;
-    type Iterator = HashMapIterator<T, usize>;
+    type Iterator = HashMapIteratorKind<T, usize>;
 
     #[inline(always)]
     fn len(&self) -> usize {
@@ -229,12 +260,26 @@ where
     fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
         self.entity(key, inserted)
     }
+
+    #[inline(always)]
+    fn is_two_level(&self) -> bool {
+        self.two_level_flag
+    }
+
+    #[inline(always)]
+    fn convert_to_two_level(&mut self) {
+        unsafe {
+            self.data.convert_to_two_level();
+        }
+        self.two_level_flag = true;
+    }
 }
 
 pub struct SerializedKeysAggregatorState {
     pub keys_area: Bump,
     pub state_area: Bump,
-    pub data_state_map: HashMap<KeysRef, usize>,
+    pub data_state_map: HashMapKind<KeysRef, usize>,
+    pub two_level_flag: bool,
 }
 
 // TODO:(Winter) Hack:
@@ -251,12 +296,11 @@ unsafe impl Sync for SerializedKeysAggregatorState {}
 impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     type Key = KeysRef;
     type Entity = KeyValueEntity<KeysRef, usize>;
-    type Iterator = HashMapIterator<KeysRef, usize>;
+    type Iterator = HashMapIteratorKind<KeysRef, usize>;
 
     fn len(&self) -> usize {
         self.data_state_map.len()
     }
-
     fn iter(&self) -> Self::Iterator {
         self.data_state_map.iter()
     }
@@ -304,12 +348,25 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
 
         state_entity
     }
+
+    #[inline(always)]
+    fn is_two_level(&self) -> bool {
+        self.two_level_flag
+    }
+
+    #[inline(always)]
+    fn convert_to_two_level(&mut self) {
+        unsafe {
+            self.data_state_map.convert_to_two_level();
+        }
+        self.two_level_flag = true;
+    }
 }
 
 impl AggregatorState<HashMethodSingleString> for SerializedKeysAggregatorState {
     type Key = KeysRef;
     type Entity = KeyValueEntity<KeysRef, usize>;
-    type Iterator = HashMapIterator<KeysRef, usize>;
+    type Iterator = HashMapIteratorKind<KeysRef, usize>;
 
     fn len(&self) -> usize {
         self.data_state_map.len()
@@ -362,5 +419,18 @@ impl AggregatorState<HashMethodSingleString> for SerializedKeysAggregatorState {
         }
 
         state_entity
+    }
+
+    #[inline(always)]
+    fn is_two_level(&self) -> bool {
+        self.two_level_flag
+    }
+
+    #[inline(always)]
+    fn convert_to_two_level(&mut self) {
+        unsafe {
+            self.data_state_map.convert_to_two_level();
+        }
+        self.two_level_flag = true;
     }
 }

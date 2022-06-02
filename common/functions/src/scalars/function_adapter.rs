@@ -26,7 +26,8 @@ use common_datavalues::ColumnWithField;
 use common_datavalues::ColumnsWithField;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataField;
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataType;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::NullColumn;
 use common_datavalues::NullType;
 use common_datavalues::NullableColumn;
@@ -56,7 +57,7 @@ impl FunctionAdapter {
     pub fn try_create(
         desc: &FunctionDescription,
         name: &str,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         let (inner, has_nullable) = if desc.features.passthrough_null {
             // one is null, result is null
@@ -84,9 +85,9 @@ impl Function for FunctionAdapter {
         self.inner.as_ref().map_or("null", |v| v.name())
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         if self.inner.is_none() {
-            return NullType::arc();
+            return NullType::new_impl();
         }
 
         let inner = self.inner.as_ref().unwrap();
@@ -151,7 +152,7 @@ impl Function for FunctionAdapter {
                     return Ok(NullableColumn::wrap_inner(
                         inner_type
                             .create_constant_column(&inner_type.default_value(), input_rows)?,
-                        Some(valid.unwrap().clone()),
+                        valid.cloned(),
                     ));
                 }
                 validity = combine_validities_2(validity.clone(), valid.cloned());

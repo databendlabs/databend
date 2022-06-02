@@ -38,7 +38,7 @@ pub struct InetAtonFunctionImpl<const SUPPRESS_PARSE_ERROR: bool> {
 }
 
 impl<const SUPPRESS_PARSE_ERROR: bool> InetAtonFunctionImpl<SUPPRESS_PARSE_ERROR> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_string(args[0])?;
 
         Ok(Box::new(InetAtonFunctionImpl::<SUPPRESS_PARSE_ERROR> {
@@ -57,11 +57,11 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         if SUPPRESS_PARSE_ERROR {
-            NullableType::arc(UInt32Type::arc())
+            NullableType::new_impl(UInt32Type::new_impl())
         } else {
-            UInt32Type::arc()
+            UInt32Type::new_impl()
         }
     }
 

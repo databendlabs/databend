@@ -15,9 +15,11 @@
 mod http_query_handlers;
 pub mod json_block;
 mod load;
+mod multipart_format;
+mod parallel_format_source;
 mod query;
+mod sequential_format_source;
 mod stage;
-mod statement;
 
 pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;
@@ -29,13 +31,12 @@ pub(crate) use json_block::JsonBlock;
 pub use load::streaming_load;
 pub use load::LoadResponse;
 pub use query::ExecuteStateKind;
+pub use query::HttpQueryContext;
 pub use query::HttpQueryHandle;
 pub use query::HttpQueryManager;
 pub use query::HttpSession;
 pub use query::HttpSessionConf;
 pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
-pub use statement::statement_handler;
-pub use statement::statement_router;
 
 pub use crate::servers::http::clickhouse_handler::clickhouse_router;

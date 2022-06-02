@@ -26,10 +26,13 @@ mod binary_read;
 mod binary_write;
 
 mod buffer;
+mod configs;
 mod files;
 mod format_settings;
 mod marshal;
+mod operator;
 mod options_deserializer;
+mod position;
 mod stat_buffer;
 mod unmarshal;
 mod utils;

@@ -1,8 +1,8 @@
 ---
-title: How to Work with Databend in Node.js
+title: How to Work With Databend in Node.js
 sidebar_label: Node.js
 description:
-   How to Work with Databend in Node.js.
+   How to work with Databend in Node.js.
 ---
 
 ## Before You Begin
@@ -19,15 +19,15 @@ mysql -h127.0.0.1 -uroot -P3307
 
 ### Create a User
 
-```sql title='mysql>'
-create user user1 identified by 'abc123';
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 ### Grants Privileges
 
 Grants `ALL` privileges to the user `user1`:
-```sql title='mysql>'
-grant all on *.* to 'user1';
+```sql
+GRANT ALL ON *.* TO user1;
 ```
 
 ## Node.js
@@ -53,31 +53,31 @@ con.connect((err) => {
    if (err) throw err;
    console.log('Connected to Databend Server!');
 
-   var sql = "create database if not exists book_db";
+   var sql = "CREATE DATABASE IF NOT EXISTS book_db";
    con.query(sql, function (err, result) {
       if (err) throw err;
       console.log("Dataabse created");
    });
 
-   var sql = "use book_db";
+   var sql = "USE book_db";
    con.query(sql, function (err, result) {
       if (err) throw err;
    });
 
 
-   var sql = "create table if not exists books(title varchar(255), author varchar(255), date varchar(255))";
+   var sql = "CREATE TABLE IF NOT EXISTS books(title VARCHAR, author VARCHAR, date VARCHAR)";
    con.query(sql, function (err, result) {
       if (err) throw err;
       console.log("Table created");
    });
 
-   var sql = "insert into books values('mybook', 'author', '2022')";
+   var sql = "INSERT INTO books VALUES('mybook', 'author', '2022')";
    con.query(sql, function (err, result) {
       if (err) throw err;
       console.log("1 record inserted");
    });
 
-   con.query("SELECT * from books", function (err, result, fields) {
+   con.query("SELECT * FROM books", function (err, result, fields) {
       if (err) throw err;
       console.log(result);
    });

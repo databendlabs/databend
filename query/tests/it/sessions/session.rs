@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
+use common_base::mem_allocator::malloc_size;
 use common_exception::Result;
-use common_mem_allocator::malloc_size;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
@@ -28,10 +28,22 @@ async fn test_session() -> Result<()> {
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
-        SessionType::Test,
+        SessionType::Dummy,
         session_manager,
+        None,
     )
     .await?;
+
+    // Tenant.
+    {
+        let actual = session.get_current_tenant();
+        assert_eq!(&actual, "test");
+
+        // We are not in management mode, so always get the config tenant.
+        session.set_current_tenant("tenant2".to_string());
+        let actual = session.get_current_tenant();
+        assert_eq!(&actual, "test");
+    }
 
     // Settings.
     {
@@ -46,6 +58,36 @@ async fn test_session() -> Result<()> {
         let session_size = malloc_size(&session);
         assert!(session_size > 1500);
         assert_eq!(session_size, session.get_memory_usage());
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_session_in_management_mode() -> Result<()> {
+    let conf = crate::tests::ConfigBuilder::create()
+        .with_management_mode()
+        .config();
+
+    let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
+
+    let session = Session::try_create(
+        conf.clone(),
+        String::from("test-001"),
+        SessionType::Dummy,
+        session_manager,
+        None,
+    )
+    .await?;
+
+    // Tenant.
+    {
+        let actual = session.get_current_tenant();
+        assert_eq!(&actual, "test");
+
+        session.set_current_tenant("tenant2".to_string());
+        let actual = session.get_current_tenant();
+        assert_eq!(&actual, "tenant2");
     }
 
     Ok(())

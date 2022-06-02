@@ -19,8 +19,8 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::task::Context;
 
-use common_base::tokio::macros::support::Pin;
-use common_base::tokio::macros::support::Poll;
+use common_base::base::tokio::macros::support::Pin;
+use common_base::base::tokio::macros::support::Poll;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::NodeInfo;

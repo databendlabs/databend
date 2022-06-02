@@ -14,16 +14,16 @@
 
 //! Test arrow-grpc API of metasrv
 
-use common_base::tokio;
-use common_base::Stoppable;
+use common_base::base::tokio;
+use common_base::base::Stoppable;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaRaftError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVAction;
-use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertKVReply;
+use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
 use tokio::time::Duration;
@@ -32,7 +32,7 @@ use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
     // - Start a metasrv server.
@@ -40,17 +40,14 @@ async fn test_restart() -> anyhow::Result<()> {
     // - restart
     // - Test read the db and read the table.
 
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (mut tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None)?;
 
     tracing::info!("--- upsert kv");
     {
         let res = client
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 "foo",
                 MatchSeq::Any,
                 Operation::Update(b"bar".to_vec()),
@@ -61,7 +58,7 @@ async fn test_restart() -> anyhow::Result<()> {
         tracing::debug!("set kv res: {:?}", res);
         let res = res?;
         assert_eq!(
-            UpsertKVActionReply::new(
+            UpsertKVReply::new(
                 None,
                 Some(SeqV {
                     seq: 1,
@@ -105,7 +102,7 @@ async fn test_restart() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(10_000)).await;
 
     // try to reconnect the restarted server.
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
 
     tracing::info!("--- get kv");
     {
@@ -126,14 +123,11 @@ async fn test_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_retry_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
     // - Test metasrv retry cluster case
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let mut tc0 = MetaSrvTestContext::new(0);
     start_metasrv_with_context(&mut tc0).await?;
@@ -179,14 +173,11 @@ async fn test_retry_join() -> anyhow::Result<()> {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
     // - Test metasrv api
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let mut tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
@@ -200,8 +191,8 @@ async fn test_join() -> anyhow::Result<()> {
     let addr0 = tc0.config.grpc_api_address.clone();
     let addr1 = tc1.config.grpc_api_address.clone();
 
-    let client0 = MetaGrpcClient::try_create(addr0.as_str(), "root", "xxx", None, None).await?;
-    let client1 = MetaGrpcClient::try_create(addr1.as_str(), "root", "xxx", None, None).await?;
+    let client0 = MetaGrpcClient::try_create(vec![addr0], "root", "xxx", None, None)?;
+    let client1 = MetaGrpcClient::try_create(vec![addr1], "root", "xxx", None, None)?;
 
     let clients = vec![client0, client1];
 
@@ -211,7 +202,7 @@ async fn test_join() -> anyhow::Result<()> {
             let k = format!("join-{}", i);
 
             let res = cli
-                .upsert_kv(UpsertKVAction::new(
+                .upsert_kv(UpsertKVReq::new(
                     k.as_str(),
                     MatchSeq::Any,
                     Operation::Update(k.clone().into_bytes()),
@@ -222,7 +213,7 @@ async fn test_join() -> anyhow::Result<()> {
             tracing::debug!("set kv res: {:?}", res);
             let res = res?;
             assert_eq!(
-                UpsertKVActionReply::new(
+                UpsertKVReply::new(
                     None,
                     Some(SeqV {
                         seq: 1 + i as u64,

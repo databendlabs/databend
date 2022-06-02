@@ -10,8 +10,8 @@ The value is returned as a `Variant` or `NULL` if either of the arguments is `NU
 ## Syntax
 
 ```sql
-GET_IGNORE_CASE(<object>, <field_name>)
-GET_IGNORE_CASE(<variant>, <field_name>)
+GET_IGNORE_CASE( <object>, <field_name> )
+GET_IGNORE_CASE( <variant>, <field_name> )
 ```
 
 ## Arguments
@@ -35,5 +35,4 @@ SELECT get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
 +---------------------------------------------------------------+
 | 1                                                             |
 +---------------------------------------------------------------+
-1 row in set (0.01 sec)
 ```

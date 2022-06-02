@@ -15,6 +15,7 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json;
@@ -22,34 +23,40 @@ use serde_json::Value;
 
 use crate::prelude::*;
 
+#[derive(Debug, Clone)]
 pub struct VariantSerializer {}
 
 impl TypeSerializer for VariantSerializer {
-    fn serialize_value(&self, value: &DataValue) -> Result<String> {
-        if let DataValue::Json(v) = value {
+    fn serialize_value(&self, value: &DataValue, _format: &FormatSettings) -> Result<String> {
+        if let DataValue::Variant(v) = value {
             Ok(v.to_string())
         } else {
             Err(ErrorCode::BadBytes("Incorrect Variant value"))
         }
     }
 
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let column: &JsonColumn = Series::check_get(column)?;
+    fn serialize_column(
+        &self,
+        column: &ColumnRef,
+        _format: &FormatSettings,
+    ) -> Result<Vec<String>> {
+        let column: &VariantColumn = Series::check_get(column)?;
         let result: Vec<String> = column.iter().map(|v| v.to_string()).collect();
         Ok(result)
     }
 
-    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
-        let column: &JsonColumn = Series::check_get(column)?;
-        let result: Vec<Value> = column.iter().map(|v| v.to_owned()).collect();
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
+        let column: &VariantColumn = Series::check_get(column)?;
+        let result: Vec<Value> = column.iter().map(|v| v.as_ref().to_owned()).collect();
         Ok(result)
     }
 
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
+        _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let column: &JsonColumn = Series::check_get(column)?;
+        let column: &VariantColumn = Series::check_get(column)?;
         let values: Vec<String> = column.iter().map(|v| v.to_string()).collect();
 
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
@@ -59,8 +66,9 @@ impl TypeSerializer for VariantSerializer {
         &self,
         column: &ColumnRef,
         valids: Option<&Bitmap>,
+        _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
-        let column: &JsonColumn = Series::check_get(column)?;
+        let column: &VariantColumn = Series::check_get(column)?;
         let mut result: Vec<Value> = Vec::new();
         for (i, v) in column.iter().enumerate() {
             if let Some(valids) = valids {
@@ -69,8 +77,8 @@ impl TypeSerializer for VariantSerializer {
                     continue;
                 }
             }
-            match v {
-                Value::String(v) => match serde_json::from_str::<Value>(v) {
+            match v.as_ref() {
+                Value::String(v) => match serde_json::from_str::<Value>(v.as_str()) {
                     Ok(v) => result.push(v),
                     Err(e) => {
                         return Err(ErrorCode::BadDataValueType(format!(
@@ -79,7 +87,7 @@ impl TypeSerializer for VariantSerializer {
                         )))
                     }
                 },
-                _ => result.push(v.clone()),
+                _ => result.push(v.as_ref().to_owned()),
             }
         }
         Ok(result)
@@ -88,16 +96,17 @@ impl TypeSerializer for VariantSerializer {
     fn serialize_json_object_suppress_error(
         &self,
         column: &ColumnRef,
+        _format: &FormatSettings,
     ) -> Result<Vec<Option<Value>>> {
-        let column: &JsonColumn = Series::check_get(column)?;
+        let column: &VariantColumn = Series::check_get(column)?;
         let result: Vec<Option<Value>> = column
             .iter()
-            .map(|v| match v {
+            .map(|v| match v.as_ref() {
                 Value::String(v) => match serde_json::from_str::<Value>(v.as_str()) {
                     Ok(v) => Some(v),
                     Err(_) => None,
                 },
-                _ => Some(v.clone()),
+                _ => Some(v.as_ref().to_owned()),
             })
             .collect();
         Ok(result)

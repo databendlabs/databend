@@ -1,0 +1,132 @@
+statement query T 
+SELECT SOUNDEX(NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT SOUNDEX('Hello');
+
+----  
+H400
+
+statement query T 
+SELECT SOUNDEX('hello');
+
+----  
+H400
+
+statement query T 
+SELECT SOUNDEX('Quadratically');
+
+----  
+Q36324
+
+statement query T 
+SELECT SOUNDEX('quadratically');
+
+----  
+Q36324
+
+statement query T 
+SELECT SOUNDEX('你好中国');
+
+----  
+你000
+
+statement query T 
+SELECT SOUNDEX('你好中国北京');
+
+----  
+你000
+
+statement query T 
+SELECT SOUNDEX('');
+
+----  
+	
+
+statement query T 
+SELECT SOUNDEX('he');
+
+----  
+H000
+
+statement query T 
+SELECT SOUNDEX('hello all folks');
+
+----  
+H4142
+
+statement query T 
+SELECT SOUNDEX('#3556 in bugdb');
+
+----  
+I51231
+
+statement query T 
+SELECT SOUNDEX('####');
+
+----  
+	
+
+statement query T 
+SELECT SOUNDEX('##🐑hello');
+
+----  
+🐑400
+
+statement query T 
+SELECT SOUNDEX('##🐑🐑he🐑llo🐑');
+
+----  
+🐑400
+
+statement query T 
+SELECT SOUNDEX('🐑he🐑llo🐑');
+
+----  
+🐑400
+
+statement query T 
+SELECT SOUNDEX('teacher');
+
+----  
+T260
+
+statement query T 
+SELECT SOUNDEX('TEACHER');
+
+----  
+T260
+
+statement query T 
+SELECT SOUNDEX('much');
+
+----  
+M200
+
+statement query T 
+SELECT SOUNDEX('MUCH');
+
+----  
+M200
+
+statement query T 
+SELECT SOUNDEX('1.23');
+
+----  
+	
+
+statement query T 
+SELECT SOUNDEX('pneumonoultramicroscopicsilicovolcanoconiosis');
+
+----  
+P5436526212421425252
+
+statement query T 
+SELECT SOUNDEX('pneumonoultramicroscopicsilicovolcanoconiosis hello world');
+
+----  
+P54365262124214252524643
+

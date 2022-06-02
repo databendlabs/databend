@@ -9,25 +9,26 @@ create table t(a uint64);
 insert into t values (5);
 insert into t values (6);
 insert into t values (7);
-
+select * from t order by a;
 optimize table t compact;
+select * from t order by a;
 
 -- optimize exact
 explain select count(1) from t;
 
 -- expects 4 history items, 3 of previous insertion, 1 for last compaction
-select count(*)=4 from fuse_history('db_09_0008', 't');
+select count(*)=4 from fuse_snapshot('db_09_0008', 't');
 
 ---------------------------
 
 -- purge data and history
-optimize table 't' purge;
+optimize table `t` purge;
 -- expect 1 snapshot left
-select count(*)=1 from fuse_history('db_09_0008', 't');
+select count(*)=1 from fuse_snapshot('db_09_0008', 't');
 -- check the data
 select * from t order by a;
 -- purge again, nothing happens
-optimize table 't' purge;
+optimize table `t` purge;
 select * from t order by a;
 
 ---------------------------
@@ -35,10 +36,11 @@ select * from t order by a;
 insert into t values (8);
 insert into t values (9);
 insert into t values (10);
+select * from t order by a;
 -- purge and compact
-optimize table 't' all;
+optimize table `t` all;
 -- expect 1 snapshot left
-select count(*)=1 from fuse_history('db_09_0008', 't');
+select count(*)=1 from fuse_snapshot('db_09_0008', 't');
 select * from t order by a;
 
 ---------------------

@@ -27,15 +27,16 @@ use crate::sql::optimizer::optimize_context::OptimizeContext;
 use crate::sql::optimizer::rule::RulePtr;
 use crate::sql::optimizer::rule::RuleSet;
 use crate::sql::optimizer::rule::TransformState;
-use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RequiredProperty;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::Operator;
 use crate::sql::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
 ///
 /// NOTICE: we don't support cost-based optimization and lower bound searching for now.
+#[allow(dead_code)]
 pub struct CascadesOptimizer {
     optimize_context: OptimizeContext,
     memo: Memo,
@@ -44,6 +45,7 @@ pub struct CascadesOptimizer {
 }
 
 impl CascadesOptimizer {
+    #[allow(dead_code)]
     pub fn create(optimize_context: OptimizeContext) -> Self {
         CascadesOptimizer {
             optimize_context,
@@ -53,12 +55,14 @@ impl CascadesOptimizer {
         }
     }
 
+    #[allow(dead_code)]
     fn init(&mut self, expression: SExpr) -> Result<()> {
         self.memo.init(expression)?;
 
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn optimize(&mut self, expression: SExpr) -> Result<SExpr> {
         self.init(expression)?;
 
@@ -69,6 +73,7 @@ impl CascadesOptimizer {
         self.find_optimal_plan()
     }
 
+    #[allow(dead_code)]
     fn explore_group(&mut self, group_index: IndexType) -> Result<()> {
         let group = self.memo.group(group_index);
         let expressions: Vec<MExpr> = group.iter().cloned().collect();
@@ -79,12 +84,13 @@ impl CascadesOptimizer {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn explore_expr(&mut self, m_expr: MExpr) -> Result<()> {
         for child in m_expr.children() {
             self.explore_group(*child)?;
         }
 
-        let mut state = TransformState::create();
+        let mut state = TransformState::new();
         for rule in self.explore_rules.iter() {
             m_expr.apply_rule(&self.memo, rule, &mut state)?;
         }
@@ -93,6 +99,7 @@ impl CascadesOptimizer {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn implement_group(&mut self, group_index: IndexType) -> Result<()> {
         let group = self.memo.group(group_index);
         let expressions: Vec<MExpr> = group.iter().cloned().collect();
@@ -103,12 +110,13 @@ impl CascadesOptimizer {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn implement_expr(&mut self, m_expr: MExpr) -> Result<()> {
         for child in m_expr.children() {
             self.implement_group(*child)?;
         }
 
-        let mut state = TransformState::create();
+        let mut state = TransformState::new();
         for rule in self.implement_rules.iter() {
             m_expr.apply_rule(&self.memo, rule, &mut state)?;
         }
@@ -117,6 +125,7 @@ impl CascadesOptimizer {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn insert_from_transform_state(
         &mut self,
         group_index: IndexType,
@@ -129,6 +138,7 @@ impl CascadesOptimizer {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn insert_expression(&mut self, group_index: IndexType, expression: &SExpr) -> Result<()> {
         self.memo.insert(Some(group_index), expression.clone())?;
 
@@ -142,9 +152,8 @@ impl CascadesOptimizer {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn find_optimal_plan(&self) -> Result<SExpr> {
-        println!("{:?}", self.memo);
-
         let root_group = self.memo.root().unwrap();
 
         let required_prop = self.optimize_context.required_prop().clone();
@@ -154,23 +163,24 @@ impl CascadesOptimizer {
 
     /// We don't have cost mechanism for evaluate cost of plans, so we just extract
     /// first physical plan in a group that satisfies given RequiredProperty.
+    #[allow(dead_code)]
     fn optimize_group(&self, group: &Group, required_prop: &RequiredProperty) -> Result<SExpr> {
         for m_expr in group.iter() {
             if m_expr.plan().is_physical() {
-                let plan = m_expr.plan().clone();
+                let plan = m_expr.plan();
 
-                // Chek properties
-                let physical = plan.as_physical_plan().unwrap();
-                let relational_prop = group.relational_prop().unwrap();
-                let dummy_physical_prop = PhysicalProperty::default();
-                let required_prop = physical.compute_required_prop(required_prop);
+                // TODO: Check properties
+                // let physical = plan.as_physical_plan().unwrap();
+                // let relational_prop = group.relational_prop().unwrap();
+                // let dummy_physical_prop = PhysicalProperty::default();
+                // let required_prop = physical.compute_required_prop(required_prop);
+                //
+                // if !required_prop.provided_by(relational_prop, &dummy_physical_prop) {
+                //     continue;
+                // }
 
-                if !required_prop.provided_by(relational_prop, &dummy_physical_prop) {
-                    continue;
-                }
-
-                let children = self.optimize_m_expr(m_expr, &required_prop)?;
-                let result = SExpr::create(plan, children, None);
+                let children = self.optimize_m_expr(m_expr, required_prop)?;
+                let result = SExpr::create(plan.clone(), children, None);
                 return Ok(result);
             }
         }
@@ -178,6 +188,7 @@ impl CascadesOptimizer {
         Err(ErrorCode::LogicalError("Cannot find an appropriate plan"))
     }
 
+    #[allow(dead_code)]
     fn optimize_m_expr(
         &self,
         m_expr: &MExpr,

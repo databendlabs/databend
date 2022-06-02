@@ -21,6 +21,7 @@ use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
 use sqlparser::ast::TableConstraint;
 use sqlparser::keywords::Keyword;
+use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Word;
@@ -35,6 +36,7 @@ use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRenameTable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUnDropTable;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -60,6 +62,14 @@ impl<'a> DfParser<'a> {
 
         let engine = self.parse_table_engine()?;
 
+        // parse cluster key
+        let mut cluster_keys = vec![];
+        if self.parser.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
+            self.parser.expect_token(&Token::LParen)?;
+            cluster_keys = self.parser.parse_comma_separated(Parser::parse_expr)?;
+            self.parser.expect_token(&Token::RParen)?;
+        }
+
         // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
         let options = self.parse_options()?;
 
@@ -81,6 +91,7 @@ impl<'a> DfParser<'a> {
             name: table_name,
             columns,
             engine,
+            cluster_keys,
             options,
             like: table_like,
             query,
@@ -94,12 +105,23 @@ impl<'a> DfParser<'a> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
 
+        let all = self.parser.parse_keyword(Keyword::ALL);
+
         let drop = DfDropTable {
             if_exists,
             name: table_name,
+            all,
         };
 
         Ok(DfStatement::DropTable(drop))
+    }
+
+    // Drop table.
+    pub(crate) fn parse_undrop_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let table_name = self.parser.parse_object_name()?;
+        let drop = DfUnDropTable { name: table_name };
+
+        Ok(DfStatement::UnDropTable(drop))
     }
 
     // Alter table

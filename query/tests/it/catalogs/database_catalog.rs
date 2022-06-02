@@ -15,15 +15,18 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropTableReq;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::RenameDatabaseReq;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableNameIdent;
 use databend_query::catalogs::Catalog;
 
 use crate::tests::create_catalog;
@@ -67,8 +70,10 @@ async fn test_catalogs_database() -> Result<()> {
     {
         let mut req = CreateDatabaseReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: "db1".to_string(),
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "db1".to_string(),
+            },
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -81,17 +86,54 @@ async fn test_catalogs_database() -> Result<()> {
         assert_eq!(db_list_1.len(), db_count + 1);
 
         // Tenant empty.
-        req.tenant = "".to_string();
+        req.name_ident.tenant = "".to_string();
         let res = catalog.create_database(req).await;
         assert!(res.is_err());
     }
 
-    // Drop.
+    // Rename.
+    {
+        let mut req = RenameDatabaseReq {
+            if_exists: false,
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "db1".to_string(),
+            },
+            new_db_name: "db2".to_string(),
+        };
+        let res = catalog.rename_database(req.clone()).await;
+        assert!(res.is_ok());
+
+        let db_list_1 = catalog.list_databases(tenant).await?;
+        assert_eq!(db_list_1.len(), db_count + 1);
+
+        // Tenant empty.
+        req.name_ident.tenant = "".to_string();
+        let res = catalog.rename_database(req).await;
+        assert!(res.is_err());
+    }
+
+    // Drop old db.
+    {
+        let req = DropDatabaseReq {
+            if_exists: false,
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "db1".to_string(),
+            },
+        };
+        let res = catalog.drop_database(req.clone()).await;
+        assert!(res.is_err());
+    }
+
+    // Drop renamed db.
     {
         let mut req = DropDatabaseReq {
             if_exists: false,
-            tenant: tenant.to_string(),
-            db_name: "db1".to_string(),
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "db2".to_string(),
+            },
         };
         let res = catalog.drop_database(req.clone()).await;
         assert!(res.is_ok());
@@ -100,7 +142,7 @@ async fn test_catalogs_database() -> Result<()> {
         assert_eq!(db_list_drop.len(), db_count);
 
         // Tenant empty.
-        req.tenant = "".to_string();
+        req.name_ident.tenant = "".to_string();
         let res = catalog.drop_database(req).await;
         assert!(res.is_err());
     }
@@ -135,9 +177,11 @@ async fn test_catalogs_table() -> Result<()> {
 
         let mut req = CreateTableReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: "default".to_string(),
-            table_name: "test_table".to_string(),
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "default".to_string(),
+                table_name: "test_table".to_string(),
+            },
             table_meta: TableMeta {
                 schema: schema.clone(),
                 engine: "MEMORY".to_string(),
@@ -158,7 +202,7 @@ async fn test_catalogs_table() -> Result<()> {
         assert_eq!(table.name(), "test_table");
 
         // Tenant empty.
-        req.tenant = "".to_string();
+        req.name_ident.tenant = "".to_string();
         let res = catalog.create_table(req.clone()).await;
         assert!(res.is_err());
     }
@@ -167,9 +211,11 @@ async fn test_catalogs_table() -> Result<()> {
     {
         let mut req = DropTableReq {
             if_exists: false,
-            tenant: tenant.to_string(),
-            db_name: "default".to_string(),
-            table_name: "test_table".to_string(),
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "default".to_string(),
+                table_name: "test_table".to_string(),
+            },
         };
         let res = catalog.drop_table(req.clone()).await;
         assert!(res.is_ok());
@@ -177,7 +223,7 @@ async fn test_catalogs_table() -> Result<()> {
         assert!(table_list_4.is_empty());
 
         // Tenant empty.
-        req.tenant = "".to_string();
+        req.name_ident.tenant = "".to_string();
         let res = catalog.drop_table(req).await;
         assert!(res.is_err());
     }

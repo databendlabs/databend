@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
@@ -40,7 +40,7 @@ async fn test_user_manager() -> Result<()> {
 
     let auth_info = AuthInfo::Password {
         hash_value: Vec::from(pwd),
-        hash_method: PasswordHashMethod::PlainText,
+        hash_method: PasswordHashMethod::Sha256,
     };
 
     // add user hostname.
@@ -183,7 +183,7 @@ async fn test_user_manager() -> Result<()> {
         let pwd = "test";
         let auth_info = AuthInfo::Password {
             hash_value: Vec::from(pwd),
-            hash_method: PasswordHashMethod::PlainText,
+            hash_method: PasswordHashMethod::Sha256,
         };
         let user_info: UserInfo = User::new(user, hostname, auth_info.clone()).into();
         user_mgr.add_user(tenant, user_info.clone(), false).await?;
@@ -295,14 +295,16 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
     }
 
-    // Get user via username `default` and hostname `otherhost`.
+    // Get user via username `default` and hostname `otherhost` will be denied.
     {
-        let user = user_mgr
+        let res = user_mgr
             .get_user(tenant, UserIdentity::new(username1, hostname3))
-            .await?;
-        assert_eq!(user.name, username1);
-        assert_eq!(user.hostname, hostname3);
-        assert!(user.grants.entries().is_empty());
+            .await;
+        assert!(res.is_err());
+        assert_eq!(
+            "Code: 2201, displayText = only accept root from localhost 'default'@'otherhost'.",
+            res.err().unwrap().to_string()
+        );
     }
 
     // Get user via username `root` and hostname `127.0.0.1`.
@@ -347,14 +349,16 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
     }
 
-    // Get user via username `root` and hostname `otherhost`.
+    // Get user via username `root` and hostname `otherhost` will be denied.
     {
-        let user = user_mgr
+        let res = user_mgr
             .get_user(tenant, UserIdentity::new(username2, hostname3))
-            .await?;
-        assert_eq!(user.name, username2);
-        assert_eq!(user.hostname, hostname3);
-        assert!(user.grants.entries().is_empty());
+            .await;
+        assert!(res.is_err());
+        assert_eq!(
+            "Code: 2201, displayText = only accept root from localhost 'root'@'otherhost'.",
+            res.err().unwrap().to_string()
+        );
     }
 
     Ok(())

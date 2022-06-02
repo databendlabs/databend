@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::GlobalSequence;
+use common_base::base::GlobalSequence;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::sled;
@@ -25,9 +25,10 @@ pub struct RaftTestContext {
 /// Create a new context for testing sled
 pub fn new_raft_test_context() -> RaftTestContext {
     // config for unit test of sled db, meta_sync() is true by default.
-    let mut config = RaftConfig::empty();
-
-    config.sled_tree_prefix = format!("test-{}-", 30900 + GlobalSequence::next());
+    let config = RaftConfig {
+        sled_tree_prefix: format!("test-{}-", 30900 + GlobalSequence::next()),
+        ..Default::default()
+    };
 
     RaftTestContext {
         raft_config: config,
@@ -44,7 +45,6 @@ macro_rules! init_raft_store_ut {
         let t = tempfile::tempdir().expect("create temp dir to sled db");
         common_meta_sled_store::init_temp_sled_db(t);
 
-        // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
         common_tracing::init_meta_ut_tracing();
 
         let name = common_tracing::func_name!();

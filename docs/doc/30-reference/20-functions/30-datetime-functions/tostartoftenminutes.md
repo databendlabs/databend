@@ -3,6 +3,7 @@ title: toStartOfTenMinutes
 ---
 
 Rounds down a date with time to the start of the ten-minute interval.
+
 ## Syntax
 
 ```sql
@@ -16,6 +17,7 @@ toStartOfTenMinutes(expr)
 | expr | datetime |
 
 ## Return Type
+
 Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 
 ## Examples
@@ -28,9 +30,9 @@ SELECT toStartOfTenMinutes(now());
 | 2022-03-29 06:40:00        |
 +----------------------------+
 
-SELECT toStartOfTenMinutes(toDateTime(1630812366));
+SELECT toStartOfTenMinutes(to_datetime(1630812366));
 +---------------------------------------------+
-| toStartOfTenMinutes(toDateTime(1630812366)) |
+| toStartOfTenMinutes(to_datetime(1630812366)) |
 +---------------------------------------------+
 | 2021-09-05 03:20:00                         |
 +---------------------------------------------+

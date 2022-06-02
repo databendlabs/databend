@@ -10,11 +10,11 @@ The value is returned as a `Variant` or `NULL` if either of the arguments is `NU
 ## Syntax
 
 ```sql
-GET(<array>, <index>)
-get(<variant>, <index>)
+GET( <array>, <index> )
+GET( <variant>, <index> )
 
-get(<object>, <field_name>)
-get(<variant>, <field_name>)
+GET( <object>, <field_name> )
+GET( <variant>, <field_name> )
 ```
 
 ## Arguments
@@ -40,7 +40,6 @@ SELECT get(parse_json('[2.71, 3.14]'), 0);
 +------------------------------------+
 | 2.71                               |
 +------------------------------------+
-1 row in set (0.01 sec)
 
 SELECT get(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'aa');
 +---------------------------------------------------+
@@ -48,7 +47,6 @@ SELECT get(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'aa');
 +---------------------------------------------------+
 | 1                                                 |
 +---------------------------------------------------+
-1 row in set (0.01 sec)
 
 SELECT get(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
 +---------------------------------------------------+
@@ -56,5 +54,4 @@ SELECT get(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
 +---------------------------------------------------+
 | NULL                                              |
 +---------------------------------------------------+
-1 row in set (0.01 sec)
 ```

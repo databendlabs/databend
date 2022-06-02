@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::IntervalKind;
+
 use super::now::NowFunction;
 use super::number_function::ToMondayFunction;
 use super::number_function::ToYearFunction;
+use super::round_function::Round;
+use super::to_interval_function_creator;
 use super::AddDaysFunction;
 use super::AddMonthsFunction;
 use super::AddTimesFunction;
 use super::AddYearsFunction;
+use super::DateAddFunction;
 use super::RoundFunction;
 use super::ToDayOfMonthFunction;
 use super::ToDayOfWeekFunction;
@@ -47,7 +52,7 @@ use crate::scalars::FunctionFeatures;
 pub struct DateFunction {}
 
 impl DateFunction {
-    fn round_function_creator(round: u32) -> FunctionDescription {
+    fn round_function_creator(round: Round) -> FunctionDescription {
         let creator: FactoryCreator = Box::new(move |display_name, args| {
             RoundFunction::try_create(display_name, args, round)
         });
@@ -84,17 +89,29 @@ impl DateFunction {
         factory.register("toYear", ToYearFunction::desc());
 
         // rounders
-        factory.register("toStartOfSecond", Self::round_function_creator(1));
-        factory.register("toStartOfMinute", Self::round_function_creator(60));
-        factory.register("toStartOfFiveMinutes", Self::round_function_creator(5 * 60));
-        factory.register("toStartOfTenMinutes", Self::round_function_creator(10 * 60));
+        factory.register(
+            "toStartOfSecond",
+            Self::round_function_creator(Round::Second),
+        );
+        factory.register(
+            "toStartOfMinute",
+            Self::round_function_creator(Round::Minute),
+        );
+        factory.register(
+            "toStartOfFiveMinutes",
+            Self::round_function_creator(Round::FiveMinutes),
+        );
+        factory.register(
+            "toStartOfTenMinutes",
+            Self::round_function_creator(Round::TenMinutes),
+        );
         factory.register(
             "toStartOfFifteenMinutes",
-            Self::round_function_creator(15 * 60),
+            Self::round_function_creator(Round::FifteenMinutes),
         );
-        factory.register("timeSlot", Self::round_function_creator(30 * 60));
-        factory.register("toStartOfHour", Self::round_function_creator(60 * 60));
-        factory.register("toStartOfDay", Self::round_function_creator(60 * 60 * 24));
+        factory.register("timeSlot", Self::round_function_creator(Round::TimeSlot));
+        factory.register("toStartOfHour", Self::round_function_creator(Round::Hour));
+        factory.register("toStartOfDay", Self::round_function_creator(Round::Day));
 
         factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
 
@@ -111,5 +128,40 @@ impl DateFunction {
         factory.register("subtractHours", AddTimesFunction::desc(-3600));
         factory.register("subtractMinutes", AddTimesFunction::desc(-60));
         factory.register("subtractSeconds", AddTimesFunction::desc(-1));
+
+        factory.register(
+            "to_interval_year",
+            to_interval_function_creator(IntervalKind::Year),
+        );
+        factory.register(
+            "to_interval_month",
+            to_interval_function_creator(IntervalKind::Month),
+        );
+        factory.register(
+            "to_interval_day",
+            to_interval_function_creator(IntervalKind::Day),
+        );
+        factory.register(
+            "to_interval_hour",
+            to_interval_function_creator(IntervalKind::Hour),
+        );
+        factory.register(
+            "to_interval_minute",
+            to_interval_function_creator(IntervalKind::Minute),
+        );
+        factory.register(
+            "to_interval_second",
+            to_interval_function_creator(IntervalKind::Second),
+        );
+        factory.register(
+            "to_interval_doy",
+            to_interval_function_creator(IntervalKind::Doy),
+        );
+        factory.register(
+            "to_interval_dow",
+            to_interval_function_creator(IntervalKind::Dow),
+        );
+
+        factory.register("date_add", DateAddFunction::desc());
     }
 }

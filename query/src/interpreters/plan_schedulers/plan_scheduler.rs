@@ -820,6 +820,7 @@ impl PlanScheduler {
 
     fn visit_local_sink(&mut self, plan: &SinkPlan) {
         self.nodes_plan[self.local_pos] = PlanNode::Sink(SinkPlan {
+            catalog_name: plan.catalog_name.clone(),
             table_info: plan.table_info.clone(),
             input: Arc::new(self.nodes_plan[self.local_pos].clone()),
             cast_schema: plan.cast_schema.clone(),
@@ -829,6 +830,7 @@ impl PlanScheduler {
     fn visit_cluster_sink(&mut self, plan: &SinkPlan) {
         for index in 0..self.nodes_plan.len() {
             self.nodes_plan[index] = PlanNode::Sink(SinkPlan {
+                catalog_name: plan.catalog_name.clone(),
                 table_info: plan.table_info.clone(),
                 input: Arc::new(self.nodes_plan[index].clone()),
                 cast_schema: plan.cast_schema.clone(),

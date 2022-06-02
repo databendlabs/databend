@@ -17,15 +17,15 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::tokio::sync::mpsc::Sender;
-use common_base::tokio::sync::*;
-use common_base::TrySpawn;
+use common_base::base::tokio::sync::mpsc::Sender;
+use common_base::base::tokio::sync::*;
+use common_base::base::TrySpawn;
+use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_infallible::RwLock;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use common_tracing::tracing::Span;
@@ -221,10 +221,10 @@ impl DatabendQueryFlightDispatcher {
         let stages_notify = self.stages_notify.clone();
 
         let flight_scatter = T::try_create(
+            query_context.clone(),
             action.get_plan().schema(),
             action.get_scatter_expression(),
             action.get_sinks().len(),
-            query_context.clone(),
         )?;
 
         query_context.try_spawn(

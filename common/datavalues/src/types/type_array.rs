@@ -20,30 +20,31 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::data_type::DataType;
-use super::data_type::DataTypePtr;
+use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct ArrayType {
-    name: String,
-    inner: DataTypePtr,
+    inner: Box<DataTypeImpl>,
 }
 
 impl ArrayType {
-    pub fn create(inner: DataTypePtr) -> Self {
+    pub fn new_impl(inner: DataTypeImpl) -> DataTypeImpl {
+        DataTypeImpl::Array(Self::create(inner))
+    }
+
+    pub fn create(inner: DataTypeImpl) -> Self {
         ArrayType {
-            name: format!("Array({})", inner.name()),
-            inner,
+            inner: Box::new(inner),
         }
     }
 
-    pub fn inner_type(&self) -> &DataTypePtr {
+    pub fn inner_type(&self) -> &DataTypeImpl {
         &self.inner
     }
 }
 
-#[typetag::serde]
 impl DataType for ArrayType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Array
@@ -54,16 +55,12 @@ impl DataType for ArrayType {
         self
     }
 
-    fn name(&self) -> &str {
-        &self.name
+    fn name(&self) -> String {
+        format!("Array({})", self.inner.name())
     }
 
     fn default_value(&self) -> DataValue {
         DataValue::Array(vec![])
-    }
-
-    fn can_inside_nullable(&self) -> bool {
-        false
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
@@ -71,7 +68,7 @@ impl DataType for ArrayType {
             let inner_column = self.inner.create_column(value)?;
             let offsets = vec![0, value.len() as i64];
             let column = Arc::new(ArrayColumn::from_data(
-                Arc::new(self.clone()),
+                DataTypeImpl::Array(self.clone()),
                 offsets.into(),
                 inner_column,
             ));
@@ -103,7 +100,7 @@ impl DataType for ArrayType {
         let inner_column = self.inner.create_column(&values)?;
 
         Ok(Arc::new(ArrayColumn::from_data(
-            Arc::new(self.clone()),
+            DataTypeImpl::Array(self.clone()),
             offsets.into(),
             inner_column,
         )))
@@ -114,19 +111,31 @@ impl DataType for ArrayType {
         ArrowType::LargeList(Box::new(field))
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(ArraySerializer {
-            inner: self.inner.create_serializer(),
-            typ: self.inner.clone(),
-        })
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        ArraySerializer {
+            inner: Box::new(self.inner.create_serializer()),
+            typ: *self.inner.clone(),
+        }
+        .into()
     }
 
-    fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {
-        todo!()
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        ArrayDeserializer {
+            inner: Box::new(self.inner.create_deserializer(capacity)),
+            builder: MutableArrayColumn::with_capacity_meta(capacity, ColumnMeta::Array {
+                inner_type: *self.inner.clone(),
+            }),
+        }
+        .into()
     }
 
-    fn create_mutable(&self, _capacity: usize) -> Box<dyn MutableColumn> {
-        todo!()
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutableArrayColumn::with_capacity_meta(
+            capacity,
+            ColumnMeta::Array {
+                inner_type: *self.inner.clone(),
+            },
+        ))
     }
 }
 

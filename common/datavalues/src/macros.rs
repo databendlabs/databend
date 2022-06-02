@@ -29,7 +29,8 @@ macro_rules! for_all_scalar_types {
             { f64 },
             { bool },
             { Vu8 },
-            { JsonValue }
+            { ArrayValue },
+            { VariantValue }
         }
     };
 }
@@ -76,7 +77,6 @@ macro_rules! for_all_primitive_boolean_types{
 #[macro_export]
 macro_rules! for_all_scalar_varints{
     ($macro:tt $(, $x:tt)*) => {
-        use serde_json::Value as JsonValue;
         $macro! {
             [$($x),*],
             { i8, Int8 },
@@ -91,7 +91,7 @@ macro_rules! for_all_scalar_varints{
             { f64, Float64 },
             { bool, Boolean },
             { Vu8, String },
-            { JsonValue, Variant }
+            { VariantValue, Variant }
         }
     };
 }
@@ -177,6 +177,8 @@ macro_rules! with_match_scalar_type {
         match $key_type {
             PhysicalTypeID::Boolean => __with_ty__! { bool },
             PhysicalTypeID::String => __with_ty__! { C },
+            PhysicalTypeID::Array => __with_ty__! { ArrayValue },
+            PhysicalTypeID::Variant => __with_ty__! { VariantValue },
 
             PhysicalTypeID::Int8 => __with_ty__! { i8 },
             PhysicalTypeID::Int16 => __with_ty__! { i16 },
@@ -204,6 +206,8 @@ macro_rules! with_match_scalar_types_error {(
     match $key_type {
         PhysicalTypeID::Boolean => __with_ty__! { bool },
         PhysicalTypeID::String => __with_ty__! { C },
+        PhysicalTypeID::Array => __with_ty__! { ArrayValue },
+        PhysicalTypeID::Variant => __with_ty__! { VariantValue },
 
         PhysicalTypeID::Int8 => __with_ty__! { i8 },
         PhysicalTypeID::Int16 => __with_ty__! { i16 },
@@ -276,6 +280,56 @@ macro_rules! with_match_primitive_types_error {
 }
 
 #[macro_export]
+macro_rules! with_match_integer_type_id {
+    ($key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            TypeID::Int8 => __with_ty__! { i8 },
+            TypeID::Int16 => __with_ty__! { i16 },
+            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int64 => __with_ty__! { i64 },
+            TypeID::UInt8 => __with_ty__! { u8 },
+            TypeID::UInt16 => __with_ty__! { u16 },
+            TypeID::UInt32 => __with_ty__! { u32 },
+            TypeID::UInt64 => __with_ty__! { u64 },
+
+            _ => $nbody,
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! with_match_integer_types_error {
+    ($key_type:expr, | $_:tt $T:ident | $body:tt) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            TypeID::Int8 => __with_ty__! { i8 },
+            TypeID::Int16 => __with_ty__! { i16 },
+            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int64 => __with_ty__! { i64 },
+            TypeID::UInt8 => __with_ty__! { u8 },
+            TypeID::UInt16 => __with_ty__! { u16 },
+            TypeID::UInt32 => __with_ty__! { u32 },
+            TypeID::UInt64 => __with_ty__! { u64 },
+            v => Err(ErrorCode::BadDataValueType(format!(
+                "Ops is not support on datatype: {:?}",
+                v
+            ))),
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! with_match_date_type_error {
     ($key_type:expr, | $_:tt $T:ident | $body:tt) => {{
         macro_rules! __with_ty__ {
@@ -285,10 +339,8 @@ macro_rules! with_match_date_type_error {
         }
 
         match $key_type {
-            TypeID::Date16 => __with_ty__! { u16},
-            TypeID::Date32 => __with_ty__! { i32},
-            TypeID::DateTime32 => __with_ty__! { u32},
-            TypeID::DateTime64 => __with_ty__! { i64},
+            TypeID::Date => __with_ty__! { i32},
+            TypeID::Timestamp => __with_ty__! { i64},
             v => Err(ErrorCode::BadDataValueType(format!(
                 "Ops is not support on datatype: {:?}",
                 v

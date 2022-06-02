@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -107,9 +107,9 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         let inner_table = self.inner_table.clone();
         pipeline.add_pipe(NewPipe::SimplePipe {
             processors: vec![SystemTableSyncSource::create(
+                ctx,
                 output.clone(),
                 inner_table,
-                ctx,
             )?],
             inputs_port: vec![],
             outputs_port: vec![output],
@@ -129,13 +129,13 @@ impl<TTable: 'static + SyncSystemTable> SystemTableSyncSource<TTable>
 where Self: SyncSource
 {
     pub fn create(
+        ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         inner: Arc<TTable>,
-        context: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(context.clone(), output, SystemTableSyncSource::<TTable> {
+        SyncSourcer::create(ctx.clone(), output, SystemTableSyncSource::<TTable> {
             inner,
-            context,
+            context: ctx,
             finished: false,
         })
     }

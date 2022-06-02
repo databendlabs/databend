@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
@@ -39,7 +39,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
     }
 
     user_mgr
-        .add_role(&tenant, RoleInfo::new("test".to_string()), false)
+        .add_role(&tenant, RoleInfo::new("test"), false)
         .await?;
 
     // Grant role to unknown user.
@@ -55,7 +55,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
 
     // Grant role to normal user.
     {
-        let user_info = UserInfo::new_no_auth("test_user".to_string(), "%".to_string());
+        let user_info = UserInfo::new_no_auth("test_user", "%");
         user_mgr.add_user(&tenant, user_info.clone(), false).await?;
         let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(user_info.grants.roles().len(), 0);
@@ -82,7 +82,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         assert_eq!(res.err().unwrap().code(), ErrorCode::UnknownRole("").code())
     }
 
-    let test_role = RoleInfo::new("test_role".to_string());
+    let test_role = RoleInfo::new("test_role");
 
     // Grant role to normal role.
     {

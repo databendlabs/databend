@@ -50,7 +50,7 @@ fn test_nullable_viewer() -> Result<()> {
 
 #[test]
 fn test_constant_viewer() -> Result<()> {
-    let ty = Int16Type::arc();
+    let ty = Int16Type::new_impl();
     let column = ty.create_constant_column(&DataValue::Int64(123), 1024)?;
 
     let viewer = i16::try_create_viewer(&column)?;

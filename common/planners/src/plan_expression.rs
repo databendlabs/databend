@@ -28,7 +28,7 @@ use crate::ExpressionVisitor;
 use crate::PlanNode;
 
 static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    ["database", "version", "current_user"]
+    ["database", "version", "current_user", "user"]
         .iter()
         .copied()
         .collect()
@@ -69,7 +69,7 @@ pub enum Expression {
         column_name: Option<String>,
 
         // Logic data_type for this literal
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
     },
 
     /// A unary expression such as "NOT foo"
@@ -117,7 +117,7 @@ pub enum Expression {
         /// The expression being cast
         expr: Box<Expression>,
         /// The `DataType` the expression will yield
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         /// The PostgreSQL style cast `expr::datatype`
         pg_style: bool,
     },
@@ -147,7 +147,7 @@ impl Expression {
         }
     }
 
-    pub fn create_literal_with_type(value: DataValue, data_type: DataTypePtr) -> Expression {
+    pub fn create_literal_with_type(value: DataValue, data_type: DataTypeImpl) -> Expression {
         Expression::Literal {
             value,
             data_type,
@@ -217,12 +217,16 @@ impl Expression {
                 pg_style,
             } => {
                 if *pg_style {
-                    format!("{}::{:?}", expr.column_name(), data_type)
+                    format!("{}::{}", expr.column_name(), data_type.sql_name())
                 } else if data_type.is_nullable() {
                     let ty: &NullableType = data_type.as_any().downcast_ref().unwrap();
-                    format!("try_cast({} as {:?})", expr.column_name(), ty.inner_type())
+                    format!(
+                        "try_cast({} as {})",
+                        expr.column_name(),
+                        ty.inner_type().sql_name()
+                    )
                 } else {
-                    format!("cast({} as {:?})", expr.column_name(), data_type)
+                    format!("cast({} as {})", expr.column_name(), data_type.sql_name())
                 }
             }
             Expression::Subquery { name, .. } => name.clone(),
@@ -252,14 +256,14 @@ impl Expression {
         Ok(nullable)
     }
 
-    pub fn to_subquery_type(subquery_plan: &PlanNode) -> DataTypePtr {
+    pub fn to_subquery_type(subquery_plan: &PlanNode) -> DataTypeImpl {
         let subquery_schema = subquery_plan.schema();
         // TODO: This may be wrong.
         let mut columns_field = Vec::with_capacity(subquery_schema.fields().len());
 
         for column_field in subquery_schema.fields() {
             let ty = ArrayType::create(column_field.data_type().clone());
-            columns_field.push(DataField::new(column_field.name(), Arc::new(ty)));
+            columns_field.push(DataField::new(column_field.name(), DataTypeImpl::Array(ty)));
         }
 
         match columns_field.len() {
@@ -271,12 +275,12 @@ impl Expression {
                     .map(|f| f.data_type().to_owned())
                     .collect();
 
-                Arc::new(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(names, types))
             }
         }
     }
 
-    pub fn to_scalar_subquery_type(subquery_plan: &PlanNode) -> DataTypePtr {
+    pub fn to_scalar_subquery_type(subquery_plan: &PlanNode) -> DataTypeImpl {
         let subquery_schema = subquery_plan.schema();
 
         match subquery_schema.fields().len() {
@@ -293,12 +297,12 @@ impl Expression {
                     .map(|f| f.data_type().to_owned())
                     .collect();
 
-                Arc::new(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(names, types))
             }
         }
     }
 
-    pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataTypePtr> {
+    pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataTypeImpl> {
         let visitor = ExpressionDataTypeVisitor::create(input_schema.clone());
         visitor.visit(self)?.finalize()
     }
@@ -425,12 +429,12 @@ impl fmt::Debug for Expression {
                 pg_style,
             } => {
                 if *pg_style {
-                    write!(f, "{:?}::{:?}", expr, data_type)
+                    write!(f, "{:?}::{}", expr, data_type.name())
                 } else if data_type.is_nullable() {
                     let ty: &NullableType = data_type.as_any().downcast_ref().unwrap();
-                    write!(f, "try_cast({:?} as {:?})", expr, ty.inner_type())
+                    write!(f, "try_cast({:?} as {})", expr, ty.inner_type().name())
                 } else {
-                    write!(f, "cast({:?} as {:?})", expr, data_type)
+                    write!(f, "cast({:?} as {})", expr, data_type.name())
                 }
             }
             Expression::MapAccess { name, .. } => write!(f, "{}", name),

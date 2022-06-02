@@ -15,54 +15,47 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_datavalues::with_match_integer_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde_json::Value as JsonValue;
-use sqlparser::ast::Value;
-use sqlparser::dialect::GenericDialect;
-use sqlparser::parser::Parser;
-use sqlparser::tokenizer::Tokenizer;
 
+use crate::scalars::semi_structureds::array_get::ArrayGetFunction;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
-pub type GetFunction = GetFunctionImpl<false, false>;
+pub type GetFunction = GetFunctionImpl<false>;
 
-pub type GetIgnoreCaseFunction = GetFunctionImpl<false, true>;
-
-pub type GetPathFunction = GetFunctionImpl<true, false>;
+pub type GetIgnoreCaseFunction = GetFunctionImpl<true>;
 
 #[derive(Clone)]
-pub struct GetFunctionImpl<const BY_PATH: bool, const IGNORE_CASE: bool> {
+pub struct GetFunctionImpl<const IGNORE_CASE: bool> {
     display_name: String,
 }
 
-impl<const BY_PATH: bool, const IGNORE_CASE: bool> GetFunctionImpl<BY_PATH, IGNORE_CASE> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+impl<const IGNORE_CASE: bool> GetFunctionImpl<IGNORE_CASE> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let data_type = args[0];
         let path_type = args[1];
 
-        if (IGNORE_CASE
-            && (!data_type.data_type_id().is_variant_or_object()
-                || !path_type.data_type_id().is_string()))
-            || (BY_PATH
-                && (!data_type.data_type_id().is_variant()
-                    || !path_type.data_type_id().is_string()))
-            || (!data_type.data_type_id().is_variant()
-                || (!path_type.data_type_id().is_string()
-                    && !path_type.data_type_id().is_unsigned_integer()))
+        if data_type.data_type_id().is_array() {
+            return ArrayGetFunction::try_create(display_name, args);
+        }
+
+        if !data_type.data_type_id().is_variant()
+            || (!path_type.data_type_id().is_string() && !path_type.data_type_id().is_integer())
         {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Invalid argument types for function '{}': ({:?}, {:?})",
                 display_name.to_uppercase(),
-                data_type,
-                path_type
+                data_type.data_type_id(),
+                path_type.data_type_id()
             )));
         }
 
-        Ok(Box::new(GetFunctionImpl::<BY_PATH, IGNORE_CASE> {
+        Ok(Box::new(GetFunctionImpl::<IGNORE_CASE> {
             display_name: display_name.to_string(),
         }))
     }
@@ -73,15 +66,13 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> GetFunctionImpl<BY_PATH, IGNO
     }
 }
 
-impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
-    for GetFunctionImpl<BY_PATH, IGNORE_CASE>
-{
+impl<const IGNORE_CASE: bool> Function for GetFunctionImpl<IGNORE_CASE> {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        NullableType::arc(VariantType::arc())
+    fn return_type(&self) -> DataTypeImpl {
+        NullableType::new_impl(VariantType::new_impl())
     }
 
     fn eval(
@@ -90,167 +81,119 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let path_keys = if BY_PATH {
-            parse_path_keys(columns[1].column())?
+        let variant_column: &VariantColumn = if columns[0].column().is_const() {
+            let const_column: &ConstColumn = Series::check_get(columns[0].column())?;
+            Series::check_get(const_column.inner())?
         } else {
-            build_path_keys(columns[1].column())?
+            Series::check_get(columns[0].column())?
         };
 
-        extract_value_by_path(columns[0].column(), path_keys, input_rows, IGNORE_CASE)
+        let mut builder = NullableColumnBuilder::<VariantValue>::with_capacity(input_rows);
+        let index_type = columns[1].data_type().data_type_id();
+        with_match_integer_type_id!(index_type, |$T| {
+            let index_column: &PrimitiveColumn<$T> = if columns[1].column().is_const() {
+                let const_column: &ConstColumn = Series::check_get(columns[1].column())?;
+                Series::check_get(const_column.inner())?
+            } else {
+                Series::check_get(columns[1].column())?
+            };
+            if IGNORE_CASE {
+                // GET_IGNORE_CASE only support extract value by field_name
+                for _ in 0..input_rows {
+                    builder.append_null();
+                }
+            } else {
+                if columns[0].column().is_const() {
+                    let value = variant_column.get_data(0);
+                    for index in index_column.iter() {
+                        let index = usize::try_from(*index)?;
+                        match value.get(index) {
+                            Some(child_value) => builder.append(&VariantValue::from(child_value), true),
+                            None => builder.append_null(),
+                        }
+                    }
+                } else if columns[1].column().is_const() {
+                    let index = index_column.get(0).as_u64()? as usize;
+                    for value in variant_column.scalar_iter() {
+                        match value.get(index) {
+                            Some(child_value) => builder.append(&VariantValue::from(child_value), true),
+                            None => builder.append_null(),
+                        }
+                    }
+                } else {
+                    for (i, value) in variant_column.scalar_iter().enumerate() {
+                        let index = index_column.get(i).as_u64()? as usize;
+                        match value.get(index) {
+                            Some(child_value) => builder.append(&VariantValue::from(child_value), true),
+                            None => builder.append_null(),
+                        }
+                    }
+                }
+            }
+        }, {
+            let field_name_column: &StringColumn = if columns[1].column().is_const() {
+                let const_column: &ConstColumn = Series::check_get(columns[1].column())?;
+                Series::check_get(const_column.inner())?
+            } else {
+                Series::check_get(columns[1].column())?
+            };
+            if columns[0].column().is_const() {
+                let value = variant_column.get_data(0);
+                for field_name in field_name_column.iter() {
+                    match extract_value_by_field_name(value, field_name, &IGNORE_CASE) {
+                        Some(child_value) => builder.append(&VariantValue::from(child_value), true),
+                        None => builder.append_null(),
+                    }
+                }
+            } else if columns[1].column().is_const() {
+                let field_name = field_name_column.get_data(0);
+                for value in variant_column.scalar_iter() {
+                    match extract_value_by_field_name(value, field_name, &IGNORE_CASE) {
+                        Some(child_value) => builder.append(&VariantValue::from(child_value), true),
+                        None => builder.append_null(),
+                    }
+                }
+            } else {
+                for (i, value) in variant_column.scalar_iter().enumerate() {
+                    let field_name = field_name_column.get_data(i);
+                    match extract_value_by_field_name(value, field_name, &IGNORE_CASE) {
+                        Some(child_value) => builder.append(&VariantValue::from(child_value), true),
+                        None => builder.append_null(),
+                    }
+                }
+            }
+        });
+
+        Ok(builder.build(input_rows))
     }
 }
 
-impl<const BY_PATH: bool, const IGNORE_CASE: bool> fmt::Display
-    for GetFunctionImpl<BY_PATH, IGNORE_CASE>
-{
+impl<const IGNORE_CASE: bool> fmt::Display for GetFunctionImpl<IGNORE_CASE> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name.to_uppercase())
     }
 }
 
-fn parse_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
-    let column: &StringColumn = if column.is_const() {
-        let const_column: &ConstColumn = Series::check_get(column)?;
-        Series::check_get(const_column.inner())?
-    } else {
-        Series::check_get(column)?
-    };
-
-    let dialect = &GenericDialect {};
-    let mut path_keys: Vec<Vec<DataValue>> = vec![];
-    for v in column.iter() {
-        if v.is_empty() {
-            return Err(ErrorCode::SyntaxException(
-                "Bad compound object's field path name: '' in GET_PATH",
-            ));
-        }
-        let definition = std::str::from_utf8(v).unwrap();
-        let mut tokenizer = Tokenizer::new(dialect, definition);
-        match tokenizer.tokenize() {
-            Ok((tokens, position_map)) => {
-                match Parser::new(tokens, position_map, dialect).parse_map_keys() {
-                    Ok(values) => {
-                        let path_key: Vec<DataValue> = values
-                            .iter()
-                            .map(|v| match v {
-                                Value::Number(value, _) => {
-                                    DataValue::try_from_literal(value, None).unwrap()
-                                }
-                                Value::SingleQuotedString(value) => {
-                                    DataValue::String(value.clone().into_bytes())
-                                }
-                                Value::ColonString(value) => {
-                                    DataValue::String(value.clone().into_bytes())
-                                }
-                                Value::PeriodString(value) => {
-                                    DataValue::String(value.clone().into_bytes())
-                                }
-                                _ => DataValue::Null,
-                            })
-                            .collect();
-
-                        path_keys.push(path_key);
-                    }
-                    Err(parse_error) => return Err(ErrorCode::from(parse_error)),
-                }
-            }
-            Err(tokenize_error) => {
-                return Err(ErrorCode::SyntaxException(format!(
-                    "Can not tokenize definition: {}, Error: {:?}",
-                    definition, tokenize_error
-                )))
-            }
-        }
-    }
-    Ok(path_keys)
-}
-
-fn build_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
-    if column.is_const() {
-        let const_column: &ConstColumn = Series::check_get(column)?;
-        return build_path_keys(const_column.inner());
-    }
-
-    let mut path_keys: Vec<Vec<DataValue>> = vec![];
-    for i in 0..column.len() {
-        path_keys.push(vec![column.get(i)]);
-    }
-    Ok(path_keys)
-}
-
-fn extract_value_by_path(
-    column: &ColumnRef,
-    path_keys: Vec<Vec<DataValue>>,
-    input_rows: usize,
-    ignore_case: bool,
-) -> Result<ColumnRef> {
-    let column: &JsonColumn = if column.is_const() {
-        let const_column: &ConstColumn = Series::check_get(column)?;
-        Series::check_get(const_column.inner())?
-    } else {
-        Series::check_get(column)?
-    };
-
-    let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
-    for path_key in path_keys.iter() {
-        if path_key.is_empty() {
-            for _ in 0..column.len() {
-                builder.append_null();
-            }
-            continue;
-        }
-        for v in column.iter() {
-            let mut found_value = true;
-            let mut value = v;
-            for key in path_key.iter() {
-                match key {
-                    DataValue::UInt64(k) => match value.get(*k as usize) {
-                        Some(child_value) => value = child_value,
-                        None => {
-                            found_value = false;
-                            break;
+fn extract_value_by_field_name<'a>(
+    value: &'a JsonValue,
+    field_name: &'a [u8],
+    ignore_case: &'a bool,
+) -> Option<&'a JsonValue> {
+    match std::str::from_utf8(field_name) {
+        Ok(field_name) => match value.get(field_name) {
+            Some(child_value) => Some(child_value),
+            None => {
+                if *ignore_case && value.is_object() {
+                    let obj = value.as_object().unwrap();
+                    for (_, (child_key, child_value)) in obj.iter().enumerate() {
+                        if field_name.to_lowercase() == child_key.to_lowercase() {
+                            return Some(child_value);
                         }
-                    },
-                    DataValue::String(k) => match String::from_utf8(k.to_vec()) {
-                        Ok(k) => match value.get(&k) {
-                            Some(child_value) => value = child_value,
-                            None => {
-                                // if no exact match value found, return one of the ambiguous matches
-                                if ignore_case && value.is_object() {
-                                    let mut ignore_case_found_value = false;
-                                    let obj = value.as_object().unwrap();
-                                    for (_, (child_key, child_value)) in obj.iter().enumerate() {
-                                        if k.to_lowercase() == child_key.to_lowercase() {
-                                            ignore_case_found_value = true;
-                                            value = child_value;
-                                            break;
-                                        }
-                                    }
-                                    if ignore_case_found_value {
-                                        continue;
-                                    }
-                                }
-                                found_value = false;
-                                break;
-                            }
-                        },
-                        Err(_) => {
-                            found_value = false;
-                            break;
-                        }
-                    },
-                    _ => {
-                        found_value = false;
-                        break;
                     }
                 }
+                None
             }
-            if found_value {
-                builder.append(value, true);
-            } else {
-                builder.append_null();
-            }
-        }
+        },
+        Err(_) => None,
     }
-    Ok(builder.build(input_rows))
 }

@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod access;
 mod interpreter_call;
 mod interpreter_database_create;
 mod interpreter_database_drop;
+mod interpreter_database_rename;
 mod interpreter_database_show_create;
 mod interpreter_empty;
 mod interpreter_explain;
@@ -34,6 +36,7 @@ mod interpreter_show_metrics;
 mod interpreter_show_processlist;
 mod interpreter_show_roles;
 mod interpreter_show_settings;
+mod interpreter_show_stages;
 mod interpreter_show_tab_stat;
 mod interpreter_show_tables;
 mod interpreter_show_users;

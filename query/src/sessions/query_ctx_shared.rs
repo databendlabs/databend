@@ -17,32 +17,33 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
-use common_base::Progress;
-use common_base::Runtime;
+use chrono_tz::Tz;
+use common_base::base::Progress;
+use common_base::base::Runtime;
+use common_base::infallible::Mutex;
+use common_base::infallible::RwLock;
 use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
-use common_infallible::RwLock;
 use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog;
-use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
+use crate::sql::SQLCommon;
 use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
-type DatabaseAndTable = (String, String);
+type DatabaseAndTable = (String, String, String);
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
@@ -60,6 +61,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) write_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
+    pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
@@ -74,7 +76,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
-    pub(in crate::sessions) role_cache_manager: Arc<RoleCacheMgr>,
 }
 
 impl QueryContextShared {
@@ -83,7 +84,9 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         let conf = session.get_config();
-        let user_manager = UserApiProvider::create_global(conf.clone()).await?;
+
+        let user_manager = session.session_mgr.get_user_api_provider();
+
         Ok(Arc::new(QueryContextShared {
             session,
             cluster_cache,
@@ -91,6 +94,7 @@ impl QueryContextShared {
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
             write_progress: Arc::new(Progress::create()),
+            error: Arc::new(Mutex::new(None)),
             runtime: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
             ref_count: Arc::new(AtomicUsize::new(0)),
@@ -102,11 +106,19 @@ impl QueryContextShared {
             dal_ctx: Arc::new(Default::default()),
             user_manager: user_manager.clone(),
             auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
-            role_cache_manager: Arc::new(RoleCacheMgr::new(user_manager)),
         }))
     }
 
+    pub fn set_error(&self, err: ErrorCode) {
+        let mut guard = self.error.lock();
+        *guard = Some(err);
+    }
+
     pub fn kill(&self) {
+        self.set_error(ErrorCode::AbortedQuery(
+            "Aborted query, because the server is shutting down or the query was killed",
+        ));
+
         let mut sources_abort_handle = self.sources_abort_handle.write();
 
         while let Some(source_abort_handle) = sources_abort_handle.pop() {
@@ -125,6 +137,10 @@ impl QueryContextShared {
         self.cluster_cache.clone()
     }
 
+    pub fn get_current_catalog(&self) -> String {
+        self.session.get_current_catalog()
+    }
+
     pub fn get_current_database(&self) -> String {
         self.session.get_current_database()
     }
@@ -137,8 +153,12 @@ impl QueryContextShared {
         self.session.get_current_user()
     }
 
+    pub fn set_current_tenant(&self, tenant: String) {
+        self.session.set_current_tenant(tenant);
+    }
+
     pub fn get_tenant(&self) -> String {
-        self.session.get_tenant()
+        self.session.get_current_tenant()
     }
 
     pub fn get_user_manager(&self) -> Arc<UserApiProvider> {
@@ -150,24 +170,30 @@ impl QueryContextShared {
     }
 
     pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
-        self.role_cache_manager.clone()
+        self.session.get_role_cache_manager()
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
     }
 
-    pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {
-        self.session.get_catalog()
+    pub fn get_catalogs(&self) -> Arc<CatalogManager> {
+        self.session.get_catalogs()
     }
 
-    pub async fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+    pub async fn get_table(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+    ) -> Result<Arc<dyn Table>> {
         // Always get same table metadata in the same query
-        let table_meta_key = (database.to_string(), table.to_string());
+
+        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
         match already_in_cache {
-            false => self.get_table_to_cache(database, table).await,
+            false => self.get_table_to_cache(catalog, database, table).await,
             true => Ok(self
                 .tables_refs
                 .lock()
@@ -177,12 +203,17 @@ impl QueryContextShared {
         }
     }
 
-    async fn get_table_to_cache(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table_to_cache(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+    ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
-        let catalog = self.get_catalog();
+        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
+        let catalog = self.get_catalogs().get_catalog(catalog)?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
-        let table_meta_key = (database.to_string(), table.to_string());
         let mut tables_refs = self.tables_refs.lock();
 
         match tables_refs.entry(table_meta_key) {
@@ -217,7 +248,7 @@ impl QueryContextShared {
 
     pub fn attach_query_str(&self, query: &str) {
         let mut running_query = self.running_query.write();
-        *running_query = Some(query.to_string());
+        *running_query = Some(SQLCommon::short_sql(query));
     }
 
     pub fn get_query_str(&self) -> String {
@@ -247,8 +278,24 @@ impl QueryContextShared {
             format.field_delimiter = settings.get_field_delimiter()?;
             format.empty_as_default = settings.get_empty_as_default()? > 0;
             format.skip_header = settings.get_skip_header()? > 0;
+
+            let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
+                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+            })?;
+            format.timezone = tz.parse::<Tz>().map_err(|_| {
+                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+            })?;
+
+            let compress = String::from_utf8(settings.get_compression()?).map_err(|_| {
+                ErrorCode::UnknownCompressionType("Compress type must be valid utf-8")
+            })?;
+            format.compression = compress.parse()?
         }
         Ok(format)
+    }
+
+    pub fn get_connection_id(&self) -> String {
+        self.session.get_id()
     }
 
     pub async fn reload_config(&self) -> Result<()> {

@@ -167,6 +167,73 @@ where
     }
 }
 
+#[derive(serde::Serialize, Deserialize)]
+struct VariantStateData {
+    pub value: String,
+    pub data: DataValue,
+}
+
+#[derive(serde::Serialize, Deserialize)]
+struct ArgVariantMinMaxState<C> {
+    pub state: ArgMinMaxState<VariantValue, C>,
+}
+
+impl<C> AggregateArgMinMaxState<VariantValue> for ArgVariantMinMaxState<C>
+where C: ChangeIf<VariantValue> + Default
+{
+    fn new() -> Self {
+        Self {
+            state: ArgMinMaxState::new(),
+        }
+    }
+
+    fn add(&mut self, other: &'_ VariantValue, data: DataValue) -> Result<()> {
+        self.state.add(other, data)
+    }
+
+    fn add_batch(
+        &mut self,
+        data_column: &ColumnRef,
+        column: &ColumnRef,
+        validity: Option<&Bitmap>,
+    ) -> Result<()> {
+        self.state.add_batch(data_column, column, validity)
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        if let Some(value) = &rhs.state.value {
+            self.state
+                .add(value.as_scalar_ref(), rhs.state.data.clone())?;
+        }
+        Ok(())
+    }
+
+    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+        if let Some(val) = &self.state.value {
+            let state_data = VariantStateData {
+                value: val.as_ref().to_string(),
+                data: self.state.data.clone(),
+            };
+            serialize_into_buf(writer, &state_data)?;
+        }
+        Ok(())
+    }
+
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+        if !reader.is_empty() {
+            let state_data: VariantStateData = deserialize_from_slice(reader)?;
+            let val: serde_json::Value = serde_json::from_str(&state_data.value)?;
+            self.state.value = Some(val.into());
+            self.state.data = state_data.data;
+        }
+        Ok(())
+    }
+
+    fn merge_result(&mut self, column: &mut dyn MutableColumn) -> Result<()> {
+        self.state.merge_result(column)
+    }
+}
+
 #[derive(Clone)]
 pub struct AggregateArgMinMaxFunction<S, C, State> {
     display_name: String,
@@ -186,7 +253,7 @@ where
         "AggregateArgMinMaxFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(self.arguments[0].data_type().clone())
     }
 
@@ -254,6 +321,15 @@ where
         let state = place.get::<State>();
         state.merge_result(array)
     }
+
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        let state = place.get::<State>();
+        std::ptr::drop_in_place(state);
+    }
 }
 
 impl<S, C, State> fmt::Display for AggregateArgMinMaxFunction<S, C, State> {
@@ -289,25 +365,39 @@ pub fn try_create_aggregate_arg_minmax_function<const IS_MIN: bool>(
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_binary_arguments(display_name, arguments.len())?;
     let data_type = arguments[1].data_type();
+    let phid = data_type.data_type_id().to_physical_type();
 
-    with_match_scalar_type!(data_type.data_type_id().to_physical_type(), |$T| {
-        if IS_MIN {
-            type State = ArgMinMaxState<$T, CmpMin>;
-             AggregateArgMinMaxFunction::<$T, CmpMin, State>::try_create(
-                display_name,
-                arguments,
-            )
+    with_match_scalar_type!(phid, |$T| {
+        if phid == PhysicalTypeID::Variant {
+            if IS_MIN {
+                type State = ArgVariantMinMaxState<CmpMin>;
+                AggregateArgMinMaxFunction::<VariantValue, CmpMin, State>::try_create(
+                    display_name,
+                    arguments,
+                )
+            } else {
+                type State = ArgVariantMinMaxState<CmpMax>;
+                AggregateArgMinMaxFunction::<VariantValue, CmpMax, State>::try_create(
+                    display_name,
+                    arguments,
+                )
+            }
         } else {
-            type State = ArgMinMaxState<$T, CmpMax>;
-             AggregateArgMinMaxFunction::<$T, CmpMax, State>::try_create(
-                display_name,
-                arguments,
-            )
+            if IS_MIN {
+                type State = ArgMinMaxState<$T, CmpMin>;
+                AggregateArgMinMaxFunction::<$T, CmpMin, State>::try_create(
+                    display_name,
+                    arguments,
+                )
+            } else {
+                type State = ArgMinMaxState<$T, CmpMax>;
+                AggregateArgMinMaxFunction::<$T, CmpMax, State>::try_create(
+                    display_name,
+                    arguments,
+                )
+            }
         }
-
-    },
-
-    {
+    }, {
         Err(ErrorCode::BadDataValueType(format!(
             "AggregateArgMinMaxFunction does not support type '{:?}'",
             data_type

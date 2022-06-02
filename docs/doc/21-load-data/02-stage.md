@@ -1,8 +1,8 @@
 ---
-title: Load Data from Databend Stages
+title: Load Data From Databend Stages
 sidebar_label: From Stages
 description:
-  Load Data from Databend Stages.
+  Load data from Databend stages.
 ---
 
 <p align="center">
@@ -21,15 +21,12 @@ Execute [CREATE STAGE](/doc/reference/sql/ddl/stage/ddl-create-stage) to create 
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
-```sql title='mysql>'
+```sql
 CREATE STAGE my_int_stage;
 ```
 
-```sql title='mysql>'
-DESC STAGE my_int_stage;
-```
-
 ```sql
+DESC STAGE my_int_stage;
 +--------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
 | name         | stage_type | stage_params                                                                                                                                                | copy_options                                  | file_format_options                                                                                                | comment |
 +--------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
@@ -73,7 +70,7 @@ Upload `books.csv` into stages:
 ```shell title='Request /v1/upload_to_stage' API
 curl -H "stage_name:my_int_stage"\
  -F "upload=@./books.csv"\
- -XPUT http://localhost:8081/v1/upload_to_stage
+ -XPUT http://root:@localhost:8081/v1/upload_to_stage
 ```
 
 ```text title='Response'
@@ -98,7 +95,7 @@ Upload `books.parquet` into stages:
 ```shell title='Request /v1/upload_to_stage' API
 curl -H "stage_name:my_int_stage"\
  -F "upload=@./books.parquet"\
- -XPUT http://localhost:8081/v1/upload_to_stage
+ -XPUT http://root:@localhost:8081/v1/upload_to_stage
 ```
 
 ```text title='Response'
@@ -125,11 +122,8 @@ curl -H "stage_name:my_int_stage"\
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
-```sql title='mysql>'
-LIST @my_int_stage;
-```
-
 ```sql
+LIST @my_int_stage;
 +---------------+
 | file_name     |
 +---------------+
@@ -140,15 +134,15 @@ LIST @my_int_stage;
 
 ### Step 4. Creating Database and Table
 
-```sql title='mysql>'
+```sql
 CREATE DATABASE book_db;
 ```
 
-```sql title='mysql>'
+```sql
 USE book_db;
 ```
 
-```sql title='mysql>'
+```sql
 CREATE TABLE books
 (
     title VARCHAR,
@@ -165,10 +159,9 @@ Execute [COPY](/doc/reference/sql/dml/dml-copy) to load staged files to the targ
 
 <TabItem value="csv" label="CSV">
 
-```sql title='mysql>'
+```sql
 COPY INTO books FROM '@my_int_stage' files=('books.csv') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
 ```
-
 
 :::tip
 
@@ -190,7 +183,7 @@ COPY INTO books FROM '@my_int_stage' files=('books.csv') file_format = (type = '
 
 <TabItem value="parquet" label="Parquet">
 
-```sql title='mysql>'
+```sql
 COPY INTO books FROM '@my_int_stage' files=('books.parquet') file_format = (type = 'Parquet');
 ```
 
@@ -202,7 +195,7 @@ COPY INTO books FROM '@my_int_stage' files=('books.parquet') file_format = (type
 ### Step 6. Verify the Loaded Data
 
 ```sql
-SELECT * FROM Books;
+SELECT * FROM books;
 +------------------------------+----------------------+-------+
 | title                        | author               | date  |
 +------------------------------+----------------------+-------+

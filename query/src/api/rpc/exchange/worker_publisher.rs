@@ -6,7 +6,10 @@ pub struct PublisherWorker {}
 impl PublisherWorker {
     pub fn create() -> Arc<PublisherWorker> {
         // TODO:
+        unimplemented!()
     }
 
-    pub fn listen(&self) -> Result<()> {}
+    pub fn listen(&self) -> Result<()> {
+        unimplemented!()
+    }
 }

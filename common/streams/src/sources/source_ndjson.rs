@@ -17,9 +17,12 @@ use std::borrow::Cow;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
+use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_io::prelude::FormatSettings;
 use futures::AsyncBufRead;
 use futures::AsyncBufReadExt;
 
@@ -30,14 +33,16 @@ pub struct NDJsonSourceBuilder {
     schema: DataSchemaRef,
     block_size: usize,
     size_limit: usize,
+    format: FormatSettings,
 }
 
 impl NDJsonSourceBuilder {
-    pub fn create(schema: DataSchemaRef) -> Self {
+    pub fn create(schema: DataSchemaRef, format: FormatSettings) -> Self {
         NDJsonSourceBuilder {
             schema,
             block_size: 10000,
             size_limit: usize::MAX,
+            format,
         }
     }
 
@@ -141,7 +146,7 @@ where R: AsyncBufRead + Unpin + Send
 
             for ((name, type_name), deser) in fields.iter().zip(packs.iter_mut()) {
                 let value = &json[name];
-                deser.de_json(value).map_err(|e| {
+                deser.de_json(value, &self.builder.format).map_err(|e| {
                     let value_str = format!("{:?}", value);
                     ErrorCode::BadBytes(format!(
                         "error at row {} column {}: type={}, err={}, value={}",

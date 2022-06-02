@@ -26,6 +26,7 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::transforms::aggregator::*;
 use crate::pipelines::new::processors::AggregatorTransformParams;
 use crate::pipelines::new::processors::Processor;
+use crate::sessions::QueryContext;
 
 pub struct TransformAggregator;
 
@@ -34,6 +35,7 @@ impl TransformAggregator {
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         transform_params: AggregatorTransformParams,
+        ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params;
 
@@ -41,7 +43,7 @@ impl TransformAggregator {
             return AggregatorTransform::create(
                 input_port,
                 output_port,
-                FinalSingleKeyAggregator::try_create(&aggregator_params)?,
+                FinalSingleStateAggregator::try_create(&aggregator_params)?,
             );
         }
 
@@ -50,64 +52,94 @@ impl TransformAggregator {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU8FinalAggregator::<false>::create(method, aggregator_params),
+                    KeysU8FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU16(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU16FinalAggregator::<false>::create(method, aggregator_params),
+                    KeysU16FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU32(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU32FinalAggregator::<false>::create(method, aggregator_params),
+                    KeysU32FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU64(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU64FinalAggregator::<false>::create(method, aggregator_params),
+                    KeysU64FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::SingleString(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SingleStringFinalAggregator::<false>::create(method, aggregator_params),
+                    SingleStringFinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::Serializer(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SerializerFinalAggregator::<false>::create(method, aggregator_params),
+                    SerializerFinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU128FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU256FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU512FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
             },
             false => match transform_params.method {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU8FinalAggregator::<true>::create(method, aggregator_params),
+                    KeysU8FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU16(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU16FinalAggregator::<true>::create(method, aggregator_params),
+                    KeysU16FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU32(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU32FinalAggregator::<true>::create(method, aggregator_params),
+                    KeysU32FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU64(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU64FinalAggregator::<true>::create(method, aggregator_params),
+                    KeysU64FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::SingleString(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SingleStringFinalAggregator::<true>::create(method, aggregator_params),
+                    SingleStringFinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::Serializer(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SerializerFinalAggregator::<true>::create(method, aggregator_params),
+                    SerializerFinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU128FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU256FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU512FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
             },
         }
@@ -117,6 +149,7 @@ impl TransformAggregator {
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         transform_params: AggregatorTransformParams,
+        ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params;
 
@@ -124,7 +157,7 @@ impl TransformAggregator {
             return AggregatorTransform::create(
                 input_port,
                 output_port,
-                PartialSingleKeyAggregator::try_create(&aggregator_params)?,
+                PartialSingleStateAggregator::try_create(&aggregator_params)?,
             );
         }
 
@@ -133,64 +166,94 @@ impl TransformAggregator {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU8PartialAggregator::<false>::create(method, aggregator_params),
+                    KeysU8PartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU16(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU16PartialAggregator::<false>::create(method, aggregator_params),
+                    KeysU16PartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU32(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU32PartialAggregator::<false>::create(method, aggregator_params),
+                    KeysU32PartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU64(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU64PartialAggregator::<false>::create(method, aggregator_params),
+                    KeysU64PartialAggregator::<false>::create(ctx, method, aggregator_params),
+                ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU128PartialAggregator::<false>::create(ctx, method, aggregator_params),
+                ),
+                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU256PartialAggregator::<false>::create(ctx, method, aggregator_params),
+                ),
+                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU512PartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::SingleString(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SingleStringPartialAggregator::<false>::create(method, aggregator_params),
+                    SingleStringPartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::Serializer(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SerializerPartialAggregator::<false>::create(method, aggregator_params),
+                    SerializerPartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
             },
             false => match transform_params.method {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU8PartialAggregator::<true>::create(method, aggregator_params),
+                    KeysU8PartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU16(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU16PartialAggregator::<true>::create(method, aggregator_params),
+                    KeysU16PartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU32(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU32PartialAggregator::<true>::create(method, aggregator_params),
+                    KeysU32PartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU64(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU64PartialAggregator::<true>::create(method, aggregator_params),
+                    KeysU64PartialAggregator::<true>::create(ctx, method, aggregator_params),
+                ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU128PartialAggregator::<true>::create(ctx, method, aggregator_params),
+                ),
+                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU256PartialAggregator::<true>::create(ctx, method, aggregator_params),
+                ),
+                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU512PartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::SingleString(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SingleStringPartialAggregator::<true>::create(method, aggregator_params),
+                    SingleStringPartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::Serializer(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SerializerPartialAggregator::<true>::create(method, aggregator_params),
+                    SerializerPartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
             },
         }

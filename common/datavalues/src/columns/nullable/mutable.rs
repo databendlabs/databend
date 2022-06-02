@@ -13,17 +13,19 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
-use crate::types::DataTypePtr;
+use crate::types::DataTypeImpl;
 use crate::ColumnRef;
+use crate::DataValue;
 use crate::NullableColumn;
 
 pub struct MutableNullableColumn {
     values: MutableBitmap,
     inner: Box<dyn MutableColumn>,
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
 }
 
 impl MutableColumn for MutableNullableColumn {
@@ -35,7 +37,7 @@ impl MutableColumn for MutableNullableColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         self.data_type.clone()
     }
 
@@ -58,14 +60,27 @@ impl MutableColumn for MutableNullableColumn {
         NullableColumn::wrap_inner(col, Some(validity.into()))
     }
 
-    fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         self.values.push(true);
         self.inner.append_data_value(value)
+    }
+
+    /// Note when the last value is null, this method will return DataValue::Null.
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        self.values
+            .pop()
+            .ok_or_else(|| {
+                ErrorCode::BadDataArrayLength("Nullable column array is empty when pop data value")
+            })
+            .and_then(|v| {
+                let value = self.inner.pop_data_value();
+                v.then_some(value).unwrap_or(Ok(DataValue::Null))
+            })
     }
 }
 
 impl MutableNullableColumn {
-    pub fn new(inner: Box<dyn MutableColumn>, data_type: DataTypePtr) -> Self {
+    pub fn new(inner: Box<dyn MutableColumn>, data_type: DataTypeImpl) -> Self {
         Self {
             inner,
             values: MutableBitmap::with_capacity(0),

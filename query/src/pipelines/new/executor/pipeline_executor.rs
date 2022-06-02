@@ -16,14 +16,14 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
-use common_base::Runtime;
-use common_base::Thread;
+use common_base::base::Runtime;
+use common_base::base::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
 
+use crate::pipelines::new::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
-use crate::pipelines::new::executor::executor_notify::WorkersNotify;
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::new::pipeline::NewPipeline;
@@ -31,7 +31,7 @@ use crate::pipelines::new::pipeline::NewPipeline;
 pub struct PipelineExecutor {
     threads_num: usize,
     graph: RunningGraph,
-    workers_notify: Arc<WorkersNotify>,
+    workers_condvar: Arc<WorkersCondvar>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
 }
@@ -40,7 +40,7 @@ impl PipelineExecutor {
     pub fn create(async_rt: Arc<Runtime>, pipeline: NewPipeline) -> Result<Arc<PipelineExecutor>> {
         unsafe {
             let threads_num = pipeline.get_max_threads();
-            let workers_notify = WorkersNotify::create(threads_num);
+            let workers_condvar = WorkersCondvar::create(threads_num);
             let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
 
             let graph = RunningGraph::create(pipeline)?;
@@ -50,12 +50,12 @@ impl PipelineExecutor {
             while let Some(task) = init_schedule_queue.pop_task() {
                 tasks.push_back(task);
             }
-
             global_tasks_queue.init_tasks(tasks);
+
             Ok(Arc::new(PipelineExecutor {
                 graph,
                 threads_num,
-                workers_notify,
+                workers_condvar,
                 global_tasks_queue,
                 async_runtime: async_rt,
             }))
@@ -63,8 +63,7 @@ impl PipelineExecutor {
     }
 
     pub fn finish(&self) -> Result<()> {
-        self.global_tasks_queue.finish();
-        self.workers_notify.wakeup_all();
+        self.global_tasks_queue.finish(self.workers_condvar.clone());
         Ok(())
     }
 
@@ -110,8 +109,8 @@ impl PipelineExecutor {
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_single_thread(&self, thread_num: usize) -> Result<()> {
-        let workers_notify = self.workers_notify.clone();
-        let mut context = ExecutorWorkerContext::create(thread_num, workers_notify);
+        let workers_condvar = self.workers_condvar.clone();
+        let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
 
         while !self.global_tasks_queue.is_finished() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.

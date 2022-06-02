@@ -60,7 +60,7 @@ pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
     partitions
 }
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::optimizers::Optimizers;
 use databend_query::sql::PlanParser;

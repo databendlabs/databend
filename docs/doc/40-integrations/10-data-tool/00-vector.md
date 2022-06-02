@@ -2,7 +2,7 @@
 title: Using Databend as a Sink for Vector
 sidebar_label: Vector
 description:
-  Using Databend as a Sink for Vector.
+  Using Databend as a sink for Vector.
 ---
 
 <p align="center">

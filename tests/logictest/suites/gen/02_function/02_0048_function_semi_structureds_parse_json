@@ -1,0 +1,303 @@
+statement query T 
+select '==parse_json==';
+
+----  
+==parse_json==
+
+statement query T 
+select parse_json(null);
+
+----  
+NULL
+
+statement query T 
+select parse_json(true);
+
+----  
+true
+
+statement query T 
+select parse_json(123);
+
+----  
+123
+
+statement query T 
+select parse_json(12.34);
+
+----  
+12.34
+
+statement query T label(mysql,http)
+select parse_json('null');
+
+----  mysql
+null
+
+----  http
+NULL
+
+statement query T 
+select parse_json('true');
+
+----  
+true
+
+statement query T 
+select parse_json('-17');
+
+----  
+-17
+
+statement query T 
+select parse_json('123.12');
+
+----  
+123.12
+
+statement query T 
+select parse_json('1.912e2');
+
+----  
+191.2
+
+statement query T label(mysql,http)
+select parse_json('"Om ara pa ca na dhih"  ');
+
+----  mysql
+"Om ara pa ca na dhih"
+
+----  http
+Om ara pa ca na dhih
+
+statement query T label(mysql,http)
+select parse_json('[-1, 12, 289, 2188, false]');
+
+----  mysql
+[-1,12,289,2188,false]
+
+----  http
+[-1, 12, 289, 2188, False]
+
+statement query T label(mysql,http)
+select parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
+
+----  mysql
+{"x":"abc","y":false,"z":10}
+
+----  http
+{'x': 'abc', 'y': False, 'z': 10}
+
+statement error 1010
+select parse_json('[1,'); 
+
+statement error 1010
+select parse_json('"ab'); 
+
+statement query T 
+select parse_json(parse_json('123'));
+
+----  
+123
+
+statement ok
+select parse_json(parse_json('"\\\"abc\\\""'));
+
+statement error 1010
+select parse_json(parse_json('"abc"')); 
+
+statement error 1010
+select parse_json(to_date('2022-01-01')); 
+
+statement error 1028
+select parse_json(); 
+
+statement error 1028
+select parse_json('a', 'aa'); 
+
+statement error 1028
+select get(parse_json('a', 'aa')); 
+
+statement query T 
+select '==try_parse_json==';
+
+----  
+==try_parse_json==
+
+statement query T 
+select try_parse_json(null);
+
+----  
+NULL
+
+statement query T 
+select try_parse_json(true);
+
+----  
+true
+
+statement query T 
+select try_parse_json(123);
+
+----  
+123
+
+statement query T 
+select try_parse_json(12.34);
+
+----  
+12.34
+
+statement query T label(mysql,http)
+select try_parse_json('null');
+
+----  mysql
+null
+
+----  http
+NULL
+
+statement query T 
+select try_parse_json('true');
+
+----  
+true
+
+statement query T 
+select try_parse_json('-17');
+
+----  
+-17
+
+statement query T 
+select try_parse_json('123.12');
+
+----  
+123.12
+
+statement query T 
+select try_parse_json('1.912e2');
+
+----  
+191.2
+
+statement query T label(mysql,http)
+select try_parse_json('"Om ara pa ca na dhih"  ');
+
+----  mysql
+"Om ara pa ca na dhih"
+
+----  http
+Om ara pa ca na dhih
+
+statement query T label(mysql,http)
+select try_parse_json('[-1, 12, 289, 2188, false]');
+
+----  mysql
+[-1,12,289,2188,false]
+
+----  http
+[-1, 12, 289, 2188, False]
+
+statement query T label(mysql,http)
+select try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
+
+----  mysql
+{"x":"abc","y":false,"z":10}
+
+----  http
+{'x': 'abc', 'y': False, 'z': 10}
+
+statement query T 
+select try_parse_json('[1,');
+
+----  
+NULL
+
+statement query T 
+select try_parse_json('"ab');
+
+----  
+NULL
+
+statement query T 
+select try_parse_json(parse_json('123'));
+
+----  
+123
+
+statement ok
+select try_parse_json(parse_json('"\\\"abc\\\""'));
+
+statement query T 
+select try_parse_json(parse_json('"abc"'));
+
+----  
+NULL
+
+statement query T 
+select try_parse_json(to_date('2022-01-01'));
+
+----  
+NULL
+
+statement ok
+DROP DATABASE IF EXISTS db1;
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+USE db1;
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Memory;
+
+statement ok
+insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}');
+
+statement query T 
+select '==parse_json from table==';
+
+----  
+==parse_json from table==
+
+statement ok
+select parse_json(v), v from t1;
+
+statement query T 
+select '==try_parse_json from table==';
+
+----  
+==try_parse_json from table==
+
+statement ok
+select try_parse_json(v), v from t1;
+
+statement ok
+CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Memory;
+
+statement ok
+insert into t2 values ('abc'),('[1,');
+
+statement query T 
+select '==parse_json from table invalid json==';
+
+----  
+==parse_json from table invalid json==
+
+statement error 1010
+select parse_json(v), v from t2; 
+
+statement query T 
+select '==try_parse_json from table invalid json==';
+
+----  
+==try_parse_json from table invalid json==
+
+statement ok
+select try_parse_json(v), v from t2;
+
+statement ok
+DROP DATABASE db1;
+

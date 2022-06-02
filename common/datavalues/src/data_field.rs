@@ -17,7 +17,8 @@ use common_macros::MallocSizeOf;
 
 use crate::remove_nullable;
 use crate::types::data_type::from_arrow_field;
-use crate::types::data_type::DataTypePtr;
+use crate::types::data_type::DataType;
+use crate::types::data_type::DataTypeImpl;
 use crate::wrap_nullable;
 use crate::TypeID;
 
@@ -25,13 +26,13 @@ use crate::TypeID;
 pub struct DataField {
     name: String,
     /// default_expr is serialized representation from PlanExpression
-    default_expr: Option<Vec<u8>>,
+    default_expr: Option<String>,
     #[ignore_malloc_size_of = "insignificant"]
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
 }
 
 impl DataField {
-    pub fn new(name: &str, data_type: DataTypePtr) -> Self {
+    pub fn new(name: &str, data_type: DataTypeImpl) -> Self {
         DataField {
             name: name.to_string(),
             default_expr: None,
@@ -39,7 +40,7 @@ impl DataField {
         }
     }
 
-    pub fn new_nullable(name: &str, data_type: DataTypePtr) -> Self {
+    pub fn new_nullable(name: &str, data_type: DataTypeImpl) -> Self {
         let data_type = wrap_nullable(&data_type);
         DataField {
             name: name.to_string(),
@@ -49,7 +50,7 @@ impl DataField {
     }
 
     #[must_use]
-    pub fn with_default_expr(mut self, default_expr: Option<Vec<u8>>) -> Self {
+    pub fn with_default_expr(mut self, default_expr: Option<String>) -> Self {
         self.default_expr = default_expr;
         self
     }
@@ -58,12 +59,12 @@ impl DataField {
         &self.name
     }
 
-    pub fn data_type(&self) -> &DataTypePtr {
+    pub fn data_type(&self) -> &DataTypeImpl {
         &self.data_type
     }
 
-    pub fn default_expr(&self) -> &Option<Vec<u8>> {
-        &self.default_expr
+    pub fn default_expr(&self) -> Option<&String> {
+        self.default_expr.as_ref()
     }
 
     #[inline]
@@ -102,7 +103,7 @@ impl DataField {
 
 impl From<&ArrowField> for DataField {
     fn from(f: &ArrowField) -> Self {
-        let dt: DataTypePtr = from_arrow_field(f);
+        let dt: DataTypeImpl = from_arrow_field(f);
 
         DataField::new(&f.name, dt)
     }
@@ -114,13 +115,10 @@ impl std::fmt::Debug for DataField {
         let remove_nullable = remove_nullable(self.data_type());
         debug_struct
             .field("name", &self.name)
-            .field("data_type", &remove_nullable)
+            .field("data_type", &remove_nullable.data_type_id())
             .field("nullable", &self.is_nullable());
         if let Some(ref default_expr) = self.default_expr {
-            debug_struct.field(
-                "default_expr",
-                &String::from_utf8(default_expr.to_owned()).unwrap(),
-            );
+            debug_struct.field("default_expr", default_expr);
         }
         debug_struct.finish()
     }

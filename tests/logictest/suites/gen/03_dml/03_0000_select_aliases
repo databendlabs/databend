@@ -1,0 +1,69 @@
+statement query III 
+select 1 as a, 1 + 1 as b, 1 + 1 + 1 as c;
+
+----  
+1 2 3
+
+statement query I 
+select 3 x;
+
+----  
+3
+
+statement query I 
+select 1 - number  as number from numbers(3) order by number;
+
+----  
+-1
+0
+1
+
+statement query II 
+select number * number +  1 as number, number + 1 as b from numbers(1);
+
+----  
+1 1
+
+statement query II 
+select number * number +  1 as `number`, number + 1 as `b` from numbers(1);
+
+----  
+1 1
+
+statement query II 
+select number * number +  1 `number`, number + 1 `b` from numbers(1);
+
+----  
+1 1
+
+statement ok
+SELECT number, 'number', "number" FROM numbers(3) AS a order by a.number;
+
+statement query I 
+SELECT a.number FROM numbers(3) AS a order by a.number;
+
+----  
+0
+1
+2
+
+statement query I 
+SELECT a.number FROM (SELECT * FROM numbers(3) AS b ORDER BY b.number) AS a;
+
+----  
+0
+1
+2
+
+statement error 1058
+SELECT b.number FROM numbers(3) AS a ORDER BY a.number; 
+
+statement error 1058
+SELECT a.number FROM numbers(3) AS a ORDER BY b.number; 
+
+statement error 1058
+SELECT b.number FROM (SELECT * FROM numbers(3) AS b ORDER BY a.number) AS a; 
+
+statement error 1058
+SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number; 
+

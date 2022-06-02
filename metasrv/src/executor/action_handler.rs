@@ -20,6 +20,8 @@ use common_meta_grpc::MetaGrpcWriteReq;
 use common_meta_grpc::RequestFor;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::MetaError;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
 
 use crate::meta_service::MetaNode;
 
@@ -48,43 +50,6 @@ impl ActionHandler {
                 let r = self.meta_node.upsert_kv(a).await;
                 RaftReply::from(r)
             }
-            // database
-            MetaGrpcWriteReq::CreateDatabase(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcWriteReq::DropDatabase(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-
-            // table
-            MetaGrpcWriteReq::CreateTable(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcWriteReq::DropTable(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcWriteReq::RenameTable(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcWriteReq::CommitTable(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-
-            // share
-            MetaGrpcWriteReq::CreateShare(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcWriteReq::DropShare(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
         }
     }
 
@@ -100,40 +65,25 @@ impl ActionHandler {
                 let r = self.meta_node.mget_kv(&a.keys).await;
                 RaftReply::from(r)
             }
+            MetaGrpcReadReq::ListKV(a) => {
+                let r = self.meta_node.prefix_list_kv(&a.prefix).await;
+                RaftReply::from(r)
+            }
             MetaGrpcReadReq::PrefixListKV(a) => {
                 let r = self.meta_node.prefix_list_kv(&a.0).await;
                 RaftReply::from(r)
             }
+        }
+    }
 
-            // database
-            MetaGrpcReadReq::GetDatabase(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcReadReq::ListDatabases(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-
-            // table
-            MetaGrpcReadReq::GetTable(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcReadReq::ListTables(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcReadReq::GetTableExt(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-
-            // share
-            MetaGrpcReadReq::GetShare(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
+    pub async fn execute_txn(&self, req: TxnRequest) -> TxnReply {
+        match self.meta_node.transaction(req).await {
+            Ok(resp) => resp,
+            Err(err) => TxnReply {
+                success: false,
+                error: serde_json::to_string(&err).expect("fail to serialize"),
+                responses: vec![],
+            },
         }
     }
 }

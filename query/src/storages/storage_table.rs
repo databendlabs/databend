@@ -20,8 +20,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
-use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -73,6 +73,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn cluster_keys(&self) -> Vec<Expression> {
+        vec![]
+    }
+
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,
@@ -104,6 +108,10 @@ pub trait Table: Sync + Send {
         unimplemented!()
     }
 
+    fn append2(&self, _: Arc<QueryContext>, _: &mut NewPipeline) -> Result<()> {
+        unimplemented!()
+    }
+
     async fn append_data(
         &self,
         _ctx: Arc<QueryContext>,
@@ -119,6 +127,7 @@ pub trait Table: Sync + Send {
     async fn commit_insertion(
         &self,
         _ctx: Arc<QueryContext>,
+        _catalog_name: &str,
         _operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
@@ -143,11 +152,28 @@ pub trait Table: Sync + Send {
     async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
+
+    async fn navigate_to(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _instant: &NavigationPoint,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::UnImplement(format!(
+            "table {},  of engine type {}, do not support time travel",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
 }
 
+pub enum NavigationPoint {
+    SnapshotID(String),
+}
+
+#[derive(Debug)]
 pub struct TableStatistics {
     pub num_rows: Option<u64>,
-    pub data_length: Option<u64>,
-    pub data_length_compressed: Option<u64>,
+    pub data_size: Option<u64>,
+    pub data_size_compressed: Option<u64>,
     pub index_length: Option<u64>,
 }

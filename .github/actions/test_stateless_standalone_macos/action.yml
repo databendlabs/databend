@@ -44,3 +44,16 @@ runs:
       shell: bash
       run: |
         bash ./scripts/ci/ci-run-tests-embedded-meta.sh
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      if: failure()
+      with:
+        path: |
+          _local_fs/
+          _logs*/
+          _meta*/
+          metasrv/_logs*/
+          query/_logs*/
+          store/_logs*/
+          nohup.out

@@ -74,7 +74,7 @@ where
         "AggregateSumFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(SumT::to_data_type())
     }
 
@@ -215,7 +215,14 @@ pub fn try_create_aggregate_sum_function(
     if data_type.data_type_id() == TypeID::Boolean {
         return AggregateSumFunction::<u8, u64>::try_create(display_name, arguments);
     }
-    with_match_primitive_type_id!(data_type.data_type_id(), |$T| {
+
+    let mut phid = data_type.data_type_id();
+    // null use dummy func, it's already covered in `AggregateNullResultFunction`
+    if data_type.is_null() {
+        phid = TypeID::UInt8;
+    }
+
+    with_match_primitive_type_id!(phid, |$T| {
         AggregateSumFunction::<$T, <$T as PrimitiveType>::LargestType>::try_create(
              display_name,
              arguments,

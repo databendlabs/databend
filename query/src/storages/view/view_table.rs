@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
@@ -57,6 +57,7 @@ impl ViewTable {
         StorageDescription {
             engine_name: "VIEW".to_string(),
             comment: "VIEW STORAGE (LOGICAL VIEW)".to_string(),
+            ..Default::default()
         }
     }
 }

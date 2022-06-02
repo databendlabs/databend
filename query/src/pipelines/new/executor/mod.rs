@@ -14,8 +14,8 @@
 
 mod pipeline_executor;
 
+mod executor_condvar;
 mod executor_graph;
-mod executor_notify;
 mod executor_tasks;
 mod executor_worker_context;
 mod pipeline_complete_executor;
@@ -23,6 +23,7 @@ mod pipeline_pulling_executor;
 mod pipeline_pushing_executor;
 
 pub use executor_graph::RunningGraph;
+pub use pipeline_complete_executor::PipelineCompleteExecutor;
 pub use pipeline_executor::PipelineExecutor;
 pub use pipeline_pulling_executor::PipelinePullingExecutor;
-pub use pipeline_complete_executor::PipelineCompleteExecutor;
+pub use pipeline_pushing_executor::PipelinePushingExecutor;

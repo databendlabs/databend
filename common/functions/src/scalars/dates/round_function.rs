@@ -14,6 +14,10 @@
 
 use std::fmt;
 
+use chrono_tz::Tz;
+use common_datavalues::chrono::Datelike;
+use common_datavalues::chrono::TimeZone;
+use common_datavalues::chrono::Timelike;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,21 +28,33 @@ use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::Monotonicity;
 
+#[derive(Clone, Copy)]
+pub enum Round {
+    Second,
+    Minute,
+    FiveMinutes,
+    TenMinutes,
+    FifteenMinutes,
+    TimeSlot,
+    Hour,
+    Day,
+}
+
 #[derive(Clone)]
 pub struct RoundFunction {
     display_name: String,
-    round: u32,
+    round: Round,
 }
 
 impl RoundFunction {
     pub fn try_create(
         display_name: &str,
-        args: &[&DataTypePtr],
-        round: u32,
+        args: &[&DataTypeImpl],
+        round: Round,
     ) -> Result<Box<dyn Function>> {
-        if args[0].data_type_id() != TypeID::DateTime32 {
+        if args[0].data_type_id() != TypeID::Timestamp {
             return Err(ErrorCode::BadDataValueType(format!(
-                "Function {} must have a DateTime type as argument, but got {}",
+                "Function {} must have a Timestamp type as argument, but got {}",
                 display_name,
                 args[0].name(),
             )));
@@ -56,8 +72,39 @@ impl RoundFunction {
     // Consider about the timezones/offsets
     // Currently: assuming timezone offset is a multiple of round.
     #[inline]
-    fn execute(&self, time: u32) -> u32 {
-        time / self.round * self.round
+    fn execute(&self, time: i64, tz: &Tz) -> i64 {
+        let dt = tz.timestamp(time / MICROSECONDS, 0_u32);
+        match self.round {
+            Round::Second => dt.timestamp_micros(),
+            Round::Minute => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute(), 0, 0)
+                .timestamp_micros(),
+            Round::FiveMinutes => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 5 * 5, 0, 0)
+                .timestamp_micros(),
+            Round::TenMinutes => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 10 * 10, 0, 0)
+                .timestamp_micros(),
+            Round::FifteenMinutes => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 15 * 15, 0, 0)
+                .timestamp_micros(),
+            Round::TimeSlot => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 30 * 30, 0, 0)
+                .timestamp_micros(),
+            Round::Hour => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), 0, 0, 0)
+                .timestamp_micros(),
+            Round::Day => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(0, 0, 0, 0)
+                .timestamp_micros(),
+        }
     }
 }
 
@@ -66,19 +113,25 @@ impl Function for RoundFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        DateTime32Type::arc(None)
+    fn return_type(&self) -> DataTypeImpl {
+        TimestampType::new_impl(0)
     }
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let func = |val: u32, _ctx: &mut EvalContext| self.execute(val);
-        let col =
-            scalar_unary_op::<u32, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
+        let func = |val: i64, ctx: &mut EvalContext| self.execute(val, &ctx.tz);
+        let mut eval_context = EvalContext {
+            tz: func_ctx.tz,
+            ..Default::default()
+        };
+        let col = scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut eval_context)?;
+        for micros in col.iter() {
+            check_timestamp(*micros)?;
+        }
         Ok(col.arc())
     }
 

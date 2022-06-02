@@ -74,7 +74,7 @@ impl SledTree {
         tracing::debug!("SledTree opened tree: {}", tree_name);
 
         let rl = SledTree {
-            name: format!("{}", tree_name),
+            name: tree_name.to_string(),
             sync,
             tree: t,
         };
@@ -137,13 +137,7 @@ impl SledTree {
                         MetaStorageError::TransactionConflict => {
                             Err(ConflictableTransactionError::Conflict)
                         }
-                        MetaStorageError::AppError(_app_err) => {
-                            Err(ConflictableTransactionError::Abort(meta_sto_err))
-                        }
                         MetaStorageError::SnapshotError(_e) => {
-                            Err(ConflictableTransactionError::Abort(meta_sto_err))
-                        }
-                        MetaStorageError::Damaged(_e) => {
                             Err(ConflictableTransactionError::Abort(meta_sto_err))
                         }
                     }

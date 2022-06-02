@@ -22,6 +22,7 @@ use crate::calcute;
 use crate::impl_logic_expression;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -33,7 +34,7 @@ impl_logic_expression!(LogicOrExpression, |, |lhs: bool, rhs: bool, lhs_v: bool,
 pub struct LogicOrFunction;
 
 impl LogicOrFunction {
-    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         LogicFunctionImpl::<LogicOrExpression>::try_create(LogicOperator::Or, args)
     }
 

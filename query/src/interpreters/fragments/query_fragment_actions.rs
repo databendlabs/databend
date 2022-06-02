@@ -2,7 +2,6 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-use common_ast::parser::rule::expr::query;
 use common_exception::{ErrorCode, Result};
 use common_meta_types::NodeInfo;
 use common_planners::PlanNode;

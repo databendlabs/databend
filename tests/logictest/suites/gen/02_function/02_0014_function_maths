@@ -1,0 +1,421 @@
+statement ok
+CREATE TABLE math_sample_numbers (timestamp UInt32, value Int32) engine=Memory;
+
+statement ok
+INSERT INTO math_sample_numbers VALUES ('1', '-1'), ('2', '-2'), ('3', '3');
+
+statement query F 
+SELECT pi();
+
+----  
+3.141592653589793
+
+statement query T 
+SELECT '===abs===';
+
+----  
+===abs===
+
+statement query I 
+SELECT abs(-1);
+
+----  
+1
+
+statement query I 
+SELECT abs(-10086);
+
+----  
+10086
+
+statement error 1007
+SELECT abs('-233.0'); 
+
+statement error 1007
+SELECT abs('blah'); 
+
+statement error 1007
+SELECT abs(TRUE); 
+
+statement error 1049
+select abs(-9223372036854775808); 
+
+statement query T 
+SELECT abs(NULL);
+
+----  
+NULL
+
+statement query I 
+SELECT abs(value) FROM math_sample_numbers;
+
+----  
+1
+2
+3
+
+statement query I 
+SELECT abs(value) + abs(-1) FROM math_sample_numbers;
+
+----  
+2
+3
+4
+
+statement query T 
+SELECT '===log===';
+
+----  
+===log===
+
+statement ok
+CREATE TABLE math_log_numbers (a Float null, b Float null) engine=Memory;
+
+statement ok
+INSERT INTO math_log_numbers VALUES (2.0, 1024.0), (NULL, 12), (12, NULL);
+
+statement query T 
+SELECT log(NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT log(NULL, NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT log(1, NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT log(NULL, 1);
+
+----  
+NULL
+
+statement query F 
+SELECT log(10, 100);
+
+----  
+2.0
+
+statement query T 
+SELECT ln(NULL);
+
+----  
+NULL
+
+statement query F label(mysql,http)
+SELECT ln(1, 2);
+
+----  mysql
+inf
+
+----  http
+NULL
+
+statement query T 
+SELECT log10(NULL);
+
+----  
+NULL
+
+statement query F 
+SELECT log10(100);
+
+----  
+2.0
+
+statement query F 
+SELECT log2(2);
+
+----  
+1.0
+
+statement query F 
+SELECT log(a, b) FROM math_log_numbers;
+
+----  
+10.0
+NULL
+NULL
+
+statement ok
+DROP TABLE math_log_numbers;
+
+statement query T 
+SELECT '===mod===';
+
+----  
+===mod===
+
+statement query I 
+SELECT mod(234, 10);
+
+----  
+4
+
+statement query I 
+SELECT mod(29, 9);
+
+----  
+2
+
+statement query F 
+SELECT mod(34.5, 3);
+
+----  
+1.5
+
+statement query T 
+SELECT '===exp===';
+
+----  
+===exp===
+
+statement query T 
+SELECT exp(NULL);
+
+----  
+NULL
+
+statement query F 
+SELECT exp(2);
+
+----  
+7.38905609893065
+
+statement error 1007
+SELECT exp('2'); 
+
+statement query T 
+SELECT '===trigonometric===';
+
+----  
+===trigonometric===
+
+statement query F 
+SELECT sin(0);
+
+----  
+0.0
+
+statement query F 
+SELECT cos(0);
+
+----  
+1.0
+
+statement query F 
+SELECT tan(0);
+
+----  
+0.0
+
+statement query F 
+SELECT tan(pi()/4);
+
+----  
+0.9999999999999999
+
+statement query F label(mysql,http)
+SELECT cot(0);
+
+----  mysql
+inf
+
+----  http
+NULL
+
+statement query F 
+SELECT cot(pi()/4);
+
+----  
+1.0000000000000002
+
+statement query F 
+SELECT asin(0.2);
+
+----  
+0.2013579207903308
+
+statement query F label(mysql,http)
+SELECT asin(1.1);
+
+----  mysql
+nan
+
+----  http
+NULL
+
+statement query F 
+SELECT acos(1);
+
+----  
+0.0
+
+statement query F label(mysql,http)
+SELECT acos(1.0001);
+
+----  mysql
+nan
+
+----  http
+NULL
+
+statement query F 
+SELECT atan(1);
+
+----  
+0.7853981633974483
+
+statement query F 
+SELECT atan(-1);
+
+----  
+-0.7853981633974483
+
+statement query F 
+SELECT atan(-2, 2);
+
+----  
+-0.7853981633974483
+
+statement query F 
+SELECT atan2(-2, 2);
+
+----  
+-0.7853981633974483
+
+statement query F 
+SELECT atan2(pi(), 0);
+
+----  
+1.5707963267948966
+
+statement query T 
+SELECT atan2(-2, NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT atan2(NULL, 2);
+
+----  
+NULL
+
+statement query T 
+SELECT atan2(NULL, NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT atan2(NULL, number) from numbers(2);
+
+----  
+NULL
+NULL
+
+statement query T 
+SELECT atan2(number, NULL) from numbers(2);
+
+----  
+NULL
+NULL
+
+statement query T 
+SELECT '===sqrt===';
+
+----  
+===sqrt===
+
+statement query F 
+SELECT sqrt(4);
+
+----  
+2.0
+
+statement query F 
+SELECT sqrt(0);
+
+----  
+0.0
+
+statement query F label(mysql,http)
+SELECT sqrt(-4);
+
+----  mysql
+nan
+
+----  http
+NULL
+
+statement error 1007
+SELECT sqrt('a'); 
+
+statement query T 
+SELECT '===pow===';
+
+----  
+===pow===
+
+statement query F 
+SELECT pow(2, 2);
+
+----  
+4.0
+
+statement query F 
+SELECT pow(-2, 2);
+
+----  
+4.0
+
+statement query F 
+SELECT pow(2, -2);
+
+----  
+0.25
+
+statement query T 
+SELECT pow(NULL, 2);
+
+----  
+NULL
+
+statement query T 
+SELECT pow(2, NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT pow(NULL, number) from numbers(2);
+
+----  
+NULL
+NULL
+
+statement query T 
+SELECT pow(number, NULL) from numbers(2);
+
+----  
+NULL
+NULL
+
+statement error 1007
+SELECT pow('a', 2); 
+
+statement error 1007
+SELECT pow(2, 'a'); 
+
+statement ok
+DROP TABLE math_sample_numbers;
+

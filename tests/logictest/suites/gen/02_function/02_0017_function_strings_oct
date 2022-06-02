@@ -1,0 +1,156 @@
+statement ok
+CREATE TABLE strings_oct_sample_u8 (value UInt8 null) engine=Memory;
+
+statement ok
+CREATE TABLE strings_oct_sample_u16 (value UInt16 null) engine=Memory;
+
+statement ok
+CREATE TABLE strings_oct_sample_u32 (value UInt32 null) engine=Memory;
+
+statement ok
+CREATE TABLE strings_oct_sample_u64 (value UInt64 null) engine=Memory;
+
+statement ok
+CREATE TABLE strings_oct_sample_i8 (value Int8 null) engine=Memory;
+
+statement ok
+CREATE TABLE strings_oct_sample_i16 (value Int16 null) engine=Memory;
+
+statement ok
+CREATE TABLE strings_oct_sample_i32 (value Int32 null) engine=Memory;
+
+statement ok
+CREATE TABLE strings_oct_sample_i64 (value Int64 null) engine=Memory;
+
+statement ok
+INSERT INTO strings_oct_sample_u8 VALUES (0), (255), (127), (NULL);
+
+statement ok
+INSERT INTO strings_oct_sample_u16 VALUES (0), (65535), (32768), (NULL);
+
+statement ok
+INSERT INTO strings_oct_sample_u32 VALUES (0), (4294967295), (2147483647), (NULL);
+
+statement ok
+INSERT INTO strings_oct_sample_u64 VALUES (0), (18446744073709551615), (9223372036854775807), (NULL);
+
+statement ok
+INSERT INTO strings_oct_sample_i8 VALUES (0), ('-128'), (127), (NULL);
+
+statement ok
+INSERT INTO strings_oct_sample_i16 VALUES (0), ('-32768'), (32767), (NULL);
+
+statement ok
+INSERT INTO strings_oct_sample_i32 VALUES (0), ('-2147483648'), (2147483647), (NULL);
+
+statement ok
+INSERT INTO strings_oct_sample_i64 VALUES (0), ('-9223372036854775808'), (9223372036854775807), (NULL);
+
+statement query T 
+select oct(value) from strings_oct_sample_u8;
+
+----  
+0
+0377
+0177
+NULL
+
+statement query T 
+select oct(value) from strings_oct_sample_u16;
+
+----  
+0
+0177777
+0100000
+NULL
+
+statement query T 
+select oct(value) from strings_oct_sample_u32;
+
+----  
+0
+037777777777
+017777777777
+NULL
+
+statement query T 
+select oct(value) from strings_oct_sample_u64;
+
+----  
+0
+01777777777777777777777
+0777777777777777777777
+NULL
+
+statement query T 
+select oct(value) from strings_oct_sample_i8;
+
+----  
+0
+-0200
+0177
+NULL
+
+statement query T 
+select oct(value) from strings_oct_sample_i16;
+
+----  
+0
+-0100000
+077777
+NULL
+
+statement query T 
+select oct(value) from strings_oct_sample_i32;
+
+----  
+0
+-020000000000
+017777777777
+NULL
+
+statement query T 
+select oct(value) from strings_oct_sample_i64;
+
+----  
+0
+-01000000000000000000000
+0777777777777777777777
+NULL
+
+statement query T 
+select oct(-128);
+
+----  
+-0200
+
+statement query T 
+select oct(127);
+
+----  
+0177
+
+statement ok
+DROP TABLE strings_oct_sample_u8;
+
+statement ok
+DROP TABLE strings_oct_sample_u16;
+
+statement ok
+DROP TABLE strings_oct_sample_u32;
+
+statement ok
+DROP TABLE strings_oct_sample_u64;
+
+statement ok
+DROP TABLE strings_oct_sample_i8;
+
+statement ok
+DROP TABLE strings_oct_sample_i16;
+
+statement ok
+DROP TABLE strings_oct_sample_i32;
+
+statement ok
+DROP TABLE strings_oct_sample_i64;
+

@@ -1,11 +1,11 @@
 SELECT typeof(CAST(number AS float)) FROM numbers_mt(1);
 SELECT typeof(CAST(number AS float32)) FROM numbers_mt(1);
 SELECT typeof(CAST(number AS UInt64)) FROM numbers_mt(1);
-SELECT typeof(toint8('8')) FROM numbers_mt(1);
-SELECT typeof(toint16('16')) FROM numbers_mt(1);
-SELECT typeof(toint32('32')) FROM numbers_mt(1);
-SELECT typeof(toint64('64')) FROM numbers_mt(1);
-SELECT typeof(toUInt32('64')) FROM numbers_mt(1);
+SELECT typeof(to_int8('8')) FROM numbers_mt(1);
+SELECT typeof(to_int16('16')) FROM numbers_mt(1);
+SELECT typeof(to_int32('32')) FROM numbers_mt(1);
+SELECT typeof(to_int64('64')) FROM numbers_mt(1);
+SELECT typeof(to_uint32('64')) FROM numbers_mt(1);
 SELECT typeof(number::float) FROM numbers_mt(1);
 SELECT typeof(number::float64) FROM numbers_mt(1);
 SELECT typeof(number::UInt64) FROM numbers_mt(1);
@@ -30,21 +30,21 @@ SELECT '33'::unsigned = 33;
 SELECT '-33aa'::signed = 33; -- {ErrorCode 1010}
 SELECT 33::string = '33';
 
-select "truE"::boolean;
-select not "FalSe"::boolean;
-select "false"::boolean = not "true"::boolean;
-select "FalSex"::boolean; -- {ErrorCode 1010}
+select 'truE'::boolean;
+select not 'FalSe'::boolean;
+select 'false'::boolean = not 'true'::boolean;
+select 'FalSex'::boolean; -- {ErrorCode 1010}
 
 
 SELECT '===DATE/DATETIME===';
-SELECT  toDateTime('2021-03-05 01:01:01') + 1 = toDateTime('2021-03-05 01:01:02');
-SELECT  toDate('2021-03-05') + 1 = toDate('2021-03-06');
-SELECT  toString(toDate('2021-03-05') + 1) = '2021-03-06';
-SELECT toDateTime(toDate('2021-03-05')) = toDateTime('2021-03-05 00:00:00');
-SELECT toDate(toDateTime('2021-03-05 01:00:00')) = toDate('2021-03-05');
-SELECT toString(toDateTime64(1640019661000)) = '2021-12-20 17:01:01.000';
-SELECT toDate(toDateTime64(1640019661000)) = toDate('2021-12-20');
-SELECT toDateTime(toDateTime64(1640019661000)) = toDateTime('2021-12-20 17:01:01');
+SELECT  to_timestamp('2021-03-05 01:01:01') + 1 = to_timestamp('2021-03-05 01:01:01.000001');
+SELECT  to_date('2021-03-05') + 1 = to_date('2021-03-06');
+SELECT  to_varchar(to_date('2021-03-05') + 1) = '2021-03-06';
+SELECT to_timestamp(to_date('2021-03-05')) = to_timestamp('2021-03-05 00:00:00');
+SELECT to_date(to_timestamp('2021-03-05 01:00:00')) = to_date('2021-03-05');
+SELECT to_varchar(to_timestamp(1640019661000000)) = '2021-12-20 17:01:01.000000';
+SELECT to_date(to_timestamp(1640019661000000)) = to_date('2021-12-20');
+SELECT to_timestamp(to_timestamp(1640019661000000)) = to_timestamp('2021-12-20 17:01:01.000000');
 
 SELECT '===Variant===';
 SELECT parse_json(true)::boolean;
@@ -88,15 +88,11 @@ SELECT parse_json('"1234.5678"')::float64;
 SELECT parse_json('"test"')::float32; -- {ErrorCode 1010}
 SELECT parse_json('"test"')::float64; -- {ErrorCode 1010}
 SELECT parse_json('null')::float64; -- {ErrorCode 1010}
-SELECT parse_json('"2022-01-01"')::date16;
-SELECT parse_json('"2022-01-01"')::date32;
-SELECT parse_json('"2022-01-01 01:01:01"')::datetime32;
-SELECT parse_json('"2022-01-01 01:01:01.123"')::datetime64;
-SELECT parse_json('"test"')::date16; -- {ErrorCode 1010}
-SELECT parse_json('"test"')::date32; -- {ErrorCode 1010}
-SELECT parse_json('"test"')::datetime32; -- {ErrorCode 1010}
-SELECT parse_json('"test"')::datetime64; -- {ErrorCode 1010}
-SELECT parse_json('null')::datetime64; -- {ErrorCode 1010}
+SELECT parse_json('"2022-01-01"')::date;
+SELECT parse_json('"2022-01-01 01:01:01"')::datetime(0);
+SELECT parse_json('"test"')::date; -- {ErrorCode 1010}
+SELECT parse_json('"test"')::datetime; -- {ErrorCode 1010}
+SELECT parse_json('null')::datetime; -- {ErrorCode 1010}
 SELECT parse_json('[1,2,3]')::array;
 SELECT parse_json(1)::array;
 SELECT parse_json('"ab"')::array;

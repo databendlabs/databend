@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
@@ -22,7 +23,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -55,7 +55,20 @@ impl Interpreter for CreateDatabaseInterpreter {
             .validate_privilege(&GrantObject::Global, UserPrivilegeType::Create)
             .await?;
 
-        let catalog = self.ctx.get_catalog();
+        let tenant = self.plan.tenant.clone();
+        let quota_api = self
+            .ctx
+            .get_user_manager()
+            .get_tenant_quota_api_client(&tenant)?;
+        let quota = quota_api.get_quota(None).await?.data;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let databases = catalog.list_databases(&tenant).await?;
+        if quota.max_databases != 0 && databases.len() >= quota.max_databases as usize {
+            return Err(ErrorCode::TenantQuotaExceeded(format!(
+                "Max databases quota exceeded {}",
+                quota.max_databases
+            )));
+        };
         catalog.create_database(self.plan.clone().into()).await?;
 
         Ok(Box::pin(DataBlockStream::create(

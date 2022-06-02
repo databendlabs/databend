@@ -16,12 +16,14 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::DropDatabaseReq;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DropDatabaseReq;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabasePlan {
     pub if_exists: bool,
     pub tenant: String,
+    pub catalog: String,
     pub db: String,
 }
 
@@ -35,8 +37,10 @@ impl From<DropDatabasePlan> for DropDatabaseReq {
     fn from(p: DropDatabasePlan) -> Self {
         DropDatabaseReq {
             if_exists: p.if_exists,
-            tenant: p.tenant,
-            db_name: p.db,
+            name_ident: DatabaseNameIdent {
+                tenant: p.tenant,
+                db_name: p.db,
+            },
         }
     }
 }
@@ -45,8 +49,10 @@ impl From<&DropDatabasePlan> for DropDatabaseReq {
     fn from(p: &DropDatabasePlan) -> Self {
         DropDatabaseReq {
             if_exists: p.if_exists,
-            tenant: p.tenant.clone(),
-            db_name: p.db.clone(),
+            name_ident: DatabaseNameIdent {
+                tenant: p.tenant.clone(),
+                db_name: p.db.clone(),
+            },
         }
     }
 }

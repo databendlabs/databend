@@ -1,6 +1,7 @@
 ---
-title: Analyzing Nginx Access Logs with Databend
+title: Analyzing Nginx Access Logs With Databend
 sidebar_label: Analyzing Nginx Logs
+description: Use Databend analyzing Nginx access logs step by step.
 ---
 
 <p align="center">
@@ -18,14 +19,9 @@ Lets ingesting Nginx access logs into Databend from Vector step by step.
 
 ### 1.1 Deploy Databend
 
-Make sure you have installed Databend, if not please see(Choose one):
+Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend with Amazon S3](../10-deploy/01-s3.md)
-* [How to Deploy Databend with Tencent COS](../10-deploy/02-cos.md)
-* [How to Deploy Databend with Alibaba OSS](../10-deploy/03-oss.md)
-* [How to Deploy Databend with Wasabi](../10-deploy/05-wasabi.md)
-* [How to Deploy Databend with Scaleway OS](../10-deploy/06-scw.md)
-
+* [How to Deploy Databend](../00-guides/index.md#deployment)
 
 ### 1.2 Create a Database and Table
 
@@ -40,7 +36,7 @@ CREATE DATABASE nginx;
 
 ```sql
 CREATE TABLE nginx.access_logs (
-  `timestamp` DATETIME,
+  `timestamp` TIMESTAMP,
   `remote_addr` VARCHAR,
   `remote_port` INT,
   `request_method` VARCHAR,
@@ -68,13 +64,13 @@ mysql -h127.0.0.1 -uroot -P3307
 ```
 
 Create a user:
-```shell title='mysql>'
-create user user1 identified by 'abc123';
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 Grant privileges for the user:
-```shell title='mysql>'
-grant insert on nginx.* to user1;
+```sql
+GRANT INSERT ON nginx.* TO user1;
 ```
 
 ## Step 2. Nginx

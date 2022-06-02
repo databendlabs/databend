@@ -14,10 +14,10 @@
 
 use std::mem::size_of;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datavalues::*;
 use common_exception::Result;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_planners::*;
 use databend_query::optimizers::*;
 use pretty_assertions::assert_eq;
@@ -37,6 +37,7 @@ async fn test_statistics_exact_optimizer() -> Result<()> {
     );
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
+        catalog: "default".to_owned(),
         source_info: SourceInfo::TableSource(TableInfo::simple(
             "system",
             "test",

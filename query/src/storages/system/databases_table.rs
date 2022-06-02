@@ -17,11 +17,10 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
@@ -41,7 +40,7 @@ impl AsyncSystemTable for DatabasesTable {
 
     async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog();
+        let catalog = ctx.get_catalog(ctx.get_current_catalog().as_str())?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
 
         let db_names: Vec<&[u8]> = databases

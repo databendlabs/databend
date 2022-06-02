@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,8 @@
 
 #![allow(non_snake_case)]
 
+use std::backtrace::Backtrace;
 use std::sync::Arc;
-
-use backtrace::Backtrace;
 
 use crate::exception::ErrorCodeBacktrace;
 use crate::ErrorCode;
@@ -29,11 +28,12 @@ macro_rules! build_exceptions {
             impl ErrorCode {
                 $(
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
+                    let bt = Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture())));
                     ErrorCode::create(
                         $code,
                         display_text.into(),
                         None,
-                        Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new())))
+                        bt,
                     )
                 }
                 paste::item! {
@@ -120,6 +120,9 @@ build_exceptions! {
     SemanticError(1065),
     InvalidAuthInfo(1066),
     InvalidTimezone(1067),
+    InvalidDate(1068),
+    InvalidTimestamp(1069),
+    InvalidClusterKeys(1070),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),
@@ -137,9 +140,19 @@ build_exceptions! {
     // Network error codes.
     NetworkRequestError(1073),
 
+    UnknownFormat(1074),
+    UnknownCompressionType(1075),
+    InvalidCompressionData(1076),
+
     // Tenant error codes.
     TenantIsEmpty(1101),
     IndexOutOfBounds(1102),
+
+    // Layout error code.
+    LayoutError(1103),
+
+    PanicError(1104),
+
 }
 
 // Metasvr errors [2001, 3000].
@@ -148,9 +161,12 @@ build_exceptions! {
     MetaServiceError(2001),
     InvalidConfig(2002),
     MetaStorageError(2003),
+    InvalidArgument(2004),
 
     TableVersionMismatched(2009),
     OCCRetryFailure(2011),
+    TableNotWritable(2012),
+    TableHistoricalDataNotFound(2013),
 
     // User api error codes.
     UnknownUser(2201),
@@ -165,6 +181,15 @@ build_exceptions! {
     IllegalMetaState(2304),
     MetaNodeInternalError(2305),
     ViewAlreadyExists(2306),
+    CreateTableWithDropTime(2307),
+    UndropTableAlreadyExists(2308),
+    UndropTableHasNoHistory(2309),
+    CreateDatabaseWithDropTime(2310),
+    UndropDbHasNoHistory(2312),
+    UndropTableWithNoDropTime(2313),
+    DropTableWithDropTime(2314),
+    DropDbWithDropTime(2315),
+    UndropDbWithNoDropTime(2316),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),
@@ -183,6 +208,7 @@ build_exceptions! {
     // Database error codes.
     UnknownDatabaseEngine(2701),
     UnknownTableEngine(2702),
+    UnsupportedEngineParams(2703),
 
     // Share error codes.
     ShareAlreadyExists(2705),
@@ -192,18 +218,18 @@ build_exceptions! {
     // Variable error codes.
     UnknownVariable(2801),
 
-    // Warehouse error codes
-    UnknownWarehouse(2901),
-    WarehouseAlreadyExists(2902),
-    IllegalWarehouseMetaFormat(2903),
-    IllegalWarehouseInfoFormat(2904),
+    // Tenant quota error codes.
+    IllegalTenantQuotaFormat(2901),
+    TenantQuotaUnknown(2902),
+    TenantQuotaExceeded(2903),
 }
 
 // Storage errors [3001, 4000].
 build_exceptions! {
     StorageNotFound(3001),
     StoragePermissionDenied(3002),
-    StorageOther(4000)
+    StorageUnavailable(3901),
+    StorageOther(4000),
 }
 
 // Cache errors [4001, 5000].

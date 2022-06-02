@@ -36,4 +36,4 @@ SELECT XXHASH64('1.2');
 --- City64WithSeed
 SELECT City64WithSeed('1234567890', 12);
 SELECT City64WithSeed('1234567890', 12.12);
-SELECT City64WithSeed(CAST(100000 as DateTime32), 1234);
+SELECT City64WithSeed(CAST(100000 as DateTime), 1234);

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::pipelines::processors::*;
@@ -29,26 +29,26 @@ async fn test_transform_limit() -> Result<()> {
             "+--------+",
             "| number |",
             "+--------+",
-            "| 7      |",
-            "| 6      |",
+            "| 0      |",
+            "| 1      |",
             "+--------+",
         ]),
         ((Some(2), 2), vec![
             "+--------+",
             "| number |",
             "+--------+",
-            "| 4      |",
-            "| 5      |",
+            "| 2      |",
+            "| 3      |",
             "+--------+",
         ]),
         ((None, 4), vec![
             "+--------+",
             "| number |",
             "+--------+",
-            "| 0      |",
-            "| 1      |",
-            "| 2      |",
-            "| 3      |",
+            "| 4      |",
+            "| 5      |",
+            "| 6      |",
+            "| 7      |",
             "+--------+",
         ]),
     ];

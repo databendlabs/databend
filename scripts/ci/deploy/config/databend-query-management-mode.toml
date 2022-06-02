@@ -12,6 +12,9 @@ admin_api_address = "0.0.0.0:8081"
 # Databend Query metrics RESET API.
 metric_api_address = "0.0.0.0:7071"
 
+# For flight rpc.
+flight_api_address = "0.0.0.0:9091"
+
 # Databend Query MySQL Handler.
 mysql_handler_host = "0.0.0.0"
 mysql_handler_port = 3307
@@ -32,8 +35,8 @@ management_mode = true
 
 
 [log]
-log_level = "INFO"
-log_dir = "./_logs"
+level = "INFO"
+dir = "./.databend/logs"
 
 [meta]
 # To enable embedded meta-store, set meta_address to ""
@@ -45,14 +48,8 @@ meta_client_timeout_in_second = 60
 # Storage config.
 [storage]
 # fs|s3
-storage_type = "fs"
+type = "fs"
 
 # FS storage.
 [storage.fs]
 data_path = "management_data"
-
-# S3 storage.
-[storage.s3]
-
-# Azure storage
-[storage.azure_storage_blob]

@@ -17,8 +17,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
-use common_base::escape_for_key;
-use common_base::unescape_for_key;
+use common_base::base::escape_for_key;
+use common_base::base::unescape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::KVApi;
@@ -28,8 +28,8 @@ use common_meta_types::NodeInfo;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVAction;
-use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertKVReply;
+use common_meta_types::UpsertKVReq;
 
 use crate::cluster::ClusterApi;
 
@@ -89,7 +89,7 @@ impl ClusterApi for ClusterMgr {
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node.id)?);
         let upsert_node = self
             .kv_api
-            .upsert_kv(UpsertKVAction::new(&node_key, seq, value, meta));
+            .upsert_kv(UpsertKVReq::new(&node_key, seq, value, meta));
 
         let res = upsert_node.await?.into_add_result()?;
 
@@ -119,7 +119,7 @@ impl ClusterApi for ClusterMgr {
 
     async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()> {
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node_id)?);
-        let upsert_node = self.kv_api.upsert_kv(UpsertKVAction::new(
+        let upsert_node = self.kv_api.upsert_kv(UpsertKVReq::new(
             &node_key,
             seq.into(),
             Operation::Delete,
@@ -127,12 +127,12 @@ impl ClusterApi for ClusterMgr {
         ));
 
         match upsert_node.await? {
-            UpsertKVActionReply {
+            UpsertKVReply {
                 ident: None,
                 prev: Some(_),
                 result: None,
             } => Ok(()),
-            UpsertKVActionReply { .. } => Err(ErrorCode::ClusterUnknownNode(format!(
+            UpsertKVReply { .. } => Err(ErrorCode::ClusterUnknownNode(format!(
                 "unknown node {:?}",
                 node_id
             ))),
@@ -149,15 +149,15 @@ impl ClusterApi for ClusterMgr {
 
         let upsert_meta =
             self.kv_api
-                .upsert_kv(UpsertKVAction::new(&node_key, seq, Operation::AsIs, meta));
+                .upsert_kv(UpsertKVReq::new(&node_key, seq, Operation::AsIs, meta));
 
         match upsert_meta.await? {
-            UpsertKVActionReply {
+            UpsertKVReply {
                 ident: None,
                 prev: Some(_),
                 result: Some(SeqV { seq: s, .. }),
             } => Ok(s),
-            UpsertKVActionReply { .. } => self.add_node(node.clone()).await,
+            UpsertKVReply { .. } => self.add_node(node.clone()).await,
         }
     }
 }

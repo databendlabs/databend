@@ -27,13 +27,12 @@ An EXISTS subquery is a boolean expression that can appear in a WHERE clause:
 ### Example
 
 ```sql
-SELECT number from numbers(10) where number>5 and exists(SELECT number from numbers(5) where number>4);
-Query OK, 0 rows affected
+SELECT number FROM numbers(10) WHERE number>5 AND exists(SELECT number FROM numbers(5) WHERE number>4);
 ```
-`SELECT number from numbers(5) where number>4` no rows are produced, `exists(SELECT number from numbers(5) where number>4)` is FALSE.
+`SELECT number FROM numbers(5) WHERE number>4` no rows are produced, `exists(SELECT number FROM numbers(5) WHERE number>4)` is FALSE.
 
 ```sql
-SELECT number from numbers(10) where number>5 and exists(SELECT number from numbers(5) where number>3);
+SELECT number FROM numbers(10) WHERE number>5 and exists(SELECT number FROM numbers(5) WHERE number>3);
 +--------+
 | number |
 +--------+
@@ -47,7 +46,7 @@ SELECT number from numbers(10) where number>5 and exists(SELECT number from numb
 `EXISTS(SELECT NUMBER FROM NUMBERS(5) WHERE NUMBER>3)` is TRUE.
 
 ```sql
-SELECT number from numbers(10) where number>5 and not exists(SELECT number from numbers(5) where number>4);
+SELECT number FROM numbers(10) WHERE number>5 AND not exists(SELECT number FROM numbers(5) WHERE number>4);
 +--------+
 | number |
 +--------+
@@ -58,4 +57,4 @@ SELECT number from numbers(10) where number>5 and not exists(SELECT number from 
 +--------+
 ```
 
-`not exists(SELECT number from numbers(5) where number>4)` is TRUE.
+`not exists(SELECT number FROM numbers(5) WHERE number>4)` is TRUE.

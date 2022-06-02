@@ -12,26 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::configs::FsStorageConfig;
-use databend_query::configs::S3StorageConfig;
+use common_io::prelude::StorageFsConfig;
+use common_io::prelude::StorageParams;
+use common_io::prelude::StorageS3Config;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-// This test need network
 async fn test_get_storage_accessor_s3() -> Result<()> {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("HEAD"))
+        .and(path("/bucket/.opendal"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&mock_server)
+        .await;
+
     let mut conf = crate::tests::ConfigBuilder::create().config();
 
-    conf.storage.storage_type = "s3".to_string();
-    conf.storage.s3 = S3StorageConfig {
+    conf.storage.params = StorageParams::S3(StorageS3Config {
         region: "us-east-2".to_string(),
-        endpoint_url: "http://s3.amazonaws.com".to_string(),
+        endpoint_url: mock_server.uri(),
         access_key_id: "".to_string(),
         secret_access_key: "".to_string(),
-        enable_pod_iam_policy: true,
         bucket: "bucket".to_string(),
         root: "".to_string(),
-    };
+        master_key: "".to_string(),
+    });
 
     let qctx = crate::tests::create_query_context_with_config(conf, None).await?;
 
@@ -44,10 +55,9 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
 async fn test_get_storage_accessor_fs() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
 
-    conf.storage.storage_type = "fs".to_string();
-    conf.storage.fs = FsStorageConfig {
-        data_path: "/tmp".to_string(),
-    };
+    conf.storage.params = StorageParams::Fs(StorageFsConfig {
+        root: "/tmp".to_string(),
+    });
 
     let qctx = crate::tests::create_query_context_with_config(conf, None).await?;
 

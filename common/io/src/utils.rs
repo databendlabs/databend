@@ -22,19 +22,16 @@ use common_exception::Result;
 pub fn convert_byte_size(num: f64) -> String {
     let negative = if num.is_sign_positive() { "" } else { "-" };
     let num = num.abs();
-    let units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+    let units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"];
     if num < 1_f64 {
-        return format!("{}{} {}", negative, num, "B");
+        return format!("{}{:.02} {}", negative, num, "B");
     }
-    let delimiter = 1000_f64;
+    let delimiter = 1024_f64;
     let exponent = cmp::min(
         (num.ln() / delimiter.ln()).floor() as i32,
         (units.len() - 1) as i32,
     );
-    let pretty_bytes = format!("{:.2}", num / delimiter.powi(exponent))
-        .parse::<f64>()
-        .unwrap()
-        * 1_f64;
+    let pretty_bytes = format!("{:.02}", num / delimiter.powi(exponent));
     let unit = units[exponent as usize];
     format!("{}{} {}", negative, pretty_bytes, unit)
 }
@@ -169,5 +166,19 @@ pub fn parse_escape_byte(b: u8) -> u8 {
         b't' => b'\t',
         b'0' => b'\0',
         _ => b,
+    }
+}
+
+/// Mask a string by "******", but keep `unmask_len` of suffix.
+///
+/// Copied from `common-base` so that we don't need to depend on it.
+#[inline]
+pub fn mask_string(s: &str, unmask_len: usize) -> String {
+    if s.len() <= unmask_len {
+        s.to_string()
+    } else {
+        let mut ret = "******".to_string();
+        ret.push_str(&s[(s.len() - unmask_len)..]);
+        ret
     }
 }

@@ -21,11 +21,17 @@ use common_arrow::arrow::types::Index;
 
 use crate::prelude::*;
 
+mod iterator;
+mod mutable;
+
+pub use iterator::*;
+pub use mutable::*;
+
 type LargeListArray = ListArray<i64>;
 
 #[derive(Clone)]
 pub struct ArrayColumn {
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
     offsets: Buffer<i64>,
     values: ColumnRef,
 }
@@ -36,7 +42,7 @@ impl ArrayColumn {
 
         let data_type = if let ArrowType::LargeList(f) = ty {
             let ty = from_arrow_field(f);
-            Arc::new(ArrayType::create(ty))
+            DataTypeImpl::Array(ArrayType::create(ty))
         } else {
             unreachable!()
         };
@@ -58,7 +64,7 @@ impl ArrayColumn {
         )
     }
 
-    pub fn from_data(data_type: DataTypePtr, offsets: Buffer<i64>, values: ColumnRef) -> Self {
+    pub fn from_data(data_type: DataTypeImpl, offsets: Buffer<i64>, values: ColumnRef) -> Self {
         Self {
             data_type,
             offsets,
@@ -87,12 +93,19 @@ impl Column for ArrayColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         self.data_type.clone()
     }
 
     fn column_type_name(&self) -> String {
         "Array".to_string()
+    }
+
+    fn column_meta(&self) -> ColumnMeta {
+        let data_type: ArrayType = self.data_type.clone().try_into().unwrap();
+        ColumnMeta::Array {
+            inner_type: data_type.inner_type().clone(),
+        }
     }
 
     fn len(&self) -> usize {
@@ -129,23 +142,16 @@ impl Column for ArrayColumn {
         }
     }
 
-    fn scatter(&self, _indices: &[usize], _scattered_size: usize) -> Vec<ColumnRef> {
-        todo!()
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        scatter_scalar_column(self, indices, scattered_size)
     }
 
-    fn filter(&self, _filter: &BooleanColumn) -> ColumnRef {
-        todo!()
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        filter_scalar_column(self, filter)
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
-        debug_assert!(
-            offsets.len() == self.len(),
-            "Size of offsets must match size of column"
-        );
-
-        // match datatypes
-        // TODO: see https://github.com/ClickHouse/ClickHouse/blob/340b53ef853348758c9042b16a8599120ebc8d22/src/Columns/ColumnArray.cpp
-        todo!()
+        replicate_scalar_column(self, offsets)
     }
 
     fn convert_full_column(&self) -> ColumnRef {
@@ -162,9 +168,25 @@ impl Column for ArrayColumn {
     }
 }
 
+impl ScalarColumn for ArrayColumn {
+    type Builder = MutableArrayColumn;
+    type OwnedItem = ArrayValue;
+    type RefItem<'a> = <ArrayValue as Scalar>::RefType<'a>;
+    type Iterator<'a> = ArrayValueIter<'a>;
+
+    #[inline]
+    fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
+        ArrayValueRef::Indexed { column: self, idx }
+    }
+
+    fn scalar_iter(&self) -> Self::Iterator<'_> {
+        ArrayValueIter::new(self)
+    }
+}
+
 impl std::fmt::Debug for ArrayColumn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut data = Vec::new();
+        let mut data = Vec::with_capacity(self.len());
         for idx in 0..self.len() {
             let x = self.get(idx);
             data.push(format!("{:?}", x));

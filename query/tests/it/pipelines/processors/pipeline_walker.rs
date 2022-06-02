@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::pipelines::processors::*;
 use databend_query::sql::PlanParser;
@@ -38,7 +38,7 @@ async fn test_pipeline_walker() -> Result<()> {
         let mut actual: Vec<String> = vec![];
         pipeline.walk_preorder(|pipe| {
             let processor = pipe.processor_by_index(0).clone();
-            actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.nums()));
+            actual.push(processor.name().to_string() + " x " + &*pipe.nums().to_string());
             Result::Ok(true)
         })?;
 
@@ -61,7 +61,7 @@ async fn test_pipeline_walker() -> Result<()> {
         let mut actual: Vec<String> = vec![];
         pipeline.walk_postorder(|pipe| {
             let processor = pipe.processor_by_index(0).clone();
-            actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.nums()));
+            actual.push(processor.name().to_string() + " x " + &*pipe.nums().to_string());
             Result::Ok(true)
         })?;
 

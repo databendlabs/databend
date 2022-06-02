@@ -179,3 +179,53 @@ where
         Ok(())
     }
 }
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct VariantState<C> {
+    pub state: ScalarState<VariantValue, C>,
+}
+
+impl<C> ScalarStateFunc<VariantValue> for VariantState<C>
+where C: ChangeIf<VariantValue> + Default
+{
+    fn new() -> Self {
+        Self {
+            state: ScalarState::new(),
+        }
+    }
+
+    fn add(&mut self, other: &'_ VariantValue) {
+        self.state.add(other)
+    }
+
+    fn add_batch(&mut self, column: &ColumnRef, validity: Option<&Bitmap>) -> Result<()> {
+        self.state.add_batch(column, validity)
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        if let Some(value) = &rhs.state.value {
+            self.state.add(value.as_scalar_ref());
+        }
+        Ok(())
+    }
+
+    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+        if let Some(val) = &self.state.value {
+            writer.put_slice(val.as_ref().to_string().as_bytes());
+        }
+        Ok(())
+    }
+
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+        if !reader.is_empty() {
+            let str_val = std::str::from_utf8(reader).unwrap();
+            let val: serde_json::Value = serde_json::from_str(str_val)?;
+            self.state.value = Some(val.into());
+        }
+        Ok(())
+    }
+
+    fn merge_result(&mut self, column: &mut dyn MutableColumn) -> Result<()> {
+        self.state.merge_result(column)
+    }
+}

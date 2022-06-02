@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use lazy_static::lazy_static;
 
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
-
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 
 /// Legacy table snapshot location key
@@ -28,24 +27,23 @@ pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 /// but use can no longer use this key in DDLs
 ///
 /// If both OPT_KEY_SNAPSHOT_LOC and OPT_KEY_SNAPSHOT_LOCATION exist, the latter will be used
-pub const OPT_KEY_SNAPSHOT_LOC: &str = "snapshot_loc";
+pub const OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
 
 lazy_static! {
     /// Table option keys that reserved for internal usage only
     /// - Users are not allowed to specified this option keys in DDL
-    /// - Should not be shown in `show create table` statment
+    /// - Should not be shown in `show create table` statement
     pub static ref RESERVED_TABLE_OPTION_KEYS: HashSet<&'static str> = {
         let mut r = HashSet::new();
         r.insert(OPT_KEY_DATABASE_ID);
-        r.insert(OPT_KEY_SNAPSHOT_LOC);
+        r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
         r
     };
 
-    /// Table option keys that Should not be shown in `show create table` statment
+    /// Table option keys that Should not be shown in `show create table` statement
     pub static ref INTERNAL_TABLE_OPTION_KEYS: HashSet<&'static str> = {
         let mut r = HashSet::new();
-        r.insert(OPT_KEY_SNAPSHOT_LOC);
-        r.insert(OPT_KEY_SNAPSHOT_LOCATION);
+        r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
         r.insert(OPT_KEY_DATABASE_ID);
         r
     };

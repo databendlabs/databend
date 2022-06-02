@@ -1,0 +1,124 @@
+statement query T 
+SELECT '=== null ===';
+
+----  
+=== null ===
+
+statement query T 
+SELECT STRCMP(NULL, 'a');
+
+----  
+NULL
+
+statement query T 
+SELECT STRCMP('a', NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT STRCMP(NULL, NULL);
+
+----  
+NULL
+
+statement query T 
+SELECT '=== const, const ===';
+
+----  
+=== const, const ===
+
+statement query I 
+SELECT STRCMP('', '123');
+
+----  
+-1
+
+statement query I 
+SELECT STRCMP('123', '');
+
+----  
+1
+
+statement query I 
+SELECT STRCMP('123', '123');
+
+----  
+0
+
+statement query I 
+SELECT STRCMP('1234', '123');
+
+----  
+1
+
+statement query I 
+SELECT STRCMP('123', '1234');
+
+----  
+-1
+
+statement query I 
+SELECT STRCMP('123', '153');
+
+----  
+-1
+
+statement query T 
+SELECT '=== const, series ===';
+
+----  
+=== const, series ===
+
+statement query I 
+SELECT STRCMP('2', to_varchar(number)) FROM numbers(5) ORDER BY number;
+
+----  
+1
+1
+0
+-1
+-1
+
+statement query T 
+SELECT '=== series, const ===';
+
+----  
+=== series, const ===
+
+statement query I 
+SELECT STRCMP(to_varchar(number), '3') FROM numbers(5) ORDER BY number;
+
+----  
+-1
+-1
+-1
+0
+1
+
+statement query T 
+SELECT '=== series, series ===';
+
+----  
+=== series, series ===
+
+statement query I 
+SELECT STRCMP(to_varchar(number), to_varchar(number)) FROM numbers(5) ORDER BY number;
+
+----  
+0
+0
+0
+0
+0
+
+statement query I 
+SELECT STRCMP(to_varchar(number + 1), to_varchar(number)) FROM numbers(5) ORDER BY number;
+
+----  
+1
+1
+1
+1
+1
+

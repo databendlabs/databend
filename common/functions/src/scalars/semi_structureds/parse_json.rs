@@ -17,7 +17,7 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde_json::Value as JsonValue;
+use common_io::prelude::FormatSettings;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
@@ -31,11 +31,11 @@ pub type ParseJsonFunction = ParseJsonFunctionImpl<false>;
 #[derive(Clone)]
 pub struct ParseJsonFunctionImpl<const SUPPRESS_PARSE_ERROR: bool> {
     display_name: String,
-    result_type: DataTypePtr,
+    result_type: DataTypeImpl,
 }
 
 impl<const SUPPRESS_PARSE_ERROR: bool> ParseJsonFunctionImpl<SUPPRESS_PARSE_ERROR> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let data_type = remove_nullable(args[0]);
         if data_type.data_type_id() == TypeID::VariantArray
             || data_type.data_type_id() == TypeID::VariantObject
@@ -43,16 +43,16 @@ impl<const SUPPRESS_PARSE_ERROR: bool> ParseJsonFunctionImpl<SUPPRESS_PARSE_ERRO
             return Err(ErrorCode::BadDataValueType(format!(
                 "Invalid argument types for function '{}': ({})",
                 display_name,
-                data_type.name()
+                data_type.data_type_id()
             )));
         }
 
         let result_type = if args[0].data_type_id() == TypeID::Null {
-            NullType::arc()
+            NullType::new_impl()
         } else if args[0].is_nullable() || SUPPRESS_PARSE_ERROR {
-            NullableType::arc(VariantType::arc())
+            NullableType::new_impl(VariantType::new_impl())
         } else {
-            VariantType::arc()
+            VariantType::new_impl()
         };
 
         Ok(Box::new(ParseJsonFunctionImpl::<SUPPRESS_PARSE_ERROR> {
@@ -77,7 +77,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.result_type.clone()
     }
 
@@ -89,23 +89,25 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
     ) -> Result<ColumnRef> {
         let data_type = columns[0].field().data_type();
         if data_type.data_type_id() == TypeID::Null {
-            return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
+            return NullType::new_impl().create_constant_column(&DataValue::Null, input_rows);
         }
 
+        // TODO(veeupup): check if we can use default format_settings
+        let format = FormatSettings::default();
         let column = columns[0].column();
         if SUPPRESS_PARSE_ERROR {
-            let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
+            let mut builder = NullableColumnBuilder::<VariantValue>::with_capacity(input_rows);
             if data_type.data_type_id().is_numeric()
                 || data_type.data_type_id().is_string()
+                || data_type.data_type_id().is_variant()
                 || data_type.data_type_id() == TypeID::Boolean
-                || data_type.data_type_id() == TypeID::Variant
             {
                 let serializer = data_type.create_serializer();
-                match serializer.serialize_json_object_suppress_error(column) {
+                match serializer.serialize_json_object_suppress_error(column, &format) {
                     Ok(values) => {
                         for v in values {
                             match v {
-                                Some(v) => builder.append(&v, true),
+                                Some(v) => builder.append(&VariantValue::from(v), true),
                                 None => builder.append_null(),
                             }
                         }
@@ -126,14 +128,14 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
             let column = nullable_column.inner();
             let data_type = remove_nullable(data_type);
 
-            let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
+            let mut builder = NullableColumnBuilder::<VariantValue>::with_capacity(input_rows);
             if data_type.data_type_id().is_numeric()
                 || data_type.data_type_id().is_string()
+                || data_type.data_type_id().is_variant()
                 || data_type.data_type_id() == TypeID::Boolean
-                || data_type.data_type_id() == TypeID::Variant
             {
                 let serializer = data_type.create_serializer();
-                match serializer.serialize_json_object(column, valids) {
+                match serializer.serialize_json_object(column, valids, &format) {
                     Ok(values) => {
                         for (i, v) in values.iter().enumerate() {
                             if let Some(valids) = valids {
@@ -142,7 +144,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
                                     continue;
                                 }
                             }
-                            builder.append(v, true);
+                            builder.append(&VariantValue::from(v), true);
                         }
                     }
                     Err(e) => return Err(e),
@@ -156,17 +158,19 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
             return Ok(builder.build(input_rows));
         }
 
-        let mut builder = ColumnBuilder::<JsonValue>::with_capacity(input_rows);
+        let mut builder = ColumnBuilder::<VariantValue>::with_capacity(input_rows);
         if data_type.data_type_id().is_numeric()
             || data_type.data_type_id().is_string()
+            || data_type.data_type_id().is_variant()
             || data_type.data_type_id() == TypeID::Boolean
-            || data_type.data_type_id() == TypeID::Variant
         {
             let serializer = data_type.create_serializer();
-            match serializer.serialize_json_object(column, None) {
+            // TODO(veeupup): check if we can use default format_settings
+            let format = FormatSettings::default();
+            match serializer.serialize_json_object(column, None, &format) {
                 Ok(values) => {
                     for v in values {
-                        builder.append(&v);
+                        builder.append(&VariantValue::from(v));
                     }
                 }
                 Err(e) => return Err(e),

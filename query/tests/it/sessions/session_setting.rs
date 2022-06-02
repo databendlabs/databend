@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
@@ -27,8 +27,9 @@ async fn test_session_setting() -> Result<()> {
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
-        SessionType::Test,
+        SessionType::Dummy,
         session_manager,
+        None,
     )
     .await?;
 

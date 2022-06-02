@@ -15,6 +15,8 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
+use enum_dispatch::enum_dispatch;
 use opensrv_clickhouse::types::column::ArcColumnData;
 use serde_json::Value;
 
@@ -22,35 +24,50 @@ use crate::prelude::*;
 mod array;
 mod boolean;
 mod date;
-mod date_time;
 mod null;
 mod nullable;
 mod number;
 mod string;
 mod struct_;
+mod timestamp;
 mod variant;
 
 pub use array::*;
 pub use boolean::*;
 pub use date::*;
-pub use date_time::*;
 pub use null::*;
 pub use nullable::*;
 pub use number::*;
 pub use string::*;
 pub use struct_::*;
+pub use timestamp::*;
 pub use variant::*;
 
+#[enum_dispatch]
 pub trait TypeSerializer: Send + Sync {
-    fn serialize_value(&self, value: &DataValue) -> Result<String>;
-    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>>;
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>>;
-    fn serialize_clickhouse_format(&self, column: &ColumnRef) -> Result<ArcColumnData>;
+    fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String>;
+    fn serialize_json(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<Value>>;
+    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>>;
+
+    fn serialize_column_quoted(
+        &self,
+        column: &ColumnRef,
+        format: &FormatSettings,
+    ) -> Result<Vec<String>> {
+        self.serialize_column(column, format)
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+        _format: &FormatSettings,
+    ) -> Result<ArcColumnData>;
 
     fn serialize_json_object(
         &self,
         _column: &ColumnRef,
         _valids: Option<&Bitmap>,
+        _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
         Err(ErrorCode::BadDataValueType(
             "Error parsing JSON: unsupported data type",
@@ -60,9 +77,36 @@ pub trait TypeSerializer: Send + Sync {
     fn serialize_json_object_suppress_error(
         &self,
         _column: &ColumnRef,
+        _format: &FormatSettings,
     ) -> Result<Vec<Option<Value>>> {
         Err(ErrorCode::BadDataValueType(
             "Error parsing JSON: unsupported data type",
         ))
     }
+}
+
+#[derive(Debug, Clone)]
+#[enum_dispatch(TypeSerializer)]
+pub enum TypeSerializerImpl {
+    Null(NullSerializer),
+    Nullable(NullableSerializer),
+    Boolean(BooleanSerializer),
+    Int8(NumberSerializer<i8>),
+    Int16(NumberSerializer<i16>),
+    Int32(NumberSerializer<i32>),
+    Int64(NumberSerializer<i64>),
+    UInt8(NumberSerializer<u8>),
+    UInt16(NumberSerializer<u16>),
+    UInt32(NumberSerializer<u32>),
+    UInt64(NumberSerializer<u64>),
+    Float32(NumberSerializer<f32>),
+    Float64(NumberSerializer<f64>),
+
+    Date(DateSerializer<i32>),
+    Interval(DateSerializer<i64>),
+    Timestamp(TimestampSerializer),
+    String(StringSerializer),
+    Array(ArraySerializer),
+    Struct(StructSerializer),
+    Variant(VariantSerializer),
 }

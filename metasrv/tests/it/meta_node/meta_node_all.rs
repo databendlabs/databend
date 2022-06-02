@@ -15,8 +15,8 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use common_base::tokio;
-use common_base::tokio::time::Duration;
+use common_base::base::tokio;
+use common_base::base::tokio::time::Duration;
 use common_meta_api::KVApi;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::LogIdOptionExt;
@@ -25,8 +25,6 @@ use common_meta_sled_store::openraft::State;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::DatabaseMeta;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
@@ -43,6 +41,7 @@ use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::meta_service::ForwardRequest;
 use databend_meta::meta_service::ForwardRequestBody;
 use databend_meta::meta_service::JoinRequest;
+use databend_meta::meta_service::LeaveRequest;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;
 use maplit::btreeset;
@@ -51,13 +50,10 @@ use pretty_assertions::assert_eq;
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let tc = MetaSrvTestContext::new(0);
     let addr = tc.config.raft_config.raft_api_advertise_host_endpoint();
@@ -70,12 +66,9 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let (_nid0, tc) = start_meta_node_leader().await?;
     let mn0 = tc.meta_node();
@@ -99,79 +92,63 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Write to leader, check on non-voter.
 
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
+    let (_nid0, tc0) = start_meta_node_leader().await?;
+    let mn0 = tc0.meta_node();
 
-    {
-        let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_leader_and_non_voter");
-        let _ent = span.enter();
+    let (_nid1, tc1) = start_meta_node_non_voter(mn0.clone(), 1).await?;
+    let mn1 = tc1.meta_node();
 
-        let (_nid0, tc0) = start_meta_node_leader().await?;
-        let mn0 = tc0.meta_node();
-
-        let (_nid1, tc1) = start_meta_node_non_voter(mn0.clone(), 1).await?;
-        let mn1 = tc1.meta_node();
-
-        assert_upsert_kv_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
-    }
+    assert_upsert_kv_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on the leader, expect Ok.
     // - Write to the raft node on the non-leader, expect ForwardToLeader error.
 
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
+    let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
+    let all = test_context_nodes(&tcs);
 
-    {
-        let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_leader_and_non_voter");
-        let _ent = span.enter();
+    let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
 
-        let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
-        let all = test_context_nodes(&tcs);
+    // test writing to leader and non-leader
+    let key = "t-non-leader-write";
+    for id in 0u64..4 {
+        let mn = &all[id as usize];
+        let maybe_leader = MetaLeader::new(mn);
+        let rst = maybe_leader
+            .write(LogEntry {
+                txid: None,
+                cmd: Cmd::UpsertKV {
+                    key: key.to_string(),
+                    seq: MatchSeq::Any,
+                    value: Operation::Update(key.to_string().into_bytes()),
+                    value_meta: None,
+                },
+            })
+            .await;
 
-        let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
-
-        // test writing to leader and non-leader
-        let key = "t-non-leader-write";
-        for id in 0u64..4 {
-            let mn = &all[id as usize];
-            let maybe_leader = MetaLeader::new(mn);
-            let rst = maybe_leader
-                .write(LogEntry {
-                    txid: None,
-                    cmd: Cmd::UpsertKV {
-                        key: key.to_string(),
-                        seq: MatchSeq::Any,
-                        value: Operation::Update(key.to_string().into_bytes()),
-                        value_meta: None,
-                    },
-                })
-                .await;
-
-            if id == leader_id {
-                assert!(rst.is_ok());
-            } else {
-                assert!(rst.is_err());
-                let e = rst.unwrap_err();
-                match e {
-                    MetaError::MetaRaftError(MetaRaftError::ForwardToLeader(ForwardToLeader {
-                        leader_id: forward_leader_id,
-                    })) => {
-                        assert_eq!(Some(leader_id), forward_leader_id);
-                    }
-                    _ => {
-                        panic!("expect MetaRaftError::ForwardToLeader")
-                    }
+        if id == leader_id {
+            assert!(rst.is_ok());
+        } else {
+            assert!(rst.is_err());
+            let e = rst.unwrap_err();
+            match e {
+                MetaError::MetaRaftError(MetaRaftError::ForwardToLeader(ForwardToLeader {
+                    leader_id: forward_leader_id,
+                })) => {
+                    assert_eq!(Some(leader_id), forward_leader_id);
+                }
+                _ => {
+                    panic!("expect MetaRaftError::ForwardToLeader")
                 }
             }
         }
@@ -180,76 +157,13 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
-async fn test_meta_node_add_database() -> anyhow::Result<()> {
-    // - Start a leader, 2 followers and a non-voter;
-    // - Assert that every node handles AddDatabase request correctly.
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-    let tenant = "tenant1";
-
-    {
-        let (_nlog, all_tc) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
-        let all = all_tc.iter().map(|tc| tc.meta_node()).collect::<Vec<_>>();
-
-        // ensure cluster works
-        assert_upsert_kv_synced(all.clone(), "foo").await?;
-
-        // - db name to create
-        // - expected db id
-        let cases: Vec<(&str, u64)> = vec![("foo", 1), ("bar", 2), ("foo", 1), ("bar", 2)];
-
-        // Sending AddDatabase request to any node is ok.
-        for (i, (name, want_id)) in cases.iter().enumerate() {
-            let mn = &all[i as usize];
-
-            let last_applied = mn.raft.metrics().borrow().last_applied;
-
-            let rst = mn
-                .write(LogEntry {
-                    txid: None,
-                    cmd: Cmd::CreateDatabase(CreateDatabaseReq {
-                        if_not_exists: false,
-                        tenant: tenant.to_string(),
-                        db_name: name.to_string(),
-                        meta: DatabaseMeta {
-                            engine: "default".to_string(),
-                            ..Default::default()
-                        },
-                    }),
-                })
-                .await;
-
-            assert!(rst.is_ok());
-
-            // No matter if a db is created, the log that tries to create db always applies.
-            assert_applied_index(all.clone(), last_applied.next_index()).await?;
-
-            for (i, mn) in all.iter().enumerate() {
-                let got = mn
-                    .get_state_machine()
-                    .await
-                    .get_database_id(tenant, name.as_ref())?;
-
-                assert_eq!(*want_id, got, "n{} applied AddDatabase", i);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     // - Bring up a cluster of 3.
     // - Write just enough logs to trigger a snapshot.
     // - Add a non-voter, test the snapshot is sync-ed
     // - Write logs to trigger another snapshot.
     // - Add
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     // Create a snapshot every 10 logs
     let snap_logs = 10;
@@ -344,15 +258,12 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_join() -> anyhow::Result<()> {
     // - Bring up a cluster
     // - Join a new node by sending a Join request to leader.
     // - Join a new node by sending a Join request to a non-voter.
     // - Restart all nodes and check if states are restored.
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let span = tracing::span!(tracing::Level::INFO, "test_meta_node_join");
     let _ent = span.enter();
@@ -443,17 +354,56 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+async fn test_meta_node_leave() -> anyhow::Result<()> {
+    // - Bring up a cluster
+    // - Leave a node by sending a Leave request to a non-voter.
+    // - Restart all nodes and check if states are restored.
+
+    let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
+    let mut all = test_context_nodes(&tcs);
+
+    let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
+    let leader = all[leader_id as usize].clone();
+
+    // leave a node
+    let leave_node_id = 1;
+    let admin_req = leave_req(leave_node_id, 0);
+    leader.handle_forwardable_request(admin_req).await?;
+
+    tracing::info!("--- stop all meta node");
+
+    for mn in all.drain(..) {
+        mn.stop().await?;
+    }
+
+    // restart the cluster and check membership
+    tracing::info!("--- re-open all meta node");
+
+    let tc0 = &tcs[0];
+    let tc2 = &tcs[2];
+    let mn0 = MetaNode::open_create_boot(&tc0.config.raft_config, Some(()), None, None).await?;
+    let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, Some(()), None, None).await?;
+
+    let all = vec![mn0, mn2];
+
+    tracing::info!("--- check reopened memberships");
+
+    for mn in all.iter() {
+        mn.raft
+            .wait(timeout())
+            .members(btreeset! {0,2}, format!("node-{} membership", mn.sto.id))
+            .await?;
+    }
+
+    Ok(())
+}
+
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     // - Bring up a cluster
     // - Join a new node.
     // - Join another new node twice.
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let span = tracing::span!(tracing::Level::INFO, "test_meta_node_join_rejoin");
-    let _ent = span.enter();
 
     let (mut _nlog, mut tcs) = start_meta_node_cluster(btreeset![0], btreeset![]).await?;
     let mut all = test_context_nodes(&tcs);
@@ -518,16 +468,12 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
     // TODO check restarted follower.
     // - Start a leader and a non-voter;
     // - Restart them.
     // - Check old data an new written data.
-
-    // TODO(xp): this only tests for in-memory storage.
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let (_nid0, tc0) = start_meta_node_leader().await?;
     let mn0 = tc0.meta_node();
@@ -553,7 +499,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     tracing::info!("restart all");
 
     // restart
-    let config = configs::Config::empty();
+    let config = configs::Config::default();
     let mn0 = MetaNode::builder(&config.raft_config)
         .node_id(0)
         .sto(sto0)
@@ -579,7 +525,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     // TODO(xp): This function will replace `test_meta_node_restart` after fs backed state machine is ready.
 
@@ -598,9 +544,6 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     //   - TODO(xp): Leader starts replication to follower and non-voter.
     //   - TODO(xp): New log will be successfully written and sync
     //   - TODO(xp): A new snapshot will be created and transferred  on demand.
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let mut log_index: u64 = 0;
     let (_id, tc) = start_meta_node_leader().await?;
@@ -821,6 +764,13 @@ fn join_req(node_id: NodeId, endpoint: Endpoint, forward: u64) -> ForwardRequest
     }
 }
 
+fn leave_req(node_id: NodeId, forward: u64) -> ForwardRequest {
+    ForwardRequest {
+        forward_to_leader: forward,
+        body: ForwardRequestBody::Leave(LeaveRequest { node_id }),
+    }
+}
+
 /// Write one log on leader, check all nodes replicated the log.
 /// Returns the number log committed.
 async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<u64> {
@@ -922,11 +872,8 @@ fn test_context_nodes(tcs: &[MetaSrvTestContext]) -> Vec<Arc<MetaNode>> {
     tcs.iter().map(|tc| tc.meta_node()).collect::<Vec<_>>()
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let tc = MetaSrvTestContext::new(0);
     let addr = tc.config.raft_config.raft_api_addr().await?;
 

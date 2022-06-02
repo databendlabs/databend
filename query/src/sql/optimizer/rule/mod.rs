@@ -18,7 +18,7 @@ use crate::sql::optimizer::SExpr;
 
 mod factory;
 mod rule_implement_get;
-mod rule_implement_project;
+mod rule_implement_hash_join;
 mod rule_set;
 mod transform_state;
 
@@ -39,14 +39,14 @@ pub trait Rule {
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RuleID {
     ImplementGet,
-    ImplementProject,
+    ImplementHashJoin,
 }
 
 impl RuleID {
     pub fn name(&self) -> &'static str {
         match self {
             RuleID::ImplementGet => "ImplementGet",
-            RuleID::ImplementProject => "ImplementProject",
+            RuleID::ImplementHashJoin => "ImplementHashJoin",
         }
     }
 
@@ -56,7 +56,7 @@ impl RuleID {
     pub fn uid(&self) -> u32 {
         match self {
             RuleID::ImplementGet => 0,
-            RuleID::ImplementProject => 1,
+            RuleID::ImplementHashJoin => 1,
         }
     }
 }

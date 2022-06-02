@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-use common_base::GlobalUniqName;
+use common_base::base::GlobalUniqName;
 use common_datavalues::DataSchemaRef;
 use crate::interpreters::fragments::query_fragment::QueryFragment;
 use common_exception::{ErrorCode, Result};

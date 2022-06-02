@@ -30,45 +30,64 @@ where R: BufferRead
 {
     fn read_int_text<T: FromLexical>(&mut self) -> Result<T> {
         // TODO: reuse the buf
-        let mut buf = vec![];
+        let mut buf = Vec::with_capacity(8);
         let mut has_point = false;
         let mut has_number = false;
         'L: loop {
             let buffer = self.fill_buf()?;
+
             if buffer.is_empty() {
                 break;
             }
 
-            match buffer[0] {
-                b'-' | b'+' => {
-                    if has_number {
-                        break;
+            for index in 0..buffer.len() {
+                match buffer[index] {
+                    b'-' | b'+' => {
+                        if has_number {
+                            buf.extend_from_slice(&buffer[..index]);
+                            self.consume(index);
+                            break 'L;
+                        }
+                    }
+
+                    b'0'..=b'9' => {
+                        has_number = true;
+                    }
+
+                    b'.' => {
+                        has_point = true;
+                        buf.extend_from_slice(&buffer[..index]);
+                        self.consume(index + 1);
+                        break 'L;
+                    }
+                    _ => {
+                        buf.extend_from_slice(&buffer[..index]);
+                        self.consume(index);
+                        break 'L;
                     }
                 }
-
-                b'0'..=b'9' => {
-                    has_number = true;
-                }
-
-                b'.' => {
-                    has_point = true;
-                    self.consume(1);
-                    break;
-                }
-                _ => break 'L,
             }
 
-            buf.push(buffer[0]);
-            self.consume(1);
+            let len = buffer.len();
+            buf.extend_from_slice(buffer);
+            self.consume(len);
         }
 
         if has_point {
             let _ = self.ignores(|f| (b'0'..=b'9').contains(&f))?;
         }
 
-        FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
-            format!("Cannot parse value:{:?} to number type", buf)
-        })
+        match buf.is_empty() {
+            true => Ok(T::default()),
+            false => match FromLexical::from_lexical(buf.as_slice()) {
+                Ok(value) => Ok(value),
+                Err(cause) => Err(ErrorCode::BadBytes(format!(
+                    "Cannot parse value:{:?} to number type, cause: {:?}",
+                    String::from_utf8(buf),
+                    cause
+                ))),
+            },
+        }
     }
 
     fn read_float_text<T: FromLexical>(&mut self) -> Result<T> {

@@ -1,8 +1,8 @@
 ---
-title: Your first Databend Pull Request
+title: Your First Databend Pull Request
 sidebar_label: First Pull Request
 description:
-  You first good Databend Pull Request
+  You first good Databend pull request
 ---
 
 [Databend](https://github.com/datafuselabs/databend) is an open source project, you can help with ideas, code, or documentation, we appreciate any efforts that help us to make the project better!
@@ -14,7 +14,7 @@ Our goal is to make contributing to the Databend project easy and transparent.
 Thank you.
 
 :::tip
-Once the code been merged, your name will be stoned in the `system.contributors` table forever.
+Once the code been merged, your name will be stored in the `system.contributors` table forever.
 
 `SELECT * FROM system.contributors`
 :::

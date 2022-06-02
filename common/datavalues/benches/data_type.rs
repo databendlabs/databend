@@ -26,35 +26,18 @@ fn add_benchmark(c: &mut Criterion) {
         DataValue::UInt64(5),
     ];
 
-    let data_type = UInt64Type::arc();
-    let data_type_enum = DataTypeImpl::from(UInt64Type::new());
-
-    c.bench_function("data_type_ptr_create", |b| {
-        b.iter(|| criterion::black_box(data_type_ptr_create(&data_type, &values)))
-    });
+    let data_type_enum = DataTypeImpl::UInt64(UInt64Type::new());
 
     c.bench_function("data_type_enum_create", |b| {
         b.iter(|| criterion::black_box(data_type_enum_create(&data_type_enum, &values)))
-    });
-
-    c.bench_function("data_type_ptr_dummy", |b| {
-        b.iter(|| criterion::black_box(data_type.can_inside_nullable()))
     });
 
     c.bench_function("data_type_enum_dummy", |b| {
         b.iter(|| criterion::black_box(data_type_enum.can_inside_nullable()))
     });
 
-    c.bench_function("data_type_ptr_dummy2", |b| {
-        b.iter(|| criterion::black_box(data_type.is_null()))
-    });
-
     c.bench_function("data_type_enum_dummy2", |b| {
         b.iter(|| criterion::black_box(data_type_enum.is_null()))
-    });
-
-    c.bench_function("data_type_ptr_dummy2_compiled", |b| {
-        b.iter(|| data_type.is_null())
     });
 
     c.bench_function("data_type_enum_dummy2_compiled", |b| {
@@ -62,11 +45,7 @@ fn add_benchmark(c: &mut Criterion) {
     });
 }
 
-fn data_type_ptr_create(ty: &DataTypePtr, values: &Vec<DataValue>) -> Result<ColumnRef> {
-    ty.create_column(values)
-}
-
-fn data_type_enum_create(ty: &DataTypeImpl, values: &Vec<DataValue>) -> Result<ColumnRef> {
+fn data_type_enum_create(ty: &DataTypeImpl, values: &[DataValue]) -> Result<ColumnRef> {
     ty.create_column(values)
 }
 

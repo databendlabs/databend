@@ -16,13 +16,13 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_infallible::RwLock;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -48,7 +48,7 @@ pub struct QueryLogTable {
 }
 
 impl QueryLogTable {
-    pub fn create(table_id: u64) -> Self {
+    pub fn create(table_id: u64, max_rows: i32) -> Self {
         let schema = DataSchemaRefExt::create(vec![
             // Type.
             DataField::new("log_type", i8::to_data_type()),
@@ -63,8 +63,8 @@ impl QueryLogTable {
             DataField::new("query_id", Vu8::to_data_type()),
             DataField::new("query_kind", Vu8::to_data_type()),
             DataField::new("query_text", Vu8::to_data_type()),
-            DataField::new("event_date", Date32Type::arc()),
-            DataField::new("event_time", DateTime64Type::arc(3, None)),
+            DataField::new("event_date", DateType::new_impl()),
+            DataField::new("event_time", TimestampType::new_impl(3)),
             // Schema.
             DataField::new("current_database", Vu8::to_data_type()),
             DataField::new("databases", Vu8::to_data_type()),
@@ -114,14 +114,9 @@ impl QueryLogTable {
 
         QueryLogTable {
             table_info,
-            max_rows: 200000,
+            max_rows,
             data: Arc::new(RwLock::new(VecDeque::new())),
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn set_max_rows(&mut self, max: i32) {
-        self.max_rows = max;
     }
 }
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
@@ -60,14 +60,14 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
-            r"\| Name \| Engine \| Version \| Row_format \| Rows \| Avg_row_length \| Data_length \| Max_data_length \| Index_length \| Data_free \| Auto_increment \| Create_time                   \| Update_time \| Check_time \| Collation \| Checksum \| Comment \|",
-            r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
-            r"\| bend \| FUSE   \| 0       \| NULL       \| NULL \| NULL           \| NULL        \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
-            r"\| data \| FUSE   \| 0       \| NULL       \| NULL \| NULL           \| NULL        \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
-            r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());
+            "+------+--------+---------+------------+------+----------------+-------------+-----------------+--------------+-----------+----------------+-------------------------------+-------------+------------+-----------+----------+---------+",
+            "| Name | Engine | Version | Row_format | Rows | Avg_row_length | Data_length | Max_data_length | Index_length | Data_free | Auto_increment | Create_time                   | Update_time | Check_time | Collation | Checksum | Comment |",
+            "+------+--------+---------+------------+------+----------------+-------------+-----------------+--------------+-----------+----------------+-------------------------------+-------------+------------+-----------+----------+---------+",
+            "| bend | FUSE   | 0       | NULL       | 0    | NULL           | 0           | NULL            | NULL         | NULL      | NULL           | 1970-01-01 00:00:00.000 +0000 | NULL        | NULL       | NULL      | NULL     |         |",
+            "| data | FUSE   | 0       | NULL       | 0    | NULL           | 0           | NULL            | NULL         | NULL      | NULL           | 1970-01-01 00:00:00.000 +0000 | NULL        | NULL       | NULL      | NULL     |         |",
+            "+------+--------+---------+------------+------+----------------+-------------+-----------------+--------------+-----------+----------------+-------------------------------+-------------+------------+-----------+----------+---------+",
+                ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     // show table status like '%da%'.
@@ -81,7 +81,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
             r"\| Name \| Engine \| Version \| Row_format \| Rows \| Avg_row_length \| Data_length \| Max_data_length \| Index_length \| Data_free \| Auto_increment \| Create_time                   \| Update_time \| Check_time \| Collation \| Checksum \| Comment \|",
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
-            r"\| data \| FUSE   \| 0       \| NULL       \| NULL \| NULL           \| NULL        \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
+            r"\| data \| FUSE   \| 0       \| NULL       \| 0    \| NULL           \| 0           \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
         ];
         common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());
@@ -98,7 +98,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
             r"\| Name \| Engine \| Version \| Row_format \| Rows \| Avg_row_length \| Data_length \| Max_data_length \| Index_length \| Data_free \| Auto_increment \| Create_time                   \| Update_time \| Check_time \| Collation \| Checksum \| Comment \|",
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
-            r"\| bend \| FUSE   \| 0       \| NULL       \| NULL \| NULL           \| NULL        \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
+            r"\| bend \| FUSE   \| 0       \| NULL       \| 0    \| NULL           \| 0           \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
         ];
         common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());
@@ -115,8 +115,8 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
             r"\| Name \| Engine \| Version \| Row_format \| Rows \| Avg_row_length \| Data_length \| Max_data_length \| Index_length \| Data_free \| Auto_increment \| Create_time                   \| Update_time \| Check_time \| Collation \| Checksum \| Comment \|",
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
-            r"\| bend \| FUSE   \| 0       \| NULL       \| NULL \| NULL           \| NULL        \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
-            r"\| data \| FUSE   \| 0       \| NULL       \| NULL \| NULL           \| NULL        \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
+            r"\| bend \| FUSE   \| 0       \| NULL       \| 0    \| NULL           \| 0           \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
+            r"\| data \| FUSE   \| 0       \| NULL       \| 0    \| NULL           \| 0           \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
         ];
         common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());
@@ -134,8 +134,8 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
             r"\| Name \| Engine \| Version \| Row_format \| Rows \| Avg_row_length \| Data_length \| Max_data_length \| Index_length \| Data_free \| Auto_increment \| Create_time                   \| Update_time \| Check_time \| Collation \| Checksum \| Comment \|",
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
-            r"\| bend \| FUSE   \| 0       \| NULL       \| NULL \| NULL           \| NULL        \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
-            r"\| data \| FUSE   \| 0       \| NULL       \| NULL \| NULL           \| NULL        \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
+            r"\| bend \| FUSE   \| 0       \| NULL       \| 0    \| NULL           \| 0           \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
+            r"\| data \| FUSE   \| 0       \| NULL       \| 0    \| NULL           \| 0           \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
         ];
         common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());

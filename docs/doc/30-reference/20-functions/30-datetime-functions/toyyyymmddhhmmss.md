@@ -6,8 +6,14 @@ Converts a date or date with time to a UInt64 number containing the year and mon
 ## Syntax
 
 ```sql
-toYYYYMMDDhhmmss(expr)
+toYYYYMMDDhhmmss( <expr> )
 ```
+
+## Arguments
+
+| Arguments   | Description |
+| ----------- | ----------- |
+| `<expr>` | date/datetime |
 
 ## Return Type
 
@@ -16,45 +22,31 @@ UInt64, returns in `YYYYMMDDhhmmss` format.
 ## Examples
 
 ```sql
-SELECT toDate(18875);
+SELECT to_date(18875);
 +---------------+
-| toDate(18875) |
+| to_date(18875) |
 +---------------+
 | 2021-09-05    |
 +---------------+
 
-SELECT toYYYYMMDDhhmmss(toDate(18875));
+SELECT toYYYYMMDDhhmmss(to_date(18875));
 +---------------------------------+
-| toYYYYMMDDhhmmss(toDate(18875)) |
+| toYYYYMMDDhhmmss(to_date(18875)) |
 +---------------------------------+
 |                  20210905000000 |
 +---------------------------------+
 
-SELECT typeof(toYYYYMMDDhhmmss(toDate(18875)));
-+---------------------------------------------+
-| typeof(toYYYYMMDDhhmmss(toDate(18875)))     |
-+---------------------------------------------+
-| UInt64                                      |
-+---------------------------------------------+
-
-SELECT toDateTime(1630833797);
+SELECT to_datetime(1630833797);
 +------------------------+
-| toDateTime(1630833797) |
+| to_datetime(1630833797) |
 +------------------------+
 | 2021-09-05 09:23:17    |
 +------------------------+
 
-SELECT toYYYYMMDDhhmmss(toDateTime(1630833797));
+SELECT toYYYYMMDDhhmmss(to_datetime(1630833797));
 +------------------------------------------+
-| toYYYYMMDDhhmmss(toDateTime(1630833797)) |
+| toYYYYMMDDhhmmss(to_datetime(1630833797)) |
 +------------------------------------------+
 |                           20210905092317 |
 +------------------------------------------+
-
-SELECT Typeof(toYYYYMMDDhhmmss(toDateTime(1630833797)));
-+------------------------------------------------------+
-| typeof(toYYYYMMDDhhmmss(toDateTime(1630833797)))     |
-+------------------------------------------------------+
-| UInt64                                               |
-+------------------------------------------------------+
 ```

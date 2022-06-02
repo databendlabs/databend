@@ -46,6 +46,7 @@ use crate::storages::ToReadDataSourcePlan;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfQueryStatement {
+    pub distinct: bool,
     pub from: Vec<TableWithJoins>,
     pub projection: Vec<SelectItem>,
     pub selection: Option<Expr>,
@@ -54,6 +55,7 @@ pub struct DfQueryStatement {
     pub order_by: Vec<OrderByExpr>,
     pub limit: Option<Expr>,
     pub offset: Option<Offset>,
+    pub format: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -65,10 +67,11 @@ impl AnalyzableStatement for DfQueryStatement {
 
         let mut ir = QueryNormalizer::normalize(ctx.clone(), self).await?;
 
-        let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
-
         QualifiedRewriter::rewrite(&joined_schema, ctx.clone(), &mut ir)?;
+
+        let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema, has_aggregation)?;
+
         let analyze_state = self.analyze_query(ir).await?;
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await
@@ -145,6 +148,10 @@ impl DfQueryStatement {
             Self::analyze_aggregate(&ir.aggregate_expressions, &mut analyze_state)?;
         }
 
+        if ir.distinct {
+            Self::analyze_distinct(&ir.projection_expressions, &mut analyze_state)?;
+        }
+
         Ok(analyze_state)
     }
 
@@ -161,6 +168,25 @@ impl DfQueryStatement {
             state
                 .aggregate_expressions
                 .push(rebase_expr(aggr_expression, base_exprs)?);
+        }
+
+        Ok(())
+    }
+
+    fn analyze_distinct(
+        projection_exprs: &[Expression],
+        state: &mut QueryAnalyzeState,
+    ) -> Result<()> {
+        for item in projection_exprs {
+            let distinct_expr = match item {
+                Expression::Alias(_, expr) => *expr.clone(),
+                _ => item.clone(),
+            };
+
+            // support select distinct aggr_func()...
+            let distinct_expr = rebase_expr(&distinct_expr, &state.group_by_expressions)?;
+            let distinct_expr = rebase_expr(&distinct_expr, &state.aggregate_expressions)?;
+            state.distinct_expressions.push(distinct_expr);
         }
 
         Ok(())
@@ -209,9 +235,18 @@ impl DfQueryStatement {
 
         match tables_desc.remove(0) {
             JoinedTableDesc::Table {
-                table, push_downs, ..
+                table,
+                push_downs,
+                name_parts,
+                ..
             } => {
-                let source_plan = table.read_plan(ctx.clone(), push_downs).await?;
+                // TODO
+                // shall we put the catalog name in the table_info?
+                // table already resolved here
+                let catalog_name = Self::resolve_catalog(&ctx, &name_parts)?;
+                let source_plan = table
+                    .read_plan_with_catalog(ctx.clone(), catalog_name, push_downs)
+                    .await?;
                 state.relation = QueryRelation::FromTable(Box::new(source_plan));
             }
             JoinedTableDesc::Subquery {
@@ -224,6 +259,17 @@ impl DfQueryStatement {
         }
 
         Ok(AnalyzedResult::SelectQuery(Box::new(state)))
+    }
+
+    fn resolve_catalog(ctx: &QueryContext, idents: &[String]) -> Result<String> {
+        match idents.len() {
+            // for table_functions, idents.len() == 0
+            0 | 1 | 2 => Ok(ctx.get_current_catalog()),
+            3 => Ok(idents[0].clone()),
+            _ => Err(ErrorCode::SyntaxException(
+                "table name should be [`catalog`].[`db`].`table` in statement",
+            )),
+        }
     }
 
     fn verify_with_dry_run(schema: &JoinedSchema, state: &QueryAnalyzeState) -> Result<DataBlock> {

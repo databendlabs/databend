@@ -31,22 +31,20 @@ tenant_id = "test_tenant"
 cluster_id = "test_cluster"
 
 table_engine_memory_enabled = true
-table_engine_csv_enabled = true
-table_engine_parquet_enabled = true
 database_engine_github_enabled = true
 
 table_cache_enabled = true
 table_memory_cache_mb_size = 1024
-table_disk_cache_root = "_cache"
+table_disk_cache_root = "./.databend/cache"
 table_disk_cache_mb_size = 10240
 
 [log]
-log_level = "ERROR"
-log_dir = "./_logs"
+level = "ERROR"
+dir = "./.databend/logs"
 
 [meta]
 # To enable embedded meta-store, set meta_address to ""
-meta_embedded_dir = "_meta_embedded_3"
+meta_embedded_dir = "./.databend/meta_embedded_3"
 meta_address = "0.0.0.0:9191"
 meta_username = "root"
 meta_password = "root"
@@ -55,14 +53,8 @@ meta_client_timeout_in_second = 60
 # Storage config.
 [storage]
 # fs|s3
-storage_type = "fs"
+type = "fs"
 
 # FS storage.
 [storage.fs]
-data_path = "stateless_test_data"
-
-# S3 storage.
-[storage.s3]
-
-# Azure storage
-[storage.azure_storage_blob]
+data_path = "./.databend/stateless_test_data"

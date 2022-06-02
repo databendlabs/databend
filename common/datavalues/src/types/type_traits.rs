@@ -13,20 +13,23 @@
 // limitations under the License.
 
 use common_arrow::arrow::compute::arithmetics::basic::NativeArithmetics;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use num::NumCast;
+use primitive_types::U256;
+use primitive_types::U512;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::Value as JsonValue;
 
 use crate::DFTryFrom;
-use crate::DataTypePtr;
+use crate::DataTypeImpl;
 use crate::DataValue;
-use crate::Date16Type;
-use crate::Date32Type;
-use crate::DateTime32Type;
-use crate::DateTime64Type;
+use crate::DateType;
 use crate::Scalar;
+use crate::TimestampType;
+use crate::TypeID;
 use crate::VariantType;
+use crate::VariantValue;
 
 pub trait PrimitiveType:
     NativeArithmetics
@@ -88,37 +91,33 @@ pub trait FloatType: PrimitiveType {}
 impl FloatType for f32 {}
 impl FloatType for f64 {}
 
-pub trait DateType: PrimitiveType {}
-impl DateType for u16 {}
-impl DateType for i32 {}
-impl DateType for u32 {}
-impl DateType for i64 {}
-
-pub trait ToDateType {
-    fn to_date_type() -> DataTypePtr;
+pub trait LogicalDateType: PrimitiveType {
+    fn get_type_id() -> TypeID;
+}
+impl LogicalDateType for i32 {
+    fn get_type_id() -> TypeID {
+        TypeID::Date
+    }
+}
+impl LogicalDateType for i64 {
+    fn get_type_id() -> TypeID {
+        TypeID::Timestamp
+    }
 }
 
-impl ToDateType for u16 {
-    fn to_date_type() -> DataTypePtr {
-        Date16Type::arc()
-    }
+pub trait ToDateType {
+    fn to_date_type() -> DataTypeImpl;
 }
 
 impl ToDateType for i32 {
-    fn to_date_type() -> DataTypePtr {
-        Date32Type::arc()
-    }
-}
-
-impl ToDateType for u32 {
-    fn to_date_type() -> DataTypePtr {
-        DateTime32Type::arc(None)
+    fn to_date_type() -> DataTypeImpl {
+        DateType::new_impl()
     }
 }
 
 impl ToDateType for i64 {
-    fn to_date_type() -> DataTypePtr {
-        DateTime64Type::arc(0, None)
+    fn to_date_type() -> DataTypeImpl {
+        TimestampType::new_impl(6)
     }
 }
 
@@ -135,11 +134,63 @@ pub trait ObjectType:
     + Default
     + Scalar
 {
-    fn data_type() -> DataTypePtr;
+    fn data_type() -> DataTypeImpl;
+
+    fn column_name() -> &'static str;
 }
 
-impl ObjectType for JsonValue {
-    fn data_type() -> DataTypePtr {
-        VariantType::arc()
+impl ObjectType for VariantValue {
+    fn data_type() -> DataTypeImpl {
+        VariantType::new_impl()
+    }
+
+    fn column_name() -> &'static str {
+        "VariantColumn"
+    }
+}
+
+pub trait LargePrimitive: Default + Sized + 'static {
+    const BYTE_SIZE: usize;
+    fn serialize_to(&self, _bytes: &mut [u8]);
+    fn from_bytes(v: &[u8]) -> Result<Self>;
+}
+
+impl LargePrimitive for u128 {
+    const BYTE_SIZE: usize = 16;
+    fn serialize_to(&self, bytes: &mut [u8]) {
+        let bs = self.to_le_bytes();
+        bytes.copy_from_slice(&bs);
+    }
+
+    fn from_bytes(v: &[u8]) -> Result<Self> {
+        let bs: [u8; 16] = v.try_into().map_err(|_| {
+            ErrorCode::StrParseError(format!(
+                "Unable to parse into u128, unexpected byte size: {}",
+                v.len()
+            ))
+        })?;
+        Ok(u128::from_le_bytes(bs))
+    }
+}
+
+impl LargePrimitive for U256 {
+    const BYTE_SIZE: usize = 32;
+    fn serialize_to(&self, bytes: &mut [u8]) {
+        self.to_little_endian(bytes);
+    }
+
+    fn from_bytes(v: &[u8]) -> Result<Self> {
+        Ok(U256::from_little_endian(v))
+    }
+}
+
+impl LargePrimitive for U512 {
+    const BYTE_SIZE: usize = 64;
+    fn serialize_to(&self, bytes: &mut [u8]) {
+        self.to_little_endian(bytes);
+    }
+
+    fn from_bytes(v: &[u8]) -> Result<Self> {
+        Ok(U512::from_little_endian(v))
     }
 }

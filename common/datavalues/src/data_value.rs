@@ -15,14 +15,15 @@
 // Borrow from apache/arrow/rust/datafusion/src/functions.rs
 // See notice.md
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
+use ordered_float::OrderedFloat;
 use serde_json::json;
-use serde_json::Value as JsonValue;
 
 use crate::prelude::*;
 
@@ -42,8 +43,10 @@ pub enum DataValue {
     Struct(Vec<DataValue>),
 
     // Custom type.
-    Json(JsonValue),
+    Variant(VariantValue),
 }
+
+impl Eq for DataValue {}
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, MallocSizeOf)]
 pub enum ValueType {
@@ -55,7 +58,7 @@ pub enum ValueType {
     String,
     Array,
     Struct,
-    Json,
+    Variant,
 }
 
 pub type DataValueRef = Arc<DataValue>;
@@ -85,81 +88,81 @@ impl DataValue {
             DataValue::String(_) => ValueType::String,
             DataValue::Array(_) => ValueType::Array,
             DataValue::Struct(_) => ValueType::Struct,
-            DataValue::Json(_) => ValueType::Json,
+            DataValue::Variant(_) => ValueType::Variant,
         }
     }
 
     /// Get the minimal memory sized data type.
-    pub fn data_type(&self) -> DataTypePtr {
+    pub fn data_type(&self) -> DataTypeImpl {
         match self {
-            DataValue::Null => Arc::new(NullType {}),
-            DataValue::Boolean(_) => BooleanType::arc(),
+            DataValue::Null => DataTypeImpl::Null(NullType {}),
+            DataValue::Boolean(_) => BooleanType::new_impl(),
             DataValue::Int64(n) => {
                 if *n >= i8::MIN as i64 && *n <= i8::MAX as i64 {
-                    return Int8Type::arc();
+                    return Int8Type::new_impl();
                 }
                 if *n >= i16::MIN as i64 && *n <= i16::MAX as i64 {
-                    return Int16Type::arc();
+                    return Int16Type::new_impl();
                 }
                 if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {
-                    return Int32Type::arc();
+                    return Int32Type::new_impl();
                 }
-                Int64Type::arc()
+                Int64Type::new_impl()
             }
             DataValue::UInt64(n) => {
                 if *n <= u8::MAX as u64 {
-                    return UInt8Type::arc();
+                    return UInt8Type::new_impl();
                 }
                 if *n <= u16::MAX as u64 {
-                    return UInt16Type::arc();
+                    return UInt16Type::new_impl();
                 }
                 if *n <= u32::MAX as u64 {
-                    return UInt32Type::arc();
+                    return UInt32Type::new_impl();
                 }
-                UInt64Type::arc()
+                UInt64Type::new_impl()
             }
-            DataValue::Float64(_) => Float64Type::arc(),
-            DataValue::String(_) => StringType::arc(),
+            DataValue::Float64(_) => Float64Type::new_impl(),
+            DataValue::String(_) => StringType::new_impl(),
             DataValue::Array(x) => {
                 let inner_type = if x.is_empty() {
-                    UInt8Type::arc()
+                    UInt8Type::new_impl()
                 } else {
                     x[0].data_type()
                 };
-                Arc::new(ArrayType::create(inner_type))
+                DataTypeImpl::Array(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
-                let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
+                let names = (0..x.len()).map(|i| i.to_string()).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                Arc::new(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(names, types))
             }
-            DataValue::Json(_) => VariantType::arc(),
+            DataValue::Variant(_) => VariantType::new_impl(),
         }
     }
 
     /// Get the maximum memory sized data type
-    pub fn max_data_type(&self) -> DataTypePtr {
+    pub fn max_data_type(&self) -> DataTypeImpl {
         match self {
-            DataValue::Null => Arc::new(NullType {}),
-            DataValue::Boolean(_) => BooleanType::arc(),
-            DataValue::Int64(_) => Int64Type::arc(),
-            DataValue::UInt64(_) => UInt64Type::arc(),
-            DataValue::Float64(_) => Float64Type::arc(),
-            DataValue::String(_) => StringType::arc(),
+            DataValue::Null => DataTypeImpl::Null(NullType {}),
+            DataValue::Boolean(_) => BooleanType::new_impl(),
+            DataValue::Int64(_) => Int64Type::new_impl(),
+            DataValue::UInt64(_) => UInt64Type::new_impl(),
+            DataValue::Float64(_) => Float64Type::new_impl(),
+            DataValue::String(_) => StringType::new_impl(),
             DataValue::Array(x) => {
                 let inner_type = if x.is_empty() {
-                    UInt8Type::arc()
+                    UInt8Type::new_impl()
                 } else {
                     x[0].data_type()
                 };
-                Arc::new(ArrayType::create(inner_type))
+                DataTypeImpl::Array(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
-                let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
+                let names = (0..x.len()).map(|i| i.to_string()).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                Arc::new(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(names, types))
             }
-            DataValue::Json(_) => VariantType::arc(),
+            DataValue::Variant(_) => VariantType::new_impl(),
         }
     }
 
@@ -176,6 +179,19 @@ impl DataValue {
     #[inline]
     pub fn is_unsigned_integer(&self) -> bool {
         matches!(self, DataValue::UInt64(_))
+    }
+
+    #[inline]
+    pub fn is_numeric(&self) -> bool {
+        matches!(
+            self,
+            DataValue::Int64(_) | DataValue::UInt64(_) | DataValue::Float64(_)
+        )
+    }
+
+    #[inline]
+    pub fn is_float(&self) -> bool {
+        matches!(self, DataValue::Float64(_))
     }
 
     pub fn as_u64(&self) -> Result<u64> {
@@ -228,7 +244,7 @@ impl DataValue {
             DataValue::UInt64(v) => Ok(Vec::<u8>::from((*v).to_string())),
             DataValue::Float64(v) => Ok(Vec::<u8>::from((*v).to_string())),
             DataValue::String(v) => Ok(v.to_owned()),
-            DataValue::Json(v) => Ok(v.to_string().into_bytes()),
+            DataValue::Variant(v) => Ok(v.to_string().into_bytes()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get string",
                 other.value_type()
@@ -236,7 +252,17 @@ impl DataValue {
         }
     }
 
-    pub fn as_const_column(&self, data_type: &DataTypePtr, size: usize) -> Result<ColumnRef> {
+    pub fn as_array(&self) -> Result<Vec<DataValue>> {
+        match self {
+            DataValue::Array(vals) => Ok(vals.to_vec()),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get array values",
+                other.value_type()
+            ))),
+        }
+    }
+
+    pub fn as_const_column(&self, data_type: &DataTypeImpl, size: usize) -> Result<ColumnRef> {
         data_type.create_constant_column(self, size)
     }
 
@@ -259,6 +285,72 @@ impl DataValue {
     }
 }
 
+impl PartialOrd for DataValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DataValue {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.value_type() == other.value_type() {
+            return match (self, other) {
+                (DataValue::Null, DataValue::Null) => Ordering::Equal,
+                (DataValue::Boolean(v1), DataValue::Boolean(v2)) => v1.cmp(v2),
+                (DataValue::UInt64(v1), DataValue::UInt64(v2)) => v1.cmp(v2),
+                (DataValue::Int64(v1), DataValue::Int64(v2)) => v1.cmp(v2),
+                (DataValue::Float64(v1), DataValue::Float64(v2)) => {
+                    OrderedFloat::from(*v1).cmp(&OrderedFloat::from(*v2))
+                }
+                (DataValue::String(v1), DataValue::String(v2)) => v1.cmp(v2),
+                (DataValue::Array(v1), DataValue::Array(v2)) => {
+                    for (l, r) in v1.iter().zip(v2) {
+                        let cmp = l.cmp(r);
+                        if cmp != Ordering::Equal {
+                            return cmp;
+                        }
+                    }
+                    v1.len().cmp(&v2.len())
+                }
+                (DataValue::Struct(v1), DataValue::Struct(v2)) => {
+                    for (l, r) in v1.iter().zip(v2.iter()) {
+                        let cmp = l.cmp(r);
+                        if cmp != Ordering::Equal {
+                            return cmp;
+                        }
+                    }
+                    v1.len().cmp(&v2.len())
+                }
+                (DataValue::Variant(v1), DataValue::Variant(v2)) => v1.cmp(v2),
+                _ => unreachable!(),
+            };
+        }
+
+        if self.is_null() {
+            return Ordering::Greater;
+        }
+
+        if other.is_null() {
+            return Ordering::Less;
+        }
+
+        if !self.is_numeric() || !other.is_numeric() {
+            panic!(
+                "Cannot compare different types with {:?} and {:?}",
+                self.value_type(),
+                other.value_type()
+            );
+        }
+
+        if self.is_float() || other.is_float() {
+            return OrderedFloat::from(self.as_f64().unwrap())
+                .cmp(&OrderedFloat::from(other.as_f64().unwrap()));
+        }
+
+        self.as_i64().unwrap().cmp(&other.as_i64().unwrap())
+    }
+}
+
 // Did not use std::convert:TryFrom
 // Because we do not need custom type error.
 pub trait DFTryFrom<T>: Sized {
@@ -278,34 +370,36 @@ impl DFTryFrom<DataValue> for Vec<u8> {
     }
 }
 
-impl DFTryFrom<DataValue> for JsonValue {
+impl DFTryFrom<DataValue> for VariantValue {
     fn try_from(value: DataValue) -> Result<Self> {
         match value {
-            DataValue::Null => Ok(JsonValue::Null),
-            DataValue::Boolean(v) => Ok(v.into()),
-            DataValue::Int64(v) => Ok(v.into()),
-            DataValue::UInt64(v) => Ok(v.into()),
-            DataValue::Float64(v) => Ok(v.into()),
-            DataValue::String(v) => Ok(v.into()),
-            DataValue::Array(v) => Ok(json!(v)),
-            DataValue::Struct(v) => Ok(json!(v)),
-            DataValue::Json(v) => Ok(v),
+            DataValue::Null => Ok(VariantValue::from(serde_json::Value::Null)),
+            DataValue::Boolean(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::Int64(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::UInt64(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::Float64(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::String(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::Array(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::Struct(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::Variant(v) => Ok(v),
         }
     }
 }
 
-impl DFTryFrom<&DataValue> for JsonValue {
+impl DFTryFrom<&DataValue> for VariantValue {
     fn try_from(value: &DataValue) -> Result<Self> {
         match value {
-            DataValue::Null => Ok(JsonValue::Null),
-            DataValue::Boolean(v) => Ok((*v as bool).into()),
-            DataValue::Int64(v) => Ok((*v as i64).into()),
-            DataValue::UInt64(v) => Ok((*v as u64).into()),
-            DataValue::Float64(v) => Ok((*v as f64).into()),
-            DataValue::String(v) => Ok(String::from_utf8(v.to_vec()).unwrap().into()),
-            DataValue::Array(v) => Ok(json!(*v)),
-            DataValue::Struct(v) => Ok(json!(*v)),
-            DataValue::Json(v) => Ok(v.to_owned()),
+            DataValue::Null => Ok(VariantValue::from(serde_json::Value::Null)),
+            DataValue::Boolean(v) => Ok(VariantValue::from(json!(*v as bool))),
+            DataValue::Int64(v) => Ok(VariantValue::from(json!(*v as i64))),
+            DataValue::UInt64(v) => Ok(VariantValue::from(json!(*v as u64))),
+            DataValue::Float64(v) => Ok(VariantValue::from(json!(*v as f64))),
+            DataValue::String(v) => Ok(VariantValue::from(json!(
+                String::from_utf8(v.to_vec()).unwrap()
+            ))),
+            DataValue::Array(v) => Ok(VariantValue::from(json!(*v))),
+            DataValue::Struct(v) => Ok(VariantValue::from(json!(*v))),
+            DataValue::Variant(v) => Ok(v.to_owned()),
         }
     }
 }
@@ -364,9 +458,9 @@ impl From<Option<Vec<u8>>> for DataValue {
     }
 }
 
-impl From<JsonValue> for DataValue {
-    fn from(x: JsonValue) -> Self {
-        DataValue::Json(x)
+impl From<VariantValue> for DataValue {
+    fn from(x: VariantValue) -> Self {
+        DataValue::Variant(x)
     }
 }
 
@@ -392,13 +486,13 @@ impl fmt::Display for DataValue {
                     f,
                     "[{}]",
                     v.iter()
-                        .map(|v| format!("{}", v))
+                        .map(|v| v.to_string())
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
             }
             DataValue::Struct(v) => write!(f, "{:?}", v),
-            DataValue::Json(v) => write!(f, "{:#}", v),
+            DataValue::Variant(v) => write!(f, "{:#}", v),
         }
     }
 }
@@ -414,7 +508,7 @@ impl fmt::Debug for DataValue {
             DataValue::String(_) => write!(f, "{}", self),
             DataValue::Array(_) => write!(f, "{}", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
-            DataValue::Json(v) => write!(f, "{:#?}", v),
+            DataValue::Variant(v) => write!(f, "{:#?}", v),
         }
     }
 }
@@ -422,7 +516,8 @@ impl fmt::Debug for DataValue {
 /// SQL style format
 pub fn format_datavalue_sql(value: &DataValue) -> String {
     match value {
-        DataValue::String(_) | DataValue::Json(_) => format!("'{}'", value),
-        _ => format!("{}", value),
+        DataValue::String(_) | DataValue::Variant(_) => format!("'{}'", value),
+        DataValue::Float64(value) => format!("'{:?}'", value),
+        _ => value.to_string(),
     }
 }

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use openraft::raft::AppendEntriesRequest;
 use openraft::raft::InstallSnapshotRequest;
 use openraft::raft::VoteRequest;
@@ -25,23 +23,17 @@ use thiserror::Error;
 use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
 use crate::AppliedState;
-use crate::DatabaseInfo;
 use crate::Endpoint;
-use crate::GetDatabaseReq;
-use crate::GetKVActionReply;
+use crate::GetKVReply;
 use crate::GetKVReq;
-use crate::GetShareReq;
-use crate::GetTableReq;
-use crate::ListDatabaseReq;
+use crate::ListKVReply;
 use crate::ListKVReq;
-use crate::ListTableReq;
 use crate::LogEntry;
-use crate::MGetKVActionReply;
+use crate::MGetKVReply;
 use crate::MGetKVReq;
 use crate::NodeId;
-use crate::PrefixListReply;
-use crate::ShareInfo;
-use crate::TableInfo;
+use crate::TxnOpResponse;
+use crate::TxnReply;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum RetryableError {
@@ -57,23 +49,23 @@ pub struct JoinRequest {
     pub endpoint: Endpoint,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct LeaveRequest {
+    pub node_id: NodeId,
+}
+
 #[derive(
     Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::From, derive_more::TryInto,
 )]
 pub enum ForwardRequestBody {
     Join(JoinRequest),
-    Write(LogEntry),
+    Leave(LeaveRequest),
 
-    ListDatabase(ListDatabaseReq),
-    GetDatabase(GetDatabaseReq),
-    ListTable(ListTableReq),
-    GetTable(GetTableReq),
+    Write(LogEntry),
 
     GetKV(GetKVReq),
     MGetKV(MGetKVReq),
     ListKV(ListKVReq),
-
-    GetShare(GetShareReq),
 }
 
 /// A request that is forwarded from one raft node to another
@@ -95,17 +87,12 @@ impl ForwardRequest {
 #[allow(clippy::large_enum_variant)]
 pub enum ForwardResponse {
     Join(()),
+    Leave(()),
     AppliedState(AppliedState),
-    ListDatabase(Vec<Arc<DatabaseInfo>>),
-    DatabaseInfo(Arc<DatabaseInfo>),
-    ListTable(Vec<Arc<TableInfo>>),
-    TableInfo(Arc<TableInfo>),
 
-    ShareInfo(Arc<ShareInfo>),
-
-    GetKV(GetKVActionReply),
-    MGetKV(MGetKVActionReply),
-    ListKV(PrefixListReply),
+    GetKV(GetKVReply),
+    MGetKV(MGetKVReply),
+    ListKV(ListKVReply),
 }
 
 impl tonic::IntoRequest<RaftRequest> for ForwardRequest {
@@ -230,6 +217,21 @@ where
                     error,
                 }
             }
+        }
+    }
+}
+
+/// Convert txn response to `success` and a series of `TxnOpResponse`.
+/// If `success` is false, then the vec is empty
+impl<E> From<TxnReply> for Result<(bool, Vec<TxnOpResponse>), E>
+where E: DeserializeOwned
+{
+    fn from(msg: TxnReply) -> Self {
+        if msg.error.is_empty() {
+            Ok((msg.success, msg.responses))
+        } else {
+            let err: E = serde_json::from_str(&msg.error).expect("fail to deserialize");
+            Err(err)
         }
     }
 }

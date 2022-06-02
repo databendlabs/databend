@@ -12,15 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod array_get;
+mod array_length;
+mod as_type;
 mod check_json;
 mod get;
+mod get_path;
+mod json_extract_path_text;
+mod length;
+mod object_keys;
 mod parse_json;
 mod semi_structured;
 
+pub use array_get::ArrayGetFunction;
+pub use array_length::ArrayLengthFunction;
+pub use as_type::as_function_creator;
 pub use check_json::CheckJsonFunction;
 pub use get::GetFunction;
 pub use get::GetIgnoreCaseFunction;
-pub use get::GetPathFunction;
+pub use get_path::GetPathFunction;
+pub use json_extract_path_text::JsonExtractPathTextFunction;
+pub use length::VariantArrayLengthFunction;
+pub use object_keys::ObjectKeysFunction;
 pub use parse_json::ParseJsonFunction;
 pub use parse_json::TryParseJsonFunction;
 pub use semi_structured::SemiStructuredFunction;

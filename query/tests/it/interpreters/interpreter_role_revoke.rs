@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
@@ -41,7 +41,7 @@ async fn test_revoke_role_interpreter() -> Result<()> {
 
     // Revoke role from normal user.
     {
-        let mut test_user = UserInfo::new_no_auth("test_user".to_string(), "%".to_string());
+        let mut test_user = UserInfo::new_no_auth("test_user", "%");
         test_user.grants.grant_role("test".to_string());
         user_mgr.add_user(&tenant, test_user.clone(), false).await?;
         let user_info = user_mgr.get_user(&tenant, test_user.identity()).await?;
@@ -82,7 +82,7 @@ async fn test_revoke_role_interpreter() -> Result<()> {
         assert_eq!(res.err().unwrap().code(), ErrorCode::UnknownRole("").code())
     }
 
-    let mut test_role = RoleInfo::new("test_role".to_string());
+    let mut test_role = RoleInfo::new("test_role");
     test_role.grants.grant_role("test".to_string());
     user_mgr.add_role(&tenant, test_role.clone(), false).await?;
     let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;

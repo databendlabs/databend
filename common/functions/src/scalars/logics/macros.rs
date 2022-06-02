@@ -28,15 +28,15 @@ macro_rules! impl_logic_expression {
         pub struct $name;
 
         impl LogicExpression for $name {
-            fn eval(columns: &ColumnsWithField, input_rows: usize, nullable: bool) -> Result<ColumnRef> {
+            fn eval(func_ctx: FunctionContext, columns: &ColumnsWithField, input_rows: usize, nullable: bool) -> Result<ColumnRef> {
                 let dt = if nullable {
-                    NullableType::arc(BooleanType::arc())
+                    NullableType::new_impl(BooleanType::new_impl())
                 } else {
-                    BooleanType::arc()
+                    BooleanType::new_impl()
                 };
 
-                let lhs = cast_column_field(&columns[0], &dt)?;
-                let rhs = cast_column_field(&columns[1], &dt)?;
+                let lhs = cast_column_field(&columns[0], columns[0].data_type(), &dt, &func_ctx)?;
+                let rhs = cast_column_field(&columns[1], columns[1].data_type(), &dt, &func_ctx)?;
 
                 if nullable {
                     let lhs_viewer = bool::try_create_viewer(&lhs)?;
@@ -45,7 +45,7 @@ macro_rules! impl_logic_expression {
                     let lhs_viewer_iter = lhs_viewer.iter();
                     let rhs_viewer_iter = rhs_viewer.iter();
 
-                    let mut builder = NullableColumnBuilder::<bool>::with_capacity(input_rows);
+                    let mut builder = NullableColumnBuilder::<bool>::with_capacity_meta(input_rows, lhs.column_meta());
 
                     for (a, (idx, b)) in lhs_viewer_iter.zip(rhs_viewer_iter.enumerate()) {
                         let (val, valid) = $func(a, b, lhs_viewer.valid_at(idx), rhs_viewer.valid_at(idx));

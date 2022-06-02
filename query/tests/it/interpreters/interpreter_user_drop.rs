@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::PasswordHashMethod;
@@ -52,10 +52,10 @@ async fn test_drop_user_interpreter() -> Result<()> {
         let password = "test";
         let auth_info = AuthInfo::Password {
             hash_value: Vec::from(password),
-            hash_method: PasswordHashMethod::PlainText,
+            hash_method: PasswordHashMethod::Sha256,
         };
 
-        let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
+        let user_info = UserInfo::new(name, hostname, auth_info);
         let user_mgr = ctx.get_user_manager();
         user_mgr.add_user(&tenant, user_info.clone(), false).await?;
 

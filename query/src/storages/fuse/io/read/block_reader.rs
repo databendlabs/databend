@@ -24,7 +24,8 @@ use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
-use common_arrow::parquet::read::PageIterator;
+use common_arrow::parquet::read::PageMetaData;
+use common_arrow::parquet::read::PageReader;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -75,24 +76,28 @@ impl BlockReader {
         meta: &ColumnMeta,
         chunk: Vec<u8>,
         rows: usize,
-        descriptor: &ColumnDescriptor,
+        column_descriptor: &ColumnDescriptor,
         field: Field,
         compression: &Compression,
     ) -> Result<ArrayIter<'static>> {
-        let pages = PageIterator::new(
+        let page_meta_data = PageMetaData {
+            column_start: meta.offset,
+            num_values: meta.num_values as i64,
+            compression: Self::to_parquet_compression(compression),
+            descriptor: column_descriptor.descriptor.clone(),
+        };
+        let pages = PageReader::new_with_page_meta(
             std::io::Cursor::new(chunk),
-            meta.num_values as i64,
-            Self::to_parquet_compression(compression),
-            descriptor.clone(),
+            page_meta_data,
             Arc::new(|_, _| true),
             vec![],
         );
 
-        let descriptor_type = descriptor.type_();
+        let primitive_type = &column_descriptor.descriptor.primitive_type;
         let decompressor = BasicDecompressor::new(pages, vec![]);
         Ok(column_iter_to_arrays(
             vec![decompressor],
-            vec![descriptor_type],
+            vec![primitive_type],
             field,
             rows,
         )?)
@@ -131,7 +136,7 @@ impl BlockReader {
         for (i, column_chunk) in chunks.into_iter().enumerate() {
             let idx = *col_idx[i];
             let field = self.arrow_schema.fields[idx].clone();
-            let column_descriptor = self.parquet_schema_descriptor.column(idx);
+            let column_descriptor = &self.parquet_schema_descriptor.columns()[idx];
             let column_meta = &part.columns_meta[&idx];
             columns_array_iter.push(Self::to_deserialize(
                 column_meta,
@@ -160,7 +165,7 @@ impl BlockReader {
         for (index, column_chunk) in chunks.into_iter().enumerate() {
             let index = self.projection[index];
             let field = self.arrow_schema.fields[index].clone();
-            let column_descriptor = self.parquet_schema_descriptor.column(index);
+            let column_descriptor = &self.parquet_schema_descriptor.columns()[index];
             let column_meta = &part.columns_meta[&index];
             columns_array_iter.push(Self::to_deserialize(
                 column_meta,
@@ -174,11 +179,7 @@ impl BlockReader {
 
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
 
-        match deserializer.next() {
-            None => Err(ErrorCode::ParquetError("fail to get a chunk")),
-            Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
-        }
+        self.try_next_block(&mut deserializer)
     }
 
     pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<Vec<u8>>> {
@@ -199,11 +200,11 @@ impl BlockReader {
     }
 
     async fn read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
-        let handler = common_base::tokio::spawn(async move {
+        let handler = common_base::base::tokio::spawn(async move {
             let mut chunk = vec![0; length as usize];
             let mut r = o.range_reader(offset..offset + length).await?;
             r.read_exact(&mut chunk).await?;
-            Result::Ok(chunk)
+            Ok(chunk)
         });
 
         match handler.await {
@@ -219,9 +220,11 @@ impl BlockReader {
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read(&self, part: PartInfoPtr) -> Result<DataBlock> {
         let (num_rows, columns_array_iter) = self.read_columns(part).await?;
-
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
+        self.try_next_block(&mut deserializer)
+    }
 
+    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
         match deserializer.next() {
             None => Err(ErrorCode::ParquetError("fail to get a chunk")),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),

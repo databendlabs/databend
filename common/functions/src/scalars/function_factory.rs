@@ -15,11 +15,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
+use super::commons::CommonFunction;
 use super::function::Function;
 use super::ArithmeticFunction;
 use super::ComparisonFunction;
@@ -39,7 +40,7 @@ use crate::scalars::DateFunction;
 use crate::scalars::UUIDFunction;
 
 pub type FactoryCreator =
-    Box<dyn Fn(&str, &[&DataTypePtr]) -> Result<Box<dyn Function>> + Send + Sync>;
+    Box<dyn Fn(&str, &[&DataTypeImpl]) -> Result<Box<dyn Function>> + Send + Sync>;
 
 pub struct FunctionDescription {
     pub(crate) features: FunctionFeatures,
@@ -69,6 +70,7 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     let mut function_factory = FunctionFactory::create();
 
     ArithmeticFunction::register(&mut function_factory);
+    CommonFunction::register(&mut function_factory);
     ToCastFunction::register(&mut function_factory);
     TupleClassFunction::register(&mut function_factory);
     ComparisonFunction::register(&mut function_factory);
@@ -102,7 +104,7 @@ impl FunctionFactory {
         case_insensitive_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn get(&self, name: impl AsRef<str>, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn get(&self, name: impl AsRef<str>, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 

@@ -1,0 +1,225 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+import "datatype.proto";
+
+// Complete database info.
+message DatabaseInfo {
+  uint64 ver = 100;
+
+  DatabaseIdent ident = 1;
+  DatabaseNameIdent name_ident = 2;
+  DatabaseMeta meta = 3;
+}
+
+// The identifier of a database by name. Names can be changed.
+// There is no guarantee that two get-database request by name will return the
+// same instance.
+message DatabaseNameIdent {
+  uint64 ver = 100;
+
+  // The user this db belongs to
+  string tenant = 1;
+
+  // Database name
+  string db_name = 2;
+}
+
+// The identifier of a database.
+// `db_id` will never change. It can only be created or removed.
+// The `seq` indicates changes of the instance.
+// I.e., the tuple `(db_id, seq)` always identifies the same instance.
+message DatabaseIdent {
+  uint64 ver = 100;
+
+  uint64 db_id = 1;
+
+  // The seq of DatabaseMeta
+  uint64 seq = 2;
+}
+
+// DatabaseMeta is a container of all non-identity information.
+message DatabaseMeta {
+  uint64 ver = 100;
+
+  // Database engine, like github engine.
+  string engine = 5;
+
+  // Database engine options, like github engine <token>.
+  map<string, string> engine_options = 6;
+
+  // Database options.
+  map<string, string> options = 4;
+
+  // The time database created.
+  string created_on = 20;
+
+  // The time database updated.
+  string updated_on = 21;
+
+  // Comment about this database.
+  string comment = 22;
+
+  // The time table droped.
+  optional string drop_on = 23;
+}
+
+// Save db name id list history.
+message DbIdList {
+  uint64 ver = 100;
+
+  repeated uint64 ids = 1;
+}
+
+// Complete table info.
+message TableInfo {
+  uint64 ver = 100;
+
+  TableIdent ident = 1;
+
+  /// For a table it is `db_name.table_name`.
+  /// For a table function, it is `table_name(args)`
+  string desc = 2;
+
+  /// `name` is meant to be used with table-function.
+  /// Table-function is identified by `name`.
+  /// A table in the contrast, can only be identified by table-id.
+  string name = 3;
+
+  /// The essential information about a table definition.
+  ///
+  /// It is about what a table actually is.
+  /// `name`, `id` or `version` is not included in the table structure
+  /// definition.
+  TableMeta meta = 4;
+}
+
+// The identifier of a table by name. Names can be changed.
+// There is no guarantee that two get-table request by name will return the same
+// instance.
+message TableNameIdent {
+  uint64 ver = 100;
+
+  // The user this table belongs to.
+  string tenant = 1;
+
+  // The database this table belongs to.
+  string db_name = 2;
+
+  // The table name.
+  string table_name = 3;
+}
+
+// The identifier of a table.
+// `table_id` will never change. It can only be created or removed.
+// The `seq` indicates changes of the instance.
+// I.e., the tuple `(db_id, seq)` always identifies the same instance.
+message TableIdent {
+  uint64 ver = 100;
+
+  uint64 table_id = 1;
+
+  // The seq of TableMeta
+  uint64 seq = 2;
+}
+
+// TableMeta is a container of all non-identity information.
+message TableMeta {
+  uint64 ver = 100;
+
+  // Table schema, i.e., columns definition.
+  DataSchema schema = 1;
+
+  // Table engine.
+  string engine = 6;
+
+  // Database engine options, like github engine <token>.
+  map<string, string> engine_options = 7;
+
+  // Table options.
+  map<string, string> options = 5;
+
+  // Keys to sort rows in table.
+  optional string cluster_keys = 9;
+
+  // The time table created.
+  string created_on = 20;
+
+  // The time table updated.
+  string updated_on = 21;
+
+  // Comment about this table.
+  string comment = 22;
+
+  // Statistics of this table.
+  optional TableStatistics statistics = 23;
+
+  // The time table droped.
+  optional string drop_on = 24;
+}
+
+// Save table name id list history.
+message TableIdList {
+  uint64 ver = 100;
+
+  repeated uint64 ids = 1;
+}
+
+// The schema of a table, such as column data types and other meta info.
+message DataSchema {
+  uint64 ver = 100;
+
+  // Fields in the table
+  repeated DataField fields = 1;
+
+  // Other optional table info
+  map<string, string> metadata = 2;
+}
+
+// The statistics of a table
+message TableStatistics {
+
+  uint64 ver = 100;
+
+  // Number of rows
+  uint64 number_of_rows = 1;
+
+  // Size of data in bytes
+  uint64 data_bytes = 2;
+
+  // Size of compressed data in bytes
+  uint64 compressed_data_bytes = 3;
+
+  // Size of index data in bytes
+  uint64 index_data_bytes = 4;
+}
+
+// One field, AKA column
+message DataField {
+  uint64 ver = 100;
+
+  // The name of this column.
+  string name = 1;
+
+  // A SQL style expression to define the default value for this field,
+  // represent as raw sql
+  optional string default_expr = 2;
+
+  // Column data type
+  DataType data_type = 3;
+}

@@ -38,7 +38,7 @@ impl AggregateFunction for AggregateFunctionBasicAdaptor {
         self.inner.name()
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         self.inner.return_type()
     }
 
@@ -116,6 +116,18 @@ impl AggregateFunction for AggregateFunctionBasicAdaptor {
     ) -> Result<Option<AggregateFunctionRef>> {
         self.inner
             .get_own_null_adaptor(nested_function, params, arguments)
+    }
+
+    fn need_manual_drop_state(&self) -> bool {
+        self.inner.need_manual_drop_state()
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        self.inner.drop_state(place)
+    }
+
+    fn convert_const_to_full(&self) -> bool {
+        self.inner.convert_const_to_full()
     }
 }
 impl fmt::Display for AggregateFunctionBasicAdaptor {

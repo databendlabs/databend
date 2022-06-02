@@ -9,7 +9,7 @@ If the input cannot be translated to a valid JSON value, the output string conta
 ## Syntax
 
 ```sql
-CHECK_JSON(<expr>)
+CHECK_JSON( <expr> )
 ```
 
 ## Arguments
@@ -31,7 +31,6 @@ SELECT check_json('[1,2,3]');
 +-----------------------+
 | NULL                  |
 +-----------------------+
-1 row in set (0.01 sec)
 
 SELECT check_json('{"key":"val"}');
 +-----------------------------+
@@ -39,7 +38,6 @@ SELECT check_json('{"key":"val"}');
 +-----------------------------+
 | NULL                        |
 +-----------------------------+
-1 row in set (0.01 sec)
 
 SELECT check_json('{"key":');
 +----------------------------------------------+
@@ -47,5 +45,4 @@ SELECT check_json('{"key":');
 +----------------------------------------------+
 | EOF while parsing a value at line 1 column 7 |
 +----------------------------------------------+
-1 row in set (0.01 sec)
 ```

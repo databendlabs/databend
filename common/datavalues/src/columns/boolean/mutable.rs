@@ -15,18 +15,21 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
+use crate::prelude::*;
 use crate::types::BooleanType;
-use crate::types::DataTypePtr;
+use crate::types::DataTypeImpl;
 use crate::BooleanColumn;
 use crate::ColumnRef;
+use crate::DataValue;
 use crate::ScalarColumnBuilder;
 
 pub struct MutableBooleanColumn {
     pub(crate) values: MutableBitmap,
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
 }
 
 impl MutableColumn for MutableBooleanColumn {
@@ -38,7 +41,7 @@ impl MutableColumn for MutableBooleanColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         self.data_type.clone()
     }
 
@@ -58,9 +61,15 @@ impl MutableColumn for MutableBooleanColumn {
         Arc::new(self.finish())
     }
 
-    fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         self.append_value(value.as_bool()?);
         Ok(())
+    }
+
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        self.pop_value().map(DataValue::Boolean).ok_or_else(|| {
+            ErrorCode::BadDataArrayLength("Bool column is empty when pop data value")
+        })
     }
 }
 
@@ -74,13 +83,18 @@ impl MutableBooleanColumn {
     pub fn from_data(values: MutableBitmap) -> Self {
         Self {
             values,
-            data_type: BooleanType::arc(),
+            data_type: BooleanType::new_impl(),
         }
     }
 
     #[inline]
     pub fn append_value(&mut self, value: bool) {
         self.values.push(value);
+    }
+
+    #[inline]
+    pub fn pop_value(&mut self) -> Option<bool> {
+        self.values.pop()
     }
 }
 
@@ -90,8 +104,12 @@ impl ScalarColumnBuilder for MutableBooleanColumn {
     fn with_capacity(capacity: usize) -> Self {
         Self {
             values: MutableBitmap::with_capacity(capacity),
-            data_type: BooleanType::arc(),
+            data_type: BooleanType::new_impl(),
         }
+    }
+
+    fn with_capacity_meta(capacity: usize, _meta: ColumnMeta) -> Self {
+        Self::with_capacity(capacity)
     }
 
     fn push(&mut self, value: bool) {

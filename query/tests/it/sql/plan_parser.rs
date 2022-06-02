@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::sql::PlanParser;
 use pretty_assertions::assert_eq;
@@ -62,6 +62,24 @@ async fn test_plan_parser() -> Result<()> {
             sql: "DROP DATABASE IF EXISTS db1",
             expect: "Drop database db1, if_exists:true",
             error: "",
+        },
+        Test {
+            name:  "rename-database-passed",
+            sql: "ALTER DATABASE IF EXISTS db1 RENAME TO db2",
+            expect: "Rename database, [db1 to db2]",
+            error: ""
+        },
+        Test {
+            name:  "rename-database-if-exists-passed",
+            sql: "ALTER DATABASE IF EXISTS db1 RENAME TO db2",
+            expect: "Rename database, [db1 to db2]",
+            error: ""
+        },
+        Test {
+            name:  "rename-database-to-immutable-passed",
+            sql: "ALTER DATABASE IF EXISTS db1 RENAME TO system",
+            expect: "Rename database, [db1 to system]",
+            error: ""
         },
         Test {
             name: "create-table-passed",
@@ -138,7 +156,7 @@ async fn test_plan_parser() -> Result<()> {
         Test {
             name: "cast-passed",
             sql: "select cast('1' as int)",
-            expect: "Projection: cast('1' as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
+            expect: "Projection: cast('1' as INT):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
@@ -170,21 +188,21 @@ async fn test_plan_parser() -> Result<()> {
         Test {
             name: "interval-passed",
             sql: "SELECT INTERVAL '1' year, INTERVAL '1' month, INTERVAL '1' day, INTERVAL '1' hour, INTERVAL '1' minute, INTERVAL '1' second",
-            expect: "Projection: 1:Interval(Year), 1:Interval(Year), 1:Interval(Year), 1:Interval(Year), 1:Interval(Year), 1:Interval(Year)\n  Expression: 1:Interval(Year) (Before Projection)\n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
+            expect: "Projection: 1:Interval(YEAR), 1:Interval(YEAR), 1:Interval(YEAR), 1:Interval(YEAR), 1:Interval(YEAR), 1:Interval(YEAR)\n  Expression: 1:Interval(YEAR) (Before Projection)\n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
             name: "interval-unsupported",
-             sql: "SELECT INTERVAL '1 year 1 day'",
-             expect: "",
-             error: "Code: 1002, displayText = invalid digit found in string (while in analyze select projection).",
-         },
-         Test {
-             name: "interval-out-of-range",
-             sql: "SELECT INTERVAL '100000000000000000 day'",
-             expect: "",
-             error: "Code: 1002, displayText = number too large to fit in target type (while in analyze select projection).",
-         },
+            sql: "SELECT INTERVAL '1 year 1 day'",
+            expect: "",
+            error: "Code: 1002, displayText = invalid digit found in string (while in analyze select projection).",
+        },
+        Test {
+            name: "interval-out-of-range",
+            sql: "SELECT INTERVAL '100000000000000000 day'",
+            expect: "",
+            error: "Code: 1002, displayText = number too large to fit in target type (while in analyze select projection).",
+        },
         Test {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",
@@ -271,7 +289,7 @@ async fn test_plan_parser() -> Result<()> {
             name: "select-without-table",
             sql: "SELECT *",
             expect: "",
-            error: "Code: 1015, displayText = SELECT * with no tables specified is not valid (while in analyze select projection)."
+            error: "Code: 1065, displayText = SELECT * with no tables specified is not valid (while in analyze select projection)."
         }
     ];
 
@@ -282,7 +300,7 @@ async fn test_plan_parser() -> Result<()> {
                 assert_eq!(t.expect, format!("{:?}", v), "{}", t.name);
             }
             Err(e) => {
-                assert_eq!(t.error, format!("{}", e), "{}", t.name);
+                assert_eq!(t.error, e.to_string(), "{}", t.name);
             }
         }
     }

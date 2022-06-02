@@ -4,11 +4,978 @@ a
 a
 ---------- AST ------------
 ColumnRef {
+    span: [
+        Ident(0..1),
+    ],
     database: None,
     table: None,
     column: Identifier {
         name: "a",
         quote: None,
+        span: Ident(0..1),
+    },
+}
+
+
+---------- Input ----------
+'I''m who I\'m.'
+---------- Output ---------
+'I'm who I'm.'
+---------- AST ------------
+Literal {
+    span: [
+        QuotedString(0..16),
+    ],
+    lit: String(
+        "I'm who I'm.",
+    ),
+}
+
+
+---------- Input ----------
+'\776 \n \t \u0053 \xaa'
+---------- Output ---------
+'Ǿ 
+ 	 S ª'
+---------- AST ------------
+Literal {
+    span: [
+        QuotedString(0..24),
+    ],
+    lit: String(
+        "Ǿ \n \t S ª",
+    ),
+}
+
+
+---------- Input ----------
+char(0xD0, 0xBF, 0xD1)
+---------- Output ---------
+char(208, 191, 209)
+---------- AST ------------
+FunctionCall {
+    span: [
+        Ident(0..4),
+        LParen(4..5),
+        MySQLLiteralHex(5..9),
+        Comma(9..10),
+        MySQLLiteralHex(11..15),
+        Comma(15..16),
+        MySQLLiteralHex(17..21),
+        RParen(21..22),
+    ],
+    distinct: false,
+    name: Identifier {
+        name: "char",
+        quote: None,
+        span: Ident(0..4),
+    },
+    args: [
+        Literal {
+            span: [
+                MySQLLiteralHex(5..9),
+            ],
+            lit: Integer(
+                208,
+            ),
+        },
+        Literal {
+            span: [
+                MySQLLiteralHex(11..15),
+            ],
+            lit: Integer(
+                191,
+            ),
+        },
+        Literal {
+            span: [
+                MySQLLiteralHex(17..21),
+            ],
+            lit: Integer(
+                209,
+            ),
+        },
+    ],
+    params: [],
+}
+
+
+---------- Input ----------
+[42, 3.5, 4., .001, 5e2, 1.925e-3, .38e+7, 1.e-01, 0xfff, x'deedbeef']
+---------- Output ---------
+[42, 3.5, 4, 0.001, 500, 0.001925, 3800000, 0.1, 4095, 3740122863]
+---------- AST ------------
+Array {
+    span: [
+        LBracket(0..1),
+        LiteralInteger(1..3),
+        Comma(3..4),
+        LiteralFloat(5..8),
+        Comma(8..9),
+        LiteralFloat(10..12),
+        Comma(12..13),
+        LiteralFloat(14..18),
+        Comma(18..19),
+        LiteralFloat(20..23),
+        Comma(23..24),
+        LiteralFloat(25..33),
+        Comma(33..34),
+        LiteralFloat(35..41),
+        Comma(41..42),
+        LiteralFloat(43..49),
+        Comma(49..50),
+        MySQLLiteralHex(51..56),
+        Comma(56..57),
+        PGLiteralHex(58..69),
+        RBracket(69..70),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LiteralInteger(1..3),
+            ],
+            lit: Integer(
+                42,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralFloat(5..8),
+            ],
+            lit: Float(
+                3.5,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralFloat(10..12),
+            ],
+            lit: Float(
+                4.0,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralFloat(14..18),
+            ],
+            lit: Float(
+                0.001,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralFloat(20..23),
+            ],
+            lit: Float(
+                500.0,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralFloat(25..33),
+            ],
+            lit: Float(
+                0.001925,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralFloat(35..41),
+            ],
+            lit: Float(
+                3800000.0,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralFloat(43..49),
+            ],
+            lit: Float(
+                0.1,
+            ),
+        },
+        Literal {
+            span: [
+                MySQLLiteralHex(51..56),
+            ],
+            lit: Integer(
+                4095,
+            ),
+        },
+        Literal {
+            span: [
+                PGLiteralHex(58..69),
+            ],
+            lit: Integer(
+                3740122863,
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+123456789012345678901234567890
+---------- Output ---------
+123456789012345678901234567890
+---------- AST ------------
+Literal {
+    span: [
+        LiteralInteger(0..30),
+    ],
+    lit: BigInt {
+        lit: "123456789012345678901234567890",
+        is_hex: false,
+    },
+}
+
+
+---------- Input ----------
+x'123456789012345678901234567890'
+---------- Output ---------
+0x123456789012345678901234567890
+---------- AST ------------
+Literal {
+    span: [
+        PGLiteralHex(0..33),
+    ],
+    lit: BigInt {
+        lit: "123456789012345678901234567890",
+        is_hex: true,
+    },
+}
+
+
+---------- Input ----------
+1e100000000000000
+---------- Output ---------
+inf
+---------- AST ------------
+Literal {
+    span: [
+        LiteralFloat(0..17),
+    ],
+    lit: Float(
+        inf,
+    ),
+}
+
+
+---------- Input ----------
+-1
+---------- Output ---------
+- 1
+---------- AST ------------
+UnaryOp {
+    span: [
+        Minus(0..1),
+    ],
+    op: Minus,
+    expr: Literal {
+        span: [
+            LiteralInteger(1..2),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+}
+
+
+---------- Input ----------
+(1,)
+---------- Output ---------
+(1,)
+---------- AST ------------
+Tuple {
+    span: [
+        LParen(0..1),
+        LiteralInteger(1..2),
+        Comma(2..3),
+        RParen(3..4),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LiteralInteger(1..2),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+(1,2)
+---------- Output ---------
+(1, 2)
+---------- AST ------------
+Tuple {
+    span: [
+        LParen(0..1),
+        LiteralInteger(1..2),
+        Comma(2..3),
+        LiteralInteger(3..4),
+        RParen(4..5),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LiteralInteger(1..2),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralInteger(3..4),
+            ],
+            lit: Integer(
+                2,
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+(1,2,)
+---------- Output ---------
+(1, 2)
+---------- AST ------------
+Tuple {
+    span: [
+        LParen(0..1),
+        LiteralInteger(1..2),
+        Comma(2..3),
+        LiteralInteger(3..4),
+        Comma(4..5),
+        RParen(5..6),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LiteralInteger(1..2),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralInteger(3..4),
+            ],
+            lit: Integer(
+                2,
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+[1]
+---------- Output ---------
+[1]
+---------- AST ------------
+Array {
+    span: [
+        LBracket(0..1),
+        LiteralInteger(1..2),
+        RBracket(2..3),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LBracket(0..1),
+                LiteralInteger(1..2),
+                RBracket(2..3),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+[1,]
+---------- Output ---------
+[1]
+---------- AST ------------
+Array {
+    span: [
+        LBracket(0..1),
+        LiteralInteger(1..2),
+        Comma(2..3),
+        RBracket(3..4),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LiteralInteger(1..2),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+[[1]]
+---------- Output ---------
+[[1]]
+---------- AST ------------
+Array {
+    span: [
+        LBracket(0..1),
+        LBracket(1..2),
+        LiteralInteger(2..3),
+        RBracket(3..4),
+        RBracket(4..5),
+    ],
+    exprs: [
+        Array {
+            span: [
+                LBracket(1..2),
+                LiteralInteger(2..3),
+                RBracket(3..4),
+            ],
+            exprs: [
+                Literal {
+                    span: [
+                        LBracket(1..2),
+                        LiteralInteger(2..3),
+                        RBracket(3..4),
+                    ],
+                    lit: Integer(
+                        1,
+                    ),
+                },
+            ],
+        },
+    ],
+}
+
+
+---------- Input ----------
+[[1],[2]]
+---------- Output ---------
+[[1], [2]]
+---------- AST ------------
+Array {
+    span: [
+        LBracket(0..1),
+        LBracket(1..2),
+        LiteralInteger(2..3),
+        RBracket(3..4),
+        Comma(4..5),
+        LBracket(5..6),
+        LiteralInteger(6..7),
+        RBracket(7..8),
+        RBracket(8..9),
+    ],
+    exprs: [
+        Array {
+            span: [
+                LBracket(1..2),
+                LiteralInteger(2..3),
+                RBracket(3..4),
+            ],
+            exprs: [
+                Literal {
+                    span: [
+                        LBracket(1..2),
+                        LiteralInteger(2..3),
+                        RBracket(3..4),
+                    ],
+                    lit: Integer(
+                        1,
+                    ),
+                },
+            ],
+        },
+        Array {
+            span: [
+                LBracket(5..6),
+                LiteralInteger(6..7),
+                RBracket(7..8),
+            ],
+            exprs: [
+                Literal {
+                    span: [
+                        LBracket(5..6),
+                        LiteralInteger(6..7),
+                        RBracket(7..8),
+                    ],
+                    lit: Integer(
+                        2,
+                    ),
+                },
+            ],
+        },
+    ],
+}
+
+
+---------- Input ----------
+[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]
+---------- Output ---------
+[[[1, 2, 3], [4, 5, 6]], [[7, 8, 9]]][0][1][2]
+---------- AST ------------
+MapAccess {
+    span: [
+        LBracket(35..36),
+        LiteralInteger(36..37),
+        RBracket(37..38),
+    ],
+    expr: MapAccess {
+        span: [
+            LBracket(32..33),
+            LiteralInteger(33..34),
+            RBracket(34..35),
+        ],
+        expr: MapAccess {
+            span: [
+                LBracket(29..30),
+                LiteralInteger(30..31),
+                RBracket(31..32),
+            ],
+            expr: Array {
+                span: [
+                    LBracket(0..1),
+                    LBracket(1..2),
+                    LBracket(2..3),
+                    LiteralInteger(3..4),
+                    Comma(4..5),
+                    LiteralInteger(5..6),
+                    Comma(6..7),
+                    LiteralInteger(7..8),
+                    RBracket(8..9),
+                    Comma(9..10),
+                    LBracket(10..11),
+                    LiteralInteger(11..12),
+                    Comma(12..13),
+                    LiteralInteger(13..14),
+                    Comma(14..15),
+                    LiteralInteger(15..16),
+                    RBracket(16..17),
+                    RBracket(17..18),
+                    Comma(18..19),
+                    LBracket(19..20),
+                    LBracket(20..21),
+                    LiteralInteger(21..22),
+                    Comma(22..23),
+                    LiteralInteger(23..24),
+                    Comma(24..25),
+                    LiteralInteger(25..26),
+                    RBracket(26..27),
+                    RBracket(27..28),
+                    RBracket(28..29),
+                ],
+                exprs: [
+                    Array {
+                        span: [
+                            LBracket(1..2),
+                            LBracket(2..3),
+                            LiteralInteger(3..4),
+                            Comma(4..5),
+                            LiteralInteger(5..6),
+                            Comma(6..7),
+                            LiteralInteger(7..8),
+                            RBracket(8..9),
+                            Comma(9..10),
+                            LBracket(10..11),
+                            LiteralInteger(11..12),
+                            Comma(12..13),
+                            LiteralInteger(13..14),
+                            Comma(14..15),
+                            LiteralInteger(15..16),
+                            RBracket(16..17),
+                            RBracket(17..18),
+                        ],
+                        exprs: [
+                            Array {
+                                span: [
+                                    LBracket(2..3),
+                                    LiteralInteger(3..4),
+                                    Comma(4..5),
+                                    LiteralInteger(5..6),
+                                    Comma(6..7),
+                                    LiteralInteger(7..8),
+                                    RBracket(8..9),
+                                ],
+                                exprs: [
+                                    Literal {
+                                        span: [
+                                            LiteralInteger(3..4),
+                                        ],
+                                        lit: Integer(
+                                            1,
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralInteger(5..6),
+                                        ],
+                                        lit: Integer(
+                                            2,
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralInteger(7..8),
+                                        ],
+                                        lit: Integer(
+                                            3,
+                                        ),
+                                    },
+                                ],
+                            },
+                            Array {
+                                span: [
+                                    LBracket(10..11),
+                                    LiteralInteger(11..12),
+                                    Comma(12..13),
+                                    LiteralInteger(13..14),
+                                    Comma(14..15),
+                                    LiteralInteger(15..16),
+                                    RBracket(16..17),
+                                ],
+                                exprs: [
+                                    Literal {
+                                        span: [
+                                            LiteralInteger(11..12),
+                                        ],
+                                        lit: Integer(
+                                            4,
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralInteger(13..14),
+                                        ],
+                                        lit: Integer(
+                                            5,
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralInteger(15..16),
+                                        ],
+                                        lit: Integer(
+                                            6,
+                                        ),
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    Array {
+                        span: [
+                            LBracket(19..20),
+                            LBracket(20..21),
+                            LiteralInteger(21..22),
+                            Comma(22..23),
+                            LiteralInteger(23..24),
+                            Comma(24..25),
+                            LiteralInteger(25..26),
+                            RBracket(26..27),
+                            RBracket(27..28),
+                        ],
+                        exprs: [
+                            Array {
+                                span: [
+                                    LBracket(20..21),
+                                    LiteralInteger(21..22),
+                                    Comma(22..23),
+                                    LiteralInteger(23..24),
+                                    Comma(24..25),
+                                    LiteralInteger(25..26),
+                                    RBracket(26..27),
+                                ],
+                                exprs: [
+                                    Literal {
+                                        span: [
+                                            LiteralInteger(21..22),
+                                        ],
+                                        lit: Integer(
+                                            7,
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralInteger(23..24),
+                                        ],
+                                        lit: Integer(
+                                            8,
+                                        ),
+                                    },
+                                    Literal {
+                                        span: [
+                                            LiteralInteger(25..26),
+                                        ],
+                                        lit: Integer(
+                                            9,
+                                        ),
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+            accessor: Bracket {
+                key: Integer(
+                    0,
+                ),
+            },
+        },
+        accessor: Bracket {
+            key: Integer(
+                1,
+            ),
+        },
+    },
+    accessor: Bracket {
+        key: Integer(
+            2,
+        ),
+    },
+}
+
+
+---------- Input ----------
+typeof(1 + 2)
+---------- Output ---------
+typeof(1 + 2)
+---------- AST ------------
+FunctionCall {
+    span: [
+        Ident(0..6),
+        LParen(6..7),
+        LiteralInteger(7..8),
+        Plus(9..10),
+        LiteralInteger(11..12),
+        RParen(12..13),
+    ],
+    distinct: false,
+    name: Identifier {
+        name: "typeof",
+        quote: None,
+        span: Ident(0..6),
+    },
+    args: [
+        BinaryOp {
+            span: [
+                Plus(9..10),
+            ],
+            op: Plus,
+            left: Literal {
+                span: [
+                    LiteralInteger(7..8),
+                ],
+                lit: Integer(
+                    1,
+                ),
+            },
+            right: Literal {
+                span: [
+                    LiteralInteger(11..12),
+                ],
+                lit: Integer(
+                    2,
+                ),
+            },
+        },
+    ],
+    params: [],
+}
+
+
+---------- Input ----------
+- - + + - 1 + + - 2
+---------- Output ---------
+- - + + - 1 + + - 2
+---------- AST ------------
+UnaryOp {
+    span: [
+        Minus(0..1),
+    ],
+    op: Minus,
+    expr: UnaryOp {
+        span: [
+            Minus(2..3),
+        ],
+        op: Minus,
+        expr: UnaryOp {
+            span: [
+                Plus(4..5),
+            ],
+            op: Plus,
+            expr: UnaryOp {
+                span: [
+                    Plus(6..7),
+                ],
+                op: Plus,
+                expr: UnaryOp {
+                    span: [
+                        Minus(8..9),
+                    ],
+                    op: Minus,
+                    expr: BinaryOp {
+                        span: [
+                            Plus(12..13),
+                        ],
+                        op: Plus,
+                        left: Literal {
+                            span: [
+                                LiteralInteger(10..11),
+                            ],
+                            lit: Integer(
+                                1,
+                            ),
+                        },
+                        right: UnaryOp {
+                            span: [
+                                Plus(14..15),
+                            ],
+                            op: Plus,
+                            expr: UnaryOp {
+                                span: [
+                                    Minus(16..17),
+                                ],
+                                op: Minus,
+                                expr: Literal {
+                                    span: [
+                                        LiteralInteger(18..19),
+                                    ],
+                                    lit: Integer(
+                                        2,
+                                    ),
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+}
+
+
+---------- Input ----------
+0XFF + 0xff + 0xa + x'ffff'
+---------- Output ---------
+255 + 255 + 10 + 65535
+---------- AST ------------
+BinaryOp {
+    span: [
+        Plus(18..19),
+    ],
+    op: Plus,
+    left: BinaryOp {
+        span: [
+            Plus(12..13),
+        ],
+        op: Plus,
+        left: BinaryOp {
+            span: [
+                Plus(5..6),
+            ],
+            op: Plus,
+            left: Literal {
+                span: [
+                    MySQLLiteralHex(0..4),
+                ],
+                lit: Integer(
+                    255,
+                ),
+            },
+            right: Literal {
+                span: [
+                    MySQLLiteralHex(7..11),
+                ],
+                lit: Integer(
+                    255,
+                ),
+            },
+        },
+        right: Literal {
+            span: [
+                MySQLLiteralHex(14..17),
+            ],
+            lit: Integer(
+                10,
+            ),
+        },
+    },
+    right: Literal {
+        span: [
+            PGLiteralHex(20..27),
+        ],
+        lit: Integer(
+            65535,
+        ),
+    },
+}
+
+
+---------- Input ----------
+1 - -(- - -1)
+---------- Output ---------
+1 - - - - - 1
+---------- AST ------------
+BinaryOp {
+    span: [
+        Minus(2..3),
+    ],
+    op: Minus,
+    left: Literal {
+        span: [
+            LiteralInteger(0..1),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+    right: UnaryOp {
+        span: [
+            Minus(4..5),
+        ],
+        op: Minus,
+        expr: UnaryOp {
+            span: [
+                Minus(6..7),
+            ],
+            op: Minus,
+            expr: UnaryOp {
+                span: [
+                    Minus(8..9),
+                ],
+                op: Minus,
+                expr: UnaryOp {
+                    span: [
+                        Minus(10..11),
+                    ],
+                    op: Minus,
+                    expr: Literal {
+                        span: [
+                            LiteralInteger(11..12),
+                        ],
+                        lit: Integer(
+                            1,
+                        ),
+                    },
+                },
+            },
+        },
     },
 }
 
@@ -19,34 +986,134 @@ ColumnRef {
 1 + a * c.d
 ---------- AST ------------
 BinaryOp {
+    span: [
+        Plus(2..3),
+    ],
     op: Plus,
-    left: Literal(
-        Number(
-            "1",
+    left: Literal {
+        span: [
+            LiteralInteger(0..1),
+        ],
+        lit: Integer(
+            1,
         ),
-    ),
+    },
     right: BinaryOp {
+        span: [
+            Multiply(6..7),
+        ],
         op: Multiply,
         left: ColumnRef {
+            span: [
+                Ident(4..5),
+            ],
             database: None,
             table: None,
             column: Identifier {
                 name: "a",
                 quote: None,
+                span: Ident(4..5),
             },
         },
         right: ColumnRef {
+            span: [
+                Ident(8..9),
+                Period(9..10),
+                Ident(10..11),
+            ],
             database: None,
             table: Some(
                 Identifier {
                     name: "c",
                     quote: None,
+                    span: Ident(8..9),
                 },
             ),
             column: Identifier {
                 name: "d",
                 quote: None,
+                span: Ident(10..11),
             },
+        },
+    },
+}
+
+
+---------- Input ----------
+number % 2
+---------- Output ---------
+number % 2
+---------- AST ------------
+BinaryOp {
+    span: [
+        Modulo(7..8),
+    ],
+    op: Modulo,
+    left: ColumnRef {
+        span: [
+            Ident(0..6),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "number",
+            quote: None,
+            span: Ident(0..6),
+        },
+    },
+    right: Literal {
+        span: [
+            LiteralInteger(9..10),
+        ],
+        lit: Integer(
+            2,
+        ),
+    },
+}
+
+
+---------- Input ----------
+`t`:k1.k2
+---------- Output ---------
+`t`:k1.k2
+---------- AST ------------
+MapAccess {
+    span: [
+        Period(6..7),
+        Ident(7..9),
+    ],
+    expr: MapAccess {
+        span: [
+            Colon(3..4),
+            Ident(4..6),
+        ],
+        expr: ColumnRef {
+            span: [
+                QuotedString(0..3),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "t",
+                quote: Some(
+                    '`',
+                ),
+                span: QuotedString(0..3),
+            },
+        },
+        accessor: Colon {
+            key: Identifier {
+                name: "k1",
+                quote: None,
+                span: Ident(4..6),
+            },
+        },
+    },
+    accessor: Period {
+        key: Identifier {
+            name: "k2",
+            quote: None,
+            span: Ident(7..9),
         },
     },
 }
@@ -58,24 +1125,41 @@ col1 not between 1 and 2
 col1 NOT BETWEEN 1 AND 2
 ---------- AST ------------
 Between {
+    span: [
+        NOT(5..8),
+        BETWEEN(9..16),
+        LiteralInteger(17..18),
+        AND(19..22),
+        LiteralInteger(23..24),
+    ],
     expr: ColumnRef {
+        span: [
+            Ident(0..4),
+        ],
         database: None,
         table: None,
         column: Identifier {
             name: "col1",
             quote: None,
+            span: Ident(0..4),
         },
     },
-    low: Literal(
-        Number(
-            "1",
+    low: Literal {
+        span: [
+            LiteralInteger(17..18),
+        ],
+        lit: Integer(
+            1,
         ),
-    ),
-    high: Literal(
-        Number(
-            "2",
+    },
+    high: Literal {
+        span: [
+            LiteralInteger(23..24),
+        ],
+        lit: Integer(
+            2,
         ),
-    ),
+    },
     not: true,
 }
 
@@ -86,19 +1170,577 @@ sum(col1)
 sum(col1)
 ---------- AST ------------
 FunctionCall {
+    span: [
+        Ident(0..3),
+        LParen(3..4),
+        Ident(4..8),
+        RParen(8..9),
+    ],
     distinct: false,
-    name: "sum",
+    name: Identifier {
+        name: "sum",
+        quote: None,
+        span: Ident(0..3),
+    },
     args: [
         ColumnRef {
+            span: [
+                Ident(4..8),
+            ],
             database: None,
             table: None,
             column: Identifier {
                 name: "col1",
                 quote: None,
+                span: Ident(4..8),
             },
         },
     ],
     params: [],
+}
+
+
+---------- Input ----------
+"random"()
+---------- Output ---------
+"random"()
+---------- AST ------------
+FunctionCall {
+    span: [
+        QuotedString(0..8),
+        LParen(8..9),
+        RParen(9..10),
+    ],
+    distinct: false,
+    name: Identifier {
+        name: "random",
+        quote: Some(
+            '"',
+        ),
+        span: QuotedString(0..8),
+    },
+    args: [],
+    params: [],
+}
+
+
+---------- Input ----------
+random(distinct)
+---------- Output ---------
+random(DISTINCT )
+---------- AST ------------
+FunctionCall {
+    span: [
+        Ident(0..6),
+        LParen(6..7),
+        DISTINCT(7..15),
+        RParen(15..16),
+    ],
+    distinct: true,
+    name: Identifier {
+        name: "random",
+        quote: None,
+        span: Ident(0..6),
+    },
+    args: [],
+    params: [],
+}
+
+
+---------- Input ----------
+covar_samp(number, number)
+---------- Output ---------
+covar_samp(number, number)
+---------- AST ------------
+FunctionCall {
+    span: [
+        Ident(0..10),
+        LParen(10..11),
+        Ident(11..17),
+        Comma(17..18),
+        Ident(19..25),
+        RParen(25..26),
+    ],
+    distinct: false,
+    name: Identifier {
+        name: "covar_samp",
+        quote: None,
+        span: Ident(0..10),
+    },
+    args: [
+        ColumnRef {
+            span: [
+                Ident(11..17),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "number",
+                quote: None,
+                span: Ident(11..17),
+            },
+        },
+        ColumnRef {
+            span: [
+                Ident(19..25),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "number",
+                quote: None,
+                span: Ident(19..25),
+            },
+        },
+    ],
+    params: [],
+}
+
+
+---------- Input ----------
+CAST(col1 AS BIGINT UNSIGNED)
+---------- Output ---------
+CAST(col1 AS UInt64)
+---------- AST ------------
+Cast {
+    span: [
+        CAST(0..4),
+        LParen(4..5),
+        Ident(5..9),
+        AS(10..12),
+        BIGINT(13..19),
+        UNSIGNED(20..28),
+        RParen(28..29),
+    ],
+    expr: ColumnRef {
+        span: [
+            Ident(5..9),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "col1",
+            quote: None,
+            span: Ident(5..9),
+        },
+    },
+    target_type: UInt64,
+    pg_style: false,
+}
+
+
+---------- Input ----------
+TRY_CAST(col1 AS BIGINT UNSIGNED)
+---------- Output ---------
+TRY_CAST(col1 AS UInt64)
+---------- AST ------------
+TryCast {
+    span: [
+        TRY_CAST(0..8),
+        LParen(8..9),
+        Ident(9..13),
+        AS(14..16),
+        BIGINT(17..23),
+        UNSIGNED(24..32),
+        RParen(32..33),
+    ],
+    expr: ColumnRef {
+        span: [
+            Ident(9..13),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "col1",
+            quote: None,
+            span: Ident(9..13),
+        },
+    },
+    target_type: UInt64,
+}
+
+
+---------- Input ----------
+trim(leading 'abc' from 'def')
+---------- Output ---------
+TRIM(LEADING 'abc' FROM 'def')
+---------- AST ------------
+Trim {
+    span: [
+        TRIM(0..4),
+        LParen(4..5),
+        LEADING(5..12),
+        QuotedString(13..18),
+        FROM(19..23),
+        QuotedString(24..29),
+        RParen(29..30),
+    ],
+    expr: Literal {
+        span: [
+            QuotedString(24..29),
+        ],
+        lit: String(
+            "def",
+        ),
+    },
+    trim_where: Some(
+        (
+            Leading,
+            Literal {
+                span: [
+                    QuotedString(13..18),
+                ],
+                lit: String(
+                    "abc",
+                ),
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+extract(year from d)
+---------- Output ---------
+EXTRACT(YEAR FROM d)
+---------- AST ------------
+Extract {
+    span: [
+        EXTRACT(0..7),
+        LParen(7..8),
+        YEAR(8..12),
+        FROM(13..17),
+        Ident(18..19),
+        RParen(19..20),
+    ],
+    kind: Year,
+    expr: ColumnRef {
+        span: [
+            Ident(18..19),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "d",
+            quote: None,
+            span: Ident(18..19),
+        },
+    },
+}
+
+
+---------- Input ----------
+position('a' in str)
+---------- Output ---------
+POSITION('a' IN str)
+---------- AST ------------
+Position {
+    span: [
+        POSITION(0..8),
+        LParen(8..9),
+        QuotedString(9..12),
+        IN(13..15),
+        Ident(16..19),
+        RParen(19..20),
+    ],
+    substr_expr: Literal {
+        span: [
+            QuotedString(9..12),
+        ],
+        lit: String(
+            "a",
+        ),
+    },
+    str_expr: ColumnRef {
+        span: [
+            Ident(16..19),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "str",
+            quote: None,
+            span: Ident(16..19),
+        },
+    },
+}
+
+
+---------- Input ----------
+substring(a from b for c)
+---------- Output ---------
+SUBSTRING(a FROM b FOR c)
+---------- AST ------------
+Substring {
+    span: [
+        SUBSTRING(0..9),
+        LParen(9..10),
+        Ident(10..11),
+        FROM(12..16),
+        Ident(17..18),
+        FOR(19..22),
+        Ident(23..24),
+        RParen(24..25),
+    ],
+    expr: ColumnRef {
+        span: [
+            Ident(10..11),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(10..11),
+        },
+    },
+    substring_from: Some(
+        ColumnRef {
+            span: [
+                Ident(17..18),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(17..18),
+            },
+        },
+    ),
+    substring_for: Some(
+        ColumnRef {
+            span: [
+                Ident(23..24),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(23..24),
+            },
+        },
+    ),
+}
+
+
+---------- Input ----------
+substring(a, b, c)
+---------- Output ---------
+SUBSTRING(a FROM b FOR c)
+---------- AST ------------
+Substring {
+    span: [
+        SUBSTRING(0..9),
+        LParen(9..10),
+        Ident(10..11),
+        Comma(11..12),
+        Ident(13..14),
+        Comma(14..15),
+        Ident(16..17),
+        RParen(17..18),
+    ],
+    expr: ColumnRef {
+        span: [
+            Ident(10..11),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(10..11),
+        },
+    },
+    substring_from: Some(
+        ColumnRef {
+            span: [
+                Ident(13..14),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(13..14),
+            },
+        },
+    ),
+    substring_for: Some(
+        ColumnRef {
+            span: [
+                Ident(16..17),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(16..17),
+            },
+        },
+    ),
+}
+
+
+---------- Input ----------
+col1::UInt8
+---------- Output ---------
+col1::UInt8
+---------- AST ------------
+Cast {
+    span: [
+        DoubleColon(4..6),
+        UINT8(6..11),
+    ],
+    expr: ColumnRef {
+        span: [
+            Ident(0..4),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "col1",
+            quote: None,
+            span: Ident(0..4),
+        },
+    },
+    target_type: UInt8,
+    pg_style: true,
+}
+
+
+---------- Input ----------
+(arr[0]:a).b
+---------- Output ---------
+arr[0]:a.b
+---------- AST ------------
+MapAccess {
+    span: [
+        Period(10..11),
+        Ident(11..12),
+    ],
+    expr: MapAccess {
+        span: [
+            Colon(7..8),
+            Ident(8..9),
+        ],
+        expr: MapAccess {
+            span: [
+                LBracket(4..5),
+                LiteralInteger(5..6),
+                RBracket(6..7),
+            ],
+            expr: ColumnRef {
+                span: [
+                    Ident(1..4),
+                ],
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "arr",
+                    quote: None,
+                    span: Ident(1..4),
+                },
+            },
+            accessor: Bracket {
+                key: Integer(
+                    0,
+                ),
+            },
+        },
+        accessor: Colon {
+            key: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(8..9),
+            },
+        },
+    },
+    accessor: Period {
+        key: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(11..12),
+        },
+    },
+}
+
+
+---------- Input ----------
+arr[4]["k"]
+---------- Output ---------
+arr[4]['k']
+---------- AST ------------
+MapAccess {
+    span: [
+        LBracket(6..7),
+        QuotedString(7..10),
+        RBracket(10..11),
+    ],
+    expr: MapAccess {
+        span: [
+            LBracket(3..4),
+            LiteralInteger(4..5),
+            RBracket(5..6),
+        ],
+        expr: ColumnRef {
+            span: [
+                Ident(0..3),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "arr",
+                quote: None,
+                span: Ident(0..3),
+            },
+        },
+        accessor: Bracket {
+            key: Integer(
+                4,
+            ),
+        },
+    },
+    accessor: Bracket {
+        key: String(
+            "k",
+        ),
+    },
+}
+
+
+---------- Input ----------
+a rlike '^11'
+---------- Output ---------
+a RLIKE '^11'
+---------- AST ------------
+BinaryOp {
+    span: [
+        RLIKE(2..7),
+    ],
+    op: RLike,
+    left: ColumnRef {
+        span: [
+            Ident(0..1),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(0..1),
+        },
+    },
+    right: Literal {
+        span: [
+            QuotedString(8..13),
+        ],
+        lit: String(
+            "^11",
+        ),
+    },
 }
 
 
@@ -108,73 +1750,142 @@ G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)
 G.E.B IS NOT NULL AND col1 NOT BETWEEN col2 AND 1 + col3 DIV sum(col4)
 ---------- AST ------------
 BinaryOp {
+    span: [
+        AND(18..21),
+    ],
     op: And,
     left: IsNull {
+        span: [
+            IS(6..8),
+            NOT(9..12),
+            NULL(13..17),
+        ],
         expr: ColumnRef {
+            span: [
+                Ident(0..1),
+                Period(1..2),
+                Ident(2..3),
+                Period(3..4),
+                Ident(4..5),
+            ],
             database: Some(
                 Identifier {
                     name: "G",
                     quote: None,
+                    span: Ident(0..1),
                 },
             ),
             table: Some(
                 Identifier {
                     name: "E",
                     quote: None,
+                    span: Ident(2..3),
                 },
             ),
             column: Identifier {
                 name: "B",
                 quote: None,
+                span: Ident(4..5),
             },
         },
         not: true,
     },
     right: Between {
+        span: [
+            NOT(27..30),
+            BETWEEN(31..38),
+            Ident(39..43),
+            AND(44..47),
+            LParen(48..49),
+            LiteralInteger(49..50),
+            Plus(51..52),
+            Ident(53..57),
+            RParen(57..58),
+            DIV(59..62),
+            Ident(63..66),
+            LParen(66..67),
+            Ident(67..71),
+            RParen(71..72),
+        ],
         expr: ColumnRef {
+            span: [
+                Ident(22..26),
+            ],
             database: None,
             table: None,
             column: Identifier {
                 name: "col1",
                 quote: None,
+                span: Ident(22..26),
             },
         },
         low: ColumnRef {
+            span: [
+                Ident(39..43),
+            ],
             database: None,
             table: None,
             column: Identifier {
                 name: "col2",
                 quote: None,
+                span: Ident(39..43),
             },
         },
         high: BinaryOp {
+            span: [
+                DIV(59..62),
+            ],
             op: Div,
             left: BinaryOp {
+                span: [
+                    Plus(51..52),
+                ],
                 op: Plus,
-                left: Literal(
-                    Number(
-                        "1",
+                left: Literal {
+                    span: [
+                        LiteralInteger(49..50),
+                    ],
+                    lit: Integer(
+                        1,
                     ),
-                ),
+                },
                 right: ColumnRef {
+                    span: [
+                        Ident(53..57),
+                    ],
                     database: None,
                     table: None,
                     column: Identifier {
                         name: "col3",
                         quote: None,
+                        span: Ident(53..57),
                     },
                 },
             },
             right: FunctionCall {
+                span: [
+                    Ident(63..66),
+                    LParen(66..67),
+                    Ident(67..71),
+                    RParen(71..72),
+                ],
                 distinct: false,
-                name: "sum",
+                name: Identifier {
+                    name: "sum",
+                    quote: None,
+                    span: Ident(63..66),
+                },
                 args: [
                     ColumnRef {
+                        span: [
+                            Ident(67..71),
+                        ],
                         database: None,
                         table: None,
                         column: Identifier {
                             name: "col4",
                             quote: None,
+                            span: Ident(67..71),
                         },
                     },
                 ],
@@ -192,102 +1903,215 @@ sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(o
 sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END
 ---------- AST ------------
 BinaryOp {
+    span: [
+        Divide(63..64),
+    ],
     op: Divide,
     left: FunctionCall {
+        span: [
+            Ident(0..3),
+            LParen(3..4),
+            CASE(4..8),
+            WHEN(9..13),
+            Ident(14..16),
+            Period(16..17),
+            Ident(17..23),
+            Eq(24..25),
+            QuotedString(26..35),
+            THEN(36..40),
+            Ident(41..50),
+            ELSE(51..55),
+            LiteralInteger(56..57),
+            END(58..61),
+            RParen(61..62),
+        ],
         distinct: false,
-        name: "sum",
+        name: Identifier {
+            name: "sum",
+            quote: None,
+            span: Ident(0..3),
+        },
         args: [
             Case {
+                span: [
+                    CASE(4..8),
+                    WHEN(9..13),
+                    Ident(14..16),
+                    Period(16..17),
+                    Ident(17..23),
+                    Eq(24..25),
+                    QuotedString(26..35),
+                    THEN(36..40),
+                    Ident(41..50),
+                    ELSE(51..55),
+                    LiteralInteger(56..57),
+                    END(58..61),
+                ],
                 operand: None,
                 conditions: [
                     BinaryOp {
+                        span: [
+                            Eq(24..25),
+                        ],
                         op: Eq,
                         left: ColumnRef {
+                            span: [
+                                Ident(14..16),
+                                Period(16..17),
+                                Ident(17..23),
+                            ],
                             database: None,
                             table: Some(
                                 Identifier {
                                     name: "n2",
                                     quote: None,
+                                    span: Ident(14..16),
                                 },
                             ),
                             column: Identifier {
                                 name: "n_name",
                                 quote: None,
+                                span: Ident(17..23),
                             },
                         },
-                        right: Literal(
-                            String(
+                        right: Literal {
+                            span: [
+                                QuotedString(26..35),
+                            ],
+                            lit: String(
                                 "GERMANY",
                             ),
-                        ),
+                        },
                     },
                 ],
                 results: [
                     ColumnRef {
+                        span: [
+                            Ident(41..50),
+                        ],
                         database: None,
                         table: None,
                         column: Identifier {
                             name: "ol_amount",
                             quote: None,
+                            span: Ident(41..50),
                         },
                     },
                 ],
                 else_result: Some(
-                    Literal(
-                        Number(
-                            "0",
+                    Literal {
+                        span: [
+                            LiteralInteger(56..57),
+                        ],
+                        lit: Integer(
+                            0,
                         ),
-                    ),
+                    },
                 ),
             },
         ],
         params: [],
     },
     right: Case {
+        span: [
+            CASE(65..69),
+            WHEN(70..74),
+            Ident(75..78),
+            LParen(78..79),
+            Ident(79..88),
+            RParen(88..89),
+            Eq(90..91),
+            LiteralInteger(92..93),
+            THEN(94..98),
+            LiteralInteger(99..100),
+            ELSE(101..105),
+            Ident(106..109),
+            LParen(109..110),
+            Ident(110..119),
+            RParen(119..120),
+            END(121..124),
+        ],
         operand: None,
         conditions: [
             BinaryOp {
+                span: [
+                    Eq(90..91),
+                ],
                 op: Eq,
                 left: FunctionCall {
+                    span: [
+                        Ident(75..78),
+                        LParen(78..79),
+                        Ident(79..88),
+                        RParen(88..89),
+                    ],
                     distinct: false,
-                    name: "sum",
+                    name: Identifier {
+                        name: "sum",
+                        quote: None,
+                        span: Ident(75..78),
+                    },
                     args: [
                         ColumnRef {
+                            span: [
+                                Ident(79..88),
+                            ],
                             database: None,
                             table: None,
                             column: Identifier {
                                 name: "ol_amount",
                                 quote: None,
+                                span: Ident(79..88),
                             },
                         },
                     ],
                     params: [],
                 },
-                right: Literal(
-                    Number(
-                        "0",
+                right: Literal {
+                    span: [
+                        LiteralInteger(92..93),
+                    ],
+                    lit: Integer(
+                        0,
                     ),
-                ),
+                },
             },
         ],
         results: [
-            Literal(
-                Number(
-                    "1",
+            Literal {
+                span: [
+                    LiteralInteger(99..100),
+                ],
+                lit: Integer(
+                    1,
                 ),
-            ),
+            },
         ],
         else_result: Some(
             FunctionCall {
+                span: [
+                    Ident(106..109),
+                    LParen(109..110),
+                    Ident(110..119),
+                    RParen(119..120),
+                ],
                 distinct: false,
-                name: "sum",
+                name: Identifier {
+                    name: "sum",
+                    quote: None,
+                    span: Ident(106..109),
+                },
                 args: [
                     ColumnRef {
+                        span: [
+                            Ident(110..119),
+                        ],
                         database: None,
                         table: None,
                         column: Identifier {
                             name: "ol_amount",
                             quote: None,
+                            span: Ident(110..119),
                         },
                     },
                 ],
@@ -307,219 +2131,395 @@ p_partkey = l_partkey
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- Output ---------
-p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= CAST(1 AS SMALLINT) AND l_quantity <= CAST(1 + 10 AS SMALLINT) AND p_size BETWEEN CAST(1 AS SMALLINT) AND CAST(5 AS SMALLINT) AND l_shipmode IN('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON'
+p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= CAST(1 AS Int16) AND l_quantity <= CAST(1 + 10 AS Int16) AND p_size BETWEEN CAST(1 AS Int16) AND CAST(5 AS Int16) AND l_shipmode IN('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- AST ------------
 BinaryOp {
+    span: [
+        AND(366..369),
+    ],
     op: And,
     left: BinaryOp {
+        span: [
+            AND(317..320),
+        ],
         op: And,
         left: BinaryOp {
+            span: [
+                AND(240..243),
+            ],
             op: And,
             left: BinaryOp {
+                span: [
+                    AND(184..187),
+                ],
                 op: And,
                 left: BinaryOp {
+                    span: [
+                        AND(145..148),
+                    ],
                     op: And,
                     left: BinaryOp {
+                        span: [
+                            AND(71..74),
+                        ],
                         op: And,
                         left: BinaryOp {
+                            span: [
+                                AND(34..37),
+                            ],
                             op: And,
                             left: BinaryOp {
+                                span: [
+                                    Eq(10..11),
+                                ],
                                 op: Eq,
                                 left: ColumnRef {
+                                    span: [
+                                        Ident(0..9),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "p_partkey",
                                         quote: None,
+                                        span: Ident(0..9),
                                     },
                                 },
                                 right: ColumnRef {
+                                    span: [
+                                        Ident(12..21),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "l_partkey",
                                         quote: None,
+                                        span: Ident(12..21),
                                     },
                                 },
                             },
                             right: BinaryOp {
+                                span: [
+                                    Eq(46..47),
+                                ],
                                 op: Eq,
                                 left: ColumnRef {
+                                    span: [
+                                        Ident(38..45),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "p_brand",
                                         quote: None,
+                                        span: Ident(38..45),
                                     },
                                 },
-                                right: Literal(
-                                    String(
+                                right: Literal {
+                                    span: [
+                                        QuotedString(48..58),
+                                    ],
+                                    lit: String(
                                         "Brand#12",
                                     ),
-                                ),
+                                },
                             },
                         },
                         right: InList {
+                            span: [
+                                IN(87..89),
+                                LParen(90..91),
+                                QuotedString(91..100),
+                                Comma(100..101),
+                                QuotedString(102..110),
+                                Comma(110..111),
+                                QuotedString(112..121),
+                                Comma(121..122),
+                                QuotedString(123..131),
+                                RParen(131..132),
+                            ],
                             expr: ColumnRef {
+                                span: [
+                                    Ident(75..86),
+                                ],
                                 database: None,
                                 table: None,
                                 column: Identifier {
                                     name: "p_container",
                                     quote: None,
+                                    span: Ident(75..86),
                                 },
                             },
                             list: [
-                                Literal(
-                                    String(
+                                Literal {
+                                    span: [
+                                        QuotedString(91..100),
+                                    ],
+                                    lit: String(
                                         "SM CASE",
                                     ),
-                                ),
-                                Literal(
-                                    String(
+                                },
+                                Literal {
+                                    span: [
+                                        QuotedString(102..110),
+                                    ],
+                                    lit: String(
                                         "SM BOX",
                                     ),
-                                ),
-                                Literal(
-                                    String(
+                                },
+                                Literal {
+                                    span: [
+                                        QuotedString(112..121),
+                                    ],
+                                    lit: String(
                                         "SM PACK",
                                     ),
-                                ),
-                                Literal(
-                                    String(
+                                },
+                                Literal {
+                                    span: [
+                                        QuotedString(123..131),
+                                    ],
+                                    lit: String(
                                         "SM PKG",
                                     ),
-                                ),
+                                },
                             ],
                             not: false,
                         },
                     },
                     right: BinaryOp {
+                        span: [
+                            Gte(160..162),
+                        ],
                         op: Gte,
                         left: ColumnRef {
+                            span: [
+                                Ident(149..159),
+                            ],
                             database: None,
                             table: None,
                             column: Identifier {
                                 name: "l_quantity",
                                 quote: None,
+                                span: Ident(149..159),
                             },
                         },
                         right: Cast {
-                            expr: Literal(
-                                Number(
-                                    "1",
+                            span: [
+                                CAST(163..167),
+                                LParen(168..169),
+                                LiteralInteger(169..170),
+                                AS(171..173),
+                                SMALLINT(174..182),
+                                RParen(182..183),
+                            ],
+                            expr: Literal {
+                                span: [
+                                    LiteralInteger(169..170),
+                                ],
+                                lit: Integer(
+                                    1,
                                 ),
-                            ),
-                            target_type: SmallInt(
-                                None,
-                            ),
+                            },
+                            target_type: Int16,
                             pg_style: false,
                         },
                     },
                 },
                 right: BinaryOp {
+                    span: [
+                        Lte(199..201),
+                    ],
                     op: Lte,
                     left: ColumnRef {
+                        span: [
+                            Ident(188..198),
+                        ],
                         database: None,
                         table: None,
                         column: Identifier {
                             name: "l_quantity",
                             quote: None,
+                            span: Ident(188..198),
                         },
                     },
                     right: Cast {
+                        span: [
+                            CAST(202..206),
+                            LParen(207..208),
+                            LiteralInteger(208..209),
+                            Plus(210..211),
+                            LiteralInteger(212..214),
+                            AS(215..217),
+                            SMALLINT(218..226),
+                            RParen(226..227),
+                        ],
                         expr: BinaryOp {
+                            span: [
+                                Plus(210..211),
+                            ],
                             op: Plus,
-                            left: Literal(
-                                Number(
-                                    "1",
+                            left: Literal {
+                                span: [
+                                    LiteralInteger(208..209),
+                                ],
+                                lit: Integer(
+                                    1,
                                 ),
-                            ),
-                            right: Literal(
-                                Number(
-                                    "10",
+                            },
+                            right: Literal {
+                                span: [
+                                    LiteralInteger(212..214),
+                                ],
+                                lit: Integer(
+                                    10,
                                 ),
-                            ),
+                            },
                         },
-                        target_type: SmallInt(
-                            None,
-                        ),
+                        target_type: Int16,
                         pg_style: false,
                     },
                 },
             },
             right: Between {
+                span: [
+                    BETWEEN(251..258),
+                    CAST(259..263),
+                    LParen(264..265),
+                    LiteralInteger(265..266),
+                    AS(267..269),
+                    SMALLINT(270..278),
+                    RParen(278..279),
+                    AND(280..283),
+                    CAST(284..288),
+                    LParen(289..290),
+                    LiteralInteger(290..291),
+                    AS(292..294),
+                    SMALLINT(295..303),
+                    RParen(303..304),
+                ],
                 expr: ColumnRef {
+                    span: [
+                        Ident(244..250),
+                    ],
                     database: None,
                     table: None,
                     column: Identifier {
                         name: "p_size",
                         quote: None,
+                        span: Ident(244..250),
                     },
                 },
                 low: Cast {
-                    expr: Literal(
-                        Number(
-                            "1",
+                    span: [
+                        CAST(259..263),
+                        LParen(264..265),
+                        LiteralInteger(265..266),
+                        AS(267..269),
+                        SMALLINT(270..278),
+                        RParen(278..279),
+                    ],
+                    expr: Literal {
+                        span: [
+                            LiteralInteger(265..266),
+                        ],
+                        lit: Integer(
+                            1,
                         ),
-                    ),
-                    target_type: SmallInt(
-                        None,
-                    ),
+                    },
+                    target_type: Int16,
                     pg_style: false,
                 },
                 high: Cast {
-                    expr: Literal(
-                        Number(
-                            "5",
+                    span: [
+                        CAST(284..288),
+                        LParen(289..290),
+                        LiteralInteger(290..291),
+                        AS(292..294),
+                        SMALLINT(295..303),
+                        RParen(303..304),
+                    ],
+                    expr: Literal {
+                        span: [
+                            LiteralInteger(290..291),
+                        ],
+                        lit: Integer(
+                            5,
                         ),
-                    ),
-                    target_type: SmallInt(
-                        None,
-                    ),
+                    },
+                    target_type: Int16,
                     pg_style: false,
                 },
                 not: false,
             },
         },
         right: InList {
+            span: [
+                IN(332..334),
+                LParen(335..336),
+                QuotedString(336..341),
+                Comma(341..342),
+                QuotedString(343..352),
+                RParen(352..353),
+            ],
             expr: ColumnRef {
+                span: [
+                    Ident(321..331),
+                ],
                 database: None,
                 table: None,
                 column: Identifier {
                     name: "l_shipmode",
                     quote: None,
+                    span: Ident(321..331),
                 },
             },
             list: [
-                Literal(
-                    String(
+                Literal {
+                    span: [
+                        QuotedString(336..341),
+                    ],
+                    lit: String(
                         "AIR",
                     ),
-                ),
-                Literal(
-                    String(
+                },
+                Literal {
+                    span: [
+                        QuotedString(343..352),
+                    ],
+                    lit: String(
                         "AIR REG",
                     ),
-                ),
+                },
             ],
             not: false,
         },
     },
     right: BinaryOp {
+        span: [
+            Eq(385..386),
+        ],
         op: Eq,
         left: ColumnRef {
+            span: [
+                Ident(370..384),
+            ],
             database: None,
             table: None,
             column: Identifier {
                 name: "l_shipinstruct",
                 quote: None,
+                span: Ident(370..384),
             },
         },
-        right: Literal(
-            String(
+        right: Literal {
+            span: [
+                QuotedString(387..406),
+            ],
+            lit: String(
                 "DELIVER IN PERSON",
             ),
-        ),
+        },
     },
 }
 

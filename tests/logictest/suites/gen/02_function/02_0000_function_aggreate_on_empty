@@ -1,0 +1,181 @@
+statement query I 
+select min(number) from numbers_mt (10) where 1 = 2;
+
+----  
+0
+
+statement query I 
+select max(number) from numbers_mt (10) where 1 = 2;
+
+----  
+0
+
+statement query I 
+select arg_min(number, number) from numbers_mt (10) where 1 = 2;
+
+----  
+0
+
+statement query I 
+select arg_max(number, number) from numbers_mt (10) where 1 = 2;
+
+----  
+0
+
+statement query I 
+select sum_distinct(number) from numbers(10) where 1 = 2;
+
+----  
+0
+
+statement query I 
+select sum_if(number, number > 100) from numbers(10);
+
+----  
+0
+
+statement query I 
+select sum_if(number, number > 0) from numbers(10) where 1 = 2;
+
+----  
+0
+
+statement query I 
+select count(number) from numbers_mt (10) where 1 = 2;
+
+----  
+0
+
+statement query I 
+select uniq(number) from numbers_mt (10) where 1 = 2;
+
+----  
+0
+
+statement query I 
+select count_distinct(number) from numbers (10) where 1 = 2;
+
+----  
+0
+
+statement query I 
+select count(distinct number) from numbers (10) where 1 = 2;
+
+----  
+0
+
+statement query I 
+select count_if(number, number > 100) from numbers (10);
+
+----  
+0
+
+statement query I 
+select count_if(number, number > 0) from numbers (10) where 1 = 2;
+
+----  
+0
+
+statement ok
+select min(number) from numbers_mt (10) where 1 = 2 group by number % 2;
+
+statement ok
+select max(number) from numbers_mt (10) where 1 = 2 group by number % 2;
+
+statement ok
+select arg_min(number, number) from numbers_mt (10) where 1 = 2 group by number % 2;
+
+statement ok
+select arg_max(number, number) from numbers_mt (10) where 1 = 2 group by number % 2;
+
+statement ok
+select count(number) from numbers_mt (10) where 1 = 2 group by number % 2;
+
+statement ok
+select uniq(number) from numbers_mt (10) where 1 = 2 group by number % 2;
+
+statement ok
+select count_distinct(number) from numbers (10) where 1 = 2 group by number % 2;
+
+statement ok
+select count(distinct number) from numbers (10) where 1 = 2 group by number % 2;
+
+statement query I 
+select count_if(number, number > 100) from numbers (10) group by number % 2;
+
+----  
+0
+0
+
+statement ok
+select count_if(number, number > 0) from numbers (10) where 1 = 2 group by number % 2;
+
+statement query I 
+select min(1) from numbers_mt (10) where 1=2;
+
+----  
+0
+
+statement query I 
+select max(1) from numbers_mt (10) where 1=2;
+
+----  
+0
+
+statement query I 
+select arg_min(number, 1) from numbers_mt (10) where 1=2;
+
+----  
+0
+
+statement query I 
+select arg_min(1, number) from numbers_mt (10) where 1=2;
+
+----  
+0
+
+statement query I 
+select arg_min(1, 1) from numbers_mt (10) where 1=2;
+
+----  
+0
+
+statement query I 
+select arg_max(number, 1) from numbers_mt (10) where 1=2;
+
+----  
+0
+
+statement query I 
+select arg_max(1, number) from numbers_mt (10) where 1=2;
+
+----  
+0
+
+statement query I 
+select arg_max(1, 1) from numbers_mt (10) where 1=2;
+
+----  
+0
+
+statement query F label(mysql,http)
+select avg(number) from numbers_mt (10) where 1 = 2;
+
+----  mysql
+nan
+
+----  http
+NULL
+
+statement query F label(mysql,http)
+select avg(1) from numbers_mt (10) where 1=2;
+
+----  mysql
+nan
+
+----  http
+NULL
+
+statement ok
+select avg(number) from numbers_mt (10) where 1 = 2 group by number % 2;
+

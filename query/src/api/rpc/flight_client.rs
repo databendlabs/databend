@@ -22,9 +22,8 @@ use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::tokio::time::Duration;
+use common_base::base::tokio::time::Duration;
 use common_datavalues::DataSchemaRef;
-use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -32,7 +31,8 @@ use common_tracing::tracing;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Streaming;
-use common_base::tokio::sync::mpsc::{Receiver, Sender};
+use common_base::base::tokio;
+use common_base::base::tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_client_stream::FlightDataStream;
@@ -66,7 +66,7 @@ impl FlightClient {
 
     pub async fn pushed_stream(&mut self) -> Result<Sender<FlightData>> {
         let (tx, rx) = tokio::sync::mpsc::channel(1);
-        self.inner.do_put()
+        // self.inner.do_put()
         Ok(tx)
     }
 

@@ -15,13 +15,16 @@
 
 use std::sync::Arc;
 
-use common_meta_types::DatabaseInfo;
-use common_meta_types::DatabaseMeta;
+use common_meta_app::schema::DatabaseIdent;
+use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::DatabaseNameIdent;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
 use crate::storages::system;
 use crate::storages::Table;
+use crate::Config;
 
 #[derive(Clone)]
 pub struct SystemDatabase {
@@ -29,7 +32,7 @@ pub struct SystemDatabase {
 }
 
 impl SystemDatabase {
-    pub fn create(sys_db_meta: &mut InMemoryMetas) -> Self {
+    pub fn create(sys_db_meta: &mut InMemoryMetas, config: &Config) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
             system::OneTable::create(sys_db_meta.next_table_id()),
             system::FunctionsTable::create(sys_db_meta.next_table_id()),
@@ -45,10 +48,13 @@ impl SystemDatabase {
             system::MetricsTable::create(sys_db_meta.next_table_id()),
             system::ColumnsTable::create(sys_db_meta.next_table_id()),
             system::UsersTable::create(sys_db_meta.next_table_id()),
-            system::WarehousesTable::create(sys_db_meta.next_table_id()),
-            Arc::new(system::QueryLogTable::create(sys_db_meta.next_table_id())),
+            Arc::new(system::QueryLogTable::create(
+                sys_db_meta.next_table_id(),
+                config.query.max_query_log_size as i32,
+            )),
             system::EnginesTable::create(sys_db_meta.next_table_id()),
             system::RolesTable::create(sys_db_meta.next_table_id()),
+            system::StagesTable::create(sys_db_meta.next_table_id()),
         ];
 
         for tbl in table_list.into_iter() {
@@ -56,8 +62,14 @@ impl SystemDatabase {
         }
 
         let db_info = DatabaseInfo {
-            database_id: sys_db_meta.next_db_id(),
-            db: "system".to_string(),
+            ident: DatabaseIdent {
+                db_id: sys_db_meta.next_db_id(),
+                seq: 0,
+            },
+            name_ident: DatabaseNameIdent {
+                tenant: "".to_string(),
+                db_name: "system".to_string(),
+            },
             meta: DatabaseMeta {
                 engine: "SYSTEM".to_string(),
                 ..Default::default()

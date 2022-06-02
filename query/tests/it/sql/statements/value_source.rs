@@ -12,34 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use std::io::Cursor;
+
+use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::*;
 use databend_query::sql::statements::ValueSource;
+
+use crate::tests::create_query_context;
 
 #[tokio::test]
 async fn test_parse_value_source() -> Result<()> {
+    let ctx = create_query_context().await?;
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("name", Vu8::to_data_type()),
         DataField::new("age", u8::to_data_type()),
         DataField::new("country", Vu8::to_data_type()),
-        DataField::new("born_time", DateTime32Type::arc(None)),
+        DataField::new("born_time", TimestampType::new_impl(0)),
     ]);
 
-    let parser = ValueSource::new(schema);
-    let s = "VALUES ('ABC', 30 , 'China', '1992-03-15 00:00:00'), ('XYZ', 31 , 'Japen', '1991-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00')".to_string();
-    let block = parser.stream_read(&s)?;
+    let parser = ValueSource::new(ctx, schema);
+    let s = "('ABC', 30 , 'China', '1992-03-15 00:00:00'),
+                    ('XYZ', 11 + 20 , 'Japen', '1991-03-15 00:00:00'), 
+                    ('UVW', 32 , CONCAT('Amer', 'ican'), '1990-03-15 00:00:00'), 
+                    (CONCAT('G', 'HJ'), 32 , 'American', '1990-03-15 00:00:00')"
+        .to_string();
+    let bytes = s.as_bytes();
+    let cursor = Cursor::new(bytes);
+    let mut reader = CheckpointReader::new(BufferReader::new(cursor));
+    let block = parser.read(&mut reader).await?;
 
     common_datablocks::assert_blocks_sorted_eq(
         vec![
-            "+------+-----+----------+-----------+",
-            "| name | age | country  | born_time |",
-            "+------+-----+----------+-----------+",
-            "| ABC  | 30  | China    | 700617600 |",
-            "| XYZ  | 31  | Japen    | 668995200 |",
-            "| UVW  | 32  | American | 637459200 |",
-            "| UVW  | 32  | American | 637459200 |",
-            "+------+-----+----------+-----------+",
+            "+------+-----+----------+-----------------+",
+            "| name | age | country  | born_time       |",
+            "+------+-----+----------+-----------------+",
+            "| ABC  | 30  | China    | 700617600000000 |",
+            "| GHJ  | 32  | American | 637459200000000 |",
+            "| UVW  | 32  | American | 637459200000000 |",
+            "| XYZ  | 31  | Japen    | 668995200000000 |",
+            "+------+-----+----------+-----------------+",
         ],
         &[block],
     );

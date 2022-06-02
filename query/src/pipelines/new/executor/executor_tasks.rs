@@ -17,29 +17,45 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::infallible::Mutex;
 use common_exception::Result;
-use common_infallible::Mutex;
 use petgraph::prelude::NodeIndex;
 
+use crate::pipelines::new::executor::executor_condvar::WorkersCondvar;
+use crate::pipelines::new::executor::executor_condvar::WorkersWaitingStatus;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
 pub struct ExecutorTasksQueue {
-    finished: AtomicBool,
+    finished: Arc<AtomicBool>,
     workers_tasks: Mutex<ExecutorTasks>,
 }
 
 impl ExecutorTasksQueue {
     pub fn create(workers_size: usize) -> Arc<ExecutorTasksQueue> {
         Arc::new(ExecutorTasksQueue {
-            finished: AtomicBool::new(false),
+            finished: Arc::new(AtomicBool::new(false)),
             workers_tasks: Mutex::new(ExecutorTasks::create(workers_size)),
         })
     }
 
-    pub fn finish(&self) {
+    pub fn finish(&self, workers_condvar: Arc<WorkersCondvar>) {
         self.finished.store(true, Ordering::Relaxed);
+
+        let mut workers_tasks = self.workers_tasks.lock();
+        let mut wakeup_workers =
+            Vec::with_capacity(workers_tasks.workers_waiting_status.waiting_size());
+
+        while workers_tasks.workers_waiting_status.waiting_size() != 0 {
+            let worker_num = workers_tasks.workers_waiting_status.wakeup_any_worker();
+            wakeup_workers.push(worker_num);
+        }
+
+        drop(workers_tasks);
+        for wakeup_worker in wakeup_workers {
+            workers_condvar.wakeup(wakeup_worker);
+        }
     }
 
     pub fn is_finished(&self) -> bool {
@@ -57,33 +73,51 @@ impl ExecutorTasksQueue {
 
             context.set_task(task);
 
-            let workers_notify = context.get_workers_notify();
+            let workers_condvar = context.get_workers_condvar();
 
             if is_async_task {
-                workers_notify.inc_active_async_worker();
+                workers_condvar.inc_active_async_worker();
             }
 
-            if !workers_tasks.is_empty() && !workers_notify.is_empty() {
+            if !workers_tasks.is_empty() && workers_tasks.workers_waiting_status.waiting_size() != 0
+            {
                 let worker_id = context.get_worker_num();
-                let wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
+                let mut wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
+
+                if workers_tasks
+                    .workers_waiting_status
+                    .is_waiting(wakeup_worker_id)
+                {
+                    workers_tasks
+                        .workers_waiting_status
+                        .wakeup_worker(wakeup_worker_id);
+                } else {
+                    wakeup_worker_id = workers_tasks.workers_waiting_status.wakeup_any_worker();
+                }
+
                 drop(workers_tasks);
-                workers_notify.wakeup(wakeup_worker_id);
+                workers_condvar.wakeup(wakeup_worker_id);
             }
 
             return;
         }
 
         // When tasks queue is empty and all workers are waiting, no new tasks will be generated.
-        let workers_notify = context.get_workers_notify();
-        if !workers_notify.has_waiting_async_task() && workers_notify.active_workers() <= 1 {
+        let workers_condvar = context.get_workers_condvar();
+        if !workers_condvar.has_waiting_async_task()
+            && workers_tasks.workers_waiting_status.is_last_active_worker()
+        {
             drop(workers_tasks);
-            self.finish();
-            workers_notify.wakeup_all();
+            self.finish(workers_condvar.clone());
             return;
         }
 
+        let worker_num = context.get_worker_num();
+        workers_tasks.workers_waiting_status.wait_worker(worker_num);
         drop(workers_tasks);
-        context.get_workers_notify().wait(context.get_worker_num());
+        context
+            .get_workers_condvar()
+            .wait(worker_num, self.finished.clone());
     }
 
     pub fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
@@ -101,28 +135,53 @@ impl ExecutorTasksQueue {
 
     #[allow(unused_assignments)]
     pub fn push_tasks(&self, ctx: &mut ExecutorWorkerContext, mut tasks: VecDeque<ExecutorTask>) {
-        let mut wake_worker_id = None;
-        {
-            let worker_id = ctx.get_worker_num();
-            let mut workers_tasks = self.workers_tasks.lock();
-            while let Some(task) = tasks.pop_front() {
-                workers_tasks.push_task(worker_id, task);
-            }
+        let mut workers_tasks = self.workers_tasks.lock();
 
-            wake_worker_id = Some(workers_tasks.best_worker_id(worker_id + 1));
+        let worker_id = ctx.get_worker_num();
+        while let Some(task) = tasks.pop_front() {
+            workers_tasks.push_task(worker_id, task);
         }
 
-        if let Some(wake_worker_id) = wake_worker_id {
-            ctx.get_workers_notify().wakeup(wake_worker_id);
+        if workers_tasks.workers_waiting_status.waiting_size() != 0 {
+            let mut wake_worker_id = workers_tasks.best_worker_id(worker_id + 1);
+
+            if workers_tasks
+                .workers_waiting_status
+                .is_waiting(wake_worker_id)
+            {
+                workers_tasks
+                    .workers_waiting_status
+                    .wakeup_worker(wake_worker_id);
+            } else {
+                wake_worker_id = workers_tasks.workers_waiting_status.wakeup_any_worker();
+            }
+
+            drop(workers_tasks);
+            ctx.get_workers_condvar().wakeup(wake_worker_id);
         }
     }
 
-    pub fn completed_async_task(&self, task: CompletedAsyncTask) {
+    pub fn completed_async_task(&self, condvar: Arc<WorkersCondvar>, task: CompletedAsyncTask) {
         let mut workers_tasks = self.workers_tasks.lock();
 
-        let worker_id = task.worker_id;
+        let mut worker_id = task.worker_id;
         workers_tasks.tasks_size += 1;
         workers_tasks.workers_completed_async_tasks[worker_id].push_back(task);
+
+        condvar.dec_active_async_worker();
+
+        if workers_tasks.workers_waiting_status.waiting_size() != 0 {
+            if workers_tasks.workers_waiting_status.is_waiting(worker_id) {
+                workers_tasks
+                    .workers_waiting_status
+                    .wakeup_worker(worker_id);
+            } else {
+                worker_id = workers_tasks.workers_waiting_status.wakeup_any_worker();
+            }
+
+            drop(workers_tasks);
+            condvar.wakeup(worker_id);
+        }
     }
 }
 
@@ -144,6 +203,7 @@ impl CompletedAsyncTask {
 
 struct ExecutorTasks {
     tasks_size: usize,
+    workers_waiting_status: WorkersWaitingStatus,
     workers_sync_tasks: Vec<VecDeque<ProcessorPtr>>,
     workers_async_tasks: Vec<VecDeque<ProcessorPtr>>,
     workers_completed_async_tasks: Vec<VecDeque<CompletedAsyncTask>>,
@@ -168,6 +228,7 @@ impl ExecutorTasks {
             workers_sync_tasks,
             workers_async_tasks,
             workers_completed_async_tasks,
+            workers_waiting_status: WorkersWaitingStatus::create(workers_size),
         }
     }
 

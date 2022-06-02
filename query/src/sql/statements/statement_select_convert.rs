@@ -64,6 +64,7 @@ impl TryFrom<Query> for DfQueryStatement {
         }
 
         Ok(DfQueryStatement {
+            distinct: query_body.distinct,
             from: query_body.from.clone(),
             projection: query_body.projection.clone(),
             selection: query_body.selection.clone(),
@@ -72,6 +73,7 @@ impl TryFrom<Query> for DfQueryStatement {
             order_by: query.order_by.clone(),
             limit: query.limit.clone(),
             offset: query.offset.clone(),
+            format: query.format.clone(),
         })
     }
 }

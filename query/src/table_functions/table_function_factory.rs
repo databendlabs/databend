@@ -16,16 +16,18 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_meta_types::MetaId;
 use common_planners::Expression;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
-use crate::storages::fuse::FuseHistoryTable;
-use crate::storages::fuse::FUSE_FUNC_HIST;
+use crate::storages::fuse::table_functions::ClusteringInformationTable;
+use crate::storages::fuse::table_functions::FuseSegmentTable;
+use crate::storages::fuse::table_functions::FuseSnapshotTable;
+use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::NumbersTable;
 use crate::table_functions::TableFunction;
 
@@ -96,8 +98,22 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
-            FUSE_FUNC_HIST.to_string(),
-            (next_id(), Arc::new(FuseHistoryTable::create)),
+            "fuse_snapshot".to_string(),
+            (next_id(), Arc::new(FuseSnapshotTable::create)),
+        );
+        creators.insert(
+            "fuse_segment".to_string(),
+            (next_id(), Arc::new(FuseSegmentTable::create)),
+        );
+
+        creators.insert(
+            "clustering_information".to_string(),
+            (next_id(), Arc::new(ClusteringInformationTable::create)),
+        );
+
+        creators.insert(
+            "async_crash_me".to_string(),
+            (next_id(), Arc::new(AsyncCrashMeTable::create)),
         );
 
         TableFunctionFactory {

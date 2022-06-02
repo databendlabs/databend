@@ -28,10 +28,10 @@ pub struct BroadcastFlightScatter {
 
 impl FlightScatter for BroadcastFlightScatter {
     fn try_create(
+        _: Arc<QueryContext>,
         _: DataSchemaRef,
         _: Option<Expression>,
         num: usize,
-        _: Arc<QueryContext>,
     ) -> Result<Self> {
         Ok(BroadcastFlightScatter {
             scattered_size: num,

@@ -1,0 +1,51 @@
+statement ok
+DROP USER if exists 'test-e'@'localhost';
+
+statement ok
+DROP USER if exists 'test-f'@'localhost';
+
+statement ok
+DROP USER if exists 'test-g'@'localhost';
+
+statement ok
+DROP USER if exists 'test-h'@'localhost';
+
+statement ok
+DROP USER if exists 'test-i'@'localhost';
+
+statement ok
+DROP USER if exists 'test-i@localhost';
+
+statement ok
+CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password';
+
+statement ok
+ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password';
+
+statement error 2201
+ALTER USER 'test1'@'localhost' IDENTIFIED BY 'password'; 
+
+statement ok
+CREATE USER 'test-f'@'localhost' IDENTIFIED WITH sha256_password BY 'password';
+
+statement ok
+ALTER USER 'test-f'@'localhost' IDENTIFIED WITH sha256_password BY 'new-new-password';
+
+statement ok
+CREATE USER 'test-g'@'localhost' IDENTIFIED WITH sha256_password BY 'password';
+
+statement ok
+ALTER USER 'test-g'@'localhost' IDENTIFIED WITH sha256_password BY 'new-password';
+
+statement ok
+CREATE USER 'test-h'@'localhost' IDENTIFIED WITH double_sha1_password BY 'password';
+
+statement ok
+ALTER USER 'test-h'@'localhost' IDENTIFIED WITH double_sha1_password BY 'new-password';
+
+statement ok
+CREATE USER 'test-i@localhost' IDENTIFIED WITH sha256_password BY 'password';
+
+statement ok
+ALTER USER 'test-i@localhost' IDENTIFIED WITH sha256_password BY 'new-password';
+

@@ -14,9 +14,10 @@
 
 use std::fmt;
 
+use chrono_tz::Tz;
 use common_datavalues::ColumnRef;
 use common_datavalues::ColumnsWithField;
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
@@ -25,13 +26,13 @@ use super::Monotonicity;
 /// for now, this is only store Timezone
 #[derive(Clone)]
 pub struct FunctionContext {
-    pub tz: String,
+    pub tz: Tz,
 }
 
 impl Default for FunctionContext {
     fn default() -> Self {
         Self {
-            tz: "UTC".to_string(),
+            tz: "UTC".parse::<Tz>().unwrap(),
         }
     }
 }
@@ -51,7 +52,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     }
 
     /// The method returns the return_type of this function.
-    fn return_type(&self) -> DataTypePtr;
+    fn return_type(&self) -> DataTypeImpl;
 
     /// Evaluate the function, e.g. run/execute the function.
     fn eval(

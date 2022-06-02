@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::AuthType;
-use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
@@ -46,24 +45,6 @@ async fn test_users_table() -> Result<()> {
             false,
         )
         .await?;
-    let auth_data = AuthInfo::Password {
-        hash_value: Vec::from("123456789"),
-        hash_method: PasswordHashMethod::PlainText,
-    };
-    ctx.get_user_manager()
-        .add_user(
-            &tenant,
-            UserInfo {
-                auth_info: auth_data,
-                name: "test1".to_string(),
-                hostname: "%".to_string(),
-                grants: UserGrantSet::empty(),
-                quota: UserQuota::no_limit(),
-                option: UserOption::default(),
-            },
-            false,
-        )
-        .await?;
     let auth_data = AuthInfo::new(AuthType::Sha256Password, &Some("123456789".to_string()));
     assert!(auth_data.is_ok());
     ctx.get_user_manager()
@@ -71,7 +52,7 @@ async fn test_users_table() -> Result<()> {
             &tenant,
             UserInfo {
                 auth_info: auth_data.unwrap(),
-                name: "test2".to_string(),
+                name: "test1".to_string(),
                 hostname: "%".to_string(),
                 grants: UserGrantSet::empty(),
                 quota: UserQuota::no_limit(),
@@ -90,13 +71,12 @@ async fn test_users_table() -> Result<()> {
     assert_eq!(block.num_columns(), 4);
 
     let expected = vec![
-        "+-------+-----------+--------------------+------------------------------------------------------------------+",
-        "| name  | hostname  | auth_type          | auth_string                                                      |",
-        "+-------+-----------+--------------------+------------------------------------------------------------------+",
-        "| test  | localhost | no_password        |                                                                  |",
-        "| test1 | %         | plaintext_password | 123456789                                                        |",
-        "| test2 | %         | sha256_password    | 15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225 |",
-        "+-------+-----------+--------------------+------------------------------------------------------------------+",
+        "+-------+-----------+-----------------+------------------------------------------------------------------+",
+        "| name  | hostname  | auth_type       | auth_string                                                      |",
+        "+-------+-----------+-----------------+------------------------------------------------------------------+",
+        "| test  | localhost | no_password     |                                                                  |",
+        "| test1 | %         | sha256_password | 15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225 |",
+        "+-------+-----------+-----------------+------------------------------------------------------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     Ok(())

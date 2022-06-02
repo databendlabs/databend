@@ -15,9 +15,11 @@
 use std::collections::BTreeMap;
 
 use common_datavalues::DataSchemaRef;
-use common_meta_types::CreateTableReq;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableNameIdent;
 
+use crate::Expression;
 use crate::PlanNode;
 
 pub type TableOptions = BTreeMap<String, String>;
@@ -26,12 +28,15 @@ pub type TableOptions = BTreeMap<String, String>;
 pub struct CreateTablePlan {
     pub if_not_exists: bool,
     pub tenant: String,
+    /// The catalog name
+    pub catalog: String,
     pub db: String,
     /// The table name
     pub table: String,
 
     pub table_meta: TableMeta,
 
+    pub cluster_keys: Vec<Expression>,
     pub as_select: Option<Box<PlanNode>>,
 }
 
@@ -39,9 +44,11 @@ impl From<CreateTablePlan> for CreateTableReq {
     fn from(p: CreateTablePlan) -> Self {
         CreateTableReq {
             if_not_exists: p.if_not_exists,
-            tenant: p.tenant,
-            db_name: p.db,
-            table_name: p.table,
+            name_ident: TableNameIdent {
+                tenant: p.tenant,
+                db_name: p.db,
+                table_name: p.table,
+            },
             table_meta: p.table_meta,
         }
     }

@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::str::FromStr;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::StorageParams;
 
 /*
 -- Internal stage
@@ -52,6 +54,16 @@ pub enum StageType {
     External,
 }
 
+impl fmt::Display for StageType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            StageType::Internal => "Internal",
+            StageType::External => "External",
+        };
+        write!(f, "{}", name)
+    }
+}
+
 impl Default for StageType {
     fn default() -> Self {
         Self::External
@@ -75,6 +87,26 @@ pub enum StageFileCompression {
 impl Default for StageFileCompression {
     fn default() -> Self {
         Self::None
+    }
+}
+
+impl FromStr for StageFileCompression {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "auto" => Ok(StageFileCompression::Auto),
+            "gzip" => Ok(StageFileCompression::Gzip),
+            "bz2" => Ok(StageFileCompression::Bz2),
+            "brotli" => Ok(StageFileCompression::Brotli),
+            "zstd" => Ok(StageFileCompression::Zstd),
+            "deflate" => Ok(StageFileCompression::Deflate),
+            "rawdeflate" | "raw_deflate" => Ok(StageFileCompression::RawDeflate),
+            "lzo" => Ok(StageFileCompression::Lzo),
+            "snappy" => Ok(StageFileCompression::Snappy),
+            "none" => Ok(StageFileCompression::None),
+            _ => Err("Unknown file compression type, must one of { auto | gzip | bz2 | brotli | zstd | deflate | raw_deflate | lzo | snappy | none }"
+                         .to_string()),
+        }
     }
 }
 
@@ -137,31 +169,8 @@ impl Default for FileFormatOptions {
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
-pub struct StageS3Storage {
-    // `example-bucket` in `s3://example-bucket/path/to/object`
-    pub bucket: String,
-    pub path: String,
-    pub credentials_aws_key_id: String,
-    pub credentials_aws_secret_key: String,
-    pub encryption_master_key: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub enum StageStorage {
-    // Location is aws s3.
-    S3(StageS3Storage),
-}
-
-impl Default for StageStorage {
-    fn default() -> Self {
-        Self::S3(StageS3Storage::default())
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
-#[serde(default)]
 pub struct StageParams {
-    pub storage: StageStorage,
+    pub storage: StorageParams,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]

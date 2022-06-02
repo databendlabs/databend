@@ -17,7 +17,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::AppError;
+use crate::app_error::AppError;
 use crate::MetaNetworkError;
 use crate::MetaRaftError;
 use crate::MetaResultError;
@@ -33,7 +33,7 @@ pub enum MetaError {
     MetaRaftError(#[from] MetaRaftError),
 
     #[error(transparent)]
-    MetaStorageError(MetaStorageError),
+    MetaStorageError(#[from] MetaStorageError),
 
     #[error(transparent)]
     MetaResultError(#[from] MetaResultError),
@@ -46,9 +46,6 @@ pub enum MetaError {
 
     #[error("raft state absent, can not open")]
     MetaStoreNotFound,
-
-    #[error("{0}")]
-    LoadConfigError(String),
 
     #[error("{0}")]
     StartMetaServiceError(String),
@@ -87,12 +84,3 @@ pub type MetaResult<T> = std::result::Result<T, MetaError>;
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[error("InvalidMembership")]
 pub struct InvalidMembership {}
-
-impl From<MetaStorageError> for MetaError {
-    fn from(e: MetaStorageError) -> Self {
-        match e {
-            MetaStorageError::AppError(app_err) => MetaError::AppError(app_err),
-            _ => MetaError::MetaStorageError(e),
-        }
-    }
-}

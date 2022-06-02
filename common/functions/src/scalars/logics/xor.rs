@@ -21,6 +21,7 @@ use super::logic::LogicOperator;
 use crate::calcute;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -28,9 +29,24 @@ use crate::scalars::FunctionFeatures;
 pub struct LogicXorExpression;
 
 impl LogicExpression for LogicXorExpression {
-    fn eval(columns: &ColumnsWithField, input_rows: usize, _nullable: bool) -> Result<ColumnRef> {
-        let lhs = cast_column_field(&columns[0], &BooleanType::arc())?;
-        let rhs = cast_column_field(&columns[1], &BooleanType::arc())?;
+    fn eval(
+        func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _nullable: bool,
+    ) -> Result<ColumnRef> {
+        let lhs = cast_column_field(
+            &columns[0],
+            columns[0].data_type(),
+            &BooleanType::new_impl(),
+            &func_ctx,
+        )?;
+        let rhs = cast_column_field(
+            &columns[1],
+            columns[1].data_type(),
+            &BooleanType::new_impl(),
+            &func_ctx,
+        )?;
         let lhs_viewer = bool::try_create_viewer(&lhs)?;
         let rhs_viewer = bool::try_create_viewer(&rhs)?;
 
@@ -49,7 +65,7 @@ impl LogicExpression for LogicXorExpression {
 pub struct LogicXorFunction;
 
 impl LogicXorFunction {
-    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         LogicFunctionImpl::<LogicXorExpression>::try_create(LogicOperator::Xor, args)
     }
 

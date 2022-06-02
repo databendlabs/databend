@@ -19,14 +19,16 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bumpalo::Bump;
+use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
+use common_datablocks::HashMethodSerializer;
 use common_datavalues::prelude::MutableColumn;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
-use common_infallible::RwLock;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -113,7 +115,11 @@ impl Processor for GroupByFinalTransform {
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
 
-        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
+        let mut offsets_aggregate_states = Vec::with_capacity(funcs.len());
+        let mut layout = None;
+        if !funcs.is_empty() {
+            layout = Option::Some(get_layout_offsets(&funcs, &mut offsets_aggregate_states)?);
+        }
 
         macro_rules! apply {
             ($hash_method: ident, $key_column_type: ty, $group_func_table: ty) => {{
@@ -144,7 +150,11 @@ impl Processor for GroupByFinalTransform {
                                 if aggr_funcs_len == 0 {
                                     groups.insert(group_key, 0usize);
                                 } else {
-                                    let place: StateAddr = arena.alloc_layout(layout).into();
+                                    let place: StateAddr = arena
+                                        .alloc_layout(layout.ok_or_else(|| {
+                                            ErrorCode::LayoutError("layout shouldn't be None")
+                                        })?)
+                                        .into();
                                     for (idx, func) in funcs.iter().enumerate() {
                                         let arg_place = place.next(offsets_aggregate_states[idx]);
 
@@ -256,6 +266,10 @@ impl Processor for GroupByFinalTransform {
                     }
                     HashMethodKind::KeysU64(hash_method) => {
                         apply! { hash_method , &UInt64Column, RwLock<HashMap<u64, usize, ahash::RandomState>> }
+                    }
+                    _ => {
+                        let method = HashMethodSerializer::default();
+                        apply! { method , &StringColumn, RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>> }
                     }
                 }
             }};

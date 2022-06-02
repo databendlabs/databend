@@ -12,25 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::rc::Rc;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
-use crate::sql::optimizer::property::RelationalProperty;
+use crate::sql::plans::Operator;
+use crate::sql::plans::RelOp;
+use crate::sql::plans::RelOperator;
 use crate::sql::IndexType;
-use crate::sql::Plan;
-
-pub type PlanPtr = Rc<Plan>;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct SExpr {
-    plan: PlanPtr,
+    plan: RelOperator,
     children: Vec<SExpr>,
 
     original_group: Option<IndexType>,
 }
 
 impl SExpr {
-    pub fn create(plan: PlanPtr, children: Vec<SExpr>, original_group: Option<IndexType>) -> Self {
+    pub fn create(
+        plan: RelOperator,
+        children: Vec<SExpr>,
+        original_group: Option<IndexType>,
+    ) -> Self {
         SExpr {
             plan,
             children,
@@ -38,24 +42,30 @@ impl SExpr {
         }
     }
 
-    pub fn create_unary(plan: PlanPtr, child: SExpr) -> Self {
+    pub fn create_unary(plan: RelOperator, child: SExpr) -> Self {
         Self::create(plan, vec![child], None)
     }
 
-    pub fn create_binary(plan: PlanPtr, left_child: SExpr, right_child: SExpr) -> Self {
+    pub fn create_binary(plan: RelOperator, left_child: SExpr, right_child: SExpr) -> Self {
         Self::create(plan, vec![left_child, right_child], None)
     }
 
-    pub fn create_leaf(plan: PlanPtr) -> Self {
+    pub fn create_leaf(plan: RelOperator) -> Self {
         Self::create(plan, vec![], None)
     }
 
-    pub fn plan(&self) -> PlanPtr {
-        self.plan.clone()
+    pub fn plan(&self) -> &RelOperator {
+        &self.plan
     }
 
-    pub fn children(&self) -> &Vec<SExpr> {
+    pub fn children(&self) -> &[SExpr] {
         &self.children
+    }
+
+    pub fn child(&self, n: usize) -> Result<&SExpr> {
+        self.children
+            .get(n)
+            .ok_or_else(|| ErrorCode::LogicalError(format!("Invalid children index: {}", n)))
     }
 
     pub fn arity(&self) -> usize {
@@ -63,7 +73,7 @@ impl SExpr {
     }
 
     pub fn is_pattern(&self) -> bool {
-        matches!(*self.plan, Plan::Pattern)
+        matches!(self.plan.plan_type(), RelOp::Pattern)
     }
 
     pub fn original_group(&self) -> Option<IndexType> {
@@ -71,9 +81,9 @@ impl SExpr {
     }
 
     pub fn match_pattern(&self, pattern: &SExpr) -> bool {
-        if !pattern.plan().kind_eq(&Plan::Pattern) {
+        if pattern.plan.plan_type() != RelOp::Pattern {
             // Pattern is plan
-            if self.plan().kind_eq(&pattern.plan()) {
+            if self.plan.plan_type() != pattern.plan.plan_type() {
                 return false;
             }
 
@@ -93,11 +103,11 @@ impl SExpr {
         true
     }
 
-    pub fn compute_relational_prop(&self) -> RelationalProperty {
-        if self.plan.is_logical() {
-            self.plan.compute_relational_prop(self).unwrap()
-        } else {
-            RelationalProperty::default()
-        }
-    }
+    // pub fn compute_relational_prop(&self) -> RelationalProperty {
+    //     if self.plan.is_logical() {
+    //         self.plan.compute_relational_prop(self).unwrap()
+    //     } else {
+    //         RelationalProperty::default()
+    //     }
+    // }
 }

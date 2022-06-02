@@ -31,7 +31,7 @@ impl MySQLFederated {
     pub fn create() -> Self {
         MySQLFederated {
             mysql_version: MYSQL_VERSION.to_string(),
-            databend_version: crate::configs::DATABEND_COMMIT_VERSION.to_string(),
+            databend_version: crate::version::DATABEND_COMMIT_VERSION.to_string(),
         }
     }
 
@@ -43,7 +43,7 @@ impl MySQLFederated {
         Some(DataBlock::create(
             DataSchemaRefExt::create(vec![DataField::new(
                 &format!("@@{}", name),
-                StringType::arc(),
+                StringType::new_impl(),
             )]),
             vec![Series::from_data(vec![value])],
         ))
@@ -56,8 +56,8 @@ impl MySQLFederated {
     fn show_variables_block(name: &str, value: &str) -> Option<DataBlock> {
         Some(DataBlock::create(
             DataSchemaRefExt::create(vec![
-                DataField::new("Variable_name", StringType::arc()),
-                DataField::new("Value", StringType::arc()),
+                DataField::new("Variable_name", StringType::new_impl()),
+                DataField::new("Value", StringType::new_impl()),
             ]),
             vec![
                 Series::from_data(vec![name]),
@@ -138,7 +138,7 @@ impl MySQLFederated {
                     // @@cc as yy:
                     // var_as is 'yy' as the field name.
                     let var_as = vars_as[1];
-                    fields.push(DataField::new(var_as, StringType::arc()));
+                    fields.push(DataField::new(var_as, StringType::new_impl()));
 
                     // var is 'cc'.
                     let var = vars_as[0];
@@ -147,7 +147,10 @@ impl MySQLFederated {
                 } else {
                     // @@aa
                     // var is 'aa'
-                    fields.push(DataField::new(&format!("@@{}", var), StringType::arc()));
+                    fields.push(DataField::new(
+                        &format!("@@{}", var),
+                        StringType::new_impl(),
+                    ));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
                     values.push(Series::from_data(vec![value]));
@@ -203,14 +206,24 @@ impl MySQLFederated {
             // Txn.
             ("(?i)^(ROLLBACK(.*))", None),
             ("(?i)^(COMMIT(.*))", None),
+            ("(?i)^(START(.*))", None),
             // Set.
             ("(?i)^(SET NAMES(.*))", None),
             ("(?i)^(SET character_set_results(.*))", None),
             ("(?i)^(SET FOREIGN_KEY_CHECKS(.*))", None),
             ("(?i)^(SET AUTOCOMMIT(.*))", None),
+            ("(?i)^(SET SQL_LOG_BIN(.*))", None),
             ("(?i)^(SET sql_mode(.*))", None),
             ("(?i)^(SET @@(.*))", None),
-            ("(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))", None),
+            // mysqldump.
+            ("(?i)^(SET SESSION(.*))", None),
+            ("(?i)^(SET SQL_QUOTE_SHOW_CREATE(.*))", None),
+            ("(?i)^(LOCK TABLES(.*))", None),
+            ("(?i)^(UNLOCK TABLES(.*))", None),
+            ("(?i)^(SELECT LOGFILE_GROUP_NAME, FILE_NAME, TOTAL_EXTENTS, INITIAL_SIZE, ENGINE, EXTRA FROM INFORMATION_SCHEMA.FILES(.*))", None),
+            // mydumper.
+            ("(?i)^(SHOW MASTER STATUS)", None),
+            ("(?i)^(SHOW ALL SLAVES STATUS)", None),
             // DBeaver.
             ("(?i)^(SHOW WARNINGS)", None),
             ("(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)", None),
@@ -229,6 +242,7 @@ impl MySQLFederated {
                 None,
             ),
             ("(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))", None),
+
         ];
 
         self.block_match_rule(query, rules)

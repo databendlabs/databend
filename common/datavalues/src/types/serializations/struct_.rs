@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use itertools::izip;
 use opensrv_clickhouse::types::column::ArcColumnData;
 use opensrv_clickhouse::types::column::TupleColumnData;
@@ -23,14 +25,15 @@ use serde_json::Value;
 
 use crate::prelude::*;
 
+#[derive(Debug, Clone)]
 pub struct StructSerializer {
     pub names: Vec<String>,
-    pub inners: Vec<Box<dyn TypeSerializer>>,
-    pub types: Vec<DataTypePtr>,
+    pub inners: Vec<Box<TypeSerializerImpl>>,
+    pub types: Vec<DataTypeImpl>,
 }
 
 impl TypeSerializer for StructSerializer {
-    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+    fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String> {
         if let DataValue::Struct(vals) = value {
             let mut res = String::new();
             res.push('(');
@@ -42,9 +45,9 @@ impl TypeSerializer for StructSerializer {
                 }
                 first = false;
 
-                let s = inner.serialize_value(val)?;
+                let s = inner.serialize_value(val, format)?;
                 if typ.data_type_id().is_quoted() {
-                    res.push_str(&format!("'{}'", s));
+                    write!(res, "'{s}'").expect("write to string must succeed");
                 } else {
                     res.push_str(&s);
                 }
@@ -56,36 +59,40 @@ impl TypeSerializer for StructSerializer {
         }
     }
 
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>> {
         let column: &StructColumn = Series::check_get(column)?;
         let mut result = Vec::with_capacity(column.len());
         for i in 0..column.len() {
             let val = column.get(i);
-            let s = self.serialize_value(&val)?;
+            let s = self.serialize_value(&val, format)?;
             result.push(s);
         }
         Ok(result)
     }
 
-    fn serialize_json(&self, _column: &ColumnRef) -> Result<Vec<Value>> {
-        // let column: &StructColumn = Series::check_get(column)?;
-        // let inner_columns = column.values();
-        // let result = self
-        //     .inners
-        //     .iter()
-        //     .zip(inner_columns.iter())
-        //     .map(|(inner, col)| inner.serialize_json(col))
-        //     .collect::<Result<Vec<Vec<Value>>>>()?;
-        todo!()
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
+        let column: &StructColumn = Series::check_get(column)?;
+
+        let mut result = Vec::with_capacity(column.len());
+        for i in 0..column.len() {
+            let val = column.get(i);
+            let s = serde_json::to_value(val)?;
+            result.push(s);
+        }
+        Ok(result)
     }
 
-    fn serialize_clickhouse_format(&self, column: &ColumnRef) -> Result<ArcColumnData> {
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+        format: &FormatSettings,
+    ) -> Result<ArcColumnData> {
         let column: &StructColumn = Series::check_get(column)?;
         let result = self
             .inners
             .iter()
             .zip(column.values().iter())
-            .map(|(inner, col)| inner.serialize_clickhouse_format(col))
+            .map(|(inner, col)| inner.serialize_clickhouse_format(col, format))
             .collect::<Result<Vec<ArcColumnData>>>()?;
 
         let data = TupleColumnData { inner: result };

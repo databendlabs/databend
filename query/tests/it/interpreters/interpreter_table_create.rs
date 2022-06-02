@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
@@ -25,7 +25,7 @@ async fn test_create_table_interpreter() -> Result<()> {
     {
         let query = "\
         CREATE TABLE default.a(\
-            a bigint null default 3, b int default a + 3, c varchar(255), d smallint, e Date\
+            a bigint null default 666, b int default a + 666, c varchar(255), d smallint, e Date\
         ) Engine = Null\
     ";
 
@@ -39,13 +39,13 @@ async fn test_create_table_interpreter() -> Result<()> {
         let field_a = schema.field_with_name("a").unwrap();
         assert_eq!(
             format!("{:?}", field_a),
-            "DataField { name: \"a\", data_type: Int64, nullable: true, default_expr: \"{\\\"Literal\\\":{\\\"value\\\":{\\\"UInt64\\\":3},\\\"column_name\\\":null,\\\"data_type\\\":{\\\"type\\\":\\\"UInt8Type\\\"}}}\" }"
+            "DataField { name: \"a\", data_type: Int64, nullable: true, default_expr: \"666\" }"
         );
 
         let field_b = schema.field_with_name("b").unwrap();
         assert_eq!(
             format!("{:?}", field_b),
-           "DataField { name: \"b\", data_type: Int32, nullable: false, default_expr: \"{\\\"BinaryExpression\\\":{\\\"left\\\":{\\\"Column\\\":\\\"a\\\"},\\\"op\\\":\\\"+\\\",\\\"right\\\":{\\\"Literal\\\":{\\\"value\\\":{\\\"UInt64\\\":3},\\\"column_name\\\":null,\\\"data_type\\\":{\\\"type\\\":\\\"UInt8Type\\\"}}}}}\" }"
+           "DataField { name: \"b\", data_type: Int32, nullable: false, default_expr: \"(a + 666)\" }"
         );
     }
 

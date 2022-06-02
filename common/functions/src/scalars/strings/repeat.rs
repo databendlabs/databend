@@ -32,7 +32,7 @@ pub struct RepeatFunction {
 }
 
 impl RepeatFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         if !args[0].data_type_id().is_string() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected parameter 1 is string, but got {}",
@@ -63,19 +63,24 @@ impl Function for RepeatFunction {
         "repeat"
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        StringType::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        StringType::new_impl()
     }
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
         let col1_viewer = Vu8::try_create_viewer(columns[0].column())?;
 
-        let col2 = cast_column_field(&columns[1], &UInt64Type::arc())?;
+        let col2 = cast_column_field(
+            &columns[1],
+            columns[1].data_type(),
+            &UInt64Type::new_impl(),
+            &func_ctx,
+        )?;
         let col2_viewer = u64::try_create_viewer(&col2)?;
 
         let mut builder = ColumnBuilder::<Vu8>::with_capacity(input_rows);

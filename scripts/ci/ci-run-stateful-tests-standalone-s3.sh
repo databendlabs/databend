@@ -9,11 +9,14 @@ echo "* Please make sure that S3 backend  *"
 echo "* is ready, and configured properly.*"
 echo "*************************************"
 export STORAGE_TYPE=s3
-export S3_STORAGE_BUCKET=testbucket
-export S3_STORAGE_ROOT=admin
-export S3_STORAGE_ENDPOINT_URL=http://127.0.0.1:9900
-export S3_STORAGE_ACCESS_KEY_ID=minioadmin
-export S3_STORAGE_SECRET_ACCESS_KEY=minioadmin
+export STORAGE_S3_BUCKET=testbucket
+export STORAGE_S3_ROOT=admin
+export STORAGE_S3_ENDPOINT_URL=http://127.0.0.1:9900
+export STORAGE_S3_ACCESS_KEY_ID=minioadmin
+export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
+
+echo "Install dependence"
+python3 -m pip install --quiet mysql-connector-python
 
 echo "calling test suite"
 echo "Starting standalone DatabendQuery(debug)"

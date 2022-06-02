@@ -17,21 +17,23 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
 use common_meta_types::UserInfo;
 use futures::channel::oneshot::Sender;
 
-use crate::configs::Config;
 use crate::sessions::QueryContextShared;
+use crate::Config;
 
 #[derive(MallocSizeOf)]
 pub struct SessionContext {
     #[ignore_malloc_size_of = "insignificant"]
     conf: Config,
     abort: AtomicBool,
+    current_catalog: RwLock<String>,
     current_database: RwLock<String>,
+    current_tenant: RwLock<String>,
     #[ignore_malloc_size_of = "insignificant"]
     current_user: RwLock<Option<UserInfo>>,
     #[ignore_malloc_size_of = "insignificant"]
@@ -48,7 +50,9 @@ impl SessionContext {
             conf,
             abort: Default::default(),
             current_user: Default::default(),
+            current_tenant: Default::default(),
             client_host: Default::default(),
+            current_catalog: RwLock::new("default".to_string()),
             current_database: RwLock::new("default".to_string()),
             io_shutdown_tx: Default::default(),
             query_context_shared: Default::default(),
@@ -65,6 +69,18 @@ impl SessionContext {
         self.abort.store(v, Ordering::Relaxed);
     }
 
+    // Get current catalog name.
+    pub fn get_current_catalog(&self) -> String {
+        let lock = self.current_catalog.read();
+        lock.clone()
+    }
+
+    // Set current catalog.
+    pub fn set_current_catalog(&self, catalog_name: String) {
+        let mut lock = self.current_catalog.write();
+        *lock = catalog_name
+    }
+
     // Get current database.
     pub fn get_current_database(&self) -> String {
         let lock = self.current_database.read();
@@ -77,8 +93,19 @@ impl SessionContext {
         *lock = db
     }
 
-    pub fn get_tenant(&self) -> String {
+    pub fn get_current_tenant(&self) -> String {
+        if self.conf.query.management_mode {
+            let lock = self.current_tenant.read();
+            if !lock.is_empty() {
+                return lock.clone();
+            }
+        }
         self.conf.query.tenant_id.clone()
+    }
+
+    pub fn set_current_tenant(&self, tenant: String) {
+        let mut lock = self.current_tenant.write();
+        *lock = tenant;
     }
 
     // Get current user
@@ -114,9 +141,9 @@ impl SessionContext {
         lock.take()
     }
 
-    pub fn query_context_shared_is_none(&self) -> bool {
+    pub fn get_current_query_id(&self) -> Option<String> {
         let lock = self.query_context_shared.read();
-        lock.is_none()
+        lock.as_ref().map(|ctx| ctx.init_query_id.read().clone())
     }
 
     pub fn get_query_context_shared(&self) -> Option<Arc<QueryContextShared>> {

@@ -1,0 +1,24 @@
+statement query T 
+select hex(100);
+
+----  
+64
+
+statement query T 
+select hex(-100);
+
+----  
+-64
+
+statement query T 
+select hex('abc');
+
+----  
+616263
+
+statement query T 
+select hex(null);
+
+----  
+NULL
+

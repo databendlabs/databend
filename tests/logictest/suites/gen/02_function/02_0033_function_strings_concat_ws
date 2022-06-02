@@ -1,0 +1,46 @@
+statement query T 
+SELECT CONCAT_WS(',', 'data', 'fuse', 'labs', '2021');
+
+----  
+data,fuse,labs,2021
+
+statement query T 
+SELECT CONCAT_WS(',', 'data', NULL, 'bend');
+
+----  
+data,bend
+
+statement query T 
+SELECT CONCAT_WS(',', 'data', NULL, NULL, 'bend');
+
+----  
+data,bend
+
+statement query T 
+SELECT CONCAT_WS(NULL, 'data', 'fuse', 'labs');
+
+----  
+NULL
+
+statement query T 
+SELECT CONCAT_WS(',', to_varchar(number), 'data', to_varchar(number+1)) from numbers(3) order by number;
+
+----  
+0,data,1
+1,data,2
+2,data,3
+
+statement query T 
+SELECT CONCAT_WS(NULL, to_varchar(number), 'data') from numbers(3);
+
+----  
+NULL
+NULL
+NULL
+
+statement query T 
+SELECT CONCAT_WS(',', NULL); -- is emtpy, not NULL
+
+----  
+	
+

@@ -57,7 +57,7 @@ pub struct OctFunction {
 }
 
 impl OctFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
         Ok(Box::new(OctFunction {
             _display_name: display_name.to_string(),
@@ -75,13 +75,13 @@ impl Function for OctFunction {
         "oct"
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        StringType::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        StringType::new_impl()
     }
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -89,14 +89,24 @@ impl Function for OctFunction {
 
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
-                let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
+                let col = cast_column_field(
+                    &columns[0],
+                    columns[0].data_type(),
+                    &UInt64Type::new_impl(),
+                    &func_ctx,
+                )?;
                 let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
                 for val in col.iter() {
                     builder.append(val.oct_string().as_bytes());
                 }
             }
             _ => {
-                let col = cast_column_field(&columns[0], &Int64Type::arc())?;
+                let col = cast_column_field(
+                    &columns[0],
+                    columns[0].data_type(),
+                    &Int64Type::new_impl(),
+                    &func_ctx,
+                )?;
                 let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
                 for val in col.iter() {
                     builder.append(val.oct_string().as_bytes());

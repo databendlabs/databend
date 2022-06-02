@@ -1,0 +1,25 @@
+statement ok
+DROP TABLE IF EXISTS t;
+
+statement ok
+CREATE TABLE t(a bigint null, b int null, c varchar(255) null, d smallint, e Date ) ENGINE = Null;
+
+statement query TTTTT 
+DESCRIBE t;
+
+----  
+a BIGINT YES NULL 
+b INT YES NULL 
+c VARCHAR YES NULL 
+d SMALLINT NO 0 
+e DATE NO 0 
+
+statement ok
+DESC t;
+
+statement ok
+DESC INFORMATION_SCHEMA.COLUMNS;
+
+statement ok
+DROP TABLE IF EXISTS t;
+

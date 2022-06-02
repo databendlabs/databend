@@ -1,17 +1,16 @@
-use common_base::tokio::sync::Notify;
-use common_base::tokio::sync::Semaphore;
-
 use std::collections::VecDeque;
 use std::sync::{Arc};
-use common_infallible::Mutex;
+use common_base::base::tokio::sync::Notify;
+use common_base::base::tokio::sync::Semaphore;
+use common_base::infallible::Mutex;
 
-struct Queue<T> {
+struct Queue<T: Sized> {
     finished: bool,
     max_queue_size: usize,
     inner_queue: VecDeque<T>,
 }
 
-impl<T> Queue<T> {
+impl<T: Sized> Queue<T> {
     pub fn create(capacity: usize) -> Queue<T> {
         Queue::<T> {
             finished: false,
@@ -121,7 +120,7 @@ pub struct Sender<T> {
     channel: Arc<Channel<T>>,
 }
 
-impl<T> Sender<T> {
+impl<T: Sized> Sender<T> {
     pub fn create(channel: Arc<Channel<T>>) -> Sender<T> {
         Sender { channel }
     }
@@ -141,11 +140,11 @@ pub enum RecvError {
 }
 
 #[derive(Clone)]
-pub struct Receiver<T> {
+pub struct Receiver<T: Sized> {
     channel: Arc<Channel<T>>,
 }
 
-impl<T> Receiver<T> {
+impl<T: Sized> Receiver<T> {
     pub fn create(channel: Arc<Channel<T>>) -> Receiver<T> {
         Receiver { channel }
     }
@@ -163,7 +162,7 @@ impl<T> Receiver<T> {
     }
 }
 
-pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
+pub fn channel<T: Sized>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     let channel = Arc::new(Channel::create(capacity));
     (Sender::create(channel.clone()), Receiver::create(channel))
 }

@@ -1,25 +1,50 @@
 ---------- Input ----------
-drop table if a.b;
+create table a.b (c integer not null 1, b float(10))
 ---------- Output ---------
 error: 
-  --> SQL:1:12
+  --> SQL:1:38
   |
-1 | drop table if a.b;
-  | ----       ^^ expected token <Ident>
-  | |           
-  | while parsing DROP TABLE statement
+1 | create table a.b (c integer not null 1, b float(10))
+  | ------                               ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, or `,`
+  | |                                     
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
 
 ---------- Input ----------
-truncate table a
+create table a (c float(10))
 ---------- Output ---------
 error: 
-  --> SQL:1:17
+  --> SQL:1:24
   |
-1 | truncate table a
-  | --------        ^ expected token ";"
-  | |               
-  | while parsing TRUNCATE TABLE statement
+1 | create table a (c float(10))
+  | ------                 ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, or `,`
+  | |                       
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
+
+
+---------- Input ----------
+create table a (c varch)
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | create table a (c varch)
+  | ------          - ^^^^^
+  | |               | |
+  | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 25 more ...
+  | |               | while parsing type name
+  | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
+
+
+---------- Input ----------
+drop table if a.b
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | drop table if a.b
+  |               ^ expected `EXISTS`, `.`, `ALL`, or `;`
 
 
 ---------- Input ----------
@@ -29,9 +54,7 @@ error:
   --> SQL:1:19
   |
 1 | truncate table a.b.c.d
-  | --------          ^ expected token ";"
-  | |                  
-  | while parsing TRUNCATE TABLE statement
+  |                   ^ expected `PURGE` or `;`
 
 
 ---------- Input ----------
@@ -41,9 +64,9 @@ error:
   --> SQL:1:10
   |
 1 | truncate a
-  | -------- ^ expected token <TABLE>
+  | -------- ^ expected `TABLE`
   | |         
-  | while parsing TRUNCATE TABLE statement
+  | while parsing `TRUNCATE TABLE [<database>.]<table> [PURGE]`
 
 
 ---------- Input ----------
@@ -53,8 +76,30 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  | ---- ^ expected token <TABLE>
-  | |     
-  | while parsing DROP TABLE statement
+  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, or `FUNCTION`
+
+
+---------- Input ----------
+insert into t format
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | insert into t format
+  | ------              ^ expected <Ident> or <QuotedString>
+  | |                   
+  | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`
+
+
+---------- Input ----------
+alter database system x rename to db
+---------- Output ---------
+error: 
+  --> SQL:1:23
+  |
+1 | alter database system x rename to db
+  | -----                 ^ expected `RENAME`
+  | |                      
+  | while parsing `ALTER DATABASE [IF EXISTS] <action>`
 
 

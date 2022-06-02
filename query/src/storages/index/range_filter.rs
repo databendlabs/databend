@@ -33,7 +33,7 @@ use common_planners::RequireColumnsVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 
-pub type BlockStatistics = HashMap<u32, ColumnStatistics>;
+pub type ColumnsStatistics = HashMap<u32, ColumnStatistics>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ColumnStatistics {
@@ -41,6 +41,12 @@ pub struct ColumnStatistics {
     pub max: DataValue,
     pub null_count: u64,
     pub in_memory_size: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ClusterStatistics {
+    pub min: Vec<DataValue>,
+    pub max: Vec<DataValue>,
 }
 
 #[derive(Debug, Clone)]
@@ -53,9 +59,9 @@ pub struct RangeFilter {
 
 impl RangeFilter {
     pub fn try_create(
+        ctx: Arc<QueryContext>,
         expr: &Expression,
         schema: DataSchemaRef,
-        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let mut stat_columns: StatColumns = Vec::new();
         let verifiable_expr = build_verifiable_expr(expr, &schema, &mut stat_columns);
@@ -68,12 +74,12 @@ impl RangeFilter {
         let output_fields = vec![verifiable_expr.to_data_field(&input_schema)?];
         let output_schema = DataSchemaRefExt::create(output_fields);
         let expr_executor = ExpressionExecutor::try_create(
+            ctx,
             "verifiable expression executor in RangeFilter",
             input_schema.clone(),
             output_schema,
             vec![verifiable_expr],
             false,
-            ctx,
         )?;
 
         Ok(Self {
@@ -84,7 +90,7 @@ impl RangeFilter {
         })
     }
 
-    pub fn eval(&self, stats: &BlockStatistics) -> Result<bool> {
+    pub fn eval(&self, stats: &ColumnsStatistics) -> Result<bool> {
         let mut columns = Vec::with_capacity(self.stat_columns.len());
         for col in self.stat_columns.iter() {
             let val_opt = col.apply_stat_value(stats, self.origin.clone())?;
@@ -205,7 +211,7 @@ impl StatColumn {
 
     fn apply_stat_value(
         &self,
-        stats: &BlockStatistics,
+        stats: &ColumnsStatistics,
         schema: DataSchemaRef,
     ) -> Result<Option<ColumnRef>> {
         if self.stat_type == StatType::Nulls {
@@ -620,7 +626,7 @@ fn get_maybe_monotonic(op: &str, args: Expressions) -> Result<bool> {
     Ok(true)
 }
 
-fn check_maybe_monotonic(expr: &Expression) -> Result<bool> {
+pub fn check_maybe_monotonic(expr: &Expression) -> Result<bool> {
     match expr {
         Expression::Literal { .. } => Ok(true),
         Expression::Column { .. } => Ok(true),

@@ -1,0 +1,6 @@
+statement query T 
+SELECT database();
+
+----  
+default
+

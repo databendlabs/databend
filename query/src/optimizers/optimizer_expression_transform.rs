@@ -110,10 +110,9 @@ impl ExprTransformImpl {
         }
     }
 
-    fn make_condition(op: &str, origin: &Expression) -> Result<Expression> {
-        let factory = FunctionFactory::instance();
-        let function_features = factory.get_features(op)?;
-        if function_features.is_bool_func {
+    fn make_condition(origin: &Expression, return_type: &DataTypeImpl) -> Result<Expression> {
+        let nonull_return_type = remove_nullable(return_type);
+        if nonull_return_type.data_type_id() == TypeID::Boolean {
             Ok(origin.clone())
         } else {
             Ok(origin.not_eq(lit(0)))
@@ -122,30 +121,30 @@ impl ExprTransformImpl {
 
     // Ensure that all expressions involved in conditions are boolean functions.
     // Specifically, change <non-bool-expr> to (0 <> <non-bool-expr>).
-    fn boolean_transformer(origin: &Expression) -> Result<Expression> {
+    fn boolean_transformer(origin: &Expression, return_type: &DataTypeImpl) -> Result<Expression> {
         match origin {
             Expression::Literal { .. } => Ok(origin.clone()),
             Expression::BinaryExpression { op, left, right } => match op.to_lowercase().as_str() {
                 "and" => {
-                    let new_left = Self::boolean_transformer(left)?;
-                    let new_right = Self::boolean_transformer(right)?;
+                    let new_left = Self::boolean_transformer(left, return_type)?;
+                    let new_right = Self::boolean_transformer(right, return_type)?;
                     Ok(new_left.and(new_right))
                 }
                 "or" => {
-                    let new_left = Self::boolean_transformer(left)?;
-                    let new_right = Self::boolean_transformer(right)?;
+                    let new_left = Self::boolean_transformer(left, return_type)?;
+                    let new_right = Self::boolean_transformer(right, return_type)?;
                     Ok(new_left.or(new_right))
                 }
-                other => Self::make_condition(other, origin),
+                _ => Self::make_condition(origin, return_type),
             },
             Expression::UnaryExpression { op, expr } => match op.to_lowercase().as_str() {
                 "not" => {
-                    let new_expr = Self::boolean_transformer(expr)?;
+                    let new_expr = Self::boolean_transformer(expr, return_type)?;
                     Ok(not(new_expr))
                 }
-                other => Self::make_condition(other, origin),
+                _ => Self::make_condition(origin, return_type),
             },
-            Expression::ScalarFunction { op, .. } => Self::make_condition(op.as_str(), origin),
+            Expression::ScalarFunction { .. } => Self::make_condition(origin, return_type),
             _ => Ok(origin.not_eq(lit(0))),
         }
     }
@@ -304,7 +303,8 @@ impl PlanRewriter for ExprTransformImpl {
 
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
         let new_predicate = Self::constant_transformer(&plan.predicate)?;
-        let new_predicate = Self::boolean_transformer(&new_predicate)?;
+        let return_type = new_predicate.to_data_type(&plan.input.schema())?;
+        let new_predicate = Self::boolean_transformer(&new_predicate, &return_type)?;
         let new_predicate = Self::truth_transformer(&new_predicate, false)?;
         PlanBuilder::from(&new_input).filter(new_predicate)?.build()
     }
@@ -321,7 +321,9 @@ impl PlanRewriter for ExprTransformImpl {
 
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
         let new_predicate = Self::constant_transformer(&plan.predicate)?;
-        let new_predicate = Self::boolean_transformer(&new_predicate)?;
+
+        let return_type = new_predicate.to_data_type(&plan.input.schema())?;
+        let new_predicate = Self::boolean_transformer(&new_predicate, &return_type)?;
         let new_predicate = Self::truth_transformer(&new_predicate, false)?;
         PlanBuilder::from(&new_input).having(new_predicate)?.build()
     }
@@ -349,6 +351,7 @@ impl PlanRewriter for ExprTransformImpl {
             // of the having is literal false like 'having 1=2'
             // then we overwrites the ReadDataSourcePlan to an empty one.
             let node = PlanNode::ReadSource(ReadDataSourcePlan {
+                catalog: plan.catalog.clone(),
                 source_info: plan.source_info.clone(),
                 scan_fields: plan.scan_fields.clone(),
                 parts: vec![], // set parts to empty vector, read_table should return None immediately

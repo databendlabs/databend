@@ -1,6 +1,7 @@
 ---
-title: Analyzing OnTime with Databend on Object Storage
+title: Analyzing OnTime With Databend on Object Storage
 sidebar_label: Analyzing OnTime Dataset
+description: Use Databend analyzing `OnTime` datasets on S3 step by step.
 ---
 
 Analyzing `OnTime` datasets on S3 with Databend step by step.
@@ -9,15 +10,30 @@ Analyzing `OnTime` datasets on S3 with Databend step by step.
 
 Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend with Amazon S3](../10-deploy/01-s3.md)
-* [How to Deploy Databend with Tencent COS](../10-deploy/02-cos.md)
-* [How to Deploy Databend with Alibaba OSS](../10-deploy/03-oss.md)
-* [How to Deploy Databend with Wasabi](../10-deploy/05-wasabi.md)
-* [How to Deploy Databend with Scaleway OS](../10-deploy/06-scw.md)
+* [How to Deploy Databend](../00-guides/index.md#deployment)
 
 ## Step 2. Load OnTime Datasets
 
-### 2.1 Create OnTime Table
+### 2.1 Create a Databend User
+
+Connect to Databend server with MySQL client:
+```shell
+mysql -h127.0.0.1 -uroot -P3307 
+```
+
+Create a user:
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
+```
+
+Grant privileges for the user:
+```sql
+GRANT ALL ON *.* TO user1;
+```
+
+See also [How To Create User](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
+
+### 2.2 Create OnTime Table
 
 ```sql
 CREATE TABLE ontime
@@ -134,7 +150,7 @@ CREATE TABLE ontime
 );
 ```
 
-### 2.2 Load Data Into OnTime Table
+### 2.3 Load Data Into OnTime Table
 
 ```shell title='t_ontime.csv.zip'
 wget --no-check-certificate https://repo.databend.rs/t_ontime/t_ontime.csv.zip
@@ -145,12 +161,14 @@ unzip t_ontime.csv.zip
 ```
 
 ```shell title='Load CSV files into Databend'
-ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"skip_header:0\" -H \"field_delimiter:\t\"  -F  \"upload=@{}\"  -XPUT http://127.0.0.1:8081/v1/streaming_load |bash
+ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"skip_header:0\" -H \"field_delimiter:\t\"  -F  \"upload=@{}\"  -XPUT http://user1:abc123@127.0.0.1:8081/v1/streaming_load |bash
 ```
 
 :::tip
 
-* http://127.0.0.1:8081/v1/streaming_load
+* http://user1:abc123@127.0.0.1:8081/v1/streaming_load
+    * `user1` is the user.
+    * `abc123` is the user password.
     * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
     * `8081` is `http_handler_port` value in your *databend-query.toml*
 :::
@@ -159,7 +177,7 @@ ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -
 
 Execute Queries:
 
-```shell title='mysql'
+```shell
 mysql -h127.0.0.1 -P3307 -uroot
 ```
 ```sql

@@ -1,8 +1,8 @@
 ---
-title: Load Data from Local File System
+title: Load Data From Local File System
 sidebar_label: From Local File System
 description:
-  Load Data from Local File System.
+  Load data from local file system.
 ---
 
 <p align="center">
@@ -10,7 +10,7 @@ description:
 </p>
 
 Using HTTP API `v1/streaming_load` to load data from local file into Databend.
-Currently, we only support CSV and Parquet file format.
+Currently, we support CSV, JSON and Parquet file format.
 
 > Note: CSV file should be UTF-8 character encoded if you have extra character set
 
@@ -51,15 +51,15 @@ Download [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.co
 mysql -h127.0.0.1 -uroot -P3307
 ```
 
-```sql title='mysql>'
+```sql
 CREATE DATABASE book_db;
 ```
 
-```sql title='mysql>'
+```sql
 USE book_db;
 ```
 
-```sql title='mysql>'
+```sql
 CREATE TABLE books
 (
     title VARCHAR,
@@ -75,7 +75,7 @@ CREATE TABLE books
 <TabItem value="csv" label="CSV">
 
 ```shell title='Request'
-curl -XPUT 'http://127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: insert into book_db.books format CSV' -H 'skip_header: 0' -H 'field_delimiter: ,' -H 'record_delimiter: \n' -F 'upload=@"./books.csv"'
+curl -XPUT 'http://root:@127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: insert into book_db.books format CSV' -H 'skip_header: 0' -H 'field_delimiter: ,' -H 'record_delimiter: \n' -F 'upload=@"./books.csv"'
 ```
 
 ```json title='Response'
@@ -107,7 +107,7 @@ curl -XPUT 'http://127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: insert into
 <TabItem value="parquet" label="Parquet">
 
 ```shell title='Request'
-curl -XPUT 'http://127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: insert into book_db.books format Parquet' -F 'upload=@"./books.parquet"'
+curl -XPUT 'http://root:@127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: insert into book_db.books format Parquet' -F 'upload=@"./books.parquet"'
 ```
 
 ```json title='Response'

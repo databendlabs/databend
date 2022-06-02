@@ -17,16 +17,16 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DropTableReq;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableNameIdent;
 use common_meta_types::GrantObject;
-use common_meta_types::TableMeta;
 use common_meta_types::UserPrivilegeType;
 use common_planners::AlterViewPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -54,7 +54,7 @@ impl Interpreter for AlterViewInterpreter {
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Database(self.plan.db.clone()),
+                &GrantObject::Database(self.plan.catalog.clone(), self.plan.db.clone()),
                 UserPrivilegeType::Create,
             )
             .await?;
@@ -62,8 +62,8 @@ impl Interpreter for AlterViewInterpreter {
         // check whether view has exists
         if !self
             .ctx
-            .get_catalog()
-            .list_tables(&*self.plan.tenant, &*self.plan.db)
+            .get_catalog(&self.plan.catalog)?
+            .list_tables(&self.plan.tenant, &self.plan.db)
             .await?
             .iter()
             .any(|table| {
@@ -84,12 +84,15 @@ impl Interpreter for AlterViewInterpreter {
 impl AlterViewInterpreter {
     async fn alter_view(&self) -> Result<SendableDataBlockStream> {
         // drop view
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let plan = DropTableReq {
             if_exists: true,
-            tenant: self.plan.tenant.clone(),
-            db_name: self.plan.db.clone(),
-            table_name: self.plan.viewname.clone(),
+
+            name_ident: TableNameIdent {
+                tenant: self.plan.tenant.clone(),
+                db_name: self.plan.db.clone(),
+                table_name: self.plan.viewname.clone(),
+            },
         };
         catalog.drop_table(plan).await?;
 
@@ -98,9 +101,11 @@ impl AlterViewInterpreter {
         options.insert("query".to_string(), self.plan.subquery.clone());
         let plan = CreateTableReq {
             if_not_exists: true,
-            tenant: self.plan.tenant.clone(),
-            db_name: self.plan.db.clone(),
-            table_name: self.plan.viewname.clone(),
+            name_ident: TableNameIdent {
+                tenant: self.plan.tenant.clone(),
+                db_name: self.plan.db.clone(),
+                table_name: self.plan.viewname.clone(),
+            },
             table_meta: TableMeta {
                 engine: VIEW_ENGINE.to_string(),
                 options,

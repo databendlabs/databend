@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-use std::fmt::Formatter;
-
 use common_exception::Result;
 
 use crate::sql::optimizer::group::Group;
@@ -72,26 +69,26 @@ impl Memo {
             return Ok(group_index);
         }
 
-        let mut new_group = false;
+        let mut _new_group = false;
 
         // Create new group if not specified
         let group_index = match target_group {
             Some(index) => index,
             _ => {
-                new_group = true;
+                _new_group = true;
                 self.add_group()
             }
         };
 
-        if new_group {
-            let group = self.group_mut(group_index);
-            let relational_prop = expression.compute_relational_prop();
-            group.set_relational_prop(relational_prop);
-        }
+        // if new_group {
+        // let group = self.group_mut(group_index);
+        // let relational_prop = expression.compute_relational_prop();
+        // group.set_relational_prop(relational_prop);
+        // }
 
         let plan = expression.plan();
 
-        let group_expression = MExpr::create(group_index, plan, children_group);
+        let group_expression = MExpr::create(group_index, plan.clone(), children_group);
         self.insert_m_expr(group_index, group_expression)?;
 
         Ok(group_index)
@@ -114,16 +111,5 @@ impl Memo {
         let group = Group::create(group_index);
         self.groups.push(group);
         group_index
-    }
-}
-
-impl Debug for Memo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{{")?;
-        for group in self.groups.iter() {
-            writeln!(f, "\tGroup_{}: {:?}", group.group_index(), group)?;
-        }
-        write!(f, "}}")?;
-        Ok(())
     }
 }

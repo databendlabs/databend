@@ -21,8 +21,7 @@ use num::cast::AsPrimitive;
 
 pub trait DateConverter {
     fn to_date(&self, tz: &Tz) -> Date<Tz>;
-    fn to_date_time(&self, tz: &Tz) -> DateTime<Tz>;
-    fn to_date_time64(&self, precision: usize, tz: &Tz) -> DateTime<Tz>;
+    fn to_timestamp(&self, tz: &Tz) -> DateTime<Tz>;
 }
 
 impl<T> DateConverter for T
@@ -34,16 +33,14 @@ where T: AsPrimitive<i64>
         dt
     }
 
-    fn to_date_time(&self, tz: &Tz) -> DateTime<Tz> {
-        tz.timestamp_millis(self.as_() * 1000)
-    }
-
-    fn to_date_time64(&self, precision: usize, tz: &Tz) -> DateTime<Tz> {
-        let nano = self.as_() * 10i64.pow(9 - precision as u32);
-
-        let sec = nano / 1_000_000_000;
-        let nsec = nano % 1_000_000_000;
-
-        tz.timestamp(sec, nsec as u32)
+    fn to_timestamp(&self, tz: &Tz) -> DateTime<Tz> {
+        // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
+        let micros = self.as_();
+        let (mut secs, mut nanos) = (micros / 1_000_000, (micros % 1_000_000) * 1_000);
+        if nanos < 0 {
+            secs -= 1;
+            nanos += 1_000_000_000;
+        }
+        tz.timestamp_opt(secs, nanos as u32).unwrap()
     }
 }

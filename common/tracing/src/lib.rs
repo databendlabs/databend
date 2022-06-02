@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(backtrace)]
+
+mod config;
 mod logging;
 mod panic_hook;
 mod tracing_to_jaeger;
 
+pub use config::Config;
 pub use logging::init_default_ut_tracing;
 pub use logging::init_global_tracing;
 pub use logging::init_meta_ut_tracing;

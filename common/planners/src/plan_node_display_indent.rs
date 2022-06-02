@@ -15,6 +15,8 @@
 use std::fmt;
 use std::fmt::Formatter;
 
+use common_datavalues::DataType;
+
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::BroadcastPlan;
@@ -32,6 +34,7 @@ use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
+use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -74,6 +77,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::ReadSource(plan) => Self::format_read_source(f, plan),
             PlanNode::CreateDatabase(plan) => Self::format_create_database(f, plan),
             PlanNode::DropDatabase(plan) => Self::format_drop_database(f, plan),
+            PlanNode::RenameDatabase(plan) => Self::format_rename_database(f, plan),
             PlanNode::CreateTable(plan) => Self::format_create_table(f, plan),
             PlanNode::DropTable(plan) => Self::format_drop_table(f, plan),
             PlanNode::RenameTable(plan) => Self::format_rename_table(f, plan),
@@ -133,9 +137,12 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             }
             write!(
                 f,
-                "{:?}:{:?}",
+                "{:?}:{}",
                 plan.expr[i],
-                plan.expr[i].to_data_type(&plan.input.schema()).unwrap()
+                plan.expr[i]
+                    .to_data_type(&plan.input.schema())
+                    .unwrap()
+                    .name()
             )?;
         }
 
@@ -150,9 +157,12 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             }
             write!(
                 f,
-                "{:?}:{:?}",
+                "{:?}:{}",
                 plan.exprs[i],
-                plan.exprs[i].to_data_type(&plan.input.schema()).unwrap()
+                plan.exprs[i]
+                    .to_data_type(&plan.input.schema())
+                    .unwrap()
+                    .name()
             )?;
         }
 
@@ -184,9 +194,9 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             let expr = plan.order_by[i].clone();
             write!(
                 f,
-                "{:?}:{:?}",
+                "{:?}:{}",
                 expr,
-                expr.to_data_type(&plan.schema()).unwrap()
+                expr.to_data_type(&plan.schema()).unwrap().name()
             )?;
         }
 
@@ -312,8 +322,24 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             write!(
                 f,
                 "{:}.{:} to {:}.{:}",
-                entity.db, entity.table_name, entity.new_db, entity.new_table_name
+                entity.database_name,
+                entity.table_name,
+                entity.new_database_name,
+                entity.new_table_name
             )?;
+
+            if i + 1 != plan.entities.len() {
+                write!(f, ", ")?;
+            }
+        }
+        write!(f, "]")
+    }
+
+    fn format_rename_database(f: &mut Formatter, plan: &RenameDatabasePlan) -> fmt::Result {
+        write!(f, "Rename database,")?;
+        write!(f, " [")?;
+        for (i, entity) in plan.entities.iter().enumerate() {
+            write!(f, "{:} to {:}", entity.db, entity.new_db,)?;
 
             if i + 1 != plan.entities.len() {
                 write!(f, ", ")?;

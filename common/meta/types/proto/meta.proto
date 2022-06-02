@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package meta;
 
+import "request.proto";
+
 message Empty {}
 message GetRequest { string key = 1; }
 
@@ -31,6 +33,14 @@ message RaftRequest {
 message RaftReply {
   string data = 1;
   string error = 2;
+}
+
+message MemberListRequest {
+  string data = 1;
+}
+
+message MemberListReply {
+  repeated string data = 1;
 }
 
 message HandshakeRequest {
@@ -67,14 +77,8 @@ message WatchRequest {
   FilterType filter_type = 3;
 }
 
-
 message Event {
   string key = 1;
-
-  message SeqV {
-    uint64 seq = 1;
-    bytes data = 2;
-  }
 
   // current hold current value of key(if any)
   optional SeqV current = 2;
@@ -85,6 +89,67 @@ message Event {
 
 message WatchResponse {
   Event event = 1;
+}
+
+// messages for txn
+message TxnCondition {
+  // condition result
+  enum ConditionResult {
+    EQ = 0;
+    GT = 1;
+    GE = 2;
+    LT = 3;
+    LE = 4;
+    NE = 5;
+  }
+
+  string key = 1;
+
+  oneof target {
+    // used when compare value
+    bytes value = 2;
+    // used when compare seq
+    uint64 seq = 3;
+  }
+
+  // the expected result of condition, if `expected` match the condition result,
+  // then the `if_then` op will be executed, otherwise `else_then` op will be executed.
+  ConditionResult expected = 4;
+}
+
+message TxnOp {
+  oneof request {
+    TxnGetRequest get = 1;
+    TxnPutRequest put = 2;
+    TxnDeleteRequest delete = 3;
+  }
+}
+
+message TxnOpResponse {
+  oneof response {
+    TxnGetResponse get = 1;
+    TxnPutResponse put = 2;
+    TxnDeleteResponse delete = 3;
+  }
+}
+
+message TxnRequest {
+  // `condition` is a list of predicates.
+  // If all of them success, the `if_then` will be executed, 
+  // otherwise `else_then` op will be executed.
+  repeated TxnCondition condition = 1;
+
+  // `if_then` is a list of operations will be executed when all condition evaluates to true.
+  repeated TxnOp if_then = 2;
+
+  // `else_then` is a list of operations will be executed when not all condition evaluates to true.
+  repeated TxnOp else_then = 3;
+}
+
+message TxnReply {
+  bool success = 1;
+  repeated TxnOpResponse responses = 2;
+  string error = 3;
 }
 
 service RaftService {
@@ -119,4 +184,9 @@ service MetaService {
   // Add watch key stream.
   // Whenever the watch key data updated, client will be notified accross the stream.
   rpc Watch(WatchRequest) returns (stream WatchResponse);
+
+  rpc Transaction(TxnRequest) returns (TxnReply);
+
+  // Get MetaSrv member list endpoints
+  rpc MemberList(MemberListRequest) returns (MemberListReply);
 }

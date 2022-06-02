@@ -33,7 +33,7 @@ impl PatternExtractor {
         if pattern.is_pattern() {
             // Pattern operator is `Pattern`, we can return current operator.
             return vec![SExpr::create(
-                m_expr.plan(),
+                m_expr.plan().clone(),
                 vec![],
                 Some(m_expr.group_index()),
             )];
@@ -84,7 +84,7 @@ impl PatternExtractor {
 
         if cursors.is_empty() {
             results.push(SExpr::create(
-                m_expr.plan(),
+                m_expr.plan().clone(),
                 vec![],
                 Some(m_expr.group_index()),
             ));

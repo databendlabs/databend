@@ -13,13 +13,14 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = { path = "../arrow" }
+common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
 common-macros = { path = "../macros" }
-common-mem-allocator = { path = "../mem-allocator" }
+primitive-types = "0.6.1"
 
 # Github dependencies
-opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-clickhouse" }
+opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "15786d3", package = "opensrv-clickhouse" }
 
 # Crates.io dependencies
 chrono = "0.4.19"
@@ -35,7 +36,6 @@ paste = "1.0.7"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 smallvec = { version = "1.8.0", features = ["write"] }
-typetag = "0.1.8"
 
 [dev-dependencies]
 criterion = "0.3.5"

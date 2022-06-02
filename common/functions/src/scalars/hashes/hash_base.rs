@@ -57,7 +57,7 @@ where
     H: Hasher + Default + Clone + Sync + Send + 'static,
     R: Scalar + Clone + FromPrimitive + ToDataType + Sync + Send,
 {
-    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(BaseHashFunction::<H, R> {
             display_name: display_name.to_string(),
             h: PhantomData,
@@ -80,7 +80,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         R::to_data_type()
     }
 
@@ -138,7 +138,7 @@ impl DFHash for f64 {
     }
 }
 
-impl<'a> DFHash for bool {
+impl DFHash for bool {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         Hash::hash(self, state);
@@ -149,5 +149,70 @@ impl<'a> DFHash for &'a [u8] {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         Hash::hash_slice(self, state);
+    }
+}
+
+impl<'a> DFHash for &'a VariantValue {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let v = self.as_ref().to_string();
+        let u = v.as_bytes();
+        Hash::hash(&u, state);
+    }
+}
+
+impl<'a> DFHash for ArrayValueRef<'a> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Hash::hash(&'[', state);
+        match self {
+            ArrayValueRef::Indexed { column, idx } => {
+                let value = column.get(*idx);
+                if let DataValue::Array(vals) = value {
+                    for v in vals {
+                        DFHash::hash(&v, state);
+                        Hash::hash(&',', state);
+                    }
+                }
+            }
+            ArrayValueRef::ValueRef { val } => {
+                for v in &val.values {
+                    DFHash::hash(v, state);
+                    Hash::hash(&',', state);
+                }
+            }
+        }
+        Hash::hash(&']', state);
+    }
+}
+
+impl DFHash for DataValue {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            DataValue::Null => {}
+            DataValue::Boolean(v) => DFHash::hash(v, state),
+            DataValue::Int64(v) => DFHash::hash(v, state),
+            DataValue::UInt64(v) => DFHash::hash(v, state),
+            DataValue::Float64(v) => DFHash::hash(v, state),
+            DataValue::String(vals) => {
+                for v in vals {
+                    DFHash::hash(v, state);
+                }
+            }
+            DataValue::Array(vals) => {
+                for v in vals {
+                    v.hash(state);
+                    Hash::hash(&',', state);
+                }
+            }
+            DataValue::Struct(vals) => {
+                for v in vals {
+                    v.hash(state);
+                    Hash::hash(&',', state);
+                }
+            }
+            DataValue::Variant(v) => DFHash::hash(&v, state),
+        }
     }
 }

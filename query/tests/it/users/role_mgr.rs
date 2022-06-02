@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
@@ -32,13 +32,13 @@ async fn test_role_manager() -> Result<()> {
 
     // add role
     {
-        let role_info = RoleInfo::new(role_name.clone());
+        let role_info = RoleInfo::new(&role_name);
         role_mgr.add_role(tenant, role_info, false).await?;
     }
 
     // add role again, error
     {
-        let role_info = RoleInfo::new(role_name.clone());
+        let role_info = RoleInfo::new(&role_name);
         let res = role_mgr.add_role(tenant, role_info, false).await;
         assert!(res.is_err());
         assert_eq!(
@@ -49,7 +49,7 @@ async fn test_role_manager() -> Result<()> {
 
     // add role
     {
-        let role_info = RoleInfo::new(role_name.clone());
+        let role_info = RoleInfo::new(&role_name);
         role_mgr.add_role(tenant, role_info, true).await?;
     }
 

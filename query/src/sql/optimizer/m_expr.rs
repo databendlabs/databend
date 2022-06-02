@@ -12,17 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-use std::fmt::Formatter;
-
 use common_exception::Result;
 
 use crate::sql::optimizer::memo::Memo;
 use crate::sql::optimizer::pattern_extractor::PatternExtractor;
 use crate::sql::optimizer::rule::RulePtr;
 use crate::sql::optimizer::rule::TransformState;
-use crate::sql::optimizer::s_expr::PlanPtr;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::Operator;
+use crate::sql::plans::RelOperator;
 use crate::sql::IndexType;
 
 /// `MExpr` is abbreviation of multiple expression, which is the representation of relational
@@ -30,12 +28,12 @@ use crate::sql::IndexType;
 #[derive(Clone)]
 pub struct MExpr {
     group_index: IndexType,
-    plan: PlanPtr,
+    plan: RelOperator,
     children: Vec<IndexType>,
 }
 
 impl MExpr {
-    pub fn create(group_index: IndexType, plan: PlanPtr, children: Vec<IndexType>) -> Self {
+    pub fn create(group_index: IndexType, plan: RelOperator, children: Vec<IndexType>) -> Self {
         MExpr {
             group_index,
             plan,
@@ -51,8 +49,8 @@ impl MExpr {
         self.group_index
     }
 
-    pub fn plan(&self) -> PlanPtr {
-        self.plan.clone()
+    pub fn plan(&self) -> &RelOperator {
+        &self.plan
     }
 
     pub fn children(&self) -> &Vec<IndexType> {
@@ -69,7 +67,7 @@ impl MExpr {
             return false;
         }
 
-        self.plan.kind_eq(&pattern.plan())
+        self.plan.plan_type() == pattern.plan().plan_type()
     }
 
     pub fn apply_rule(
@@ -84,17 +82,6 @@ impl MExpr {
         for expr in exprs.iter() {
             rule.apply(expr, transform_state)?;
         }
-
-        Ok(())
-    }
-}
-
-impl Debug for MExpr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{")?;
-        write!(f, "plan: {:?}, ", &self.plan)?;
-        write!(f, "children: {:?}", &self.children)?;
-        write!(f, "}}")?;
 
         Ok(())
     }

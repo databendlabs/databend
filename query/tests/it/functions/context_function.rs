@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::procedures::ContextFunction;
 
@@ -30,6 +30,12 @@ async fn test_context_function_build_arg_from_ctx() -> Result<()> {
     // Ok.
     {
         let args = ContextFunction::build_args_from_ctx(ctx.clone(), "current_user")?;
+        assert_eq!("'root'@'127.0.0.1'", format!("{:?}", args[0]));
+    }
+
+    // Ok.
+    {
+        let args = ContextFunction::build_args_from_ctx(ctx.clone(), "user")?;
         assert_eq!("'root'@'127.0.0.1'", format!("{:?}", args[0]));
     }
 

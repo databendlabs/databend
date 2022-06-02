@@ -76,6 +76,7 @@ impl QueryFragment for ReadDatasourceQueryFragment {
                         executor.clone(),
                         PlanNode::ReadSource(ReadDataSourcePlan {
                             parts: new_partitions[index].to_owned(),
+                            catalog: self.read_data_source.catalog.clone(),
                             source_info: self.read_data_source.source_info.clone(),
                             scan_fields: self.read_data_source.scan_fields.clone(),
                             statistics: self.read_data_source.statistics.clone(),

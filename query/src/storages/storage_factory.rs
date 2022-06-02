@@ -15,12 +15,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 
-use crate::configs::Config;
 use crate::storages::fuse::FuseTable;
 use crate::storages::github::GithubTable;
 use crate::storages::memory::MemoryTable;
@@ -28,6 +27,7 @@ use crate::storages::null::NullTable;
 use crate::storages::view::ViewTable;
 use crate::storages::StorageContext;
 use crate::storages::Table;
+use crate::Config;
 
 pub trait StorageCreator: Send + Sync {
     fn try_create(&self, ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>>;
@@ -47,6 +47,7 @@ where
 pub struct StorageDescription {
     pub engine_name: String,
     pub comment: String,
+    pub support_order_key: bool,
 }
 
 pub trait StorageDescriptor: Send + Sync {

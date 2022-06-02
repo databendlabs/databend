@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod fuse_history;
+mod clustering_information;
+mod fuse_segment;
+mod fuse_snapshot;
+mod search_tables;
 mod system;
 
-pub use fuse_history::FuseHistoryProcedure;
+pub use clustering_information::ClusteringInformationProcedure;
+pub use fuse_segment::FuseSegmentProcedure;
+pub use fuse_snapshot::FuseSnapshotProcedure;
+pub use search_tables::SearchTablesProcedure;
 pub use system::SystemProcedure;

@@ -16,16 +16,22 @@ use std::iter::once;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::growable::make_growable;
+use common_arrow::arrow::array::ord as arrow_ord;
+use common_arrow::arrow::array::ord::DynComparator;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::merge_sort::*;
 use common_arrow::arrow::compute::sort as arrow_sort;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::error::Error as ArrowError;
+use common_arrow::arrow::error::Result as ArrowResult;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataBlock;
 
+#[derive(Clone)]
 pub struct SortColumnDescription {
     pub column_name: String,
     pub asc: bool,
@@ -57,7 +63,7 @@ impl DataBlock {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let indices = arrow_sort::lexsort_to_indices(&order_arrays, limit)?;
+        let indices = arrow_sort::lexsort_to_indices_impl(&order_arrays, limit, &build_compare)?;
         DataBlock::block_take_by_indices(block, indices.values())
     }
 
@@ -110,7 +116,7 @@ impl DataBlock {
             })
             .collect::<Vec<_>>();
 
-        let comparator = build_comparator(&sort_options_with_array)?;
+        let comparator = build_comparator_impl(&sort_options_with_array, &build_compare)?;
         let lhs_indices = (0, 0, lhs.num_rows());
         let rhs_indices = (1, 0, rhs.num_rows());
         let slices = merge_sort_slices(once(&lhs_indices), once(&rhs_indices), &comparator);
@@ -200,5 +206,40 @@ impl DataBlock {
                 DataBlock::merge_sort_block(&left, &right, sort_columns_descriptions, limit)
             }
         }
+    }
+}
+
+fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
+    let left = VariantColumn::from_arrow_array(left);
+    let right = VariantColumn::from_arrow_array(right);
+
+    Ok(Box::new(move |i, j| {
+        left.get_data(i).cmp(right.get_data(j))
+    }))
+}
+
+fn compare_array(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
+    let left = ArrayColumn::from_arrow_array(left);
+    let right = ArrayColumn::from_arrow_array(right);
+
+    Ok(Box::new(move |i, j| {
+        left.get_data(i).cmp(&right.get_data(j))
+    }))
+}
+
+fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
+    match left.data_type() {
+        ArrowType::LargeList(_) => compare_array(left, right),
+        ArrowType::Extension(name, _, _) => {
+            if name == "Variant" || name == "VariantArray" || name == "VariantObject" {
+                compare_variant(left, right)
+            } else {
+                return Err(ArrowError::NotYetImplemented(format!(
+                    "Sort not supported for data type {:?}",
+                    left.data_type()
+                )));
+            }
+        }
+        _ => arrow_ord::build_compare(left, right),
     }
 }

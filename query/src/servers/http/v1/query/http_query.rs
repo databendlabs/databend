@@ -12,30 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::tokio::sync::mpsc;
-use common_base::tokio::sync::Mutex as TokioMutex;
-use common_base::tokio::sync::RwLock;
-use common_base::ProgressValues;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::Mutex as TokioMutex;
+use common_base::base::tokio::sync::RwLock;
+use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserInfo;
+use common_io::prelude::FormatSettings;
 use serde::Deserialize;
 
+use super::HttpQueryContext;
+use crate::servers::http::v1::query::block_buffer::BlockBuffer;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
 use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateKind;
 use crate::servers::http::v1::query::Executor;
+use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
-use crate::servers::http::v1::query::ResultDataManager;
 use crate::servers::http::v1::query::Wait;
-use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 #[derive(Deserialize, Debug)]
@@ -48,24 +48,49 @@ pub struct HttpQueryRequest {
     pub pagination: PaginationConf,
 }
 
+const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
+const DEFAULT_MAX_ROWS_PER_PAGE: usize = 10000;
+const DEFAULT_WAIT_TIME_SECS: u32 = 1;
+
+fn default_max_rows_in_buffer() -> usize {
+    DEFAULT_MAX_ROWS_IN_BUFFER
+}
+
+fn default_max_rows_per_page() -> usize {
+    DEFAULT_MAX_ROWS_PER_PAGE
+}
+
+fn default_wait_time_secs() -> u32 {
+    DEFAULT_WAIT_TIME_SECS
+}
+
 #[derive(Deserialize, Debug)]
 pub struct PaginationConf {
-    pub(crate) wait_time_secs: i32,
+    #[serde(default = "default_wait_time_secs")]
+    pub(crate) wait_time_secs: u32,
+    #[serde(default = "default_max_rows_in_buffer")]
+    pub(crate) max_rows_in_buffer: usize,
+    #[serde(default = "default_max_rows_per_page")]
+    pub(crate) max_rows_per_page: usize,
 }
 
 impl Default for PaginationConf {
     fn default() -> Self {
-        PaginationConf { wait_time_secs: 1 }
+        PaginationConf {
+            wait_time_secs: 1,
+            max_rows_in_buffer: DEFAULT_MAX_ROWS_IN_BUFFER,
+            max_rows_per_page: DEFAULT_MAX_ROWS_PER_PAGE,
+        }
     }
 }
 
 impl PaginationConf {
     pub(crate) fn get_wait_type(&self) -> Wait {
         let t = self.wait_time_secs;
-        match t.cmp(&0) {
-            Ordering::Greater => Wait::Deadline(Instant::now() + Duration::from_secs(t as u64)),
-            Ordering::Equal => Wait::Async,
-            Ordering::Less => Wait::Sync,
+        if t > 0 {
+            Wait::Deadline(Instant::now() + Duration::from_secs(t as u64))
+        } else {
+            Wait::Async
         }
     }
 }
@@ -108,28 +133,24 @@ pub struct HttpQueryResponseInternal {
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
-    #[allow(dead_code)]
+
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
-    data: Arc<TokioMutex<ResultDataManager>>,
+    data: Arc<TokioMutex<PageManager>>,
     config: HttpQueryConfig,
     expire_at: Arc<TokioMutex<Option<Instant>>>,
 }
 
 impl HttpQuery {
     pub(crate) async fn try_create(
-        id: &str,
+        ctx: &HttpQueryContext,
         request: HttpQueryRequest,
-        session_manager: &Arc<SessionManager>,
-        user_info: &UserInfo,
         config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
-        let http_query_manager = session_manager.get_http_query_manager();
+        let http_query_manager = ctx.session_mgr.get_http_query_manager();
         let session = match &request.session {
             HttpSession::New(session_conf) => {
-                let session = session_manager
-                    .create_session(SessionType::HTTPQuery)
-                    .await?;
+                let session = ctx.get_session(SessionType::HTTPQuery);
                 if let Some(db) = &session_conf.database {
                     session.set_current_database(db.clone());
                 }
@@ -143,28 +164,46 @@ impl HttpQuery {
                 session
             }
             HttpSession::Old { id } => {
-                let session = http_query_manager
-                    .get_session(id)
-                    .await
-                    .ok_or_else(|| ErrorCode::UnknownSession(id))?;
-                if session.expire_state() == ExpiringState::InUse {
-                    return Err(ErrorCode::BadArguments(
-                        "last query on the session not finished",
-                    ));
-                };
+                let session = http_query_manager.get_session(id).await.ok_or_else(|| {
+                    ErrorCode::UnknownSession(format!("unknown session-id {}, maybe expired", id))
+                })?;
+                let mut n = 1;
+                while let ExpiringState::InUse(query_id) = session.expire_state() {
+                    if let Some(last_query) = &http_query_manager.get_query(&query_id).await {
+                        if last_query.get_state().await.state == ExecuteStateKind::Running {
+                            return Err(ErrorCode::BadArguments(
+                                "last query on the session not finished",
+                            ));
+                        } else {
+                            http_query_manager.remove_query(&query_id).await;
+                        }
+                    }
+                    // wait for Arc<QueryContextShared> to drop and detach itself from session
+                    // should not take too long
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                    n += 1;
+                    if n > 10 {
+                        return Err(ErrorCode::UnexpectedError(
+                            "last query stop but not released",
+                        ));
+                    }
+                }
                 session
             }
         };
-        session.set_current_user(user_info.clone());
         let session_id = session.get_id().clone();
 
-        //TODO(youngsofun): support config/set channel size
-        let (block_tx, block_rx) = mpsc::channel(10);
+        let ctx = session.create_query_context().await?;
+        let id = ctx.get_id();
 
-        let state = ExecuteState::try_create(&request, session, block_tx).await?;
-        let data = Arc::new(TokioMutex::new(ResultDataManager::new(block_rx)));
+        let block_buffer = BlockBuffer::new(request.pagination.max_rows_in_buffer);
+        let state = ExecuteState::try_create(&request, session, ctx, block_buffer.clone()).await?;
+        let data = Arc::new(TokioMutex::new(PageManager::new(
+            request.pagination.max_rows_per_page,
+            block_buffer,
+        )));
         let query = HttpQuery {
-            id: id.to_string(),
+            id,
             session_id,
             request,
             state,
@@ -180,9 +219,13 @@ impl HttpQuery {
         self.request.pagination.wait_time_secs == 0
     }
 
-    pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
+    pub async fn get_response_page(
+        &self,
+        page_no: usize,
+        format: &FormatSettings,
+    ) -> Result<HttpQueryResponseInternal> {
         Ok(HttpQueryResponseInternal {
-            data: Some(self.get_page(page_no).await?),
+            data: Some(self.get_page(page_no, format).await?),
             session_id: self.session_id.clone(),
             state: self.get_state().await,
         })
@@ -207,10 +250,10 @@ impl HttpQuery {
         }
     }
 
-    async fn get_page(&self, page_no: usize) -> Result<ResponseData> {
+    async fn get_page(&self, page_no: usize, format: &FormatSettings) -> Result<ResponseData> {
         let mut data = self.data.lock().await;
         let page = data
-            .get_a_page(page_no, &self.request.pagination.get_wait_type())
+            .get_a_page(page_no, &self.request.pagination.get_wait_type(), format)
             .await?;
         let response = ResponseData {
             page,
@@ -226,7 +269,11 @@ impl HttpQuery {
             true,
         )
         .await;
-        self.data.lock().await.block_rx.close();
+    }
+
+    pub async fn detach(&self) {
+        let data = self.data.lock().await;
+        data.detach().await
     }
 
     pub async fn clear_expire_time(&self) {

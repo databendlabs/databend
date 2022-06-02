@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
-use common_meta_types::protobuf::event::SeqV;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
+use common_meta_types::protobuf::SeqV;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
+use common_tracing::tracing;
 
 use crate::init_meta_ut;
 
-async fn upsert_kv_client_main(addr: String, updates: Vec<UpsertKVAction>) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+async fn upsert_kv_client_main(addr: String, updates: Vec<UpsertKVReq>) -> anyhow::Result<()> {
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
 
     // update some kv
     for update in updates.iter() {
@@ -40,17 +41,15 @@ async fn test_watch_main(
     addr: String,
     watch: WatchRequest,
     mut watch_events: Vec<Event>,
-    updates: Vec<UpsertKVAction>,
+    updates: Vec<UpsertKVReq>,
 ) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None)?;
 
-    let mut grpc_client = client.make_client().await?;
+    // let mut grpc_client = client.make_conn().await?;
 
-    let request = tonic::Request::new(watch);
+    let mut client_stream = client.request(watch).await?;
 
-    let mut client_stream = grpc_client.watch(request).await?.into_inner();
-
-    let _h = tokio::spawn(upsert_kv_client_main(addr.clone(), updates));
+    let _h = tokio::spawn(upsert_kv_client_main(addr, updates));
 
     loop {
         if let Ok(Some(resp)) = client_stream.message().await {
@@ -70,15 +69,13 @@ async fn test_watch_main(
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_watch() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Watch some key.
     // - Write some data.
     // - Assert watcher get all the update.
 
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let mut seq: u64 = 1;
@@ -153,11 +150,11 @@ async fn test_watch() -> anyhow::Result<()> {
         seq += 3;
         // update kv
         let updates = vec![
-            UpsertKVAction::new("a", MatchSeq::Any, Operation::Update(val_a), None),
-            UpsertKVAction::new("z", MatchSeq::Any, Operation::Update(val_z), None),
-            UpsertKVAction::new("b", MatchSeq::Any, Operation::Update(val_b), None),
-            UpsertKVAction::new("b", MatchSeq::Any, Operation::Update(val_new), None),
-            UpsertKVAction::new("b", MatchSeq::Any, Operation::Delete, None),
+            UpsertKVReq::new("a", MatchSeq::Any, Operation::Update(val_a), None),
+            UpsertKVReq::new("z", MatchSeq::Any, Operation::Update(val_z), None),
+            UpsertKVReq::new("b", MatchSeq::Any, Operation::Update(val_b), None),
+            UpsertKVReq::new("b", MatchSeq::Any, Operation::Update(val_new), None),
+            UpsertKVReq::new("b", MatchSeq::Any, Operation::Delete, None),
         ];
         test_watch_main(addr.clone(), watch, events, updates).await?;
     }
@@ -200,10 +197,10 @@ async fn test_watch() -> anyhow::Result<()> {
 
         // update and delete twice
         let updates = vec![
-            UpsertKVAction::new(key_str, MatchSeq::Any, Operation::Update(val), None),
-            UpsertKVAction::new(key_str, MatchSeq::Any, Operation::Delete, None),
-            UpsertKVAction::new(key_str, MatchSeq::Any, Operation::Update(val_new), None),
-            UpsertKVAction::new(key_str, MatchSeq::Any, Operation::Delete, None),
+            UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Update(val), None),
+            UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Delete, None),
+            UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Update(val_new), None),
+            UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Delete, None),
         ];
         test_watch_main(addr.clone(), watch, events, updates).await?;
     }

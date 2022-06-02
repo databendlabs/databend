@@ -14,25 +14,25 @@
 
 use std::sync::Arc;
 
-use common_base::escape_for_key;
+use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_meta_api::KVApi;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
-use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
 
+use crate::serde::deserialize_struct;
+use crate::serde::serialize_struct;
 use crate::user::user_api::UserApi;
 
 static USER_API_KEY_PREFIX: &str = "__fd_users";
@@ -63,7 +63,7 @@ impl UserMgr {
     ) -> common_exception::Result<u64> {
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
-        let value = serde_json::to_vec(&user_info)?;
+        let value = serialize_struct(user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let match_seq = match seq {
             None => MatchSeq::GE(1),
@@ -72,7 +72,7 @@ impl UserMgr {
 
         let kv_api = self.kv_api.clone();
         let res = kv_api
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 &key,
                 match_seq,
                 Operation::Update(value),
@@ -95,10 +95,10 @@ impl UserApi for UserMgr {
         let match_seq = MatchSeq::Exact(0);
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
-        let value = serde_json::to_vec(&user_info)?;
+        let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(UpsertKVAction::new(
+        let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(
             &key,
             match_seq,
             Operation::Update(value),
@@ -122,7 +122,10 @@ impl UserApi for UserMgr {
             res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", user_key)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
-            Ok(_) => Ok(seq_value.into_seqv()?),
+            Ok(_) => Ok(SeqV::new(
+                seq_value.seq,
+                deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")?,
+            )),
             Err(_) => Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key))),
         }
     }
@@ -133,8 +136,7 @@ impl UserApi for UserMgr {
 
         let mut r = vec![];
         for (_key, val) in values {
-            let u = serde_json::from_slice::<UserInfo>(&val.data)
-                .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
+            let u = deserialize_struct(&val.data, ErrorCode::IllegalUserInfoFormat, || "")?;
 
             r.push(SeqV::new(val.seq, u));
         }
@@ -221,12 +223,7 @@ impl UserApi for UserMgr {
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self
             .kv_api
-            .upsert_kv(UpsertKVAction::new(
-                &key,
-                seq.into(),
-                Operation::Delete,
-                None,
-            ))
+            .upsert_kv(UpsertKVReq::new(&key, seq.into(), Operation::Delete, None))
             .await?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())

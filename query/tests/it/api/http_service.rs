@@ -15,8 +15,8 @@
 use std::fs::File;
 use std::io::Read;
 
-use common_base::get_free_tcp_port;
-use common_base::tokio;
+use common_base::base::get_free_tcp_port;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::api::HttpService;
 use databend_query::servers::Server;

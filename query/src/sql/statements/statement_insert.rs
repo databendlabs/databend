@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::BufferReader;
+use common_io::prelude::CheckpointReader;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
 use common_planners::InsertValueBlock;
@@ -31,7 +34,6 @@ use sqlparser::ast::Query;
 use sqlparser::ast::SqliteOnConflict;
 
 use crate::sessions::QueryContext;
-use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -44,7 +46,7 @@ use crate::storages::Table;
 pub struct DfInsertStatement<'a> {
     pub or: Option<SqliteOnConflict>,
     /// TABLE
-    pub table_name: ObjectName,
+    pub object_name: ObjectName,
     /// COLUMNS
     pub columns: Vec<Ident>,
     /// Overwrite (Hive)
@@ -77,8 +79,10 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         self.is_supported()?;
 
-        let (database_name, table_name) = self.resolve_table(&ctx)?;
-        let write_table = ctx.get_table(&database_name, &table_name).await?;
+        let (catalog_name, database_name, table_name) = self.resolve_table(&ctx)?;
+        let write_table = ctx
+            .get_table(&catalog_name, &database_name, &table_name)
+            .await?;
         let table_id = write_table.get_id();
         let schema = self.insert_schema(write_table)?;
 
@@ -93,6 +97,7 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Insert(
             InsertPlan {
+                catalog_name,
                 database_name,
                 table_name,
                 table_id,
@@ -105,19 +110,27 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
 }
 
 impl<'a> DfInsertStatement<'a> {
-    fn resolve_table(&self, ctx: &QueryContext) -> Result<(String, String)> {
-        match self.table_name.0.len() {
+    fn resolve_table(&self, ctx: &QueryContext) -> Result<(String, String, String)> {
+        let parts = &self.object_name.0;
+        match parts.len() {
             0 => Err(ErrorCode::SyntaxException("Insert table name is empty")),
             1 => Ok((
+                ctx.get_current_catalog(),
                 ctx.get_current_database(),
-                self.table_name.0[0].value.clone(),
+                parts[0].value.clone(),
             )),
             2 => Ok((
-                self.table_name.0[0].value.clone(),
-                self.table_name.0[1].value.clone(),
+                ctx.get_current_catalog(),
+                parts[0].value.clone(),
+                parts[1].value.clone(),
+            )),
+            3 => Ok((
+                parts[0].value.clone(),
+                parts[1].value.clone(),
+                parts[2].value.clone(),
             )),
             _ => Err(ErrorCode::SyntaxException(
-                "Insert table name must be [`db`].`table`",
+                "Insert table name must be [`catalog`].[`db`].`table`",
             )),
         }
     }
@@ -146,16 +159,11 @@ impl<'a> DfInsertStatement<'a> {
     ) -> Result<InsertInputSource> {
         tracing::debug!("{:?}", values_str);
 
-        let source = ValueSource::new(schema.clone());
-        let block = match source.stream_read(values_str) {
-            Ok(block) => Ok(block),
-            Err(_) => {
-                let bytes = values_str.as_bytes();
-                source
-                    .parser_read(bytes, ExpressionAnalyzer::create(ctx.clone()), ctx)
-                    .await
-            }
-        }?;
+        let bytes = values_str.as_bytes();
+        let cursor = Cursor::new(bytes);
+        let mut reader = CheckpointReader::new(BufferReader::new(cursor));
+        let source = ValueSource::new(ctx.clone(), schema.clone());
+        let block = source.read(&mut reader).await?;
         Ok(InsertInputSource::Values(InsertValueBlock { block }))
     }
 

@@ -15,9 +15,10 @@
 use std::fs::File;
 use std::io::Read;
 
-use common_base::tokio;
-use common_base::Stoppable;
+use common_base::base::tokio;
+use common_base::base::Stoppable;
 use common_exception::Result;
+use common_tracing::tracing;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
@@ -30,12 +31,9 @@ use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 // TODO(zhihanz) add tls fail case
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_http_service_tls_server() -> Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let mut conf = Config::empty();
+    let mut conf = Config::default();
     let addr_str = "127.0.0.1:30002";
 
     conf.admin_tls_server_key = TEST_SERVER_KEY.to_owned();

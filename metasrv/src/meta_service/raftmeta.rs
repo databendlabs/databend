@@ -17,17 +17,14 @@ use std::fmt::Debug;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 
-use common_base::tokio;
-use common_base::tokio::sync::watch;
-use common_base::tokio::sync::Mutex;
-use common_base::tokio::sync::RwLockReadGuard;
-use common_base::tokio::task::JoinHandle;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::watch;
+use common_base::base::tokio::sync::Mutex;
+use common_base::base::tokio::sync::RwLockReadGuard;
+use common_base::base::tokio::task::JoinHandle;
 use common_grpc::DNSResolver;
-use common_meta_api::MetaApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
-use common_meta_raft_store::state_machine::TableLookupKey;
-use common_meta_raft_store::state_machine::TableLookupValue;
 use common_meta_sled_store::openraft;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
@@ -40,7 +37,6 @@ use common_meta_types::Endpoint;
 use common_meta_types::ForwardRequest;
 use common_meta_types::ForwardResponse;
 use common_meta_types::ForwardToLeader;
-use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
@@ -49,9 +45,6 @@ use common_meta_types::MetaRaftError;
 use common_meta_types::MetaResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::SeqV;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
 use common_meta_types::ToMetaError;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
@@ -65,6 +58,11 @@ use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
+use crate::metrics::incr_meta_metrics_leader_change;
+use crate::metrics::incr_meta_metrics_read_failed;
+use crate::metrics::set_meta_metrics_has_leader;
+use crate::metrics::set_meta_metrics_is_leader;
+use crate::metrics::set_meta_metrics_proposals_applied;
 use crate::network::Network;
 use crate::store::MetaRaftStore;
 use crate::watcher::WatcherManager;
@@ -367,6 +365,7 @@ impl MetaNode {
         // TODO: every state change triggers add_non_voter!!!
         let mut running_rx = mn.running_rx.clone();
         let mut jh = mn.join_handles.lock().await;
+        let mut current_leader: Option<u64> = None;
 
         // TODO: reduce dependency: it does not need all of the fields in MetaNode
         let mn = mn.clone();
@@ -388,6 +387,17 @@ impl MetaNode {
                         if changed.is_ok() {
                             let mm = metrics_rx.borrow().clone();
                             if let Some(cur) = mm.current_leader {
+                                // if current leader has changed?
+                                if let Some(leader) = current_leader {
+                                    if cur != leader {
+                                        current_leader = Some(cur);
+                                        incr_meta_metrics_leader_change();
+                                    }
+                                } else {
+                                    current_leader = Some(cur);
+                                    incr_meta_metrics_leader_change();
+                                }
+
                                 if cur == mn.sto.id {
                                     // TODO: check result
                                     let _rst = mn.add_configured_non_voters().await;
@@ -399,7 +409,17 @@ impl MetaNode {
                                             _rst
                                         );
                                     }
+                                    set_meta_metrics_is_leader(true);
+                                } else {
+                                    set_meta_metrics_is_leader(false);
                                 }
+                                set_meta_metrics_has_leader(true);
+                            } else {
+                                set_meta_metrics_has_leader(false);
+                                set_meta_metrics_is_leader(false);
+                            }
+                            if let Some(last_applied) = mm.last_applied {
+                                set_meta_metrics_proposals_applied(last_applied.index);
                             }
                         } else {
                             // shutting down
@@ -534,13 +554,12 @@ impl MetaNode {
         let mut cluster_node_ids = BTreeSet::new();
         cluster_node_ids.insert(node_id);
 
-        let rst = self
-            .raft
+        self.raft
             .initialize(cluster_node_ids)
             .await
             .map_err(|x| MetaError::MetaServiceError(format!("{:?}", x)))?;
 
-        tracing::info!("initialized cluster, rst: {:?}", rst);
+        tracing::info!("initialized cluster");
 
         self.add_node(node_id, endpoint).await?;
 
@@ -595,24 +614,42 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_meta_addrs(&self) -> MetaResult<Vec<String>> {
+        // inconsistent get: from local state machine
+        let sm = self.sto.state_machine.read().await;
+        sm.get_metasrv_addrs()
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaError>
     where
         Request: Into<ForwardRequestBody> + Debug,
         ForwardResponse: TryInto<Reply>,
         <ForwardResponse as TryInto<Reply>>::Error: std::fmt::Display,
     {
-        let res = self
+        match self
             .handle_forwardable_request(ForwardRequest {
                 forward_to_leader: 1,
                 body: req.into(),
             })
-            .await?;
+            .await
+        {
+            Err(e) => {
+                incr_meta_metrics_read_failed();
+                Err(e)
+            }
+            Ok(res) => {
+                let res: Reply = res.try_into().map_err(|e| {
+                    incr_meta_metrics_read_failed();
+                    MetaRaftError::ConsistentReadError(format!(
+                        "consistent read recv invalid reply: {}",
+                        e
+                    ))
+                })?;
 
-        let res: Reply = res.try_into().map_err(|e| {
-            MetaRaftError::ConsistentReadError(format!("consistent read recv invalid reply: {}", e))
-        })?;
-
-        Ok(res)
+                Ok(res)
+            }
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self, req), fields(target=%req.forward_to_leader))]
@@ -701,44 +738,53 @@ impl MetaNode {
         Ok(resp)
     }
 
+    /// Remove a node from this cluster.
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn remove_node(&self, node_id: NodeId) -> Result<AppliedState, MetaError> {
+        // TODO: use txid?
+        let resp = self
+            .write(LogEntry {
+                txid: None,
+                cmd: Cmd::RemoveNode { node_id },
+            })
+            .await?;
+        Ok(resp)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn add_metasrv_addr(
+        &self,
+        metasrv_name: String,
+        metasrv_addr: String,
+    ) -> Result<AppliedState, MetaError> {
+        let resp = self
+            .write(LogEntry {
+                txid: None,
+                cmd: Cmd::AddMetaSrvAddr {
+                    metasrv_name,
+                    metasrv_addr,
+                },
+            })
+            .await?;
+        Ok(resp)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn remove_metasrv_addr(
+        &self,
+        metasrv_name: String,
+    ) -> Result<AppliedState, MetaError> {
+        let resp = self
+            .write(LogEntry {
+                txid: None,
+                cmd: Cmd::RemoveMetaSrvAddr { metasrv_name },
+            })
+            .await?;
+        Ok(resp)
+    }
+
     pub async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
         self.sto.state_machine.read().await
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn lookup_table_id(
-        &self,
-        db_id: u64,
-        name: &str,
-    ) -> Result<Option<SeqV<TableLookupValue>>, MetaError> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        match sm.table_lookup().get(
-            &(TableLookupKey {
-                database_id: db_id,
-                table_name: name.to_string(),
-            }),
-        ) {
-            Ok(e) => Ok(e),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.list_tables(req).await
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_table_by_id(&self, tid: &u64) -> Result<Option<SeqV<TableMeta>>, MetaError> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.get_table_meta_by_id(tid)
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
@@ -811,10 +857,9 @@ impl MetaNode {
                 ))
             })?;
 
-        let resp = client
-            .forward(req)
-            .await
-            .map_err(|e| MetaRaftError::ForwardRequestError(e.to_string()))?;
+        let resp = client.forward(req).await.map_err(|e| {
+            MetaRaftError::ForwardRequestError(format!("{} while forward to {}", e, endpoint))
+        })?;
         let raft_mes = resp.into_inner();
 
         let res: Result<ForwardResponse, MetaError> = raft_mes.into();

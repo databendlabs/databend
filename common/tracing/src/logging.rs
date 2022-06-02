@@ -144,7 +144,7 @@ pub fn init_meta_ut_tracing() {
         let mut g = META_UT_LOG_GUARD.as_ref().lock().unwrap();
         *g = Some(do_init_meta_ut_tracing(
             "unittest-meta",
-            "_logs_unittest",
+            "./.databend/logs_unittest",
             "DEBUG",
         ));
     });
@@ -174,6 +174,7 @@ where
         let fmt_level = meta.level().as_str();
         write!(writer, "{:>5} ", fmt_level)?;
 
+        write!(writer, "{:0>15?} ", std::thread::current().name())?;
         write!(writer, "{:0>2?} ", std::thread::current().id())?;
 
         if let Some(scope) = ctx.event_scope() {

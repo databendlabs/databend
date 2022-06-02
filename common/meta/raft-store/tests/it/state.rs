@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_raft_store::state::RaftState;
 use common_meta_sled_store::openraft;
 use openraft::storage::HardState;

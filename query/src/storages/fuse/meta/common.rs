@@ -18,6 +18,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::storages::index::ClusterStatistics;
 use crate::storages::index::ColumnStatistics;
 
 pub type ColumnId = u32;
@@ -34,6 +35,7 @@ pub struct Statistics {
     pub compressed_byte_size: u64,
 
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
+    pub cluster_stats: Option<ClusterStatistics>,
 }
 
 /// Thing has a u64 version nubmer

@@ -15,9 +15,10 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common_base::tokio;
-use common_base::GlobalSequence;
-use common_base::Stoppable;
+use common_base::base::tokio;
+use common_base::base::GlobalSequence;
+use common_base::base::Stoppable;
+use common_meta_grpc::ClientHandle;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
@@ -94,7 +95,7 @@ impl MetaSrvTestContext {
     pub fn new(id: u64) -> MetaSrvTestContext {
         let config_id = next_port();
 
-        let mut config = configs::Config::empty();
+        let mut config = configs::Config::default();
 
         // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
         if cfg!(target_os = "macos") {
@@ -104,7 +105,7 @@ impl MetaSrvTestContext {
 
         config.raft_config.id = id;
 
-        config.raft_config.config_id = format!("{}", config_id);
+        config.raft_config.config_id = config_id.to_string();
 
         // By default, create a meta node instead of open an existent one.
         config.raft_config.single = true;
@@ -131,11 +132,6 @@ impl MetaSrvTestContext {
             config.admin_api_address = format!("{}:{}", host, http_port);
         }
 
-        {
-            let metric_port = next_port();
-            config.metric_api_address = format!("{}:{}", host, metric_port);
-        }
-
         tracing::info!("new test context config: {:?}", config);
 
         MetaSrvTestContext {
@@ -149,10 +145,10 @@ impl MetaSrvTestContext {
         self.meta_node.clone().unwrap()
     }
 
-    pub async fn grpc_client(&self) -> anyhow::Result<MetaGrpcClient> {
+    pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle>> {
         let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
         Ok(client)
     }
 

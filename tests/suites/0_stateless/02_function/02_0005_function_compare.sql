@@ -150,9 +150,9 @@ select '周周周周' not regexp '.*';
 select '==compare_number_string==';
 -- using strict parse by default
 select '333' = '333';
-select toString(1) = '1';
-select toString(111) = '111';
-select toString(3 + 4) = '7';
+select to_varchar(1) = '1';
+select to_varchar(111) = '111';
+select to_varchar(3 + 4) = '7';
 
 -- TODO remove explicit cast
 select '123 ab' = 123; -- {ErrorCode 1010}
@@ -163,11 +163,50 @@ select '777.4' < 778;
 
 select '==compare_datetime==';
 -- compare with date/datetime strings
-SELECT '2021-03-05' = toDate('2021-03-05');
-SELECT '2021-03-05 01:01:01' = toDateTime('2021-03-05 01:01:01');
-SELECT '2021-03-05 01:01:02' > toDateTime('2021-03-05 01:01:01');
-SELECT '2021-03-06' > toDate('2021-03-05');
-SELECT toDateTime('2021-03-05 00:00:00') = toDate('2021-03-05');
-SELECT toDateTime('2021-03-05 00:00:01') > toDate('2021-03-05');
-SELECT toDateTime('2021-03-04 00:00:01') < toDate('2021-03-05');
-SELECT toDateTime(toDate('2021-03-05')) = toDate('2021-03-05');
+SELECT '2021-03-05' = to_date('2021-03-05');
+SELECT '2021-03-05 01:01:01' = to_datetime('2021-03-05 01:01:01');
+SELECT '2021-03-05 01:01:02' > to_datetime('2021-03-05 01:01:01');
+SELECT '2021-03-06' > to_date('2021-03-05');
+SELECT to_datetime('2021-03-05 00:00:00') = to_date('2021-03-05');
+SELECT to_datetime('2021-03-05 00:00:01') > to_date('2021-03-05');
+SELECT to_datetime('2021-03-04 00:00:01') < to_date('2021-03-05');
+SELECT to_datetime(to_date('2021-03-05')) = to_date('2021-03-05');
+
+select '==compare_variant==';
+-- compare with variant
+SELECT parse_json('true') = true;
+SELECT parse_json('false') = true;
+SELECT parse_json('true') != true;
+SELECT parse_json('false') != true;
+SELECT parse_json('1') = 1;
+SELECT parse_json('2') = 1;
+SELECT parse_json('1') != 1;
+SELECT parse_json('2') != 1;
+SELECT parse_json('1') > 1;
+SELECT parse_json('2') > 1;
+SELECT parse_json('1') >= 1;
+SELECT parse_json('2') >= 1;
+SELECT parse_json('1') < 1;
+SELECT parse_json('2') < 1;
+SELECT parse_json('1') <= 1;
+SELECT parse_json('2') <= 1;
+SELECT parse_json('"ab"') = 'ab';
+SELECT parse_json('"cd"') = 'ab';
+SELECT parse_json('"ab"') != 'ab';
+SELECT parse_json('"cd"') != 'ab';
+SELECT parse_json('"ab"') > 'ab';
+SELECT parse_json('"cd"') > 'ab';
+SELECT parse_json('"ab"') >= 'ab';
+SELECT parse_json('"cd"') >= 'ab';
+SELECT parse_json('"ab"') < 'ab';
+SELECT parse_json('"cd"') < 'ab';
+SELECT parse_json('"ab"') <= 'ab';
+SELECT parse_json('"cd"') <= 'ab';
+SELECT parse_json('"ab"') like 'ab';
+SELECT parse_json('"cd"') like 'ab';
+SELECT parse_json('"ab"') not like 'ab';
+SELECT parse_json('"cd"') not like 'ab';
+SELECT parse_json('"ab"') regexp '.*';
+SELECT parse_json('"cd"') regexp '.*';
+SELECT parse_json('"ab"') not regexp '.*';
+SELECT parse_json('"cd"') not regexp '.*';

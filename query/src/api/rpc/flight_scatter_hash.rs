@@ -33,10 +33,10 @@ pub struct HashFlightScatter {
 
 impl FlightScatter for HashFlightScatter {
     fn try_create(
+        ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         expr: Option<Expression>,
         num: usize,
-        ctx: Arc<QueryContext>,
     ) -> common_exception::Result<Self> {
         match expr {
             None => Err(ErrorCode::LogicalError(
@@ -65,7 +65,7 @@ impl HashFlightScatter {
         ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let expression = Self::expr_action(num, expr);
-        let indices_expr_executor = Self::expr_executor(schema, &expression, ctx)?;
+        let indices_expr_executor = Self::expr_executor(ctx, schema, &expression)?;
         indices_expr_executor.validate()?;
 
         Ok(HashFlightScatter {
@@ -80,17 +80,17 @@ impl HashFlightScatter {
     }
 
     fn expr_executor(
+        ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         expr: &Expression,
-        ctx: Arc<QueryContext>,
     ) -> Result<ExpressionExecutor> {
         ExpressionExecutor::try_create(
+            ctx,
             "indices expression in FlightScatterByHash",
             schema,
             Self::indices_expr_schema(&expr.column_name()),
             vec![expr.clone()],
             false,
-            ctx,
         )
     }
 

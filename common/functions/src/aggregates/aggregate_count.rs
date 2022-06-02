@@ -31,11 +31,9 @@ pub struct AggregateCountState {
     count: u64,
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct AggregateCountFunction {
     display_name: String,
-    arguments: Vec<DataField>,
     nullable: bool,
 }
 
@@ -49,7 +47,6 @@ impl AggregateCountFunction {
         Ok(Arc::new(AggregateCountFunction {
             display_name: display_name.to_string(),
             nullable: false,
-            arguments,
         }))
     }
 
@@ -67,7 +64,7 @@ impl AggregateFunction for AggregateCountFunction {
         "AggregateCountFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(u64::to_data_type())
     }
 

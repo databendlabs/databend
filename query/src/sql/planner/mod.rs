@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,57 +14,61 @@
 
 use std::sync::Arc;
 
-pub use bind_context::BindContext;
-use common_ast::parser::Parser;
+use common_ast::parser::error::Backtrace;
+use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
+use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-pub use metadata::*;
-pub use plan::*;
-pub use scalar::*;
+pub use plans::ScalarExpr;
 
-use crate::pipelines::processors::Pipeline;
 use crate::sessions::QueryContext;
-use crate::sql::exec::Executor;
 use crate::sql::optimizer::optimize;
-use crate::sql::optimizer::OptimizeContext;
+pub use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 
-mod bind_context;
-mod binder;
-mod expression_binder;
+pub(crate) mod binder;
+mod format;
 mod metadata;
-mod plan;
-mod scalar;
+pub mod plans;
+mod semantic;
+
+pub use binder::ColumnBinding;
+pub use format::FormatTreeNode;
+pub use metadata::ColumnEntry;
+pub use metadata::Metadata;
+pub use metadata::MetadataRef;
+pub use metadata::TableEntry;
+
+use self::plans::Plan;
 
 pub struct Planner {
-    context: Arc<QueryContext>,
+    ctx: Arc<QueryContext>,
 }
 
 impl Planner {
-    pub fn new(context: Arc<QueryContext>) -> Self {
-        Planner { context }
+    pub fn new(ctx: Arc<QueryContext>) -> Self {
+        Planner { ctx }
     }
 
-    pub async fn plan_sql(&mut self, sql: &str) -> Result<Pipeline> {
+    pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef)> {
         // Step 1: parse SQL text into AST
-        let parser = Parser {};
-        let stmts = parser.parse_with_sqlparser(sql)?;
+        let tokens = tokenize_sql(sql)?;
+
+        let backtrace = Backtrace::new();
+        let stmts = parse_sql(&tokens, &backtrace)?;
         if stmts.len() > 1 {
             return Err(ErrorCode::UnImplement("unsupported multiple statements"));
         }
 
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
-        let binder = Binder::new(self.context.get_catalog(), self.context.clone());
-        let bind_result = binder.bind(&stmts[0]).await?;
+        let metadata = Arc::new(RwLock::new(Metadata::create()));
+        let binder = Binder::new(self.ctx.clone(), self.ctx.get_catalogs(), metadata.clone());
+        let plan = binder.bind(&stmts[0]).await?;
 
         // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr
-        let optimize_context = OptimizeContext::create_with_bind_context(&bind_result.bind_context);
-        let optimized_expr = optimize(bind_result.s_expr().clone(), optimize_context)?;
+        let optimized_plan = optimize(plan)?;
 
-        // Step 4: build executable Pipeline with SExpr
-        let exec = Executor::create(self.context.clone(), bind_result.metadata);
-        let pipeline = exec.build_pipeline(&optimized_expr).await?;
-
-        Ok(pipeline)
+        Ok((optimized_plan, metadata.clone()))
     }
 }

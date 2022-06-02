@@ -12,79 +12,64 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::error::Error;
+use std::fs::File;
+use std::io::Write;
+
 use common_ast::parser::token::*;
-use logos::Span;
-use pretty_assertions::assert_eq;
+use common_exception::Result;
+use goldenfile::Mint;
+
+fn run_lexer(file: &mut File, source: &str) {
+    let tokens = Tokenizer::new(source).collect::<Result<Vec<_>>>();
+    match tokens {
+        Ok(tokens) => {
+            let tuples: Vec<_> = tokens
+                .into_iter()
+                .map(|token| (token.kind, token.text(), token.span))
+                .collect();
+            writeln!(file, "---------- Input ----------").unwrap();
+            writeln!(file, "{}", source).unwrap();
+            writeln!(file, "---------- Output ---------").unwrap();
+            writeln!(file, "{:?}", tuples).unwrap();
+            writeln!(file, "\n").unwrap();
+        }
+        Err(err) => {
+            let report = err.message().trim().to_string();
+            writeln!(file, "---------- Input ----------").unwrap();
+            writeln!(file, "{}", source).unwrap();
+            writeln!(file, "---------- Output ---------").unwrap();
+            writeln!(file, "{}", report).unwrap();
+            writeln!(file, "\n").unwrap();
+        }
+    }
+}
 
 #[test]
 fn test_lexer() {
-    assert_lex("", &[(EOI, "", 0..0)]);
-    assert_lex(
-        "x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '",
-        &[
-            (LiteralHex, "x'deadbeef'", 0..11),
-            (
-                LiteralString,
-                "'a string literal\n escape quote by '' or \\'. '",
-                29..75,
-            ),
-            (EOI, "", 75..75),
-        ],
-    );
-    assert_lex("'中文' '日本語'", &[
-        (LiteralString, "'中文'", 0..8),
-        (LiteralString, "'日本語'", 9..20),
-        (EOI, "", 20..20),
-    ]);
-    assert_lex("42 3.5 4. .001 5e2 1.925e-3 .38e+7 1.e-01", &[
-        (LiteralNumber, "42", 0..2),
-        (LiteralNumber, "3.5", 3..6),
-        (LiteralNumber, "4.", 7..9),
-        (LiteralNumber, ".001", 10..14),
-        (LiteralNumber, "5e2", 15..18),
-        (LiteralNumber, "1.925e-3", 19..27),
-        (LiteralNumber, ".38e+7", 28..34),
-        (LiteralNumber, "1.e-01", 35..41),
-        (EOI, "", 41..41),
-    ]);
-    assert_lex(
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("lexer.txt").unwrap();
+
+    let cases = vec![
+        r#""#,
+        r#"x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '"#,
+        r#"'中文' '日本語'"#,
+        r#"42 3.5 4. .001 5e2 1.925e-3 .38e+7 1.e-01 0xfff x'deedbeef'"#,
         r#"create table "user" (id int, name varchar /* the user name */);"#,
-        &[
-            (CREATE, "create", 0..6),
-            (TABLE, "table", 7..12),
-            (QuotedIdent, "\"user\"", 13..19),
-            (LParen, "(", 20..21),
-            (Ident, "id", 21..23),
-            (INT, "int", 24..27),
-            (Comma, ",", 27..28),
-            (Ident, "name", 29..33),
-            (VARCHAR, "varchar", 34..41),
-            (RParen, ")", 61..62),
-            (SemiColon, ";", 62..63),
-            (EOI, "", 63..63),
-        ],
-    )
+    ];
+
+    for case in cases {
+        run_lexer(&mut file, case);
+    }
 }
 
 #[test]
 fn test_lexer_error() {
-    assert_eq!(
-        tokenise("select †∑∂ from t;").unwrap_err(),
-        Error::UnrecognisedToken {
-            rest: "†∑∂ from t;".to_string(),
-            position: 7
-        }
-    );
-}
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("lexer-error.txt").unwrap();
 
-fn assert_lex<'a>(source: &'a str, expected_tokens: &[(TokenKind, &'a str, Span)]) {
-    let tokens = tokenise(source).unwrap();
+    let cases = vec![r#"select †∑∂ from t;"#];
 
-    let tuples: Vec<_> = tokens
-        .into_iter()
-        .map(|token| (token.kind, token.text, token.span))
-        .collect();
-
-    assert_eq!(tuples, expected_tokens);
+    for case in cases {
+        run_lexer(&mut file, case);
+    }
 }

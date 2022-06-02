@@ -4,7 +4,14 @@ DROP TABLE IF EXISTS t3;
 DROP TABLE IF EXISTS t4;
 
 CREATE TABLE t(c1 int) ENGINE = Null;
-SELECT COUNT(1) from system.tables where name = 't' and database = 'default';
+
+-- As part of the functionality of time travel, system.tables now
+-- - contains dropped-tables
+-- - has an extra column `dropped_on`
+-- it is NOT backward compatible.
+--
+-- The following case is moved to 20_005_system_tables_with_dropped
+--SELECT COUNT(1) from system.tables where name = 't' and database = 'default' and dropped_on = 'NULL';
 
 CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null;
 CREATE TABLE t(c1 int) ENGINE = Null; -- {ErrorCode 2302}
@@ -15,9 +22,14 @@ insert into t2 values(1,1),(2,2);
 select a+b from t2;
 
 create table t2(a int,b int) engine=Memory; -- {ErrorCode 2302}
+create table t2(a int,b int) engine=Memory; -- {ErrorCode 2302}
+create table t2(a INT auto_increment); -- {ErrorCode 1022}
+
+create table t3(a int,b int) engine=Memory CLUSTER BY(a); -- {ErrorCode 2703}
+
 
 create table t3(`a` int) ENGINE = Null;
-create table t4('a' int) ENGINE = Null;
+create table t4(a int) ENGINE = Null;
 
 DROP TABLE IF EXISTS t;
 DROP TABLE IF EXISTS t2;
@@ -59,7 +71,7 @@ create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
 
 
 SELECT '====CREATE ALL DATA TYPE TABLE====';
-create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, var VARCHAR, bool BOOLEAN, array ARRAY, obj OBJECT, variant VARIANT);
+create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
 desc db2.test7;
 
 

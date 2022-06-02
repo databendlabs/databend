@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_functions::scalars::CastFunction;
@@ -63,8 +63,8 @@ async fn test_cast_stream() {
     let stream = DataBlockStream::create(input_schema.clone(), None, vec![block0, block1]);
 
     // cast from String to UInt8 and String to UInt16
-    let to_uint8 = CastFunction::create("cast", "UInt8").unwrap();
-    let to_uint16 = CastFunction::create("cast", "UInt16").unwrap();
+    let to_uint8 = CastFunction::create("cast", "UInt8", StringType::new_impl()).unwrap();
+    let to_uint16 = CastFunction::create("cast", "UInt16", StringType::new_impl()).unwrap();
 
     let functions = vec![to_uint8, to_uint16];
     let mut cast_stream = CastStream::try_create(

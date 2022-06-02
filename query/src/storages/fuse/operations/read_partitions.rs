@@ -45,7 +45,7 @@ impl FuseTable {
                 }
                 let schema = self.table_info.schema();
                 let block_metas = BlockPruner::new(snapshot.clone())
-                    .apply(schema, &push_downs, ctx.as_ref())
+                    .apply(ctx.as_ref(), schema, &push_downs)
                     .await?;
 
                 let partitions_scanned = block_metas.len();
@@ -101,7 +101,10 @@ impl FuseTable {
         }
     }
 
-    fn all_columns_partitions(metas: &[BlockMeta], limit: usize) -> (Statistics, Partitions) {
+    pub(crate) fn all_columns_partitions(
+        metas: &[BlockMeta],
+        limit: usize,
+    ) -> (Statistics, Partitions) {
         let mut statistics = Statistics::default_exact();
         let mut partitions = Partitions::default();
 
@@ -167,11 +170,10 @@ impl FuseTable {
                 break;
             }
         }
-
         (statistics, partitions)
     }
 
-    fn all_columns_part(meta: &BlockMeta) -> PartInfoPtr {
+    pub(crate) fn all_columns_part(meta: &BlockMeta) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
 
         for (idx, column_meta) in &meta.col_metas {

@@ -1,8 +1,8 @@
 ---
-title: Start a query Cluster on kubernetes
+title: Start a Query Cluster on Kubernetes
 sidebar_label: K8s Cluster
 description:
-  How to Deploy a Databend Query Cluster on kubernetes.
+  How to deploy a Databend query cluster on Kubernetes.
 ---
 
 :::tip
@@ -11,13 +11,13 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-This tutorial covers how to install and configure Databend query cluster on kubernetes with minio storage backend.
+This tutorial covers how to install and configure the Databend query cluster on kubernetes with minio storage backend.
 ## Before you begin
 
-* Make sure your cluster have enough resource for installation (at least 4 cpus, 4GB RAM, 50GB disk)
-* Make sure you have a kubernetes cluster up and running, please take a look on [k3d](https://k3d.io/v5.3.0/), [minikube](https://minikube.sigs.k8s.io/docs/start/)
+* Make sure your cluster have enough resource for installation (at least 4 CPUs, 4GB RAM, 50GB disk)
+* Make sure you have a kubernetes cluster up and running. Please take a look at [k3d](https://k3d.io/v5.3.0/) or [minikube](https://minikube.sigs.k8s.io/docs/start/).
 * Databend Cluster mode only works on shared storage(AWS S3 or MinIO s3-like storage).
-* This cluster mainly used for testing purpose, it is not targeted for production use.
+* This cluster is mainly used for testing purposes. It is not targeted for production use.
 
 ## Step 1. Deploy sample minio
 
@@ -31,11 +31,11 @@ We will bootstrap a minio server on kubernetes, with the following configuration
 
 ```shell title="minio-server-config"
 STORAGE_TYPE=s3
-S3_STORAGE_BUCKET=sample-storage
-S3_STORAGE_REGION=us-east-1
-S3_STORAGE_ENDPOINT_URL=http://minio.minio.svc.cluster.local:9000
-S3_STORAGE_ACCESS_KEY_ID=minio
-S3_STORAGE_SECRET_ACCESS_KEY=minio123
+STORAGE_S3_BUCKET=sample-storage
+STORAGE_S3_REGION=us-east-1
+STORAGE_S3_ENDPOINT_URL=http://minio.minio.svc.cluster.local:9000
+STORAGE_S3_ACCESS_KEY_ID=minio
+STORAGE_S3_SECRET_ACCESS_KEY=minio123
 ```
 
 The following configuration shall be applied to the target kubernetes cluster, it would create a bucket named `sample-storage` with `10Gi` storage space
@@ -79,11 +79,10 @@ nohup kubectl port-forward -n tenant1 svc/query-service 3308:3307 &
 mysql -h127.0.0.1 -uroot -P3308
 ```
 
-```sql title='mysql>'
-SELECT * from system.clusters
-```
-
 ```sql
+SELECT * FROM system.clusters
+```
+```
 +----------------------+------------+------+
 | name                 | host       | port |
 +----------------------+------------+------+
@@ -95,7 +94,7 @@ SELECT * from system.clusters
 
 ## Step 4. Distributed query
 
-```sql
+```text
 EXPLAIN SELECT max(number), sum(number) FROM numbers_mt(10000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10;
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                           |
@@ -114,8 +113,8 @@ EXPLAIN SELECT max(number), sum(number) FROM numbers_mt(10000000000) GROUP BY nu
 The distributed query works, the cluster will efficiently transfer data through `flight_api_address`.
 
 ## Step 4.1. Upload the data to the cluster
-```shell title='mysql>'
-CREATE TABLE t1(i int, j int);
+```sql
+CREATE TABLE t1(i INT, j INT);
 ```
 
 ```sql
@@ -123,6 +122,8 @@ INSERT INTO t1 SELECT number, number + 300 from numbers(10000000);
 ```
 ```sql
 SELECT count(*) FROM t1;
+```
+```
 +----------+
 | count()  |
 +----------+

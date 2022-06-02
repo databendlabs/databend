@@ -41,6 +41,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -53,6 +54,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -65,6 +67,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -86,6 +89,7 @@ fn create_table() -> Result<()> {
         },
         like: None,
         query: None,
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -100,6 +104,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "batcave".into()},
         like: Some(ObjectName(vec![Ident::new("db2"), Ident::new("test2")])),
         query: None,
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -117,12 +122,14 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "batcave".into()},
         like: None,
         query: Some(Box::new(DfQueryStatement {
+            distinct: false,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
                     name: ObjectName(vec![Ident::new("t2")]),
                     alias: None,
                     args: vec![],
                     with_hints: vec![],
+                    instant: None,
                 },
                 joins: vec![],
             }],
@@ -133,7 +140,9 @@ fn create_table() -> Result<()> {
             order_by: vec![],
             limit: None,
             offset: None,
+            format: None,
         })),
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
     Ok(())
@@ -151,6 +160,7 @@ fn create_table_select() -> Result<()> {
             options: maplit::btreemap! {},
             like: None,
             query: Some(verified_query("SELECT a, b FROM bar")?),
+            cluster_keys: vec![],
         }),
     )?;
 
@@ -164,6 +174,7 @@ fn create_table_select() -> Result<()> {
             options: maplit::btreemap! {},
             like: None,
             query: Some(verified_query("SELECT a, b FROM bar")?),
+            cluster_keys: vec![],
         }),
     )?;
 
@@ -177,6 +188,7 @@ fn drop_table() -> Result<()> {
         let expected = DfStatement::DropTable(DfDropTable {
             if_exists: false,
             name: ObjectName(vec![Ident::new("t1")]),
+            all: false,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -186,6 +198,17 @@ fn drop_table() -> Result<()> {
         let expected = DfStatement::DropTable(DfDropTable {
             if_exists: true,
             name: ObjectName(vec![Ident::new("t1")]),
+            all: false,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "DROP TABLE t1 all";
+        let expected = DfStatement::DropTable(DfDropTable {
+            if_exists: false,
+            name: ObjectName(vec![Ident::new("t1")]),
+            all: true,
         });
         expect_parse_ok(sql, expected)?;
     }

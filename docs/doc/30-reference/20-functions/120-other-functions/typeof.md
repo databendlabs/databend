@@ -23,18 +23,10 @@ String
 ## Examples
 
 ```sql
-SELECT typeof(number) FROM numbers(2);
-+--------------------+
-| typeof(number)     |
-+--------------------+
-| UInt64             |
-| UInt64             |
-+--------------------+
-
-SELECT typeof(sum(number)) FROM numbers(2);
-+-------------------------+
-| typeof(sum(number))     |
-+-------------------------+
-| UInt64                  |
-+-------------------------+
+SELECT typeof(1::INT);
++------------------+
+| typeof(1::Int32) |
++------------------+
+| INT              |
++------------------+
 ```

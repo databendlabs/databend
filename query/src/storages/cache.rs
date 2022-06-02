@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::configs::QueryConfig;
+use crate::config::QueryConfig;
 use crate::storages::fuse::cache;
 use crate::storages::fuse::cache::MemoryCache;
 use crate::storages::fuse::cache::SegmentInfoCache;

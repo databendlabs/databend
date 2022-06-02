@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use metrics::histogram;
+use sqlparser::ast::Expr;
 use sqlparser::ast::Value;
 use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::Dialect;
@@ -89,6 +90,27 @@ impl<'a> DfParser<'a> {
                 Ok(result)
             }
         }
+    }
+
+    pub fn parse_expr(expr: &str) -> Result<Expr, ParserError> {
+        let dialect = &MySqlDialect {};
+        let mut tokenizer = Tokenizer::new(dialect, expr);
+        let (tokens, position_map) = tokenizer.tokenize()?;
+        let mut parser = Parser::new(tokens, position_map, dialect);
+        parser.parse_expr()
+    }
+
+    pub fn parse_exprs(expr: &str) -> Result<Vec<Expr>, ParserError> {
+        let dialect = &MySqlDialect {};
+        let mut tokenizer = Tokenizer::new(dialect, expr);
+        let (tokens, position_map) = tokenizer.tokenize()?;
+        let mut parser = Parser::new(tokens, position_map, dialect);
+
+        parser.expect_token(&Token::LParen)?;
+        let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
+        parser.expect_token(&Token::RParen)?;
+
+        Ok(exprs)
     }
 
     /// Parse a SQL statement and produce a set of statements
@@ -186,7 +208,9 @@ impl<'a> DfParser<'a> {
                         self.parse_revoke()
                     }
                     Keyword::COPY => {
+                        *self = Self::new_with_dialect(self.sql, &SnowflakeDialect {})?;
                         self.parser.next_token();
+
                         self.parse_copy()
                     }
                     Keyword::CALL => {
@@ -206,6 +230,10 @@ impl<'a> DfParser<'a> {
                         "USE" => self.parse_use_database(),
                         "KILL" => self.parse_kill_query(),
                         "OPTIMIZE" => self.parse_optimize(),
+                        "UNDROP" => {
+                            self.parser.next_token();
+                            self.parse_undrop()
+                        }
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => self.expected("an SQL statement", Token::Word(w)),
@@ -291,6 +319,7 @@ impl<'a> DfParser<'a> {
                 Keyword::FUNCTION => self.parse_alter_udf(),
                 Keyword::TABLE => self.parse_alter_table(),
                 Keyword::VIEW => self.parse_alter_view(),
+                Keyword::DATABASE => self.parse_alter_database(),
                 _ => self.expected("keyword USER or FUNCTION", Token::Word(w)),
             },
             unexpected => self.expected("alter statement", unexpected),
@@ -334,10 +363,21 @@ impl<'a> DfParser<'a> {
         }
     }
 
+    fn parse_undrop(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => self.parse_undrop_table(),
+                _ => self.expected("drop statement", Token::Word(w)),
+            },
+            unexpected => self.expected("drop statement", unexpected),
+        }
+    }
+
     fn parse_show(&mut self) -> Result<DfStatement<'a>, ParserError> {
-        let full: bool = self.consume_token("FULL");
-        if self.consume_token("TABLES") {
-            self.parse_show_tables(full)
+        if self.consume_token("FULL") && self.consume_token("TABLES") {
+            self.parse_show_tables(true)
+        } else if self.consume_token("TABLES") {
+            self.parse_show_tables(false)
         } else if self.consume_token("TABLE") && self.consume_token("STATUS") {
             self.parse_show_tab_stat()
         } else if self.consume_token("DATABASES") || self.consume_token("SCHEMAS") {
@@ -346,6 +386,8 @@ impl<'a> DfParser<'a> {
             Ok(DfStatement::ShowSettings(DfShowSettings))
         } else if self.consume_token("CREATE") {
             self.parse_show_create()
+        } else if self.consume_token("FIELDS") {
+            self.parse_show_fields()
         } else if self.consume_token("PROCESSLIST") {
             Ok(DfStatement::ShowProcessList(DfShowProcessList))
         } else if self.consume_token("METRICS") {
@@ -360,6 +402,8 @@ impl<'a> DfParser<'a> {
             self.parse_show_functions()
         } else if self.consume_token("ENGINES") {
             Ok(DfStatement::ShowEngines(DfShowEngines))
+        } else if self.consume_token("STAGES") {
+            self.parse_show_stages()
         } else {
             self.expected("show statement", self.parser.peek_token())
         }

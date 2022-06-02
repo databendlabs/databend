@@ -17,9 +17,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
-use common_base::tokio;
-use common_base::tokio::net::TcpListener;
-use common_base::tokio::sync::Notify;
+use common_base::base::tokio;
+use common_base::base::tokio::net::TcpListener;
+use common_base::base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -30,9 +30,9 @@ use tonic::transport::ServerTlsConfig;
 
 use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::rpc::DatabendQueryFlightService;
-use crate::configs::Config;
 use crate::servers::Server as DatabendQueryServer;
 use crate::sessions::SessionManager;
+use crate::Config;
 
 pub struct RpcService {
     pub sessions: Arc<SessionManager>,
@@ -97,7 +97,7 @@ impl RpcService {
             .add_service(FlightServiceServer::new(flight_api_service))
             .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
 
-        common_base::tokio::spawn(server);
+        common_base::base::tokio::spawn(server);
         Ok(())
     }
 }

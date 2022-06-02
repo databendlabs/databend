@@ -65,16 +65,16 @@ pub trait ResultTypeOfUnary {{
     .unwrap();
 
     let lhs = vec![
-        UInt8Type::arc(),
-        UInt16Type::arc(),
-        UInt32Type::arc(),
-        UInt64Type::arc(),
-        Int8Type::arc(),
-        Int16Type::arc(),
-        Int32Type::arc(),
-        Int64Type::arc(),
-        Float32Type::arc(),
-        Float64Type::arc(),
+        UInt8Type::new_impl(),
+        UInt16Type::new_impl(),
+        UInt32Type::new_impl(),
+        UInt64Type::new_impl(),
+        Int8Type::new_impl(),
+        Int16Type::new_impl(),
+        Int32Type::new_impl(),
+        Int64Type::new_impl(),
+        Float32Type::new_impl(),
+        Float64Type::new_impl(),
     ];
     let rhs = lhs.clone();
     for left in &lhs {
@@ -122,8 +122,8 @@ impl ResultTypeOfUnary for {} {{
     file.flush().unwrap();
 }
 
-fn to_primitive_str(dt: DataTypePtr) -> &'static str {
-    match dt.name() {
+fn to_primitive_str(dt: DataTypeImpl) -> &'static str {
+    match dt.name().as_str() {
         "UInt8" => "u8",
         "UInt16" => "u16",
         "UInt32" => "u32",

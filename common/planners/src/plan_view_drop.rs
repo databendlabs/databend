@@ -21,6 +21,7 @@ use common_datavalues::DataSchemaRef;
 pub struct DropViewPlan {
     pub if_exists: bool,
     pub tenant: String,
+    pub catalog: String,
     pub db: String,
     pub viewname: String,
 }

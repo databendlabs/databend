@@ -13,8 +13,8 @@ Z+
 1
 NULL
 NULL
-Int64
-Float64
+BIGINT
+DOUBLE
 0
 NULL
 2

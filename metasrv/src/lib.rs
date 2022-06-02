@@ -22,6 +22,7 @@ pub mod meta_service;
 pub mod metrics;
 pub mod network;
 pub mod store;
+pub mod version;
 pub mod watcher;
 
 pub trait Opened {

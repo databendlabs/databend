@@ -15,7 +15,7 @@ SHOW TABLE STATUS
 ## Examples
 
 ```sql
-CREATE TABLE t(id int);
+CREATE TABLE t(id INT);
 SHOW TABLE STATUS\G
 *************************** 1. row ***************************
            Name: t

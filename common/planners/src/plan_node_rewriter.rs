@@ -23,7 +23,8 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::{AggregatorFinalPlan, RemotePlan};
+use crate::plan_table_undrop::UnDropTablePlan;
+use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
@@ -67,6 +68,8 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::V1RemotePlan;
+use crate::RemotePlan;
+use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;
@@ -143,10 +146,12 @@ pub trait PlanRewriter: Sized {
             PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
+            PlanNode::RenameDatabase(plan) => self.rewrite_rename_database(plan),
 
             // Table.
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
+            PlanNode::UnDropTable(plan) => self.rewrite_undrop_table(plan),
             PlanNode::RenameTable(plan) => self.rewrite_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
@@ -355,6 +360,9 @@ pub trait PlanRewriter: Sized {
     fn rewrite_rename_table(&mut self, plan: &RenameTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::RenameTable(plan.clone()))
     }
+    fn rewrite_rename_database(&mut self, plan: &RenameDatabasePlan) -> Result<PlanNode> {
+        Ok(PlanNode::RenameDatabase(plan.clone()))
+    }
 
     fn rewrite_optimize_table(&mut self, plan: &OptimizeTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::OptimizeTable(plan.clone()))
@@ -398,6 +406,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_drop_table(&mut self, plan: &DropTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::DropTable(plan.clone()))
+    }
+
+    fn rewrite_undrop_table(&mut self, plan: &UnDropTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::UnDropTable(plan.clone()))
     }
 
     fn rewrite_drop_database(&mut self, plan: &DropDatabasePlan) -> Result<PlanNode> {

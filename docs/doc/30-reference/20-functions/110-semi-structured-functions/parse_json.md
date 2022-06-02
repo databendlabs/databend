@@ -2,6 +2,7 @@
 title: PARSE_JSON
 description:
   Interprets input JSON string, producing a VARIANT value
+title_includes: TRY_PARSE_JSON
 ---
 
 `parse_json` and `try_parse_json` interprets an input string as a JSON document, producing a VARIANT value.
@@ -34,7 +35,6 @@ SELECT parse_json('[-1, 12, 289, 2188, false]');
 +------------------------------------------+
 | [-1,12,289,2188,false]                   |
 +------------------------------------------+
-1 row in set (0.01 sec)
 
 SELECT try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 +---------------------------------------------------------+
@@ -42,5 +42,4 @@ SELECT try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 +---------------------------------------------------------+
 | {"x":"abc","y":false,"z":10}                            |
 +---------------------------------------------------------+
-1 row in set (0.01 sec)
 ```

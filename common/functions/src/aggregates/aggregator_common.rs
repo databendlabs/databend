@@ -17,11 +17,14 @@ use std::fmt::Display;
 use bumpalo::Bump;
 use common_datavalues::ColumnRef;
 use common_datavalues::ColumnWithField;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::AggregateFunctionFactory;
+use super::AggregateFunctionRef;
+use super::StateAddr;
 
 pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
@@ -77,6 +80,33 @@ pub fn assert_variadic_arguments<D: Display>(
     Ok(())
 }
 
+struct EvalAggr {
+    addr: StateAddr,
+    _arena: Bump,
+    func: AggregateFunctionRef,
+}
+
+impl EvalAggr {
+    fn new(func: AggregateFunctionRef) -> Self {
+        let _arena = Bump::new();
+        let place = _arena.alloc_layout(func.state_layout());
+        let addr = place.into();
+        func.init_state(addr);
+
+        Self { _arena, func, addr }
+    }
+}
+
+impl Drop for EvalAggr {
+    fn drop(&mut self) {
+        if self.func.need_manual_drop_state() {
+            unsafe {
+                self.func.drop_state(self.addr);
+            }
+        }
+    }
+}
+
 pub fn eval_aggr(
     name: &str,
     params: Vec<DataValue>,
@@ -88,16 +118,11 @@ pub fn eval_aggr(
     let cols: Vec<ColumnRef> = columns.iter().map(|c| c.column().clone()).collect();
 
     let func = factory.get(name, params, arguments)?;
-
-    let arena = Bump::new();
-    let place = arena.alloc_layout(func.state_layout());
-    let addr = place.into();
-    func.init_state(addr);
-    func.accumulate(addr, &cols, None, rows)?;
-
     let data_type = func.return_type()?;
-    let mut builder = data_type.create_mutable(1024);
-    func.merge_result(addr, builder.as_mut())?;
 
+    let eval = EvalAggr::new(func.clone());
+    func.accumulate(eval.addr, &cols, None, rows)?;
+    let mut builder = data_type.create_mutable(1024);
+    func.merge_result(eval.addr, builder.as_mut())?;
     Ok(builder.to_column())
 }

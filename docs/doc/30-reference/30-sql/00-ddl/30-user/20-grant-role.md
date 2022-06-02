@@ -1,5 +1,5 @@
 ---
-title: GRANT ROLE To a User
+title: GRANT ROLE to a User
 sidebar_label: GRANT ROLE
 description: Assigns a role to a user.
 ---
@@ -18,19 +18,17 @@ GRANT ROLE <role_name> TO { USER <user_name> }
 
 
 Create a user:
-```sql title='mysql>'
-create user user1 identified by 'abc123';
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 Grant the `ALL` privilege on all existing tables in the `default` database to the user `user1`:
  
-```sql title='mysql>'
-grant all on default.* to user1;
+```sql
+GRANT ALL ON default.* TO user1;
 ```
-```sql title='mysql>'
-show grants for user1;
-```
-```
+```sql
+SHOW GRANTS FOR user1;
 +-----------------------------------------+
 | Grants                                  |
 +-----------------------------------------+
@@ -43,21 +41,18 @@ show grants for user1;
 Grant the `SELECT` privilege on all existing tables in the `mydb` database to the role `role1`:
 
 Create role:
-```sql tile='mysql>'
-create role role1;
+```sql
+CREATE ROLE role1;
 ```
 
 Grant privileges to the role:
-```sql title='mysql>'
-grant SELECT on mydb.* to role role1;
+```sql
+GRANT SELECT ON mydb.* TO ROLE role1;
 ```
 
 Show the grants for the role:
-```sql ext title='mysql>'
-show grants for role role1;
-```
-
-```text
+```sql
+SHOW GRANTS FOR ROLE role1;
 +-------------------------------------+
 | Grants                              |
 +-------------------------------------+
@@ -68,10 +63,8 @@ show grants for role role1;
 ### Grant a Role to a User
 
 User `user1` grants are:
-```sql title='mysql>'
-show grants for user1;
-```
-```
+```sql
+SHOW GRANTS FOR user1;
 +-----------------------------------------+
 | Grants                                  |
 +-----------------------------------------+
@@ -81,11 +74,8 @@ show grants for user1;
 ```
 
 Role `role1` grants are:
-```sql title='mysql>'
-show grants for role role1;
-```
-
-```text
+```sql
+SHOW GRANTS FOR ROLE role1;
 +-------------------------------------+
 | Grants                              |
 +-------------------------------------+
@@ -94,16 +84,13 @@ show grants for role role1;
 ```
 
 Grant role `role1` to user `user1`:
-```sql title='mysql>'
- grant role role1 to user1;
+```sql
+ GRANT ROLE role1 TO user1;
 ```
 
 Now, user `user1` grants are:
-```sql title='mysql>'
-show grants for user1;
-```
-
-```
+```sql
+SHOW GRANTS FOR user1;
 +-----------------------------------------+
 | Grants                                  |
 +-----------------------------------------+

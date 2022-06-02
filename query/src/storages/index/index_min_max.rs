@@ -30,7 +30,6 @@ pub struct MinMaxIndex {
     pub version: IndexSchemaVersion,
 }
 
-#[allow(dead_code)]
 impl MinMaxIndex {
     fn create(col: String, min: DataValue, max: DataValue) -> Self {
         MinMaxIndex {

@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use anyerror::AnyError;
-use common_base::tokio;
-use common_base::tokio::sync::oneshot;
-use common_base::tokio::sync::oneshot::Receiver;
-use common_base::tokio::sync::oneshot::Sender;
-use common_base::tokio::task::JoinHandle;
-use common_base::Stoppable;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::oneshot;
+use common_base::base::tokio::sync::oneshot::Receiver;
+use common_base::base::tokio::sync::oneshot::Sender;
+use common_base::base::tokio::task::JoinHandle;
+use common_base::base::Stoppable;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use common_meta_types::MetaError;
@@ -98,10 +98,15 @@ impl GrpcServer {
                 return Err(err.into());
             }
         };
+
         tracing::info!("gRPC addr: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(meta_node.clone());
         let grpc_srv = MetaServiceServer::new(grpc_impl);
+
+        // meta_node
+        //     .add_metasrv_addr(conf.grpc_api_address.clone(), conf.grpc_api_address.clone())
+        //     .await;
 
         let j = tokio::spawn(
             async move {

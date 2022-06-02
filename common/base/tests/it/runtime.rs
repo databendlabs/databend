@@ -15,7 +15,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_base::*;
+use common_base::base::*;
 use common_exception::Result;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]

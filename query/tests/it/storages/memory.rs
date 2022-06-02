@@ -13,14 +13,15 @@
 //  limitations under the License.
 //
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_planners::*;
+use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::storages::memory::MemoryTable;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
@@ -63,7 +64,7 @@ async fn test_memorytable() -> Result<()> {
             .unwrap();
         // with overwrite false
         table
-            .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
             .await?;
     }
 
@@ -156,7 +157,7 @@ async fn test_memorytable() -> Result<()> {
             .unwrap();
         // with overwrite = true
         table
-            .commit_insertion(ctx.clone(), r.try_collect().await?, true)
+            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, true)
             .await?;
     }
 
@@ -186,6 +187,7 @@ async fn test_memorytable() -> Result<()> {
     // truncate.
     {
         let truncate_plan = TruncateTablePlan {
+            catalog: "default".to_string(),
             db: "default".to_string(),
             table: "a".to_string(),
             purge: false,

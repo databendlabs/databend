@@ -4,16 +4,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use common_base::base::tokio;
 use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use common_exception::{ErrorCode, Result};
-use common_infallible::{Mutex, ReentrantMutex, RwLock};
+use common_base::infallible::{Mutex, ReentrantMutex, RwLock};
 use crate::api::{DataExchange, ExecutorPacket, FlightAction, FlightClient, FragmentPacket, PublisherPacket};
 use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::{NewPipe, NewPipeline, QueryPipelineBuilder};
 use crate::sessions::QueryContext;
-use common_base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_grpc::ConnectionFactory;
@@ -26,7 +26,7 @@ use crate::api::rpc::exchange::exchange_subscriber::ExchangeSubscriber;
 use crate::api::rpc::flight_actions::{PrepareExecutor, PreparePublisher};
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
-use crate::configs::Config;
+use crate::Config;
 use crate::pipelines::new::processors::port::InputPort;
 
 pub struct DataExchangeManager {
@@ -69,15 +69,15 @@ impl DataExchangeManager {
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
                     None,
-                    Some(self.config.tls_query_client_conf()),
-                )?,
+                    Some(self.config.query.to_rpc_client_tls_config()),
+                ).await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
                     None,
                     None,
-                )?,
+                ).await?,
             ))),
         };
     }
@@ -194,7 +194,7 @@ impl QueryCoordinator {
 
     pub fn init_publisher(&mut self, config: Config, packet: &PublisherPacket) -> Result<()> {
         for (executor, info) in &packet.data_endpoints {
-            if executor == packet.request_server {
+            if executor == &packet.request_server {
                 // Send log, metric, trace, (progress?)
             }
 
@@ -220,23 +220,23 @@ impl QueryCoordinator {
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
                     None,
-                    Some(config.tls_query_client_conf()),
-                )?,
+                    Some(config.query.to_rpc_client_tls_config()),
+                ).await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
                     None,
                     None,
-                )?,
+                ).await?,
             ))),
         };
     }
 
     fn spawn_publish_worker(config: Config, rx: Receiver<FlightData>, info: Arc<NodeInfo>) {
         tokio::spawn(async move {
-            let mut connection = Self::create_client(config, &info.flight_address).await?;
-            let tx = connection.pushed_stream().await?;
+            let mut connection = Self::create_client(config, &info.flight_address).await.unwrap();
+            let tx = connection.pushed_stream().await.unwrap();
 
             // TODO: rx.finished if error.
             // TODO: we push log, metric and trace to request server if timeout.
@@ -317,18 +317,19 @@ impl FragmentCoordinator {
                 }
             )),
             DataExchange::HashDataExchange(exchange) => Ok(ExchangeParams::HashExchange(
-                HashExchangeParams {
-                    schema: self.node.schema(),
-                    query_id: query.query_id.to_string(),
-                    fragment_id: self.fragment_id.to_string(),
-                    executor_id: query.executor_id.to_string(),
-                    destination_ids: exchange.destination_ids.to_owned(),
-                    hash_scatter: HashFlightScatter::try_create(
-                        self.node.schema(),
-                        Some(exchange.exchange_expression.clone()),
-                        exchange.destination_ids.len(),
-                    )?,
-                }
+                // HashExchangeParams {
+                //     schema: self.node.schema(),
+                //     query_id: query.query_id.to_string(),
+                //     fragment_id: self.fragment_id.to_string(),
+                //     executor_id: query.executor_id.to_string(),
+                //     destination_ids: exchange.destination_ids.to_owned(),
+                //     hash_scatter: HashFlightScatter::try_create(
+                //         self.node.schema(),
+                //         Some(exchange.exchange_expression.clone()),
+                //         exchange.destination_ids.len(),
+                //     )?,
+                // }
+                unimplemented!()
             )),
         }
     }

@@ -26,7 +26,7 @@ SELECT
 numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 :::
 
-## SELECT clause
+## SELECT Clause
 
 ```sql
 SELECT number FROM numbers(3);
@@ -39,7 +39,7 @@ SELECT number FROM numbers(3);
 +--------+
 ```
 
-## FROM clause
+## FROM Clause
 
 ```sql
 SELECT number FROM numbers(3) AS a; 
@@ -52,7 +52,7 @@ SELECT number FROM numbers(3) AS a;
 +--------+
 ```
 
-## WHERE clause
+## WHERE Clause
 
 ```sql
 SELECT number FROM numbers(3) WHERE number > 1;
@@ -63,7 +63,7 @@ SELECT number FROM numbers(3) WHERE number > 1;
 +--------+
 ```
 
-## GROUP BY clause
+## GROUP BY Clause
 
 ```sql
 SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY c1, c2;
@@ -79,7 +79,7 @@ SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY 
 +------+------+-------------+
 ```
 
-## HAVING clause
+## HAVING Clause
 
 ```sql
 SELECT number%2 as c1, number%3 as c2, MAX(number) as max FROM numbers(10000) GROUP BY c1, c2 HAVING max>9996;
@@ -92,7 +92,7 @@ SELECT number%2 as c1, number%3 as c2, MAX(number) as max FROM numbers(10000) GR
 +------+------+------+
 ```
 
-## ORDER By clause
+## ORDER By Clause
 
 ```sql
 SELECT number FROM numbers(5) ORDER BY number ASC;
@@ -105,7 +105,6 @@ SELECT number FROM numbers(5) ORDER BY number ASC;
 |      3 |
 |      4 |
 +--------+
-5 rows in set (0.00 sec)
 
 SELECT number FROM numbers(5) ORDER BY number DESC;
 +--------+
@@ -117,7 +116,6 @@ SELECT number FROM numbers(5) ORDER BY number DESC;
 |      1 |
 |      0 |
 +--------+
-5 rows in set (0.00 sec)
 
 SELECT number%2 AS c1, number%3 AS c2  FROM numbers(5) ORDER BY c1 ASC, c2 DESC;
 +------+------+
@@ -131,7 +129,7 @@ SELECT number%2 AS c1, number%3 AS c2  FROM numbers(5) ORDER BY c1 ASC, c2 DESC;
 +------+------+
 ```
 
-## LIMIT clause
+## LIMIT Clause
 
 ```sql
 SELECT number FROM numbers(1000000000) LIMIT 1;
@@ -150,7 +148,7 @@ SELECT number FROM numbers(100000) ORDER BY number LIMIT 2 OFFSET 10;
 +--------+
 ```
 
-## OFFSET clause
+## OFFSET Clause
 
 ```sql
 SELECT number FROM numbers(5) ORDER BY number OFFSET 2;

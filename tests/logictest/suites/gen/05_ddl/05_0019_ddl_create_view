@@ -1,0 +1,21 @@
+statement ok
+DROP VIEW IF EXISTS tmp_view;
+
+statement ok
+DROP VIEW IF EXISTS tmp_view2;
+
+statement ok
+CREATE VIEW tmp_view AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a;
+
+statement error 2306
+CREATE VIEW tmp_view AS SELECT 1; 
+
+statement ok
+CREATE VIEW tmp_view2 AS SELECT * FROM numbers(100);
+
+statement ok
+DROP VIEW IF EXISTS tmp_view;
+
+statement ok
+DROP VIEW IF EXISTS tmp_view2;
+

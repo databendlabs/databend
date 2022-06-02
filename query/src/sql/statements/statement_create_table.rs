@@ -21,20 +21,20 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableMeta;
 use common_planners::validate_expression;
 use common_planners::CreateTablePlan;
-use common_planners::Expression;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOption;
+use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 
 use super::analyzer_expr::ExpressionAnalyzer;
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::sql::is_reserved_opt_key;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -50,6 +50,7 @@ pub struct DfCreateTable {
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub engine: String,
+    pub cluster_keys: Vec<Expr>,
     pub options: BTreeMap<String, String>,
 
     // The table name after "create .. like" statement.
@@ -63,10 +64,14 @@ pub struct DfCreateTable {
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (db, table) = Self::resolve_table(ctx.clone(), &self.name, "Table")?;
-        let mut table_meta = self.table_meta(ctx.clone(), db.as_str()).await?;
+        let (catalog, db, table) = resolve_table(&ctx, &self.name, "CREATE TABLE")?;
+        let mut table_meta = self
+            .table_meta(ctx.clone(), catalog.as_str(), db.as_str())
+            .await?;
         let if_not_exists = self.if_not_exists;
         let tenant = ctx.get_tenant();
+
+        let expression_analyzer = ExpressionAnalyzer::create(ctx.clone());
         let as_select_plan_node = match &self.query {
             // CTAS
             Some(query_statement) => {
@@ -91,13 +96,28 @@ impl AnalyzableStatement for DfCreateTable {
             None => None,
         };
 
+        let mut cluster_keys = vec![];
+        for k in self.cluster_keys.iter() {
+            let expr = expression_analyzer.analyze_sync(k)?;
+            validate_expression(&expr, &table_meta.schema)?;
+            cluster_keys.push(expr);
+        }
+
+        if !cluster_keys.is_empty() {
+            let cluster_keys: Vec<String> = cluster_keys.iter().map(|e| e.column_name()).collect();
+            let order_keys_sql = format!("({})", cluster_keys.join(", "));
+            table_meta.cluster_keys = Some(order_keys_sql);
+        }
+
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::CreateTable(CreateTablePlan {
                 if_not_exists,
                 tenant,
+                catalog,
                 db,
                 table,
                 table_meta,
+                cluster_keys,
                 as_select: as_select_plan_node,
             }),
         )))
@@ -105,27 +125,12 @@ impl AnalyzableStatement for DfCreateTable {
 }
 
 impl DfCreateTable {
-    pub fn resolve_table(
+    async fn table_meta(
+        &self,
         ctx: Arc<QueryContext>,
-        table_name: &ObjectName,
-        table_type: &str,
-    ) -> Result<(String, String)> {
-        let idents = &table_name.0;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException(format!(
-                "{} name is empty",
-                table_type
-            ))),
-            1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
-            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(format!(
-                "{} name must be [`db`].`{}`",
-                table_type, table_type
-            ))),
-        }
-    }
-
-    async fn table_meta(&self, ctx: Arc<QueryContext>, db_name: &str) -> Result<TableMeta> {
+        catalog_name: &str,
+        db_name: &str,
+    ) -> Result<TableMeta> {
         let engine = self.engine.clone();
         let schema = self.table_schema(ctx.clone()).await?;
 
@@ -138,7 +143,8 @@ impl DfCreateTable {
             options: self.options.clone(),
             ..Default::default()
         };
-        self.plan_with_db_id(ctx.as_ref(), db_name, meta).await
+        self.plan_with_db_id(ctx.as_ref(), catalog_name, db_name, meta)
+            .await
     }
 
     async fn table_schema(&self, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
@@ -147,14 +153,17 @@ impl DfCreateTable {
             // we use the original table's schema.
             Some(like_table_name) => {
                 // resolve database and table name from 'like statement'
-                let (origin_db_name, origin_table_name) =
-                    Self::resolve_table(ctx.clone(), like_table_name, "Table")?;
+                let (origin_catalog_name, origin_db_name, origin_table_name) =
+                    resolve_table(&ctx, like_table_name, "Table")?;
 
                 // use the origin table's schema for the table to create
-                let origin_table = ctx.get_table(&origin_db_name, &origin_table_name).await?;
+                let origin_table = ctx
+                    .get_table(&origin_catalog_name, &origin_db_name, &origin_table_name)
+                    .await?;
                 Ok(origin_table.schema())
             }
             None => {
+                // default expression do not need udfs
                 let expr_analyzer = ExpressionAnalyzer::create(ctx);
                 let mut fields = Vec::with_capacity(self.columns.len());
 
@@ -171,9 +180,16 @@ impl DfCreateTable {
                             }
                             ColumnOption::Default(expr) => {
                                 let expr = expr_analyzer.analyze(expr).await?;
-                                default_expr = Some(serde_json::to_vec(&expr)?);
+                                // we ensure that expr's column_name equals the raw sql (no alias inside the expression)
+                                default_expr = Some(expr.column_name());
                             }
-                            _ => {}
+                            ColumnOption::NotNull => {}
+
+                            other => {
+                                return Err(ErrorCode::BadOption(format!("{} column option is not supported, please do not specify them in the CREATE TABLE statement",
+                        other
+                            )));
+                            }
                         }
                     }
                     let field = SQLCommon::make_data_type(&column.data_type).map(|data_type| {
@@ -195,6 +211,7 @@ impl DfCreateTable {
     async fn plan_with_db_id(
         &self,
         ctx: &QueryContext,
+        catalog_name: &str,
         database_name: &str,
         mut meta: TableMeta,
     ) -> Result<TableMeta> {
@@ -207,11 +224,11 @@ impl DfCreateTable {
             //
             // Later, when database id is kept, let say in `TableInfo`, we can
             // safely eliminate this "FUSE" constant and the table meta option entry.
-            let catalog = ctx.get_catalog();
+            let catalog = ctx.get_catalog(catalog_name)?;
             let db = catalog
                 .get_database(ctx.get_tenant().as_str(), database_name)
                 .await?;
-            let db_id = db.get_db_info().database_id;
+            let db_id = db.get_db_info().ident.db_id;
             meta.options
                 .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
         }
@@ -241,10 +258,8 @@ impl DfCreateTable {
 
     fn validata_default_exprs(&self, schema: &DataSchemaRef) -> Result<()> {
         for f in schema.fields() {
-            if let Some(default_expr) = f.default_expr() {
-                let expr: Expression =
-                    serde_json::from_slice::<Expression>(default_expr.as_slice())?;
-
+            if let Some(expr) = f.default_expr() {
+                let expr = PlanParser::parse_expr(expr)?;
                 validate_expression(&expr, schema)?;
             }
         }

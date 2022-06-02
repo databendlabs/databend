@@ -27,7 +27,7 @@ fn test_regexp_instr_function() -> Result<()> {
                 Series::from_data(vec!["dog cat dog", "aa aaa aaaa aa aaa aaaa", ""]),
                 Series::from_data(vec!["dog", "a{2}", ""]),
             ],
-            expect: Series::from_data(vec![1_u64, 1, 0]),
+            expect: Series::from_data(vec![Some(1_u64), Some(1), Some(0)]),
             error: "",
         },
         ScalarFunctionTest {
@@ -37,7 +37,7 @@ fn test_regexp_instr_function() -> Result<()> {
                 Series::from_data(vec!["dog", "a{2}", ""]),
                 Series::from_data(vec![1_i64, 2, 1]),
             ],
-            expect: Series::from_data(vec![1_u64, 4, 0]),
+            expect: Series::from_data(vec![Some(1_u64), Some(4), Some(0)]),
             error: "",
         },
         ScalarFunctionTest {
@@ -52,7 +52,7 @@ fn test_regexp_instr_function() -> Result<()> {
                 Series::from_data(vec![1_i64, 1, 9]),
                 Series::from_data(vec![2_i64, 3, 2]),
             ],
-            expect: Series::from_data(vec![9_u64, 7, 15]),
+            expect: Series::from_data(vec![Some(9_u64), Some(7), Some(15)]),
             error: "",
         },
         ScalarFunctionTest {
@@ -68,7 +68,7 @@ fn test_regexp_instr_function() -> Result<()> {
                 Series::from_data(vec![2_i64, 2, 2]),
                 Series::from_data(vec![0_i64, 1, 1]),
             ],
-            expect: Series::from_data(vec![9_u64, 10, 24]),
+            expect: Series::from_data(vec![Some(9_u64), Some(10), Some(24)]),
             error: "",
         },
         ScalarFunctionTest {
@@ -85,7 +85,7 @@ fn test_regexp_instr_function() -> Result<()> {
                 Series::from_data(vec![0_i64, 1, 1]),
                 Series::from_data(vec!["i", "c", "i"]),
             ],
-            expect: Series::from_data(vec![9_u64, 0, 24]),
+            expect: Series::from_data(vec![Some(9_u64), Some(0), Some(24)]),
             error: "",
         },
         ScalarFunctionTest {
@@ -102,8 +102,20 @@ fn test_regexp_instr_function() -> Result<()> {
                 Series::from_data(vec![1_i64, 2, 3, 1]),
                 Series::from_data(vec![0_i64, 1, 1, 1]),
             ],
-            expect: Series::from_data(vec![1_u64, 9, 14, 9]),
+            expect: Series::from_data(vec![Some(1_u64), Some(9), Some(14), Some(9)]),
             error: "",
+        },
+        ScalarFunctionTest {
+            name: "regexp-instr-position-error",
+            columns: vec![
+                Series::from_data(vec!["dog cat dog"]),
+                Series::from_data(vec!["dog"]),
+                Series::from_data(vec![0_i64]),
+                Series::from_data(vec![1_i64]),
+                Series::from_data(vec![0_i64]),
+            ],
+            expect: Series::from_data(Vec::<u64>::new()),
+            error: "Incorrect arguments to regexp_instr: position must be positive, but got 0",
         },
         ScalarFunctionTest {
             name: "regexp-instr-return-option-error",
@@ -146,8 +158,8 @@ fn test_regexp_instr_function() -> Result<()> {
 #[test]
 fn test_regexp_instr_constant_column() -> Result<()> {
     let data = DataValue::String("dog".as_bytes().into());
-    let data_value1 = StringType::arc().create_constant_column(&data, 3)?;
-    let data_value2 = StringType::arc().create_constant_column(&data, 3)?;
+    let data_value1 = StringType::new_impl().create_constant_column(&data, 3)?;
+    let data_value2 = StringType::new_impl().create_constant_column(&data, 3)?;
 
     let tests = vec![
         ScalarFunctionTest {
@@ -159,7 +171,7 @@ fn test_regexp_instr_constant_column() -> Result<()> {
                 Series::from_data(vec![2_i64, 1, 1]),
                 Series::from_data(vec![0_i64, 0, 1]),
             ],
-            expect: Series::from_data(vec![9_u64, 5, 8]),
+            expect: Series::from_data(vec![Some(9_u64), Some(5), Some(8)]),
             error: "",
         },
         ScalarFunctionTest {

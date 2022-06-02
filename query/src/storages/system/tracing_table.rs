@@ -23,9 +23,9 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -78,13 +78,13 @@ impl TracingTable {
     }
 
     fn log_files(ctx: Arc<QueryContext>) -> Result<VecDeque<String>> {
-        WalkDir::new(ctx.get_config().log.log_dir.as_str())
+        WalkDir::new(ctx.get_config().log.dir.as_str())
             .sort_by_key(|file| file.file_name().to_owned())
             .into_iter()
             .filter_map(|dir_entry| match dir_entry {
                 Ok(entry) if entry.path().is_dir() => None,
                 Ok(entry) => Some(Ok(entry.path().display().to_string())),
-                Err(cause) => Some(Err(ErrorCode::UnknownException(format!("{}", cause)))),
+                Err(cause) => Some(Err(ErrorCode::UnknownException(cause.to_string()))),
             })
             .collect::<Result<VecDeque<String>>>()
     }

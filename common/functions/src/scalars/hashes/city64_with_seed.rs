@@ -61,7 +61,7 @@ pub struct City64WithSeedFunction {
 
 // CityHash64WithSeed(value, seed)
 impl City64WithSeedFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         if !matches!(
             args[0].data_type_id(),
             TypeID::UInt8
@@ -74,10 +74,8 @@ impl City64WithSeedFunction {
                 | TypeID::Int64
                 | TypeID::Float32
                 | TypeID::Float64
-                | TypeID::Date16
-                | TypeID::Date32
-                | TypeID::DateTime32
-                | TypeID::DateTime64
+                | TypeID::Date
+                | TypeID::Timestamp
                 | TypeID::Interval
                 | TypeID::String
         ) {
@@ -110,13 +108,13 @@ impl Function for City64WithSeedFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        UInt64Type::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        UInt64Type::new_impl()
     }
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
@@ -139,7 +137,12 @@ impl Function for City64WithSeedFunction {
             });
             Ok(Arc::new(result_col))
         } else {
-            let seed_col = cast_column_field(&columns[1], &UInt64Type::arc())?;
+            let seed_col = cast_column_field(
+                &columns[1],
+                columns[1].data_type(),
+                &UInt64Type::new_impl(),
+                &func_ctx,
+            )?;
             let seed_viewer = u64::try_create_viewer(&seed_col)?;
 
             let result_col = with_match_scalar_types_error!(physical_data_type, |$S| {

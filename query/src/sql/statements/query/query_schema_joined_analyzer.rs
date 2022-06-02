@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::FunctionArg;
 use sqlparser::ast::Ident;
+use sqlparser::ast::Instant;
 use sqlparser::ast::JoinOperator;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::Query;
@@ -25,10 +26,11 @@ use sqlparser::ast::TableAlias;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::TableWithJoins;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::query_schema_joined::JoinedSchema;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -36,6 +38,7 @@ use crate::sql::DfParser;
 use crate::sql::DfStatement;
 use crate::storages::view::view_table::QUERY;
 use crate::storages::view::view_table::VIEW_ENGINE;
+use crate::storages::NavigationPoint;
 
 pub struct JoinedSchemaAnalyzer {
     ctx: Arc<QueryContext>,
@@ -99,8 +102,14 @@ impl JoinedSchemaAnalyzer {
 
     async fn table(&self, item: &TableRPNItem) -> Result<JoinedSchema> {
         // TODO(Winter): await query_context.get_table
-        let (database, table) = self.resolve_table(&item.name)?;
-        let read_table = self.ctx.get_table(&database, &table).await?;
+        let (catalog, database, table) = resolve_table(&self.ctx, &item.name, "SELECT")?;
+        let mut read_table = self.ctx.get_table(&catalog, &database, &table).await?;
+        if let Some(Instant::SnapshotID(s)) = &item.instant {
+            let navigation_point = NavigationPoint::SnapshotID(s.to_owned());
+            read_table = read_table
+                .navigate_to(self.ctx.clone(), &navigation_point)
+                .await?
+        }
         let tbl_info = read_table.get_table_info();
 
         if tbl_info.engine() == VIEW_ENGINE {
@@ -124,7 +133,7 @@ impl JoinedSchemaAnalyzer {
         } else {
             match &item.alias {
                 None => {
-                    let name_prefix = vec![database, table];
+                    let name_prefix = vec![catalog, database, table];
                     JoinedSchema::from_table(read_table, name_prefix)
                 }
                 Some(table_alias) => {
@@ -148,12 +157,14 @@ impl JoinedSchemaAnalyzer {
 
         for table_arg in &item.args {
             table_args.push(match table_arg {
-                FunctionArg::Named { arg, .. } => analyzer.analyze_function_arg(arg).await?,
-                FunctionArg::Unnamed(arg) => analyzer.analyze_function_arg(arg).await?,
+                FunctionArg::Named { arg, .. } => analyzer.analyze_function_arg(arg)?,
+                FunctionArg::Unnamed(arg) => analyzer.analyze_function_arg(arg)?,
             });
         }
 
-        let catalog = self.ctx.get_catalog();
+        // always look up table_function in the default catalog?
+        // TODO seems buggy
+        let catalog = self.ctx.get_catalog(CATALOG_DEFAULT)?;
         let table_function = catalog.get_table_function(&table_name, Some(table_args))?;
         match &item.alias {
             None => JoinedSchema::from_table(table_function.as_table(), Vec::new()),
@@ -163,22 +174,12 @@ impl JoinedSchemaAnalyzer {
             }
         }
     }
-
-    fn resolve_table(&self, name: &ObjectName) -> Result<(String, String)> {
-        match name.0.len() {
-            0 => Err(ErrorCode::SyntaxException("Table name is empty")),
-            1 => Ok((self.ctx.get_current_database(), name.0[0].value.clone())),
-            2 => Ok((name.0[0].value.clone(), name.0[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(
-                "Table name must be [`db`].`table`",
-            )),
-        }
-    }
 }
 
 struct TableRPNItem {
     name: ObjectName,
     alias: Option<TableAlias>,
+    instant: Option<Instant>,
 }
 
 struct DerivedRPNItem {
@@ -218,6 +219,7 @@ impl RelationRPNBuilder {
         self.rpn.push(RelationRPNItem::Table(TableRPNItem {
             name: ObjectName(vec![Ident::new("system"), Ident::new("one")]),
             alias: None,
+            instant: None,
         }));
     }
 
@@ -257,6 +259,7 @@ impl RelationRPNBuilder {
                 args,
                 alias,
                 with_hints,
+                instant,
             } => {
                 if !with_hints.is_empty() {
                     return Err(ErrorCode::SyntaxException(
@@ -265,7 +268,7 @@ impl RelationRPNBuilder {
                 }
 
                 match args.is_empty() {
-                    true => self.visit_table(name, alias),
+                    true => self.visit_table(name, alias, instant),
                     false => self.visit_table_function(name, args, alias),
                 }
             }
@@ -291,10 +294,16 @@ impl RelationRPNBuilder {
         }
     }
 
-    fn visit_table(&mut self, name: &ObjectName, alias: &Option<TableAlias>) -> Result<()> {
+    fn visit_table(
+        &mut self,
+        name: &ObjectName,
+        alias: &Option<TableAlias>,
+        instant: &Option<Instant>,
+    ) -> Result<()> {
         self.rpn.push(RelationRPNItem::Table(TableRPNItem {
             name: name.clone(),
             alias: alias.clone(),
+            instant: instant.clone(),
         }));
         Ok(())
     }

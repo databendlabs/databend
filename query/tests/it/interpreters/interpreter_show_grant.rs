@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
@@ -31,15 +31,11 @@ async fn test_show_grant_interpreter() -> Result<()> {
     let user_mgr = ctx.get_user_manager();
     let role_cache_mgr = ctx.get_role_cache_manager();
     user_mgr
-        .add_user(
-            &tenant,
-            UserInfo::new_no_auth("test".to_string(), "localhost".to_string()),
-            false,
-        )
+        .add_user(&tenant, UserInfo::new_no_auth("test", "localhost"), false)
         .await?;
 
     user_mgr
-        .add_role(&tenant, RoleInfo::new("role1".to_string()), false)
+        .add_role(&tenant, RoleInfo::new("role1"), false)
         .await?;
 
     {
@@ -64,12 +60,13 @@ async fn test_show_grant_interpreter() -> Result<()> {
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
-    let mut role_info = RoleInfo::new("role2".to_string());
+    let mut role_info = RoleInfo::new("role2");
     let mut privileges = UserPrivilegeSet::empty();
     privileges.set_privilege(UserPrivilegeType::Select);
-    role_info
-        .grants
-        .grant_privileges(&GrantObject::Database("mydb".into()), privileges);
+    role_info.grants.grant_privileges(
+        &GrantObject::Database("default".into(), "mydb".into()),
+        privileges,
+    );
     user_mgr.add_role(&tenant, role_info, false).await?;
     role_cache_mgr.invalidate_cache(&tenant);
 
@@ -80,11 +77,11 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+-------------------------------------+",
-            "| Grants                              |",
-            "+-------------------------------------+",
-            "| GRANT SELECT ON 'mydb'.* TO 'role2' |",
-            "+-------------------------------------+",
+            "+-----------------------------------------------+",
+            "| Grants                                        |",
+            "+-----------------------------------------------+",
+            "| GRANT SELECT ON 'default'.'mydb'.* TO 'role2' |",
+            "+-----------------------------------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
@@ -105,11 +102,11 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+------------------------------------------------+",
-            "| Grants                                         |",
-            "+------------------------------------------------+",
-            "| GRANT SELECT ON 'mydb'.* TO 'test'@'localhost' |",
-            "+------------------------------------------------+",
+            "+----------------------------------------------------------+",
+            "| Grants                                                   |",
+            "+----------------------------------------------------------+",
+            "| GRANT SELECT ON 'default'.'mydb'.* TO 'test'@'localhost' |",
+            "+----------------------------------------------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
@@ -120,7 +117,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         .grant_privileges_to_user(
             &tenant,
             UserIdentity::new("test", "localhost"),
-            GrantObject::Database("mydb".into()),
+            GrantObject::Database("default".into(), "mydb".into()),
             privileges,
         )
         .await?;
@@ -132,11 +129,11 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+-------------------------------------------------------+",
-            "| Grants                                                |",
-            "+-------------------------------------------------------+",
-            "| GRANT CREATE,SELECT ON 'mydb'.* TO 'test'@'localhost' |",
-            "+-------------------------------------------------------+",
+            "+-----------------------------------------------------------------+",
+            "| Grants                                                          |",
+            "+-----------------------------------------------------------------+",
+            "| GRANT CREATE,SELECT ON 'default'.'mydb'.* TO 'test'@'localhost' |",
+            "+-----------------------------------------------------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
@@ -152,11 +149,11 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+-------------------------------------+",
-            "| Grants                              |",
-            "+-------------------------------------+",
-            "| GRANT SELECT ON 'mydb'.* TO 'role1' |",
-            "+-------------------------------------+",
+            "+-----------------------------------------------+",
+            "| Grants                                        |",
+            "+-----------------------------------------------+",
+            "| GRANT SELECT ON 'default'.'mydb'.* TO 'role1' |",
+            "+-----------------------------------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
@@ -165,7 +162,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         .grant_privileges_to_role(
             &tenant,
             "role1".to_string(),
-            GrantObject::Database("mydb1".into()),
+            GrantObject::Database("default".into(), "mydb1".into()),
             privileges,
         )
         .await?;
@@ -176,12 +173,12 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+--------------------------------------+",
-            "| Grants                               |",
-            "+--------------------------------------+",
-            "| GRANT SELECT ON 'mydb'.* TO 'role1'  |",
-            "| GRANT CREATE ON 'mydb1'.* TO 'role1' |",
-            "+--------------------------------------+",
+            "+------------------------------------------------+",
+            "| Grants                                         |",
+            "+------------------------------------------------+",
+            "| GRANT CREATE ON 'default'.'mydb1'.* TO 'role1' |",
+            "| GRANT SELECT ON 'default'.'mydb'.* TO 'role1'  |",
+            "+------------------------------------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

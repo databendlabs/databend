@@ -1,0 +1,70 @@
+name: "(hive) Test Stateful Standalone"
+description: "(hive) Running stateful tests in standalone mode"
+inputs:
+  profile:
+    description: "The profile for this test"
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+      with:
+        image: ${{ inputs.target }}
+
+    # If you need to reset the cache version, increment the number after `v`
+    - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: debug-hive-${{ inputs.target }}-v2
+
+    # for the time being, only databend-query is needed
+    - shell: bash
+      run: cargo build --bin databend-query --features hive
+
+    # for cache
+    - shell: bash
+      run: cargo metadata --all-features --format-version 1 > ./target/metadata.json
+
+    # hive cluster setup
+    - name: Hive Cluster Setup
+      shell: bash
+      run: |
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" up -d
+
+    - name: Hive Cluster Setup
+      shell: bash
+      run: |
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" up -d
+
+    # Wait for h2 to come alive
+    #  INSIDE the container of service "hive-server", wait for port 10000 being listened:
+    #  - check if port 10000 is available, per sec
+    #  - failed if not available during 50s (typically, service will be brought up in about 30s, in github)
+    - name: Wait for hiveserver2
+      shell: bash
+      run: |
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "timeout 50 bash -c 'until nc -z localhost 10000; do sleep 1; echo "waiting..."; done'"
+
+    # hive test data setup, to be refined
+    - name: Hive Testing Data
+      shell: bash
+      run: |
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'CREATE TABLE if not exists pokes (foo INT);'"
+
+    - name: Run Stateful Tests with Standalone mode
+      shell: bash
+      run: |
+        bash ./scripts/ci/ci-run-stateful-hive-tests-standalone-embed-meta.sh
+
+    - name: Stop containers
+      if: always()
+      shell: bash
+      run: docker-compose -f "./docker/it-hive/hive-docker-compose.yml" down

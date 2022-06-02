@@ -16,10 +16,11 @@
 use std::collections::HashMap;
 use std::iter::Iterator;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Extras;
+use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::ColumnMeta;
@@ -68,6 +69,7 @@ fn test_to_partitions() -> Result<()> {
         file_size: 0,
         col_stats: cols_stats.clone(),
         col_metas: cols_metas,
+        cluster_stats: None,
         location: ("".to_owned(), 0),
         compression: Compression::Lz4Raw,
     };
@@ -132,7 +134,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
 
         let r = table.append_data(ctx.clone(), stream).await?;
         table
-            .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
             .await?;
 
         table = fixture.latest_default_table().await?;

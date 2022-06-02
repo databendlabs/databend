@@ -14,12 +14,16 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::StorageParams;
+use common_io::prelude::StorageS3Config;
 use common_management::*;
 use common_meta_api::KVApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::SeqV;
+use common_meta_types::StageParams;
 use common_meta_types::UserStageInfo;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -36,7 +40,10 @@ async fn test_add_stage() -> Result<()> {
             meta: _,
             data: value,
         }) => {
-            assert_eq!(value, serde_json::to_vec(&stage_info)?);
+            assert_eq!(
+                value,
+                serialize_struct(&stage_info, ErrorCode::IllegalUserStageFormat, || "")?
+            );
         }
         catch => panic!("GetKVActionReply{:?}", catch),
     }
@@ -106,6 +113,12 @@ async fn test_unknown_stage_drop_stage() -> Result<()> {
 fn create_test_stage_info() -> UserStageInfo {
     UserStageInfo {
         stage_name: "mystage".to_string(),
+        stage_params: StageParams {
+            storage: StorageParams::S3(StorageS3Config {
+                bucket: "mystage_bucket".to_string(),
+                ..Default::default()
+            }),
+        },
         ..Default::default()
     }
 }

@@ -1,0 +1,97 @@
+statement ok
+DROP DATABASE IF EXISTS showtabstat;
+
+statement ok
+CREATE DATABASE showtabstat;
+
+statement ok
+CREATE TABLE showtabstat.t1(c1 int) ENGINE = Null;
+
+statement ok
+CREATE TABLE showtabstat.t2(c1 int) ENGINE = Null;
+
+statement ok
+CREATE TABLE showtabstat.t3(c1 int) ENGINE = Null;
+
+statement ok
+USE showtabstat;
+
+statement ok
+SHOW TABLE STATUS;
+
+statement ok
+SHOW TABLE STATUS LIKE 't%';
+
+statement ok
+SHOW TABLE STATUS LIKE 't2';
+
+statement ok
+SHOW TABLE STATUS LIKE 't';
+
+statement ok
+SHOW TABLE STATUS WHERE Name LIKE 't%';
+
+statement ok
+SHOW TABLE STATUS WHERE Name = 't%' AND 1 = 0;
+
+statement ok
+SHOW TABLE STATUS WHERE Name = 't2' OR 1 = 1;
+
+statement ok
+SHOW TABLE STATUS WHERE Name = 't2' AND 1 = 1;
+
+statement ok
+USE default;
+
+statement query TTITITITTTTTTTTTT 
+SHOW TABLE STATUS FROM showtabstat WHERE Name LIKE 't%';
+
+----  
+t1 Null 0 NULL NULL NULL NULL NULL NULL NULL NULL 1970-01-01 00:00:00.000 +0000 NULL NULL NULL NULL 
+t2 Null 0 NULL NULL NULL NULL NULL NULL NULL NULL 1970-01-01 00:00:00.000 +0000 NULL NULL NULL NULL 
+t3 Null 0 NULL NULL NULL NULL NULL NULL NULL NULL 1970-01-01 00:00:00.000 +0000 NULL NULL NULL NULL 
+
+statement ok
+SHOW TABLE STATUS FROM showtabstat WHERE Name = 't%' AND 1 = 0;
+
+statement query TTITITITTTTTTTTTT 
+SHOW TABLE STATUS FROM showtabstat WHERE Name = 't2' OR 1 = 1;
+
+----  
+t1 Null 0 NULL NULL NULL NULL NULL NULL NULL NULL 1970-01-01 00:00:00.000 +0000 NULL NULL NULL NULL 
+t2 Null 0 NULL NULL NULL NULL NULL NULL NULL NULL 1970-01-01 00:00:00.000 +0000 NULL NULL NULL NULL 
+t3 Null 0 NULL NULL NULL NULL NULL NULL NULL NULL 1970-01-01 00:00:00.000 +0000 NULL NULL NULL NULL 
+
+statement query TTITITITTTTTTTTTT 
+SHOW TABLE STATUS FROM showtabstat WHERE Name = 't2' AND 1 = 1;
+
+----  
+t2 Null 0 NULL NULL NULL NULL NULL NULL NULL NULL 1970-01-01 00:00:00.000 +0000 NULL NULL NULL NULL 
+
+statement ok
+CREATE TABLE showtabstat.t4(c1 int);
+
+statement query TTITITITTTTTTTTTT 
+SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
+
+----  
+t4 FUSE 0 NULL 0 NULL 0 NULL NULL NULL NULL 1970-01-01 00:00:00.000 +0000 NULL NULL NULL NULL 
+
+statement ok
+insert into showtabstat.t4 values(1);
+
+statement query TTITITITTTTTTTTTT 
+SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
+
+----  
+t4 FUSE 0 NULL 1 NULL 4 NULL NULL NULL NULL 1970-01-01 00:00:00.000 +0000 NULL NULL NULL NULL 
+
+statement error 1058
+SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test'; 
+
+statement error 1058
+SHOW TABLE STATUS FROM showtabstat WHERE created_on = 'test'; 
+
+statement ok
+DROP DATABASE IF EXISTS showtabstat;
+

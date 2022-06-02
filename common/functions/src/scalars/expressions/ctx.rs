@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono_tz::Tz;
 use common_exception::ErrorCode;
 
 #[derive(Debug, Clone)]
@@ -19,24 +20,28 @@ pub struct EvalContext {
     pub factor: i64,
     pub precision: usize,
     pub error: Option<ErrorCode>,
+    pub tz: Tz,
 }
 
 impl Default for EvalContext {
     fn default() -> Self {
+        let tz = "UTC".parse::<Tz>().unwrap();
         Self {
             factor: 1,
             precision: 0,
             error: None,
+            tz,
         }
     }
 }
 
 impl EvalContext {
-    pub fn new(factor: i64, precision: usize, error: Option<ErrorCode>) -> Self {
+    pub fn new(factor: i64, precision: usize, error: Option<ErrorCode>, tz: Tz) -> Self {
         Self {
             factor,
             precision,
             error,
+            tz,
         }
     }
 

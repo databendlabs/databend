@@ -15,8 +15,8 @@
 
 use std::sync::Arc;
 
-use common_base::Progress;
-use common_base::ProgressValues;
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -40,7 +40,7 @@ use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
     #[inline]
-    pub async fn do_read(
+    pub fn do_read(
         &self,
         ctx: Arc<QueryContext>,
         push_downs: &Option<Extras>,

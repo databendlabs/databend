@@ -1,0 +1,60 @@
+statement query TT 
+SHOW CREATE DATABASE `system`;
+
+----  
+system CREATE DATABASE `system` ENGINE=SYSTEM
+
+statement ok
+DROP DATABASE IF EXISTS `test`;
+
+statement ok
+CREATE DATABASE `test`;
+
+statement query TT 
+SHOW CREATE DATABASE `test`;
+
+----  
+test CREATE DATABASE `test`
+
+statement ok
+DROP DATABASE `test`;
+
+-- statement error 1073
+-- CREATE DATABASE `datafuselabs` ENGINE=github(token='xxx'); 
+
+-- statement ok
+-- SHOW CREATE DATABASE `datafuselabs`;
+
+-- statement ok
+-- DROP DATABASE `datafuselabs`;
+
+statement query TT 
+SHOW CREATE SCHEMA `system`;
+
+----  
+system CREATE DATABASE `system` ENGINE=SYSTEM
+
+statement ok
+DROP SCHEMA IF EXISTS `test`;
+
+statement ok
+CREATE SCHEMA `test`;
+
+statement query TT 
+SHOW CREATE SCHEMA `test`;
+
+----  
+test CREATE DATABASE `test`
+
+statement ok
+DROP SCHEMA `test`;
+
+-- statement error 1073
+-- CREATE SCHEMA `datafuselabs` ENGINE=github(token='xxx'); 
+
+-- statement ok
+-- SHOW CREATE SCHEMA `datafuselabs`;
+
+-- statement ok
+-- DROP SCHEMA `datafuselabs`;
+

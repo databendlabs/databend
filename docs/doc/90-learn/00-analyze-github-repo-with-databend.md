@@ -1,6 +1,7 @@
 ---
-title: Analyzing Github Repository with Databend
+title: Analyzing Github Repository With Databend
 sidebar_label: Analyzing Github Repository
+description: Use Databend analyzing Github repository step by step.
 ---
 
 # Analyzing Github Repository with Databend
@@ -9,30 +10,29 @@ Use Databend analyzing Github repository step by step.
 
 ## Step 1 
 
-Install Databend, see [How to deploy Databend with local fs](../10-deploy/00-local.md).
+Make sure you have installed Databend, if not please see:
+
+* [How to Deploy Databend](../00-guides/index.md#deployment)
 
 ## Step 2
 
-```sql title='mysql>'
+```shell
 mysql -h 127.0.0.1 -P 3307 -uroot
 ```
 
-```sql title='mysql>'
-create database datafuselabs engine=github(token='<your-github-personal-access-token>');
+```sql
+CREATE DATABASE datafuselabs ENGINE=GITHUB(token='<your-github-personal-access-token>');
 ```
 :::tip
 * [Creating a personal github access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token)
 :::
 
-```sql title='mysql>'
-use datafuselabs;
-```
-
-```sql title='mysql>'
-show tables;
+```sql
+USE datafuselabs;
 ```
 
 ```sql
+SHOW TABLES;
 +-------------------------------+---------------------------------+
 | created_on                    | name                            |
 +-------------------------------+---------------------------------+
@@ -81,16 +81,16 @@ SHOW CREATE TABLE databend_issues;
 | Table           | Create Table                                                                                                                                                                                                                                                          |
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | databend_issues | CREATE TABLE `databend_issues` (
-  `number` Int64,
-  `title` String,
-  `state` String,
-  `user` String,
-  `labels` String,
-  `assigness` String,
-  `comments` UInt32,
-  `created_at` DateTime32,
-  `updated_at` DateTime32,
-  `closed_at` DateTime32,
+  `number` BIGINT,
+  `title` VARCHAR,
+  `state` VARCHAR,
+  `user` VARCHAR,
+  `labels` VARCHAR,
+  `assigness` VARCHAR,
+  `comments` INT UNSIGNED,
+  `created_at` TIMESTAMP,
+  `updated_at` TIMESTAMP,
+  `closed_at` TIMESTAMP,
 ) ENGINE=GITHUB |
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 ```

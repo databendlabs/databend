@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_base::Progress;
-use common_base::ProgressValues;
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use futures::Future;
@@ -96,12 +96,14 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
         match self.inner.generate().await? {
             None => self.is_finish = true,
             Some(data_block) => {
-                let progress_values = ProgressValues {
-                    rows: data_block.num_rows(),
-                    bytes: data_block.memory_size(),
-                };
-                self.scan_progress.incr(&progress_values);
-                self.generated_data = Some(data_block)
+                if !data_block.is_empty() {
+                    let progress_values = ProgressValues {
+                        rows: data_block.num_rows(),
+                        bytes: data_block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
+                    self.generated_data = Some(data_block)
+                }
             }
         };
 

@@ -21,6 +21,7 @@ use common_planners::extract_aliases;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::resolve_aliases_to_exprs;
 use common_planners::Expression;
+use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::OffsetRows;
 use sqlparser::ast::SelectItem;
@@ -38,25 +39,28 @@ pub struct QueryNormalizer {
 
 /// Replace alias in query and collect aggregate functions
 impl QueryNormalizer {
-    fn create(ctx: Arc<QueryContext>) -> QueryNormalizer {
-        QueryNormalizer {
-            expression_analyzer: ExpressionAnalyzer::create(ctx),
+    async fn try_create(ctx: Arc<QueryContext>) -> Result<QueryNormalizer> {
+        let tenant = ctx.get_tenant();
+        let udfs = ctx.get_user_manager().get_udfs(&tenant).await?;
+        Ok(QueryNormalizer {
+            expression_analyzer: ExpressionAnalyzer::create_with_udfs_support(ctx, udfs),
             aliases_map: HashMap::new(),
             query_ast_ir: QueryASTIR {
                 filter_predicate: None,
-                group_by_expressions: vec![],
                 having_predicate: None,
+                group_by_expressions: vec![],
                 aggregate_expressions: vec![],
+                distinct: false,
                 order_by_expressions: vec![],
                 projection_expressions: vec![],
                 limit: None,
                 offset: None,
             },
-        }
+        })
     }
 
     pub async fn normalize(ctx: Arc<QueryContext>, v: &DfQueryStatement) -> Result<QueryASTIR> {
-        let query_normalizer = QueryNormalizer::create(ctx);
+        let query_normalizer = QueryNormalizer::try_create(ctx).await?;
         query_normalizer.transform(v).await
     }
 
@@ -64,26 +68,37 @@ impl QueryNormalizer {
         if let Err(cause) = self.visit_filter(query).await {
             return Err(cause.add_message_back(" (while in analyze select filter)"));
         }
+        tracing::debug!("after analyse of filter:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_projection(query).await {
             return Err(cause.add_message_back(" (while in analyze select projection)"));
         }
+        tracing::debug!("after analyse of projection:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_group_by(query).await {
             return Err(cause.add_message_back(" (while in analyze select group by)"));
         }
+        tracing::debug!("after analyse of group_by:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_having(query).await {
             return Err(cause.add_message_back(" (while in analyze select having)"));
         }
+        tracing::debug!("after analyse of having:\n{:?}", self.query_ast_ir);
+
+        if query.distinct {
+            self.query_ast_ir.distinct = true;
+        }
+        tracing::debug!("after analyse of distinct:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_order_by(query).await {
             return Err(cause.add_message_back(" (while in analyze select order by)"));
         }
+        tracing::debug!("after analyse of order_by:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_limit(query).await {
             return Err(cause.add_message_back(" (while in analyze select limit)"));
         }
+        tracing::debug!("after analyse of limit:\n{:?}", self.query_ast_ir);
 
         Ok(self.query_ast_ir)
     }
@@ -186,7 +201,7 @@ impl QueryNormalizer {
             match item {
                 SelectItem::Wildcard => {
                     if query.from.is_empty() {
-                        return Err(ErrorCode::LogicalError(
+                        return Err(ErrorCode::SemanticError(
                             "SELECT * with no tables specified is not valid",
                         ));
                     }

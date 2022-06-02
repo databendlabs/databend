@@ -16,36 +16,44 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserInfo;
 use common_tracing::tracing;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
-use headers::HeaderMap;
-use hyper::http::header::AUTHORIZATION;
+use http::header::AUTHORIZATION;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
+use poem::Addr;
 use poem::Endpoint;
 use poem::Middleware;
 use poem::Request;
 
+use super::v1::HttpQueryContext;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 use crate::users::auth::auth_mgr::Credential;
 
 pub struct HTTPSessionMiddleware {
     pub session_manager: Arc<SessionManager>,
 }
 
-fn get_credential(headers: &HeaderMap) -> Result<Option<Credential>> {
-    let auth_headers: Vec<_> = headers.get_all(AUTHORIZATION).iter().collect();
+fn get_credential(req: &Request) -> Result<Credential> {
+    let auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if auth_headers.len() > 1 {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
         return Err(ErrorCode::AuthenticateFailure(msg));
     }
     if auth_headers.is_empty() {
-        return Ok(None);
+        return Err(ErrorCode::AuthenticateFailure(
+            "No authorization header detected",
+        ));
     }
+    let client_ip = match req.remote_addr().0 {
+        Addr::SocketAddr(addr) => Some(addr.ip().to_string()),
+        Addr::Custom(..) => Some("127.0.0.1".to_string()),
+        _ => None,
+    };
     let value = auth_headers[0];
     if value.as_bytes().starts_with(b"Basic ") {
         match Basic::decode(value) {
@@ -56,21 +64,22 @@ fn get_credential(headers: &HeaderMap) -> Result<Option<Credential>> {
                 let c = Credential::Password {
                     name,
                     password,
-                    hostname: None,
+                    hostname: client_ip,
                 };
-                Ok(Some(c))
+                Ok(c)
             }
             None => Err(ErrorCode::AuthenticateFailure("bad Basic auth header")),
         }
     } else if value.as_bytes().starts_with(b"Bearer ") {
         match Bearer::decode(value) {
-            Some(bearer) => Ok(Some(Credential::Jwt {
+            Some(bearer) => Ok(Credential::Jwt {
                 token: bearer.token().to_string(),
-            })),
+                hostname: client_ip,
+            }),
             None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
         }
     } else {
-        Ok(None)
+        Err(ErrorCode::AuthenticateFailure("bad auth header"))
     }
 }
 
@@ -90,12 +99,21 @@ pub struct HTTPSessionEndpoint<E> {
 }
 
 impl<E> HTTPSessionEndpoint<E> {
-    async fn auth(&self, req: &Request) -> Result<UserInfo> {
-        let credential = get_credential(req.headers())?;
-        match credential {
-            Some(c) => self.manager.get_auth_manager().auth(&c).await,
-            None => self.manager.get_auth_manager().no_auth().await,
+    async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
+        let credential = get_credential(req)?;
+        let session = self.manager.create_session(SessionType::Dummy).await?;
+        let (tenant_id, user_info) = session
+            .create_query_context()
+            .await?
+            .get_auth_manager()
+            .auth(&credential)
+            .await?;
+        session.set_current_user(user_info);
+        if let Some(tenant_id) = tenant_id {
+            session.set_current_tenant(tenant_id);
         }
+
+        Ok(HttpQueryContext::new(self.manager.clone(), session))
     }
 }
 
@@ -106,9 +124,8 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         tracing::debug!("receive http request: {:?},", req);
         let res = match self.auth(&req).await {
-            Ok(user_info) => {
-                req.extensions_mut().insert(self.manager.clone());
-                req.extensions_mut().insert(user_info);
+            Ok(ctx) => {
+                req.extensions_mut().insert(ctx);
                 self.ep.call(req).await
             }
             Err(err) => Err(PoemError::from_string(

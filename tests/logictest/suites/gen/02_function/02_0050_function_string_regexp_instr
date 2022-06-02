@@ -1,0 +1,84 @@
+statement query I 
+SELECT REGEXP_INSTR('dog cat dog', 'dog');
+
+----  
+1
+
+statement query I 
+SELECT REGEXP_INSTR('dog cat dog', 'dog', 2);
+
+----  
+9
+
+statement query I 
+SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 2);
+
+----  
+9
+
+statement query I 
+SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 2, 1);
+
+----  
+12
+
+statement query I 
+SELECT REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1);
+
+----  
+12
+
+statement query I 
+SELECT REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, 'c');
+
+----  
+0
+
+statement query I 
+SELECT REGEXP_INSTR('dog cat dog', NULL);
+
+----  
+NULL
+
+statement query I 
+SELECT REGEXP_INSTR('dog cat dog', 'dog', NULL);
+
+----  
+NULL
+
+statement query I 
+SELECT REGEXP_INSTR('🍣🍣b', 'b', 2);
+
+----  
+3
+
+statement query I 
+SELECT REGEXP_INSTR('µå周çб', '周');
+
+----  
+3
+
+statement query I 
+SELECT REGEXP_INSTR('周 周周 周周周 周周周周', '周+', 2, 3, 1);
+
+----  
+14
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE TABLE t1(s String NULL, pat String NULL, pos Int64 NULL, occu Int64 NULL, ro Int64 NULL, mt String NULL) Engine = Memory;
+
+statement ok
+INSERT INTO t1 (s, pat, pos, occu, ro, mt) VALUES (NULL, 'dog', 1, 1, 1, ''), ('dog cat dog', 'dog', NULL, 1, 1, 'c'), ('dog cat dog', 'dog', 1, 1, 1, 'c'), ('dog cat dog', 'dog', 1, 1, 1, NULL);
+
+statement query T 
+SELECT s FROM t1 WHERE REGEXP_INSTR(s, pat, pos, occu, ro, mt) = 4;
+
+----  
+dog cat dog
+
+statement ok
+DROP TABLE t1;
+

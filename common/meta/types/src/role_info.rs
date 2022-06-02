@@ -28,9 +28,9 @@ pub struct RoleInfo {
 }
 
 impl RoleInfo {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: &str) -> Self {
         Self {
-            name,
+            name: name.to_string(),
             grants: UserGrantSet::empty(),
         }
     }

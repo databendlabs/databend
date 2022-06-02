@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use once_cell::sync::Lazy;
 
 use crate::PlanNode;
@@ -29,6 +29,7 @@ pub static SINK_SCHEMA: Lazy<DataSchemaRef> = Lazy::new(|| {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SinkPlan {
+    pub catalog_name: String,
     pub table_info: TableInfo,
     pub input: Arc<PlanNode>,
     pub cast_schema: Option<DataSchemaRef>,

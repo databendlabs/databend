@@ -22,8 +22,8 @@ use std::task::Poll;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use common_base::tokio;
-use common_base::tokio::task::JoinHandle;
+use common_base::base::tokio;
+use common_base::base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -37,6 +37,7 @@ use serde::Serialize;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
+use tonic::transport::Endpoint;
 use trust_dns_resolver::TokioAsyncResolver;
 
 use crate::RpcClientTlsConfig;
@@ -140,23 +141,40 @@ impl Future for DNSServiceFuture {
 pub struct ConnectionFactory;
 
 impl ConnectionFactory {
-    pub fn create_rpc_channel(
+    pub async fn create_rpc_channel(
         addr: impl ToString,
         timeout: Option<Duration>,
         rpc_client_config: Option<RpcClientTlsConfig>,
     ) -> std::result::Result<Channel, GrpcConnectionError> {
+        let endpoint = Self::create_rpc_endpoint(addr, timeout, rpc_client_config)?;
+
+        let mut inner_connector = HttpConnector::new_with_resolver(DNSService);
+        inner_connector.set_nodelay(true);
+        inner_connector.set_keepalive(None);
+        inner_connector.enforce_http(false);
+
+        // check connection immediately
+        match endpoint.connect_with_connector(inner_connector).await {
+            Ok(channel) => Ok(channel),
+            Err(error) => Err(GrpcConnectionError::CannotConnect {
+                uri: endpoint.uri().to_string(),
+                source: AnyError::new(&error),
+            }),
+        }
+    }
+
+    pub fn create_rpc_endpoint(
+        addr: impl ToString,
+        timeout: Option<Duration>,
+        rpc_client_config: Option<RpcClientTlsConfig>,
+    ) -> std::result::Result<Endpoint, GrpcConnectionError> {
         match format!("http://{}", addr.to_string()).parse::<Uri>() {
             Err(error) => Err(GrpcConnectionError::InvalidUri {
                 uri: addr.to_string(),
                 source: AnyError::new(&error),
             }),
             Ok(uri) => {
-                let mut inner_connector = HttpConnector::new_with_resolver(DNSService);
-                inner_connector.set_nodelay(true);
-                inner_connector.set_keepalive(None);
-                inner_connector.enforce_http(false);
-
-                let builder = Channel::builder(uri.clone());
+                let builder = Channel::builder(uri);
 
                 let mut endpoint = if let Some(conf) = rpc_client_config {
                     tracing::info!("tls rpc enabled");
@@ -180,13 +198,7 @@ impl ConnectionFactory {
                     endpoint = endpoint.timeout(timeout);
                 }
 
-                match endpoint.connect_with_connector_lazy(inner_connector) {
-                    Ok(channel) => Ok(channel),
-                    Err(error) => Err(GrpcConnectionError::CannotConnect {
-                        uri: uri.to_string(),
-                        source: AnyError::new(&error),
-                    }),
-                }
+                Ok(endpoint)
             }
         }
     }

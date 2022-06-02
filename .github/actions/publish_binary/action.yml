@@ -60,6 +60,9 @@ runs:
       run: |
         aws s3 cp databend-${{ inputs.version }}-${{ inputs.target }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/databend-${{ inputs.version }}-${{ inputs.target }}.tar.gz
         aws s3 cp databend-tools-${{ inputs.version }}-${{ inputs.target }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/databend-tools-${{ inputs.version }}-${{ inputs.target }}.tar.gz
-        curl https://api.github.com/repos/datafuselabs/databend/tags > tags.json
+        curl --retry 3 -fsSLo tags.json \
+             --header 'content-type: application/json' \
+             --header 'authorization: Bearer ${{ inputs.github_token }}' \
+             https://api.github.com/repos/datafuselabs/databend/tags
         cat tags.json
         aws s3 cp ./tags.json s3://repo.databend.rs/databend/tags.json

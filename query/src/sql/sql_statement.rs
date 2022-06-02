@@ -29,6 +29,8 @@ use super::statements::DfDropView;
 use super::statements::DfGrantRoleStatement;
 use super::statements::DfList;
 use super::statements::DfRevokeRoleStatement;
+use super::statements::DfShowStages;
+use crate::sql::statements::DfAlterDatabase;
 use crate::sql::statements::DfAlterTable;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
@@ -67,9 +69,11 @@ use crate::sql::statements::DfShowTabStat;
 use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUnDropTable;
 use crate::sql::statements::DfUseDatabase;
 
 /// Tokens parsed by `DFParser` are converted into these values.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement<'a> {
     // ANSI SQL AST node
@@ -82,6 +86,7 @@ pub enum DfStatement<'a> {
     CreateDatabase(DfCreateDatabase),
     DropDatabase(DfDropDatabase),
     UseDatabase(DfUseDatabase),
+    AlterDatabase(DfAlterDatabase),
 
     // Tables.
     ShowTables(DfShowTables),
@@ -90,6 +95,7 @@ pub enum DfStatement<'a> {
     CreateTable(DfCreateTable),
     DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
+    UnDropTable(DfUnDropTable),
     AlterTable(DfAlterTable),
     TruncateTable(DfTruncateTable),
     OptimizeTable(DfOptimizeTable),
@@ -141,6 +147,7 @@ pub enum DfStatement<'a> {
     DropStage(DfDropUserStage),
     DescribeStage(DfDescribeUserStage),
     List(DfList),
+    ShowStages(DfShowStages),
 
     // Call
     Call(DfCall),

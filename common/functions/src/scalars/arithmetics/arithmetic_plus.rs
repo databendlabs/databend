@@ -54,7 +54,7 @@ pub struct ArithmeticPlusFunction;
 impl ArithmeticPlusFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         let op = DataValueBinaryOperator::Plus;
         let left_type = args[0].data_type_id();
@@ -81,7 +81,7 @@ impl ArithmeticPlusFunction {
                         let interval = args[1].as_any().downcast_ref::<IntervalType>().unwrap();
                         let kind = interval.kind();
                         let function_name = format!("add{}s", kind);
-                        FunctionFactory::instance().get(function_name, &[args[0], &Int64Type::arc()])
+                        FunctionFactory::instance().get(function_name, &[args[0], &Int64Type::new_impl()])
                     } else {
                         error_fn()
                     }

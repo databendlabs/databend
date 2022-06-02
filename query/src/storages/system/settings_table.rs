@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 
 use crate::sessions::QueryContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
@@ -59,7 +59,7 @@ impl SyncSystemTable for SettingsTable {
                 // Desc.
                 descs.push(format!("{:?}", vals[4]));
                 // Types.
-                types.push(format!("{:?}", vals[2].max_data_type()));
+                types.push(vals[2].max_data_type().name());
             }
         }
 

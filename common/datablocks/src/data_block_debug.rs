@@ -96,7 +96,7 @@ fn create_table(results: &[DataBlock]) -> Result<Table> {
             let mut cells = Vec::new();
             for col in 0..batch.num_columns() {
                 let column = batch.column(col);
-                let str = format!("{}", column.get_checked(row)?);
+                let str = column.get_checked(row)?.to_string();
                 cells.push(Cell::new(&str));
             }
             table.add_row(cells);

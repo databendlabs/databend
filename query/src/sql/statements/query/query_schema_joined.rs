@@ -223,7 +223,7 @@ impl JoinedTableDesc {
 #[derive(Clone)]
 pub struct JoinedColumnDesc {
     pub short_name: String,
-    pub data_type: DataTypePtr,
+    pub data_type: DataTypeImpl,
     pub nullable: bool,
     pub is_ambiguity: bool,
 }
@@ -238,7 +238,7 @@ impl JoinedColumnDesc {
         }
     }
 
-    pub fn create(alias: &str, data_type: DataTypePtr, nullable: bool) -> JoinedColumnDesc {
+    pub fn create(alias: &str, data_type: DataTypeImpl, nullable: bool) -> JoinedColumnDesc {
         JoinedColumnDesc {
             short_name: alias.to_string(),
             data_type,

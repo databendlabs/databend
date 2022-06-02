@@ -1,0 +1,74 @@
+statement query B label(mysql,http)
+select if(number>1, true, false) from numbers(3) order by number;
+
+----  mysql
+0
+0
+1
+
+----  http
+false
+false
+true
+
+statement query I 
+select if(number>1, number, 1) from numbers(3) order by number;
+
+----  
+1
+1
+2
+
+statement query I 
+select if(number<1, 2, number) from numbers(3) order by number;
+
+----  
+2
+1
+2
+
+statement query T 
+select if(number>0, 'Z+', 'zero') from numbers(3) order by number;
+
+----  
+zero
+Z+
+Z+
+
+statement query B label(mysql,http)
+select if(number<1, true, null) from numbers(3) order by number;
+
+----  mysql
+1
+NULL
+NULL
+
+----  http
+true
+NULL
+NULL
+
+statement query T 
+select typeof(if(number % 3 = 0, to_uint32(1), to_int64(3))) from numbers(10) limit 1;
+
+----  
+BIGINT
+
+statement query T 
+select typeof(if(number % 3 = 0, to_uint32(1), to_float32(3))) from numbers(10) limit 1;
+
+----  
+DOUBLE
+
+statement query I 
+SELECT if (number % 3 = 1, null, number) as a FROM numbers(7) order by number;
+
+----  
+0
+NULL
+2
+3
+NULL
+5
+6
+

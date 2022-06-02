@@ -1,0 +1,9 @@
+0,"0",1
+1,"1",2
+2,"2",3
+0	0	1
+1	1	2
+2	2	3
+{"number":0,"number::VARCHAR":"0","(number + 1)":1}
+{"number":1,"number::VARCHAR":"1","(number + 1)":2}
+{"number":2,"number::VARCHAR":"2","(number + 1)":3}

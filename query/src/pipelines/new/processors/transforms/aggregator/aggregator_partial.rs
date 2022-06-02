@@ -17,8 +17,11 @@ use std::sync::Arc;
 use bytes::BytesMut;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
+use common_datablocks::HashMethodKeysU128;
 use common_datablocks::HashMethodKeysU16;
+use common_datablocks::HashMethodKeysU256;
 use common_datablocks::HashMethodKeysU32;
+use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
@@ -37,6 +40,7 @@ use crate::pipelines::transforms::group_by::AggregatorState;
 use crate::pipelines::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::transforms::group_by::StateEntity;
+use crate::sessions::QueryContext;
 
 pub type KeysU8PartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodKeysU8>;
@@ -46,6 +50,15 @@ pub type KeysU32PartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodKeysU32>;
 pub type KeysU64PartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodKeysU64>;
+pub type KeysU128PartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodKeysU128>;
+
+pub type KeysU256PartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodKeysU256>;
+
+pub type KeysU512PartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodKeysU512>;
+
 pub type SerializerPartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodSerializer>;
 pub type SingleStringPartialAggregator<const HAS_AGG: bool> =
@@ -56,22 +69,26 @@ pub struct PartialAggregator<
     Method: HashMethod + PolymorphicKeysHelper<Method>,
 > {
     is_generated: bool,
+    states_dropped: bool,
 
     method: Method,
     state: Method::State,
     params: Arc<AggregatorParams>,
+    ctx: Arc<QueryContext>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
     PartialAggregator<HAS_AGG, Method>
 {
-    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Self {
+    pub fn create(ctx: Arc<QueryContext>, method: Method, params: Arc<AggregatorParams>) -> Self {
         let state = method.aggregate_state();
         Self {
             is_generated: false,
+            states_dropped: false,
             state,
             method,
             params,
+            ctx,
         }
     }
 
@@ -98,9 +115,10 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
             match inserted {
                 true => {
-                    let place = state.alloc_layout2(params);
-                    places.push(place);
-                    entity.set_state_value(place.addr());
+                    if let Some(place) = state.alloc_layout2(params) {
+                        places.push(place);
+                        entity.set_state_value(place.addr());
+                    }
                 }
                 false => {
                     let place: StateAddr = (*entity.get_state_value()).into();
@@ -222,6 +240,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
         let group_keys = self.method.build_keys(&group_columns, block.num_rows())?;
 
+        let group_by_two_level_threshold =
+            self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
+        if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
+            self.state.convert_to_two_level();
+        }
+
         let places = Self::lookup_state(&self.params, group_keys, &mut self.state);
         Self::execute(&self.params, &block, &places)
     }
@@ -240,13 +264,23 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
         let group_keys = self.method.build_keys(&group_columns, block.num_rows())?;
+
+        let group_by_two_level_threshold =
+            self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
+        if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
+            self.state.convert_to_two_level();
+        }
+
         Self::lookup_key(group_keys, &mut self.state);
         Ok(())
     }
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.state.len() == 0 || self.is_generated {
-            true => Ok(None),
+            true => {
+                self.drop_states();
+                Ok(None)
+            }
             false => {
                 self.is_generated = true;
                 let mut keys_column_builder = self.method.keys_column_builder(self.state.len());
@@ -260,5 +294,46 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 ])))
             }
         }
+    }
+}
+
+impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
+    PartialAggregator<HAS_AGG, Method>
+{
+    fn drop_states(&mut self) {
+        if !self.states_dropped {
+            let aggregator_params = self.params.as_ref();
+            let aggregate_functions = &aggregator_params.aggregate_functions;
+            let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+
+            let functions = aggregate_functions
+                .iter()
+                .filter(|p| p.need_manual_drop_state())
+                .collect::<Vec<_>>();
+
+            let states = offsets_aggregate_states
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+                .map(|(_, s)| *s)
+                .collect::<Vec<_>>();
+
+            for group_entity in self.state.iter() {
+                let place: StateAddr = (*group_entity.get_state_value()).into();
+
+                for (function, state_offset) in functions.iter().zip(states.iter()) {
+                    unsafe { function.drop_state(place.next(*state_offset)) }
+                }
+            }
+            self.states_dropped = true;
+        }
+    }
+}
+
+impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>> Drop
+    for PartialAggregator<HAS_AGG, Method>
+{
+    fn drop(&mut self) {
+        self.drop_states();
     }
 }

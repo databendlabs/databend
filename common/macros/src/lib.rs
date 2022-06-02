@@ -12,23 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(dead_code)]
 mod async_entrypoint;
 mod malloc_sizeof;
 
 synstructure::decl_derive!([MallocSizeOf, attributes(ignore_malloc_size_of, conditional_malloc_size_of)] => malloc_sizeof::malloc_size_of_derive);
 
-#[allow(unused)]
 use proc_macro::TokenStream;
 
 #[proc_macro_attribute]
-#[cfg(not(test))] // Work around for rust-lang/rust#62127
 pub fn databend_main(args: TokenStream, item: TokenStream) -> TokenStream {
     async_entrypoint::async_main(args, item)
 }
 
 #[proc_macro_attribute]
-#[cfg(not(test))] // Work around for rust-lang/rust#62127
 pub fn databend_test(args: TokenStream, item: TokenStream) -> TokenStream {
     async_entrypoint::async_test(args, item)
 }

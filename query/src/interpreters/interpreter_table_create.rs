@@ -28,10 +28,10 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use super::InsertInterpreter;
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::storages::StorageDescription;
 
 pub struct CreateTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -57,33 +57,59 @@ impl Interpreter for CreateTableInterpreter {
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Database(self.plan.db.clone()),
+                &GrantObject::Database(self.plan.catalog.clone(), self.plan.db.clone()),
                 UserPrivilegeType::Create,
             )
             .await?;
 
-        let engine = self.plan.engine();
-
-        if self
+        let tenant = self.plan.tenant.clone();
+        let quota_api = self
             .ctx
-            .get_catalog()
+            .get_user_manager()
+            .get_tenant_quota_api_client(&tenant)?;
+        let quota = quota_api.get_quota(None).await?.data;
+        let engine = self.plan.engine();
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let tables = catalog
             .list_tables(&*self.plan.tenant, &*self.plan.db)
-            .await?
-            .iter()
-            .all(|table| table.name() != self.plan.table.as_str())
-            && self
-                .ctx
-                .get_catalog()
-                .get_table_engines()
-                .iter()
-                .all(|desc| {
-                    desc.engine_name.to_string().to_lowercase() != engine.to_string().to_lowercase()
-                })
+            .await?;
+        if quota.max_tables_per_database != 0
+            && tables.len() >= quota.max_tables_per_database as usize
         {
-            return Err(ErrorCode::UnknownTableEngine(format!(
-                "Unknown table engine {}",
-                engine
+            return Err(ErrorCode::TenantQuotaExceeded(format!(
+                "Max tables per database quota exceeded: {}",
+                quota.max_tables_per_database
             )));
+        };
+        let name_not_duplicate = tables
+            .iter()
+            .all(|table| table.name() != self.plan.table.as_str());
+
+        let engine_desc: Option<StorageDescription> = catalog
+            .get_table_engines()
+            .iter()
+            .find(|desc| {
+                desc.engine_name.to_string().to_lowercase() == engine.to_string().to_lowercase()
+            })
+            .cloned();
+
+        match engine_desc {
+            Some(engine) => {
+                if !self.plan.cluster_keys.is_empty() && !engine.support_order_key {
+                    return Err(ErrorCode::UnsupportedEngineParams(format!(
+                        "Unsupported cluster key for engine: {}",
+                        engine.engine_name
+                    )));
+                }
+            }
+            None => {
+                if name_not_duplicate {
+                    return Err(ErrorCode::UnknownTableEngine(format!(
+                        "Unknown table engine {}",
+                        engine
+                    )));
+                }
+            }
         }
 
         match &self.plan.as_select {
@@ -103,7 +129,7 @@ impl CreateTableInterpreter {
         select_plan_node: Box<PlanNode>,
     ) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
         catalog.create_table(self.plan.clone().into()).await?;
@@ -130,6 +156,7 @@ impl CreateTableInterpreter {
             .collect();
         let schema = DataSchemaRefExt::create(select_fields);
         let insert_plan = InsertPlan {
+            catalog_name: self.plan.catalog.clone(),
             database_name: self.plan.db.clone(),
             table_name: self.plan.table.clone(),
             table_id: table.get_id(),
@@ -148,7 +175,7 @@ impl CreateTableInterpreter {
     }
 
     async fn create_table(&self) -> Result<SendableDataBlockStream> {
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
         catalog.create_table(self.plan.clone().into()).await?;
 
         Ok(Box::pin(DataBlockStream::create(

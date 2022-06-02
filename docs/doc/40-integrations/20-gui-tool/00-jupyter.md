@@ -1,5 +1,5 @@
 ---
-title: Visualization Databend data in Jupyter Notebook
+title: Visualization Databend Data in Jupyter Notebook
 sidebar_label: Jupyter
 description:
   Visualization Databend data in Jupyter Notebook.
@@ -29,7 +29,7 @@ CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 Grant privileges for the user:
-```shell title='mysql>'
+```sql
 GRANT ALL ON *.* TO user1;
 ```
 

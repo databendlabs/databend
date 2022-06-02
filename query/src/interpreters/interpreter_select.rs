@@ -76,7 +76,7 @@ impl Interpreter for SelectInterpreter {
 
         if settings.get_enable_new_processor_framework()? != 0 {
             let query_pipeline = match self.ctx.get_cluster().is_empty() {
-                true => self.execute2()?,
+                true => self.create_new_pipeline()?,
                 false => {
                     let optimized_plan = self.rewrite_plan()?;
                     plan_schedulers::schedule_query_new(self.ctx.clone(), &optimized_plan).await?

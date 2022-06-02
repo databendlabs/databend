@@ -15,7 +15,8 @@
 use std::fmt;
 use std::time::Duration;
 
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataType;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::Int8Type;
 use common_exception::ErrorCode;
@@ -33,7 +34,7 @@ pub struct SleepFunction {
 }
 
 impl SleepFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
         Ok(Box::new(SleepFunction {
             display_name: display_name.to_string(),
@@ -51,8 +52,8 @@ impl Function for SleepFunction {
         "SleepFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        Int8Type::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        Int8Type::new_impl()
     }
 
     fn eval(
@@ -89,7 +90,7 @@ impl Function for SleepFunction {
             )));
         };
         std::thread::sleep(duration);
-        let t = Int8Type::arc();
+        let t = Int8Type::new_impl();
         t.create_constant_column(&DataValue::UInt64(0), input_rows)
     }
 }

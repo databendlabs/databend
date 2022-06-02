@@ -1,4 +1,26 @@
 ---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: local-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minio-pv-volume
+  labels:
+    type: local
+spec:
+  storageClassName: local-storage
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/databend/minio"
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -7,6 +29,7 @@ metadata:
   labels:
     app: minio-storage-claim
 spec:
+  storageClassName: local-storage
   # Read more about access modes here:
   # http://kubernetes.io/docs/user-guide/persistent-volumes/#access-modes
   accessModes:

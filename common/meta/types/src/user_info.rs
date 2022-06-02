@@ -44,15 +44,15 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub fn new(name: String, hostname: String, auth_info: AuthInfo) -> Self {
+    pub fn new(name: &str, hostname: &str, auth_info: AuthInfo) -> Self {
         // Default is no privileges.
         let grants = UserGrantSet::default();
         let quota = UserQuota::no_limit();
         let option = UserOption::default();
 
         UserInfo {
-            name,
-            hostname,
+            name: name.to_string(),
+            hostname: hostname.to_string(),
             auth_info,
             grants,
             quota,
@@ -60,7 +60,7 @@ impl UserInfo {
         }
     }
 
-    pub fn new_no_auth(name: String, hostname: String) -> Self {
+    pub fn new_no_auth(name: &str, hostname: &str) -> Self {
         UserInfo::new(name, hostname, AuthInfo::None)
     }
 
@@ -97,6 +97,14 @@ pub struct UserOption {
 }
 
 impl UserOption {
+    pub fn new(flags: BitFlags<UserOptionFlag>) -> Self {
+        Self { flags }
+    }
+
+    pub fn flags(&self) -> &BitFlags<UserOptionFlag> {
+        &self.flags
+    }
+
     pub fn set_all_flag(&mut self) {
         self.flags = BitFlags::all();
     }
@@ -116,7 +124,7 @@ impl UserOption {
 
 #[bitflags]
 #[repr(u64)]
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, num_derive::FromPrimitive)]
 pub enum UserOptionFlag {
     TenantSetting = 1 << 0,
     ConfigReload = 1 << 1,

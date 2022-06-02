@@ -27,14 +27,13 @@ use poem::Route;
 
 use super::v1::upload_to_stage;
 use crate::common::service::HttpShutdownHandler;
-use crate::configs::Config;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::query_route;
-use crate::servers::http::v1::statement_router;
 use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
 use crate::sessions::SessionManager;
+use crate::Config;
 
 pub struct HttpHandler {
     session_manager: Arc<SessionManager>,
@@ -53,7 +52,7 @@ impl HttpHandler {
         let json = r#"{"foo": "bar"}"#;
         format!(
             r#" examples:
-curl --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
+curl -u root: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
 echo '{}' | curl '{:?}/clickhouse/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
             sock, json, sock
         )
@@ -66,7 +65,6 @@ echo '{}' | curl '{:?}/clickhouse/?query=INSERT%20INTO%20test%20FORMAT%20JSONEac
                 get(poem::endpoint::make_sync(move |_| Self::usage(sock))),
             )
             .nest("/clickhouse", clickhouse_router())
-            .nest("/v1/statement", statement_router())
             .nest("/v1/query", query_route())
             .at("/v1/streaming_load", put(streaming_load))
             .at("/v1/upload_to_stage", put(upload_to_stage))

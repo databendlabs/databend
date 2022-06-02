@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
-use common_datavalues::DateTime32Type;
-use common_datavalues::DateTime64Type;
+use common_datavalues::TimestampType;
+use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_QUERY;
 use common_exception::ABORT_SESSION;
+use common_io::prelude::FormatSettings;
 use common_tracing::tracing;
 use opensrv_mysql::*;
 
@@ -38,10 +39,14 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         DFQueryResultWriter::<'a, W> { inner: Some(inner) }
     }
 
-    pub fn write(&mut self, query_result: Result<(Vec<DataBlock>, String)>) -> Result<()> {
+    pub fn write(
+        &mut self,
+        query_result: Result<(Vec<DataBlock>, String)>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
-                Ok((blocks, extra_info)) => Self::ok(blocks, extra_info, writer)?,
+                Ok((blocks, extra_info)) => Self::ok(blocks, extra_info, writer, format)?,
                 Err(error) => Self::err(&error, writer)?,
             }
         }
@@ -52,6 +57,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         blocks: Vec<DataBlock>,
         extra_info: String,
         dataset_writer: QueryResultWriter<'a, W>,
+        format: &FormatSettings,
     ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
         let default_response = OkResponse {
@@ -78,11 +84,11 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 TypeID::Float64 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
                 TypeID::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
-                TypeID::Date16 | TypeID::Date32 => Ok(ColumnType::MYSQL_TYPE_DATE),
-                TypeID::DateTime32 => Ok(ColumnType::MYSQL_TYPE_DATETIME),
-                TypeID::DateTime64 => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+                TypeID::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
+                TypeID::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 TypeID::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 TypeID::Interval => Ok(ColumnType::MYSQL_TYPE_LONG),
+                TypeID::Array => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Struct => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::VariantArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
@@ -108,7 +114,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         let block = blocks[0].clone();
-        let utc: Tz = "UTC".parse().unwrap();
+        let tz = format.timezone;
         match convert_schema(block.schema()) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
@@ -131,29 +137,16 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 (TypeID::Boolean, DataValue::Boolean(v)) => {
                                     row_writer.write_col(v as i8)?
                                 }
-                                (TypeID::Date16, DataValue::UInt64(v)) => {
-                                    row_writer.write_col(v.to_date(&utc).naive_local())?
+                                (TypeID::Date, DataValue::Int64(v)) => {
+                                    let v = v as i32;
+                                    row_writer.write_col(v.to_date(&tz).naive_local())?
                                 }
-                                (TypeID::Date32, DataValue::Int64(v)) => {
-                                    row_writer.write_col(v.to_date(&utc).naive_local())?
-                                }
-                                (TypeID::DateTime32, DataValue::UInt64(v)) => {
-                                    let data_type: &DateTime32Type =
+                                (TypeID::Timestamp, DataValue::Int64(v)) => {
+                                    let data_type: &TimestampType =
                                         data_type.as_any().downcast_ref().unwrap();
-                                    let tz = data_type.tz();
-                                    let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());
-                                    let tz: Tz = tz.parse().unwrap();
-                                    row_writer.write_col(v.to_date_time(&tz).naive_local())?
-                                }
-                                (TypeID::DateTime64, DataValue::Int64(v)) => {
-                                    let data_type: &DateTime64Type =
-                                        data_type.as_any().downcast_ref().unwrap();
-                                    let tz = data_type.tz();
-                                    let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());
-                                    let tz: Tz = tz.parse().unwrap();
 
                                     row_writer.write_col(
-                                        v.to_date_time64(data_type.precision(), &tz)
+                                        v.to_timestamp(&tz)
                                             .naive_local()
                                             .format(data_type.format_string().as_str())
                                             .to_string(),
@@ -162,21 +155,30 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 (TypeID::String, DataValue::String(v)) => {
                                     row_writer.write_col(v)?
                                 }
+                                (TypeID::Array, DataValue::Array(_)) => {
+                                    let serializer = data_type.create_serializer();
+                                    row_writer
+                                        .write_col(serializer.serialize_value(&val, format)?)?
+                                }
                                 (TypeID::Struct, DataValue::Struct(_)) => {
                                     let serializer = data_type.create_serializer();
-                                    row_writer.write_col(serializer.serialize_value(&val)?)?
+                                    row_writer
+                                        .write_col(serializer.serialize_value(&val, format)?)?
                                 }
-                                (TypeID::Variant, DataValue::Json(_)) => {
+                                (TypeID::Variant, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
-                                    row_writer.write_col(serializer.serialize_value(&val)?)?
+                                    row_writer
+                                        .write_col(serializer.serialize_value(&val, format)?)?
                                 }
-                                (TypeID::VariantArray, DataValue::Json(_)) => {
+                                (TypeID::VariantArray, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
-                                    row_writer.write_col(serializer.serialize_value(&val)?)?
+                                    row_writer
+                                        .write_col(serializer.serialize_value(&val, format)?)?
                                 }
-                                (TypeID::VariantObject, DataValue::Json(_)) => {
+                                (TypeID::VariantObject, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
-                                    row_writer.write_col(serializer.serialize_value(&val)?)?
+                                    row_writer
+                                        .write_col(serializer.serialize_value(&val, format)?)?
                                 }
                                 (_, DataValue::Int64(v)) => row_writer.write_col(v)?,
 
@@ -204,11 +206,11 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
     fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
         if error.code() != ABORT_QUERY && error.code() != ABORT_SESSION {
             tracing::error!("OnQuery Error: {:?}", error);
-            writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
+            writer.error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())?;
         } else {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
-                format!("{}", error).as_bytes(),
+                error.to_string().as_bytes(),
             )?;
         }
 

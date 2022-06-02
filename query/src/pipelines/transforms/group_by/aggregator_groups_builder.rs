@@ -16,11 +16,13 @@ use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataField;
+use common_datavalues::DataType;
 use common_datavalues::MutableColumn;
 use common_datavalues::MutableStringColumn;
-use common_datavalues::PrimitiveType;
 use common_datavalues::ScalarColumnBuilder;
+use common_datavalues::TypeDeserializer;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
@@ -30,17 +32,13 @@ pub trait GroupColumnsBuilder<Key> {
     fn finish(self) -> Result<Vec<ColumnRef>>;
 }
 
-pub struct FixedKeysGroupColumnsBuilder<T>
-where T: PrimitiveType
-{
+pub struct FixedKeysGroupColumnsBuilder<T> {
     data: Vec<T>,
     groups_fields: Vec<DataField>,
 }
 
 impl<T> FixedKeysGroupColumnsBuilder<T>
-where
-    T: PrimitiveType,
-    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
+where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>
 {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
@@ -50,10 +48,8 @@ where
     }
 }
 
-impl<T> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
-where
-    T: PrimitiveType,
-    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
+impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
+where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>
 {
     #[inline]
     fn append_value(&mut self, v: &T) {
@@ -98,12 +94,13 @@ impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
 
         let rows = self.data.len();
         let mut res = Vec::with_capacity(self.groups_fields.len());
+        let format = FormatSettings::default();
         for group_field in self.groups_fields.iter() {
             let data_type = group_field.data_type();
             let mut deserializer = data_type.create_deserializer(rows);
 
             for (_, key) in keys.iter_mut().enumerate() {
-                deserializer.de_binary(key)?;
+                deserializer.de_binary(key, &format)?;
             }
             res.push(deserializer.finish_to_column());
         }

@@ -24,12 +24,11 @@ use crate::prelude::*;
 pub struct StringType {}
 
 impl StringType {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
+    pub fn new_impl() -> DataTypeImpl {
+        DataTypeImpl::String(Self {})
     }
 }
 
-#[typetag::serde]
 impl DataType for StringType {
     fn data_type_id(&self) -> TypeID {
         TypeID::String
@@ -40,8 +39,12 @@ impl DataType for StringType {
         self
     }
 
-    fn name(&self) -> &str {
-        "String"
+    fn name(&self) -> String {
+        "String".to_string()
+    }
+
+    fn sql_name(&self) -> String {
+        "VARCHAR".to_string()
     }
 
     fn aliases(&self) -> &[&str] {
@@ -68,12 +71,12 @@ impl DataType for StringType {
         ArrowType::LargeBinary
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(StringSerializer {})
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        StringSerializer {}.into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(StringDeserializer::with_capacity(capacity))
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        StringDeserializer::with_capacity(capacity).into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

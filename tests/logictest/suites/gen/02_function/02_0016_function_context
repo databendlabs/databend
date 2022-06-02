@@ -1,0 +1,6 @@
+statement query T 
+SELECT current_user();
+
+----  
+'root'@'127.0.0.1'
+

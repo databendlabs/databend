@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::sql::statements::AnalyzableStatement;
 use databend_query::sql::statements::AnalyzedResult;
 use databend_query::sql::DfParser;
+use pretty_assertions::assert_eq;
 
 use crate::tests::create_query_context;
 
@@ -38,7 +39,7 @@ async fn test_statement_copy() -> Result<()> {
         credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
         encryption=(master_key = 'my_master_key')
         file_format = (type = csv field_delimiter = '|' skip_header = 1)",
-            expect: r#"Copy into system.configs, ReadDataSourcePlan { source_info: S3StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,validation_mode:None"#,
+            expect: r#"Copy into system.configs, ReadDataSourcePlan { catalog: "default", source_info: StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StorageS3Config { endpoint_url: "https://s3.amazonaws.com", region: "", bucket: "mybucket", root: "", access_key_id: "******_id", secret_access_key: "******key", master_key: "******key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,validation_mode:None"#,
             err: "",
         },
 
@@ -51,7 +52,7 @@ async fn test_statement_copy() -> Result<()> {
         file_format = (type = csv field_delimiter = '|' skip_header = 1)
         VALIDATION_MODE = RETURN_13_ROWS
         ",
-            expect: r#"Copy into system.configs, ReadDataSourcePlan { source_info: S3StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,validation_mode:ReturnNRows(13)"#,
+            expect: r#"Copy into system.configs, ReadDataSourcePlan { catalog: "default", source_info: StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StorageS3Config { endpoint_url: "https://s3.amazonaws.com", region: "", bucket: "mybucket", root: "", access_key_id: "******_id", secret_access_key: "******key", master_key: "******key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,validation_mode:ReturnNRows(13)"#,
             err: "",
         },
 
@@ -65,7 +66,7 @@ async fn test_statement_copy() -> Result<()> {
         file_format = (type = csv field_delimiter = '|' skip_header = 1)
         VALIDATION_MODE = RETURN_13_ROWS
         ",
-            expect: r#"Copy into system.configs, ReadDataSourcePlan { source_info: S3StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,files:["file1.csv", "file2.csv"] ,validation_mode:ReturnNRows(13)"#,
+            expect: r#"Copy into system.configs, ReadDataSourcePlan { catalog: "default", source_info: StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StorageS3Config { endpoint_url: "https://s3.amazonaws.com", region: "", bucket: "mybucket", root: "", access_key_id: "******_id", secret_access_key: "******key", master_key: "******key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,files:["file1.csv", "file2.csv"] ,validation_mode:ReturnNRows(13)"#,
             err: "",
         },
 
@@ -80,7 +81,7 @@ async fn test_statement_copy() -> Result<()> {
         on_error = CONTINUE size_limit = 10
         VALIDATION_MODE = RETURN_13_ROWS
         ",
-            expect: r#"Copy into system.configs, ReadDataSourcePlan { source_info: S3StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: Continue, size_limit: 10 }, comment: "" }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,files:["file1.csv", "file2.csv"] ,validation_mode:ReturnNRows(13)"#,
+            expect: r#"Copy into system.configs, ReadDataSourcePlan { catalog: "default", source_info: StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StorageS3Config { endpoint_url: "https://s3.amazonaws.com", region: "", bucket: "mybucket", root: "", access_key_id: "******_id", secret_access_key: "******key", master_key: "******key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: Continue, size_limit: 10 }, comment: "" }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,files:["file1.csv", "file2.csv"] ,validation_mode:ReturnNRows(13)"#,
             err: "",
         },
 

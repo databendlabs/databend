@@ -14,18 +14,20 @@
 
 use std::str::FromStr;
 
+use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FormatSettings {
     pub record_delimiter: Vec<u8>,
     pub field_delimiter: Vec<u8>,
     pub empty_as_default: bool,
     pub skip_header: bool,
     pub compression: Compression,
+    pub timezone: Tz,
 }
 
 impl Default for FormatSettings {
@@ -36,19 +38,23 @@ impl Default for FormatSettings {
             empty_as_default: false,
             skip_header: false,
             compression: Compression::None,
+            timezone: "UTC".parse::<Tz>().unwrap(),
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Compression {
     None,
     Auto,
+    /// Deflate with gzip headers.
     Gzip,
     Bz2,
     Brotli,
     Zstd,
+    /// Deflate with zlib headers
     Deflate,
+    /// Raw default stream without any headers.
     RawDeflate,
     Lzo,
     Snappy,
@@ -64,20 +70,19 @@ impl FromStr for Compression {
     type Err = ErrorCode;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s.to_ascii_lowercase().as_str() {
+        match s.to_lowercase().as_str() {
             "auto" => Ok(Compression::Auto),
             "gzip" => Ok(Compression::Gzip),
             "bz2" => Ok(Compression::Bz2),
             "brotli" => Ok(Compression::Brotli),
             "zstd" => Ok(Compression::Zstd),
             "deflate" => Ok(Compression::Deflate),
-            "rawdeflate" => Ok(Compression::RawDeflate),
+            "rawdeflate" | "raw_deflate" => Ok(Compression::RawDeflate),
             "lzo" => Ok(Compression::Lzo),
             "snappy" => Ok(Compression::Snappy),
             "none" => Ok(Compression::None),
-            _ => Err(ErrorCode::IllegalUserSettingFormat(format!(
-                "Unknown compression: {}",
-                s
+            _ => Err(ErrorCode::UnknownCompressionType(format!(
+                "Unknown compression: {s}"
             ))),
         }
     }

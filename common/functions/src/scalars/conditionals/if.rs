@@ -29,11 +29,11 @@ use crate::scalars::FunctionFeatures;
 #[derive(Clone, Debug)]
 pub struct IfFunction {
     display_name: String,
-    least_supertype: DataTypePtr,
+    least_supertype: DataTypeImpl,
 }
 
 impl IfFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let dts = vec![args[1].clone(), args[2].clone()];
         let least_supertype = aggregate_types(dts.as_slice())?;
 
@@ -57,6 +57,7 @@ impl IfFunction {
         &self,
         cond_col: &ColumnRef,
         columns: &ColumnsWithField,
+        _func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         debug_assert!(cond_col.is_const());
         // whether nullable or not, we can use viewer to make it
@@ -77,6 +78,7 @@ impl IfFunction {
         cond_col: &BooleanColumn,
         columns: &ColumnsWithField,
         input_rows: usize,
+        func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         debug_assert!(columns[0].column().is_const() || columns[1].column().is_const());
         let (lhs_col, rhs_col, reverse) = if columns[0].column().is_const() {
@@ -85,8 +87,18 @@ impl IfFunction {
             (&columns[1], &columns[0], true)
         };
 
-        let lhs = cast_column_field(lhs_col, &self.least_supertype)?;
-        let rhs = cast_column_field(rhs_col, &self.least_supertype)?;
+        let lhs = cast_column_field(
+            lhs_col,
+            lhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
+        let rhs = cast_column_field(
+            rhs_col,
+            rhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
 
         let type_id = remove_nullable(&lhs.data_type()).data_type_id();
 
@@ -97,7 +109,7 @@ impl IfFunction {
                 let l_val = left_viewer.value_at(0);
                 let rhs_viewer = $T::try_create_viewer(&rhs)?;
 
-                let mut builder: NullableColumnBuilder<$T> = NullableColumnBuilder::with_capacity(input_rows);
+                let mut builder: NullableColumnBuilder<$T> =  NullableColumnBuilder::with_capacity_meta(input_rows, lhs.column_meta());
 
                 let iter = cond_col.iter().zip(rhs_viewer.iter().enumerate());
 
@@ -105,16 +117,16 @@ impl IfFunction {
                     for (predicate, (row, r_val)) in iter {
                         if predicate {
                             builder.append(r_val, rhs_viewer.valid_at(row));
-                        }else {
+                        } else {
                             builder.append(l_val, true);
                         }
                     }
                     return Ok(builder.build(input_rows));
-                }else {
+                } else {
                     for (predicate, (row, r_val)) in iter {
                         if predicate {
                             builder.append(l_val, true);
-                        }else {
+                        } else {
                             builder.append(r_val, rhs_viewer.valid_at(row));
                         }
                     }
@@ -134,7 +146,7 @@ impl IfFunction {
                 if reverse {
                     let iter = cond_col.iter().map(|predicate| if predicate { r_val } else { l_val });
                     return Ok(Arc::new(ColumnBuilder::<$T>::from_iterator(iter)));
-                }else {
+                } else {
                     let iter = cond_col.iter().map(|predicate| if predicate { l_val } else { r_val });
                     return Ok(Arc::new(ColumnBuilder::<$T>::from_iterator(iter)));
                 }
@@ -181,19 +193,30 @@ impl IfFunction {
         cond_col: &BooleanColumn,
         columns: &ColumnsWithField,
         input_rows: usize,
+        func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         let lhs_col = &columns[0];
         let rhs_col = &columns[1];
 
-        let lhs = cast_column_field(lhs_col, &self.least_supertype)?;
-        let rhs = cast_column_field(rhs_col, &self.least_supertype)?;
+        let lhs = cast_column_field(
+            lhs_col,
+            lhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
+        let rhs = cast_column_field(
+            rhs_col,
+            rhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
 
         let type_id = remove_nullable(&self.least_supertype).data_type_id();
 
         with_match_scalar_type!(type_id.to_physical_type(), |$T| {
             let lhs_viewer = $T::try_create_viewer(&lhs)?;
             let rhs_viewer = $T::try_create_viewer(&rhs)?;
-            let mut builder = NullableColumnBuilder::<$T>::with_capacity(input_rows);
+            let mut builder = NullableColumnBuilder::<$T>::with_capacity_meta(input_rows, lhs.column_meta());
             for ((predicate, l), (row, r)) in cond_col
                 .iter()
                 .zip(lhs_viewer.iter())
@@ -217,12 +240,23 @@ impl IfFunction {
         &self,
         cond_col: &BooleanColumn,
         columns: &ColumnsWithField,
+        func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         let lhs_col = &columns[0];
         let rhs_col = &columns[1];
 
-        let lhs = cast_column_field(lhs_col, &self.least_supertype)?;
-        let rhs = cast_column_field(rhs_col, &self.least_supertype)?;
+        let lhs = cast_column_field(
+            lhs_col,
+            lhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
+        let rhs = cast_column_field(
+            rhs_col,
+            rhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
 
         debug_assert!(!self.least_supertype.is_nullable());
         let type_id = self.least_supertype.data_type_id();
@@ -250,13 +284,13 @@ impl Function for IfFunction {
         "IfFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.least_supertype.clone()
     }
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -265,24 +299,24 @@ impl Function for IfFunction {
 
         // 1. fast path for cond nullable or const or null column
         if cond_col.is_const() {
-            return self.eval_cond_const(&cond_col, &columns[1..]);
+            return self.eval_cond_const(&cond_col, &columns[1..], &func_ctx);
         }
 
         let cond_col = Series::check_get_scalar::<bool>(&cond_col)?;
 
         // 2. handle when lhs / rhs is const
         if columns[1].column().is_const() || columns[2].column().is_const() {
-            return self.eval_const(cond_col, &columns[1..], input_rows);
+            return self.eval_const(cond_col, &columns[1..], input_rows, &func_ctx);
         }
 
         // 3. handle nullable column
         let whether_nullable = |col: &ColumnRef| col.is_nullable() || col.data_type().is_null();
         if whether_nullable(columns[1].column()) || whether_nullable(columns[2].column()) {
-            return self.eval_nullable(cond_col, &columns[1..], input_rows);
+            return self.eval_nullable(cond_col, &columns[1..], input_rows, &func_ctx);
         }
 
         // 4. all normal type and are not nullable/const
-        self.eval_generic(cond_col, &columns[1..])
+        self.eval_generic(cond_col, &columns[1..], &func_ctx)
     }
 }
 

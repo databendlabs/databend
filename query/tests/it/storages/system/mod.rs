@@ -24,7 +24,7 @@ mod metrics_table;
 mod query_log_table;
 mod roles_table;
 mod settings_table;
+mod stages_table;
 mod tables_table;
 mod tracing_table;
 mod users_table;
-mod warehouses_table;

@@ -7,14 +7,14 @@ Converts a date or date with time to a UInt16 number containing the year number 
 ## Syntax
 
 ```sql
-TOYEAR(date)
+TOYEAR( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| date | date16/date32/datetime |
+| `<expr>` | date/datetime |
 
 ## Return Type
 
@@ -30,9 +30,9 @@ SELECT toyear(now());
 |          2022 |
 +---------------+
 
-SELECT toyear(todatetime(1));
+SELECT toyear(to_datetime(1));
 +-----------------------+
-| toyear(todatetime(1)) |
+| toyear(to_datetime(1)) |
 +-----------------------+
 |                  1970 |
 +-----------------------+

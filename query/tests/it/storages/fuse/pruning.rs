@@ -15,18 +15,18 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableMeta;
 use common_planners::add;
 use common_planners::col;
 use common_planners::lit;
 use common_planners::sub;
 use common_planners::CreateTablePlan;
 use common_planners::Extras;
-use databend_query::catalogs::Catalog;
+use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
@@ -48,7 +48,7 @@ async fn apply_block_pruning(
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
     BlockPruner::new(table_snapshot)
-        .apply(schema, push_down, ctx.as_ref())
+        .apply(ctx.as_ref(), schema, push_down)
         .await
 }
 
@@ -69,6 +69,7 @@ async fn test_block_pruner() -> Result<()> {
 
     // create test table
     let create_table_plan = CreateTablePlan {
+        catalog: "default".to_owned(),
         if_not_exists: false,
         tenant: fixture.default_tenant(),
         db: fixture.default_db_name(),
@@ -78,22 +79,21 @@ async fn test_block_pruner() -> Result<()> {
             engine: "FUSE".to_string(),
             options: [
                 (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
-                // for the convenience of testing, let one segment contains one block
                 (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
-                // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
             ..Default::default()
         },
         as_select: None,
+        cluster_keys: vec![],
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(None).await?;
 
     // get table
-    let catalog = ctx.get_catalog();
+    let catalog = ctx.get_catalog("default")?;
     let table = catalog
         .get_table(
             fixture.default_tenant().as_str(),
@@ -125,7 +125,7 @@ async fn test_block_pruner() -> Result<()> {
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+        .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
         .await?;
 
     // get the latest tbl
@@ -209,6 +209,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     // create test table
     let create_table_plan = CreateTablePlan {
+        catalog: "default".to_owned(),
         if_not_exists: false,
         tenant: fixture.default_tenant(),
         db: fixture.default_db_name(),
@@ -227,9 +228,10 @@ async fn test_block_pruner_monotonic() -> Result<()> {
             ..Default::default()
         },
         as_select: None,
+        cluster_keys: vec![],
     };
 
-    let catalog = ctx.get_catalog();
+    let catalog = ctx.get_catalog("default")?;
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(None).await?;
 
@@ -260,7 +262,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+        .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
         .await?;
 
     // get the latest tbl

@@ -31,14 +31,21 @@ pub struct DfShowTables {
     pub kind: DfShowKind,
     pub showfull: bool,
     pub fromdb: Option<String>,
+    pub with_history: bool,
 }
 
 impl DfShowTables {
-    pub fn create(kind: DfShowKind, showfull: bool, fromdb: Option<String>) -> DfShowTables {
+    pub fn create(
+        kind: DfShowKind,
+        showfull: bool,
+        fromdb: Option<String>,
+        with_history: bool,
+    ) -> DfShowTables {
         DfShowTables {
             kind,
             showfull,
             fromdb,
+            with_history,
         }
     }
 }
@@ -50,13 +57,14 @@ impl AnalyzableStatement for DfShowTables {
         let mut kind = PlanShowKind::All;
         let showfull = self.showfull;
         let fromdb = self.fromdb.clone();
+        let with_history = self.with_history;
         match &self.kind {
             DfShowKind::All => {}
             DfShowKind::Like(v) => {
-                kind = PlanShowKind::Like(format!("{}", v));
+                kind = PlanShowKind::Like(v.to_string());
             }
             DfShowKind::Where(v) => {
-                kind = PlanShowKind::Where(format!("{}", v));
+                kind = PlanShowKind::Where(v.to_string());
             }
         }
 
@@ -65,6 +73,7 @@ impl AnalyzableStatement for DfShowTables {
                 kind,
                 showfull,
                 fromdb,
+                with_history,
             }),
         ))))
     }

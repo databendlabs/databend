@@ -22,10 +22,10 @@ use common_planners::Expression;
 use crate::sessions::QueryContext;
 pub trait FlightScatter: Sized {
     fn try_create(
+        ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         expr: Option<Expression>,
         num: usize,
-        ctx: Arc<QueryContext>,
     ) -> Result<Self>;
 
     fn execute(&self, data_block: &DataBlock) -> Result<Vec<DataBlock>>;

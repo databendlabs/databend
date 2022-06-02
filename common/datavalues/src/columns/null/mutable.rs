@@ -15,11 +15,13 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
-use crate::types::DataTypePtr;
+use crate::types::DataTypeImpl;
 use crate::ColumnRef;
+use crate::DataValue;
 use crate::NullColumn;
 use crate::NullType;
 
@@ -29,8 +31,8 @@ pub struct MutableNullColumn {
 }
 
 impl MutableColumn for MutableNullColumn {
-    fn data_type(&self) -> DataTypePtr {
-        Arc::new(NullType {})
+    fn data_type(&self) -> DataTypeImpl {
+        DataTypeImpl::Null(NullType {})
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -66,5 +68,16 @@ impl MutableColumn for MutableNullColumn {
     fn append_data_value(&mut self, _value: crate::DataValue) -> Result<()> {
         self.length += 1;
         Ok(())
+    }
+
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        (self.length > 0)
+            .then(|| {
+                self.length -= 1;
+                DataValue::Null
+            })
+            .ok_or_else(|| {
+                ErrorCode::BadDataArrayLength("Null column is empty when pop data value")
+            })
     }
 }

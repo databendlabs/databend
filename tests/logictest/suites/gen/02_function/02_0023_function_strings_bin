@@ -1,0 +1,42 @@
+statement query T 
+select bin(0);
+
+----  
+0
+
+statement query T 
+select bin(12);
+
+----  
+1100
+
+statement query T 
+select bin(128);
+
+----  
+10000000
+
+statement query T 
+select bin(255);
+
+----  
+11111111
+
+statement query T 
+select bin(65536);
+
+----  
+10000000000000000
+
+statement query T 
+select bin(13835058055282163712);
+
+----  
+1100000000000000000000000000000000000000000000000000000000000000
+
+statement query T 
+select bin(9223372036854775808);
+
+----  
+1000000000000000000000000000000000000000000000000000000000000000
+

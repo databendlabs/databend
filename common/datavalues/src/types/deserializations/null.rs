@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_io::prelude::CpBufferReader;
+use common_io::prelude::*;
 
 use crate::ColumnRef;
 use crate::DataValue;
@@ -27,39 +27,49 @@ pub struct NullDeserializer {
 }
 
 impl TypeDeserializer for NullDeserializer {
-    fn de_binary(&mut self, _reader: &mut &[u8]) -> Result<()> {
+    fn de_binary(&mut self, _reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }
 
-    fn de_default(&mut self) {
+    fn de_default(&mut self, _format: &FormatSettings) {
         self.builder.append_default();
     }
 
-    fn de_fixed_binary_batch(&mut self, _reader: &[u8], _step: usize, rows: usize) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        _reader: &[u8],
+        _step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for _ in 0..rows {
             self.builder.append_default();
         }
         Ok(())
     }
 
-    fn de_json(&mut self, _value: &serde_json::Value) -> Result<()> {
+    fn de_json(&mut self, _value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }
 
-    fn de_whole_text(&mut self, _reader: &[u8]) -> Result<()> {
+    fn de_whole_text(&mut self, _reader: &[u8], _format: &FormatSettings) -> Result<()> {
         Ok(())
     }
 
-    fn de_text(&mut self, _reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, _reader: &mut R, _format: &FormatSettings) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }
 
-    fn append_data_value(&mut self, _value: DataValue) -> Result<()> {
+    fn append_data_value(&mut self, _value: DataValue, _format: &FormatSettings) -> Result<()> {
         self.builder.append_default();
         Ok(())
+    }
+
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        self.builder.pop_data_value()
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {

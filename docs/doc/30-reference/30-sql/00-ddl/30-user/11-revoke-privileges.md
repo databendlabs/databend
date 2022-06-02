@@ -12,7 +12,7 @@ Removes one or more privileges on a securable object from a user or role. The pr
 ```sql
 REVOKE { 
         schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level>
-      }
+       }
 TO [ROLE <role_name>] [<user>]
 ```
 
@@ -49,19 +49,17 @@ privileges_level ::=
 
 
 Create a user:
-```sql title='mysql>'
-create user user1 identified by 'abc123';
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 Grant the `SELECT,INSERT` privilege on all existing tables in the `default` database to the user `user1`:
  
-```sql title='mysql>'
-grant select,insert on default.* to user1;
+```sql
+GRANT SELECT,INSERT ON default.* TO user1;
 ```
-```sql title='mysql>'
-show grants for user1;
-```
-```
+```sql
+SHOW GRANTS FOR user1;
 +---------------------------------------------------+
 | Grants                                            |
 +---------------------------------------------------+
@@ -70,14 +68,12 @@ show grants for user1;
 ```
 
 Revoke `INSERT` privilege from user `user1`:
-```sql title='mysql>'
-revoke insert on default.* from user1;
+```sql
+REVOKE INSERT ON default.* FROM user1;
 ```
 
-```sql title='mysql>'
-show grants for user1;
-```
-```text
+```sql
+SHOW GRANTS FOR user1;
 +--------------------------------------------+
 | Grants                                     |
 +--------------------------------------------+
@@ -90,21 +86,18 @@ show grants for user1;
 Grant the `SELECT,INSERT` privilege on all existing tables in the `mydb` database to the role `role1`:
 
 Create role:
-```sql tile='mysql>'
-create role role1;
+```sql
+CREATE ROLE role1;
 ```
 
 Grant privileges to the role:
-```sql title='mysql>'
-grant select,insert on mydb.* to role role1;
+```sql
+GRANT SELECT,INSERT ON mydb.* TO ROLE role1;
 ```
 
 Show the grants for the role:
-```sql title='mysql>'
-show grants for role role1;
-```
-
-```text
+```sql
+SHOW GRANTS FOR ROLE role1;
 +--------------------------------------------+
 | Grants                                     |
 +--------------------------------------------+
@@ -113,14 +106,12 @@ show grants for role role1;
 ```
 
 Revoke `INSERT` privilege from role `role1`:
-```sql title='mysql>'
-revoke insert on mydb.* from role role1;
+```sql
+REVOKE INSERT ON mydb.* FROM ROLE role1;
 ```
 
-```sql title='mysql>'
-show grants for role role1;
-```
-```text
+```sql
+SHOW GRANTS FOR ROLE role1;
 +-------------------------------------+
 | Grants                              |
 +-------------------------------------+

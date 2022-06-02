@@ -25,9 +25,9 @@ use poem::EndpointExt;
 use poem::Route;
 
 use crate::common::service::HttpShutdownHandler;
-use crate::configs::Config;
 use crate::servers::Server;
 use crate::sessions::SessionManager;
+use crate::Config;
 
 pub struct HttpService {
     sessions: Arc<SessionManager>,
@@ -43,7 +43,8 @@ impl HttpService {
     }
 
     fn build_router(&self) -> impl Endpoint {
-        Route::new()
+        #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
+        let mut route = Route::new()
             .at("/v1/health", get(super::http::v1::health::health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at("/v1/logs", get(super::http::v1::logs::logs_handler))
@@ -59,8 +60,21 @@ impl HttpService {
             .at(
                 "/debug/pprof/profile",
                 get(super::http::debug::pprof::debug_pprof_handler),
-            )
-            .data(self.sessions.clone())
+            );
+
+        #[cfg(feature = "memory-profiling")]
+        {
+            route = route.at(
+                // to follow the conversions of jepref, we arrange the path in
+                // this way, so that jeprof could be invoked like:
+                //   `jeprof ./target/debug/databend-query http://localhost:8080/debug/mem`
+                // and jeprof will translate the above url into sth like:
+                //    "http://localhost:8080/debug/mem/pprof/profile?seconds=30"
+                "/debug/mem/pprof/profile",
+                get(super::http::debug::jeprof::debug_jeprof_dump_handler),
+            );
+        };
+        route.data(self.sessions.clone())
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {

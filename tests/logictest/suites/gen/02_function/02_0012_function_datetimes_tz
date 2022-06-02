@@ -1,0 +1,429 @@
+statement query T 
+select "====CAST====";
+
+----  
+====CAST====
+
+statement ok
+set timezone='UTC';
+
+statement query T 
+select to_timestamp(1630320462000000);
+
+----  
+2021-08-30 10:47:42
+
+statement query T 
+select to_timestamp('2000-01-01 00:00:00');
+
+----  
+2000-01-01 00:00:00
+
+statement ok
+set timezone='Asia/Shanghai'; -- Asia/Shanghai: +8:00
+
+statement query T label(mysql,http)
+select to_timestamp(1630320462000000);
+
+----  mysql
+2021-08-30 18:47:42
+
+----  http
+2021-08-30 10:47:42
+
+statement query T label(mysql,http)
+select to_timestamp('2000-01-01 12:00:00');
+
+----  mysql
+2000-01-01 12:00:00
+
+----  http
+2000-01-01 04:00:00
+
+statement query T 
+select "====INSERT_WITH_VALUES====";
+
+----  
+====INSERT_WITH_VALUES====
+
+statement ok
+set timezone = 'UTC';
+
+statement ok
+create table tt (a timestamp);
+
+statement ok
+insert into table tt values ('2021-04-30 22:48:00'), (to_timestamp('2021-04-30 22:48:00'));
+
+statement query T 
+select * from tt;
+
+----  
+2021-04-30 22:48:00
+2021-04-30 22:48:00
+
+statement ok
+set timezone = 'Asia/Shanghai';
+
+statement query T label(mysql,http)
+select * from tt;
+
+----  mysql
+2021-05-01 06:48:00
+2021-05-01 06:48:00
+
+----  http
+2021-04-30 22:48:00
+2021-04-30 22:48:00
+
+statement ok
+drop table tt;
+
+statement query T 
+select "====NUMBER_FUNCTION====";
+
+----  
+====NUMBER_FUNCTION====
+
+statement query T 
+select "==UTC==";
+
+----  
+==UTC==
+
+statement ok
+set timezone = 'UTC';
+
+statement query I 
+select toyyyymm(to_timestamp(1619820000000000));
+
+----  
+202104
+
+statement query I 
+select toyyyymmdd(to_timestamp(1619820000000000));
+
+----  
+20210430
+
+statement query I 
+select toyyyymmddhhmmss(to_timestamp(1619820000000000));
+
+----  
+20210430220000
+
+statement query T 
+select tostartofmonth(to_timestamp(1619820000000000));
+
+----  
+2021-04-01
+
+statement query I 
+select tomonth(to_timestamp(1619820000000000));
+
+----  
+4
+
+statement query I 
+select todayofyear(to_timestamp(1619820000000000));
+
+----  
+120
+
+statement query I 
+select todayofmonth(to_timestamp(1619820000000000));
+
+----  
+30
+
+statement query I 
+select todayofweek(to_timestamp(1619820000000000));
+
+----  
+5
+
+statement ok
+set timezone = 'Asia/Shanghai';
+
+statement query T 
+select "==Asia/Shanghai==";
+
+----  
+==Asia/Shanghai==
+
+statement query I 
+select toyyyymm(to_timestamp(1619820000000000));
+
+----  
+202105
+
+statement query I 
+select toyyyymmdd(to_timestamp(1619820000000000));
+
+----  
+20210501
+
+statement query I 
+select toyyyymmddhhmmss(to_timestamp(1619820000000000));
+
+----  
+20210501060000
+
+statement query T 
+select tostartofmonth(to_timestamp(1619820000000000));
+
+----  
+2021-05-01
+
+statement query I 
+select tomonth(to_timestamp(1619820000000000));
+
+----  
+5
+
+statement query I 
+select todayofyear(to_timestamp(1619820000000000));
+
+----  
+121
+
+statement query I 
+select todayofmonth(to_timestamp(1619820000000000));
+
+----  
+1
+
+statement query I 
+select todayofweek(to_timestamp(1619820000000000));
+
+----  
+6
+
+statement query T 
+select "====ROUNDER_FUNCTION====";
+
+----  
+====ROUNDER_FUNCTION====
+
+statement query T 
+select "==UTC==";
+
+----  
+==UTC==
+
+statement ok
+set timezone = 'UTC';
+
+statement query T 
+select tostartofsecond(to_timestamp(1619822911999000));
+
+----  
+2021-04-30 22:48:31
+
+statement query T 
+select tostartofminute(to_timestamp(1619822911999000));
+
+----  
+2021-04-30 22:48:00
+
+statement query T 
+select tostartoffiveminutes(to_timestamp(1619822911999000));
+
+----  
+2021-04-30 22:45:00
+
+statement query T 
+select tostartoftenminutes(to_timestamp(1619822911999000));
+
+----  
+2021-04-30 22:40:00
+
+statement query T 
+select tostartoffifteenminutes(to_timestamp(1619822911999000));
+
+----  
+2021-04-30 22:45:00
+
+statement query T 
+select timeslot(to_timestamp(1619822911999000));
+
+----  
+2021-04-30 22:30:00
+
+statement query T 
+select tostartofhour(to_timestamp(1619822911999000));
+
+----  
+2021-04-30 22:00:00
+
+statement query T 
+select tostartofday(to_timestamp(1619822911999000));
+
+----  
+2021-04-30 00:00:00
+
+statement query T 
+select tostartofweek(to_timestamp(1619822911999000));
+
+----  
+2021-04-25
+
+statement ok
+set timezone = 'Asia/Shanghai';
+
+statement query T 
+select "==Asia/Shanghai==";
+
+----  
+==Asia/Shanghai==
+
+statement query T label(mysql,http)
+select tostartofsecond(to_timestamp(1619822911999000));
+
+----  mysql
+2021-05-01 06:48:31
+
+----  http
+2021-04-30 22:48:31
+
+statement query T label(mysql,http)
+select tostartofminute(to_timestamp(1619822911999000));
+
+----  mysql
+2021-05-01 06:48:00
+
+----  http
+2021-04-30 22:48:00
+
+statement query T label(mysql,http)
+select tostartoffiveminutes(to_timestamp(1619822911999000));
+
+----  mysql
+2021-05-01 06:45:00
+
+----  http
+2021-04-30 22:45:00
+
+statement query T label(mysql,http)
+select tostartoftenminutes(to_timestamp(1619822911999000));
+
+----  mysql
+2021-05-01 06:40:00
+
+----  http
+2021-04-30 22:40:00
+
+statement query T label(mysql,http)
+select tostartoffifteenminutes(to_timestamp(1619822911999000));
+
+----  mysql
+2021-05-01 06:45:00
+
+----  http
+2021-04-30 22:45:00
+
+statement query T label(mysql,http)
+select timeslot(to_timestamp(1619822911999000));
+
+----  mysql
+2021-05-01 06:30:00
+
+----  http
+2021-04-30 22:30:00
+
+statement query T label(mysql,http)
+select tostartofhour(to_timestamp(1619822911999000));
+
+----  mysql
+2021-05-01 06:00:00
+
+----  http
+2021-04-30 22:00:00
+
+statement query T label(mysql,http)
+select tostartofday(to_timestamp(1619822911999000));
+
+----  mysql
+2021-05-01 00:00:00
+
+----  http
+2021-04-30 16:00:00
+
+statement query T 
+select tostartofweek(to_timestamp(1619822911999000));
+
+----  
+2021-04-25
+
+statement query T 
+select "====INTERVAL_FUNCTION====";
+
+----  
+====INTERVAL_FUNCTION====
+
+statement query T 
+select "==UTC==";
+
+----  
+==UTC==
+
+statement ok
+set timezone = 'UTC';
+
+statement query T label(mysql,http)
+select addMonths(to_timestamp(1619822911999000), 1);
+
+----  mysql
+2021-05-30 22:48:31.999000
+
+----  http
+2021-05-30 22:48:31
+
+statement query T 
+select to_timestamp(1583013600000000);
+
+----  
+2020-02-29 22:00:00
+
+statement query T 
+select addYears(to_timestamp(1583013600000000), 1);
+
+----  
+2021-02-28 22:00:00
+
+statement query T 
+select "==Asia/Shanghai==";
+
+----  
+==Asia/Shanghai==
+
+statement ok
+set timezone = 'Asia/Shanghai';
+
+statement query T label(mysql,http)
+select addMonths(to_timestamp(1619822911999000), 1);
+
+----  mysql
+2021-06-01 14:48:31.999000
+
+----  http
+2021-06-01 06:48:31
+
+statement query T label(mysql,http)
+select to_timestamp(1583013600000000);
+
+----  mysql
+2020-03-01 06:00:00
+
+----  http
+2020-02-29 22:00:00
+
+statement query T label(mysql,http)
+select addYears(to_timestamp(1583013600000000), 1);
+
+----  mysql
+2021-03-01 14:00:00
+
+----  http
+2021-03-01 06:00:00
+

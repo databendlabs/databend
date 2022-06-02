@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserIdentity;
 use databend_query::api::http::v1::status::status_handler;
@@ -87,7 +87,7 @@ async fn test_status() -> Result<()> {
     );
 
     let interpreter = run_query(sessions.clone()).await?;
-    let _ = interpreter.start().await?;
+    interpreter.start().await?;
     let status = get_status(&ep).await;
     assert_eq!(
         (

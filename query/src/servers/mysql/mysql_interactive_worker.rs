@@ -16,13 +16,12 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::TrySpawn;
+use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use metrics::histogram;
@@ -35,14 +34,19 @@ use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::InterpreterFactoryV2;
+use crate::interpreters::InterpreterQueryLog;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sql::DfParser;
 use crate::sql::PlanParser;
+use crate::sql::Planner;
 use crate::users::CertifiedInfo;
 
 struct InteractiveWorkerBase<W: std::io::Write> {
@@ -67,7 +71,13 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
     }
 
     fn connect_id(&self) -> u32 {
-        u32::from_le_bytes([0x08, 0x00, 0x00, 0x00])
+        match self.session.get_mysql_conn_id() {
+            Some(conn_id) => conn_id,
+            None => {
+                //default conn id
+                u32::from_le_bytes([0x08, 0x00, 0x00, 0x00])
+            }
+        }
     }
 
     fn default_auth_plugin(&self) -> &str {
@@ -176,7 +186,12 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         let instant = Instant::now();
         let blocks = self.base.do_query(query).await;
 
-        let mut write_result = writer.write(blocks);
+        let format = self
+            .session
+            .get_shared_query_context()
+            .await?
+            .get_format_settings()?;
+        let mut write_result = writer.write(blocks, &format);
 
         if let Err(cause) = write_result {
             let suffix = format!("(while in query {})", query);
@@ -273,15 +288,54 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 tracing::info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
                 context.attach_query_str(query);
-                let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
+
+                let settings = context.get_settings();
+
+                let (stmts, hints) =
+                    DfParser::parse_sql(query, context.get_current_session().get_type())?;
+
+                let interpreter: Arc<dyn Interpreter> =
+                    if settings.get_enable_new_processor_framework()? != 0
+                        && context.get_cluster().is_empty()
+                        && settings.get_enable_planner_v2()? != 0
+                        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+                    {
+                        let mut planner = Planner::new(context.clone());
+                        let (plan, _) = planner.plan_sql(query).await?;
+                        InterpreterFactoryV2::get(context.clone(), &plan)?
+                    } else {
+                        let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
+                        if let (Some(hint_error_code), Err(error_code)) = (
+                            hints
+                                .iter()
+                                .find(|v| v.error_code.is_some())
+                                .and_then(|x| x.error_code),
+                            &plan,
+                        ) {
+                            // Pre-check if parsing error can be ignored
+                            if hint_error_code == error_code.code() {
+                                return Ok((vec![DataBlock::empty()], String::from("")));
+                            }
+                        }
+
+                        let plan = match plan {
+                            Ok(p) => p,
+                            Err(e) => {
+                                InterpreterQueryLog::fail_to_start(context, e.clone()).await;
+                                return Err(e);
+                            }
+                        };
+                        tracing::debug!("Get logic plan:\n{:?}", plan);
+                        InterpreterFactory::get(context.clone(), plan)?
+                    };
 
                 match hints
                     .iter()
                     .find(|v| v.error_code.is_some())
                     .and_then(|x| x.error_code)
                 {
-                    None => Self::exec_query(plan, &context).await,
-                    Some(hint_error_code) => match Self::exec_query(plan, &context).await {
+                    None => Self::exec_query(interpreter, &context).await,
+                    Some(hint_error_code) => match Self::exec_query(interpreter, &context).await {
                         Ok(_) => Err(ErrorCode::UnexpectedError(format!(
                             "Expected server error code: {} but got: Ok.",
                             hint_error_code
@@ -303,13 +357,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(plan, context))]
+    #[tracing::instrument(level = "debug", skip(interpreter, context))]
     async fn exec_query(
-        plan: Result<PlanNode>,
+        interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
     ) -> Result<(Vec<DataBlock>, String)> {
         let instant = Instant::now();
-        let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
 
         let query_result = context.try_spawn(
             async move {
@@ -396,7 +449,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
             version: format!(
                 "{}-{}",
                 MYSQL_VERSION,
-                *crate::configs::DATABEND_COMMIT_VERSION
+                *crate::version::DATABEND_COMMIT_VERSION
             ),
             client_addr,
         }

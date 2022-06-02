@@ -16,19 +16,18 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
+use common_base::mem_allocator::malloc_size;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
-use common_mem_allocator::malloc_size;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use futures::channel::*;
 use opendal::Operator;
 
-use crate::catalogs::DatabaseCatalog;
-use crate::configs::Config;
+use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -36,12 +35,14 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
+use crate::users::RoleCacheMgr;
+use crate::Config;
 
-#[derive(Clone, MallocSizeOf)]
+#[derive(MallocSizeOf)]
 pub struct Session {
     pub(in crate::sessions) id: String,
     #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) typ: SessionType,
+    pub(in crate::sessions) typ: RwLock<SessionType>,
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
@@ -50,6 +51,7 @@ pub struct Session {
     session_settings: Settings,
     #[ignore_malloc_size_of = "insignificant"]
     status: Arc<RwLock<SessionStatus>>,
+    pub(in crate::sessions) mysql_connection_id: Option<u32>,
 }
 
 impl Session {
@@ -58,30 +60,40 @@ impl Session {
         id: String,
         typ: SessionType,
         session_mgr: Arc<SessionManager>,
+        mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
-        let session_settings =
-            Settings::try_create(&conf, session_ctx.clone(), session_mgr.get_user_manager())?;
+        let session_settings = Settings::try_create(&conf)?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
-
         Ok(Arc::new(Session {
             id,
-            typ,
+            typ: RwLock::new(typ),
             session_mgr,
             ref_count,
             session_ctx,
             session_settings,
             status,
+            mysql_connection_id,
         }))
+    }
+
+    pub fn get_mysql_conn_id(self: &Arc<Self>) -> Option<u32> {
+        self.mysql_connection_id
     }
 
     pub fn get_id(self: &Arc<Self>) -> String {
         self.id.clone()
     }
 
-    pub fn get_type(self: &Arc<Self>) -> SessionType {
-        self.typ.clone()
+    pub fn get_type(&self) -> SessionType {
+        let lock = self.typ.read();
+        lock.clone()
+    }
+
+    pub fn set_type(&self, typ: SessionType) {
+        let mut lock = self.typ.write();
+        *lock = typ;
     }
 
     pub fn is_aborting(self: &Arc<Self>) -> bool {
@@ -91,7 +103,7 @@ impl Session {
     pub fn kill(self: &Arc<Self>) {
         let session_ctx = self.session_ctx.clone();
         session_ctx.set_abort(true);
-        if session_ctx.query_context_shared_is_none() {
+        if session_ctx.get_current_query_id().is_some() {
             if let Some(io_shutdown) = session_ctx.take_io_shutdown_tx() {
                 let (tx, rx) = oneshot::channel();
                 if io_shutdown.send(tx).is_ok() {
@@ -136,8 +148,8 @@ impl Session {
         Ok(shared)
     }
 
-    pub fn query_context_shared_is_none(&self) -> bool {
-        self.session_ctx.query_context_shared_is_none()
+    pub fn get_current_query_id(&self) -> Option<String> {
+        self.session_ctx.get_current_query_id()
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
@@ -146,7 +158,7 @@ impl Session {
         self.session_ctx.set_client_host(host);
         self.session_ctx.set_io_shutdown_tx(Some(tx));
 
-        common_base::tokio::spawn(async move {
+        common_base::base::tokio::spawn(async move {
             if let Ok(tx) = rx.await {
                 (io_shutdown)();
                 tx.send(()).ok();
@@ -162,8 +174,16 @@ impl Session {
         self.session_ctx.get_current_database()
     }
 
-    pub fn get_tenant(self: &Arc<Self>) -> String {
-        self.session_ctx.get_tenant()
+    pub fn get_current_catalog(self: &Arc<Self>) -> String {
+        self.session_ctx.get_current_catalog()
+    }
+
+    pub fn get_current_tenant(self: &Arc<Self>) -> String {
+        self.session_ctx.get_current_tenant()
+    }
+
+    pub fn set_current_tenant(self: &Arc<Self>, tenant: String) {
+        self.session_ctx.set_current_tenant(tenant);
     }
 
     pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
@@ -187,7 +207,7 @@ impl Session {
             return Ok(());
         }
 
-        let tenant = self.get_tenant();
+        let tenant = self.get_current_tenant();
         let role_cache = self
             .get_shared_query_context()
             .await?
@@ -217,8 +237,8 @@ impl Session {
         self.session_mgr.clone()
     }
 
-    pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.session_mgr.get_catalog()
+    pub fn get_catalogs(self: &Arc<Self>) -> Arc<CatalogManager> {
+        self.session_mgr.get_catalog_manager()
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {
@@ -235,5 +255,9 @@ impl Session {
 
     pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {
         self.status.clone()
+    }
+
+    pub fn get_role_cache_manager(self: &Arc<Self>) -> Arc<RoleCacheMgr> {
+        self.session_mgr.get_role_cache_manager()
     }
 }

@@ -17,17 +17,16 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::Expression;
 use common_planners::ShowCreateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::sql::is_internal_opt_key;
+use crate::sql::PlanParser;
 
 pub struct ShowCreateTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -51,7 +50,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
 
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.db, &self.plan.table)
@@ -61,27 +60,46 @@ impl Interpreter for ShowCreateTableInterpreter {
         let engine = table.engine();
         let schema = table.schema();
 
-        let mut table_info = format!("CREATE TABLE `{}` (\n", name);
-        for field in schema.fields().iter() {
-            let default_expr = match field.default_expr() {
-                Some(expr) => {
-                    let expression: Expression = serde_json::from_slice::<Expression>(expr)?;
-                    format!(" DEFAULT {}", expression.column_name())
-                }
-                None => "".to_string(),
-            };
-            let column = format!(
-                "  `{}` {}{},\n",
-                field.name(),
-                format_data_type_sql(field.data_type()),
-                default_expr
-            );
-            table_info.push_str(column.as_str());
+        let mut table_create_sql = format!("CREATE TABLE `{}` (\n", name);
+
+        // Append columns.
+        {
+            let mut columns = vec![];
+            for field in schema.fields().iter() {
+                let default_expr = match field.default_expr() {
+                    Some(expr) => {
+                        let expression = PlanParser::parse_expr(expr)?;
+                        format!(" DEFAULT {}", expression.column_name())
+                    }
+                    None => "".to_string(),
+                };
+                let column = format!(
+                    "  `{}` {}{}",
+                    field.name(),
+                    format_data_type_sql(field.data_type()),
+                    default_expr
+                );
+                columns.push(column);
+            }
+            // Format is:
+            //  (
+            //      x,
+            //      y
+            //  )
+            let columns_str = format!("{}\n", columns.join(",\n"));
+            table_create_sql.push_str(&columns_str);
         }
+
         let table_engine = format!(") ENGINE={}", engine);
-        table_info.push_str(table_engine.as_str());
-        table_info.push_str({
-            let mut opts = table.options().iter().collect::<Vec<_>>();
+        table_create_sql.push_str(table_engine.as_str());
+
+        let table_info = table.get_table_info();
+        if let Some(order_keys_str) = &table_info.meta.cluster_keys {
+            table_create_sql.push_str(format!(" CLUSTER BY {}", order_keys_str).as_str());
+        }
+
+        table_create_sql.push_str({
+            let mut opts = table_info.options().iter().collect::<Vec<_>>();
             opts.sort_by_key(|(k, _)| *k);
             opts.iter()
                 .filter(|(k, _)| !is_internal_opt_key(k))
@@ -99,7 +117,7 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let block = DataBlock::create(show_schema.clone(), vec![
             Series::from_data(vec![name.as_bytes()]),
-            Series::from_data(vec![table_info.into_bytes()]),
+            Series::from_data(vec![table_create_sql.into_bytes()]),
         ]);
         tracing::debug!("Show create table executor result: {:?}", block);
 

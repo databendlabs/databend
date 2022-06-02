@@ -15,16 +15,18 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
 
 use crate::prelude::*;
 
+#[derive(Debug, Clone)]
 pub struct StringSerializer {}
 
 impl TypeSerializer for StringSerializer {
-    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+    fn serialize_value(&self, value: &DataValue, _format: &FormatSettings) -> Result<String> {
         if let DataValue::String(x) = value {
             Ok(String::from_utf8_lossy(x).to_string())
         } else {
@@ -32,7 +34,11 @@ impl TypeSerializer for StringSerializer {
         }
     }
 
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+    fn serialize_column(
+        &self,
+        column: &ColumnRef,
+        _format: &FormatSettings,
+    ) -> Result<Vec<String>> {
         let column: &StringColumn = Series::check_get(column)?;
         let result: Vec<String> = column
             .iter()
@@ -41,7 +47,20 @@ impl TypeSerializer for StringSerializer {
         Ok(result)
     }
 
-    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+    fn serialize_column_quoted(
+        &self,
+        column: &ColumnRef,
+        _format: &FormatSettings,
+    ) -> Result<Vec<String>> {
+        let column: &StringColumn = Series::check_get(column)?;
+        let result: Vec<String> = column
+            .iter()
+            .map(|v| format!("{:?}", String::from_utf8_lossy(v)))
+            .collect();
+        Ok(result)
+    }
+
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         let column: &StringColumn = Series::check_get(column)?;
         let result: Vec<Value> = column
             .iter()
@@ -53,6 +72,7 @@ impl TypeSerializer for StringSerializer {
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
+        _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let column: &StringColumn = Series::check_get(column)?;
         let values: Vec<&[u8]> = column.iter().collect();
@@ -63,6 +83,7 @@ impl TypeSerializer for StringSerializer {
         &self,
         column: &ColumnRef,
         valids: Option<&Bitmap>,
+        _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
         let column: &StringColumn = Series::check_get(column)?;
         let mut result: Vec<Value> = Vec::new();
@@ -97,6 +118,7 @@ impl TypeSerializer for StringSerializer {
     fn serialize_json_object_suppress_error(
         &self,
         column: &ColumnRef,
+        _format: &FormatSettings,
     ) -> Result<Vec<Option<Value>>> {
         let column: &StringColumn = Series::check_get(column)?;
         let result: Vec<Option<Value>> = column

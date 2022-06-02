@@ -18,7 +18,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
-use common_base::tokio::sync::mpsc;
+use common_base::base::tokio::sync::mpsc;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_grpc::MetaGrpcReadReq;
@@ -27,10 +27,14 @@ use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::HandshakeResponse;
+use common_meta_types::protobuf::MemberListReply;
+use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
 use common_tracing::tracing;
 use futures::StreamExt;
 use prost::Message;
@@ -45,6 +49,10 @@ use tonic::Streaming;
 use crate::executor::ActionHandler;
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
+use crate::version::from_digit_ver;
+use crate::version::to_digit_ver;
+use crate::version::METASRV_SEMVER;
+use crate::version::MIN_METACLI_SEMVER;
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
@@ -66,10 +74,9 @@ impl MetaServiceImpl {
             .and_then(|b| String::from_utf8(b.to_vec()).ok())
             .ok_or_else(|| Status::unauthenticated("Error auth-token-bin is empty"))?;
 
-        let claim = self
-            .token
-            .try_verify_token(token)
-            .map_err(|e| Status::unauthenticated(e.to_string()))?;
+        let claim = self.token.try_verify_token(token.clone()).map_err(|e| {
+            Status::unauthenticated(format!("token verify failed: {}, {}", token, e))
+        })?;
         Ok(claim)
     }
 }
@@ -91,7 +98,23 @@ impl MetaService for MetaServiceImpl {
             .await
             .ok_or_else(|| Status::internal("Error request next is None"))??;
 
-        let HandshakeRequest { payload, .. } = req;
+        let HandshakeRequest {
+            protocol_version,
+            payload,
+        } = req;
+
+        let min_compatible = to_digit_ver(&MIN_METACLI_SEMVER);
+
+        // backward compatibility: no version in handshake.
+        // TODO(xp): remove this when merged.
+        if protocol_version > 0 && protocol_version < min_compatible {
+            return Err(Status::invalid_argument(format!(
+                "meta-client protocol_version({}) < metasrv min-compatible({})",
+                from_digit_ver(protocol_version),
+                MIN_METACLI_SEMVER,
+            )));
+        }
+
         let auth = BasicAuth::decode(&*payload).map_err(|e| Status::internal(e.to_string()))?;
 
         let user = "root";
@@ -105,8 +128,8 @@ impl MetaService for MetaServiceImpl {
                 .map_err(|e| Status::internal(e.to_string()))?;
 
             let resp = HandshakeResponse {
+                protocol_version: to_digit_ver(&METASRV_SEMVER),
                 payload: token.into_bytes(),
-                ..HandshakeResponse::default()
             };
             let output = futures::stream::once(async { Ok(resp) });
             Ok(Response::new(Box::pin(output)))
@@ -181,6 +204,32 @@ impl MetaService for MetaServiceImpl {
 
         let output_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(Response::new(Box::pin(output_stream) as Self::WatchStream))
+    }
+
+    async fn transaction(
+        &self,
+        request: Request<TxnRequest>,
+    ) -> Result<Response<TxnReply>, Status> {
+        self.check_token(request.metadata())?;
+        common_tracing::extract_remote_span_as_parent(&request);
+
+        let request = request.into_inner();
+
+        tracing::info!("Receive txn_request: {:?}", request);
+
+        let body = self.action_handler.execute_txn(request).await;
+        Ok(Response::new(body))
+    }
+
+    async fn member_list(
+        &self,
+        _request: Request<MemberListRequest>,
+    ) -> Result<Response<MemberListReply>, Status> {
+        let meta_node = &self.action_handler.meta_node;
+        let members = meta_node.get_meta_addrs().await.map_err(|e| {
+            Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
+        })?;
+        Ok(Response::new(MemberListReply { data: members }))
     }
 }
 

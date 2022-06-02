@@ -15,7 +15,6 @@
 use std::any::Any;
 
 use common_exception::Result;
-use serde_json::Value as JsonValue;
 
 use super::column::ScalarColumn;
 use crate::prelude::*;
@@ -52,6 +51,11 @@ pub trait ScalarRef<'a>: std::fmt::Debug + Clone + Copy + Send + 'a {
 
     /// Convert the reference into an owned value.
     fn to_owned_scalar(&self) -> Self::ScalarType;
+
+    /// Whether to_owned_scalar has heap allocation which is unhandled by Bumplao
+    fn has_alloc_beyond_bump() -> bool {
+        false
+    }
 }
 
 macro_rules! impl_primitive_scalar_type {
@@ -148,31 +152,69 @@ impl<'a> ScalarRef<'a> for &'a [u8] {
     fn to_owned_scalar(&self) -> Vec<u8> {
         self.to_vec()
     }
+
+    fn has_alloc_beyond_bump() -> bool {
+        true
+    }
 }
 
-impl Scalar for JsonValue {
-    type ColumnType = ObjectColumn<JsonValue>;
-    type RefType<'a> = &'a JsonValue;
-    type Viewer<'a> = ObjectViewer<'a, JsonValue>;
+impl Scalar for VariantValue {
+    type ColumnType = ObjectColumn<VariantValue>;
+    type RefType<'a> = &'a VariantValue;
+    type Viewer<'a> = ObjectViewer<'a, VariantValue>;
 
     #[inline]
-    fn as_scalar_ref(&self) -> &JsonValue {
+    fn as_scalar_ref(&self) -> &VariantValue {
         self
     }
 
     #[allow(clippy::needless_lifetimes)]
     #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: &'long JsonValue) -> &'short JsonValue {
+    fn upcast_gat<'short, 'long: 'short>(long: &'long VariantValue) -> &'short VariantValue {
         long
     }
 }
 
-impl<'a> ScalarRef<'a> for &'a JsonValue {
-    type ColumnType = ObjectColumn<JsonValue>;
-    type ScalarType = JsonValue;
+impl<'a> ScalarRef<'a> for &'a VariantValue {
+    type ColumnType = ObjectColumn<VariantValue>;
+    type ScalarType = VariantValue;
 
     #[inline]
-    fn to_owned_scalar(&self) -> JsonValue {
+    fn to_owned_scalar(&self) -> VariantValue {
         (*self).clone()
+    }
+
+    fn has_alloc_beyond_bump() -> bool {
+        true
+    }
+}
+
+impl Scalar for ArrayValue {
+    type ColumnType = ArrayColumn;
+    type RefType<'a> = ArrayValueRef<'a>;
+    type Viewer<'a> = ArrayViewer<'a>;
+
+    #[inline]
+    fn as_scalar_ref(&self) -> ArrayValueRef<'_> {
+        ArrayValueRef::ValueRef { val: self }
+    }
+
+    #[allow(clippy::needless_lifetimes)]
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: ArrayValueRef<'long>) -> ArrayValueRef<'short> {
+        long
+    }
+}
+
+impl<'a> ScalarRef<'a> for ArrayValueRef<'a> {
+    type ColumnType = ArrayColumn;
+    type ScalarType = ArrayValue;
+
+    #[inline]
+    fn to_owned_scalar(&self) -> ArrayValue {
+        match self {
+            ArrayValueRef::Indexed { column, idx } => column.get(*idx).into(),
+            ArrayValueRef::ValueRef { val } => (*val).clone(),
+        }
     }
 }

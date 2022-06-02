@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
@@ -78,12 +78,12 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+---------------+------------+",
-            "| Tables_in_db1 | Table_type |",
-            "+---------------+------------+",
-            "| bend          | BASE TABLE |",
-            "| data          | BASE TABLE |",
-            "+---------------+------------+",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+            "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+            "| bend          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+            "| data          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
@@ -113,11 +113,11 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+---------------+------------+",
-            "| Tables_in_db1 | Table_type |",
-            "+---------------+------------+",
-            "| data          | BASE TABLE |",
-            "+---------------+------------+",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+            "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+            "| data          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
@@ -148,11 +148,11 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+---------------+------------+",
-            "| Tables_in_db1 | Table_type |",
-            "+---------------+------------+",
-            "| bend          | BASE TABLE |",
-            "+---------------+------------+",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+            "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+            "| bend          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
@@ -183,12 +183,12 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+---------------+------------+",
-            "| Tables_in_db1 | Table_type |",
-            "+---------------+------------+",
-            "| bend          | BASE TABLE |",
-            "| data          | BASE TABLE |",
-            "+---------------+------------+",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+            "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+            "| bend          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+            "| data          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
@@ -221,12 +221,12 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
 
         let expected = vec![
-            "+---------------+------------+",
-            "| Tables_in_db1 | Table_type |",
-            "+---------------+------------+",
-            "| bend          | BASE TABLE |",
-            "| data          | BASE TABLE |",
-            "+---------------+------------+",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+            "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+            "| bend          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+            "| data          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

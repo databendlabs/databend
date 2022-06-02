@@ -22,12 +22,11 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 pub use iterator::*;
 pub use mutable::*;
-use serde_json::Value as JsonValue;
 
 use crate::prelude::*;
 
 /// ObjectColumn is a generic struct that wrapped any structure or enumeration,
-/// such as JsonValue or BitMap.
+/// such as VariantValue or BitMap.
 #[derive(Clone)]
 pub struct ObjectColumn<T: ObjectType> {
     values: Vec<T>,
@@ -97,7 +96,7 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         T::data_type()
     }
 
@@ -236,11 +235,17 @@ where T: Scalar<ColumnType = Self> + ObjectType
     }
 }
 
-pub type JsonColumn = ObjectColumn<JsonValue>;
+pub type VariantColumn = ObjectColumn<VariantValue>;
 
 impl<T: ObjectType> std::fmt::Debug for ObjectColumn<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO(b41sh): implement display_fmt
-        write!(f, "ObjectColumn")
+        let mut data = Vec::with_capacity(self.len());
+        for idx in 0..self.len() {
+            let x = self.get(idx);
+            data.push(format!("{}", x));
+        }
+        let head = T::column_name();
+        let iter = data.iter();
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
     }
 }

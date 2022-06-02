@@ -19,8 +19,8 @@ use std::io::ErrorKind;
 use std::ops::RangeBounds;
 
 use anyerror::AnyError;
-use common_base::tokio::sync::RwLock;
-use common_base::tokio::sync::RwLockWriteGuard;
+use common_base::base::tokio::sync::RwLock;
+use common_base::base::tokio::sync::RwLockWriteGuard;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::state::RaftState;
@@ -53,6 +53,7 @@ use openraft::SnapshotMeta;
 use openraft::StorageError;
 
 use crate::export::vec_kv_to_json;
+use crate::metrics::incr_meta_metrics_applying_snapshot;
 use crate::store::ToStorageError;
 use crate::Opened;
 
@@ -403,6 +404,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn begin_receiving_snapshot(&self) -> Result<Box<Self::SnapshotData>, StorageError> {
+        incr_meta_metrics_applying_snapshot(1);
         Ok(Box::new(Cursor::new(Vec::new())))
     }
 
@@ -418,6 +420,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
             { snapshot_size = snapshot.get_ref().len() },
             "decoding snapshot for installation"
         );
+        incr_meta_metrics_applying_snapshot(-1);
 
         let new_snapshot = Snapshot {
             meta: meta.clone(),

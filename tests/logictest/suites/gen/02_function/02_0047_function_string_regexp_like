@@ -1,0 +1,462 @@
+statement query T 
+select * from system.databases where regexp_like(name, '^sys') ;
+
+----  
+system
+
+statement query T 
+select * from system.databases where regexp_like(name, 'ef+.ul+.') ;
+
+----  
+default
+
+statement query B label(mysql,http)
+select regexp_like('foo', 'FOO');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select regexp_like('foo', null);
+
+----  
+NULL
+
+statement query T 
+select regexp_like(null, null);
+
+----  
+NULL
+
+statement query T 
+select regexp_like('foo', 'FOO', null);
+
+----  
+NULL
+
+statement query B label(mysql,http)
+select regexp_like('foo', 'FOO', 'c');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+select regexp_like('foo', 'FOO', 'i');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select regexp_like('fo\nfo', '^fo$');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+select regexp_like('fofo', '^fo');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select regexp_like('fo\nfo', '^fo$', 'm');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select regexp_like('fo\no', '^fo\no$');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select regexp_like('fo\no', '^fo$');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+select regexp_like('fo\no', '^fo$', 'm');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('fofo', '^f.*$');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('fo\r\nfo', '^f.*$');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('fo\r\nfo', '^f.*$', 'm');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('fo\r\nfo', '(?m)^f.*$');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('fo\r\nfo', '^f.*$', 'n');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('Ban', '^Ba*n');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('Baaan', '^Ba*n');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('Bn', '^Ba*n');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('Ban', '^Ba+n');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('Bn', '^Ba+n');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('Bn', '^Ba?n');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('Ban', '^Ba?n');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('Baan', '^Ba?n');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('pi', 'pi|apa');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('axe', 'pi|apa');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('apa', 'pi|apa');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('apa', '^(pi|apa)$');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('pi', '^(pi|apa)$');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('pix', '^(pi|apa)$');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('pi', '^(pi)*$');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('pip', '^(pi)*$');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('pipi', '^(pi)*$');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('abcde', 'a[bcd]{2}e');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('abcde', 'a[bcd]{3}e');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('abcde', 'a[bcd]{1,10}e');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('aXbc', '[a-dXYZ]');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('aXbc', '^[a-dXYZ]$');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('aXbc', '^[a-dXYZ]+$');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('aXbc', '^[^a-dXYZ]+$');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('gheis', '^[^a-dXYZ]+$');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('gheisa', '^[^a-dXYZ]+$');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('justalnums', '[[:alnum:]]+');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('!!', '[[:alnum:]]+');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('1+2', '1+2');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT REGEXP_LIKE('1+2', '1\\+2');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select REGEXP_LIKE('🍣🍣b', 'b');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select regexp_like('бжb', 'b');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select regexp_like('µå周çб', '周');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select regexp_like('周周周周', '.*');
+
+----  mysql
+1
+
+----  http
+true
+

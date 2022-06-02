@@ -14,7 +14,6 @@
 
 use std::net::Ipv4Addr;
 
-use clap::Parser;
 use common_exception::Result;
 use common_grpc::DNSResolver;
 use common_meta_types::Endpoint;
@@ -22,8 +21,6 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
 use common_meta_types::NodeId;
 use once_cell::sync::Lazy;
-use serde::Deserialize;
-use serde::Serialize;
 
 pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     let build_semver = option_env!("VERGEN_BUILD_SEMVER");
@@ -43,97 +40,63 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     ver
 });
 
-pub const KVSRV_LISTEN_HOST: &str = "KVSRV_LISTEN_HOST";
-pub const KVSRV_ADVERTISE_HOST: &str = "KVSRV_ADVERTISE_HOST";
-pub const KVSRV_API_PORT: &str = "KVSRV_API_PORT";
-pub const KVSRV_RAFT_DIR: &str = "KVSRV_RAFT_DIR";
-pub const KVSRV_NO_SYNC: &str = "KVSRV_NO_SYNC";
-pub const KVSRV_SNAPSHOT_LOGS_SINCE_LAST: &str = "KVSRV_SNAPSHOT_LOGS_SINCE_LAST";
-pub const KVSRV_HEARTBEAT_INTERVAL: &str = "KVSRV_HEARTBEAT_INTERVAL";
-pub const KVSRV_INSTALL_SNAPSHOT_TIMEOUT: &str = "KVSRV_INSTALL_SNAPSHOT_TIMEOUT";
-pub const KVSRV_BOOT: &str = "KVSRV_BOOT";
-pub const KVSRV_SINGLE: &str = "KVSRV_SINGLE";
-pub const KVSRV_ID: &str = "KVSRV_ID";
-
-pub const DEFAULT_LISTEN_HOST: &str = "127.0.0.1";
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
-#[serde(default)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct RaftConfig {
     /// Identify a config.
     /// This is only meant to make debugging easier with more than one Config involved.
-    #[clap(long, default_value = "")]
     pub config_id: String,
 
     /// The local listening host for metadata communication.
     /// This config does not need to be stored in raft-store,
     /// only used when metasrv startup and listen to.
-    #[clap(long, env = KVSRV_LISTEN_HOST, default_value = DEFAULT_LISTEN_HOST)]
     pub raft_listen_host: String,
 
     /// The hostname that other nodes will use to connect this node.
     /// This host should be stored in raft store and be replicated to the raft cluster,
     /// i.e., when calling add_node().
     /// Use `localhost` by default.
-    #[clap(long, env = KVSRV_ADVERTISE_HOST, default_value = "localhost")]
     pub raft_advertise_host: String,
 
     /// The listening port for metadata communication.
-    #[clap(long, env = KVSRV_API_PORT, default_value = "28004")]
     pub raft_api_port: u32,
 
     /// The dir to store persisted meta state, including raft logs, state machine etc.
-    #[clap(long, env = KVSRV_RAFT_DIR, default_value = "./_meta")]
     pub raft_dir: String,
 
     /// Whether to fsync meta to disk for every meta write(raft log, state machine etc).
     /// No-sync brings risks of data loss during a crash.
     /// You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING.
-    #[clap(long, env = KVSRV_NO_SYNC)]
     pub no_sync: bool,
 
     /// The number of logs since the last snapshot to trigger next snapshot.
-    #[clap(long, env = KVSRV_SNAPSHOT_LOGS_SINCE_LAST, default_value = "1024")]
     pub snapshot_logs_since_last: u64,
 
     /// The interval in milli seconds at which a leader send heartbeat message to followers.
     /// Different value of this setting on leader and followers may cause unexpected behavior.
-    #[clap(long, env = KVSRV_HEARTBEAT_INTERVAL, default_value = "1000")]
     pub heartbeat_interval: u64,
 
     /// The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.
-    #[clap(long, env = KVSRV_INSTALL_SNAPSHOT_TIMEOUT, default_value = "4000")]
     pub install_snapshot_timeout: u64,
 
     /// The maximum number of applied logs to keep before purging
-    #[clap(long, env = "RAFT_MAX_APPLIED_LOG_TO_KEEP", default_value = "1000")]
     pub max_applied_log_to_keep: u64,
 
     /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
     /// Otherwise it opens the previous one.
     /// This is mainly for testing purpose.
-    #[clap(long, env = KVSRV_SINGLE)]
     pub single: bool,
 
     /// Bring up a metasrv node and join a cluster.
     ///
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
-    #[clap(
-        long,
-        env = "METASRV_JOIN",
-        multiple_occurrences = true,
-        multiple_values = true
-    )]
     pub join: Vec<String>,
 
     /// The node id. Only used when this server is not initialized,
     ///  e.g. --boot or --single for the first time.
     ///  Otherwise this argument is ignored.
-    #[clap(long, env = KVSRV_ID, default_value = "0")]
     pub id: NodeId,
 
     /// For test only: specifies the tree name prefix
-    #[clap(long, default_value = "")]
     pub sled_tree_prefix: String,
 }
 
@@ -147,18 +110,14 @@ pub fn get_default_raft_advertise_host() -> String {
     }
 }
 
-pub fn get_default_raft_listen_host() -> String {
-    DEFAULT_LISTEN_HOST.to_string()
-}
-
 impl Default for RaftConfig {
     fn default() -> Self {
         Self {
             config_id: "".to_string(),
-            raft_listen_host: get_default_raft_listen_host(),
+            raft_listen_host: "127.0.0.1".to_string(),
             raft_advertise_host: get_default_raft_advertise_host(),
             raft_api_port: 28004,
-            raft_dir: "./_meta".to_string(),
+            raft_dir: "./.databend/meta".to_string(),
             no_sync: false,
             snapshot_logs_since_last: 1024,
             heartbeat_interval: 1000,
@@ -173,15 +132,6 @@ impl Default for RaftConfig {
 }
 
 impl RaftConfig {
-    /// StructOptToml provides a default Default impl that loads config from cli args,
-    /// which conflicts with unit test if case-filter arguments passed, e.g.:
-    /// `cargo test my_unit_test_fn`
-    ///
-    /// Thus we need another method to generate an empty default instance.
-    pub fn empty() -> Self {
-        <Self as Parser>::parse_from(&Vec::<&'static str>::new())
-    }
-
     pub fn raft_api_listen_host_string(&self) -> String {
         format!("{}:{}", self.raft_listen_host, self.raft_api_port)
     }
@@ -226,11 +176,15 @@ impl RaftConfig {
     }
 
     pub fn check(&self) -> MetaResult<()> {
-        if !self.join.is_empty() && self.single {
+        // There two cases:
+        // - both join and single is set
+        // - neither join nor single is set
+        if self.join.is_empty() != self.single {
             return Err(MetaError::InvalidConfig(String::from(
-                "--join and --single can not be both set",
+                "at least one of `single` and `join` needs to be enabled",
             )));
         }
+
         let self_addr = self.raft_api_listen_host_string();
         if self.join.contains(&self_addr) {
             return Err(MetaError::InvalidConfig(String::from(

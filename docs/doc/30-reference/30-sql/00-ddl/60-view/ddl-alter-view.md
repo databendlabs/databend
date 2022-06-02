@@ -15,9 +15,9 @@ ALTER VIEW [db.]view_name AS SELECT query
 ## Examples
 
 ```sql
-create view tmp_view as SELECT number % 3 as a, avg(number) from numbers(1000) group by a order by a;
+CREATE VIEW tmp_view AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a;
 
-SELECT * from tmp_view;
+SELECT * FROM tmp_view;
 +------+-------------+
 | a    | avg(number) |
 +------+-------------+
@@ -28,7 +28,7 @@ SELECT * from tmp_view;
 
 ALTER VIEW tmp_view AS SELECT * from numbers(3);
 
-SELECT * from tmp_view;
+SELECT * FROM tmp_view;
 +--------+
 | number |
 +--------+

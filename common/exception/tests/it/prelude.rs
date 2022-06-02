@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ fn test_prelude() -> anyhow::Result<()> {
 
     assert_eq!(
         "Code: 1067, displayText = 123, cause: an error occurred when formatting an argument.",
-        format!("{}", y.unwrap_err())
+        y.unwrap_err().to_string()
     );
     Ok(())
 }

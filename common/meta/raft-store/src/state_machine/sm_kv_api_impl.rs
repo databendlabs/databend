@@ -15,19 +15,21 @@
 use common_meta_api::KVApi;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
-use common_meta_types::GetKVActionReply;
-use common_meta_types::MGetKVActionReply;
+use common_meta_types::GetKVReply;
+use common_meta_types::MGetKVReply;
 use common_meta_types::MetaError;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVAction;
-use common_meta_types::UpsertKVActionReply;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
+use common_meta_types::UpsertKVReply;
+use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 
 use crate::state_machine::StateMachine;
 
 #[async_trait::async_trait]
 impl KVApi for StateMachine {
-    async fn upsert_kv(&self, act: UpsertKVAction) -> Result<UpsertKVActionReply, MetaError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
         let cmd = Cmd::UpsertKV {
             key: act.key,
             seq: act.seq,
@@ -48,7 +50,23 @@ impl KVApi for StateMachine {
         }
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVActionReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+        let cmd = Cmd::Transaction(txn);
+
+        let res = self.sm_tree.txn(true, |t| {
+            let r = self.apply_cmd(&cmd, &t).unwrap();
+            Ok(r)
+        })?;
+
+        match res {
+            AppliedState::TxnReply(x) => Ok(x),
+            _ => {
+                panic!("expect AppliedState::TxnReply");
+            }
+        }
+    }
+
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
         // TODO(xp) refine get(): a &str is enough for key
         let sv = self.kvs().get(&key.to_string())?;
         tracing::debug!("get_kv sv:{:?}", sv);
@@ -60,7 +78,7 @@ impl KVApi for StateMachine {
         Ok(Self::unexpired(sv))
     }
 
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVActionReply, MetaError> {
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, MetaError> {
         let kvs = self.kvs();
         let mut res = vec![];
         for x in keys.iter() {

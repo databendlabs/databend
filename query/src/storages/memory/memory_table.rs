@@ -18,12 +18,12 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::infallible::Mutex;
+use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_exception::Result;
-use common_infallible::Mutex;
-use common_infallible::RwLock;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -31,11 +31,15 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
+use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::Sink;
+use crate::pipelines::new::processors::Sinker;
 use crate::pipelines::new::processors::SyncSource;
 use crate::pipelines::new::processors::SyncSourcer;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SinkPipeBuilder;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
@@ -73,6 +77,7 @@ impl MemoryTable {
         StorageDescription {
             engine_name: "MEMORY".to_string(),
             comment: "MEMORY Storage Engine".to_string(),
+            ..Default::default()
         }
     }
 
@@ -234,6 +239,20 @@ impl Table for MemoryTable {
         Ok(())
     }
 
+    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+        let mut sink_pipeline_builder = SinkPipeBuilder::create();
+        for _ in 0..pipeline.output_len() {
+            let input_port = InputPort::create();
+            sink_pipeline_builder.add_sink(
+                input_port.clone(),
+                MemoryTableSink::create(input_port, ctx.clone()),
+            );
+        }
+
+        pipeline.add_pipe(sink_pipeline_builder.finalize());
+        Ok(())
+    }
+
     async fn append_data(
         &self,
         _ctx: Arc<QueryContext>,
@@ -245,6 +264,7 @@ impl Table for MemoryTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<QueryContext>,
+        _catalog_name: &str,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
@@ -308,7 +328,7 @@ impl MemoryTableSource {
             }
         }
 
-        Ok(None)
+        Ok(Some(data_block))
     }
 }
 
@@ -321,5 +341,24 @@ impl SyncSource for MemoryTableSource {
             None => Ok(None),
             Some(data_block) => self.projection(data_block),
         }
+    }
+}
+
+struct MemoryTableSink {
+    ctx: Arc<QueryContext>,
+}
+
+impl MemoryTableSink {
+    pub fn create(input: Arc<InputPort>, ctx: Arc<QueryContext>) -> ProcessorPtr {
+        Sinker::create(input, MemoryTableSink { ctx })
+    }
+}
+
+impl Sink for MemoryTableSink {
+    const NAME: &'static str = "MemoryTableSink";
+
+    fn consume(&mut self, data_block: DataBlock) -> Result<()> {
+        self.ctx.push_precommit_block(data_block);
+        Ok(())
     }
 }

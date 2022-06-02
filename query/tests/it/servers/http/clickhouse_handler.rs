@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::clickhouse_router;
@@ -20,6 +20,7 @@ use http::Uri;
 use poem::error::Result as PoemResult;
 use poem::http::Method;
 use poem::http::StatusCode;
+use poem::web::headers::Authorization;
 use poem::Body;
 use poem::Endpoint;
 use poem::EndpointExt;
@@ -82,7 +83,7 @@ async fn test_select() -> PoemResult<()> {
     }
 
     {
-        let (status, body) = server.post("select ", "1").await;
+        let (status, body) = server.post("select 1", "").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "1\n");
     }
@@ -135,7 +136,7 @@ async fn test_insert_format_values() -> PoemResult<()> {
 
     {
         let (status, body) = server
-            .post("insert into table t1 values", "(0, 'a'), (1, 'b')")
+            .post("insert into table t1 format values", "(0, 'a'), (1, 'b')")
             .await;
         assert_ok!(status, body);
         assert_error!(body, "");
@@ -233,7 +234,12 @@ impl QueryBuilder {
             Some(body) => (Method::POST, body),
         };
 
-        Request::builder().uri(uri).method(method).body(body)
+        let basic = Authorization::basic("root", "");
+        Request::builder()
+            .uri(uri)
+            .method(method)
+            .typed_header(basic)
+            .body(body)
     }
 }
 

@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::{AggregatorFinalPlan, RemotePlan};
+use crate::plan_table_undrop::UnDropTablePlan;
+use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
@@ -56,6 +57,8 @@ use crate::OptimizeTablePlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::V1RemotePlan;
+use crate::RemotePlan;
+use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;
@@ -116,11 +119,13 @@ pub enum PlanNode {
     // Database.
     CreateDatabase(CreateDatabasePlan),
     DropDatabase(DropDatabasePlan),
+    RenameDatabase(RenameDatabasePlan),
     ShowCreateDatabase(ShowCreateDatabasePlan),
 
     // Table.
     CreateTable(CreateTablePlan),
     DropTable(DropTablePlan),
+    UnDropTable(UnDropTablePlan),
     RenameTable(RenameTablePlan),
     TruncateTable(TruncateTablePlan),
     OptimizeTable(OptimizeTablePlan),
@@ -213,10 +218,12 @@ impl PlanNode {
             PlanNode::CreateDatabase(v) => v.schema(),
             PlanNode::DropDatabase(v) => v.schema(),
             PlanNode::ShowCreateDatabase(v) => v.schema(),
+            PlanNode::RenameDatabase(v) => v.schema(),
 
             // Table.
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
+            PlanNode::UnDropTable(v) => v.schema(),
             PlanNode::RenameTable(v) => v.schema(),
             PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::OptimizeTable(v) => v.schema(),
@@ -311,10 +318,12 @@ impl PlanNode {
             PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
             PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
+            PlanNode::RenameDatabase(_) => "RenameDatabase",
 
             // Table.
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
+            PlanNode::UnDropTable(_) => "UndropTablePlan",
             PlanNode::RenameTable(_) => "RenameTablePlan",
             PlanNode::TruncateTable(_) => "TruncateTablePlan",
             PlanNode::OptimizeTable(_) => "OptimizeTablePlan",

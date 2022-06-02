@@ -51,7 +51,7 @@ ndjson is a newline delimited JSON format:
 
 For example, we have a table:
 ```sql title='table t1'
-CREATE TABLE t1(a UInt8);
+CREATE TABLE t1(a TINYINT UNSIGNED);
 ```
 
 Insert into `t1`:

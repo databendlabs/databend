@@ -13,36 +13,33 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::env;
 use std::future::Future;
-use std::str::FromStr;
+use std::ops::DerefMut;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::tokio;
-use common_base::Runtime;
-use common_base::SignalStream;
+use common_base::base::tokio;
+use common_base::base::Runtime;
+use common_base::base::SignalStream;
+use common_base::infallible::RwLock;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
+use common_io::prelude::init_operator;
 use common_metrics::label_counter;
 use common_tracing::init_query_logger;
 use common_tracing::tracing;
 use common_tracing::tracing_appender::non_blocking::WorkerGuard;
 use futures::future::Either;
 use futures::StreamExt;
-use opendal::services::fs;
-use opendal::services::memory;
-use opendal::services::s3;
-use opendal::Accessor;
 use opendal::Operator;
 use opendal::Scheme as DalSchema;
 use crate::api::DataExchangeManager;
 
-use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::CatalogManager;
 use crate::clusters::ClusterDiscovery;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
@@ -50,15 +47,14 @@ use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
 use crate::storages::cache::CacheManager;
-use crate::users::auth::auth_mgr::AuthMgr;
+use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: RwLock<Config>,
     pub(in crate::sessions) discovery: RwLock<Arc<ClusterDiscovery>>,
-    pub(in crate::sessions) catalog: RwLock<Arc<DatabaseCatalog>>,
-    pub(in crate::sessions) user_manager: RwLock<Arc<UserApiProvider>>,
-    pub(in crate::sessions) auth_manager: RwLock<Arc<AuthMgr>>,
+    pub(in crate::sessions) catalogs: RwLock<Arc<CatalogManager>>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
     pub(in crate::sessions) data_exchange_manager: Arc<DataExchangeManager>,
 
@@ -71,21 +67,28 @@ pub struct SessionManager {
     storage_operator: RwLock<Operator>,
     storage_runtime: Arc<Runtime>,
     _guards: Vec<WorkerGuard>,
+
+    user_api_provider: RwLock<Arc<UserApiProvider>>,
+    role_cache_manager: RwLock<Arc<RoleCacheMgr>>,
+    // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
+    pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
+    pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
+        let catalogs = Arc::new(CatalogManager::new(&conf).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
 
         let storage_runtime = {
-            let mut storage_num_cpus = conf.storage.storage_num_cpus as usize;
+            let mut storage_num_cpus = conf.storage.num_cpus as usize;
             if storage_num_cpus == 0 {
                 storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
             }
+
             Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
         };
 
@@ -95,32 +98,29 @@ impl SessionManager {
             .await?
             .layer(DalRuntime::new(storage_runtime.inner()));
 
-        // User manager and init the default users.
-        let user = UserApiProvider::create_global(conf.clone()).await?;
-        let auth_manager = Arc::new(AuthMgr::create(conf.clone(), user.clone()).await?);
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(Default::default()));
 
-        let (_guards, query_logger) = if conf.log.log_query_enabled {
-            let (_guards, query_logger) =
-                init_query_logger("query-detail", conf.log.log_dir.as_str());
+        let (_guards, query_logger) = if conf.log.query_enabled {
+            let (_guards, query_logger) = init_query_logger("query-detail", conf.log.dir.as_str());
             (_guards, Some(query_logger))
         } else {
             (Vec::new(), None)
         };
+        let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
+        let user_api_provider = UserApiProvider::create_global(conf.clone()).await?;
+        let role_cache_manager = Arc::new(RoleCacheMgr::new(user_api_provider.clone()));
 
         let exchange_manager = DataExchangeManager::create(conf.clone());
         Ok(Arc::new(SessionManager {
             conf: RwLock::new(conf),
-            catalog: RwLock::new(catalog),
+            catalogs: RwLock::new(catalogs),
             discovery: RwLock::new(discovery),
-            user_manager: RwLock::new(user),
             http_query_manager,
             max_sessions,
             active_sessions,
-            auth_manager: RwLock::new(auth_manager),
             data_exchange_manager: exchange_manager,
             storage_cache_manager: RwLock::new(storage_cache_manager),
             query_logger: RwLock::new(query_logger),
@@ -128,6 +128,10 @@ impl SessionManager {
             storage_operator: RwLock::new(storage_operator),
             storage_runtime: Arc::new(storage_runtime),
             _guards,
+            user_api_provider: RwLock::new(user_api_provider),
+            role_cache_manager: RwLock::new(role_cache_manager),
+            mysql_conn_map,
+            mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
         }))
     }
 
@@ -143,17 +147,8 @@ impl SessionManager {
         self.http_query_manager.clone()
     }
 
-    pub fn get_auth_manager(self: &Arc<Self>) -> Arc<AuthMgr> {
-        self.auth_manager.read().clone()
-    }
-
-    /// Get the user api provider.
-    pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.user_manager.read().clone()
-    }
-
-    pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.catalog.read().clone()
+    pub fn get_catalog_manager(self: &Arc<Self>) -> Arc<CatalogManager> {
+        self.catalogs.read().clone()
     }
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
@@ -172,6 +167,14 @@ impl SessionManager {
         self.storage_runtime.clone()
     }
 
+    pub fn get_user_api_provider(&self) -> Arc<UserApiProvider> {
+        self.user_api_provider.read().clone()
+    }
+
+    pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
+        self.role_cache_manager.read().clone()
+    }
+
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
         // TODO: maybe deadlock
         let config = self.get_conf();
@@ -179,17 +182,34 @@ impl SessionManager {
             let sessions = self.active_sessions.read();
             if sessions.len() == self.max_sessions {
                 return Err(ErrorCode::TooManyUserConnections(
-                    "The current accept connection has exceeded mysql_handler_thread_num config",
+                    "The current accept connection has exceeded max_active_sessions config",
                 ));
             }
         }
-        let session = Session::try_create(
-            config.clone(),
-            uuid::Uuid::new_v4().to_string(),
-            typ,
-            self.clone(),
-        )
-            .await?;
+        let id = uuid::Uuid::new_v4().to_string();
+        let session_typ = typ.clone();
+        let mut mysql_conn_id = None;
+        match session_typ {
+            SessionType::MySQL => {
+                let mut conn_id_session_id = self.mysql_conn_map.write();
+                mysql_conn_id = Some(self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed));
+                if conn_id_session_id.len() < self.max_sessions {
+                    conn_id_session_id.insert(mysql_conn_id, id.clone());
+                } else {
+                    return Err(ErrorCode::TooManyUserConnections(
+                        "The current accept connection has exceeded max_active_sessions config",
+                    ));
+                }
+            }
+            _ => {
+                tracing::debug!(
+                    "session type is {}, mysql_conn_map no need to change.",
+                    session_typ
+                );
+            }
+        }
+        let session =
+            Session::try_create(config.clone(), id, typ, self.clone(), mysql_conn_id).await?;
 
         let mut sessions = self.active_sessions.write();
         if sessions.len() < self.max_sessions {
@@ -204,7 +224,7 @@ impl SessionManager {
             Ok(SessionRef::create(session))
         } else {
             Err(ErrorCode::TooManyUserConnections(
-                "The current accept connection has exceeded mysql_handler_thread_num config",
+                "The current accept connection has exceeded max_active_sessions config",
             ))
         }
     }
@@ -229,6 +249,7 @@ impl SessionManager {
             id.clone(),
             SessionType::FlightRPC,
             self.clone(),
+            None,
         )
             .await?;
 
@@ -261,6 +282,15 @@ impl SessionManager {
     }
 
     #[allow(clippy::ptr_arg)]
+    pub async fn get_id_by_mysql_conn_id(
+        self: &Arc<Self>,
+        mysql_conn_id: &Option<u32>,
+    ) -> Option<String> {
+        let sessions = self.mysql_conn_map.read();
+        sessions.get(mysql_conn_id).cloned()
+    }
+
+    #[allow(clippy::ptr_arg)]
     pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
         let config = self.get_conf();
         label_counter(
@@ -271,6 +301,13 @@ impl SessionManager {
 
         let mut sessions = self.active_sessions.write();
         sessions.remove(session_id);
+        //also need remove mysql_conn_map
+        let mut mysql_conns_map = self.mysql_conn_map.write();
+        for (k, v) in mysql_conns_map.deref_mut().clone() {
+            if &v == session_id {
+                mysql_conns_map.remove(&k);
+            }
+        }
     }
 
     pub fn graceful_shutdown(
@@ -334,78 +371,35 @@ impl SessionManager {
 
     // Init the storage operator by config.
     async fn init_storage_operator(conf: &Config) -> Result<Operator> {
-        let storage_conf = &conf.storage;
-        let schema_name = &storage_conf.storage_type;
-        let schema = DalSchema::from_str(schema_name)?;
+        let op = init_operator(&conf.storage).await?;
+        // Enable exponential backoff by default
+        let op = op.with_backoff(backon::ExponentialBackoff::default());
+        // OpenDAL will send a real request to underlying storage to check whether it works or not.
+        // If this check failed, it's highly possible that the users have configured it wrongly.
+        op.check().await.map_err(|e| {
+            ErrorCode::StorageUnavailable(format!(
+                "current configured storage is not available: {e}"
+            ))
+        })?;
 
-        let accessor: Arc<dyn Accessor> = match schema {
-            DalSchema::Memory => {
-                let mut builder = memory::Backend::build();
-
-                builder.finish().await?
-            }
-            DalSchema::S3 => {
-                let s3_conf = &storage_conf.s3;
-                let mut builder = s3::Backend::build();
-
-                // Endpoint.
-                {
-                    builder.endpoint(&s3_conf.endpoint_url);
-                }
-
-                // Region
-                {
-                    builder.region(&s3_conf.region);
-                }
-
-                // Credential.
-                {
-                    builder.access_key_id(&s3_conf.access_key_id);
-                    builder.secret_access_key(&s3_conf.secret_access_key);
-                }
-
-                // Bucket.
-                {
-                    builder.bucket(&s3_conf.bucket);
-                }
-
-                // Root.
-                {
-                    if !s3_conf.root.is_empty() {
-                        builder.root(&s3_conf.root);
-                    }
-                }
-
-                builder.finish().await?
-            }
-            DalSchema::Fs => {
-                let mut path = storage_conf.fs.data_path.clone();
-                if !path.starts_with('/') {
-                    path = env::current_dir().unwrap().join(path).display().to_string();
-                }
-
-                fs::Backend::build().root(&path).finish().await?
-            }
-            _ => return Err(ErrorCode::StorageOther("not supported storage backend")),
-        };
-
-        Ok(Operator::new(accessor))
+        Ok(op)
     }
 
     pub async fn reload_config(&self) -> Result<()> {
+        // TODO(xp): Potential race condition if fields are updated one by one.
+        //           These fields should all be got prepared then update in one atomic update.
+
         let config = {
             let mut config = self.conf.write();
             let config_file = config.config_file.clone();
-            *config = Config::load_from_file(&config_file)?;
-            // ensure the environment variables are immutable
-            *config = Config::load_from_env(&config)?;
+            *config = Config::load()?;
             config.config_file = config_file;
             config.clone()
         };
 
         {
-            let catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
-            *self.catalog.write() = Arc::new(catalog);
+            let catalogs = CatalogManager::new(&config).await?;
+            *self.catalogs.write() = Arc::new(catalogs);
         }
 
         *self.storage_cache_manager.write() = Arc::new(CacheManager::init(&config.query));
@@ -424,15 +418,13 @@ impl SessionManager {
             *self.discovery.write() = discovery;
         }
 
-        // User manager and init the default users.
-        let user = {
-            let user = UserApiProvider::create_global(config.clone()).await?;
-            *self.user_manager.write() = user.clone();
-            user
-        };
+        {
+            let x = UserApiProvider::create_global(config).await?;
+            *self.user_api_provider.write() = x.clone();
 
-        let auth_mgr = AuthMgr::create(config.clone(), user).await?;
-        *self.auth_manager.write() = Arc::new(auth_mgr);
+            let role_cache_manager = RoleCacheMgr::new(x);
+            *self.role_cache_manager.write() = Arc::new(role_cache_manager);
+        }
 
         Ok(())
     }

@@ -1,0 +1,70 @@
+---------- Input ----------
+select * from customer join where a = b
+---------- Output ---------
+error: 
+  --> SQL:1:29
+  |
+1 | select * from customer join where a = b
+  |                             ^^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedString>
+
+
+---------- Input ----------
+select * from join customer
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | select * from join customer
+  | ------        ^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedString>
+  | |              
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from customer natural inner join orders on a = b
+---------- Output ---------
+error: 
+  --> SQL:1:50
+  |
+1 | select * from customer natural inner join orders on a = b
+  |                                                  ^^ expected `(`, `.`, `AT`, <Ident>, <QuotedString>, `AS`, or 15 more ...
+
+
+---------- Input ----------
+select * order a
+---------- Output ---------
+error: 
+  --> SQL:1:16
+  |
+1 | select * order a
+  | ------         ^ expected `BY`
+  | |               
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * order
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | select * order
+  | ------        ^ expected `BY`
+  | |             
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select number + 5 as a, cast(number as float(255))
+---------- Output ---------
+error: 
+  --> SQL:1:45
+  |
+1 | select number + 5 as a, cast(number as float(255))
+  | ------                  ----                ^ expected `)`
+  | |                       |                    
+  | |                       while parsing `CAST(... AS ...)`
+  | |                       while parsing expression
+  | while parsing `SELECT ...`
+
+
