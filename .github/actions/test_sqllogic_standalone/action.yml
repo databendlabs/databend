@@ -15,6 +15,9 @@ runs:
     - name: Maximize build space
       uses: ./.github/actions/cleanup
 
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+
     - uses: actions/download-artifact@v2
       with:
         name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
@@ -33,7 +36,7 @@ runs:
     - name: Run sqllogic Tests with Standalone mode, with embedded meta-store
       shell: bash
       run: |
-        bash ./scripts/ci/ci-run-sqllogic-tests.sh
+        build-tool bash ./scripts/ci/ci-run-sqllogic-tests.sh
 
     - name: Upload artifact
       uses: actions/upload-artifact@v2
