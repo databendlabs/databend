@@ -1,3 +1,4 @@
+
 ---
 title: Type Conversion
 ---
@@ -25,6 +26,12 @@ TO_UINT32( <expr> )
 TO_UINT64( <expr> )
 ```
 
+> `TO_DATETIME( <expr> )` and `TO_TIMESTAMP( <expr> )` uses the following rules to automatically determine the unit of time:
+>
+> - If the value is less than 31536000000, it is treated as a number of seconds,
+> - If the value is greater than or equal to 31536000000 and less than 31536000000000, it is treated as milliseconds.
+> - If the value is greater than or equal to 31536000000000, it is treated as microseconds.
+
 ## Examples
 
 ```sql
@@ -42,11 +49,25 @@ SELECT to_date(19109);
 | 2022-04-27     |
 +----------------+
 
-SELECT to_datetime(1651036648000000);
+SELECT to_datetime(1651036648);
++----------------------------+
+| to_datetime(1651036648)    |
++----------------------------+
+| 2022-04-27 05:17:28.000000 |
++----------------------------+
+
+SELECT to_datetime(1651036648123);
++----------------------------+
+| to_datetime(1651036648123) |
++----------------------------+
+| 2022-04-27 05:17:28.123000 |
++----------------------------+
+
+SELECT to_datetime(1651036648123456);
 +-------------------------------+
-| to_datetime(1651036648000000) |
+| to_datetime(1651036648123456) |
 +-------------------------------+
-| 2022-04-27 05:17:28.000000    |
+| 2022-04-27 05:17:28.123456    |
 +-------------------------------+
 
 SELECT to_float32('1.2');
