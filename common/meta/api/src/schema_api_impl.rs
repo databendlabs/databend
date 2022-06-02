@@ -76,6 +76,8 @@ use common_meta_types::app_error::UnknownTableId;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op::Request;
 use common_meta_types::ConditionResult;
+use common_meta_types::GCDroppedDataReply;
+use common_meta_types::GCDroppedDataReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
@@ -1493,9 +1495,230 @@ impl<KV: KVApi> SchemaApi for KV {
         }
     }
 
+    async fn gc_dropped_data(
+        &self,
+        req: GCDroppedDataReq,
+    ) -> Result<GCDroppedDataReply, MetaError> {
+        let table_cnt = if req.table_at_least != 0 {
+            gc_dropped_table(self, req.tenant.clone(), req.table_at_least).await?
+        } else {
+            0
+        };
+        let db_cnt = if req.db_at_least != 0 {
+            gc_dropped_db(self, req.tenant.clone(), req.db_at_least).await?
+        } else {
+            0
+        };
+
+        Ok(GCDroppedDataReply {
+            gc_table_count: table_cnt,
+            gc_db_count: db_cnt,
+        })
+    }
+
     fn name(&self) -> String {
         "SchemaApiImpl".to_string()
     }
+}
+
+async fn gc_dropped_table(
+    kv_api: &impl KVApi,
+    tenant: String,
+    at_least: u32,
+) -> Result<u32, MetaError> {
+    let mut cnt = 0;
+    let name_key = DatabaseNameIdent {
+        tenant,
+        // Using a empty db to to list all
+        db_name: "".to_string(),
+    };
+
+    // Pairs of db-name and db_id with seq
+    let (tenant_dbnames, _db_ids) = list_id_value(kv_api, &name_key).await?;
+
+    let now = Utc::now();
+    for i in 0..tenant_dbnames.len() {
+        let tenant_dbname = tenant_dbnames.get(i).unwrap();
+        let (db_id_seq, db_id) = get_id_value(kv_api, tenant_dbname).await?;
+        let dbid_tbname_idlist = TableIdListKey {
+            db_id,
+            table_name: "".to_string(),
+        };
+        let table_id_list_keys = list_keys(kv_api, &dbid_tbname_idlist).await?;
+        for table_id_list_key in table_id_list_keys.iter() {
+            // get table id list from _fd_table_id_list/db_id/table_name
+            let dbid_tbname_idlist = TableIdListKey {
+                db_id,
+                table_name: table_id_list_key.table_name.clone(),
+            };
+            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
+                get_struct_value(kv_api, &dbid_tbname_idlist).await?;
+            let tb_id_list = if tb_id_list_seq == 0 {
+                continue;
+            } else {
+                match tb_id_list_opt {
+                    Some(list) => list,
+                    None => {
+                        continue;
+                    }
+                }
+            };
+            let mut new_tb_id_list = TableIdList::new();
+            let mut remove_table_keys = vec![];
+            let mut changed = false;
+            for table_id in tb_id_list.id_list.iter() {
+                let tbid = TableId {
+                    table_id: *table_id,
+                };
+
+                let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
+                    get_struct_value(kv_api, &tbid).await?;
+                if tb_meta_seq == 0 || tb_meta.is_none() {
+                    tracing::error!("get_table_history cannot find {:?} table_meta", table_id);
+                    continue;
+                }
+
+                // Safe unwrap() because: tb_meta_seq > 0
+                let tb_meta = tb_meta.unwrap();
+                if is_drop_time_out_of_retention_time(&tb_meta.drop_on, &now) {
+                    changed = true;
+                    remove_table_keys.push((tbid, tb_meta_seq));
+                    continue;
+                }
+                new_tb_id_list.append(*table_id);
+            }
+            if !changed {
+                continue;
+            }
+
+            // construct the txn request
+            let mut condition = vec![
+                // condition: table id list not changed
+                txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq)?,
+                // condition: database exists
+                txn_cond_seq(tenant_dbname, Eq, db_id_seq)?,
+            ];
+            // remove table id keys not changed
+            for key in remove_table_keys.iter() {
+                condition.push(txn_cond_seq(&key.0, Eq, key.1)?);
+            }
+            let mut if_then = vec![
+                // save new table id list
+                txn_op_put(&dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?)?,
+            ];
+            // remove out of time table meta
+            for key in remove_table_keys.iter() {
+                if_then.push(txn_op_del(&key.0)?);
+            }
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (_succ, _responses) = send_txn(kv_api, txn_req).await?;
+            cnt += remove_table_keys.len() as u32;
+            if cnt >= at_least {
+                break;
+            }
+        }
+    }
+    Ok(cnt)
+}
+
+async fn gc_dropped_db(
+    kv_api: &impl KVApi,
+    tenant: String,
+    at_least: u32,
+) -> Result<u32, MetaError> {
+    // List tables by tenant, db_id, table_name.
+    let dbid_tbname_idlist = DbIdListKey {
+        tenant,
+        // Using a empty db to to list all
+        db_name: "".to_string(),
+    };
+    let db_id_list_keys = list_keys(kv_api, &dbid_tbname_idlist).await?;
+
+    let utc: DateTime<Utc> = Utc::now();
+    let mut cnt: u32 = 0;
+
+    for db_id_list_key in db_id_list_keys.iter() {
+        // get db id list from _fd_db_id_list/<tenant>/<db_name>
+        let dbid_idlist = DbIdListKey {
+            tenant: db_id_list_key.tenant.clone(),
+            db_name: db_id_list_key.db_name.clone(),
+        };
+        let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
+            get_struct_value(kv_api, &dbid_idlist).await?;
+
+        let db_id_list = if db_id_list_seq == 0 {
+            continue;
+        } else {
+            match db_id_list_opt {
+                Some(list) => list,
+                None => {
+                    continue;
+                }
+            }
+        };
+
+        let mut new_db_id_list = DbIdList::new();
+        let mut removed_id_keys = vec![];
+        let mut changed = false;
+
+        for db_id in db_id_list.id_list.iter() {
+            let dbid = DatabaseId { db_id: *db_id };
+
+            let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) =
+                get_struct_value(kv_api, &dbid).await?;
+            if db_meta_seq == 0 || db_meta.is_none() {
+                tracing::error!("get_database_history cannot find {:?} db_meta", db_id);
+                continue;
+            }
+            let db_meta = db_meta.unwrap();
+            if is_drop_time_out_of_retention_time(&db_meta.drop_on, &utc) {
+                changed = true;
+                removed_id_keys.push((dbid, db_meta_seq));
+                continue;
+            }
+            new_db_id_list.append(*db_id);
+        }
+
+        if !changed {
+            continue;
+        }
+
+        // construct the txn request
+        let mut condition = vec![
+            // condition: db id list not changed,
+            txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq)?,
+        ];
+        for key in removed_id_keys.iter() {
+            // condition: db meta not changed,
+            condition.push(txn_cond_seq(&key.0, Eq, key.1)?);
+        }
+        let mut if_then = vec![
+            // save new db id list
+            txn_op_put(&dbid_idlist, serialize_struct(&new_db_id_list)?)?,
+        ];
+        for key in removed_id_keys.iter() {
+            // remove out of retention time table meta
+            if_then.push(txn_op_del(&key.0)?);
+        }
+
+        let txn_req = TxnRequest {
+            condition,
+            if_then,
+            else_then: vec![],
+        };
+
+        let (_succ, _responses) = send_txn(kv_api, txn_req).await?;
+        cnt += removed_id_keys.len() as u32;
+        if cnt >= at_least {
+            break;
+        }
+    }
+    Ok(cnt)
 }
 
 // Return true if drop time is out of `DATA_RETENTION_TIME_IN_DAYS option,
@@ -1788,7 +2011,7 @@ pub(crate) fn serialize_struct<PB: common_protos::prost::Message>(
     Ok(buf)
 }
 
-fn deserialize_struct<PB, T>(buf: &[u8]) -> Result<T, MetaError>
+pub(crate) fn deserialize_struct<PB, T>(buf: &[u8]) -> Result<T, MetaError>
 where
     PB: common_protos::prost::Message + Default,
     T: FromToProto<PB>,

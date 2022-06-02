@@ -43,6 +43,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_types::GCDroppedDataReply;
+use common_meta_types::GCDroppedDataReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 
@@ -110,6 +112,10 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, MetaError>;
+
+    // gc dropped {table|db} which out of retention time.
+    async fn gc_dropped_data(&self, req: GCDroppedDataReq)
+        -> Result<GCDroppedDataReply, MetaError>;
 
     // TODO: Disabled temporarily: Consider move them to another trait such as `ShareApi` or else.
     //       Since `share` has nothing really to do with database or table.
