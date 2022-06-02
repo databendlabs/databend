@@ -290,6 +290,8 @@ pub enum TokenKind {
     CREATE,
     #[token("CREDENTIALS", ignore(ascii_case))]
     CREDENTIALS,
+    #[token("CROSS", ignore(ascii_case))]
+    CROSS,
     #[token("CSV", ignore(ascii_case))]
     CSV,
     #[token("CURRENT_TIMESTAMP", ignore(ascii_case))]
@@ -831,7 +833,7 @@ impl TokenKind {
             // | TokenKind::COLUMN
             // | TokenKind::CONCURRENTLY
             // | TokenKind::CONSTRAINT
-            // | TokenKind::CROSS
+            | TokenKind::CROSS
             // | TokenKind::CURRENT_CATALOG
             // | TokenKind::CURRENT_DATE
             // | TokenKind::CURRENT_ROLE

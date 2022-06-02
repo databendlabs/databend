@@ -252,11 +252,11 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
 
     let join = map(
         rule! {
-            #join_operator? ~ JOIN ~ #table_ref_without_join ~ #join_condition
+            #join_operator? ~ JOIN ~ #table_ref_without_join ~ #join_condition?
         },
         |(opt_op, _, right, condition)| JoinElement {
             op: opt_op.unwrap_or(JoinOperator::Inner),
-            condition,
+            condition: condition.unwrap_or(JoinCondition::None),
             right: Box::new(right),
         },
     );
@@ -299,6 +299,7 @@ pub fn join_operator(i: Input) -> IResult<JoinOperator> {
         value(JoinOperator::LeftOuter, rule! { LEFT ~ OUTER? }),
         value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
         value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),
+        value(JoinOperator::CrossJoin, rule! { CROSS }),
     ))(i)
 }
 
