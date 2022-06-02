@@ -20,18 +20,30 @@ use crate::sql::optimizer::RelationalProperty;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum JoinType {
+    InnerJoin,
+    LeftJoin,
+    RightJoin,
+    FullJoin,
+    SemiJoin,
+    AntiJoin,
+    CrossJoin,
+}
 
 #[derive(Clone, Debug)]
 pub struct LogicalInnerJoin {
     pub left_conditions: Vec<Scalar>,
     pub right_conditions: Vec<Scalar>,
+    pub join_type: JoinType,
 }
 
 impl Operator for LogicalInnerJoin {
-    fn plan_type(&self) -> PlanType {
-        PlanType::LogicalInnerJoin
+    fn plan_type(&self) -> RelOp {
+        RelOp::LogicalInnerJoin
     }
 
     fn is_physical(&self) -> bool {

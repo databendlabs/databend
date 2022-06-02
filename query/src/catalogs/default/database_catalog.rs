@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
@@ -397,6 +399,18 @@ impl Catalog for DatabaseCatalog {
         }
 
         self.mutable_catalog.rename_table(req).await
+    }
+
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
+        if req.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while count tables)",
+            ));
+        }
+
+        let res = self.mutable_catalog.count_tables(req).await?;
+
+        Ok(res)
     }
 
     async fn upsert_table_option(

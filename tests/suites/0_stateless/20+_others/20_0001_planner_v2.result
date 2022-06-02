@@ -309,7 +309,7 @@ abc
 8
 9
 ===Explain===
-\n    Project: [a]\n        EvalScalar: []\n            Filter: [a > 0]\n                PhysicalScan: default.default.t1\n
+Project: [a]\n    EvalScalar: []\n        Filter: [a > 0]\n            PhysicalScan: default.default.t1\n
 ===Explain Pipeline===
 ProjectionTransform × 1 processor
   ProjectionTransform × 1 processor
@@ -317,6 +317,7 @@ ProjectionTransform × 1 processor
       TransformHashJoin × 1 processor
         ProjectionTransform × 1 processor
           FuseEngineSource × 1 processor
+
 BuildHashTable × 1 processor
   ProjectionTransform × 1 processor
     FuseEngineSource × 1 processor
@@ -332,3 +333,13 @@ BuildHashTable × 1 processor
 ('field', 4)
 ====View====
 0
+====Cross Join====
+1	2	2	2
+1	2	3	5
+1	2	7	8
+2	3	2	2
+2	3	3	5
+2	3	7	8
+3	4	2	2
+3	4	3	5
+3	4	7	8

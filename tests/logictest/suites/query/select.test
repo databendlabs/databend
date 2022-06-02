@@ -1,0 +1,8 @@
+statement ok
+set enable_planner_v2 = 1;
+
+statement query T
+select 'Hello, world!';
+
+----
+Hello, world!

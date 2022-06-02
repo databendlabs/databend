@@ -22,7 +22,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 
 #[derive(Clone, Debug)]
 pub struct Project {
@@ -30,8 +30,8 @@ pub struct Project {
 }
 
 impl Operator for Project {
-    fn plan_type(&self) -> PlanType {
-        PlanType::Project
+    fn plan_type(&self) -> RelOp {
+        RelOp::Project
     }
 
     fn is_physical(&self) -> bool {

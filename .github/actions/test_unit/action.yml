@@ -20,11 +20,6 @@ runs:
       with:
         bypass_env_vars: RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
 
-    # If you need to reset the cache version, increment the number after `v`
-    - uses: Swatinem/rust-cache@v1
-      with:
-        sharedKey: unit-v3
-
     - shell: bash
       run: cargo test --no-fail-fast
       env:

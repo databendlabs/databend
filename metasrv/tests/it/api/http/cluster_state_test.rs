@@ -21,6 +21,7 @@ use std::string::String;
 use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_meta_types::Node;
+use common_tracing::tracing;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
 use databend_meta::api::http::v1::cluster_state::state_handler;
 use databend_meta::api::HttpService;
@@ -42,11 +43,8 @@ use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
-#[tokio::test]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_cluster_nodes() -> common_exception::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
 
@@ -81,11 +79,8 @@ async fn test_cluster_nodes() -> common_exception::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_cluster_state() -> common_exception::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
 
@@ -126,12 +121,9 @@ async fn test_cluster_state() -> common_exception::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_http_service_cluster_state() -> common_exception::Result<()> {
     let addr_str = "127.0.0.1:30003";
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
