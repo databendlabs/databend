@@ -1689,7 +1689,6 @@ async fn gc_dropped_table(
             };
             let mut new_tb_id_list = TableIdList::new();
             let mut remove_table_keys = vec![];
-            let mut changed = false;
             for table_id in tb_id_list.id_list.iter() {
                 let tbid = TableId {
                     table_id: *table_id,
@@ -1705,13 +1704,12 @@ async fn gc_dropped_table(
                 // Safe unwrap() because: tb_meta_seq > 0
                 let tb_meta = tb_meta.unwrap();
                 if is_drop_time_out_of_retention_time(&tb_meta.drop_on, &now) {
-                    changed = true;
                     remove_table_keys.push((tbid, tb_meta_seq));
                     continue;
                 }
                 new_tb_id_list.append(*table_id);
             }
-            if !changed {
+            if remove_table_keys.is_empty() {
                 continue;
             }
 
@@ -1788,7 +1786,6 @@ async fn gc_dropped_db(
 
         let mut new_db_id_list = DbIdList::new();
         let mut removed_id_keys = vec![];
-        let mut changed = false;
 
         for db_id in db_id_list.id_list.iter() {
             let dbid = DatabaseId { db_id: *db_id };
@@ -1801,14 +1798,13 @@ async fn gc_dropped_db(
             }
             let db_meta = db_meta.unwrap();
             if is_drop_time_out_of_retention_time(&db_meta.drop_on, &utc) {
-                changed = true;
                 removed_id_keys.push((dbid, db_meta_seq));
                 continue;
             }
             new_db_id_list.append(*db_id);
         }
 
-        if !changed {
+        if removed_id_keys.is_empty() {
             continue;
         }
 
