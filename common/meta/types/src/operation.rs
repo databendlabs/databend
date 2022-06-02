@@ -15,15 +15,26 @@
 //! This crate defines data types used in meta data storage service.
 
 use std::fmt::Debug;
+use std::fmt::Formatter;
 
 pub type MetaId = u64;
 
 /// An operation that updates a field, delete it, or leave it as is.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum Operation<T> {
     Update(T),
     Delete,
     AsIs,
+}
+
+impl<T> Debug for Operation<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Operation::Update(_) => f.debug_tuple("Update").field(&"[binary]").finish(),
+            Operation::Delete => f.debug_tuple("Delete").finish(),
+            Operation::AsIs => f.debug_tuple("AsIs").finish(),
+        }
+    }
 }
 
 impl<T> From<Option<T>> for Operation<T>
