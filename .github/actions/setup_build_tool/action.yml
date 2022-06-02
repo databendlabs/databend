@@ -15,8 +15,8 @@ runs:
     - name: clean the existing toolchain
       shell: bash
       run: |
-        rm -rf /home/runner/.cargo
-        rm -rf /home/runner/.rustup
+        rm -rf $HOME/.cargo
+        rm -rf $HOME/.rustup
 
     - name: setup build-tool binary
       shell: bash

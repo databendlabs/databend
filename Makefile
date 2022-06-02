@@ -15,6 +15,11 @@ YAMLLINT_CONFIG ?= .yamllint.yml
 YAMLLINT_IMAGE ?= docker.io/cytopia/yamllint:latest
 YAMLLINT_DOCKER ?= docker $(YAML_DOCKER_ARGS) $(YAMLLINT_IMAGE)
 
+SKYWALKING_ARGS ?= -v info -c .licenserc.yaml header check
+SKYWALKING_DOCKER_ARGS ?= run --rm --user "$$(id -u)" -e GITHUB_TOKEN -v "$${PWD}:/license-eye" --workdir /license-eye
+SKYWALKING_IMAGE ?= docker.io/apache/skywalking-eyes:0.3.0
+SKYWALKING_DOCKER ?= docker $(SKYWALKING_DOCKER_ARGS) $(SKYWALKING_IMAGE)
+
 CARGO_TARGET_DIR ?= $(CURDIR)/target
 
 # Setup dev toolchain
@@ -36,6 +41,9 @@ lint:
 
 lint-yaml: $(YAML_FILES)
 	$(YAMLLINT_DOCKER) -f parsable -c $(YAMLLINT_CONFIG) $(YAMLLINT_ARGS) -- $?
+
+check-license:
+	$(SKYWALKING_DOCKER) $(SKYWALKING_ARGS)
 
 miri:
 	cargo miri setup
