@@ -1,0 +1,12 @@
+DROP DATABASE IF EXISTS db1;
+CREATE DATABASE db1;
+USE db1;
+
+CREATE TABLE IF NOT EXISTS t(c1 Int, c2 Int );
+INSERT INTO t VALUES(1,2);
+INSERT INTO t VALUES(3,4);
+
+delete from t where c1 = 1;
+select * from t;
+
+DROP DATABASE db1;
