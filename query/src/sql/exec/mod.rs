@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
+use common_datablocks::HashMethodSerializer;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -36,6 +37,7 @@ use primitive_types::U512;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
+use super::plans::JoinType;
 use super::plans::RelOperator;
 use super::MetadataRef;
 use crate::common::HashMap;
@@ -47,7 +49,15 @@ use crate::pipelines::new::processors::ChainingHashTable;
 use crate::pipelines::new::processors::ExpressionTransform;
 use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::new::processors::HashTable;
+use crate::pipelines::new::processors::KeyU128HashTable;
+use crate::pipelines::new::processors::KeyU16HashTable;
+use crate::pipelines::new::processors::KeyU256HashTable;
+use crate::pipelines::new::processors::KeyU32HashTable;
+use crate::pipelines::new::processors::KeyU512HashTable;
+use crate::pipelines::new::processors::KeyU64HashTable;
+use crate::pipelines::new::processors::KeyU8HashTable;
 use crate::pipelines::new::processors::ProjectionTransform;
+use crate::pipelines::new::processors::SerializerHashTable;
 use crate::pipelines::new::processors::SinkBuildHashTable;
 use crate::pipelines::new::processors::Sinker;
 use crate::pipelines::new::processors::SortMergeCompactor;
@@ -525,6 +535,7 @@ impl PipelineBuilder {
 
         let hash_join_state = create_join_state(
             ctx.clone(),
+            hash_join.join_type.clone(),
             build_expressions,
             probe_expressions,
             build_schema,
@@ -714,6 +725,7 @@ impl PipelineBuilder {
 
 fn create_join_state(
     ctx: Arc<QueryContext>,
+    join_type: JoinType,
     build_expressions: Vec<Expression>,
     probe_expressions: Vec<Expression>,
     build_schema: DataSchemaRef,
@@ -725,73 +737,99 @@ fn create_join_state(
         .collect::<Result<Vec<DataTypeImpl>>>()?;
     let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
     Ok(match method {
-        HashMethodKind::Serializer(_) => Arc::new(ChainingHashTable::try_create(
+        HashMethodKind::SingleString(_) | HashMethodKind::Serializer(_) => {
+            Arc::new(ChainingHashTable::try_create(
+                ctx,
+                join_type,
+                HashTable::SerializerHashTable(SerializerHashTable {
+                    hash_table: HashMap::<KeysRef, Vec<RowPtr>>::create(),
+                    hash_method: HashMethodSerializer::default(),
+                }),
+                build_expressions,
+                probe_expressions,
+                build_schema,
+                probe_schema,
+            )?)
+        }
+        HashMethodKind::KeysU8(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
-            HashTable::SerializerHashTable(HashMap::<KeysRef, Vec<RowPtr>>::create()),
+            join_type,
+            HashTable::KeyU8HashTable(KeyU8HashTable {
+                hash_table: HashMap::<u8, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
             build_expressions,
             probe_expressions,
             build_schema,
             probe_schema,
         )?),
-        HashMethodKind::SingleString(_) => Arc::new(ChainingHashTable::try_create(
+        HashMethodKind::KeysU16(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
-            HashTable::SerializerHashTable(HashMap::<KeysRef, Vec<RowPtr>>::create()),
+            join_type,
+            HashTable::KeyU16HashTable(KeyU16HashTable {
+                hash_table: HashMap::<u16, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
             build_expressions,
             probe_expressions,
             build_schema,
             probe_schema,
         )?),
-        HashMethodKind::KeysU8(_) => Arc::new(ChainingHashTable::try_create(
+        HashMethodKind::KeysU32(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
-            HashTable::KeyU8HashTable(HashMap::<u8, Vec<RowPtr>>::create()),
+            join_type,
+            HashTable::KeyU32HashTable(KeyU32HashTable {
+                hash_table: HashMap::<u32, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
             build_expressions,
             probe_expressions,
             build_schema,
             probe_schema,
         )?),
-        HashMethodKind::KeysU16(_) => Arc::new(ChainingHashTable::try_create(
+        HashMethodKind::KeysU64(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
-            HashTable::KeyU16HashTable(HashMap::<u16, Vec<RowPtr>>::create()),
+            join_type,
+            HashTable::KeyU64HashTable(KeyU64HashTable {
+                hash_table: HashMap::<u64, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
             build_expressions,
             probe_expressions,
             build_schema,
             probe_schema,
         )?),
-        HashMethodKind::KeysU32(_) => Arc::new(ChainingHashTable::try_create(
+        HashMethodKind::KeysU128(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
-            HashTable::KeyU32HashTable(HashMap::<u32, Vec<RowPtr>>::create()),
+            join_type,
+            HashTable::KeyU128HashTable(KeyU128HashTable {
+                hash_table: HashMap::<u128, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
             build_expressions,
             probe_expressions,
             build_schema,
             probe_schema,
         )?),
-        HashMethodKind::KeysU64(_) => Arc::new(ChainingHashTable::try_create(
+        HashMethodKind::KeysU256(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
-            HashTable::KeyU64HashTable(HashMap::<u64, Vec<RowPtr>>::create()),
+            join_type,
+            HashTable::KeyU256HashTable(KeyU256HashTable {
+                hash_table: HashMap::<U256, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
             build_expressions,
             probe_expressions,
             build_schema,
             probe_schema,
         )?),
-        HashMethodKind::KeysU128(_) => Arc::new(ChainingHashTable::try_create(
+        HashMethodKind::KeysU512(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
-            HashTable::KeyU128HashTable(HashMap::<u128, Vec<RowPtr>>::create()),
-            build_expressions,
-            probe_expressions,
-            build_schema,
-            probe_schema,
-        )?),
-        HashMethodKind::KeysU256(_) => Arc::new(ChainingHashTable::try_create(
-            ctx,
-            HashTable::KeyU256HashTable(HashMap::<U256, Vec<RowPtr>>::create()),
-            build_expressions,
-            probe_expressions,
-            build_schema,
-            probe_schema,
-        )?),
-        HashMethodKind::KeysU512(_) => Arc::new(ChainingHashTable::try_create(
-            ctx,
-            HashTable::KeyU512HashTable(HashMap::<U512, Vec<RowPtr>>::create()),
+            join_type,
+            HashTable::KeyU512HashTable(KeyU512HashTable {
+                hash_table: HashMap::<U512, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
             build_expressions,
             probe_expressions,
             build_schema,

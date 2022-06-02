@@ -34,11 +34,10 @@ use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
 
-use crate::interpreters::ExplainInterpreterV2;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
-use crate::interpreters::SelectInterpreterV2;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::MySQLFederated;
@@ -46,8 +45,8 @@ use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::DfParser;
-use crate::sql::DfStatement;
 use crate::sql::PlanParser;
+use crate::sql::Planner;
 use crate::users::CertifiedInfo;
 
 struct InteractiveWorkerBase<W: std::io::Write> {
@@ -299,16 +298,11 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                     if settings.get_enable_new_processor_framework()? != 0
                         && context.get_cluster().is_empty()
                         && settings.get_enable_planner_v2()? != 0
-                        && matches!(stmts.get(0), Some(DfStatement::Query(_)))
+                        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
                     {
-                        // New planner is enabled, and the statement is ensured to be `SELECT` statement.
-                        SelectInterpreterV2::try_create(context.clone(), query)?
-                    } else if settings.get_enable_new_processor_framework()? != 0
-                        && context.get_cluster().is_empty()
-                        && settings.get_enable_planner_v2()? != 0
-                        && matches!(stmts.get(0), Some(DfStatement::Explain(_)))
-                    {
-                        ExplainInterpreterV2::try_create(context.clone(), query)?
+                        let mut planner = Planner::new(context.clone());
+                        let (plan, _) = planner.plan_sql(query).await?;
+                        InterpreterFactoryV2::get(context.clone(), &plan)?
                     } else {
                         let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
                         if let (Some(hint_error_code), Err(error_code)) = (

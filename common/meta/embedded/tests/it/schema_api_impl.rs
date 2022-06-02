@@ -96,6 +96,22 @@ async fn test_meta_embedded_table_list() -> anyhow::Result<()> {
     SchemaApiTestSuite {}.table_list(&mt).await
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_embedded_table_drop_out_of_retention_time_history() -> anyhow::Result<()> {
+    let mt = MetaEmbedded::new_temp().await?;
+    SchemaApiTestSuite {}
+        .table_drop_out_of_retention_time_history(&mt, &mt)
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_embedded_database_drop_out_of_retention_time_history() -> anyhow::Result<()> {
+    let mt = MetaEmbedded::new_temp().await?;
+    SchemaApiTestSuite {}
+        .database_drop_out_of_retention_time_history(&mt, &mt)
+        .await
+}
+
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // async fn test_meta_embedded_share_create_get_dro() -> anyhow::Result<()> {
 //     let mt = MetaEmbedded::new_temp().await?;

@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
@@ -125,6 +127,8 @@ pub trait Catalog: DynClone + Send + Sync {
     ) -> Result<UpsertTableOptionReply>;
 
     async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply>;
+
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply>;
 
     ///
     /// Table function

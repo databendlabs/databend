@@ -10,8 +10,8 @@ from log import log
 
 class TestMySQL(logictest.SuiteRunner, ABC):
 
-    def __init__(self, kind):
-        super().__init__(kind)
+    def __init__(self, kind, pattern):
+        super().__init__(kind, pattern)
         self._connection = None
 
     def reset_connection(self):
@@ -54,7 +54,7 @@ class TestMySQL(logictest.SuiteRunner, ABC):
                 if isinstance(v, NoneType):
                     vals.append("NULL")
                     continue
-                
+
                 if query_type[i] == 'I':
                     if not isinstance(v, int):
                         log.error(
