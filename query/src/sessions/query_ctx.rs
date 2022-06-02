@@ -221,6 +221,10 @@ impl QueryContext {
         self.shared.attach_http_query_handle(handle);
     }
 
+    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
+        self.shared.get_http_query()
+    }
+
     pub fn attach_query_str(&self, query: &str) {
         self.shared.attach_query_str(query);
     }
