@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -26,7 +27,6 @@ use common_io::prelude::FormatSettings;
 use serde::Deserialize;
 
 use super::HttpQueryContext;
-use crate::servers::http::v1::query::block_buffer::BlockBuffer;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
 use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
@@ -37,6 +37,7 @@ use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
 use crate::sessions::SessionType;
+use crate::storages::result::block_buffer::BlockBuffer;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -100,6 +101,7 @@ impl PaginationConf {
 pub struct HttpSessionConf {
     pub database: Option<String>,
     pub max_idle_time: Option<u64>,
+    pub settings: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -153,6 +155,12 @@ impl HttpQuery {
                 let session = ctx.get_session(SessionType::HTTPQuery);
                 if let Some(db) = &session_conf.database {
                     session.set_current_database(db.clone());
+                }
+                if let Some(conf_settings) = &session_conf.settings {
+                    let settings = session.get_settings();
+                    for (k, v) in conf_settings {
+                        settings.set_settings(k.to_string(), v.to_string(), false)?;
+                    }
                 }
                 if let Some(secs) = session_conf.max_idle_time {
                     if secs > 0 {

@@ -70,7 +70,11 @@ impl Interpreter for SelectInterpreterV2 {
             self.metadata.clone(),
             self.s_expr.clone(),
         );
-        let (root_pipeline, pipelines) = pb.spawn()?;
+
+        if let Some(handle) = self.ctx.get_http_query() {
+            return handle.execute(self.ctx.clone(), pb).await;
+        }
+        let (root_pipeline, pipelines, _) = pb.spawn()?;
         let async_runtime = self.ctx.get_storage_runtime();
 
         // Spawn sub-pipelines
