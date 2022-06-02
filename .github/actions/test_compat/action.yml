@@ -41,4 +41,7 @@ runs:
           metasrv/_logs*/
           query/_logs*/
           store/_logs*/
+          .databend/
+          query.log
+          metasrv.log
           nohup.out
