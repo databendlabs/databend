@@ -18,7 +18,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 
 #[derive(Clone, Debug)]
@@ -29,8 +29,8 @@ pub struct PhysicalHashJoin {
 }
 
 impl Operator for PhysicalHashJoin {
-    fn plan_type(&self) -> PlanType {
-        PlanType::PhysicalHashJoin
+    fn plan_type(&self) -> RelOp {
+        RelOp::PhysicalHashJoin
     }
 
     fn is_physical(&self) -> bool {

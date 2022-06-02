@@ -149,7 +149,6 @@ select '====SELECT_WITHOUT_FROM====';
 select 1 + 1;
 select to_int(8);
 select 'new_planner';
-select *; -- {ErrorCode 1065}
 
 -- limit
 select '=== Test limit ===';

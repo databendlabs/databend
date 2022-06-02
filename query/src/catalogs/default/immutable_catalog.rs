@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
@@ -168,6 +170,12 @@ impl Catalog for ImmutableCatalog {
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         Err(ErrorCode::UnImplement(
             "Cannot rename table in system database",
+        ))
+    }
+
+    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot count tables in system database",
         ))
     }
 

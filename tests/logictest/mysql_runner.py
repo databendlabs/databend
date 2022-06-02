@@ -10,8 +10,8 @@ from log import log
 
 class TestMySQL(logictest.SuiteRunner, ABC):
 
-    def __init__(self, kind):
-        super().__init__(kind)
+    def __init__(self, kind, pattern):
+        super().__init__(kind, pattern)
         self._connection = None
 
     def reset_connection(self):

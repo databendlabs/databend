@@ -8,8 +8,8 @@ from log import log
 
 class TestHttp(logictest.SuiteRunner, ABC):
 
-    def __init__(self, kind):
-        super().__init__(kind)
+    def __init__(self, kind, pattern):
+        super().__init__(kind, pattern)
         self._http = None
 
     def get_connection(self):
@@ -48,28 +48,28 @@ class TestHttp(logictest.SuiteRunner, ABC):
                     if not isinstance(v, int):
                         log.error(
                             "Expected int, got type {} in query {} row {} col {} value {}"
-                            .format(type(v), statement.text, ri, i, v))
+                                .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'F' or query_type[i] == 'R':
                     if not isinstance(v, float):
                         log.error(
                             "Expected float, got type {} in query {} row {} col {} value {}"
-                            .format(type(v), statement.text, ri, i, v))
+                                .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'T':
                     # include data, timestamp, dict, list ...
                     if not (isinstance(v, str) or isinstance(v, dict) or
                             isinstance(v, list)):
                         log.error(
                             "Expected string, got type {} in query {} row {} col {} value {}"
-                            .format(type(v), statement.text, ri, i, v))
+                                .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'B':
                     if not isinstance(v, bool):
                         log.error(
                             "Expected bool, got type {} in query {} row {} col {} value {}"
-                            .format(type(v), statement.text, ri, i, v))
+                                .format(type(v), statement.text, ri, i, v))
                 else:
                     log.error(
                         "Unknown type {} in query {} row {} col {} value {}".
-                        format(query_type[i], statement.text, ri, i, v))
+                            format(query_type[i], statement.text, ri, i, v))
                 if isinstance(v, bool):
                     v = str(v).lower(
                     )  # bool to string in python will be True/False

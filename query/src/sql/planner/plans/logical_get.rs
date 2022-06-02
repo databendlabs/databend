@@ -20,7 +20,7 @@ use crate::sql::optimizer::RelationalProperty;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
@@ -30,8 +30,8 @@ pub struct LogicalGet {
 }
 
 impl Operator for LogicalGet {
-    fn plan_type(&self) -> PlanType {
-        PlanType::LogicalGet
+    fn plan_type(&self) -> RelOp {
+        RelOp::LogicalGet
     }
 
     fn is_physical(&self) -> bool {

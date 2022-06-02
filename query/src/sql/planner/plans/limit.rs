@@ -21,7 +21,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 
 #[derive(Clone, Debug)]
 pub struct LimitPlan {
@@ -30,8 +30,8 @@ pub struct LimitPlan {
 }
 
 impl Operator for LimitPlan {
-    fn plan_type(&self) -> PlanType {
-        PlanType::Limit
+    fn plan_type(&self) -> RelOp {
+        RelOp::Limit
     }
 
     fn is_physical(&self) -> bool {

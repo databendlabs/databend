@@ -21,7 +21,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::PhysicalHashJoin;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 
 pub struct RuleImplementHashJoin {
     id: RuleID,
@@ -34,18 +34,18 @@ impl RuleImplementHashJoin {
             id: RuleID::ImplementHashJoin,
             pattern: SExpr::create_binary(
                 PatternPlan {
-                    plan_type: PlanType::LogicalInnerJoin,
+                    plan_type: RelOp::LogicalInnerJoin,
                 }
                 .into(),
                 SExpr::create_leaf(
                     PatternPlan {
-                        plan_type: PlanType::Pattern,
+                        plan_type: RelOp::Pattern,
                     }
                     .into(),
                 ),
                 SExpr::create_leaf(
                     PatternPlan {
-                        plan_type: PlanType::Pattern,
+                        plan_type: RelOp::Pattern,
                     }
                     .into(),
                 ),
