@@ -19,6 +19,7 @@ use common_datavalues::prelude::*;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRefExt;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
@@ -43,9 +44,8 @@ impl Procedure for TenantQuotaProcedure {
 
     fn features(&self) -> ProcedureFeatures {
         ProcedureFeatures::default()
-            .variadic_arguments(1, 5)
+            .variadic_arguments(0, 5)
             .management_mode_required(true)
-            .user_option_flag(UserOptionFlag::TenantSetting)
     }
 
     /// args:
@@ -55,14 +55,25 @@ impl Procedure for TenantQuotaProcedure {
     /// max_stages: u32
     /// max_files_per_stage: u32
     async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
-        let tenant = args[0].clone();
+        let mut tenant = ctx.get_tenant();
+        if !args.is_empty() {
+            let user_info = ctx.get_current_user()?;
+            if !user_info.has_option_flag(UserOptionFlag::TenantSetting) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Access denied: '{}' requires user {} option flag",
+                    self.name(),
+                    UserOptionFlag::TenantSetting
+                )));
+            }
+            tenant = args[0].clone();
+        }
         let quota_api = ctx
             .get_user_manager()
             .get_tenant_quota_api_client(&tenant)?;
         let res = quota_api.get_quota(None).await?;
         let mut quota = res.data;
 
-        if args.len() == 1 {
+        if args.len() <= 1 {
             return self.to_block(&quota);
         };
 
