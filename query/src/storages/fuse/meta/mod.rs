@@ -21,6 +21,7 @@ mod v0;
 mod v1;
 mod versions;
 
+pub use common::ClusterKey;
 pub use common::ColumnId;
 pub use common::Compression;
 pub use common::Location;

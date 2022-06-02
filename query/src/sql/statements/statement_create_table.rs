@@ -99,6 +99,7 @@ impl AnalyzableStatement for DfCreateTable {
         let mut cluster_keys = vec![];
         for k in self.cluster_keys.iter() {
             let expr = expression_analyzer.analyze_sync(k)?;
+            // TODO(zhyass): Not all expressions are valid for cluster key.
             validate_expression(&expr, &table_meta.schema)?;
             cluster_keys.push(expr);
         }

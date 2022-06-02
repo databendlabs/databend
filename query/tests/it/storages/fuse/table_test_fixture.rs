@@ -135,7 +135,7 @@ impl TestFixture {
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
                 .into(),
-                cluster_keys_meta: Some(ClusterKeyMeta {
+                cluster_key_meta: Some(ClusterKeyMeta {
                     cluster_keys_vec: vec!["(id)".to_string()],
                     default_cluster_key_id: 0,
                 }),

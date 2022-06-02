@@ -14,7 +14,6 @@
 //
 
 use std::borrow::Borrow;
-use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
@@ -23,7 +22,6 @@ use common_exception::Result;
 
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::Statistics;
-use crate::storages::index::ClusterStatistics;
 use crate::storages::index::ColumnStatistics;
 use crate::storages::index::ColumnsStatistics;
 
@@ -94,43 +92,6 @@ pub fn reduce_block_stats<T: Borrow<ColumnsStatistics>>(stats: &[T]) -> Result<C
         })
 }
 
-pub fn reduce_cluster_stats<T: Borrow<Option<ClusterStatistics>>>(
-    stats: &[T],
-) -> Option<ClusterStatistics> {
-    if stats.iter().any(|s| s.borrow().is_none()) {
-        return None;
-    }
-
-    let stat = stats[0].borrow().clone().unwrap();
-    let mut min = stat.min.clone();
-    let mut max = stat.max;
-    for stat in stats.iter().skip(1) {
-        let stat = stat.borrow().clone().unwrap();
-        for (l, r) in min.iter().zip(stat.min.iter()) {
-            match l.cmp(r) {
-                Ordering::Equal => continue,
-                Ordering::Less => break,
-                Ordering::Greater => {
-                    min = stat.min.clone();
-                    break;
-                }
-            }
-        }
-
-        for (l, r) in max.iter().zip(stat.max.iter()) {
-            match l.cmp(r) {
-                Ordering::Equal => continue,
-                Ordering::Less => {
-                    max = stat.max.clone();
-                    break;
-                }
-                Ordering::Greater => break,
-            }
-        }
-    }
-    Some(ClusterStatistics { min, max })
-}
-
 pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
     let s = Statistics {
         row_count: l.row_count + r.row_count,
@@ -138,7 +99,6 @@ pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
         compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
         col_stats: reduce_block_stats(&[&l.col_stats, &r.col_stats])?,
-        cluster_stats: reduce_cluster_stats(&[&l.cluster_stats, &r.cluster_stats]),
     };
     Ok(s)
 }

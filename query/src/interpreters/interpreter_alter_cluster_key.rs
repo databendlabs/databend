@@ -70,6 +70,7 @@ impl Interpreter for AlterClusterKeyInterpreter {
         let schema = table.schema();
         let cluster_keys = plan.cluster_keys.clone();
         // Let's validate the expressions firstly.
+        // TODO(zhyass): Not all expressions are valid for cluster key.
         for expr in cluster_keys.iter() {
             validate_expression(expr, &schema)?;
         }

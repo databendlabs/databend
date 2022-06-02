@@ -126,8 +126,8 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: p.engine,
             engine_options: p.engine_options,
             options: p.options,
-            cluster_keys_meta: p
-                .cluster_keys_meta
+            cluster_key_meta: p
+                .cluster_key_meta
                 .map(mt::ClusterKeyMeta::from_pb)
                 .transpose()?,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
@@ -153,8 +153,8 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             options: self.options.clone(),
-            cluster_keys_meta: self
-                .cluster_keys_meta
+            cluster_key_meta: self
+                .cluster_key_meta
                 .as_ref()
                 .map(|x| x.to_pb())
                 .transpose()?,

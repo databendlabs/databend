@@ -109,7 +109,7 @@ fn new_table_info() -> mt::TableInfo {
             engine: "44".to_string(),
             engine_options: btreemap! {s("abc") => s("def")},
             options: btreemap! {s("xyz") => s("foo")},
-            cluster_keys_meta: Some(ClusterKeyMeta {
+            cluster_key_meta: Some(ClusterKeyMeta {
                 cluster_keys_vec: vec!["(a + 2, b)".to_string()],
                 default_cluster_key_id: 0,
             }),
@@ -320,7 +320,7 @@ fn test_load_old() -> anyhow::Result<()> {
                 engine: "44".to_string(),
                 engine_options: btreemap! {s("abc") => s("def")},
                 options: btreemap! {s("xyz") => s("foo")},
-                cluster_keys_meta: Some(ClusterKeyMeta {
+                cluster_key_meta: Some(ClusterKeyMeta {
                     cluster_keys_vec: vec!["(a + 2, b)".to_string()],
                     default_cluster_key_id: 0,
                 }),

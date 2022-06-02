@@ -39,6 +39,7 @@ use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
+use crate::storages::fuse::meta::ClusterKey;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
@@ -54,6 +55,7 @@ pub struct FuseTable {
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
     pub(crate) cluster_keys: Vec<Expression>,
+    pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) read_only: bool,
 }
 
@@ -65,14 +67,16 @@ impl FuseTable {
 
     pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
+        let cluster_key_meta = table_info.cluster_keys();
         let mut cluster_keys = Vec::new();
-        if let Some(order) = &table_info.cluster_keys() {
+        if let Some((_, order)) = &cluster_key_meta {
             cluster_keys = PlanParser::parse_exprs(order)?;
         }
 
         Ok(Box::new(FuseTable {
             table_info,
             cluster_keys,
+            cluster_key_meta,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
             read_only,
         }))

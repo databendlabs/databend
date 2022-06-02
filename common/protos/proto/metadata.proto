@@ -155,7 +155,7 @@ message TableMeta {
   map<string, string> options = 5;
 
   // Keys to sort rows in table.
-  optional ClusterKeyMeta cluster_keys_meta = 9;
+  optional ClusterKeyMeta cluster_key_meta = 9;
 
   // The time table created.
   string created_on = 20;

@@ -27,7 +27,6 @@ use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::serialize_data_blocks;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
@@ -35,6 +34,7 @@ use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
+use crate::storages::index::ClusterKeyInfo;
 
 enum State {
     None,
@@ -62,8 +62,7 @@ pub struct FuseTableSink {
     num_block_threshold: u64,
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
-    cluster_keys_index: Vec<usize>,
-    expression_executor: Option<ExpressionExecutor>,
+    cluster_key_info: Option<ClusterKeyInfo>,
 }
 
 impl FuseTableSink {
@@ -73,8 +72,7 @@ impl FuseTableSink {
         num_block_threshold: usize,
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
-        cluster_keys_index: Vec<usize>,
-        expression_executor: Option<ExpressionExecutor>,
+        cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
@@ -84,8 +82,7 @@ impl FuseTableSink {
             state: State::None,
             accumulator: Default::default(),
             num_block_threshold: num_block_threshold as u64,
-            cluster_keys_index,
-            expression_executor,
+            cluster_key_info,
         })))
     }
 }
@@ -133,17 +130,20 @@ impl Processor for FuseTableSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::NeedSerialize(data_block) => {
-                let cluster_stats = BlockStatistics::clusters_statistics(
-                    self.cluster_keys_index.clone(),
-                    data_block.clone(),
-                )?;
+                let mut cluster_stats = None;
+                let mut block = data_block;
+                if let Some(v) = &self.cluster_key_info {
+                    cluster_stats = BlockStatistics::clusters_statistics(
+                        v.cluster_key_id,
+                        v.cluster_key_index.clone(),
+                        block.clone(),
+                    )?;
 
-                // Remove unused columns before serialize
-                let block = if let Some(executor) = &self.expression_executor {
-                    executor.execute(&data_block)?
-                } else {
-                    data_block
-                };
+                    // Remove unused columns before serialize
+                    if let Some(executor) = &v.expression_executor {
+                        block = executor.execute(&block)?;
+                    }
+                }
 
                 let location = self.meta_locations.gen_block_location();
                 let block_statistics = BlockStatistics::from(&block, location, cluster_stats)?;
@@ -162,7 +162,6 @@ impl Processor for FuseTableSink {
             State::GenerateSegment => {
                 let acc = std::mem::take(&mut self.accumulator);
                 let col_stats = acc.summary()?;
-                let cluster_stats = acc.summary_clusters();
 
                 let segment_info = SegmentInfo::new(acc.blocks_metas, Statistics {
                     row_count: acc.summary_row_count,
@@ -170,7 +169,6 @@ impl Processor for FuseTableSink {
                     uncompressed_byte_size: acc.in_memory_size,
                     compressed_byte_size: acc.file_size,
                     col_stats,
-                    cluster_stats,
                 });
 
                 self.state = State::SerializedSegment {

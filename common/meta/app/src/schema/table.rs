@@ -182,7 +182,7 @@ pub struct TableMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
-    pub cluster_keys_meta: Option<ClusterKeyMeta>,
+    pub cluster_key_meta: Option<ClusterKeyMeta>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
@@ -237,11 +237,11 @@ impl TableInfo {
         self
     }
 
-    pub fn cluster_keys(&self) -> Option<String> {
-        self.meta.cluster_keys_meta.as_ref().and_then(|v| {
-            v.cluster_keys_vec
-                .get(v.default_cluster_key_id as usize)
-                .cloned()
+    pub fn cluster_keys(&self) -> Option<(u32, String)> {
+        self.meta.cluster_key_meta.as_ref().map(|v| {
+            let id = v.default_cluster_key_id;
+            let key = v.cluster_keys_vec[id as usize].clone();
+            (id, key)
         })
     }
 }
@@ -253,7 +253,7 @@ impl Default for TableMeta {
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),
-            cluster_keys_meta: None,
+            cluster_key_meta: None,
             created_on: Default::default(),
             updated_on: Default::default(),
             comment: "".to_string(),
@@ -265,13 +265,13 @@ impl Default for TableMeta {
 
 impl TableMeta {
     pub fn set_cluster_keys_meta(mut self, cluster_keys: String) -> Self {
-        match self.cluster_keys_meta {
+        match self.cluster_key_meta {
             Some(ref mut v) => {
                 v.cluster_keys_vec.push(cluster_keys);
                 v.default_cluster_key_id = v.cluster_keys_vec.len() as u32 - 1;
             }
             None => {
-                self.cluster_keys_meta = Some(ClusterKeyMeta {
+                self.cluster_key_meta = Some(ClusterKeyMeta {
                     cluster_keys_vec: vec![cluster_keys],
                     default_cluster_key_id: 0,
                 });
