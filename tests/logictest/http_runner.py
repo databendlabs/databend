@@ -1,5 +1,4 @@
 from abc import ABC
-from types import NoneType
 
 import logictest
 import http_connector
@@ -40,7 +39,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
         vals = []
         for (ri, row) in enumerate(results):
             for (i, v) in enumerate(row):
-                if isinstance(v, NoneType):
+                if isinstance(v, type(None)):
                     vals.append("NULL")
                     continue
 
