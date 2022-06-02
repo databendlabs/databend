@@ -33,7 +33,7 @@ runs:
       run: |
         pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql six PyHamcrest requests environs fire
 
-    - name: Run sqllogic Tests with Standalone mode, with embedded meta-store
+    - name: Run sqllogic Tests with Standalone mode with embedded meta-store
       shell: bash
       run: |
         build-tool bash ./scripts/ci/ci-run-sqllogic-tests.sh
