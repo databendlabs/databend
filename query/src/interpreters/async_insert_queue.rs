@@ -18,15 +18,16 @@ use std::collections::VecDeque;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use common_base::base::ProgressValues;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::interval;
 use common_base::base::tokio::time::Duration;
 use common_base::base::tokio::time::Instant;
+use common_base::base::ProgressValues;
 use common_base::base::Runtime;
 use common_base::infallible::Mutex;
 use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertPlan;
 use common_planners::SelectPlan;
@@ -99,11 +100,16 @@ impl Entry {
         self.notify.notify_one();
     }
 
-    pub async fn wait(&self) {
+    pub fn finish_with_timeout(&self) {
+        self.notify.notify_one();
+    }
+
+    pub async fn wait(&self) -> bool {
         if *self.finished.read() {
-            return;
+            return true;
         }
         self.notify.clone().notified().await;
+        self.is_finished()
     }
 
     pub fn is_finished(&self) -> bool {
@@ -236,7 +242,7 @@ impl AsyncInsertQueue {
                     bytes: data_block.memory_size(),
                 };
                 ctx.get_scan_progress().incr(&progress_values);
-                
+
                 data_block
             }
         };
@@ -282,13 +288,23 @@ impl AsyncInsertQueue {
     }
 
     pub async fn wait_for_processing_insert(
-        &self,
+        self: Arc<Self>,
         query_id: String,
-        _time_out: Duration,
+        time_out: Duration,
     ) -> Result<()> {
         let entry = self.get_entry(query_id);
-        entry.wait().await;
-        Ok(())
+        let e = entry.clone();
+        self.runtime.as_ref().inner().spawn(async move {
+            let mut intv = interval(time_out);
+            intv.tick().await;
+            intv.tick().await;
+            e.finish_with_timeout();
+        });
+        let finished = entry.wait().await;
+        match finished {
+            true => Ok(()),
+            false => Err(ErrorCode::AsyncInsertTimeoutError("Async insert timeout.")),
+        }
     }
 
     fn schedule(self: Arc<Self>, key: InsertKey, data: InsertData) {

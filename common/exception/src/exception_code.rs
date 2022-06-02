@@ -150,6 +150,9 @@ build_exceptions! {
     LayoutError(1103),
 
     PanicError(1104),
+
+    // Async insert error codes
+    AsyncInsertTimeoutError(1105),
 }
 
 // Metasvr errors [2001, 3000].
