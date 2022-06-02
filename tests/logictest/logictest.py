@@ -250,6 +250,7 @@ class SuiteRunner(object):
                 if re.match(self.pattern, filename):
                     self.statement_files.append(
                         (filename, os.path.relpath(filename, self.path)))
+        self.statement_files.sort()
 
     def execute(self):
         # batch execute use single session
