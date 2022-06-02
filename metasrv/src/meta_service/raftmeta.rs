@@ -191,12 +191,10 @@ impl MetaNode {
     }
 
     pub fn new_raft_config(config: &RaftConfig) -> Config {
-        // TODO(xp): configure cluster name.
-
         let hb = config.heartbeat_interval;
 
         Config {
-            cluster_name: "foo_cluster".to_string(),
+            cluster_name: config.cluster_name.clone(),
             heartbeat_interval: hb,
             election_timeout_min: hb * 8,
             election_timeout_max: hb * 12,

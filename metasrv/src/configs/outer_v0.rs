@@ -184,6 +184,7 @@ pub struct ConfigViaEnv {
     pub metasrv_join: Vec<String>,
     pub kvsrv_id: u64,
     pub sled_tree_prefix: String,
+    pub cluster_name: String,
 }
 
 impl Default for ConfigViaEnv {
@@ -218,6 +219,7 @@ impl From<Config> for ConfigViaEnv {
             metasrv_join: cfg.raft_config.join,
             kvsrv_id: cfg.raft_config.id,
             sled_tree_prefix: cfg.raft_config.sled_tree_prefix,
+            cluster_name: cfg.raft_config.cluster_name,
         }
     }
 }
@@ -241,6 +243,7 @@ impl Into<Config> for ConfigViaEnv {
             join: self.metasrv_join,
             id: self.kvsrv_id,
             sled_tree_prefix: self.sled_tree_prefix,
+            cluster_name: self.cluster_name,
         };
 
         Config {
@@ -334,6 +337,11 @@ pub struct RaftConfig {
     /// For test only: specifies the tree name prefix
     #[clap(long, default_value = "")]
     pub sled_tree_prefix: String,
+
+    /// Tne node name. If the user specifies a name, the user-supplied name is used,
+    /// if not, the default name is used
+    #[clap(long, default_value = "foo_cluster")]
+    pub cluster_name: String,
 }
 
 impl Default for RaftConfig {
@@ -359,6 +367,7 @@ impl From<RaftConfig> for InnerRaftConfig {
             join: x.join,
             id: x.id,
             sled_tree_prefix: x.sled_tree_prefix,
+            cluster_name: x.cluster_name,
         }
     }
 }
@@ -380,6 +389,7 @@ impl From<InnerRaftConfig> for RaftConfig {
             join: inner.join,
             id: inner.id,
             sled_tree_prefix: inner.sled_tree_prefix,
+            cluster_name: inner.cluster_name,
         }
     }
 }
