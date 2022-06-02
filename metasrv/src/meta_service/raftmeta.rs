@@ -273,15 +273,12 @@ impl MetaNode {
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    /// 3. If `init_cluster` is `Some` and it is just created, try to initialize a single-node cluster.
-    ///
-    /// TODO(xp): `init_cluster`: pass in a Map<id, address> to initialize the cluster.
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open_create_boot(
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-        init_cluster: Option<Vec<String>>,
+        is_initialize: bool,
     ) -> MetaResult<Arc<MetaNode>> {
         let mut config = config.clone();
 
@@ -310,12 +307,10 @@ impl MetaNode {
 
         tracing::info!("MetaNode started: {:?}", config);
 
-        // init_cluster with advertise_host other than listen_host
-        if !is_open {
-            if let Some(_addrs) = init_cluster {
-                mn.init_cluster(config.raft_api_advertise_host_endpoint())
-                    .await?;
-            }
+        // initialize with advertise_host other than listen_host
+        if !is_open && is_initialize {
+            mn.init_cluster(config.raft_api_advertise_host_endpoint())
+                .await?;
         }
         Ok(mn)
     }
@@ -511,13 +506,13 @@ impl MetaNode {
 
     async fn do_start(conf: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {
         if conf.single {
-            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), Some(vec![])).await?;
+            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), true).await?;
             return Ok(mn);
         }
 
         if !conf.join.is_empty() {
             // Bring up a new node, join it into a cluster
-            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), None).await?;
+            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), false).await?;
 
             if mn.is_opened() {
                 return Ok(mn);
@@ -525,7 +520,7 @@ impl MetaNode {
             return Ok(mn);
         }
         // open mode
-        let mn = MetaNode::open_create_boot(conf, Some(()), None, None).await?;
+        let mn = MetaNode::open_create_boot(conf, Some(()), None, false).await?;
         Ok(mn)
     }
 
@@ -537,7 +532,7 @@ impl MetaNode {
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
         // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
 
-        let mn = Self::open_create_boot(config, None, Some(()), Some(vec![])).await?;
+        let mn = Self::open_create_boot(config, None, Some(()), true).await?;
 
         Ok(mn)
     }
