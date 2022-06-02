@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
 use std::sync::Arc;
 
 use common_ast::ast::BinaryOperator;
@@ -21,7 +22,10 @@ use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::UnaryOperator;
+use common_ast::parser::error::Backtrace;
 use common_ast::parser::error::DisplayError;
+use common_ast::parser::parse_udf;
+use common_ast::parser::tokenize_sql;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
 use common_datavalues::BooleanType;
@@ -447,8 +451,20 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         func_name: &str,
         arguments: &[&Expr<'a>],
-        _required_type: Option<DataTypeImpl>,
+        required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
+        let udf = self
+            .ctx
+            .get_user_manager()
+            .get_udf(self.ctx.get_tenant().as_str(), func_name)
+            .await;
+        if udf.is_ok() {
+            let udf = udf?;
+            let backtrace = Backtrace::new();
+            let sql_tokens = tokenize_sql(udf.definition.as_str())?;
+            let expr = parse_udf(&sql_tokens, &backtrace)?;
+            return self.resolve(&expr, required_type).await;
+        }
         let mut args = vec![];
         let mut arg_types = vec![];
 
