@@ -27,7 +27,7 @@ use crate::storages::fuse::meta::SnapshotVersion;
 use crate::storages::fuse::meta::Versioned;
 
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
-static SNAPHOST_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
+static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -71,8 +71,8 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
-        if location.as_ref().ends_with(SNAPHOST_V1.suffix()) {
-            SNAPHOST_V1.version()
+        if location.as_ref().ends_with(SNAPSHOT_V1.suffix()) {
+            SNAPSHOT_V1.version()
         } else {
             SNAPSHOT_V0.version()
         }

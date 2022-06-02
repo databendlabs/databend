@@ -22,7 +22,6 @@ use crate::storages::fuse::io::write_block;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::Compression;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -78,6 +77,7 @@ impl<'a> DeletionCollector<'a> {
             // TODO handle empty segment
             let mut new_segment = SegmentInfo::new(segment.blocks.clone(), segment.summary.clone());
             for replacement in replacements {
+                // TODO remove this unwrap
                 let position = new_segment
                     .blocks
                     .iter()
@@ -90,18 +90,23 @@ impl<'a> DeletionCollector<'a> {
                 }
             }
 
-            let new_summary = reduce_block_metas(&new_segment.blocks)?;
-            new_segment.summary = new_summary;
+            if new_segment.blocks.len() == 0 {
+                // remove the segment if no blocks there
+                new_snapshot.segments.remove(seg_idx);
+            } else {
+                let new_summary = reduce_block_metas(&new_segment.blocks)?;
+                new_segment.summary = new_summary;
 
-            let new_seg_loc = self.location_generator.gen_segment_info_location();
-            let loc = (new_seg_loc, SegmentInfo::VERSION);
+                let new_seg_loc = self.location_generator.gen_segment_info_location();
+                let loc = (new_seg_loc, SegmentInfo::VERSION);
 
-            // write the new segment, TODO update cache
-            let bytes = serde_json::to_vec(&new_segment)?;
-            let operator = self.ctx.get_storage_operator()?;
-            operator.object(loc.0.as_str()).write(bytes).await?;
+                // write the new segment, TODO update cache
+                let bytes = serde_json::to_vec(&new_segment)?;
+                let operator = self.ctx.get_storage_operator()?;
+                operator.object(loc.0.as_str()).write(bytes).await?;
 
-            new_snapshot.segments[seg_idx] = loc;
+                new_snapshot.segments[seg_idx] = loc;
+            }
         }
 
         new_snapshot.prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version()));
@@ -129,8 +134,9 @@ impl<'a> DeletionCollector<'a> {
         operator.object(&snapshot_loc).write(bytes).await?;
         Ok((new_snapshot, snapshot_loc))
     }
-    ///Replaces the block located at `block_meta.location`,
-    /// of segment indexed by `seg_idx`, with a new block `r`
+    /// Replaces
+    ///  the block located at `block_location` of segment indexed by `seg_idx`
+    /// With a new block `r`
     pub async fn replace_with(
         &mut self,
         seg_idx: usize,
@@ -162,16 +168,17 @@ impl<'a> DeletionCollector<'a> {
         let col_stats = accumulator::columns_statistics(&block)?;
         let (file_size, file_meta_data) = write_block(block, data_accessor, &location).await?;
         let col_metas = column_metas(&file_meta_data)?;
-        let block_meta = BlockMeta {
+        let cluster_stats = None; // TODO confirm this with zhyass
+        let location = (location, DataBlock::VERSION);
+        let block_meta = BlockMeta::new(
             row_count,
             block_size,
             file_size,
             col_stats,
             col_metas,
-            cluster_stats: None, // TODO confirm this with zhyass
-            location: (location, DataBlock::VERSION),
-            compression: Compression::Lz4Raw, // TODO hide this
-        };
+            cluster_stats,
+            location,
+        );
         Ok(block_meta)
     }
 }

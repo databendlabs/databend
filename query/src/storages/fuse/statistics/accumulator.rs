@@ -24,7 +24,6 @@ use common_functions::aggregates::eval_aggr;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::ColumnMeta;
-use crate::storages::fuse::meta::Compression;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::column_metas;
 use crate::storages::index::ClusterStatistics;
@@ -85,16 +84,22 @@ impl StatisticsAccumulator {
         self.cluster_statistics
             .push(statistics.block_cluster_statistics.clone());
 
-        self.blocks_metas.push(BlockMeta {
+        let row_count = statistics.block_rows_size;
+        let block_size = statistics.block_bytes_size;
+        let col_stats = statistics.block_column_statistics.clone();
+        let location = (statistics.block_file_location, DataBlock::VERSION);
+        let col_metas = column_metas(&meta)?;
+        let cluster_stats = statistics.block_cluster_statistics;
+
+        self.blocks_metas.push(BlockMeta::new(
+            row_count,
+            block_size,
             file_size,
-            compression: Compression::Lz4Raw,
-            row_count: statistics.block_rows_size,
-            block_size: statistics.block_bytes_size,
-            col_stats: statistics.block_column_statistics.clone(),
-            location: (statistics.block_file_location, DataBlock::VERSION),
-            col_metas: column_metas(&meta)?,
-            cluster_stats: statistics.block_cluster_statistics,
-        });
+            col_stats,
+            col_metas,
+            cluster_stats,
+            location,
+        ));
 
         Ok(())
     }
@@ -125,16 +130,22 @@ impl PartiallyAccumulated {
     ) -> StatisticsAccumulator {
         let mut stats = &mut self.accumulator;
         stats.file_size += file_size;
-        let block_meta = BlockMeta {
-            row_count: self.block_row_count,
-            block_size: self.block_size,
+
+        let row_count = self.block_row_count;
+        let block_size = self.block_size;
+        let col_stats = self.block_columns_statistics;
+        let cluster_stats = self.block_cluster_statistics;
+        let location = (location, DataBlock::VERSION);
+
+        let block_meta = BlockMeta::new(
+            row_count,
+            block_size,
             file_size,
-            col_stats: self.block_columns_statistics,
+            col_stats,
             col_metas,
-            cluster_stats: self.block_cluster_statistics,
-            location: (location, DataBlock::VERSION),
-            compression: Compression::Lz4Raw,
-        };
+            cluster_stats,
+            location,
+        );
         stats.blocks_metas.push(block_meta);
         self.accumulator
     }

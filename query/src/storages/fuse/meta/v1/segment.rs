@@ -58,7 +58,34 @@ pub struct BlockMeta {
     /// `Lz4` is merely for backward compatibility, it will NO longer be
     /// used in the write path.
     #[serde(default = "Compression::legacy")]
-    pub compression: Compression,
+    compression: Compression,
+}
+
+impl BlockMeta {
+    pub fn new(
+        row_count: u64,
+        block_size: u64,
+        file_size: u64,
+        col_stats: HashMap<ColumnId, ColumnStatistics>,
+        col_metas: HashMap<ColumnId, ColumnMeta>,
+        cluster_stats: Option<ClusterStatistics>,
+        location: Location,
+    ) -> Self {
+        Self {
+            row_count,
+            block_size,
+            file_size,
+            col_stats,
+            col_metas,
+            cluster_stats,
+            location,
+            compression: Compression::Lz4Raw,
+        }
+    }
+
+    pub fn compression(&self) -> Compression {
+        self.compression
+    }
 }
 
 impl SegmentInfo {

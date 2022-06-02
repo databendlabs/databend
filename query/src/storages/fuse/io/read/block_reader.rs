@@ -162,7 +162,7 @@ impl BlockReader {
                 rows,
                 column_descriptor,
                 field,
-                &meta.compression,
+                &meta.compression(),
             )?);
         }
 
