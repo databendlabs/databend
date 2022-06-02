@@ -256,6 +256,7 @@ class SuiteRunner(object):
         if callable(getattr(self, "batch_execute")):
             # case batch
             for (file_path, suite_name) in self.statement_files:
+                log.info("Batch execute, suite name:{} in file {}".format(suite_name, file_path))
                 statement_list = list()
                 for state in get_statements(file_path, suite_name):
                     statement_list.append(state)
@@ -263,6 +264,7 @@ class SuiteRunner(object):
         else:
             # case one by one
             for (file_path, suite_name) in self.statement_files:
+                log.info("One by one execute, suite name:{} in file {}".format(suite_name, file_path))
                 for state in get_statements(file_path, suite_name):
                     self.execute_statement(state)
 
