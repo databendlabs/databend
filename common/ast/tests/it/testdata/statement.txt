@@ -81,7 +81,7 @@ Explain {
                             alias: None,
                         },
                     ],
-                    from: Some(
+                    from: [
                         Table {
                             catalog: None,
                             database: None,
@@ -93,7 +93,7 @@ Explain {
                             alias: None,
                             travel_point: None,
                         },
-                    ),
+                    ],
                     selection: None,
                     group_by: [],
                     having: None,
@@ -295,7 +295,7 @@ CreateTable {
                             ],
                         ),
                     ],
-                    from: Some(
+                    from: [
                         Table {
                             catalog: None,
                             database: None,
@@ -307,7 +307,7 @@ CreateTable {
                             alias: None,
                             travel_point: None,
                         },
-                    ),
+                    ],
                     selection: None,
                     group_by: [],
                     having: None,
@@ -902,7 +902,7 @@ Query(
                         alias: None,
                     },
                 ],
-                from: Some(
+                from: [
                     Table {
                         catalog: None,
                         database: None,
@@ -914,7 +914,7 @@ Query(
                         alias: None,
                         travel_point: None,
                     },
-                ),
+                ],
                 selection: Some(
                     BinaryOp {
                         span: [
@@ -1074,7 +1074,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Table {
                         catalog: None,
                         database: None,
@@ -1086,7 +1086,7 @@ Query(
                         alias: None,
                         travel_point: None,
                     },
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -1133,7 +1133,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Table {
                         catalog: None,
                         database: Some(
@@ -1151,7 +1151,7 @@ Query(
                         alias: None,
                         travel_point: None,
                     },
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -1168,7 +1168,7 @@ Query(
 ---------- Input ----------
 select * from a, b, c;
 ---------- Output ---------
-SELECT * FROM a CROSS JOIN b CROSS JOIN c
+SELECT * FROM a, b, c
 ---------- AST ------------
 Query(
     Query {
@@ -1202,53 +1202,41 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
-                    Join(
-                        Join {
-                            op: CrossJoin,
-                            condition: None,
-                            left: Join(
-                                Join {
-                                    op: CrossJoin,
-                                    condition: None,
-                                    left: Table {
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Ident(14..15),
-                                        },
-                                        alias: None,
-                                        travel_point: None,
-                                    },
-                                    right: Table {
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            name: "b",
-                                            quote: None,
-                                            span: Ident(17..18),
-                                        },
-                                        alias: None,
-                                        travel_point: None,
-                                    },
-                                },
-                            ),
-                            right: Table {
-                                catalog: None,
-                                database: None,
-                                table: Identifier {
-                                    name: "c",
-                                    quote: None,
-                                    span: Ident(20..21),
-                                },
-                                alias: None,
-                                travel_point: None,
-                            },
+                from: [
+                    Table {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(14..15),
                         },
-                    ),
-                ),
+                        alias: None,
+                        travel_point: None,
+                    },
+                    Table {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Ident(17..18),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                    Table {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Ident(20..21),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -1311,7 +1299,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Join(
                         Join {
                             op: Inner,
@@ -1387,7 +1375,7 @@ Query(
                             },
                         },
                     ),
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -1454,7 +1442,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Join(
                         Join {
                             op: LeftOuter,
@@ -1530,7 +1518,7 @@ Query(
                             },
                         },
                     ),
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -1597,7 +1585,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Join(
                         Join {
                             op: RightOuter,
@@ -1673,7 +1661,7 @@ Query(
                             },
                         },
                     ),
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -1740,7 +1728,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Join(
                         Join {
                             op: FullOuter,
@@ -1816,7 +1804,7 @@ Query(
                             },
                         },
                     ),
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -1881,7 +1869,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Join(
                         Join {
                             op: Inner,
@@ -1957,7 +1945,7 @@ Query(
                             },
                         },
                     ),
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -2016,7 +2004,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Join(
                         Join {
                             op: LeftOuter,
@@ -2053,7 +2041,7 @@ Query(
                             },
                         },
                     ),
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -2112,7 +2100,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Join(
                         Join {
                             op: RightOuter,
@@ -2149,7 +2137,7 @@ Query(
                             },
                         },
                     ),
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -2208,7 +2196,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Join(
                         Join {
                             op: FullOuter,
@@ -2245,7 +2233,7 @@ Query(
                             },
                         },
                     ),
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -2302,7 +2290,7 @@ Query(
                         ],
                     ),
                 ],
-                from: Some(
+                from: [
                     Join(
                         Join {
                             op: Inner,
@@ -2339,7 +2327,7 @@ Query(
                             },
                         },
                     ),
-                ),
+                ],
                 selection: None,
                 group_by: [],
                 having: None,
@@ -2453,7 +2441,7 @@ Insert {
                             ],
                         ),
                     ],
-                    from: Some(
+                    from: [
                         Table {
                             catalog: None,
                             database: None,
@@ -2465,7 +2453,7 @@ Insert {
                             alias: None,
                             travel_point: None,
                         },
-                    ),
+                    ],
                     selection: None,
                     group_by: [],
                     having: None,
@@ -2570,7 +2558,7 @@ Query(
                         alias: None,
                     },
                 ],
-                from: None,
+                from: [],
                 selection: None,
                 group_by: [],
                 having: None,
