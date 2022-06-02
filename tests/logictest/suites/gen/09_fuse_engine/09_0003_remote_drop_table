@@ -13,8 +13,12 @@ CREATE TABLE IF NOT EXISTS t(a varchar, b varchar) Engine = fuse;
 statement ok
 INSERT INTO t(a,b) VALUES('1', 'v1'),('2','v2');
 
-statement ok
+statement query TT
 SELECT * FROM t;
+
+----
+1 v1
+2 v2
 
 statement ok
 CREATE TABLE IF NOT EXISTS t2(a varchar, b varchar) Engine = fuse;
