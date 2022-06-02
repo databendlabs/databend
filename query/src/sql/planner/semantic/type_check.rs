@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::sync::Arc;
 
 use common_ast::ast::BinaryOperator;
@@ -40,6 +39,7 @@ use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
@@ -103,7 +103,7 @@ impl<'a> TypeChecker<'a> {
     #[async_recursion::async_recursion]
     pub async fn resolve(
         &mut self,
-        expr: &Expr<'a>,
+        expr: &Expr<'_>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match expr {
@@ -450,20 +450,25 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_function(
         &mut self,
         func_name: &str,
-        arguments: &[&Expr<'a>],
+        arguments: &[&Expr<'_>],
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        let udf = self
-            .ctx
-            .get_user_manager()
-            .get_udf(self.ctx.get_tenant().as_str(), func_name)
-            .await;
-        if udf.is_ok() {
-            let udf = udf?;
-            let backtrace = Backtrace::new();
-            let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-            let expr = parse_udf(&sql_tokens, &backtrace)?;
-            return self.resolve(&expr, required_type).await;
+        if !is_builtin_function(func_name) {
+            let udf = self
+                .ctx
+                .get_user_manager()
+                .get_udf(self.ctx.get_tenant().as_str(), func_name)
+                .await;
+            if let Ok(udf) = udf {
+                let backtrace = Backtrace::new();
+                let sql_tokens = tokenize_sql(udf.definition.as_str())?;
+                let expr = parse_udf(&sql_tokens, &backtrace)?;
+                return self.resolve(&expr, required_type).await;
+            } else {
+                return Err(ErrorCode::SemanticError(
+                    "No function matches the given name.",
+                ));
+            }
         }
         let mut args = vec![];
         let mut arg_types = vec![];
@@ -495,8 +500,8 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_binary_op(
         &mut self,
         op: &BinaryOperator,
-        left: &Expr<'a>,
-        right: &Expr<'a>,
+        left: &Expr<'_>,
+        right: &Expr<'_>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match op {
@@ -573,7 +578,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_unary_op(
         &mut self,
         op: &UnaryOperator,
-        child: &Expr<'a>,
+        child: &Expr<'_>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match op {
@@ -594,7 +599,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_extract_expr(
         &mut self,
         interval_kind: &IntervalKind,
-        arg: &Expr<'a>,
+        arg: &Expr<'_>,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match interval_kind {
@@ -635,7 +640,7 @@ impl<'a> TypeChecker<'a> {
 
     pub async fn resolve_interval(
         &mut self,
-        arg: &Expr<'a>,
+        arg: &Expr<'_>,
         interval_kind: &IntervalKind,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
@@ -709,8 +714,8 @@ impl<'a> TypeChecker<'a> {
 
     pub async fn resolve_date_add(
         &mut self,
-        date: &Expr<'a>,
-        interval: &Expr<'a>,
+        date: &Expr<'_>,
+        interval: &Expr<'_>,
         interval_kind: &IntervalKind,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
@@ -744,7 +749,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_subquery(
         &mut self,
         typ: SubqueryType,
-        subquery: &Query<'a>,
+        subquery: &Query<'_>,
         allow_multi_rows: bool,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
@@ -832,8 +837,8 @@ impl<'a> TypeChecker<'a> {
 
     async fn try_resolve_trim_function(
         &mut self,
-        expr: &Expr<'a>,
-        trim_where: &Option<(TrimWhere, Box<Expr<'a>>)>,
+        expr: &Expr<'_>,
+        trim_where: &Option<(TrimWhere, Box<Expr<'_>>)>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         let (func_name, trim_scalar) = if let Some((trim_type, trim_expr)) = trim_where {
             let func_name = match trim_type {
@@ -896,7 +901,7 @@ impl<'a> TypeChecker<'a> {
 
     // TODO(leiysky): use an array builder function instead, since we should allow declaring
     // an array with variable as element.
-    async fn resolve_array(&mut self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
+    async fn resolve_array(&mut self, exprs: &[Expr<'_>]) -> Result<(Scalar, DataTypeImpl)> {
         let mut elems = Vec::with_capacity(exprs.len());
         let mut types = Vec::with_capacity(exprs.len());
         for expr in exprs.iter() {
@@ -928,7 +933,7 @@ impl<'a> TypeChecker<'a> {
         ))
     }
 
-    async fn resolve_tuple(&mut self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
+    async fn resolve_tuple(&mut self, exprs: &[Expr<'_>]) -> Result<(Scalar, DataTypeImpl)> {
         let mut args = Vec::with_capacity(exprs.len());
         let mut arg_types = Vec::with_capacity(exprs.len());
         for expr in exprs {
