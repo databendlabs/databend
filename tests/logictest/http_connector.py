@@ -96,7 +96,7 @@ class HttpConnector():
         self._port = port
         self._user = user
         self._database = database
-        self._session_max_idle_time = 300
+        self._session_max_idle_time = 30 
         self._session = None
         self._additonal_headers = dict()
         e = environs.Env()
