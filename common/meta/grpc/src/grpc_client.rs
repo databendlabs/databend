@@ -349,7 +349,7 @@ impl MetaGrpcClient {
                     break Err(MetaError::InvalidConfig("endpoints is empty".to_string()));
                 } else {
                     let addr = eps.get(start % num_eps).unwrap();
-                    let ch = self.conn_pool.get(addr).await;
+                    let ch = self.conn_pool.item_manager().build(addr).await;
                     match ch {
                         Ok(c) => {
                             break Ok(c);
