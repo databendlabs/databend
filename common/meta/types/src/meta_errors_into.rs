@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::error::Error;
 use std::fmt::Display;
 
 use anyerror::AnyError;
@@ -34,24 +35,33 @@ impl From<MetaError> for ErrorCode {
             // Except application error and part of network error,
             // all other errors are not handleable and can only be converted to a fatal error.
             //
-            MetaError::MetaRaftError(e) => ErrorCode::MetaServiceError(e.to_string()),
-            MetaError::MetaStorageError(e) => ErrorCode::MetaServiceError(e.to_string()),
-            MetaError::MetaResultError(e) => ErrorCode::MetaServiceError(e.to_string()),
-            MetaError::InvalidConfig(e) => ErrorCode::MetaServiceError(e),
-            MetaError::MetaStoreAlreadyExists(e) => {
-                ErrorCode::MetaServiceError(format!("meta store already exists: {}", e))
+            MetaError::MetaRaftError(raft_err) => ErrorCode::MetaServiceError(raft_err.to_string())
+                .set_backtrace(raft_err.backtrace()),
+            MetaError::MetaStorageError(sto_err) => {
+                ErrorCode::MetaServiceError(sto_err.to_string()).set_backtrace(sto_err.backtrace())
             }
-            MetaError::MetaStoreNotFound => {
-                ErrorCode::MetaServiceError("MetaStoreNotFound".to_string())
+            MetaError::MetaResultError(res_err) => {
+                ErrorCode::MetaServiceError(res_err.to_string()).set_backtrace(res_err.backtrace())
             }
-            MetaError::StartMetaServiceError(e) => ErrorCode::MetaServiceError(e),
-            MetaError::ConcurrentSnapshotInstall(e) => ErrorCode::MetaServiceError(e),
-            MetaError::MetaServiceError(e) => ErrorCode::MetaServiceError(e),
-            MetaError::IllegalRoleInfoFormat(e) => ErrorCode::MetaServiceError(e),
-            MetaError::IllegalUserInfoFormat(e) => ErrorCode::MetaServiceError(e),
-            MetaError::SerdeError(e) => ErrorCode::MetaServiceError(e.to_string()),
-            MetaError::EncodeError(e) => ErrorCode::MetaServiceError(e.to_string()),
-            MetaError::Fatal(e) => ErrorCode::MetaServiceError(e.to_string()),
+            MetaError::InvalidConfig(err_str) => ErrorCode::MetaServiceError(err_str),
+            MetaError::MetaStoreAlreadyExists(node_id) => {
+                ErrorCode::MetaServiceError(format!("meta store already exists: {}", node_id))
+            }
+            MetaError::MetaStoreNotFound => ErrorCode::MetaServiceError("MetaStoreNotFound"),
+            MetaError::StartMetaServiceError(err_str) => ErrorCode::MetaServiceError(err_str),
+            MetaError::ConcurrentSnapshotInstall(err_str) => ErrorCode::MetaServiceError(err_str),
+            MetaError::MetaServiceError(err_str) => ErrorCode::MetaServiceError(err_str),
+            MetaError::IllegalRoleInfoFormat(err_str) => ErrorCode::MetaServiceError(err_str),
+            MetaError::IllegalUserInfoFormat(err_str) => ErrorCode::MetaServiceError(err_str),
+            MetaError::SerdeError(ae) => {
+                ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
+            }
+            MetaError::EncodeError(ae) => {
+                ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
+            }
+            MetaError::Fatal(ae) => {
+                ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
+            }
         }
     }
 }
