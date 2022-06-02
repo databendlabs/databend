@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::hash::Hash;
 use std::sync::Arc;
 
+use common_base::base::ProgressValues;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::interval;
 use common_base::base::tokio::time::Duration;
@@ -227,7 +228,17 @@ impl AsyncInsertQueue {
                 DataBlock::concat_blocks(&blocks)?
             }
             common_planners::InsertInputSource::StreamingWithFormat(_) => todo!(),
-            common_planners::InsertInputSource::Values(values) => values.block.clone(),
+            common_planners::InsertInputSource::Values(values) => {
+                let data_block = values.block.clone();
+
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                ctx.get_scan_progress().incr(&progress_values);
+                
+                data_block
+            }
         };
 
         let entry = Arc::new(Entry::try_create(data_block.clone()));
