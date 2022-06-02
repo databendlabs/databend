@@ -21,7 +21,7 @@ pub trait InputState: Send {
     fn as_any(&mut self) -> &mut dyn Any;
 }
 
-pub trait InputFormat: Send {
+pub trait InputFormat: Send + Sync {
     fn support_parallel(&self) -> bool {
         false
     }

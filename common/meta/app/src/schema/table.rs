@@ -560,3 +560,25 @@ impl ListTableReq {
         }
     }
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+
+pub struct CountTablesKey {
+    pub tenant: String,
+}
+
+impl Display for CountTablesKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'", self.tenant)
+    }
+}
+
+/// count tables for a tenant
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct CountTablesReq {
+    pub tenant: String,
+}
+
+pub struct CountTablesReply {
+    pub count: u64,
+}

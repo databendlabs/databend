@@ -189,10 +189,7 @@ pub async fn streaming_load(
                     {
                         return match new_processor_format(&context, &plan, multipart).await {
                             Ok(res) => Ok(res),
-                            Err(cause) => {
-                                println!("catch error {:?}", cause);
-                                Err(InternalServerError(cause))
-                            }
+                            Err(cause) => Err(InternalServerError(cause)),
                         };
                     }
 
@@ -406,23 +403,14 @@ fn format_source_pipe_builder(
     schema: DataSchemaRef,
     multipart: Multipart,
     format_settings: &FormatSettings,
-) -> Result<(MultipartWorker, SourcePipeBuilder)> {
-    let ports = vec![OutputPort::create()];
-    let mut source_pipe_builder = SourcePipeBuilder::create();
-    let (worker, sources) = MultipartFormat::input_sources(
+) -> Result<(Box<dyn MultipartWorker>, SourcePipeBuilder)> {
+    MultipartFormat::input_sources(
         format,
         context.clone(),
         multipart,
         schema,
         format_settings.clone(),
-        ports.clone(),
-    )?;
-
-    for (index, source) in sources.into_iter().enumerate() {
-        source_pipe_builder.add_source(ports[index].clone(), source);
-    }
-
-    Ok((worker, source_pipe_builder))
+    )
 }
 
 async fn ndjson_source_pipe_builder(

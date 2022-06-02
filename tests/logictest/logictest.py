@@ -122,7 +122,7 @@ class Statement:
                     if is_empty_line(s[0]):
                         raise Exception(
                             "Invalid query options, query type should not be empty: {}"
-                            .format(qo))
+                                .format(qo))
                     self.query_type = s[0]
                     return
                 query_type, options = qo.split(" ", 1)
@@ -154,9 +154,9 @@ class Statement:
 
 
 class ParsedStatement(
-        collections.namedtuple(
-            'ParsedStatement',
-            ["at_line", "s_type", "suite_name", "text", "results"])):
+    collections.namedtuple(
+        'ParsedStatement',
+        ["at_line", "s_type", "suite_name", "text", "results"])):
 
     def get_fields(self):
         return self._fields
@@ -225,7 +225,7 @@ def safe_execute(method, *info):
 @six.add_metaclass(abc.ABCMeta)
 class SuiteRunner(object):
 
-    def __init__(self, kind):
+    def __init__(self, kind, pattern):
         self.label = None
         self.retry_time = 3
         self.driver = None
@@ -234,11 +234,12 @@ class SuiteRunner(object):
         self.kind = kind
         self.show_query_on_execution = True
         self.on_error_return = False
+        self.pattern = pattern
 
     # return all files under the path
     # format: a list of file absolute path and name(relative path)
     def fetch_files(self):
-        skip_files=os.getenv("SKIP_TEST_FILES")
+        skip_files = os.getenv("SKIP_TEST_FILES")
         skip_tests = skip_files.split(",") if skip_files is not None else []
         log.debug("Skip test file list {}".format(skip_tests))
         for filename in glob.iglob('{}/**'.format(self.path), recursive=True):
@@ -246,8 +247,9 @@ class SuiteRunner(object):
                 if os.path.basename(filename) in skip_tests:
                     log.info("Skip test file {}".format(filename))
                     continue
-                self.statement_files.append(
-                    (filename, os.path.relpath(filename, self.path)))
+                if re.match(self.pattern, filename):
+                    self.statement_files.append(
+                        (filename, os.path.relpath(filename, self.path)))
 
     def execute(self):
         # batch execute use single session
@@ -292,10 +294,10 @@ class SuiteRunner(object):
         compare_f = "".join(f.split())
         compare_result = "".join(resultset[2].split())
         assert compare_f == compare_result, "Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
-                                                  "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
-                                                                                      f.rstrip(),
-                                                                                      str(statement), resultset[1],
-                                                                                      resultset[0].group("label"))
+                                            "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
+                                                                                f.rstrip(),
+                                                                                str(statement), resultset[1],
+                                                                                resultset[0].group("label"))
 
     def assert_execute_query(self, statement):
         actual = safe_execute(lambda: self.execute_query(statement), statement)
