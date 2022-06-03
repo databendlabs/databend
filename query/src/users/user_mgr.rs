@@ -36,7 +36,7 @@ impl UserApiProvider {
                 user_info.option.set_all_flag();
             } else {
                 return Err(ErrorCode::UnknownUser(format!(
-                    "only accept root from localhost '{}'@'{}'",
+                    "only accept root from localhost, current: '{}'@'{}'",
                     user.username, user.hostname
                 )));
             }
