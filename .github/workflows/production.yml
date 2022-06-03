@@ -153,6 +153,5 @@ jobs:
         with:
           dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
-          dockerhub_namespace: ${{ secrets.DOCKERHUB_NAMESPACE }}
           target: ${{ matrix.config.target }}
           platform: ${{ matrix.config.platform }}
