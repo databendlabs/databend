@@ -19,7 +19,6 @@ use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::get_file_name;
 use common_io::prelude::operator_list_files;
 use common_planners::ListPlan;
 use common_streams::DataBlockStream;
@@ -81,9 +80,6 @@ impl Interpreter for ListInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let files = self.list_files().await?;
         tracing::info!("list file list:{:?}, pattern:{}", &files, self.plan.pattern);
-
-        // file path to filename
-        let files: Vec<String> = files.iter().map(|file| get_file_name(file)).collect();
 
         let block = DataBlock::create(self.plan.schema(), vec![Series::from_data(files)]);
         Ok(Box::pin(DataBlockStream::create(

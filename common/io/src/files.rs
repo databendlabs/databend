@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
@@ -19,22 +21,30 @@ use opendal::ObjectMode;
 use opendal::Operator;
 
 /// Get the files in the path, if the path is not exist, return an empty list.
-/// TODO(xuanwo): it's so general that better implement in opendal instead: https://github.com/datafuselabs/opendal/issues/268
 pub async fn operator_list_files(op: &Operator, path: &str) -> Result<Vec<String>> {
     let mut list: Vec<String> = vec![];
-    let mode = op.object(path).metadata().await?.mode();
-    match mode {
+
+    let o = op.object(path);
+
+    // return an empty list if not exist
+    let meta = match o.metadata().await {
+        Ok(meta) => meta,
+        Err(e) => {
+            return match e.kind() {
+                io::ErrorKind::NotFound => Ok(Vec::new()),
+                _ => Err(e.into()),
+            }
+        }
+    };
+    match meta.mode() {
         ObjectMode::FILE => {
-            list.push(path.to_string());
+            list.push(o.name());
         }
         ObjectMode::DIR => {
             let mut objects = op.object(path).list().await?;
             while let Some(object) = objects.next().await {
-                let mut object = object?;
-                let meta = object.metadata_cached().await?;
-                if meta.mode() == ObjectMode::FILE {
-                    list.push(meta.path().to_string());
-                }
+                let name = object?.name();
+                list.push(name);
             }
         }
         other => {

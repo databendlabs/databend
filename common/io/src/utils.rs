@@ -92,26 +92,20 @@ pub fn deserialize_from_slice<T: serde::de::DeserializeOwned>(slice: &mut &[u8])
 
 #[inline]
 pub fn get_abs_path(root: &str, path: &str) -> String {
+    let is_dir = path.ends_with('/');
     // Joining an absolute path replaces the existing path, we need to
     // normalize it before.
-    let path = path
+    let mut path = path
         .split('/')
         .filter(|v| !v.is_empty())
         .collect::<Vec<&str>>()
         .join("/");
+    // If path is dir and not empty, we should add `/` back.
+    if is_dir && !path.is_empty() {
+        path.push('/');
+    }
 
     PathBuf::from(root).join(path).to_string_lossy().to_string()
-}
-
-// todo(xuanwo): opendal support meta name (https://github.com/datafuselabs/opendal/issues/150)
-#[inline]
-pub fn get_file_name(path: &str) -> String {
-    let path = path
-        .split('/')
-        .filter(|v| !v.is_empty())
-        .collect::<Vec<&str>>();
-
-    path[path.len() - 1].to_string()
 }
 
 pub fn is_control_ascii(c: u8) -> bool {

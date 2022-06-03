@@ -37,11 +37,11 @@ pub async fn location_to_stage_path(
 ) -> Result<(UserStageInfo, String)> {
     let mgr = ctx.get_user_manager();
     let s: Vec<&str> = location.split('@').collect();
-    // @my_ext_stage/abc
+    // @my_ext_stage/abc/
     let names: Vec<&str> = s[1].splitn(2, '/').collect();
     let stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
 
-    let path = if names.len() > 1 { names[1] } else { "" };
+    let path = if names.len() > 1 { names[1] } else { "/" };
 
     let relative_path = match stage.stage_type {
         // It's internal, so we should prefix with stage name.
@@ -63,10 +63,10 @@ pub fn parse_stage_storage(
     // TODO(xuanwo): we should make the path logic more clear, ref: https://github.com/datafuselabs/databend/issues/5295
 
     // Parse uri.
-    // 's3://<bucket>[/<path>]'
+    // 's3://<bucket>[/<path>/]'
     let uri = location.parse::<http::Uri>().map_err(|_e| {
         ErrorCode::SyntaxException(
-            "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
+            "File location uri must be specified, for example: 's3://<bucket>[/<path>/]'",
         )
     })?;
 
