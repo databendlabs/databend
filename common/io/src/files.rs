@@ -38,7 +38,7 @@ pub async fn operator_list_files(op: &Operator, path: &str) -> Result<Vec<String
     };
     match meta.mode() {
         ObjectMode::FILE => {
-            list.push(o.name());
+            list.push(o.path());
         }
         ObjectMode::DIR => {
             let mut objects = op.object(path).list().await?;

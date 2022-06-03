@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::get_abs_path;
 use common_io::prelude::parse_escape_string;
 use common_io::prelude::StorageParams;
 use common_io::prelude::StorageS3Config;
@@ -46,8 +45,7 @@ pub async fn location_to_stage_path(
     let relative_path = match stage.stage_type {
         // It's internal, so we should prefix with stage name.
         StageType::Internal => {
-            let prefix = format!("stage/{}", stage.stage_name);
-            get_abs_path(prefix.as_str(), path)
+            format!("/stage/{}{}", stage.stage_name, path)
         }
         StageType::External => path.to_string(),
     };
