@@ -37,7 +37,7 @@ runs:
     - name: Login to Public ECR
       shell: bash
       run: |
-        docker login --username AWS --password $(aws ecr-public get-login-password --region us-east-2) public.ecr.aws
+        docker login --username AWS --password $(aws ecr-public get-login-password --region us-east-1) public.ecr.aws
 
     - name: Login to DockerHub
       uses: docker/login-action@v1

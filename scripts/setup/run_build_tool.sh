@@ -27,8 +27,8 @@ for var in ${BYPASS_ENV_VARS//,/ }; do
 done
 
 # NOTE: create with runner user first to avoid permission issues
-mkdir -p "${CARGO_HOME}/git"
 mkdir -p "${CARGO_HOME}/registry"
+mkdir -p "${CARGO_HOME}/git"
 
 TOOLCHAIN_VERSION=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
 
