@@ -77,7 +77,12 @@ pub trait Table: Sync + Send {
         vec![]
     }
 
-    async fn alter_cluster_keys(&self) -> Result<()> {
+    async fn alter_cluster_keys(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _catalog_name: &str,
+        _cluster_key_str: String,
+    ) -> Result<()> {
         Err(ErrorCode::UnsupportedEngineParams(format!(
             "Unsupported cluster key for engine: {}",
             self.engine()

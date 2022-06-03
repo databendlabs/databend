@@ -75,7 +75,12 @@ impl Interpreter for AlterClusterKeyInterpreter {
             validate_expression(expr, &schema)?;
         }
 
-        table.alter_cluster_keys().await?;
+        let cluster_key_vec: Vec<String> = cluster_keys.iter().map(|e| e.column_name()).collect();
+        let cluster_key_str = format!("({})", cluster_key_vec.join(", "));
+
+        table
+            .alter_cluster_keys(self.ctx.clone(), &self.plan.catalog_name, cluster_key_str)
+            .await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

@@ -236,14 +236,6 @@ impl TableInfo {
         self.meta.schema = schema;
         self
     }
-
-    pub fn cluster_keys(&self) -> Option<(u32, String)> {
-        self.meta.cluster_key_meta.as_ref().map(|v| {
-            let id = v.default_cluster_key_id;
-            let key = v.cluster_keys_vec[id as usize].clone();
-            (id, key)
-        })
-    }
 }
 
 impl Default for TableMeta {
@@ -278,6 +270,14 @@ impl TableMeta {
             }
         }
         self
+    }
+
+    pub fn cluster_keys(&self) -> Option<(u32, String)> {
+        self.cluster_key_meta.as_ref().map(|v| {
+            let id = v.default_cluster_key_id;
+            let key = v.cluster_keys_vec[id as usize].clone();
+            (id, key)
+        })
     }
 }
 
