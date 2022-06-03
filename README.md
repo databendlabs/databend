@@ -31,6 +31,7 @@
 - [Architecture](#architecture)
 - [Try Databend](#try-databend)
 - [Getting Started](#getting-started)
+- [Contributing](#contributing)
 - [Community](#community)
 - [Roadmap](#roadmap)
 
@@ -163,6 +164,17 @@ Let's run some [benchmark queries](https://databend.rs/doc/performance/local-vec
 ### Performance
 
 - [How to Benchmark Databend](https://databend.rs/doc/learn/analyze-ontime-with-databend-on-ec2-and-s3)
+
+
+## Contributing
+
+Databend is an open source project, you can help with ideas, code, or documentation, we appreciate any efforts that help us to make the project better!
+Once the code been merged, your name will be stored in the **system.contributors** table forever.
+
+To get started with contributing:
+
+- [Building Databend From Source](https://databend.rs/doc/contributing/building-from-source)
+- [The First Good Pull Request](https://databend.rs/doc/contributing/good-pr)
 
 
 ## Community
