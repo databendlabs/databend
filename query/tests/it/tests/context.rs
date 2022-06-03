@@ -34,7 +34,7 @@ use crate::tests::SessionManagerBuilder;
 
 pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
-    create_query_context_with_session(sessions)
+    create_query_context_with_session(sessions).await
 }
 
 pub async fn create_query_context_with_session(
