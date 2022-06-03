@@ -115,10 +115,10 @@ jobs:
           pull: true
           push: true
           tags: |
-            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
-            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
-            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
-            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ steps.login.outputs.dockerhub_repo }}:dev
+            ${{ steps.login.outputs.dockerhub_repo }}:dev-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ steps.login.outputs.ecr_repo }}:dev
+            ${{ steps.login.outputs.ecr_repo }}:dev-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./scripts/setup
           file: ./docker/build-tool/dev/Dockerfile
           build-args: |
