@@ -122,7 +122,7 @@ class Statement:
                     if is_empty_line(s[0]):
                         raise Exception(
                             "Invalid query options, query type should not be empty: {}"
-                                .format(qo))
+                            .format(qo))
                     self.query_type = s[0]
                     return
                 query_type, options = qo.split(" ", 1)
@@ -154,9 +154,9 @@ class Statement:
 
 
 class ParsedStatement(
-    collections.namedtuple(
-        'ParsedStatement',
-        ["at_line", "s_type", "suite_name", "text", "results"])):
+        collections.namedtuple(
+            'ParsedStatement',
+            ["at_line", "s_type", "suite_name", "text", "results"])):
 
     def get_fields(self):
         return self._fields

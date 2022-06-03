@@ -39,6 +39,7 @@ use super::inner::Config as InnerConfig;
 use super::inner::HiveCatalogConfig as InnerHiveCatalogConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
+use crate::DATABEND_COMMIT_VERSION;
 
 /// Outer config for `query`.
 ///
@@ -52,7 +53,7 @@ use super::inner::QueryConfig as InnerQueryConfig;
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
-#[clap(about, version, author)]
+#[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
     /// Run a command and quit

@@ -98,6 +98,10 @@ pub struct RaftConfig {
 
     /// For test only: specifies the tree name prefix
     pub sled_tree_prefix: String,
+
+    ///  The node name. If the user specifies a name,
+    /// the user-supplied name is used, if not, the default name is used.
+    pub cluster_name: String,
 }
 
 pub fn get_default_raft_advertise_host() -> String {
@@ -127,6 +131,7 @@ impl Default for RaftConfig {
             join: vec![],
             id: 0,
             sled_tree_prefix: "".to_string(),
+            cluster_name: "foo_cluster".to_string(),
         }
     }
 }

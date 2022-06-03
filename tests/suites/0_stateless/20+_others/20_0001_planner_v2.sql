@@ -282,4 +282,8 @@ select * from t1, t2;
 drop table t1;
 drop table t2;
 
+-- test error code hint
+
+select 3 as a, 4 as a; -- {ErrorCode 1002 }
+
 set enable_planner_v2 = 0;
