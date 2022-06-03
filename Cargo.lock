@@ -1192,7 +1192,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-exception",
- "common-tracing",
  "futures",
  "lexical-core",
  "opendal",

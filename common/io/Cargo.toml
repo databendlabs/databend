@@ -18,7 +18,6 @@ storage-hdfs = ["opendal/services-hdfs"]
 [dependencies]
 # Workspace dependencies
 common-exception = { path = "../exception" }
-common-tracing = {path = "../tracing"}
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
