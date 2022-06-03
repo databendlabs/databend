@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
 
+permissions:
+  id-token: write
+  contents: write
+
 jobs:
   publish_macos:
     name: macos assets
