@@ -125,24 +125,24 @@ impl PipelineBuilder {
         format_field_name(name.as_str(), column_index)
     }
 
-    pub fn spawn(mut self) -> Result<(NewPipeline, Vec<NewPipeline>)> {
+    pub fn spawn(mut self) -> Result<(NewPipeline, Vec<NewPipeline>, Arc<DataSchema>)> {
         let expr = self.expression.clone();
         let mut pipeline = NewPipeline::create();
         let schema = self.build_pipeline(self.ctx.clone(), &expr, &mut pipeline)?;
-        self.align_data_schema(schema, &mut pipeline)?;
+        let schema = self.align_data_schema(schema, &mut pipeline)?;
         let settings = self.ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         for pipeline in self.pipelines.iter_mut() {
             pipeline.set_max_threads(settings.get_max_threads()? as usize);
         }
-        Ok((pipeline, self.pipelines))
+        Ok((pipeline, self.pipelines, schema))
     }
 
     fn align_data_schema(
         &mut self,
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
-    ) -> Result<()> {
+    ) -> Result<Arc<DataSchema>> {
         let mut projections = Vec::with_capacity(self.result_columns.len());
         let mut output_fields = Vec::with_capacity(self.result_columns.len());
         for (index, name) in self.result_columns.iter() {
@@ -166,7 +166,7 @@ impl PipelineBuilder {
                 self.ctx.clone(),
             )
         })?;
-        Ok(())
+        Ok(output_schema)
     }
 
     pub fn build_pipeline(

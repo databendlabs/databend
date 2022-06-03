@@ -79,9 +79,9 @@ impl<'a> Binder {
     pub(super) async fn bind_table_reference(
         &mut self,
         bind_context: &BindContext,
-        stmt: &TableReference<'a>,
+        table_ref: &TableReference<'a>,
     ) -> Result<(SExpr, BindContext)> {
-        match stmt {
+        match table_ref {
             TableReference::Table {
                 catalog,
                 database,

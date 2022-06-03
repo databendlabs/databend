@@ -453,7 +453,7 @@ impl MetaGrpcClient {
     /// S ---------------+------+------+------------>
     /// S.ver:           2      3      4
     /// ```
-    #[tracing::instrument(level = "debug", skip(client, password))]
+    #[tracing::instrument(level = "debug", skip(client, password, client_ver, min_metasrv_ver))]
     pub async fn handshake(
         client: &mut MetaServiceClient<Channel>,
         client_ver: &Version,
@@ -461,6 +461,12 @@ impl MetaGrpcClient {
         username: &str,
         password: &str,
     ) -> std::result::Result<Vec<u8>, MetaError> {
+        tracing::debug!(
+            client_ver = display(client_ver),
+            min_metasrv_ver = display(min_metasrv_ver),
+            "client version"
+        );
+
         let auth = BasicAuth {
             username: username.to_string(),
             password: password.to_string(),
