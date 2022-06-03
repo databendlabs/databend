@@ -1491,6 +1491,7 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
+ "atty",
  "console-subscriber",
  "once_cell",
  "opentelemetry",
