@@ -116,6 +116,8 @@ When `databend-query` starts, `AsyncInsertQueue` starts according to a config `e
 
 `AsyncInsertQueue` is a global instance, so we better put it in the `SessionManager`. But the queue also needs `SessionManager` which is a circular dependency. Therefore, the `session_mgr` of `AsyncInsertQueue` must be `Arc<RwLock<Option<Arc<SessionManager>>>>`, not `Arc<SeesionManager>`. We need to modify the `AsyncInsertQueue` after `SessionManager` has been initialized. Maybe we should use `Weak` better here.
 
+The mothod arguments of `AsyncInsertQueue` is `Arc<Self>` because tokio runtime needs a static lifetime of task.
+
 # Configs
 
 - `enable_async_insert`: Enable the async insert mode int http protocol
