@@ -8,20 +8,23 @@ on:
       - "scripts/setup/**"
       - "docker/build-tool/**"
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   base:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
+      - uses: ./.github/actions/setup_docker
+        id: login
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repo: build-tool
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Get rust toolchain version
         id: toolchain
@@ -35,8 +38,10 @@ jobs:
           pull: true
           push: true
           tags: |
-            datafuselabs/build-tool:base
-            datafuselabs/build-tool:base-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ steps.login.outputs.dockerhub_repo }}:base
+            ${{ steps.login.outputs.dockerhub_repo }}:base-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ steps.login.outputs.ecr_repo }}:base
+            ${{ steps.login.outputs.ecr_repo }}:base-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./scripts/setup
           file: ./docker/build-tool/base/Dockerfile
 
@@ -54,14 +59,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
+      - uses: ./.github/actions/setup_docker
+        id: login
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repo: build-tool
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Get rust toolchain version
         id: toolchain
@@ -69,19 +73,16 @@ jobs:
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
           echo "::set-output name=TOOLCHAIN::${version}"
 
-      - name: Get Image Name
-        run: |
-          image="datafuselabs/build-tool:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}"
-          echo "IMAGE=${image}" >> $GITHUB_ENV
-
       - name: Build and publish databend build image
         uses: docker/build-push-action@v3
         with:
           pull: true
           push: true
           tags: |
-            ${{ env.IMAGE }}
-            ${{ env.IMAGE }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
+            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./docker/build-tool/${{ matrix.platform }}/
           file: ./docker/build-tool/${{ matrix.platform }}/Dockerfile
           build-args: |
@@ -94,14 +95,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
+      - uses: ./.github/actions/setup_docker
+        id: login
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repo: build-tool
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Get rust toolchain version
         id: toolchain
@@ -115,8 +115,10 @@ jobs:
           pull: true
           push: true
           tags: |
-            datafuselabs/build-tool:dev
-            datafuselabs/build-tool:dev-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
+            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./scripts/setup
           file: ./docker/build-tool/dev/Dockerfile
           build-args: |

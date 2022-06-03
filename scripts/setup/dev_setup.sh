@@ -349,7 +349,7 @@ EOF
 		cat <<EOF
 Development tools (since -d was provided):
   * mysql client
-  * python3 (boto3, yapf, ...)
+  * python3 (boto3, yapf, yamllint, ...)
   * lcov
   * tools from rust-tools.txt ( e.g. cargo-audit, cargo-udeps, taplo-cli)
 EOF
@@ -514,7 +514,7 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		install_pkg py3-pip "$PACKAGE_MANAGER"
 		install_pkg libffi-dev "$PACKAGE_MANAGER"
 	fi
-	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py toml
+	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py toml yamllint
 	# drivers
 	python3 -m pip install --quiet mysql-connector-python pymysql sqlalchemy clickhouse_driver
 

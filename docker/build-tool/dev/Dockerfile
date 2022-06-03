@@ -1,5 +1,10 @@
+FROM golang:1.18 AS go-build
+RUN go install github.com/apache/skywalking-eyes/cmd/license-eye@latest
+
 ARG RUST_TOOLCHAIN
 FROM datafuselabs/build-tool:base-${RUST_TOOLCHAIN}
+
+COPY --from=go-build /go/bin/license-eye /usr/local/bin/license-eye
 
 ARG ARCH
 COPY rust-tools.txt /build/scripts/setup/rust-tools.txt
