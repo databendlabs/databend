@@ -8,7 +8,7 @@ inputs:
   bypass_env_vars:
     description: "Environment variables bypass to docker container"
     required: false
-    default: RUSTFLAGS,RUST_LOG
+    default: RUSTFLAGS,RUST_LOG,CARGO_TERM_COLOR,CARGO_INCREMENTAL
 runs:
   using: "composite"
   steps:
@@ -29,6 +29,8 @@ runs:
         #!/bin/bash
         script_name=\$(basename "\$0")
         export IMAGE=datafuselabs/build-tool:${{ inputs.image }}
+        export CARGO_INCREMENTAL=0
+        export CARGO_TERM_COLOR=always
         export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }}
         if [[ \${script_name} == "build-tool" ]]; then
           scripts/setup/run_build_tool.sh \$@
