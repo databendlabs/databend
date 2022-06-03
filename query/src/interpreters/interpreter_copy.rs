@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::operator_list_files;
 use common_planners::CopyMode;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
@@ -29,6 +28,7 @@ use common_planners::StageTableInfo;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use futures::StreamExt;
 use futures::TryStreamExt;
 use regex::Regex;
 
@@ -77,7 +77,15 @@ impl CopyInterpreter {
                     files_with_path
                 } else {
                     let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
-                    operator_list_files(&op, path).await?
+                    let mut list = vec![];
+
+                    // TODO: we could rewrite into try_collect.
+                    let mut objects = op.object(path).list().await?;
+                    while let Some(object) = objects.next().await {
+                        list.push(object?.path());
+                    }
+
+                    list
                 };
 
                 Ok(files_with_path)

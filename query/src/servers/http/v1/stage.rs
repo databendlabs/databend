@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_io::prelude::StorageParams;
 use common_meta_types::StageType;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -74,8 +73,8 @@ pub async fn upload_to_stage(
         .headers()
         .get("relative_path")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .trim_matches(|c| c == '/');
+        .unwrap_or("/")
+        .to_string();
 
     match stage.stage_type {
         // It's internal, so we already have an op which has the root path
