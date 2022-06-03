@@ -609,7 +609,7 @@ pub struct QueryConfig {
     pub jwt_key_file: String,
 
     /// Enable the async insert mode int http protocol
-    #[clap(long)]
+    #[clap(long, parse(try_from_str), default_value = "false")]
     pub enable_async_insert: bool,
 
     /// The maximum memory size of the buffered data collected per insert before being inserted.
@@ -625,7 +625,7 @@ pub struct QueryConfig {
     pub async_insert_stale_timeout: u64,
 
     /// If it's true, the client will wait for the query response of insert.
-    #[clap(long)]
+    #[clap(long, parse(try_from_str), default_value = "true")]
     pub wait_for_async_insert: bool,
 
     /// The timeout in seconds for waiting for processing of async insert.
