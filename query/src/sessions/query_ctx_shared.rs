@@ -177,6 +177,14 @@ impl QueryContextShared {
         self.session.get_settings()
     }
 
+    pub fn get_changed_settings(&self) -> Arc<Settings> {
+        self.session.get_changed_settings()
+    }
+
+    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        self.session.apply_changed_settings(changed_settings)
+    }
+
     pub fn get_catalogs(&self) -> Arc<CatalogManager> {
         self.session.get_catalogs()
     }

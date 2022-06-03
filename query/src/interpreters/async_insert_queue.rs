@@ -49,12 +49,28 @@ use crate::storages::memory::MemoryTableSink;
 #[derive(Clone)]
 pub struct InsertKey {
     plan: Arc<InsertPlan>,
-    _settings: Settings,
+    // settings different with default settings
+    changed_settings: Settings,
+}
+
+impl InsertKey {
+    pub fn get_serialized_changed_settings(&self) -> String {
+        let mut serialized_settings = String::new();
+        let values = self.changed_settings.get_setting_values();
+        for value in values.into_iter() {
+            let serialized = serde_json::to_string(&value).unwrap();
+            serialized_settings.push_str(&serialized);
+        }
+        serialized_settings
+    }
 }
 
 impl PartialEq for InsertKey {
     fn eq(&self, other: &Self) -> bool {
         self.plan.eq(&other.plan)
+            && self
+                .get_serialized_changed_settings()
+                .eq(&other.get_serialized_changed_settings())
     }
 }
 
@@ -67,14 +83,20 @@ impl Hash for InsertKey {
             self.plan.catalog_name, self.plan.database_name, self.plan.table_name
         );
         state.write(table.as_bytes());
-        // TODO(fkuner)
-        // self.settings.hash(state);
+        let values = self.changed_settings.get_setting_values();
+        for value in values.into_iter() {
+            let serialized = serde_json::to_string(&value).unwrap();
+            state.write(serialized.as_bytes());
+        }
     }
 }
 
 impl InsertKey {
-    pub fn try_create(plan: Arc<InsertPlan>, _settings: Settings) -> Self {
-        Self { plan, _settings }
+    pub fn try_create(plan: Arc<InsertPlan>, changed_settings: Settings) -> Self {
+        Self {
+            plan,
+            changed_settings,
+        }
     }
 }
 
@@ -206,7 +228,7 @@ impl AsyncInsertQueue {
     ) -> Result<()> {
         let self_arc = self.clone();
         let plan = plan_node.clone();
-        let settings = ctx.get_settings();
+        let settings = ctx.get_changed_settings();
 
         let data_block = match &plan_node.source {
             common_planners::InsertInputSource::SelectPlan(plan) => {

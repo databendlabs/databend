@@ -307,6 +307,14 @@ impl QueryContext {
         self.shared.get_settings()
     }
 
+    pub fn get_changed_settings(&self) -> Arc<Settings> {
+        self.shared.get_changed_settings()
+    }
+
+    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        self.shared.apply_changed_settings(changed_settings)
+    }
+
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
         self.shared.get_format_settings()
     }
