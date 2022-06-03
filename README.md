@@ -28,10 +28,8 @@
 <br>
 
 - [What is Databend?](#what-is-databend)
-- [Design Overview](#design-overview)
-   - [Meta Service Layer](#meta-service-layer)
-   - [Compute Layer](#compute-layer)
-   - [Storage Layer](#storage-layer)
+- [Architecture](#architecture)
+- [Try Databend](#try-databend)
 - [Getting Started](#getting-started)
 - [Community](#community)
 - [Roadmap](#roadmap)
