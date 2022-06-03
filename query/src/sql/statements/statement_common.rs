@@ -25,6 +25,7 @@ use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_tracing::tracing::debug;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
@@ -37,18 +38,20 @@ pub async fn location_to_stage_path(
     let mgr = ctx.get_user_manager();
     let s: Vec<&str> = location.split('@').collect();
     // @my_ext_stage/abc/
-    let names: Vec<&str> = s[1].splitn(2, '/').collect();
+    let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
     let stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
 
-    let path = if names.len() > 1 { names[1] } else { "/" };
+    let path = names.get(1).unwrap_or(&"");
 
     let relative_path = match stage.stage_type {
         // It's internal, so we should prefix with stage name.
         StageType::Internal => {
-            format!("/stage/{}{}", stage.stage_name, path)
+            format!("/stage/{}/{}", stage.stage_name, path)
         }
         StageType::External => path.to_string(),
     };
+
+    debug!("parsed stage: {stage:?}, path: {relative_path}");
     Ok((stage, relative_path))
 }
 

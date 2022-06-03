@@ -24,6 +24,7 @@ use common_planners::ListPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use common_tracing::tracing::info;
 use futures::StreamExt;
 use regex::Regex;
 
@@ -44,8 +45,12 @@ impl ListInterpreter {
 
     async fn list_files(&self) -> Result<Vec<String>> {
         let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
-        let pattern = &self.plan.pattern;
         let path = &self.plan.path;
+        let pattern = &self.plan.pattern;
+        info!(
+            "list stage {:?} with path {path}, pattern {pattern}",
+            self.plan.stage.stage_name
+        );
 
         let mut files = if path.ends_with('/') {
             let mut list = vec![];
