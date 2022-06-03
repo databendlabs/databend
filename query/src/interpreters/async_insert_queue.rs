@@ -50,7 +50,7 @@ use crate::storages::memory::MemoryTableSink;
 pub struct InsertKey {
     plan: Arc<InsertPlan>,
     // settings different with default settings
-    changed_settings: Settings,
+    changed_settings: Arc<Settings>,
 }
 
 impl InsertKey {
@@ -92,7 +92,7 @@ impl Hash for InsertKey {
 }
 
 impl InsertKey {
-    pub fn try_create(plan: Arc<InsertPlan>, changed_settings: Settings) -> Self {
+    pub fn try_create(plan: Arc<InsertPlan>, changed_settings: Arc<Settings>) -> Self {
         Self {
             plan,
             changed_settings,
@@ -270,7 +270,7 @@ impl AsyncInsertQueue {
         };
 
         let entry = Arc::new(Entry::try_create(data_block.clone()));
-        let key = InsertKey::try_create(plan, settings.as_ref().clone());
+        let key = InsertKey::try_create(plan, settings.clone());
 
         let mut queue = self_arc.queue.write();
 
@@ -341,6 +341,8 @@ impl AsyncInsertQueue {
         let session_mgr = self.session_mgr.read().clone().unwrap();
         let session = session_mgr.create_session(SessionType::HTTPQuery).await;
         let ctx = session.unwrap().create_query_context().await.unwrap();
+
+        ctx.apply_changed_settings(key.changed_settings.clone()).unwrap();
 
         let interpreter =
             InsertInterpreter::try_create(ctx.clone(), insert_plan.as_ref().clone(), true).unwrap();
