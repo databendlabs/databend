@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod access;
+mod async_insert_queue;
 mod interpreter_call;
 mod interpreter_database_create;
 mod interpreter_database_drop;
