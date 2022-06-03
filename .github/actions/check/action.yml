@@ -22,11 +22,12 @@ runs:
       with:
         log: info
 
-    - name: YAML Lint
-      uses: ibiqlik/action-yamllint@v3
-      with:
-        file_or_dir: ./
-        config_file: .yamllint.yml
+#    comment out to wait for https://github.com/datafuselabs/databend/pull/5759#issuecomment-1145570321
+#    - name: YAML Lint
+#      uses: ibiqlik/action-yamllint@v3
+#      with:
+#        file_or_dir: ./
+#        config_file: .yamllint.yml
 
     - name: Format
       shell: bash
