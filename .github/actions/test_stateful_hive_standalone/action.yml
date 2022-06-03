@@ -30,6 +30,12 @@ runs:
       run: |
         chmod +x ./target/debug/databend-*
 
+    - name: Checkout java env
+      uses: actions/setup-java@v3
+      with:
+        distribution: temurin
+        java-version: '11'
+
     # hive cluster setup
     - name: Hive Cluster Setup
       shell: bash
@@ -60,6 +66,9 @@ runs:
       shell: bash
       run: |
         bash ./scripts/ci/ci-run-stateful-hive-tests-standalone-embed-meta.sh
+      env:
+        LD_LIBRARY_PATH: ${{ env.JAVA_HOME }}/lib/server:${{ env.LD_LIBRARY_PATH }}
+
 
     - name: Stop containers
       if: always()
