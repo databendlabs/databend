@@ -46,3 +46,7 @@ runs:
     - name: check cargo version
       shell: bash
       run: rustup show
+
+    - name: check disk space
+      shell: bash
+      run: df -h
