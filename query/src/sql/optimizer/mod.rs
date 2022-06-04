@@ -55,6 +55,7 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
             kind,
             plan: Box::new(optimize(*plan)?),
         }),
+        Plan::CreateTable(_) => Ok(plan),
     }
 }
 

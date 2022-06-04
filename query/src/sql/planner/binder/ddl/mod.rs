@@ -12,21 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
-use crate::sql::plans::Plan;
-
-impl Plan {
-    pub fn format_indent(&self) -> Result<String> {
-        match self {
-            Plan::Query {
-                s_expr, metadata, ..
-            } => s_expr.to_format_tree(metadata).format_indent(),
-            Plan::Explain { kind, plan } => {
-                let result = plan.format_indent()?;
-                Ok(format!("{:?}:\n{}", kind, result))
-            }
-            Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
-        }
-    }
-}
+mod table;
