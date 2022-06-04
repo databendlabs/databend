@@ -447,6 +447,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve function call.
+    #[async_recursion::async_recursion]
     pub async fn resolve_function(
         &mut self,
         func_name: &str,
@@ -459,16 +460,24 @@ impl<'a> TypeChecker<'a> {
                 .get_user_manager()
                 .get_udf(self.ctx.get_tenant().as_str(), func_name)
                 .await;
-            if let Ok(udf) = udf {
+            return if let Ok(udf) = udf {
+                let mut arguments = arguments.to_vec();
                 let backtrace = Backtrace::new();
                 let sql_tokens = tokenize_sql(udf.definition.as_str())?;
                 let expr = parse_udf(&sql_tokens, &backtrace)?;
-                return self.resolve(&expr, required_type).await;
+                arguments.push(&expr);
+                let (scalar, _) = self.resolve(&expr, None).await?;
+                let func_name = match scalar {
+                    Scalar::FunctionCall(FunctionCall { func_name, .. }) => func_name,
+                    _ => return Err(ErrorCode::SemanticError("...")),
+                };
+                self.resolve_function(func_name.as_str(), &arguments, required_type)
+                    .await
             } else {
-                return Err(ErrorCode::SemanticError(
+                Err(ErrorCode::SemanticError(
                     "No function matches the given name.",
-                ));
-            }
+                ))
+            };
         }
         let mut args = vec![];
         let mut arg_types = vec![];
