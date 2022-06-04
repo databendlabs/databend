@@ -31,6 +31,22 @@ use sqlparser::ast::ObjectName;
 use crate::sessions::QueryContext;
 
 /// Returns user's stage info and relative path towards the stage's root.
+///
+/// If input location is empty we will convert it to `/` means the root of stage
+///
+/// - @mystage => (mystage, "/")
+///
+/// If input location is endswith `/`, it's a folder.
+///
+/// - @mystage/ => (mystage, "/")
+///
+/// Otherwise, it's a file
+///
+/// - @mystage/abc => (mystage, "abc")
+///
+/// For internal stage, we will also add prefix `/stage/<stage>/`
+///
+/// - @internal/abc => (internal, "/stage/internal/abc")
 pub async fn location_to_stage_path(
     location: &str,
     ctx: &Arc<QueryContext>,
