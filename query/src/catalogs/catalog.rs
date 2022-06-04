@@ -31,6 +31,8 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
@@ -62,6 +64,8 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()>;
+
+    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply>;
 
     async fn exists_database(&self, tenant: &str, db_name: &str) -> Result<bool> {
         match self.get_database(tenant, db_name).await {

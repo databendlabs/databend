@@ -71,6 +71,7 @@ use crate::interpreters::ShowTabStatInterpreter;
 use crate::interpreters::ShowTablesInterpreter;
 use crate::interpreters::ShowUsersInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
+use crate::interpreters::UnDropDatabaseInterpreter;
 use crate::interpreters::UnDropTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::QueryContext;
@@ -133,6 +134,7 @@ impl InterpreterFactory {
                 ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
             }
             PlanNode::RenameDatabase(v) => RenameDatabaseInterpreter::try_create(ctx_clone, v),
+            PlanNode::UnDropDatabase(v) => UnDropDatabaseInterpreter::try_create(ctx_clone, v),
 
             // Table related transforms
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
