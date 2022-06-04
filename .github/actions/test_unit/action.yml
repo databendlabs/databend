@@ -4,6 +4,7 @@ inputs:
   codecov_token:
     description: "CodeCov Token"
     required: true
+
 runs:
   using: "composite"
   steps:
