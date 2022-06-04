@@ -48,7 +48,13 @@ pub async fn location_to_stage_path(
         StageType::Internal => {
             format!("/stage/{}/{}", stage.stage_name, path)
         }
-        StageType::External => path.to_string(),
+        StageType::External => {
+            if path.is_empty() {
+                "/".to_string()
+            } else {
+                path.to_string()
+            }
+        }
     };
 
     debug!("parsed stage: {stage:?}, path: {relative_path}");
@@ -80,14 +86,19 @@ pub fn parse_stage_storage(
         })?
         .to_string();
     // Path maybe a dir or a file.
-    let path = uri.path().to_string();
+    let mut path = uri.path().to_string();
+    // Rewrite path to `/` if it's empty to fit the directory check rule.
+    if path.is_empty() {
+        path = "/".to_string();
+    }
+
     // Path endswith `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
     let (root, path) = if path.ends_with('/') {
-        (path.as_str(), "")
+        (path.as_str(), "/")
     } else {
-        ("", path.as_str())
+        ("/", path.as_str())
     };
 
     // File storage plan.
