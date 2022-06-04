@@ -25,7 +25,6 @@ select a+b from t2;
 
 create table t2(a int,b int) engine=Memory; -- {ErrorCode 2302}
 create table t2(a int,b int) engine=Memory; -- {ErrorCode 2302}
-create table t2(a INT auto_increment); -- {ErrorCode 1005}
 
 create table t3(a int,b int) engine=Memory CLUSTER BY(a); -- {ErrorCode 2703}
 
@@ -67,7 +66,6 @@ SELECT '====END TEST CREATE TABLE LIKE STATEMENT====';
 
 
 SELECT '====TIMESTAMP====';
-create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); -- {ErrorCode 1065}
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
 
 
