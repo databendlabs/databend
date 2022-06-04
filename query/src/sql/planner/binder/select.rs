@@ -14,11 +14,15 @@
 
 use async_recursion::async_recursion;
 use common_ast::ast::Expr;
+use common_ast::ast::Join;
+use common_ast::ast::JoinCondition;
+use common_ast::ast::JoinOperator;
 use common_ast::ast::OrderByExpr;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
+use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -50,10 +54,24 @@ impl<'a> Binder {
         stmt: &SelectStmt<'a>,
         order_by: &[OrderByExpr<'a>],
     ) -> Result<(SExpr, BindContext)> {
-        let (mut s_expr, mut from_context) = if let Some(from) = &stmt.from {
-            self.bind_table_reference(bind_context, from).await?
-        } else {
+        let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             self.bind_one_table(bind_context, stmt).await?
+        } else {
+            let cross_joins = stmt
+                .from
+                .iter()
+                .cloned()
+                .reduce(|left, right| {
+                    TableReference::Join(Join {
+                        op: JoinOperator::CrossJoin,
+                        condition: JoinCondition::None,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    })
+                })
+                .unwrap();
+            self.bind_table_reference(bind_context, &cross_joins)
+                .await?
         };
 
         if let Some(expr) = &stmt.selection {

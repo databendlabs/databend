@@ -125,11 +125,6 @@ impl QueryContextShared {
             source_abort_handle.abort();
         }
 
-        let http_query = self.http_query.read();
-        if let Some(handle) = &*http_query {
-            handle.abort();
-        }
-
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
@@ -244,6 +239,9 @@ impl QueryContextShared {
     pub fn attach_http_query_handle(&self, handle: HttpQueryHandle) {
         let mut http_query = self.http_query.write();
         *http_query = Some(handle);
+    }
+    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
+        self.http_query.read().clone()
     }
 
     pub fn attach_query_str(&self, query: &str) {

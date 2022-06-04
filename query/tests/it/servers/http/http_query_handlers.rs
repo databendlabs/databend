@@ -90,11 +90,10 @@ async fn expect_end(ep: &EndpointType, result: QueryResponse) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_simple_sql() -> Result<()> {
+async fn test_simple_sql(v2: u64) -> Result<()> {
     let sql = "select * from system.tables limit 10";
     let ep = create_endpoint();
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1, v2).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 10, "{:?}", result);
@@ -163,11 +162,20 @@ async fn test_simple_sql() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_return_when_finish() -> Result<()> {
+async fn test_simple_sql_v1() -> Result<()> {
+    test_simple_sql(0).await
+}
+
+#[tokio::test]
+async fn test_simple_sql_v2() -> Result<()> {
+    test_simple_sql(1).await
+}
+
+async fn test_return_when_finish(v2: u64) -> Result<()> {
     let wait_time_secs = 5;
     let sql = "create table t1(a int)";
     let ep = create_endpoint();
-    let (status, result) = post_sql_to_endpoint(&ep, sql, wait_time_secs).await?;
+    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, v2).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     for (sql, state) in [
@@ -190,6 +198,16 @@ async fn test_return_when_finish() -> Result<()> {
         );
     }
     Ok(())
+}
+
+#[tokio::test]
+async fn test_return_when_finish_v1() -> Result<()> {
+    test_return_when_finish(0).await
+}
+
+#[tokio::test]
+async fn test_return_when_finish_v2() -> Result<()> {
+    test_return_when_finish(1).await
 }
 
 #[tokio::test]
@@ -260,7 +278,6 @@ async fn test_wait_time_secs() -> Result<()> {
         assert_eq!(status, StatusCode::OK, "{:?}", result);
         assert!(result.error.is_none(), "{:?}", result);
         assert!(result.stats.scan_progress.is_some(), "{:?}", result);
-        println!("{:?}", result);
         num_row += result.data.len();
         match &result.next_uri {
             Some(next_uri) => {
@@ -284,6 +301,7 @@ async fn test_wait_time_secs() -> Result<()> {
     }
     unreachable!("'{}' run for more than 3 secs", sql);
 }
+
 #[tokio::test]
 async fn test_buffer_size() -> Result<()> {
     let rows = 100;
@@ -305,11 +323,10 @@ async fn test_buffer_size() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_pagination() -> Result<()> {
+async fn test_pagination(v2: u64) -> Result<()> {
     let ep = create_endpoint();
     let sql = "select * from numbers(10)";
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}});
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}, "session": { "settings": {"enable_planner_v2": v2.to_string()}}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -326,7 +343,6 @@ async fn test_pagination() -> Result<()> {
 
         let (status, result) = get_uri_checked(&ep, &uri).await?;
         let msg = || format!("page {}: {:?}", page, result);
-        println!("{} {:?}", msg(), result);
         assert_eq!(status, StatusCode::OK, "{:?}", msg());
         assert!(result.error.is_none(), "{:?}", msg());
         assert_eq!(result.data.len(), 2, "{:?}", msg());
@@ -365,6 +381,16 @@ async fn test_pagination() -> Result<()> {
     assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_pagination_v1() -> Result<()> {
+    test_pagination(0).await
+}
+
+#[tokio::test]
+async fn test_pagination_v2() -> Result<()> {
+    test_pagination(1).await
 }
 
 #[test]
@@ -681,7 +707,17 @@ async fn post_sql_to_endpoint(
     sql: &str,
     wait_time_secs: u64,
 ) -> Result<(StatusCode, QueryResponse)> {
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+    post_sql_to_endpoint_new_session(ep, sql, wait_time_secs, 0).await
+}
+
+async fn post_sql_to_endpoint_new_session(
+    ep: &EndpointType,
+    sql: &str,
+    wait_time_secs: u64,
+    enable_planner_v2: u64,
+) -> Result<(StatusCode, QueryResponse)> {
+    let enable_planner_v2 = enable_planner_v2.to_string();
+    let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {"enable_planner_v2": enable_planner_v2}}});
     post_json_to_endpoint(ep, &json).await
 }
 
@@ -1005,12 +1041,11 @@ pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
     resp
 }
 
-#[tokio::test]
-async fn test_download() -> Result<()> {
+async fn test_download(v2: u64) -> Result<()> {
     let ep = create_endpoint();
 
     let sql = "select number, number + 1 from numbers(2)";
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1, v2).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 2, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
@@ -1034,7 +1069,11 @@ async fn test_download() -> Result<()> {
         ("csv", "0,1\n1,2\n"),
         (
             "ndjson",
-            "{\"number\":0,\"(number + 1)\":1}\n{\"number\":1,\"(number + 1)\":2}\n",
+            if v2 == 0 {
+                "{\"number\":0,\"(number + 1)\":1}\n{\"number\":1,\"(number + 1)\":2}\n"
+            } else {
+                "{\"number\":0,\"number + 1\":1}\n{\"number\":1,\"number + 1\":2}\n"
+            },
         ),
         ("values", "(0,1),(1,2)"),
     ] {
@@ -1049,6 +1088,16 @@ async fn test_download() -> Result<()> {
         );
     }
     Ok(())
+}
+
+#[tokio::test]
+async fn test_download_v1() -> Result<()> {
+    test_download(0).await
+}
+
+#[tokio::test]
+async fn test_download_v2() -> Result<()> {
+    test_download(1).await
 }
 
 #[tokio::test]
@@ -1072,11 +1121,10 @@ async fn test_download_non_select() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_download_failed() -> Result<()> {
+async fn test_download_failed(v2: u64) -> Result<()> {
     let ep = create_endpoint();
     let sql = "xxx";
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1, v2).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
 
     let mut resp = download(&ep, &result.id).await;
@@ -1085,6 +1133,16 @@ async fn test_download_failed() -> Result<()> {
     assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{:?}", result);
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_download_failed_v1() -> Result<()> {
+    test_download_failed(0).await
+}
+
+#[tokio::test]
+async fn test_download_failed_v2() -> Result<()> {
+    test_download_failed(1).await
 }
 
 #[tokio::test]

@@ -74,6 +74,7 @@ impl AuthMgr {
                             user_info.grants.grant_role(role);
                         }
                     }
+                    self.user_mgr.ensure_builtin_roles(&tenant).await?;
                     self.user_mgr
                         .add_user(&tenant, user_info.clone(), true)
                         .await?;

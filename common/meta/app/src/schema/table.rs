@@ -283,6 +283,14 @@ impl TableIdList {
         TableIdList::default()
     }
 
+    pub fn len(&self) -> usize {
+        self.id_list.len()
+    }
+
+    pub fn id_list(&self) -> &Vec<u64> {
+        &self.id_list
+    }
+
     pub fn append(&mut self, table_id: u64) {
         self.id_list.push(table_id);
     }

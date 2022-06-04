@@ -60,19 +60,9 @@ pub fn query(i: Input) -> IResult<Query> {
                     span: span.0,
                     distinct: opt_distinct.is_some(),
                     select_list,
-                    from: opt_from_block.map(|(_, table_refs)| {
-                        table_refs
-                            .into_iter()
-                            .reduce(|left, right| {
-                                TableReference::Join(Join {
-                                    op: JoinOperator::CrossJoin,
-                                    condition: JoinCondition::None,
-                                    left: Box::new(left),
-                                    right: Box::new(right),
-                                })
-                            })
-                            .unwrap()
-                    }),
+                    from: opt_from_block
+                        .map(|(_, table_refs)| table_refs)
+                        .unwrap_or_default(),
                     selection: opt_where_block.map(|(_, selection)| selection),
                     group_by: opt_group_by_block
                         .map(|(_, _, group_by)| group_by)

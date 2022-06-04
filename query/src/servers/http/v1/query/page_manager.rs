@@ -25,8 +25,8 @@ use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
 
 use crate::servers::http::v1::json_block::block_to_json_value;
-use crate::servers::http::v1::query::block_buffer::BlockBuffer;
 use crate::servers::http::v1::JsonBlock;
+use crate::storages::result::block_buffer::BlockBuffer;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Wait {

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(backtrace)]
+
 //! This crate defines data types used in meta data storage service.
 
 mod applied_state;
@@ -123,6 +125,8 @@ pub use meta_raft_errors::RetryableError;
 pub use meta_result_error::MetaResultError;
 pub use meta_storage_errors::MetaStorageError;
 pub use meta_storage_errors::MetaStorageResult;
+pub use operation::GCDroppedDataReply;
+pub use operation::GCDroppedDataReq;
 pub use operation::MetaId;
 pub use operation::Operation;
 pub use principal_identity::PrincipalIdentity;

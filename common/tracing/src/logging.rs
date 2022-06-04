@@ -36,7 +36,6 @@ use tracing_subscriber::fmt::FmtContext;
 use tracing_subscriber::fmt::FormatEvent;
 use tracing_subscriber::fmt::FormatFields;
 use tracing_subscriber::fmt::FormattedFields;
-use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::EnvFilter;
@@ -74,12 +73,8 @@ pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<Worker
     // Enable log compatible layer to convert log record to tracing span.
     LogTracer::init().expect("log tracer must be valid");
 
-    // Stdout layer.
-    let (stdout_writer, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
-    let stdout_logging_layer = Layer::new().with_writer(stdout_writer);
-    guards.push(stdout_guard);
-
-    // JSON log layer.
+    // JSON layer:
+    // Log files will be stored in log.dir, default is '.databend/logs'.
     let rolling_appender = RollingFileAppender::new(Rotation::HOURLY, dir, app_name);
     let (rolling_writer, rolling_writer_guard) = tracing_appender::non_blocking(rolling_appender);
     let file_logging_layer = BunyanFormattingLayer::new(app_name.to_string(), rolling_writer);
@@ -94,16 +89,17 @@ pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<Worker
     let jaeger_layer = Some(tracing_opentelemetry::layer().with_tracer(tracer));
 
     // Use env RUST_LOG to initialize log if present.
-    // Otherwise use the specified level.
+    // Otherwise, use the specified level.
     let directives = env::var(EnvFilter::DEFAULT_ENV).unwrap_or_else(|_x| level.to_string());
     let env_filter = EnvFilter::new(directives);
     let subscriber = Registry::default()
+        .with(fmt::layer().with_ansi(atty::is(atty::Stream::Stdout)))
         .with(env_filter)
         .with(JsonStorageLayer)
-        .with(stdout_logging_layer)
         .with(file_logging_layer)
         .with(jaeger_layer);
 
+    // For tokio-console
     #[cfg(feature = "console")]
     let subscriber = subscriber.with(console_subscriber::spawn());
 
@@ -122,6 +118,7 @@ pub fn init_query_logger(
     let rolling_appender = RollingFileAppender::new(Rotation::HOURLY, dir, log_name);
     let (rolling_writer, rolling_writer_guard) = tracing_appender::non_blocking(rolling_appender);
     let format = tracing_subscriber::fmt::format()
+        .with_ansi(atty::is(atty::Stream::Stdout))
         .without_time()
         .with_target(false)
         .with_level(false)
