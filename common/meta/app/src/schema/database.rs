@@ -230,6 +230,15 @@ impl Display for UndropDatabaseReq {
     }
 }
 
+impl UndropDatabaseReq {
+    pub fn tenant(&self) -> &str {
+        &self.name_ident.tenant
+    }
+    pub fn db_name(&self) -> &str {
+        &self.name_ident.db_name
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct UndropDatabaseReply {}
 
