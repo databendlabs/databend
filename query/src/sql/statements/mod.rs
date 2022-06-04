@@ -139,7 +139,7 @@ pub use statement_show_tab_stat::DfShowTabStat;
 pub use statement_show_tables::DfShowTables;
 pub use statement_show_users::DfShowUsers;
 pub use statement_truncate_table::DfTruncateTable;
-pub use statement_undrop_table::DfUnDropTable;
 pub use statement_undrop_database::DfUnDropDatabase;
+pub use statement_undrop_table::DfUnDropTable;
 pub use statement_use_database::DfUseDatabase;
 pub use value_source::ValueSource;
