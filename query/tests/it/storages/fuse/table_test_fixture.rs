@@ -21,7 +21,6 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::StorageFsConfig;
 use common_io::prelude::StorageParams;
-use common_meta_app::schema::ClusterKeyMeta;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::TableMeta;
 use common_planners::CreateDatabasePlan;
@@ -135,10 +134,8 @@ impl TestFixture {
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
                 .into(),
-                cluster_key_meta: Some(ClusterKeyMeta {
-                    cluster_keys_vec: vec!["(id)".to_string()],
-                    default_cluster_key_id: 0,
-                }),
+                cluster_keys: vec!["(id)".to_string()],
+                default_cluster_key_id: Some(0),
                 ..Default::default()
             },
             as_select: None,

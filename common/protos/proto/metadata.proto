@@ -154,8 +154,11 @@ message TableMeta {
   // Table options.
   map<string, string> options = 5;
 
-  // Keys to sort rows in table.
-  optional ClusterKeyMeta cluster_key_meta = 9;
+  // The vector of cluster keys.
+  repeated string cluster_keys = 9;
+
+  // The default cluster keys id.
+  optional uint32 default_cluster_key_id = 8;
 
   // The time table created.
   string created_on = 20;
@@ -207,17 +210,6 @@ message TableStatistics {
 
   // Size of index data in bytes
   uint64 index_data_bytes = 4;
-}
-
-// The meta of cluster keys
-message ClusterKeyMeta {
-  uint64 ver = 100;
-
-  // The vector of cluster keys
-  repeated string cluster_keys_vec = 1;
-
-  // The default cluster keys id
-  uint32 default_cluster_key_id = 2;
 }
 
 // One field, AKA column

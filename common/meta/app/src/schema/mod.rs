@@ -34,7 +34,6 @@ pub use database::RenameDatabaseReply;
 pub use database::RenameDatabaseReq;
 pub use database::UndropDatabaseReply;
 pub use database::UndropDatabaseReq;
-pub use table::ClusterKeyMeta;
 pub use table::CountTablesKey;
 pub use table::CountTablesReply;
 pub use table::CountTablesReq;

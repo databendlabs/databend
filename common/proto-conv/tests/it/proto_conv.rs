@@ -19,7 +19,6 @@ use common_datavalues as dv;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
-use common_meta_app::schema::ClusterKeyMeta;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_proto_conv::FromToProto;
@@ -109,10 +108,8 @@ fn new_table_info() -> mt::TableInfo {
             engine: "44".to_string(),
             engine_options: btreemap! {s("abc") => s("def")},
             options: btreemap! {s("xyz") => s("foo")},
-            cluster_key_meta: Some(ClusterKeyMeta {
-                cluster_keys_vec: vec!["(a + 2, b)".to_string()],
-                default_cluster_key_id: 0,
-            }),
+            cluster_keys: vec!["(a + 2, b)".to_string()],
+            default_cluster_key_id: Some(0),
             created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
             updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
             comment: s("table_comment"),
@@ -224,7 +221,7 @@ fn test_load_old() -> anyhow::Result<()> {
     // TableInfo is loadable
     {
         let tbl_info_v1: Vec<u8> = vec![
-            10, 7, 8, 5, 16, 6, 160, 6, 1, 18, 3, 102, 111, 111, 26, 3, 98, 97, 114, 34, 137, 5,
+            10, 7, 8, 5, 16, 6, 160, 6, 1, 18, 3, 102, 111, 111, 26, 3, 98, 97, 114, 34, 134, 5,
             10, 140, 4, 10, 37, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43, 32,
             51, 26, 15, 10, 10, 10, 5, 26, 0, 160, 6, 1, 160, 6, 1, 160, 6, 1, 160, 6, 1, 10, 16,
             10, 4, 98, 111, 111, 108, 26, 5, 18, 0, 160, 6, 1, 160, 6, 1, 10, 16, 10, 4, 105, 110,
@@ -250,12 +247,11 @@ fn test_load_old() -> anyhow::Result<()> {
             3, 160, 6, 1, 160, 6, 1, 160, 6, 1, 10, 26, 10, 8, 105, 110, 116, 101, 114, 118, 97,
             108, 26, 11, 170, 1, 5, 8, 2, 160, 6, 1, 160, 6, 1, 160, 6, 1, 18, 6, 10, 1, 97, 18, 1,
             98, 160, 6, 1, 42, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58,
-            10, 10, 3, 97, 98, 99, 18, 3, 100, 101, 102, 74, 15, 10, 10, 40, 97, 32, 43, 32, 50,
-            44, 32, 98, 41, 160, 6, 1, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49,
-            50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45,
-            50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1, 13, 116, 97, 98,
-            108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 3, 160, 6, 1, 160, 6, 1, 160,
-            6, 1,
+            10, 10, 3, 97, 98, 99, 18, 3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44,
+            32, 98, 41, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48,
+            58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49,
+            50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1, 13, 116, 97, 98, 108, 101, 95, 99,
+            111, 109, 109, 101, 110, 116, 186, 1, 3, 160, 6, 1, 160, 6, 1, 160, 6, 1,
         ];
         let p: pb::TableInfo =
             common_protos::prost::Message::decode(tbl_info_v1.as_slice()).map_err(print_err)?;
@@ -320,10 +316,8 @@ fn test_load_old() -> anyhow::Result<()> {
                 engine: "44".to_string(),
                 engine_options: btreemap! {s("abc") => s("def")},
                 options: btreemap! {s("xyz") => s("foo")},
-                cluster_key_meta: Some(ClusterKeyMeta {
-                    cluster_keys_vec: vec!["(a + 2, b)".to_string()],
-                    default_cluster_key_id: 0,
-                }),
+                cluster_keys: vec!["(a + 2, b)".to_string()],
+                default_cluster_key_id: Some(0),
                 created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
                 updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
                 comment: s("table_comment"),

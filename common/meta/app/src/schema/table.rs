@@ -165,14 +165,6 @@ pub struct TableStatistics {
     pub index_data_bytes: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct ClusterKeyMeta {
-    // The vector of cluster keys.
-    pub cluster_keys_vec: Vec<String>,
-    // The default cluster keys id.
-    pub default_cluster_key_id: u32,
-}
-
 /// The essential state that defines what a table is.
 ///
 /// It is what a meta store just needs to save.
@@ -182,7 +174,10 @@ pub struct TableMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
-    pub cluster_key_meta: Option<ClusterKeyMeta>,
+    // The vector of cluster keys.
+    pub cluster_keys: Vec<String>,
+    // The default cluster keys id.
+    pub default_cluster_key_id: Option<u32>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
@@ -245,7 +240,8 @@ impl Default for TableMeta {
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),
-            cluster_key_meta: None,
+            cluster_keys: vec![],
+            default_cluster_key_id: None,
             created_on: Default::default(),
             updated_on: Default::default(),
             comment: "".to_string(),
@@ -256,28 +252,15 @@ impl Default for TableMeta {
 }
 
 impl TableMeta {
-    pub fn set_cluster_keys_meta(mut self, cluster_keys: String) -> Self {
-        match self.cluster_key_meta {
-            Some(ref mut v) => {
-                v.cluster_keys_vec.push(cluster_keys);
-                v.default_cluster_key_id = v.cluster_keys_vec.len() as u32 - 1;
-            }
-            None => {
-                self.cluster_key_meta = Some(ClusterKeyMeta {
-                    cluster_keys_vec: vec![cluster_keys],
-                    default_cluster_key_id: 0,
-                });
-            }
-        }
+    pub fn set_cluster_keys_meta(mut self, cluster_key: String) -> Self {
+        self.cluster_keys.push(cluster_key);
+        self.default_cluster_key_id = Some(self.cluster_keys.len() as u32 - 1);
         self
     }
 
     pub fn cluster_keys(&self) -> Option<(u32, String)> {
-        self.cluster_key_meta.as_ref().map(|v| {
-            let id = v.default_cluster_key_id;
-            let key = v.cluster_keys_vec[id as usize].clone();
-            (id, key)
-        })
+        self.default_cluster_key_id
+            .map(|id| (id, self.cluster_keys[id as usize].clone()))
     }
 }
 

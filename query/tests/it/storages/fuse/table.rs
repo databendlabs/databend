@@ -17,7 +17,6 @@ use std::default::Default;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_meta_app::schema::ClusterKeyMeta;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_planners::col;
@@ -309,7 +308,8 @@ async fn test_fuse_alter_cluster_key() -> Result<()> {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            cluster_key_meta: None,
+            cluster_keys: vec![],
+            default_cluster_key_id: None,
             ..Default::default()
         },
         as_select: None,
@@ -333,11 +333,8 @@ async fn test_fuse_alter_cluster_key() -> Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
-    let expected = Some(ClusterKeyMeta {
-        cluster_keys_vec: vec!["(id)".to_string()],
-        default_cluster_key_id: 0,
-    });
-    assert_eq!(table_info.meta.cluster_key_meta, expected);
+    assert_eq!(table_info.meta.cluster_keys, vec!["(id)".to_string()]);
+    assert_eq!(table_info.meta.default_cluster_key_id, Some(0));
 
     let snapshot_loc = table
         .get_table_info()
