@@ -578,7 +578,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         rule! {
             CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
         },
-        |(_, _, _, cluster_by, _)| AlterTableAction::ClusterBy { cluster_by },
+        |(_, _, _, cluster_by, _)| AlterTableAction::AddClusterKey { cluster_by },
     );
 
     rule!(

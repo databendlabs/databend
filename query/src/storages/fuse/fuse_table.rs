@@ -238,7 +238,6 @@ impl Table for FuseTable {
         new_table_meta
             .options
             .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), snapshot_loc.clone());
-
         // remove legacy options
         new_table_meta.options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
 
@@ -252,7 +251,6 @@ impl Table for FuseTable {
 
         let catalog = ctx.get_catalog(catalog_name)?;
         let result = catalog.update_table_meta(req).await;
-
         match result {
             Ok(_) => {
                 if let Some(snapshot_cache) =
