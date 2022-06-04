@@ -12,13 +12,13 @@ runs:
       with:
         swap-size-gb: 4
 
-    - name: Maximize build space
-      uses: ./.github/actions/cleanup
+    # - name: Maximize build space
+    #   uses: ./.github/actions/cleanup
 
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
       with:
-        bypass_env_vars: RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
+        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
 
     - shell: bash
       run: cargo test --no-fail-fast
@@ -64,7 +64,3 @@ runs:
           query/_logs*/
           store/_logs*/
           .databend/
-
-    # for cache
-    - shell: bash
-      run: cargo metadata --all-features --format-version 1 > ./target/metadata.json

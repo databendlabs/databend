@@ -8,7 +8,7 @@ inputs:
   bypass_env_vars:
     description: "Environment variables bypass to docker container"
     required: false
-    default: RUSTFLAGS,RUST_LOG,CARGO_TERM_COLOR,CARGO_INCREMENTAL
+    default: RUSTFLAGS,RUST_LOG
 runs:
   using: "composite"
   steps:
@@ -31,7 +31,7 @@ runs:
         export IMAGE=datafuselabs/build-tool:${{ inputs.image }}
         export CARGO_INCREMENTAL=0
         export CARGO_TERM_COLOR=always
-        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }}
+        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR
         if [[ \${script_name} == "build-tool" ]]; then
           scripts/setup/run_build_tool.sh \$@
         else
@@ -42,6 +42,8 @@ runs:
         ln -s build-tool $BIN_LOCAL/rustc
         ln -s build-tool $BIN_LOCAL/cargo
         ln -s build-tool $BIN_LOCAL/rustup
+        ln -s build-tool $BIN_LOCAL/make
+        ln -s build-tool $BIN_LOCAL/taplo
 
     - name: check cargo version
       shell: bash

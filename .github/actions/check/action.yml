@@ -9,6 +9,8 @@ runs:
   steps:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
+      with:
+         bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN
 
     - name: Check License Header
       shell: bash
@@ -40,4 +42,4 @@ runs:
 
     - name: Check toml format
       shell: bash
-      run: build-tool taplo fmt --check
+      run: taplo fmt --check
