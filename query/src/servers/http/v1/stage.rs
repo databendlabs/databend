@@ -76,13 +76,10 @@ pub async fn upload_to_stage(
         .unwrap_or("/")
         .to_string();
 
-    match stage.stage_type {
-        // It's internal, so we already have an op which has the root path
-        // need to inject a tenant path
-        StageType::Internal => {
-            relative_path = format!("/stage/{}/{}/", stage.stage_name, relative_path);
-        }
-        _ => {}
+    // It's internal, so we already have an op which has the root path
+    // need to inject a tenant path
+    if stage.stage_type == StageType::Internal {
+        relative_path = format!("/stage/{}/{}/", stage.stage_name, relative_path);
     }
 
     while let Ok(Some(field)) = multipart.next_field().await {

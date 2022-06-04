@@ -217,7 +217,7 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
+    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
         unimplemented!()
     }
 
