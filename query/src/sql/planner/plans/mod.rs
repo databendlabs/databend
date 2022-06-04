@@ -31,6 +31,7 @@ mod sort;
 pub use aggregate::AggregatePlan;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
+use common_planners::CreateTablePlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
@@ -66,4 +67,7 @@ pub enum Plan {
         kind: ExplainKind,
         plan: Box<Plan>,
     },
+
+    // DDL
+    CreateTable(CreateTablePlan),
 }

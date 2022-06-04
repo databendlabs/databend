@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use super::CreateTableInterpreter;
 use super::ExplainInterpreterV2;
 use super::InterpreterPtr;
 use super::SelectInterpreterV2;
@@ -31,7 +32,10 @@ pub struct InterpreterFactoryV2;
 impl InterpreterFactoryV2 {
     /// Check if statement is supported by InterpreterFactoryV2
     pub fn check(stmt: &DfStatement) -> bool {
-        matches!(stmt, DfStatement::Query(_) | DfStatement::Explain(_))
+        matches!(
+            stmt,
+            DfStatement::Query(_) | DfStatement::Explain(_) | DfStatement::CreateTable(_)
+        )
     }
 
     pub fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
@@ -48,6 +52,9 @@ impl InterpreterFactoryV2 {
             ),
             Plan::Explain { kind, plan } => {
                 ExplainInterpreterV2::try_create(ctx, *plan.clone(), kind.clone())
+            }
+            Plan::CreateTable(create_table) => {
+                CreateTableInterpreter::try_create(ctx, create_table.clone())
             }
         }?;
         Ok(inner)

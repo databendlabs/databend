@@ -33,6 +33,7 @@ use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod ddl;
 mod distinct;
 mod join;
 mod limit;
@@ -101,6 +102,11 @@ impl<'a> Binder {
                     kind: kind.clone(),
                     plan: Box::new(plan),
                 })
+            }
+
+            Statement::CreateTable(stmt) => {
+                let plan = self.bind_create_table(stmt).await?;
+                Ok(plan)
             }
 
             _ => Err(ErrorCode::UnImplement(format!(
