@@ -27,11 +27,12 @@ use num::FromPrimitive;
 use crate::check_ver;
 use crate::FromToProto;
 use crate::Incompatible;
+use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
 impl FromToProto<pb::DataSchema> for dv::DataSchema {
     fn from_pb(p: pb::DataSchema) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let mut fs = Vec::with_capacity(p.fields.len());
         for f in p.fields.into_iter() {
@@ -50,6 +51,7 @@ impl FromToProto<pb::DataSchema> for dv::DataSchema {
 
         let p = pb::DataSchema {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             fields: fs,
             metadata: self.meta().clone(),
         };
@@ -59,7 +61,7 @@ impl FromToProto<pb::DataSchema> for dv::DataSchema {
 
 impl FromToProto<pb::DataField> for dv::DataField {
     fn from_pb(p: pb::DataField) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let v = dv::DataField::new(
             &p.name,
@@ -74,6 +76,7 @@ impl FromToProto<pb::DataField> for dv::DataField {
     fn to_pb(&self) -> Result<pb::DataField, Incompatible> {
         let p = pb::DataField {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             name: self.name().clone(),
             default_expr: self.default_expr().cloned(),
             data_type: Some(self.data_type().to_pb()?),
@@ -84,7 +87,7 @@ impl FromToProto<pb::DataField> for dv::DataField {
 
 impl FromToProto<pb::DataType> for dv::DataTypeImpl {
     fn from_pb(p: pb::DataType) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let dt = match p.dt {
             None => {
@@ -136,6 +139,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::NullableType(Box::new(inn))),
                 };
                 Ok(v)
@@ -143,6 +147,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::Boolean(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::BoolType(pb::Empty {})),
                 };
                 Ok(v)
@@ -150,6 +155,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::Int8(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::Int8Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -157,6 +163,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::Int16(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::Int16Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -164,6 +171,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::Int32(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::Int32Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -171,6 +179,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::Int64(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::Int64Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -178,6 +187,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::UInt8(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::Uint8Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -185,6 +195,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::UInt16(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::Uint16Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -192,6 +203,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::UInt32(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::Uint32Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -199,6 +211,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::UInt64(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::Uint64Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -206,6 +219,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::Float32(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::Float32Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -213,6 +227,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::Float64(_) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::Float64Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -220,6 +235,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::Date(_x) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::DateType(pb::Empty {})),
                 };
                 Ok(v)
@@ -229,6 +245,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::TimestampType(inn)),
                 };
                 Ok(v)
@@ -236,6 +253,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             dv::DataTypeImpl::String(_x) => {
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::StringType(pb::Empty {})),
                 };
                 Ok(v)
@@ -245,6 +263,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::StructType(inn)),
                 };
                 Ok(v)
@@ -254,6 +273,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 
                 let v = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::ArrayType(Box::new(inn))),
                 };
                 Ok(v)
@@ -263,6 +283,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 
                 let p = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::VariantType(inn)),
                 };
                 Ok(p)
@@ -272,6 +293,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 
                 let p = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::VariantArrayType(inn)),
                 };
                 Ok(p)
@@ -281,6 +303,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 
                 let p = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::VariantObjectType(inn)),
                 };
                 Ok(p)
@@ -290,6 +313,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 
                 let p = pb::DataType {
                     ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
                     dt: Some(Dt::IntervalType(inn)),
                 };
                 Ok(p)
@@ -301,7 +325,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 impl FromToProto<pb::NullableType> for dv::NullableType {
     fn from_pb(p: pb::NullableType) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let inner = p.inner.ok_or_else(|| Incompatible {
             reason: "NullableType.inner can not be None".to_string(),
@@ -318,6 +342,7 @@ impl FromToProto<pb::NullableType> for dv::NullableType {
 
         let p = pb::NullableType {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             inner: Some(Box::new(inner_pb_type)),
         };
 
@@ -328,7 +353,7 @@ impl FromToProto<pb::NullableType> for dv::NullableType {
 impl FromToProto<pb::Timestamp> for dv::TimestampType {
     fn from_pb(p: pb::Timestamp) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
         let v = dv::TimestampType::create(p.precision as usize);
         Ok(v)
     }
@@ -336,6 +361,7 @@ impl FromToProto<pb::Timestamp> for dv::TimestampType {
     fn to_pb(&self) -> Result<pb::Timestamp, Incompatible> {
         let p = pb::Timestamp {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             precision: self.precision() as u64,
             // tz: self.tz().cloned(),
         };
@@ -347,7 +373,7 @@ impl FromToProto<pb::Timestamp> for dv::TimestampType {
 impl FromToProto<pb::Struct> for dv::StructType {
     fn from_pb(p: pb::Struct) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
         let names = p.names.clone();
 
         let mut types = Vec::with_capacity(p.types.len());
@@ -369,6 +395,7 @@ impl FromToProto<pb::Struct> for dv::StructType {
 
         let p = pb::Struct {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
 
             names,
             types,
@@ -381,7 +408,7 @@ impl FromToProto<pb::Struct> for dv::StructType {
 impl FromToProto<pb::Array> for dv::ArrayType {
     fn from_pb(p: pb::Array) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let inner = p.inner.ok_or_else(|| Incompatible {
             reason: "Array.inner can not be None".to_string(),
@@ -398,6 +425,7 @@ impl FromToProto<pb::Array> for dv::ArrayType {
 
         let p = pb::Array {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             inner: Some(Box::new(inner_pb_type)),
         };
 
@@ -408,13 +436,16 @@ impl FromToProto<pb::Array> for dv::ArrayType {
 impl FromToProto<pb::VariantArray> for dv::VariantArrayType {
     fn from_pb(p: pb::VariantArray) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         Ok(Self {})
     }
 
     fn to_pb(&self) -> Result<pb::VariantArray, Incompatible> {
-        let p = pb::VariantArray { ver: VER };
+        let p = pb::VariantArray {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+        };
         Ok(p)
     }
 }
@@ -422,13 +453,16 @@ impl FromToProto<pb::VariantArray> for dv::VariantArrayType {
 impl FromToProto<pb::VariantObject> for dv::VariantObjectType {
     fn from_pb(p: pb::VariantObject) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         Ok(Self {})
     }
 
     fn to_pb(&self) -> Result<pb::VariantObject, Incompatible> {
-        let p = pb::VariantObject { ver: VER };
+        let p = pb::VariantObject {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+        };
         Ok(p)
     }
 }
@@ -467,7 +501,7 @@ impl FromToProto<pb::IntervalKind> for dv::IntervalKind {
 impl FromToProto<pb::IntervalType> for dv::IntervalType {
     fn from_pb(p: pb::IntervalType) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let pb_kind: pb::IntervalKind =
             FromPrimitive::from_i32(p.kind).ok_or_else(|| Incompatible {
@@ -482,6 +516,7 @@ impl FromToProto<pb::IntervalType> for dv::IntervalType {
         let pb_kind = self.kind().to_pb()?;
         let p = pb::IntervalType {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             kind: pb_kind as i32,
         };
         Ok(p)
@@ -491,13 +526,16 @@ impl FromToProto<pb::IntervalType> for dv::IntervalType {
 impl FromToProto<pb::Variant> for dv::VariantType {
     fn from_pb(p: pb::Variant) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         Ok(Self {})
     }
 
     fn to_pb(&self) -> Result<pb::Variant, Incompatible> {
-        let p = pb::Variant { ver: VER };
+        let p = pb::Variant {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+        };
         Ok(p)
     }
 }

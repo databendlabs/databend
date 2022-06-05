@@ -138,11 +138,25 @@ fn test_incompatible() -> anyhow::Result<()> {
     let db_info = new_db_info();
     let mut p = db_info.to_pb()?;
     p.ver = 2;
+    p.min_compatible = 2;
 
     let res = mt::DatabaseInfo::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("ver=2 is not compatible with [1, 1]")
+            reason: s("executable ver=1 is smaller than the message min compatible ver: 2")
+        },
+        res.unwrap_err()
+    );
+
+    let db_info = new_db_info();
+    let mut p = db_info.to_pb()?;
+    p.ver = 0;
+    p.min_compatible = 0;
+
+    let res = mt::DatabaseInfo::from_pb(p);
+    assert_eq!(
+        Incompatible {
+            reason: s("message ver=0 is smaller than executable min compatible ver: 1")
         },
         res.unwrap_err()
     );

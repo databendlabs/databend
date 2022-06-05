@@ -30,4 +30,5 @@ pub use from_to_protobuf::FromToProto;
 pub use from_to_protobuf::Incompatible;
 pub use util::check_ver;
 pub use util::missing;
+pub use util::MIN_COMPATIBLE_VER;
 pub use util::VER;
