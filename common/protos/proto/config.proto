@@ -26,6 +26,7 @@ message S3StorageConfig {
   string bucket = 5;
   string root = 6;
   string master_key = 7;
+  bool disable_credential_loader = 8;
 }
 
 message FsStorageConfig {
