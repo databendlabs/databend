@@ -37,6 +37,7 @@ impl FromToProto<pb::S3StorageConfig> for StorageParams {
             bucket: p.bucket,
             root: p.root,
             master_key: p.master_key,
+            disable_credential_loader: p.disable_credential_loader,
         }))
     }
 
@@ -52,6 +53,7 @@ impl FromToProto<pb::S3StorageConfig> for StorageParams {
                 bucket: v.bucket.clone(),
                 root: v.root.clone(),
                 master_key: v.master_key.clone(),
+                disable_credential_loader: v.disable_credential_loader,
             })
         } else {
             Err(Incompatible {
