@@ -12,12 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
+use common_meta_types::UserStageInfo;
+use common_tracing::tracing::info;
+use futures::StreamExt;
+use regex::Regex;
 
 use crate::sessions::QueryContext;
+use crate::storages::stage::StageSource;
 
 pub async fn validate_grant_object_exists(
     ctx: &Arc<QueryContext>,
@@ -54,4 +61,53 @@ pub async fn validate_grant_object_exists(
     }
 
     Ok(())
+}
+
+pub async fn list_files(
+    ctx: Arc<QueryContext>,
+    stage: UserStageInfo,
+    path: String,
+    pattern: String,
+) -> Result<Vec<String>> {
+    let op = StageSource::get_op(&ctx, &stage).await?;
+    let path = &path;
+    let pattern = &pattern;
+    info!(
+        "list files {:?} with path {path}, pattern {pattern}",
+        stage.stage_name
+    );
+
+    let mut files = if path.ends_with('/') {
+        let mut list = vec![];
+        let mut objects = op.object(path).list().await?;
+        while let Some(object) = objects.next().await {
+            let name = object?.name();
+            list.push(name);
+        }
+        list
+    } else {
+        let o = op.object(path);
+        match o.metadata().await {
+            Ok(_) => vec![o.name()],
+            Err(e) if e.kind() == io::ErrorKind::NotFound => vec![],
+            Err(e) => return Err(e.into()),
+        }
+    };
+
+    if !pattern.is_empty() {
+        let regex = Regex::new(pattern).map_err(|e| {
+            ErrorCode::SyntaxException(format!(
+                "Pattern format invalid, got:{}, error:{:?}",
+                pattern, e
+            ))
+        })?;
+        let matched_files = files
+            .iter()
+            .filter(|file| regex.is_match(file))
+            .cloned()
+            .collect();
+        files = matched_files;
+    }
+
+    Ok(files)
 }

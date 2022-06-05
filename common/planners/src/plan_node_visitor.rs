@@ -61,6 +61,7 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RemoveUserStagePlan;
 use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
@@ -201,6 +202,7 @@ pub trait PlanVisitor {
             PlanNode::DropUserStage(plan) => self.visit_drop_user_stage(plan),
             PlanNode::DescribeUserStage(plan) => self.visit_describe_user_stage(plan),
             PlanNode::List(plan) => self.visit_list(plan),
+            PlanNode::RemoveUserStage(plan) => self.visit_remove_user_stage(plan),
 
             // UDF.
             PlanNode::CreateUserUDF(plan) => self.visit_create_user_udf(plan),
@@ -487,6 +489,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_alter_user_udf(&mut self, _: &AlterUserUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_remove_user_stage(&mut self, _: &RemoveUserStagePlan) -> Result<()> {
         Ok(())
     }
 

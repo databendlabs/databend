@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use common_exception::Result;
 use databend_query::sql::statements::DfCreateUserStage;
 use databend_query::sql::statements::DfList;
+use databend_query::sql::statements::DfRemoveStage;
 use databend_query::sql::*;
 
 use crate::sql::sql_parser::*;
@@ -75,5 +76,28 @@ fn create_stage_test() -> Result<()> {
             pattern: "*.csv".to_string(),
         }),
     )?;
+    Ok(())
+}
+
+#[test]
+fn remove_stage_test() -> Result<()> {
+    expect_parse_ok(
+        "REMOVE @stage1/file1.csv",
+        DfStatement::RemoveStage(DfRemoveStage {
+            location: "@stage1/file1.csv".to_string(),
+            pattern: "".to_string(),
+            ..Default::default()
+        }),
+    )?;
+
+    expect_parse_ok(
+        "REMOVE @stage1 pattern = 'file.*csv'",
+        DfStatement::RemoveStage(DfRemoveStage {
+            location: "@stage1".to_string(),
+            pattern: "file.*csv".to_string(),
+            ..Default::default()
+        }),
+    )?;
+
     Ok(())
 }
