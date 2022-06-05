@@ -952,7 +952,7 @@ impl<'a> TypeChecker<'a> {
             .get_user_manager()
             .get_udf(self.ctx.get_tenant().as_str(), func_name)
             .await;
-        if let Ok(udf) = udf {
+        return if let Ok(udf) = udf {
             let parameters = udf.parameters;
             if parameters.len() != arguments.len() {
                 return Err(ErrorCode::SyntaxException(format!(
@@ -978,11 +978,11 @@ impl<'a> TypeChecker<'a> {
                 }
                 Ok(None)
             })?;
-            return self.resolve(&udf_expr, None).await;
+            self.resolve(&udf_expr, None).await
         } else {
-            return Err(ErrorCode::SemanticError(
+            Err(ErrorCode::SemanticError(
                 "No function matches the given name.",
-            ));
+            ))
         };
     }
 
@@ -1068,7 +1068,7 @@ impl<'a> TypeChecker<'a> {
                 }),
                 Expr::Extract { span, kind, expr } => Ok(Expr::Extract {
                     span,
-                    kind: kind.clone(),
+                    kind: *kind,
                     expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
                 }),
                 Expr::Position {
@@ -1202,7 +1202,7 @@ impl<'a> TypeChecker<'a> {
                 Expr::Interval { span, expr, unit } => Ok(Expr::Interval {
                     span,
                     expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
-                    unit: unit.clone(),
+                    unit: *unit,
                 }),
                 Expr::DateAdd {
                     span,
@@ -1215,7 +1215,7 @@ impl<'a> TypeChecker<'a> {
                     interval: Box::new(
                         self.clone_expr_with_replacement(&**interval, replacement_fn)?,
                     ),
-                    unit: unit.clone(),
+                    unit: *unit,
                 }),
                 _ => Ok(original_expr.clone()),
             },
