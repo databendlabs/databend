@@ -54,7 +54,7 @@ impl InterpreterFactoryV2 {
                 ExplainInterpreterV2::try_create(ctx, *plan.clone(), kind.clone())
             }
             Plan::CreateTable(create_table) => {
-                CreateTableInterpreter::try_create(ctx, create_table.clone())
+                CreateTableInterpreter::try_create(ctx, *create_table.clone())
             }
         }?;
         Ok(inner)

@@ -153,7 +153,7 @@ impl<'a> DfParser<'a> {
                     let cluster_by = DfAlterTable {
                         if_exists,
                         table_name,
-                        action: AlterTableAction::AddClusterKey(cluster_keys),
+                        action: AlterTableAction::AlterClusterKey(cluster_keys),
                     };
 
                     Ok(DfStatement::AlterTable(cluster_by))

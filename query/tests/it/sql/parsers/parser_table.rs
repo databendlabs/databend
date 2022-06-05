@@ -312,7 +312,7 @@ fn alter_cluster_key() -> Result<()> {
         let expected = DfStatement::AlterTable(DfAlterTable {
             if_exists: false,
             table_name: ObjectName(vec![Ident::new("t1")]),
-            action: AlterTableAction::AddClusterKey(vec![
+            action: AlterTableAction::AlterClusterKey(vec![
                 Expr::Identifier(Ident::new("a")),
                 Expr::Identifier(Ident::new("b")),
             ]),

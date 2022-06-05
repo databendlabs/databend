@@ -232,6 +232,6 @@ impl<'a> Binder {
                 None
             },
         };
-        Ok(Plan::CreateTable(plan))
+        Ok(Plan::CreateTable(Box::new(plan)))
     }
 }

@@ -39,7 +39,7 @@ pub struct DfAlterTable {
 #[derive(Clone, Debug, PartialEq)]
 pub enum AlterTableAction {
     RenameTable(ObjectName),
-    AddClusterKey(Vec<Expr>),
+    AlterClusterKey(Vec<Expr>),
     // TODO AddColumn etc.
 }
 
@@ -70,7 +70,7 @@ impl AnalyzableStatement for DfAlterTable {
                     PlanNode::RenameTable(RenameTablePlan { tenant, entities }),
                 )))
             }
-            AlterTableAction::AddClusterKey(exprs) => {
+            AlterTableAction::AlterClusterKey(exprs) => {
                 let expression_analyzer = ExpressionAnalyzer::create(ctx);
                 let cluster_keys = exprs.iter().try_fold(vec![], |mut acc, k| {
                     let expr = expression_analyzer.analyze_sync(k)?;
