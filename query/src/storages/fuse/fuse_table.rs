@@ -72,7 +72,7 @@ impl FuseTable {
 
     pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
-        let cluster_key_meta = table_info.meta.cluster_keys();
+        let cluster_key_meta = table_info.meta.cluster_key();
         let mut cluster_keys = Vec::new();
         if let Some((_, order)) = &cluster_key_meta {
             cluster_keys = PlanParser::parse_exprs(order)?;
@@ -202,8 +202,8 @@ impl Table for FuseTable {
         cluster_key_str: String,
     ) -> Result<()> {
         let mut new_table_meta = self.get_table_info().meta.clone();
-        new_table_meta = new_table_meta.set_cluster_keys_meta(cluster_key_str);
-        let cluster_key_meta = new_table_meta.cluster_keys();
+        new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
+        let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot(ctx.as_ref()).await?;

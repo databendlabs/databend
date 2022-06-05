@@ -107,7 +107,7 @@ impl AnalyzableStatement for DfCreateTable {
         if !cluster_keys.is_empty() {
             let cluster_keys: Vec<String> = cluster_keys.iter().map(|e| e.column_name()).collect();
             let cluster_keys_sql = format!("({})", cluster_keys.join(", "));
-            table_meta = table_meta.set_cluster_keys_meta(cluster_keys_sql);
+            table_meta = table_meta.push_cluster_key(cluster_keys_sql);
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(

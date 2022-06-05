@@ -84,7 +84,7 @@ pub trait Table: Sync + Send {
         _cluster_key_str: String,
     ) -> Result<()> {
         Err(ErrorCode::UnsupportedEngineParams(format!(
-            "Unsupported cluster key for engine: {}",
+            "Unsupported clustering keys for engine: {}",
             self.engine()
         )))
     }
