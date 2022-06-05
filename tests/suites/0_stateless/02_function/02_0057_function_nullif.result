@@ -1,0 +1,39 @@
+==nullif_const_values==
+NULL
+2
+1
+1
+NULL
+NULL
+a
+b
+a
+NULL
+NULL
+==nullif_non_nullable_columns=
+0	0	NULL
+0	1	0
+1	0	1
+1	1	NULL
+==nullif_nullable_columns==
+0	0	NULL
+0	1	0
+0	NULL	0
+1	0	1
+1	1	NULL
+1	NULL	1
+NULL	0	NULL
+NULL	1	NULL
+NULL	NULL	NULL
+==nullif_lhs_all_null==
+NULL	0	NULL
+NULL	1	NULL
+NULL	NULL	NULL
+NULL	0	NULL
+NULL	1	NULL
+==nullif_rhs_all_null==
+0	NULL	0
+1	NULL	1
+0	NULL	0
+1	NULL	1
+NULL	NULL	NULL
