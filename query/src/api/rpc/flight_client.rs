@@ -64,10 +64,10 @@ impl FlightClient {
         Ok(())
     }
 
-    pub async fn pushed_stream(&mut self) -> Result<Sender<FlightData>> {
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
-        // self.inner.do_put()
-        Ok(tx)
+    pub async fn pushed_stream(&mut self, rx: async_channel::Receiver<FlightData>) -> Result<()> {
+        let request = Request::new(rx);
+        let response = self.inner.do_put(request).await?;
+        Ok(())
     }
 
     // Execute do_get.

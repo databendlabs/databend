@@ -31,8 +31,8 @@ pub struct HashFlightScatter {
     scattered_size: usize,
 }
 
-impl FlightScatter for HashFlightScatter {
-    fn try_create(
+impl HashFlightScatter {
+    pub fn try_create(
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         expr: Option<Expression>,
@@ -45,8 +45,10 @@ impl FlightScatter for HashFlightScatter {
             Some(expr) => HashFlightScatter::try_create_impl(schema, num, expr, ctx),
         }
     }
+}
 
-    fn execute(&self, data_block: &DataBlock) -> common_exception::Result<Vec<DataBlock>> {
+impl FlightScatter for HashFlightScatter {
+    fn execute(&self, data_block: &DataBlock, num: usize) -> common_exception::Result<Vec<DataBlock>> {
         let expression_executor = self.scatter_expression_executor.clone();
         let evaluated_data_block = expression_executor.execute(data_block)?;
         let indices = evaluated_data_block.try_column_by_name(&self.scatter_expression_name)?;

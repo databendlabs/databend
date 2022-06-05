@@ -3,13 +3,12 @@ use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow::io::ipc::IpcSchema;
 use common_arrow::arrow::io::ipc::write::default_ipc_fields;
 use common_arrow::arrow_format::flight::data::FlightData;
-use common_base::base::tokio::sync::mpsc::error::TryRecvError;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::{ErrorCode, Result};
 use common_base::infallible::Mutex;
 use crate::api::DataExchange;
-use crate::api::rpc::exchange::exchange_channel::{Receiver, RecvError};
+use async_channel::{Receiver, TryRecvError};
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::pipelines::new::{NewPipe, NewPipeline};
 use crate::pipelines::new::processors::port::{InputPort, OutputPort};
@@ -83,8 +82,8 @@ impl Processor for ViaExchangeSubscriber {
 
         if self.input.is_finished() {
             return match self.rx.try_recv() {
-                Err(RecvError::Finished) => Ok(Event::Finished),
-                Err(RecvError::QueueIsEmpty) => Ok(Event::Async),
+                Err(TryRecvError::Empty) => Ok(Event::Async),
+                Err(TryRecvError::Closed) => Ok(Event::Finished),
                 Ok(flight_data) => {
                     self.remote_flight_data = Some(flight_data);
                     Ok(Event::Sync)

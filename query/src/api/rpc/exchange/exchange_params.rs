@@ -16,15 +16,16 @@ pub struct SerializeParams {
 }
 
 #[derive(Clone)]
-pub struct HashExchangeParams {
+pub struct ShuffleExchangeParams {
     pub query_id: String,
     pub executor_id: String,
     pub fragment_id: String,
     pub schema: DataSchemaRef,
     pub destination_ids: Vec<String>,
-    pub hash_scatter: HashFlightScatter,
+    pub shuffle_scatter: Arc<Box<dyn FlightScatter>>,
 }
 
+#[derive(Clone)]
 pub struct MergeExchangeParams {
     pub query_id: String,
     pub fragment_id: String,
@@ -33,11 +34,23 @@ pub struct MergeExchangeParams {
 }
 
 pub enum ExchangeParams {
-    HashExchange(HashExchangeParams),
     MergeExchange(MergeExchangeParams),
+    ShuffleExchange(ShuffleExchangeParams),
 }
 
-impl HashExchangeParams {
+impl MergeExchangeParams {
+    pub fn create_serialize_params(&self) -> Result<SerializeParams> {
+        let arrow_schema = self.schema.to_arrow();
+        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        Ok(SerializeParams {
+            ipc_fields,
+            local_executor_pos: 0,
+            options: WriteOptions { compression: None },
+        })
+    }
+}
+
+impl ShuffleExchangeParams {
     pub fn create_serialize_params(&self) -> Result<SerializeParams> {
         let arrow_schema = self.schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
@@ -59,7 +72,7 @@ impl HashExchangeParams {
 impl ExchangeParams {
     pub fn get_schema(&self) -> DataSchemaRef {
         match self {
-            ExchangeParams::HashExchange(exchange) => exchange.schema.clone(),
+            ExchangeParams::ShuffleExchange(exchange) => exchange.schema.clone(),
             ExchangeParams::MergeExchange(exchange) => exchange.schema.clone()
         }
     }

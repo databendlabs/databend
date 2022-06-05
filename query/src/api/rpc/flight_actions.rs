@@ -119,17 +119,17 @@ impl TryInto<Vec<u8>> for CancelAction {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct PrepareExecutor {
+pub struct PreparePipeline {
     pub executor_packet: ExecutorPacket,
 }
 
-impl TryInto<PrepareExecutor> for Vec<u8> {
+impl TryInto<PreparePipeline> for Vec<u8> {
     type Error = Status;
 
-    fn try_into(self) -> Result<PrepareExecutor, Self::Error> {
+    fn try_into(self) -> Result<PreparePipeline, Self::Error> {
         match std::str::from_utf8(&self) {
             Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(utf8_body) => match serde_json::from_str::<PrepareExecutor>(utf8_body) {
+            Ok(utf8_body) => match serde_json::from_str::<PreparePipeline>(utf8_body) {
                 Err(cause) => Err(Status::invalid_argument(cause.to_string())),
                 Ok(action) => Ok(action),
             },
@@ -137,7 +137,7 @@ impl TryInto<PrepareExecutor> for Vec<u8> {
     }
 }
 
-impl TryInto<Vec<u8>> for PrepareExecutor {
+impl TryInto<Vec<u8>> for PreparePipeline {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
@@ -182,7 +182,7 @@ pub enum FlightAction {
     PrepareShuffleAction(ShuffleAction),
     BroadcastAction(BroadcastAction),
     CancelAction(CancelAction),
-    PrepareExecutor(PrepareExecutor),
+    PreparePipeline(PreparePipeline),
     PreparePublisher(PreparePublisher),
 }
 
@@ -236,7 +236,7 @@ impl TryInto<FlightAction> for Action {
             "PrepareShuffleAction" => Ok(FlightAction::PrepareShuffleAction(self.body.try_into()?)),
             "BroadcastAction" => Ok(FlightAction::BroadcastAction(self.body.try_into()?)),
             "CancelAction" => Ok(FlightAction::CancelAction(self.body.try_into()?)),
-            "PrepareExecutor" => Ok(FlightAction::PrepareExecutor(self.body.try_into()?)),
+            "PreparePipeline" => Ok(FlightAction::PreparePipeline(self.body.try_into()?)),
             "PreparePublisher" => Ok(FlightAction::PreparePublisher(self.body.try_into()?)),
             un_implemented => Err(Status::unimplemented(format!(
                 "UnImplement action {}",
@@ -263,8 +263,8 @@ impl TryInto<Action> for FlightAction {
                 r#type: String::from("CancelAction"),
                 body: cancel_action.try_into()?,
             }),
-            FlightAction::PrepareExecutor(executor) => Ok(Action {
-                r#type: String::from("PrepareExecutor"),
+            FlightAction::PreparePipeline(executor) => Ok(Action {
+                r#type: String::from("PreparePipeline"),
                 body: executor.try_into()?,
             }),
             FlightAction::PreparePublisher(publisher) => Ok(Action {

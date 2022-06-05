@@ -20,13 +20,7 @@ use common_exception::Result;
 use common_planners::Expression;
 
 use crate::sessions::QueryContext;
-pub trait FlightScatter: Sized {
-    fn try_create(
-        ctx: Arc<QueryContext>,
-        schema: DataSchemaRef,
-        expr: Option<Expression>,
-        num: usize,
-    ) -> Result<Self>;
 
-    fn execute(&self, data_block: &DataBlock) -> Result<Vec<DataBlock>>;
+pub trait FlightScatter: Sync + Send {
+    fn execute(&self, data_block: &DataBlock, num: usize) -> Result<Vec<DataBlock>>;
 }

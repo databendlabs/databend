@@ -124,9 +124,15 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoPutStream = FlightStream<PutResult>;
 
-    async fn do_put(&self, _: StreamReq<FlightData>) -> Response<Self::DoPutStream> {
-        Result::Err(Status::unimplemented(
-            "DatabendQuery does not implement do_put.",
+    async fn do_put(&self, req: StreamReq<FlightData>) -> Response<Self::DoPutStream> {
+        // TODO: receive data into
+        let stream = req.into_inner();
+        let exchange_manager = self.sessions.get_data_exchange_manager();
+        exchange_manager.handle_do_put(stream).await?;
+        Ok(RawResponse::new(Box::pin(tokio_stream::once(Ok(
+            PutResult {
+                app_metadata: vec![]
+            }))) as FlightStream<PutResult>,
         ))
     }
 
@@ -184,7 +190,7 @@ impl FlightService for DatabendQueryFlightService {
                     .await?;
                 FlightResult { body: vec![] }
             }
-            FlightAction::PrepareExecutor(packet) => {
+            FlightAction::PreparePipeline(packet) => {
                 let session = self.sessions.create_session(SessionType::FlightRPC).await?;
                 let query_context = session.create_query_context().await?;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
