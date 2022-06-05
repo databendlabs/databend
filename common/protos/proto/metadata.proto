@@ -21,6 +21,7 @@ import "datatype.proto";
 // Complete database info.
 message DatabaseInfo {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   DatabaseIdent ident = 1;
   DatabaseNameIdent name_ident = 2;
@@ -32,6 +33,7 @@ message DatabaseInfo {
 // same instance.
 message DatabaseNameIdent {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // The user this db belongs to
   string tenant = 1;
@@ -46,6 +48,7 @@ message DatabaseNameIdent {
 // I.e., the tuple `(db_id, seq)` always identifies the same instance.
 message DatabaseIdent {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   uint64 db_id = 1;
 
@@ -56,6 +59,7 @@ message DatabaseIdent {
 // DatabaseMeta is a container of all non-identity information.
 message DatabaseMeta {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // Database engine, like github engine.
   string engine = 5;
@@ -82,6 +86,7 @@ message DatabaseMeta {
 // Save db name id list history.
 message DbIdList {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   repeated uint64 ids = 1;
 }
@@ -89,6 +94,7 @@ message DbIdList {
 // Complete table info.
 message TableInfo {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   TableIdent ident = 1;
 
@@ -114,6 +120,7 @@ message TableInfo {
 // instance.
 message TableNameIdent {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // The user this table belongs to.
   string tenant = 1;
@@ -131,6 +138,7 @@ message TableNameIdent {
 // I.e., the tuple `(db_id, seq)` always identifies the same instance.
 message TableIdent {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   uint64 table_id = 1;
 
@@ -141,6 +149,7 @@ message TableIdent {
 // TableMeta is a container of all non-identity information.
 message TableMeta {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // Table schema, i.e., columns definition.
   DataSchema schema = 1;
@@ -176,6 +185,7 @@ message TableMeta {
 // Save table name id list history.
 message TableIdList {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   repeated uint64 ids = 1;
 }
@@ -183,6 +193,7 @@ message TableIdList {
 // The schema of a table, such as column data types and other meta info.
 message DataSchema {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // Fields in the table
   repeated DataField fields = 1;
@@ -195,6 +206,7 @@ message DataSchema {
 message TableStatistics {
 
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // Number of rows
   uint64 number_of_rows = 1;
@@ -212,6 +224,7 @@ message TableStatistics {
 // One field, AKA column
 message DataField {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // The name of this column.
   string name = 1;

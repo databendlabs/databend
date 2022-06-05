@@ -20,13 +20,14 @@ use common_protos::pb;
 use crate::check_ver;
 use crate::FromToProto;
 use crate::Incompatible;
+use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
 impl FromToProto<pb::S3StorageConfig> for StorageParams {
     fn from_pb(p: pb::S3StorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {
         // TODO: config will have it's own version flags in the future.
-        check_ver(p.version)?;
+        check_ver(p.version, p.min_compatible)?;
 
         Ok(Self::S3(StorageS3Config {
             region: p.region,
@@ -43,6 +44,7 @@ impl FromToProto<pb::S3StorageConfig> for StorageParams {
         if let StorageParams::S3(v) = self {
             Ok(pb::S3StorageConfig {
                 version: VER,
+                min_compatible: MIN_COMPATIBLE_VER,
                 region: v.region.clone(),
                 endpoint_url: v.endpoint_url.clone(),
                 access_key_id: v.access_key_id.clone(),
@@ -63,7 +65,7 @@ impl FromToProto<pb::FsStorageConfig> for StorageParams {
     fn from_pb(p: pb::FsStorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {
         // TODO: config will have it's own version flags in the future.
-        check_ver(p.version)?;
+        check_ver(p.version, p.min_compatible)?;
 
         Ok(Self::Fs(StorageFsConfig { root: p.root }))
     }
@@ -72,6 +74,7 @@ impl FromToProto<pb::FsStorageConfig> for StorageParams {
         if let StorageParams::Fs(v) = self {
             Ok(pb::FsStorageConfig {
                 version: VER,
+                min_compatible: MIN_COMPATIBLE_VER,
                 root: v.root.clone(),
             })
         } else {

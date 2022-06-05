@@ -24,11 +24,12 @@ use crate::check_ver;
 use crate::missing;
 use crate::FromToProto;
 use crate::Incompatible;
+use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
 impl FromToProto<pb::DatabaseInfo> for mt::DatabaseInfo {
     fn from_pb(p: pb::DatabaseInfo) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let meta = match p.meta {
             None => {
@@ -53,6 +54,7 @@ impl FromToProto<pb::DatabaseInfo> for mt::DatabaseInfo {
     fn to_pb(&self) -> Result<pb::DatabaseInfo, Incompatible> {
         let p = pb::DatabaseInfo {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             ident: Some(self.ident.to_pb()?),
             name_ident: Some(self.name_ident.to_pb()?),
             meta: Some(self.meta.to_pb()?),
@@ -63,7 +65,7 @@ impl FromToProto<pb::DatabaseInfo> for mt::DatabaseInfo {
 
 impl FromToProto<pb::DatabaseNameIdent> for mt::DatabaseNameIdent {
     fn from_pb(p: pb::DatabaseNameIdent) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let v = Self {
             tenant: p.tenant,
@@ -75,6 +77,7 @@ impl FromToProto<pb::DatabaseNameIdent> for mt::DatabaseNameIdent {
     fn to_pb(&self) -> Result<pb::DatabaseNameIdent, Incompatible> {
         let p = pb::DatabaseNameIdent {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             tenant: self.tenant.clone(),
             db_name: self.db_name.clone(),
         };
@@ -84,7 +87,7 @@ impl FromToProto<pb::DatabaseNameIdent> for mt::DatabaseNameIdent {
 
 impl FromToProto<pb::DatabaseIdent> for mt::DatabaseIdent {
     fn from_pb(p: pb::DatabaseIdent) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let v = Self {
             db_id: p.db_id,
@@ -96,6 +99,7 @@ impl FromToProto<pb::DatabaseIdent> for mt::DatabaseIdent {
     fn to_pb(&self) -> Result<pb::DatabaseIdent, Incompatible> {
         let p = pb::DatabaseIdent {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             db_id: self.db_id,
             seq: self.seq,
         };
@@ -105,7 +109,7 @@ impl FromToProto<pb::DatabaseIdent> for mt::DatabaseIdent {
 
 impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
     fn from_pb(p: pb::DatabaseMeta) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let v = Self {
             engine: p.engine,
@@ -125,6 +129,7 @@ impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
     fn to_pb(&self) -> Result<pb::DatabaseMeta, Incompatible> {
         let p = pb::DatabaseMeta {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             options: self.options.clone(),
@@ -142,7 +147,7 @@ impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
 
 impl FromToProto<pb::DbIdList> for mt::DbIdList {
     fn from_pb(p: pb::DbIdList) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let v = Self { id_list: p.ids };
         Ok(v)
@@ -151,6 +156,7 @@ impl FromToProto<pb::DbIdList> for mt::DbIdList {
     fn to_pb(&self) -> Result<pb::DbIdList, Incompatible> {
         let p = pb::DbIdList {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             ids: self.id_list.clone(),
         };
         Ok(p)
