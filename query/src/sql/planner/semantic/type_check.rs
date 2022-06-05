@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::BinaryOperator;
@@ -447,37 +448,14 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve function call.
-    #[async_recursion::async_recursion]
     pub async fn resolve_function(
         &mut self,
         func_name: &str,
         arguments: &[&Expr<'_>],
-        required_type: Option<DataTypeImpl>,
+        _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         if !is_builtin_function(func_name) {
-            let udf = self
-                .ctx
-                .get_user_manager()
-                .get_udf(self.ctx.get_tenant().as_str(), func_name)
-                .await;
-            return if let Ok(udf) = udf {
-                let mut arguments = arguments.to_vec();
-                let backtrace = Backtrace::new();
-                let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-                let expr = parse_udf(&sql_tokens, &backtrace)?;
-                arguments.push(&expr);
-                let (scalar, _) = self.resolve(&expr, None).await?;
-                let func_name = match scalar {
-                    Scalar::FunctionCall(FunctionCall { func_name, .. }) => func_name,
-                    _ => return Err(ErrorCode::SemanticError("...")),
-                };
-                self.resolve_function(func_name.as_str(), &arguments, required_type)
-                    .await
-            } else {
-                Err(ErrorCode::SemanticError(
-                    "No function matches the given name.",
-                ))
-            };
+            return self.resolve_udf(func_name, arguments).await;
         }
         let mut args = vec![];
         let mut arg_types = vec![];
@@ -962,5 +940,285 @@ impl<'a> TypeChecker<'a> {
             .into(),
             tuple_func.return_type(),
         ))
+    }
+
+    async fn resolve_udf(
+        &mut self,
+        func_name: &str,
+        arguments: &[&Expr<'_>],
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        let udf = self
+            .ctx
+            .get_user_manager()
+            .get_udf(self.ctx.get_tenant().as_str(), func_name)
+            .await;
+        if let Ok(udf) = udf {
+            let parameters = udf.parameters;
+            if parameters.len() != arguments.len() {
+                return Err(ErrorCode::SyntaxException(format!(
+                    "Require {} parameters, but got: {}",
+                    parameters.len(),
+                    arguments.len()
+                )));
+            }
+            let backtrace = Backtrace::new();
+            let sql_tokens = tokenize_sql(udf.definition.as_str())?;
+            let expr = parse_udf(&sql_tokens, &backtrace)?;
+            let mut args_map = HashMap::new();
+            arguments.iter().enumerate().for_each(|(idx, argument)| {
+                if let Some(parameter) = parameters.get(idx) {
+                    args_map.insert(parameter, (*argument).clone());
+                }
+            });
+            let udf_expr = self.clone_expr_with_replacement(&expr, &|nest_expr| {
+                if let Expr::ColumnRef { column, .. } = nest_expr {
+                    if let Some(arg) = args_map.get(&column.name) {
+                        return Ok(Some(arg.clone()));
+                    }
+                }
+                Ok(None)
+            })?;
+            return self.resolve(&udf_expr, None).await;
+        } else {
+            return Err(ErrorCode::SemanticError(
+                "No function matches the given name.",
+            ));
+        };
+    }
+
+    fn clone_expr_with_replacement<F>(
+        &self,
+        original_expr: &Expr<'a>,
+        replacement_fn: &F,
+    ) -> Result<Expr<'a>>
+    where
+        F: Fn(&Expr) -> Result<Option<Expr<'a>>>,
+    {
+        let replacement_opt = replacement_fn(original_expr)?;
+        match replacement_opt {
+            Some(replacement) => Ok(replacement),
+            None => match original_expr {
+                Expr::IsNull { span, expr, not } => Ok(Expr::IsNull {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    not: *not,
+                }),
+                Expr::InList {
+                    span,
+                    expr,
+                    list,
+                    not,
+                } => Ok(Expr::InList {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    list: list
+                        .iter()
+                        .map(|item| self.clone_expr_with_replacement(item, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                    not: *not,
+                }),
+                Expr::Between {
+                    span,
+                    expr,
+                    low,
+                    high,
+                    not,
+                } => Ok(Expr::Between {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    low: Box::new(self.clone_expr_with_replacement(&**low, replacement_fn)?),
+                    high: Box::new(self.clone_expr_with_replacement(&**high, replacement_fn)?),
+                    not: *not,
+                }),
+                Expr::BinaryOp {
+                    span,
+                    op,
+                    left,
+                    right,
+                } => Ok(Expr::BinaryOp {
+                    span,
+                    op: op.clone(),
+                    left: Box::new(self.clone_expr_with_replacement(&**left, replacement_fn)?),
+                    right: Box::new(self.clone_expr_with_replacement(&**right, replacement_fn)?),
+                }),
+                Expr::UnaryOp { span, op, expr } => Ok(Expr::UnaryOp {
+                    span,
+                    op: op.clone(),
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                }),
+                Expr::Cast {
+                    span,
+                    expr,
+                    target_type,
+                    pg_style,
+                } => Ok(Expr::Cast {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    target_type: target_type.clone(),
+                    pg_style: *pg_style,
+                }),
+                Expr::TryCast {
+                    span,
+                    expr,
+                    target_type,
+                } => Ok(Expr::TryCast {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    target_type: target_type.clone(),
+                }),
+                Expr::Extract { span, kind, expr } => Ok(Expr::Extract {
+                    span,
+                    kind: kind.clone(),
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                }),
+                Expr::Position {
+                    span,
+                    substr_expr,
+                    str_expr,
+                } => Ok(Expr::Position {
+                    span,
+                    substr_expr: Box::new(
+                        self.clone_expr_with_replacement(&**substr_expr, replacement_fn)?,
+                    ),
+                    str_expr: Box::new(
+                        self.clone_expr_with_replacement(&**str_expr, replacement_fn)?,
+                    ),
+                }),
+                Expr::Substring {
+                    span,
+                    expr,
+                    substring_from,
+                    substring_for,
+                } => Ok(Expr::Substring {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    substring_from: if let Some(substring_from_expr) = substring_from {
+                        Some(Box::new(self.clone_expr_with_replacement(
+                            &**substring_from_expr,
+                            replacement_fn,
+                        )?))
+                    } else {
+                        None
+                    },
+                    substring_for: if let Some(substring_for_expr) = substring_for {
+                        Some(Box::new(self.clone_expr_with_replacement(
+                            &**substring_for_expr,
+                            replacement_fn,
+                        )?))
+                    } else {
+                        None
+                    },
+                }),
+                Expr::Trim {
+                    span,
+                    expr,
+                    trim_where,
+                } => Ok(Expr::Trim {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    trim_where: if let Some((trim, trim_expr)) = trim_where {
+                        Some((
+                            trim.clone(),
+                            Box::new(
+                                self.clone_expr_with_replacement(&**trim_expr, replacement_fn)?,
+                            ),
+                        ))
+                    } else {
+                        None
+                    },
+                }),
+                Expr::Tuple { span, exprs } => Ok(Expr::Tuple {
+                    span,
+                    exprs: exprs
+                        .iter()
+                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                }),
+                Expr::FunctionCall {
+                    span,
+                    distinct,
+                    name,
+                    args,
+                    params,
+                } => Ok(Expr::FunctionCall {
+                    span,
+                    distinct: *distinct,
+                    name: name.clone(),
+                    args: args
+                        .iter()
+                        .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                    params: params.clone(),
+                }),
+                Expr::Case {
+                    span,
+                    operand,
+                    conditions,
+                    results,
+                    else_result,
+                } => Ok(Expr::Case {
+                    span,
+                    operand: if let Some(operand_expr) = operand {
+                        Some(Box::new(self.clone_expr_with_replacement(
+                            &**operand_expr,
+                            replacement_fn,
+                        )?))
+                    } else {
+                        None
+                    },
+                    conditions: conditions
+                        .iter()
+                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                    results: results
+                        .iter()
+                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                    else_result: if let Some(else_result_expr) = else_result {
+                        Some(Box::new(self.clone_expr_with_replacement(
+                            &**else_result_expr,
+                            replacement_fn,
+                        )?))
+                    } else {
+                        None
+                    },
+                }),
+                Expr::MapAccess {
+                    span,
+                    expr,
+                    accessor,
+                } => Ok(Expr::MapAccess {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    accessor: accessor.clone(),
+                }),
+                Expr::Array { span, exprs } => Ok(Expr::Array {
+                    span,
+                    exprs: exprs
+                        .iter()
+                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                }),
+                Expr::Interval { span, expr, unit } => Ok(Expr::Interval {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    unit: unit.clone(),
+                }),
+                Expr::DateAdd {
+                    span,
+                    date,
+                    interval,
+                    unit,
+                } => Ok(Expr::DateAdd {
+                    span,
+                    date: Box::new(self.clone_expr_with_replacement(&**date, replacement_fn)?),
+                    interval: Box::new(
+                        self.clone_expr_with_replacement(&**interval, replacement_fn)?,
+                    ),
+                    unit: unit.clone(),
+                }),
+                _ => Ok(original_expr.clone()),
+            },
+        }
     }
 }
