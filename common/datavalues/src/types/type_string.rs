@@ -15,10 +15,13 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_exception::Result;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::StringSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StringType {}
@@ -71,10 +74,9 @@ impl DataType for StringType {
         ArrowType::LargeBinary
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        StringSerializer {}.into()
+    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        Ok(StringSerializer::try_create(col)?.into())
     }
-
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         StringDeserializer::with_capacity(capacity).into()
     }

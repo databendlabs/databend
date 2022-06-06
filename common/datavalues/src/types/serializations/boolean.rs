@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
@@ -22,80 +21,81 @@ use serde_json::Value;
 
 use crate::prelude::*;
 
-#[derive(Debug, Clone)]
-pub struct BooleanSerializer {}
+const TRUE_BYTES: &[u8] = &[b'1'];
+const FALSE_BYTES: &[u8] = &[b'0'];
 
-const TRUE_STR: &str = "1";
-const FALSE_STR: &str = "0";
+#[derive(Clone)]
+pub struct BooleanSerializer {
+    pub(crate) values: Bitmap,
+}
 
-impl TypeSerializer for BooleanSerializer {
-    fn serialize_value(&self, value: &DataValue, _format: &FormatSettings) -> Result<String> {
-        if let DataValue::Boolean(x) = value {
-            if *x {
-                Ok(TRUE_STR.to_owned())
-            } else {
-                Ok(FALSE_STR.to_owned())
-            }
+impl BooleanSerializer {
+    pub fn try_create(col: &ColumnRef) -> Result<Self> {
+        let col: &BooleanColumn = Series::check_get(col)?;
+        let values = col.values().clone();
+        Ok(Self { values })
+    }
+}
+
+impl<'a> TypeSerializer<'a> for BooleanSerializer {
+    fn need_quote(&self) -> bool {
+        false
+    }
+
+    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
+        let v = if self.values.get_bit(row_index) {
+            TRUE_BYTES
         } else {
-            Err(ErrorCode::BadBytes("Incorrect boolean value"))
-        }
+            FALSE_BYTES
+        };
+        buf.extend_from_slice(v);
     }
 
-    fn serialize_column(
-        &self,
-        column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<String>> {
-        let array: &BooleanColumn = Series::check_get(column)?;
-
-        let result: Vec<String> = array
-            .iter()
-            .map(|v| {
-                if v {
-                    TRUE_STR.to_owned()
-                } else {
-                    FALSE_STR.to_owned()
-                }
-            })
-            .collect();
-        Ok(result)
-    }
-
-    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
-        let array: &BooleanColumn = Series::check_get(column)?;
-        let result: Vec<Value> = array
+    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+        let result: Vec<Value> = self
+            .values
             .iter()
             .map(|v| serde_json::to_value(v).unwrap())
             .collect();
         Ok(result)
     }
 
-    fn serialize_clickhouse_format(
+    fn serialize_clickhouse_const(
         &self,
-        column: &ColumnRef,
+        _format: &FormatSettings,
+        size: usize,
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
+        let mut values: Vec<u8> = Vec::with_capacity(self.values.len() * size);
+        for _ in 0..size {
+            for v in self.values.iter() {
+                values.push(v as u8)
+            }
+        }
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
+    }
+
+    fn serialize_clickhouse_column(
+        &self,
         _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let col: &BooleanColumn = Series::check_get(column)?;
-        let values: Vec<u8> = col.iter().map(|c| c as u8).collect();
+        let values: Vec<u8> = self.values.iter().map(|c| c as u8).collect();
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 
     fn serialize_json_object(
         &self,
-        column: &ColumnRef,
         _valids: Option<&Bitmap>,
         format: &FormatSettings,
     ) -> Result<Vec<Value>> {
-        self.serialize_json(column, format)
+        self.serialize_json(format)
     }
 
     fn serialize_json_object_suppress_error(
         &self,
-        column: &ColumnRef,
         _format: &FormatSettings,
     ) -> Result<Vec<Option<Value>>> {
-        let column: &BooleanColumn = Series::check_get(column)?;
-        let result: Vec<Option<Value>> = column
+        let result: Vec<Option<Value>> = self
+            .values
             .iter()
             .map(|x| match serde_json::to_value(x) {
                 Ok(v) => Some(v),

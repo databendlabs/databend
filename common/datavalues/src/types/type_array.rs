@@ -23,6 +23,8 @@ use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::ArraySerializer;
+use crate::serializations::TypeSerializerImpl;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct ArrayType {
@@ -111,12 +113,8 @@ impl DataType for ArrayType {
         ArrowType::LargeList(Box::new(field))
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        ArraySerializer {
-            inner: Box::new(self.inner.create_serializer()),
-            typ: *self.inner.clone(),
-        }
-        .into()
+    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        Ok(ArraySerializer::try_create(col, &self.inner)?.into())
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
