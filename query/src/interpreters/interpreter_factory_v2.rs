@@ -41,6 +41,8 @@ impl InterpreterFactoryV2 {
                 | DfStatement::Explain(_)
                 | DfStatement::CreateTable(_)
                 | DfStatement::ShowMetrics(_)
+                | DfStatement::ShowProcessList(_)
+                | DfStatement::ShowSettings(_)
         )
     }
 
