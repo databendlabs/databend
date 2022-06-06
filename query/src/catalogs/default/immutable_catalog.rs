@@ -31,6 +31,8 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
@@ -164,6 +166,12 @@ impl Catalog for ImmutableCatalog {
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         Err(ErrorCode::UnImplement(
             "Cannot undrop table in system database",
+        ))
+    }
+
+    async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot undrop database in system database",
         ))
     }
 

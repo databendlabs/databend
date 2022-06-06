@@ -71,6 +71,7 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::SubQueriesSetPlan;
 use crate::TruncateTablePlan;
+use crate::UnDropDatabasePlan;
 use crate::UseDatabasePlan;
 
 #[allow(clippy::large_enum_variant)]
@@ -118,6 +119,7 @@ pub enum PlanNode {
     // Database.
     CreateDatabase(CreateDatabasePlan),
     DropDatabase(DropDatabasePlan),
+    UnDropDatabase(UnDropDatabasePlan),
     RenameDatabase(RenameDatabasePlan),
     ShowCreateDatabase(ShowCreateDatabasePlan),
 
@@ -218,6 +220,7 @@ impl PlanNode {
             PlanNode::DropDatabase(v) => v.schema(),
             PlanNode::ShowCreateDatabase(v) => v.schema(),
             PlanNode::RenameDatabase(v) => v.schema(),
+            PlanNode::UnDropDatabase(v) => v.schema(),
 
             // Table.
             PlanNode::CreateTable(v) => v.schema(),
@@ -318,6 +321,7 @@ impl PlanNode {
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
             PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
             PlanNode::RenameDatabase(_) => "RenameDatabase",
+            PlanNode::UnDropDatabase(_) => "UnDropDatabase",
 
             // Table.
             PlanNode::CreateTable(_) => "CreateTablePlan",

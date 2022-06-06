@@ -33,7 +33,6 @@ pub use crate::configs::StorageFsConfig;
 pub use crate::configs::StorageHdfsConfig;
 pub use crate::configs::StorageParams;
 pub use crate::configs::StorageS3Config;
-pub use crate::files::operator_list_files;
 pub use crate::format_settings::Compression;
 pub use crate::format_settings::FormatSettings;
 pub use crate::marshal::Marshal;

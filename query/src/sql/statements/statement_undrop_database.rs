@@ -14,40 +14,35 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::ListPlan;
 use common_planners::PlanNode;
+use common_planners::UnDropDatabasePlan;
+use common_tracing::tracing;
+use sqlparser::ast::ObjectName;
 
-use super::location_to_stage_path;
 use crate::sessions::QueryContext;
+use crate::sql::statements::resolve_database;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfList {
-    pub location: String,
-    pub pattern: String,
+pub struct DfUnDropDatabase {
+    pub name: ObjectName,
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfList {
+impl AnalyzableStatement for DfUnDropDatabase {
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        if !self.location.starts_with('@') {
-            return Err(ErrorCode::SyntaxException(
-                "List stage uri must be started with @, for example: '@stage_name[/<path>/]'",
-            ));
-        }
-        let (stage, path) = location_to_stage_path(&self.location, &ctx).await?;
+        let tenant = ctx.get_tenant();
+        let (catalog, db) = resolve_database(&ctx, &self.name, "UNDROP DATABASE")?;
 
-        let plan_node = ListPlan {
-            path,
-            stage,
-            pattern: self.pattern.clone(),
-        };
-
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::List(
-            plan_node,
-        ))))
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::UnDropDatabase(UnDropDatabasePlan {
+                tenant,
+                catalog,
+                db,
+            }),
+        )))
     }
 }

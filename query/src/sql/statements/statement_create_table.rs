@@ -117,7 +117,7 @@ impl AnalyzableStatement for DfCreateTable {
                 db,
                 table,
                 table_meta,
-                cluster_keys,
+                cluster_keys: self.cluster_keys.iter().map(ToString::to_string).collect(),
                 as_select: as_select_plan_node,
             }),
         )))

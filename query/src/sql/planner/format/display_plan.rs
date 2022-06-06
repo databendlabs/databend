@@ -26,6 +26,7 @@ impl Plan {
                 let result = plan.format_indent()?;
                 Ok(format!("{:?}:\n{}", kind, result))
             }
+            Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
         }
     }
 }
