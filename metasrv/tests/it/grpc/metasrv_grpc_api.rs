@@ -32,7 +32,7 @@ use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
     // - Start a metasrv server.
@@ -40,12 +40,9 @@ async fn test_restart() -> anyhow::Result<()> {
     // - restart
     // - Test read the db and read the table.
 
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (mut tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None)?;
 
     tracing::info!("--- upsert kv");
     {
@@ -105,7 +102,7 @@ async fn test_restart() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(10_000)).await;
 
     // try to reconnect the restarted server.
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
 
     tracing::info!("--- get kv");
     {
@@ -126,14 +123,11 @@ async fn test_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_retry_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
     // - Test metasrv retry cluster case
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let mut tc0 = MetaSrvTestContext::new(0);
     start_metasrv_with_context(&mut tc0).await?;
@@ -179,14 +173,11 @@ async fn test_retry_join() -> anyhow::Result<()> {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
     // - Test metasrv api
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
 
     let mut tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
@@ -200,8 +191,8 @@ async fn test_join() -> anyhow::Result<()> {
     let addr0 = tc0.config.grpc_api_address.clone();
     let addr1 = tc1.config.grpc_api_address.clone();
 
-    let client0 = MetaGrpcClient::try_create(vec![addr0], "root", "xxx", None, None).await?;
-    let client1 = MetaGrpcClient::try_create(vec![addr1], "root", "xxx", None, None).await?;
+    let client0 = MetaGrpcClient::try_create(vec![addr0], "root", "xxx", None, None)?;
+    let client1 = MetaGrpcClient::try_create(vec![addr1], "root", "xxx", None, None)?;
 
     let clients = vec![client0, client1];
 

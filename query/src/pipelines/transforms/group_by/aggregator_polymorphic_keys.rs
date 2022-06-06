@@ -12,18 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::marker::PhantomData;
+
 use bumpalo::Bump;
 use common_datablocks::HashMethod;
-use common_datablocks::HashMethodKeysU16;
-use common_datablocks::HashMethodKeysU32;
-use common_datablocks::HashMethodKeysU64;
-use common_datablocks::HashMethodKeysU8;
+use common_datablocks::HashMethodFixedKeys;
+use common_datablocks::HashMethodKeysU128;
+use common_datablocks::HashMethodKeysU256;
+use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodSerializer;
 use common_datablocks::HashMethodSingleString;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use primitive_types::U256;
+use primitive_types::U512;
 
 use super::aggregator_groups_builder::SingleStringGroupColumnsBuilder;
+use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
+use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
 use crate::common::HashMapKind;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
@@ -94,24 +100,21 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     ) -> Self::GroupColumnsBuilder;
 }
 
-impl PolymorphicKeysHelper<HashMethodKeysU8> for HashMethodKeysU8 {
+impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> {
     type State = ShortFixedKeysAggregatorState<u8>;
     fn aggregate_state(&self) -> Self::State {
         Self::State::create((u8::MAX as usize) + 1)
     }
-
     type ColumnBuilder = FixedKeysColumnBuilder<u8>;
     fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder {
         FixedKeysColumnBuilder::<u8> {
             inner_builder: MutablePrimitiveColumn::<u8>::with_capacity(capacity),
         }
     }
-
     type KeysColumnIter = FixedKeysColumnIter<u8>;
     fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter> {
-        FixedKeysColumnIter::create(Series::check_get::<UInt8Column>(column)?)
+        FixedKeysColumnIter::create(Series::check_get::<PrimitiveColumn<u8>>(column)?)
     }
-
     type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<u8>;
     fn group_columns_builder(
         &self,
@@ -122,24 +125,21 @@ impl PolymorphicKeysHelper<HashMethodKeysU8> for HashMethodKeysU8 {
     }
 }
 
-impl PolymorphicKeysHelper<HashMethodKeysU16> for HashMethodKeysU16 {
+impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16> {
     type State = ShortFixedKeysAggregatorState<u16>;
     fn aggregate_state(&self) -> Self::State {
         Self::State::create((u16::MAX as usize) + 1)
     }
-
     type ColumnBuilder = FixedKeysColumnBuilder<u16>;
     fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder {
         FixedKeysColumnBuilder::<u16> {
             inner_builder: MutablePrimitiveColumn::<u16>::with_capacity(capacity),
         }
     }
-
     type KeysColumnIter = FixedKeysColumnIter<u16>;
     fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter> {
-        FixedKeysColumnIter::create(Series::check_get::<UInt16Column>(column)?)
+        FixedKeysColumnIter::create(Series::check_get::<PrimitiveColumn<u16>>(column)?)
     }
-
     type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<u16>;
     fn group_columns_builder(
         &self,
@@ -150,28 +150,21 @@ impl PolymorphicKeysHelper<HashMethodKeysU16> for HashMethodKeysU16 {
     }
 }
 
-impl PolymorphicKeysHelper<HashMethodKeysU32> for HashMethodKeysU32 {
+impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32> {
     type State = LongerFixedKeysAggregatorState<u32>;
     fn aggregate_state(&self) -> Self::State {
-        LongerFixedKeysAggregatorState::<u32> {
-            area: Bump::new(),
-            data: HashMapKind::create_hash_table(),
-            two_level_flag: false,
-        }
+        Self::State::default()
     }
-
     type ColumnBuilder = FixedKeysColumnBuilder<u32>;
     fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder {
         FixedKeysColumnBuilder::<u32> {
             inner_builder: MutablePrimitiveColumn::<u32>::with_capacity(capacity),
         }
     }
-
     type KeysColumnIter = FixedKeysColumnIter<u32>;
     fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter> {
-        FixedKeysColumnIter::create(Series::check_get::<UInt32Column>(column)?)
+        FixedKeysColumnIter::create(Series::check_get::<PrimitiveColumn<u32>>(column)?)
     }
-
     type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<u32>;
     fn group_columns_builder(
         &self,
@@ -182,28 +175,21 @@ impl PolymorphicKeysHelper<HashMethodKeysU32> for HashMethodKeysU32 {
     }
 }
 
-impl PolymorphicKeysHelper<HashMethodKeysU64> for HashMethodKeysU64 {
+impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64> {
     type State = LongerFixedKeysAggregatorState<u64>;
     fn aggregate_state(&self) -> Self::State {
-        LongerFixedKeysAggregatorState::<u64> {
-            area: Bump::new(),
-            data: HashMapKind::create_hash_table(),
-            two_level_flag: false,
-        }
+        Self::State::default()
     }
-
     type ColumnBuilder = FixedKeysColumnBuilder<u64>;
     fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder {
         FixedKeysColumnBuilder::<u64> {
             inner_builder: MutablePrimitiveColumn::<u64>::with_capacity(capacity),
         }
     }
-
     type KeysColumnIter = FixedKeysColumnIter<u64>;
     fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter> {
-        FixedKeysColumnIter::create(Series::check_get::<UInt64Column>(column)?)
+        FixedKeysColumnIter::create(Series::check_get::<PrimitiveColumn<u64>>(column)?)
     }
-
     type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<u64>;
     fn group_columns_builder(
         &self,
@@ -211,6 +197,93 @@ impl PolymorphicKeysHelper<HashMethodKeysU64> for HashMethodKeysU64 {
         params: &AggregatorParams,
     ) -> Self::GroupColumnsBuilder {
         FixedKeysGroupColumnsBuilder::<u64>::create(capacity, params)
+    }
+}
+
+impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
+    type State = LongerFixedKeysAggregatorState<u128>;
+    fn aggregate_state(&self) -> Self::State {
+        Self::State::default()
+    }
+
+    type ColumnBuilder = LargeFixedKeysColumnBuilder<u128>;
+    fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder {
+        LargeFixedKeysColumnBuilder {
+            inner_builder: MutableStringColumn::with_capacity(capacity * 16),
+            _t: PhantomData,
+        }
+    }
+
+    type KeysColumnIter = LargeFixedKeysColumnIter<u128>;
+    fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter> {
+        LargeFixedKeysColumnIter::create(Series::check_get::<StringColumn>(column)?)
+    }
+
+    type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<u128>;
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder {
+        FixedKeysGroupColumnsBuilder::create(capacity, params)
+    }
+}
+
+impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
+    type State = LongerFixedKeysAggregatorState<U256>;
+    fn aggregate_state(&self) -> Self::State {
+        Self::State::default()
+    }
+
+    type ColumnBuilder = LargeFixedKeysColumnBuilder<U256>;
+    fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder {
+        LargeFixedKeysColumnBuilder {
+            inner_builder: MutableStringColumn::with_capacity(capacity * 32),
+            _t: PhantomData,
+        }
+    }
+
+    type KeysColumnIter = LargeFixedKeysColumnIter<U256>;
+    fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter> {
+        LargeFixedKeysColumnIter::create(Series::check_get::<StringColumn>(column)?)
+    }
+
+    type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<U256>;
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder {
+        FixedKeysGroupColumnsBuilder::create(capacity, params)
+    }
+}
+
+impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
+    type State = LongerFixedKeysAggregatorState<U512>;
+    fn aggregate_state(&self) -> Self::State {
+        Self::State::default()
+    }
+
+    type ColumnBuilder = LargeFixedKeysColumnBuilder<U512>;
+    fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder {
+        LargeFixedKeysColumnBuilder {
+            inner_builder: MutableStringColumn::with_capacity(capacity * 64),
+            _t: PhantomData,
+        }
+    }
+
+    type KeysColumnIter = LargeFixedKeysColumnIter<U512>;
+    fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter> {
+        LargeFixedKeysColumnIter::create(Series::check_get::<StringColumn>(column)?)
+    }
+
+    type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<U512>;
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder {
+        FixedKeysGroupColumnsBuilder::create(capacity, params)
     }
 }
 

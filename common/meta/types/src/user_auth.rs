@@ -19,7 +19,6 @@ use sha2::Digest;
 use sha2::Sha256;
 
 const NO_PASSWORD_STR: &str = "no_password";
-const PLAINTEXT_PASSWORD_STR: &str = "plaintext_password";
 const SHA256_PASSWORD_STR: &str = "sha256_password";
 const DOUBLE_SHA1_PASSWORD_STR: &str = "double_sha1_password";
 const JWT_AUTH_STR: &str = "jwt";
@@ -27,7 +26,6 @@ const JWT_AUTH_STR: &str = "jwt";
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum AuthType {
     NoPassword,
-    PlaintextPassword,
     Sha256Password,
     DoubleSha1Password,
     JWT,
@@ -37,7 +35,6 @@ impl std::str::FromStr for AuthType {
     type Err = ErrorCode;
     fn from_str(s: &str) -> Result<Self> {
         match s {
-            PLAINTEXT_PASSWORD_STR => Ok(AuthType::PlaintextPassword),
             SHA256_PASSWORD_STR => Ok(AuthType::Sha256Password),
             DOUBLE_SHA1_PASSWORD_STR => Ok(AuthType::DoubleSha1Password),
             NO_PASSWORD_STR => Ok(AuthType::NoPassword),
@@ -51,7 +48,6 @@ impl AuthType {
     pub fn to_str(&self) -> &str {
         match self {
             AuthType::NoPassword => NO_PASSWORD_STR,
-            AuthType::PlaintextPassword => PLAINTEXT_PASSWORD_STR,
             AuthType::Sha256Password => SHA256_PASSWORD_STR,
             AuthType::DoubleSha1Password => DOUBLE_SHA1_PASSWORD_STR,
             AuthType::JWT => JWT_AUTH_STR,
@@ -61,7 +57,6 @@ impl AuthType {
     fn bad_auth_types(s: &str) -> String {
         let all = vec![
             NO_PASSWORD_STR,
-            PLAINTEXT_PASSWORD_STR,
             SHA256_PASSWORD_STR,
             DOUBLE_SHA1_PASSWORD_STR,
             JWT_AUTH_STR,
@@ -76,7 +71,6 @@ impl AuthType {
 
     fn get_password_type(self) -> Option<PasswordHashMethod> {
         match self {
-            AuthType::PlaintextPassword => Some(PasswordHashMethod::PlainText),
             AuthType::Sha256Password => Some(PasswordHashMethod::Sha256),
             AuthType::DoubleSha1Password => Some(PasswordHashMethod::DoubleSha1),
             _ => None,
@@ -109,9 +103,7 @@ impl AuthInfo {
         match auth_type {
             AuthType::NoPassword => Ok(AuthInfo::None),
             AuthType::JWT => Ok(AuthInfo::JWT),
-            AuthType::PlaintextPassword
-            | AuthType::Sha256Password
-            | AuthType::DoubleSha1Password => match auth_string {
+            AuthType::Sha256Password | AuthType::DoubleSha1Password => match auth_string {
                 Some(p) => {
                     let method = auth_type.get_password_type().unwrap();
                     Ok(AuthInfo::Password {
@@ -131,6 +123,12 @@ impl AuthInfo {
             .map(|s| AuthType::from_str(&s))
             .transpose()?
             .unwrap_or(default);
+        AuthInfo::new(auth_type, auth_string)
+    }
+
+    pub fn create2(auth_type: &Option<AuthType>, auth_string: &Option<String>) -> Result<AuthInfo> {
+        let default = AuthType::DoubleSha1Password;
+        let auth_type = auth_type.clone().unwrap_or(default);
         AuthInfo::new(auth_type, auth_string)
     }
 
@@ -156,7 +154,6 @@ impl AuthInfo {
                 hash_value: _,
                 hash_method: t,
             } => match t {
-                PasswordHashMethod::PlainText => AuthType::PlaintextPassword,
                 PasswordHashMethod::Sha256 => AuthType::Sha256Password,
                 PasswordHashMethod::DoubleSha1 => AuthType::DoubleSha1Password,
             },
@@ -217,7 +214,6 @@ impl AuthInfo {
                 hash_value: p,
                 hash_method: t,
             } => match t {
-                PasswordHashMethod::PlainText => Ok(p == password_input),
                 PasswordHashMethod::DoubleSha1 => {
                     let password_sha1 = AuthInfo::restore_sha1_mysql(salt, password_input, p)?;
                     Ok(*p == calc_sha1(&password_sha1))
@@ -253,7 +249,6 @@ impl Default for AuthInfo {
     num_derive::FromPrimitive,
 )]
 pub enum PasswordHashMethod {
-    PlainText = 0,
     DoubleSha1 = 1,
     Sha256 = 2,
 }
@@ -261,17 +256,13 @@ pub enum PasswordHashMethod {
 impl PasswordHashMethod {
     pub fn hash(self, user_input: &[u8]) -> Vec<u8> {
         match self {
-            PasswordHashMethod::PlainText => Vec::from(user_input),
             PasswordHashMethod::DoubleSha1 => double_sha1(user_input).to_vec(),
             PasswordHashMethod::Sha256 => Sha256::digest(user_input).to_vec(),
         }
     }
 
     fn to_string(self, hash_value: &[u8]) -> String {
-        match self {
-            PasswordHashMethod::PlainText => String::from_utf8_lossy(hash_value).into_owned(),
-            _ => hex::encode(hash_value),
-        }
+        hex::encode(hash_value)
     }
 }
 

@@ -8,8 +8,8 @@ from log import log
 
 class TestHttp(logictest.SuiteRunner, ABC):
 
-    def __init__(self, kind):
-        super().__init__(kind)
+    def __init__(self, kind, pattern):
+        super().__init__(kind, pattern)
         self._http = None
 
     def get_connection(self):
@@ -41,7 +41,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
         for (ri, row) in enumerate(results):
             for (i, v) in enumerate(row):
                 if isinstance(v, NoneType):
-                    vals.append("None")
+                    vals.append("NULL")
                     continue
 
                 if query_type[i] == 'I':

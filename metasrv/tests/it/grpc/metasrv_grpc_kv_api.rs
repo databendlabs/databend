@@ -21,7 +21,7 @@ use common_meta_api::KVApiBuilder;
 use common_meta_api::KVApiTestSuite;
 use common_meta_grpc::ClientHandle;
 use common_meta_grpc::MetaGrpcClient;
-use common_tracing::tracing_futures::Instrument;
+use common_tracing::tracing;
 
 use crate::init_meta_ut;
 use crate::tests::service::start_metasrv_cluster;
@@ -37,9 +37,7 @@ impl KVApiBuilder<Arc<ClientHandle>> for Builder {
     async fn build(&self) -> Arc<ClientHandle> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
-        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)
-            .await
-            .unwrap();
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).unwrap();
 
         {
             let mut tcs = self.test_contexts.lock().unwrap();
@@ -67,15 +65,11 @@ impl KVApiBuilder<Arc<ClientHandle>> for Builder {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_metasrv_kv_api() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-
     let builder = Builder {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
 
-    async { KVApiTestSuite {}.test_all(builder).await }
-        .instrument(ut_span)
-        .await
+    KVApiTestSuite {}.test_all(builder).await
 }

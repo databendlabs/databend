@@ -145,14 +145,20 @@ impl<'a> Error<'a> {
     }
 }
 
+impl From<fast_float::Error> for ErrorKind {
+    fn from(_: fast_float::Error) -> Self {
+        ErrorKind::Other("unable to parse float number")
+    }
+}
+
 impl From<ParseIntError> for ErrorKind {
     fn from(err: ParseIntError) -> Self {
         let msg = match err.kind() {
             IntErrorKind::InvalidDigit => {
                 "unable to parse number because it contains invalid characters"
             }
-            IntErrorKind::PosOverflow => "unable to parse number because it positive overflowed",
-            IntErrorKind::NegOverflow => "unable to parse number because it negative overflowed",
+            IntErrorKind::PosOverflow => "unable to parse number because it positively overflowed",
+            IntErrorKind::NegOverflow => "unable to parse number because it negatively overflowed",
             _ => "unable to parse number",
         };
         ErrorKind::Other(msg)

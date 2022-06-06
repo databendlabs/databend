@@ -20,8 +20,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
-use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -75,6 +75,18 @@ pub trait Table: Sync + Send {
 
     fn cluster_keys(&self) -> Vec<Expression> {
         vec![]
+    }
+
+    async fn alter_cluster_keys(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _catalog_name: &str,
+        _cluster_key_str: String,
+    ) -> Result<()> {
+        Err(ErrorCode::UnsupportedEngineParams(format!(
+            "Unsupported clustering keys for engine: {}",
+            self.engine()
+        )))
     }
 
     // defaults to generate one single part and empty statistics

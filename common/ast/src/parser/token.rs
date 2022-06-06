@@ -115,12 +115,16 @@ pub enum TokenKind {
     QuotedString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
-    LiteralHex,
+    PGLiteralHex,
+    #[regex(r"0[xX][a-fA-F0-9]+")]
+    MySQLLiteralHex,
 
     #[regex(r"[0-9]+")]
+    LiteralInteger,
+
     #[regex(r"[0-9]+e[+-]?[0-9]+")]
     #[regex(r"([0-9]*\.[0-9]+(e[+-]?[0-9]+)?)|([0-9]+\.[0-9]*(e[+-]?[0-9]+)?)")]
-    LiteralNumber,
+    LiteralFloat,
 
     // Symbols
     #[token("==")]
@@ -286,6 +290,8 @@ pub enum TokenKind {
     CREATE,
     #[token("CREDENTIALS", ignore(ascii_case))]
     CREDENTIALS,
+    #[token("CROSS", ignore(ascii_case))]
+    CROSS,
     #[token("CSV", ignore(ascii_case))]
     CSV,
     #[token("CURRENT_TIMESTAMP", ignore(ascii_case))]
@@ -610,6 +616,8 @@ pub enum TokenKind {
     XOR,
     #[token("YEAR", ignore(ascii_case))]
     YEAR,
+    #[token("NULLIF", ignore(ascii_case))]
+    NULLIF,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -619,8 +627,10 @@ impl TokenKind {
             self,
             Ident
                 | QuotedString
-                | LiteralHex
-                | LiteralNumber
+                | PGLiteralHex
+                | MySQLLiteralHex
+                | LiteralInteger
+                | LiteralFloat
                 | DoubleEq
                 | Eq
                 | NotEq
@@ -728,7 +738,7 @@ impl TokenKind {
             // | TokenKind::NORMALIZE
             | TokenKind::NOT
             | TokenKind::NULL
-            // | TokenKind::NULLIF
+            | TokenKind::NULLIF
             // | TokenKind::NUMERIC
             // | TokenKind::ONLY
             | TokenKind::OR
@@ -825,7 +835,7 @@ impl TokenKind {
             // | TokenKind::COLUMN
             // | TokenKind::CONCURRENTLY
             // | TokenKind::CONSTRAINT
-            // | TokenKind::CROSS
+            | TokenKind::CROSS
             // | TokenKind::CURRENT_CATALOG
             // | TokenKind::CURRENT_DATE
             // | TokenKind::CURRENT_ROLE

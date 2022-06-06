@@ -296,16 +296,6 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context().await?;
 
-    // NumberArgumentsNotMatch
-    {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `TENANT_QUOTA` expect to have [1, 5] arguments, but got 0.";
-        assert_eq!(expect, res.err().unwrap().to_string());
-    }
-
     // Access denied
     {
         let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1)").await?;
@@ -325,6 +315,24 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         .option
         .set_option_flag(UserOptionFlag::TenantSetting);
     let ctx = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
+
+    // current tenant
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota()").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+---------------+-------------------------+------------+---------------------+",
+            "| max_databases | max_tables_per_database | max_stages | max_files_per_stage |",
+            "+---------------+-------------------------+------------+---------------------+",
+            "| 0             | 0                       | 0          | 0                   |",
+            "+---------------+-------------------------+------------+---------------------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    }
+
+    // query other tenant
     {
         let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -340,6 +348,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
+    // set other tenant quota
     {
         let plan =
             PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1, 7, 5, 3, 3)").await?;
@@ -382,6 +391,83 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
             "+---------------+-------------------------+------------+---------------------+",
             "| 8             | 5                       | 3          | 3                   |",
             "+---------------+-------------------------+------------+---------------------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    }
+
+    // current tenant again
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota()").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+---------------+-------------------------+------------+---------------------+",
+            "| max_databases | max_tables_per_database | max_stages | max_files_per_stage |",
+            "+---------------+-------------------------+------------+---------------------+",
+            "| 0             | 0                       | 0          | 0                   |",
+            "+---------------+-------------------------+------------+---------------------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_call_stats_tenant_tables_interpreter() -> Result<()> {
+    common_tracing::init_default_ut_tracing();
+
+    let ctx = crate::tests::create_query_context().await?;
+
+    // NumberArgumentsNotMatch
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call stats$tenant_tables()").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "CallInterpreter");
+        let res = executor.execute(None).await;
+        assert_eq!(res.is_err(), true);
+        let expect = "Code: 1028, displayText = Function `TENANT_TABLES` expect to have [1, 18446744073709551614] arguments, but got 0.";
+        assert_eq!(expect, res.err().unwrap().to_string());
+    }
+
+    // Access denied
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call stats$tenant_tables(tenant1)").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let res = executor.execute(None).await;
+        assert_eq!(res.is_err(), true);
+        let expect =
+            "Code: 1062, displayText = Access denied: 'TENANT_TABLES' only used in management-mode.";
+        assert_eq!(expect, res.err().unwrap().to_string());
+    }
+
+    let conf = crate::tests::ConfigBuilder::create()
+        .with_management_mode()
+        .config();
+    let mut user_info = ctx.get_current_user()?;
+    user_info
+        .option
+        .set_option_flag(UserOptionFlag::TenantSetting);
+    let ctx = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
+
+    {
+        let plan = PlanParser::parse(
+            ctx.clone(),
+            "call stats$tenant_tables(tenant1, tenant2, tenant3)",
+        )
+        .await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+-----------+-------------+",
+            "| tenant_id | table_count |",
+            "+-----------+-------------+",
+            "| tenant1   | 0           |",
+            "| tenant2   | 0           |",
+            "| tenant3   | 0           |",
+            "+-----------+-------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

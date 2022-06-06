@@ -20,7 +20,10 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/check
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -34,7 +37,10 @@ jobs:
           - x86_64-apple-darwin
           - aarch64-apple-darwin
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/build_release
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -49,7 +55,10 @@ jobs:
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/build_release
         with:
           target: ${{ matrix.target }}
@@ -58,7 +67,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: check
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_unit
         with:
           codecov_token: ${{ secrets.CODECOV_TOKEN }}
@@ -67,7 +79,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build_linux
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_standalone_linux
         with:
           profile: release
@@ -76,7 +91,7 @@ jobs:
   #   runs-on: macos-11
   #   needs: build_macos
   #   steps:
-  #     - uses: actions/checkout@v2
+  #     - uses: actions/checkout@v3
   #     - uses: ./.github/actions/test_stateless_standalone_macos
   #       with:
   #         profile: release
@@ -85,7 +100,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build_linux
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_cluster_linux
         with:
           profile: release
@@ -94,7 +112,10 @@ jobs:
     runs-on: macos-11
     needs: build_macos
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_cluster_macos
         with:
           profile: release
@@ -103,7 +124,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build_linux
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateful_standalone
         with:
           profile: release
@@ -121,11 +145,13 @@ jobs:
         config:
           - { target: x86_64-unknown-linux-gnu, platform: linux/amd64 }
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/publish_image
         with:
           dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
-          dockerhub_namespace: ${{ secrets.DOCKERHUB_NAMESPACE }}
           target: ${{ matrix.config.target }}
           platform: ${{ matrix.config.platform }}

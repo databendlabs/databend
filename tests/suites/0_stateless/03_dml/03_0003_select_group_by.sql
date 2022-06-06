@@ -49,3 +49,32 @@ SELECT number, count(*) FROM numbers_mt(1000) group by number order by number li
 set group_by_two_level_threshold=1000000000;
 SELECT number, count(*) FROM numbers_mt(1000) group by number order by number limit 5;
 
+SELECT '==GROUP BY Variant==';
+CREATE TABLE IF NOT EXISTS t_variant(id Int null, var Variant null) Engine = Fuse;
+
+INSERT INTO t_variant VALUES(1, parse_json('{"k":"v"}')),
+                            (2, parse_json('{"k":"v"}')),
+                            (3, parse_json('"abcd"')),
+                            (4, parse_json('"abcd"')),
+                            (5, parse_json('12')),
+                            (6, parse_json('12')),
+                            (7, parse_json('[1,2,3]')),
+                            (8, parse_json('[1,2,3]'));
+
+SELECT max(id), min(id), var FROM t_variant GROUP BY var ORDER BY var ASC;
+
+DROP TABLE t_variant;
+
+SELECT '==GROUP BY Array(Int32)==';
+
+CREATE TABLE IF NOT EXISTS t_array(id Int null, arr Array(Int32) null) Engine = Fuse;
+INSERT INTO t_array VALUES(1, []),
+                          (2, []),
+                          (3, [1,2,3]),
+                          (4, [1,2,3]),
+                          (5, [4,5,6]),
+                          (6, [4,5,6]);
+
+SELECT max(id), min(id), arr FROM t_array GROUP BY arr ORDER BY arr ASC;
+
+DROP TABLE t_array;

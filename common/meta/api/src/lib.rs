@@ -29,6 +29,8 @@ pub use kv_api_key::KVApiKey;
 pub use kv_api_key::KVApiKeyError;
 pub use kv_api_test_suite::KVApiTestSuite;
 pub use schema_api::SchemaApi;
+pub(crate) use schema_api_impl::deserialize_struct;
+pub(crate) use schema_api_impl::serialize_struct;
 pub use schema_api_keys::DatabaseIdGen;
 pub use schema_api_keys::TableIdGen;
 pub use schema_api_test_suite::SchemaApiTestSuite;

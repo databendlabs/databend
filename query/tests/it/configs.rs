@@ -25,7 +25,8 @@ use pretty_assertions::assert_eq;
 fn test_default_config() -> Result<()> {
     let actual = Config::default();
 
-    let tom_expect = r#"config_file = ""
+    let tom_expect = r#"cmd = ""
+config_file = ""
 
 [query]
 tenant_id = "admin"
@@ -65,6 +66,12 @@ table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
 management_mode = false
 jwt_key_file = ""
+enable_async_insert = false
+async_insert_max_data_size = 10000
+async_insert_busy_timeout = 200
+async_insert_stale_timeout = 0
+wait_for_async_insert = true
+wait_for_async_insert_timeout = 100
 
 [log]
 level = "INFO"
@@ -321,6 +328,12 @@ table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
 management_mode = false
 jwt_key_file = ""
+enable_async_insert = false
+async_insert_max_data_size = 10000
+async_insert_busy_timeout = 200
+async_insert_stale_timeout = 0
+wait_for_async_insert = true
+wait_for_async_insert_timeout = 100
 
 [log]
 level = "INFO"

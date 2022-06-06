@@ -18,13 +18,14 @@ use common_base::infallible::RwLock;
 use common_datavalues::BooleanType;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataValue;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::Statistics;
 use databend_query::sql::optimizer::SExpr;
+use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::FilterPlan;
@@ -139,6 +140,7 @@ fn test_format() {
                 },
             }
             .into()],
+            join_type: JoinType::InnerJoin,
         }
         .into(),
         SExpr::create_unary(

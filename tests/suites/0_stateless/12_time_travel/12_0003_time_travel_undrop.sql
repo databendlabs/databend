@@ -36,3 +36,11 @@ SELECT count(1) FROM t;
 
 DROP TABLE t;
 DROP database db_12_0003;
+
+select "-- undrop database";
+UNDROP database db_12_0003;
+USE db_12_0003;
+SHOW TABLES;
+SELECT count(1) FROM t1;
+UNDROP TABLE t;
+SELECT count(1) FROM t;

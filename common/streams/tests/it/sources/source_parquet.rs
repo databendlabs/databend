@@ -53,7 +53,7 @@ async fn test_source_parquet() -> Result<()> {
     use common_arrow::arrow::chunk::Chunk;
     let batch = Chunk::try_from(sample_block)?;
     use common_arrow::parquet::encoding::Encoding;
-    let encodings = std::iter::repeat(Encoding::Plain)
+    let encodings = std::iter::repeat(vec![Encoding::Plain])
         .take(arrow_schema.fields.len())
         .collect::<Vec<_>>();
 

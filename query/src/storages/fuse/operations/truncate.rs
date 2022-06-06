@@ -16,9 +16,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_app::schema::TableStatistics;
+use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_meta_types::TableStatistics;
-use common_meta_types::UpdateTableMetaReq;
 use common_planners::TruncateTablePlan;
 use uuid::Uuid;
 
@@ -41,6 +41,7 @@ impl FuseTable {
                 prev_snapshot.schema.clone(),
                 Default::default(),
                 vec![],
+                self.cluster_key_meta.clone(),
             );
             let loc = self.meta_location_generator();
             let new_snapshot_loc =

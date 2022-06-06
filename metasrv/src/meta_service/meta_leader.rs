@@ -16,7 +16,9 @@ use std::collections::BTreeSet;
 
 use common_meta_api::KVApi;
 use common_meta_sled_store::openraft;
+use common_meta_sled_store::openraft::error::ChangeMembershipError;
 use common_meta_sled_store::openraft::error::ClientWriteError;
+use common_meta_sled_store::openraft::error::InProgress;
 use common_meta_sled_store::openraft::raft::EntryPayload;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
@@ -105,28 +107,33 @@ impl<'a> MetaLeader<'a> {
             return Ok(());
         }
 
-        // TODO(xp): deal with joint config
-        assert!(membership.get_ith_config(1).is_none());
-
-        // safe unwrap: if the first config is None, panic is the expected behavior here.
-        let mut membership = membership.get_ith_config(0).unwrap().clone();
-
-        membership.insert(node_id);
-
-        let ent = LogEntry {
-            txid: None,
-            cmd: Cmd::AddNode {
-                node_id,
-                node: Node {
-                    name: node_id.to_string(),
-                    endpoint,
-                },
-            },
-        };
-
-        self.write(ent).await?;
-
-        self.change_membership(membership).await
+        // deal with joint config，If the cluster is in joint config,
+        // we need to return an Inprogress error with membership log id.
+        match membership.get_ith_config(1) {
+            Some(_membership) => Err(MetaRaftError::ChangeMembershipError(
+                ChangeMembershipError::InProgress(InProgress {
+                    membership_log_id: metrics.membership_config.log_id,
+                }),
+            )
+            .into()),
+            None => {
+                // safe unwrap: if the first config is None, panic is the expected behavior here.
+                let mut membership = membership.get_ith_config(0).unwrap().clone();
+                membership.insert(node_id);
+                let ent = LogEntry {
+                    txid: None,
+                    cmd: Cmd::AddNode {
+                        node_id,
+                        node: Node {
+                            name: node_id.to_string(),
+                            endpoint,
+                        },
+                    },
+                };
+                self.write(ent).await?;
+                self.change_membership(membership).await
+            }
+        }
     }
 
     /// A node leave the cluster.
@@ -145,21 +152,29 @@ impl<'a> MetaLeader<'a> {
             return Ok(());
         }
 
-        // TODO(xp): deal with joint config
-        assert!(membership.get_ith_config(1).is_none());
+        // deal with joint config，If the cluster is in joint config,
+        // we need to return an Inprogress error with membership log id.
+        match membership.get_ith_config(1) {
+            Some(_membership) => Err(MetaRaftError::ChangeMembershipError(
+                ChangeMembershipError::InProgress(InProgress {
+                    membership_log_id: metrics.membership_config.log_id,
+                }),
+            )
+            .into()),
+            None => {
+                // safe unwrap: if the first config is None, panic is the expected behavior here.
+                let mut membership = membership.get_ith_config(0).unwrap().clone();
+                membership.remove(&node_id);
 
-        // safe unwrap: if the first config is None, panic is the expected behavior here.
-        let mut membership = membership.get_ith_config(0).unwrap().clone();
-
-        membership.remove(&node_id);
-
-        self.change_membership(membership).await?;
-        let ent = LogEntry {
-            txid: None,
-            cmd: Cmd::RemoveNode { node_id },
-        };
-        self.write(ent).await?;
-        Ok(())
+                self.change_membership(membership).await?;
+                let ent = LogEntry {
+                    txid: None,
+                    cmd: Cmd::RemoveNode { node_id },
+                };
+                self.write(ent).await?;
+                Ok(())
+            }
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -209,10 +224,7 @@ impl<'a> MetaLeader<'a> {
         match write_rst {
             Ok(resp) => {
                 let data = resp.data;
-                match data {
-                    AppliedState::AppError(ae) => Err(MetaError::from(ae)),
-                    _ => Ok(data),
-                }
+                Ok(data)
             }
 
             Err(cli_write_err) => match cli_write_err {

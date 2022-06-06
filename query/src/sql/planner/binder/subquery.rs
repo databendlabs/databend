@@ -101,13 +101,9 @@ impl SubqueryRewriter {
                 self.rewrite(s_expr.child(1)?)?,
             )),
 
-            RelOperator::Project(_)
-            | RelOperator::Limit(_)
-            | RelOperator::Sort(_)
-            | RelOperator::Explain(_) => Ok(SExpr::create_unary(
-                s_expr.plan().clone(),
-                self.rewrite(s_expr.child(0)?)?,
-            )),
+            RelOperator::Project(_) | RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(
+                SExpr::create_unary(s_expr.plan().clone(), self.rewrite(s_expr.child(0)?)?),
+            ),
 
             RelOperator::LogicalGet(_) => Ok(s_expr.clone()),
 

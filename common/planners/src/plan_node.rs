@@ -20,6 +20,7 @@ use crate::plan_table_undrop::UnDropTablePlan;
 use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterClusterKeyPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::AlterViewPlan;
@@ -72,6 +73,7 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::SubQueriesSetPlan;
 use crate::TruncateTablePlan;
+use crate::UnDropDatabasePlan;
 use crate::UseDatabasePlan;
 
 #[allow(clippy::large_enum_variant)]
@@ -114,12 +116,16 @@ pub enum PlanNode {
     // List
     List(ListPlan),
 
+    // Alter.
+    AlterClusterKey(AlterClusterKeyPlan),
+
     // Show.
     Show(ShowPlan),
 
     // Database.
     CreateDatabase(CreateDatabasePlan),
     DropDatabase(DropDatabasePlan),
+    UnDropDatabase(UnDropDatabasePlan),
     RenameDatabase(RenameDatabasePlan),
     ShowCreateDatabase(ShowCreateDatabasePlan),
 
@@ -221,6 +227,7 @@ impl PlanNode {
             PlanNode::DropDatabase(v) => v.schema(),
             PlanNode::ShowCreateDatabase(v) => v.schema(),
             PlanNode::RenameDatabase(v) => v.schema(),
+            PlanNode::UnDropDatabase(v) => v.schema(),
 
             // Table.
             PlanNode::CreateTable(v) => v.schema(),
@@ -275,6 +282,9 @@ impl PlanNode {
 
             // Kill.
             PlanNode::Kill(v) => v.schema(),
+
+            // Alter
+            PlanNode::AlterClusterKey(v) => v.schema(),
         }
     }
 
@@ -322,6 +332,7 @@ impl PlanNode {
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
             PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
             PlanNode::RenameDatabase(_) => "RenameDatabase",
+            PlanNode::UnDropDatabase(_) => "UnDropDatabase",
 
             // Table.
             PlanNode::CreateTable(_) => "CreateTablePlan",
@@ -376,6 +387,9 @@ impl PlanNode {
 
             // Kill.
             PlanNode::Kill(_) => "KillQuery",
+
+            // Alter.
+            PlanNode::AlterClusterKey(_) => "AlterClusterKeyPlan",
         }
     }
 

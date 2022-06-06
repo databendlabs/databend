@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use once_cell::sync::Lazy;
 
 use crate::PlanNode;

@@ -15,15 +15,15 @@
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 
 #[derive(Clone, Debug)]
 pub struct PatternPlan {
-    pub plan_type: PlanType,
+    pub plan_type: RelOp,
 }
 
 impl Operator for PatternPlan {
-    fn plan_type(&self) -> PlanType {
+    fn plan_type(&self) -> RelOp {
         self.plan_type.clone()
     }
 

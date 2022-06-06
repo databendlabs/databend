@@ -103,7 +103,7 @@ impl Session {
     pub fn kill(self: &Arc<Self>) {
         let session_ctx = self.session_ctx.clone();
         session_ctx.set_abort(true);
-        if session_ctx.query_context_shared_is_none() {
+        if session_ctx.get_current_query_id().is_some() {
             if let Some(io_shutdown) = session_ctx.take_io_shutdown_tx() {
                 let (tx, rx) = oneshot::channel();
                 if io_shutdown.send(tx).is_ok() {
@@ -148,8 +148,8 @@ impl Session {
         Ok(shared)
     }
 
-    pub fn query_context_shared_is_none(&self) -> bool {
-        self.session_ctx.query_context_shared_is_none()
+    pub fn get_current_query_id(&self) -> Option<String> {
+        self.session_ctx.get_current_query_id()
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
@@ -231,6 +231,15 @@ impl Session {
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
         Arc::new(self.session_settings.clone())
+    }
+
+    pub fn get_changed_settings(self: &Arc<Self>) -> Arc<Settings> {
+        Arc::new(self.session_settings.get_changed_settings())
+    }
+
+    pub fn apply_changed_settings(self: &Arc<Self>, changed_settings: Arc<Settings>) -> Result<()> {
+        self.session_settings
+            .apply_changed_settings(changed_settings)
     }
 
     pub fn get_session_manager(self: &Arc<Self>) -> Arc<SessionManager> {

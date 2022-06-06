@@ -56,37 +56,37 @@ statement query T
 SELECT REGEXP_REPLACE(NULL, 'b', 'X');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT REGEXP_REPLACE('a b c', NULL, 'X');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT REGEXP_REPLACE('a b c', 'b', NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT REGEXP_REPLACE('a b c', 'b', 'X', NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT REGEXP_REPLACE('a b c', 'b', 'X', 1, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT REGEXP_REPLACE('a b c', 'b', 'X', 1, 2, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT '======';

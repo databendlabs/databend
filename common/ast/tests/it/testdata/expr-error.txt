@@ -38,13 +38,28 @@ error:
 
 
 ---------- Input ----------
+1 a
+---------- Output ---------
+1
+---------- AST ------------
+Literal {
+    span: [
+        LiteralInteger(0..1),
+    ],
+    lit: Integer(
+        1,
+    ),
+}
+
+
+---------- Input ----------
 CAST(col1)
 ---------- Output ---------
 error: 
   --> SQL:1:10
   |
 1 | CAST(col1)
-  | ----     ^ expected `AS`, `,`, `(`, `.`, `IS`, `NOT`, or 47 more ...
+  | ----     ^ expected `AS`, `,`, `(`, `.`, `IS`, `NOT`, or 50 more ...
   | |         
   | while parsing `CAST(... AS ...)`
   | while parsing expression

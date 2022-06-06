@@ -36,10 +36,36 @@ pub use property::RelationalProperty;
 pub use property::RequiredProperty;
 pub use s_expr::SExpr;
 
+use super::plans::Plan;
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::RuleSet;
 
-pub fn optimize(expression: SExpr, _ctx: OptimizeContext) -> Result<SExpr> {
+pub fn optimize(plan: Plan) -> Result<Plan> {
+    match plan {
+        Plan::Query {
+            s_expr,
+            bind_context,
+            metadata,
+        } => Ok(Plan::Query {
+            s_expr: optimize_query(s_expr)?,
+            bind_context,
+            metadata,
+        }),
+        Plan::Explain { kind, plan } => Ok(Plan::Explain {
+            kind,
+            plan: Box::new(optimize(*plan)?),
+        }),
+
+        // Passthrough
+        Plan::ShowMetrics
+        | Plan::ShowProcessList
+        | Plan::ShowSettings
+        | Plan::CreateTable(_)
+        | Plan::CreateUser(_) => Ok(plan),
+    }
+}
+
+pub fn optimize_query(expression: SExpr) -> Result<SExpr> {
     let mut heuristic = HeuristicOptimizer::create()?;
     let s_expr = heuristic.optimize(expression)?;
     // TODO: enable cascades optimizer

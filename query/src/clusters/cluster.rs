@@ -92,7 +92,6 @@ impl ClusterDiscovery {
             Err(cause) => Err(cause.add_message_back("(while cluster api get_nodes).")),
             Ok(cluster_nodes) => {
                 let mut res = Vec::with_capacity(cluster_nodes.len());
-
                 for node in &cluster_nodes {
                     res.push(Arc::new(node.clone()))
                 }

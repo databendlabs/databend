@@ -27,7 +27,7 @@ use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
 
-macro_rules! test_parse {
+macro_rules! run_parser {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
         let tokens = Tokenizer::new($source).collect::<Result<Vec<_>>>().unwrap();
         let backtrace = Backtrace::new();
@@ -104,6 +104,7 @@ fn test_statement() {
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
+        r#"create user 'test-e'@'localhost' identified by 'password';"#,
     ];
 
     for case in cases {
@@ -138,7 +139,7 @@ fn test_statements_in_legacy_suites() {
         // TODO(andylokandy): support all cases eventually
         // Remove currently unimplemented cases
         let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES).*\n",
+            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP).*\n",
         )
         .unwrap()
         .replace_all(&file_str, "")
@@ -168,6 +169,7 @@ fn test_statement_error() {
         r#"drop a"#,
         r#"insert into t format"#,
         r#"alter database system x rename to db"#,
+        r#"create user 'test-e'@'localhost' identified bi 'password';"#,
     ];
 
     for case in cases {
@@ -187,6 +189,8 @@ fn test_query() {
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
         r#"select * from a limit 3 offset 4 format csv"#,
+        r#"select * from customer inner join orders"#,
+        r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on a = b limit 1"#,
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
@@ -210,7 +214,7 @@ fn test_query() {
     ];
 
     for case in cases {
-        test_parse!(file, query, case);
+        run_parser!(file, query, case);
     }
 }
 
@@ -221,7 +225,6 @@ fn test_query_error() {
     let cases = &[
         r#"select * from customer join where a = b"#,
         r#"select * from join customer"#,
-        r#"select * from t inner join t1"#,
         r#"select * from customer natural inner join orders on a = b"#,
         r#"select * order a"#,
         r#"select * order"#,
@@ -229,7 +232,7 @@ fn test_query_error() {
     ];
 
     for case in cases {
-        test_parse!(file, query, case);
+        run_parser!(file, query, case);
     }
 }
 
@@ -240,12 +243,26 @@ fn test_expr() {
 
     let cases = &[
         r#"a"#,
+        r#"'I''m who I\'m.'"#,
+        r#"'\776 \n \t \u0053 \xaa'"#,
+        r#"char(0xD0, 0xBF, 0xD1)"#,
+        r#"[42, 3.5, 4., .001, 5e2, 1.925e-3, .38e+7, 1.e-01, 0xfff, x'deedbeef']"#,
+        r#"123456789012345678901234567890"#,
+        r#"x'123456789012345678901234567890'"#,
+        r#"1e100000000000000"#,
         r#"-1"#,
         r#"(1,)"#,
         r#"(1,2)"#,
         r#"(1,2,)"#,
+        r#"[1]"#,
+        r#"[1,]"#,
+        r#"[[1]]"#,
+        r#"[[1],[2]]"#,
+        r#"[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]"#,
         r#"typeof(1 + 2)"#,
         r#"- - + + - 1 + + - 2"#,
+        r#"0XFF + 0xff + 0xa + x'ffff'"#,
+        r#"1 - -(- - -1)"#,
         r#"1 + a * c.d"#,
         r#"number % 2"#,
         r#"`t`:k1.k2"#,
@@ -274,10 +291,12 @@ fn test_expr() {
             AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
+        r#"nullif(1, 1)"#,
+        r#"nullif(a, b)"#,
     ];
 
     for case in cases {
-        test_parse!(file, expr, case);
+        run_parser!(file, expr, case);
     }
 }
 
@@ -290,6 +309,8 @@ fn test_expr_error() {
         r#"5 * (a and ) 1"#,
         r#"a + +"#,
         r#"CAST(col1 AS foo)"#,
+        // TODO(andylokandy): This is a bug being tracking in https://github.com/segeljakt/pratt/issues/7
+        r#"1 a"#,
         r#"CAST(col1)"#,
         r#"G.E.B IS NOT NULL AND
             col1 NOT BETWEEN col2 AND
@@ -297,6 +318,6 @@ fn test_expr_error() {
     ];
 
     for case in cases {
-        test_parse!(file, expr, case);
+        run_parser!(file, expr, case);
     }
 }

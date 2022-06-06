@@ -4,6 +4,7 @@ inputs:
   codecov_token:
     description: "CodeCov Token"
     required: true
+
 runs:
   using: "composite"
   steps:
@@ -18,12 +19,7 @@ runs:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
       with:
-        bypass_env_vars: RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
-
-    # If you need to reset the cache version, increment the number after `v`
-    - uses: Swatinem/rust-cache@v1
-      with:
-        sharedKey: unit-v3
+        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
 
     - shell: bash
       run: cargo test --no-fail-fast

@@ -80,7 +80,7 @@ statement query TTTT
 SELECT Null + 1, Null - 1, Null * 1, Null / 1;
 
 ----  
-None None None None
+NULL NULL NULL NULL
 
 statement query FF 
 SELECT 1 + 1.0, 1 + 2.0;

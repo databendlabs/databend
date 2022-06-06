@@ -13,11 +13,11 @@ CREATE VIEW view_t1 AS SELECT a, b FROM t1;
 ```
 And do a query like:
 ```sql
-SELECT a from view_t1;
+SELECT a FROM view_t1;
 ```
 the result equals the below query
 ```sql
-SELECT a from (SELECT a, b FROM t1);
+SELECT a FROM (SELECT a, b FROM t1);
 ```
 
 So, if you delete the table which the view depends on, it occurs an error that the original table does not exist. And you may need to drop the old view and recreate the new view you need.
@@ -31,9 +31,9 @@ CREATE VIEW [IF NOT EXISTS] [db.]view_name AS SELECT query
 ## Examples
 
 ```sql
-create view tmp_view as SELECT number % 3 as a, avg(number) from numbers(1000) group by a order by a;
+CREATE VIEW tmp_view AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a;
 
-SELECT * from tmp_view;
+SELECT * FROM tmp_view;
 +------+-------------+
 | a    | avg(number) |
 +------+-------------+

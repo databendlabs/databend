@@ -16,7 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::plans::Operator;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::plans::RelOperator;
 use crate::sql::IndexType;
 
@@ -73,7 +73,7 @@ impl SExpr {
     }
 
     pub fn is_pattern(&self) -> bool {
-        matches!(self.plan.plan_type(), PlanType::Pattern)
+        matches!(self.plan.plan_type(), RelOp::Pattern)
     }
 
     pub fn original_group(&self) -> Option<IndexType> {
@@ -81,7 +81,7 @@ impl SExpr {
     }
 
     pub fn match_pattern(&self, pattern: &SExpr) -> bool {
-        if pattern.plan.plan_type() != PlanType::Pattern {
+        if pattern.plan.plan_type() != RelOp::Pattern {
             // Pattern is plan
             if self.plan.plan_type() != pattern.plan.plan_type() {
                 return false;

@@ -63,10 +63,13 @@ pub fn serialize_data_blocks(
         .map(|b| Chunk::try_from(b.clone()))
         .collect::<Result<Vec<_>>>()?;
 
-    let encodings: Vec<_> = arrow_schema
+    let encodings: Vec<Vec<_>> = arrow_schema
         .fields
         .iter()
-        .map(|f| col_encoding(&f.data_type))
+        .map(|f| match f.data_type() {
+            ArrowDataType::Dictionary(..) => vec![Encoding::RleDictionary],
+            _ => vec![col_encoding(f.data_type())],
+        })
         .collect();
 
     let row_groups = RowGroupIterator::try_new(

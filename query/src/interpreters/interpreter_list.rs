@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -19,12 +20,12 @@ use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::get_file_name;
-use common_io::prelude::operator_list_files;
 use common_planners::ListPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use common_tracing::tracing::info;
+use futures::StreamExt;
 use regex::Regex;
 
 use crate::interpreters::Interpreter;
@@ -44,9 +45,29 @@ impl ListInterpreter {
 
     async fn list_files(&self) -> Result<Vec<String>> {
         let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
-        let pattern = &self.plan.pattern;
         let path = &self.plan.path;
-        let mut files = operator_list_files(&op, path).await?;
+        let pattern = &self.plan.pattern;
+        info!(
+            "list stage {:?} with path {path}, pattern {pattern}",
+            self.plan.stage.stage_name
+        );
+
+        let mut files = if path.ends_with('/') {
+            let mut list = vec![];
+            let mut objects = op.object(path).list().await?;
+            while let Some(object) = objects.next().await {
+                let name = object?.name();
+                list.push(name);
+            }
+            list
+        } else {
+            let o = op.object(path);
+            match o.metadata().await {
+                Ok(_) => vec![o.name()],
+                Err(e) if e.kind() == io::ErrorKind::NotFound => vec![],
+                Err(e) => return Err(e.into()),
+            }
+        };
 
         if !pattern.is_empty() {
             let regex = Regex::new(pattern).map_err(|e| {
@@ -81,9 +102,6 @@ impl Interpreter for ListInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let files = self.list_files().await?;
         tracing::info!("list file list:{:?}, pattern:{}", &files, self.plan.pattern);
-
-        // file path to filename
-        let files: Vec<String> = files.iter().map(|file| get_file_name(file)).collect();
 
         let block = DataBlock::create(self.plan.schema(), vec![Series::from_data(files)]);
         Ok(Box::pin(DataBlockStream::create(

@@ -22,7 +22,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::plans::ScalarItem;
 
 #[derive(Clone, Debug)]
@@ -36,8 +36,8 @@ pub struct AggregatePlan {
 }
 
 impl Operator for AggregatePlan {
-    fn plan_type(&self) -> PlanType {
-        PlanType::Aggregate
+    fn plan_type(&self) -> RelOp {
+        RelOp::Aggregate
     }
 
     fn is_physical(&self) -> bool {

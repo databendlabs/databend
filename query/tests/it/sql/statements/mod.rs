@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod query;
+mod statement_common;
 mod statement_copy;
 mod statement_create_table;
 mod statement_select;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::BinaryOperator;
@@ -21,20 +22,28 @@ use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::UnaryOperator;
+use common_ast::parser::error::Backtrace;
 use common_ast::parser::error::DisplayError;
+use common_ast::parser::parse_expr;
+use common_ast::parser::tokenize_sql;
+use common_datavalues::type_coercion::merge_types;
+use common_datavalues::ArrayType;
 use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::IntervalKind;
 use common_datavalues::IntervalType;
+use common_datavalues::NullType;
 use common_datavalues::StringType;
 use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::TupleFunction;
 
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
@@ -95,7 +104,7 @@ impl<'a> TypeChecker<'a> {
     #[async_recursion::async_recursion]
     pub async fn resolve(
         &mut self,
-        expr: &Expr<'a>,
+        expr: &Expr<'_>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match expr {
@@ -255,7 +264,9 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 let func_name = name.name.as_str();
-
+                if !is_builtin_function(func_name) {
+                    return self.resolve_udf(func_name, args).await;
+                }
                 // Check if current function is a context function, e.g. `database`, `version`
                 if let Some(ctx_func_result) = self.try_resolve_context_function(func_name).await {
                     return ctx_func_result;
@@ -429,6 +440,30 @@ impl<'a> TypeChecker<'a> {
                     .await
             }
 
+            Expr::Tuple { exprs, .. } => self.resolve_tuple(exprs).await,
+
+            Expr::NullIf { span, expr1, expr2 } => {
+                // Rewrite NULLIF(expr1, expr2) to IF(expr1 = expr2, NULL, expr1)
+                self.resolve_function(
+                    "if",
+                    &[
+                        &Expr::BinaryOp {
+                            span,
+                            op: BinaryOperator::Eq,
+                            left: expr1.clone(),
+                            right: expr2.clone(),
+                        },
+                        &Expr::Literal {
+                            span,
+                            lit: Literal::Null,
+                        },
+                        expr1.as_ref(),
+                    ],
+                    None,
+                )
+                .await
+            }
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr
@@ -440,7 +475,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_function(
         &mut self,
         func_name: &str,
-        arguments: &[&Expr<'a>],
+        arguments: &[&Expr<'_>],
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         let mut args = vec![];
@@ -473,8 +508,8 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_binary_op(
         &mut self,
         op: &BinaryOperator,
-        left: &Expr<'a>,
-        right: &Expr<'a>,
+        left: &Expr<'_>,
+        right: &Expr<'_>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match op {
@@ -551,7 +586,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_unary_op(
         &mut self,
         op: &UnaryOperator,
-        child: &Expr<'a>,
+        child: &Expr<'_>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match op {
@@ -572,7 +607,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_extract_expr(
         &mut self,
         interval_kind: &IntervalKind,
-        arg: &Expr<'a>,
+        arg: &Expr<'_>,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match interval_kind {
@@ -613,7 +648,7 @@ impl<'a> TypeChecker<'a> {
 
     pub async fn resolve_interval(
         &mut self,
-        arg: &Expr<'a>,
+        arg: &Expr<'_>,
         interval_kind: &IntervalKind,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
@@ -687,8 +722,8 @@ impl<'a> TypeChecker<'a> {
 
     pub async fn resolve_date_add(
         &mut self,
-        date: &Expr<'a>,
-        interval: &Expr<'a>,
+        date: &Expr<'_>,
+        interval: &Expr<'_>,
         interval_kind: &IntervalKind,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
@@ -722,7 +757,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_subquery(
         &mut self,
         typ: SubqueryType,
-        subquery: &Query<'a>,
+        subquery: &Query<'_>,
         allow_multi_rows: bool,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
@@ -810,8 +845,8 @@ impl<'a> TypeChecker<'a> {
 
     async fn try_resolve_trim_function(
         &mut self,
-        expr: &Expr<'a>,
-        trim_where: &Option<(TrimWhere, Box<Expr<'a>>)>,
+        expr: &Expr<'_>,
+        trim_where: &Option<(TrimWhere, Box<Expr<'_>>)>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         let (func_name, trim_scalar) = if let Some((trim_type, trim_expr)) = trim_where {
             let func_name = match trim_type {
@@ -857,7 +892,8 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<(DataValue, DataTypeImpl)> {
         // TODO(leiysky): try cast value to required type
         let value = match literal {
-            Literal::Number(string) => DataValue::try_from_literal(string, None)?,
+            Literal::Integer(uint) => DataValue::UInt64(*uint),
+            Literal::Float(float) => DataValue::Float64(*float),
             Literal::String(string) => DataValue::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => DataValue::Boolean(*boolean),
             Literal::Null => DataValue::Null,
@@ -871,41 +907,339 @@ impl<'a> TypeChecker<'a> {
         Ok((value, data_type))
     }
 
-    async fn resolve_array(&self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
-        let mut values = Vec::with_capacity(exprs.len());
-        let mut first_data_type = None;
+    // TODO(leiysky): use an array builder function instead, since we should allow declaring
+    // an array with variable as element.
+    async fn resolve_array(&mut self, exprs: &[Expr<'_>]) -> Result<(Scalar, DataTypeImpl)> {
+        let mut elems = Vec::with_capacity(exprs.len());
+        let mut types = Vec::with_capacity(exprs.len());
         for expr in exprs.iter() {
-            match expr {
-                Expr::Literal { lit, .. } => {
-                    let (value, data_type) = self.resolve_literal(lit, None)?;
-                    if let Some(dy) = first_data_type.as_ref() {
-                        if !data_type.eq(dy) {
-                            return Err(ErrorCode::SemanticError(expr.span().display_error(
-                                "Values in array should have same type".to_string(),
-                            )));
-                        }
-                    } else {
-                        first_data_type = Some(data_type);
-                    }
-                    values.push(value);
-                }
-                _ => {
-                    return Err(ErrorCode::SemanticError(
-                        expr.span()
-                            .display_error("Array only supports literal exprs".to_string()),
-                    ));
-                }
+            let (arg, data_type) = self.resolve(expr, None).await?;
+            types.push(data_type);
+            if let Scalar::ConstantExpr(elem) = arg {
+                elems.push(elem.value);
+            } else {
+                return Err(ErrorCode::SemanticError(
+                    expr.span()
+                        .display_error("Array element must be literal".to_string()),
+                ));
             }
         }
-        let array = DataValue::Array(values);
-        let data_type = array.data_type();
+        let element_type = if elems.is_empty() {
+            NullType::new_impl()
+        } else {
+            types
+                .iter()
+                .fold(Ok(types[0].clone()), |acc, v| merge_types(&acc?, v))?
+        };
         Ok((
             ConstantExpr {
-                value: array,
-                data_type: data_type.clone(),
+                value: DataValue::Array(elems),
+                data_type: ArrayType::new_impl(element_type.clone()),
             }
             .into(),
-            data_type,
+            ArrayType::new_impl(element_type),
         ))
+    }
+
+    async fn resolve_tuple(&mut self, exprs: &[Expr<'_>]) -> Result<(Scalar, DataTypeImpl)> {
+        let mut args = Vec::with_capacity(exprs.len());
+        let mut arg_types = Vec::with_capacity(exprs.len());
+        for expr in exprs {
+            let (arg, data_type) = self.resolve(expr, None).await?;
+            args.push(arg);
+            arg_types.push(data_type);
+        }
+        let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
+        let tuple_func = TupleFunction::try_create_func("", &arg_types_ref)?;
+        Ok((
+            FunctionCall {
+                arguments: args,
+                func_name: "tuple".to_string(),
+                arg_types,
+                return_type: tuple_func.return_type(),
+            }
+            .into(),
+            tuple_func.return_type(),
+        ))
+    }
+
+    async fn resolve_udf(
+        &mut self,
+        func_name: &str,
+        arguments: &[Expr<'_>],
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        let udf = self
+            .ctx
+            .get_user_manager()
+            .get_udf(self.ctx.get_tenant().as_str(), func_name)
+            .await;
+        return if let Ok(udf) = udf {
+            let parameters = udf.parameters;
+            if parameters.len() != arguments.len() {
+                return Err(ErrorCode::SyntaxException(format!(
+                    "Require {} parameters, but got: {}",
+                    parameters.len(),
+                    arguments.len()
+                )));
+            }
+            let backtrace = Backtrace::new();
+            let sql_tokens = tokenize_sql(udf.definition.as_str())?;
+            let expr = parse_expr(&sql_tokens, &backtrace)?;
+            let mut args_map = HashMap::new();
+            arguments.iter().enumerate().for_each(|(idx, argument)| {
+                if let Some(parameter) = parameters.get(idx) {
+                    args_map.insert(parameter, (*argument).clone());
+                }
+            });
+            let udf_expr = self.clone_expr_with_replacement(&expr, &|nest_expr| {
+                if let Expr::ColumnRef { column, .. } = nest_expr {
+                    if let Some(arg) = args_map.get(&column.name) {
+                        return Ok(Some(arg.clone()));
+                    }
+                }
+                Ok(None)
+            })?;
+            self.resolve(&udf_expr, None).await
+        } else {
+            Err(ErrorCode::SemanticError(
+                "No function matches the given name.",
+            ))
+        };
+    }
+
+    fn clone_expr_with_replacement<F>(
+        &self,
+        original_expr: &Expr<'a>,
+        replacement_fn: &F,
+    ) -> Result<Expr<'a>>
+    where
+        F: Fn(&Expr) -> Result<Option<Expr<'a>>>,
+    {
+        let replacement_opt = replacement_fn(original_expr)?;
+        match replacement_opt {
+            Some(replacement) => Ok(replacement),
+            None => match original_expr {
+                Expr::IsNull { span, expr, not } => Ok(Expr::IsNull {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    not: *not,
+                }),
+                Expr::InList {
+                    span,
+                    expr,
+                    list,
+                    not,
+                } => Ok(Expr::InList {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    list: list
+                        .iter()
+                        .map(|item| self.clone_expr_with_replacement(item, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                    not: *not,
+                }),
+                Expr::Between {
+                    span,
+                    expr,
+                    low,
+                    high,
+                    not,
+                } => Ok(Expr::Between {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    low: Box::new(self.clone_expr_with_replacement(&**low, replacement_fn)?),
+                    high: Box::new(self.clone_expr_with_replacement(&**high, replacement_fn)?),
+                    not: *not,
+                }),
+                Expr::BinaryOp {
+                    span,
+                    op,
+                    left,
+                    right,
+                } => Ok(Expr::BinaryOp {
+                    span,
+                    op: op.clone(),
+                    left: Box::new(self.clone_expr_with_replacement(&**left, replacement_fn)?),
+                    right: Box::new(self.clone_expr_with_replacement(&**right, replacement_fn)?),
+                }),
+                Expr::UnaryOp { span, op, expr } => Ok(Expr::UnaryOp {
+                    span,
+                    op: op.clone(),
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                }),
+                Expr::Cast {
+                    span,
+                    expr,
+                    target_type,
+                    pg_style,
+                } => Ok(Expr::Cast {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    target_type: target_type.clone(),
+                    pg_style: *pg_style,
+                }),
+                Expr::TryCast {
+                    span,
+                    expr,
+                    target_type,
+                } => Ok(Expr::TryCast {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    target_type: target_type.clone(),
+                }),
+                Expr::Extract { span, kind, expr } => Ok(Expr::Extract {
+                    span,
+                    kind: *kind,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                }),
+                Expr::Position {
+                    span,
+                    substr_expr,
+                    str_expr,
+                } => Ok(Expr::Position {
+                    span,
+                    substr_expr: Box::new(
+                        self.clone_expr_with_replacement(&**substr_expr, replacement_fn)?,
+                    ),
+                    str_expr: Box::new(
+                        self.clone_expr_with_replacement(&**str_expr, replacement_fn)?,
+                    ),
+                }),
+                Expr::Substring {
+                    span,
+                    expr,
+                    substring_from,
+                    substring_for,
+                } => Ok(Expr::Substring {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    substring_from: if let Some(substring_from_expr) = substring_from {
+                        Some(Box::new(self.clone_expr_with_replacement(
+                            &**substring_from_expr,
+                            replacement_fn,
+                        )?))
+                    } else {
+                        None
+                    },
+                    substring_for: if let Some(substring_for_expr) = substring_for {
+                        Some(Box::new(self.clone_expr_with_replacement(
+                            &**substring_for_expr,
+                            replacement_fn,
+                        )?))
+                    } else {
+                        None
+                    },
+                }),
+                Expr::Trim {
+                    span,
+                    expr,
+                    trim_where,
+                } => Ok(Expr::Trim {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    trim_where: if let Some((trim, trim_expr)) = trim_where {
+                        Some((
+                            trim.clone(),
+                            Box::new(
+                                self.clone_expr_with_replacement(&**trim_expr, replacement_fn)?,
+                            ),
+                        ))
+                    } else {
+                        None
+                    },
+                }),
+                Expr::Tuple { span, exprs } => Ok(Expr::Tuple {
+                    span,
+                    exprs: exprs
+                        .iter()
+                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                }),
+                Expr::FunctionCall {
+                    span,
+                    distinct,
+                    name,
+                    args,
+                    params,
+                } => Ok(Expr::FunctionCall {
+                    span,
+                    distinct: *distinct,
+                    name: name.clone(),
+                    args: args
+                        .iter()
+                        .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                    params: params.clone(),
+                }),
+                Expr::Case {
+                    span,
+                    operand,
+                    conditions,
+                    results,
+                    else_result,
+                } => Ok(Expr::Case {
+                    span,
+                    operand: if let Some(operand_expr) = operand {
+                        Some(Box::new(self.clone_expr_with_replacement(
+                            &**operand_expr,
+                            replacement_fn,
+                        )?))
+                    } else {
+                        None
+                    },
+                    conditions: conditions
+                        .iter()
+                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                    results: results
+                        .iter()
+                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                    else_result: if let Some(else_result_expr) = else_result {
+                        Some(Box::new(self.clone_expr_with_replacement(
+                            &**else_result_expr,
+                            replacement_fn,
+                        )?))
+                    } else {
+                        None
+                    },
+                }),
+                Expr::MapAccess {
+                    span,
+                    expr,
+                    accessor,
+                } => Ok(Expr::MapAccess {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    accessor: accessor.clone(),
+                }),
+                Expr::Array { span, exprs } => Ok(Expr::Array {
+                    span,
+                    exprs: exprs
+                        .iter()
+                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
+                        .collect::<Result<Vec<Expr>>>()?,
+                }),
+                Expr::Interval { span, expr, unit } => Ok(Expr::Interval {
+                    span,
+                    expr: Box::new(self.clone_expr_with_replacement(&**expr, replacement_fn)?),
+                    unit: *unit,
+                }),
+                Expr::DateAdd {
+                    span,
+                    date,
+                    interval,
+                    unit,
+                } => Ok(Expr::DateAdd {
+                    span,
+                    date: Box::new(self.clone_expr_with_replacement(&**date, replacement_fn)?),
+                    interval: Box::new(
+                        self.clone_expr_with_replacement(&**interval, replacement_fn)?,
+                    ),
+                    unit: *unit,
+                }),
+                _ => Ok(original_expr.clone()),
+            },
+        }
     }
 }

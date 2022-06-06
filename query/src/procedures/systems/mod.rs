@@ -15,9 +15,11 @@
 mod clustering_information;
 mod fuse_segment;
 mod fuse_snapshot;
+mod search_tables;
 mod system;
 
 pub use clustering_information::ClusteringInformationProcedure;
 pub use fuse_segment::FuseSegmentProcedure;
 pub use fuse_snapshot::FuseSnapshotProcedure;
+pub use search_tables::SearchTablesProcedure;
 pub use system::SystemProcedure;

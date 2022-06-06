@@ -19,6 +19,7 @@ use common_datavalues::DataType;
 
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterClusterKeyPlan;
 use crate::BroadcastPlan;
 use crate::CallPlan;
 use crate::CopyPlan;
@@ -88,6 +89,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::DropRole(plan) => Self::format_drop_role(f, plan),
             PlanNode::Copy(plan) => Self::format_copy(f, plan),
             PlanNode::Call(plan) => Self::format_call(f, plan),
+            PlanNode::AlterClusterKey(plan) => Self::format_alter_cluster_key(f, plan),
             _ => {
                 let mut printed = true;
 
@@ -358,5 +360,14 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     fn format_call(f: &mut Formatter, plan: &CallPlan) -> fmt::Result {
         write!(f, "Call {:}", plan.name)?;
         write!(f, " args: {:?}", plan.args)
+    }
+
+    fn format_alter_cluster_key(f: &mut Formatter, plan: &AlterClusterKeyPlan) -> fmt::Result {
+        write!(
+            f,
+            "Alter table {:}.{:}",
+            plan.database_name, plan.table_name
+        )?;
+        write!(f, " cluster by {:?}", plan.cluster_keys)
     }
 }

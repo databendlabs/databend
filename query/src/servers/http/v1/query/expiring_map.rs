@@ -61,7 +61,7 @@ where V: Expirable
 async fn run_check<T: Expirable>(e: &T, max_idle: Duration) -> bool {
     loop {
         match e.expire_state() {
-            ExpiringState::InUse => sleep(max_idle).await,
+            ExpiringState::InUse(_) => sleep(max_idle).await,
             ExpiringState::Idle { idle_time } => {
                 if idle_time > max_idle {
                     return true;

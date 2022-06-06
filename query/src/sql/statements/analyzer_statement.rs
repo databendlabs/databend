@@ -152,6 +152,7 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::ShowCreateDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateDatabase(v) => v.analyze(ctx).await,
             DfStatement::DropDatabase(v) => v.analyze(ctx).await,
+            DfStatement::UnDropDatabase(v) => v.analyze(ctx).await,
             DfStatement::AlterDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateTable(v) => v.analyze(ctx).await,
             DfStatement::DescribeTable(v) => v.analyze(ctx).await,

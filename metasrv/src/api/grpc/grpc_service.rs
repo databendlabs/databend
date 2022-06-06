@@ -49,6 +49,10 @@ use tonic::Streaming;
 use crate::executor::ActionHandler;
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
+use crate::version::from_digit_ver;
+use crate::version::to_digit_ver;
+use crate::version::METASRV_SEMVER;
+use crate::version::MIN_METACLI_SEMVER;
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
@@ -98,7 +102,19 @@ impl MetaService for MetaServiceImpl {
             protocol_version,
             payload,
         } = req;
-        assert_eq!(protocol_version, 0); // todo(ariesdevil): define server version, return un compatible error.
+
+        let min_compatible = to_digit_ver(&MIN_METACLI_SEMVER);
+
+        // backward compatibility: no version in handshake.
+        // TODO(xp): remove this when merged.
+        if protocol_version > 0 && protocol_version < min_compatible {
+            return Err(Status::invalid_argument(format!(
+                "meta-client protocol_version({}) < metasrv min-compatible({})",
+                from_digit_ver(protocol_version),
+                MIN_METACLI_SEMVER,
+            )));
+        }
+
         let auth = BasicAuth::decode(&*payload).map_err(|e| Status::internal(e.to_string()))?;
 
         let user = "root";
@@ -112,8 +128,8 @@ impl MetaService for MetaServiceImpl {
                 .map_err(|e| Status::internal(e.to_string()))?;
 
             let resp = HandshakeResponse {
+                protocol_version: to_digit_ver(&METASRV_SEMVER),
                 payload: token.into_bytes(),
-                ..HandshakeResponse::default()
             };
             let output = futures::stream::once(async { Ok(resp) });
             Ok(Response::new(Box::pin(output)))

@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
@@ -112,8 +112,8 @@ impl AsyncSystemTable for TablesTable {
 }
 
 impl TablesTable {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
+    pub fn schema() -> Arc<DataSchema> {
+        DataSchemaRefExt::create(vec![
             DataField::new("database", Vu8::to_data_type()),
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("engine", Vu8::to_data_type()),
@@ -123,14 +123,16 @@ impl TablesTable {
             DataField::new_nullable("data_size", u64::to_data_type()),
             DataField::new_nullable("data_compressed_size", u64::to_data_type()),
             DataField::new_nullable("index_size", u64::to_data_type()),
-        ]);
+        ])
+    }
 
+    pub fn create(table_id: u64) -> Arc<dyn Table> {
         let table_info = TableInfo {
             desc: "'system'.'tables'".to_string(),
             name: "tables".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
-                schema,
+                schema: TablesTable::schema(),
                 engine: "SystemTables".to_string(),
 
                 ..Default::default()

@@ -24,19 +24,31 @@ use crate::interpreters::InterpreterPtr;
 use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::sessions::QueryContext;
-use crate::sql::Planner;
+use crate::sql::exec::PipelineBuilder;
+use crate::sql::optimizer::SExpr;
+use crate::sql::BindContext;
+use crate::sql::MetadataRef;
 
 /// Interpret SQL query with new SQL planner
 pub struct SelectInterpreterV2 {
     ctx: Arc<QueryContext>,
-    query: String,
+    s_expr: SExpr,
+    bind_context: BindContext,
+    metadata: MetadataRef,
 }
 
 impl SelectInterpreterV2 {
-    pub fn try_create(ctx: Arc<QueryContext>, query: &str) -> Result<InterpreterPtr> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        bind_context: BindContext,
+        s_expr: SExpr,
+        metadata: MetadataRef,
+    ) -> Result<InterpreterPtr> {
         Ok(Arc::new(SelectInterpreterV2 {
             ctx,
-            query: query.to_string(),
+            s_expr,
+            bind_context,
+            metadata,
         }))
     }
 }
@@ -52,8 +64,17 @@ impl Interpreter for SelectInterpreterV2 {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let mut planner = Planner::new(self.ctx.clone());
-        let (root_pipeline, pipelines) = planner.plan_sql(self.query.as_str()).await?;
+        let pb = PipelineBuilder::new(
+            self.ctx.clone(),
+            self.bind_context.result_columns(),
+            self.metadata.clone(),
+            self.s_expr.clone(),
+        );
+
+        if let Some(handle) = self.ctx.get_http_query() {
+            return handle.execute(self.ctx.clone(), pb).await;
+        }
+        let (root_pipeline, pipelines, _) = pb.spawn()?;
         let async_runtime = self.ctx.get_storage_runtime();
 
         // Spawn sub-pipelines
@@ -64,8 +85,9 @@ impl Interpreter for SelectInterpreterV2 {
 
         // Spawn root pipeline
         let executor = PipelinePullingExecutor::try_create(async_runtime, root_pipeline)?;
-        let executor_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
-        Ok(Box::pin(self.ctx.try_create_abortable(executor_stream)?))
+        let (handler, stream) = ProcessorExecutorStream::create(executor)?;
+        self.ctx.add_source_abort_handle(handler);
+        Ok(Box::pin(Box::pin(stream)))
     }
 
     async fn start(&self) -> Result<()> {

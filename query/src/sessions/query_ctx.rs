@@ -34,7 +34,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
 use common_planners::Expression;
 use common_planners::PartInfoPtr;
@@ -47,6 +47,7 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use futures::future::AbortHandle;
 use opendal::Operator;
 
 use crate::catalogs::Catalog;
@@ -220,6 +221,10 @@ impl QueryContext {
         self.shared.attach_http_query_handle(handle);
     }
 
+    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
+        self.shared.get_http_query()
+    }
+
     pub fn attach_query_str(&self, query: &str) {
         self.shared.attach_query_str(query);
     }
@@ -268,6 +273,10 @@ impl QueryContext {
         Ok(abort_stream)
     }
 
+    pub fn add_source_abort_handle(&self, abort_handle: AbortHandle) {
+        self.shared.add_source_abort_handle(abort_handle);
+    }
+
     pub fn get_current_catalog(&self) -> String {
         self.shared.get_current_catalog()
     }
@@ -305,6 +314,14 @@ impl QueryContext {
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
+    }
+
+    pub fn get_changed_settings(&self) -> Arc<Settings> {
+        self.shared.get_changed_settings()
+    }
+
+    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        self.shared.apply_changed_settings(changed_settings)
     }
 
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
