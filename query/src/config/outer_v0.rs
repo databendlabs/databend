@@ -366,6 +366,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             secret_access_key: self.secret_access_key,
             master_key: self.master_key,
             root: self.root,
+            disable_credential_loader: false,
         })
     }
 }

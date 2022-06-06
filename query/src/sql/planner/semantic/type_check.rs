@@ -435,6 +435,28 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Tuple { exprs, .. } => self.resolve_tuple(exprs).await,
 
+            Expr::NullIf { span, expr1, expr2 } => {
+                // Rewrite NULLIF(expr1, expr2) to IF(expr1 = expr2, NULL, expr1)
+                self.resolve_function(
+                    "if",
+                    &[
+                        &Expr::BinaryOp {
+                            span,
+                            op: BinaryOperator::Eq,
+                            left: expr1.clone(),
+                            right: expr2.clone(),
+                        },
+                        &Expr::Literal {
+                            span,
+                            lit: Literal::Null,
+                        },
+                        expr1.as_ref(),
+                    ],
+                    None,
+                )
+                .await
+            }
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr

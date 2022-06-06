@@ -115,5 +115,10 @@ pub async fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
     // Root.
     builder.root(&cfg.root);
 
+    // Disable credential loader
+    if cfg.disable_credential_loader {
+        builder.disable_credential_loader();
+    }
+
     Ok(Operator::new(builder.finish().await?))
 }

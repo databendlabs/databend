@@ -114,11 +114,12 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let user_info = test_user_info();
         let mut p = user_info.to_pb()?;
         p.ver = 2;
+        p.min_compatible = 2;
 
         let res = mt::UserInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("ver=2 is not compatible with [1, 1]")
+                reason: s("executable ver=1 is smaller than the message min compatible ver: 2")
             },
             res.unwrap_err()
         );
@@ -128,11 +129,12 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let user_stage_info = test_user_stage_info();
         let mut p = user_stage_info.to_pb()?;
         p.ver = 2;
+        p.min_compatible = 2;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("ver=2 is not compatible with [1, 1]")
+                reason: s("executable ver=1 is smaller than the message min compatible ver: 2")
             },
             res.unwrap_err()
         );
