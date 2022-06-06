@@ -96,6 +96,12 @@ impl<'a> ClusteringInformation<'a> {
             return Err(ErrorCode::UnImplement("Unimplement error"));
         }
 
+        let cluster_key_id = block.cluster_stats.clone().unwrap().cluster_key_id;
+        let default_cluster_key_id = self.table.cluster_key_meta.clone().unwrap().0;
+        if cluster_key_id != default_cluster_key_id {
+            return Err(ErrorCode::UnImplement("Unimplement error"));
+        }
+
         let cluster_stats = block.cluster_stats.clone().unwrap();
         Ok((cluster_stats.min, cluster_stats.max))
     }

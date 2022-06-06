@@ -19,6 +19,7 @@ use common_datavalues::DataSchemaRef;
 use crate::plan_table_undrop::UnDropTablePlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterClusterKeyPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::AlterViewPlan;
@@ -112,6 +113,9 @@ pub enum PlanNode {
 
     // List
     List(ListPlan),
+
+    // Alter.
+    AlterClusterKey(AlterClusterKeyPlan),
 
     // Show.
     Show(ShowPlan),
@@ -275,6 +279,9 @@ impl PlanNode {
 
             // Kill.
             PlanNode::Kill(v) => v.schema(),
+
+            // Alter
+            PlanNode::AlterClusterKey(v) => v.schema(),
         }
     }
 
@@ -376,6 +383,9 @@ impl PlanNode {
 
             // Kill.
             PlanNode::Kill(_) => "KillQuery",
+
+            // Alter.
+            PlanNode::AlterClusterKey(_) => "AlterClusterKeyPlan",
         }
     }
 

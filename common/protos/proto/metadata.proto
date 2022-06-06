@@ -164,7 +164,13 @@ message TableMeta {
   map<string, string> options = 5;
 
   // Keys to sort rows in table.
-  optional string cluster_keys = 9;
+   optional string cluster_key = 9;
+
+  // The vector of cluster keys.
+  repeated string cluster_keys = 4;
+
+  // The default cluster keys id.
+  optional uint32 default_cluster_key_id = 8;
 
   // The time table created.
   string created_on = 20;

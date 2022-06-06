@@ -19,6 +19,7 @@ use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::plan_table_undrop::UnDropTablePlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterClusterKeyPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::AlterViewPlan;
@@ -211,6 +212,9 @@ pub trait PlanVisitor {
 
             // Kill.
             PlanNode::Kill(plan) => self.visit_kill_query(plan),
+
+            // Alter.
+            PlanNode::AlterClusterKey(plan) => self.visit_alter_cluster_key(plan),
         }
     }
 
@@ -474,6 +478,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_alter_user_udf(&mut self, _: &AlterUserUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_alter_cluster_key(&mut self, _: &AlterClusterKeyPlan) -> Result<()> {
         Ok(())
     }
 }

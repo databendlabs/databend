@@ -212,8 +212,8 @@ impl<'a> Binder {
             cluster_keys.push(cluster_key.to_string());
         }
         if !cluster_keys.is_empty() {
-            let order_keys_sql = format!("({})", cluster_keys.join(", "));
-            meta.cluster_keys = Some(order_keys_sql);
+            let cluster_keys_sql = format!("({})", cluster_keys.join(", "));
+            meta = meta.push_cluster_key(cluster_keys_sql);
         }
 
         let plan = CreateTablePlan {
@@ -232,6 +232,6 @@ impl<'a> Binder {
                 None
             },
         };
-        Ok(Plan::CreateTable(plan))
+        Ok(Plan::CreateTable(Box::new(plan)))
     }
 }

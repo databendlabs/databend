@@ -125,7 +125,6 @@ impl ResultTableSink {
             uncompressed_byte_size: acc.in_memory_size,
             compressed_byte_size: acc.file_size,
             col_stats,
-            cluster_stats: None,
         });
 
         let meta = ResultTableMeta {
