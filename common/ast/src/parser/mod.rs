@@ -55,7 +55,7 @@ pub fn parse_sql<'a>(
 }
 
 /// Parse udf function into Expr
-pub fn parse_udf<'a>(
+pub fn parse_expr<'a>(
     sql_tokens: &'a [Token<'a>],
     backtrace: &'a Backtrace<'a>,
 ) -> Result<Expr<'a>> {

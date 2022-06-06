@@ -24,7 +24,7 @@ use common_ast::ast::TrimWhere;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::error::Backtrace;
 use common_ast::parser::error::DisplayError;
-use common_ast::parser::parse_udf;
+use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
@@ -264,7 +264,9 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 let func_name = name.name.as_str();
-
+                if !is_builtin_function(func_name) {
+                    return self.resolve_udf(func_name, args).await;
+                }
                 // Check if current function is a context function, e.g. `database`, `version`
                 if let Some(ctx_func_result) = self.try_resolve_context_function(func_name).await {
                     return ctx_func_result;
@@ -454,9 +456,6 @@ impl<'a> TypeChecker<'a> {
         arguments: &[&Expr<'_>],
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        if !is_builtin_function(func_name) {
-            return self.resolve_udf(func_name, arguments).await;
-        }
         let mut args = vec![];
         let mut arg_types = vec![];
 
@@ -945,7 +944,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_udf(
         &mut self,
         func_name: &str,
-        arguments: &[&Expr<'_>],
+        arguments: &[Expr<'_>],
     ) -> Result<(Scalar, DataTypeImpl)> {
         let udf = self
             .ctx
@@ -963,7 +962,7 @@ impl<'a> TypeChecker<'a> {
             }
             let backtrace = Backtrace::new();
             let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-            let expr = parse_udf(&sql_tokens, &backtrace)?;
+            let expr = parse_expr(&sql_tokens, &backtrace)?;
             let mut args_map = HashMap::new();
             arguments.iter().enumerate().for_each(|(idx, argument)| {
                 if let Some(parameter) = parameters.get(idx) {
