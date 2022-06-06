@@ -100,13 +100,13 @@ If `endpoints` is configured, the `address` configuration will no longer take ef
 
 ### clickhouse_http_handler_host
 
-* The IP address to listen on for ClickHouse handler, e.g., `0.0.0.0`.
+* The IP address to listen on for ClickHouse HTTP handler, e.g., `0.0.0.0`.
 * Default: `"127.0.0.1"`
 * Env variable: `QUERY_CLICKHOUSE_HTTP_HANDLER_HOST`
 
 ### clickhouse_http_handler_port
 
-* The port to listen on for ClickHouse handler, e.g., `8124`.
+* The port to listen on for ClickHouse HTTP handler, e.g., `8124`.
 * Default: `8124`
 * Env variable: `QUERY_CLICKHOUSE_HTTP_HANDLER_PORT`
 
