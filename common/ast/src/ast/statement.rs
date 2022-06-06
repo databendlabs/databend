@@ -371,7 +371,7 @@ impl Display for TableOption {
 impl Display for DatabaseEngine {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let DatabaseEngine::Github(token) = self {
-            write!(f, "GITHUB(token={token})")
+            write!(f, "GITHUB(token=\'{token}\')")
         } else {
             write!(f, "DEFAULT")
         }

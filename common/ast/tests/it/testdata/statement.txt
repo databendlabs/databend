@@ -523,6 +523,51 @@ CreateDatabase(
         options: [],
     },
 )
+<<<<<<< HEAD
+=======
+
+
+---------- Input ----------
+create database t engine = Github(token='123456');
+---------- Output ---------
+CREATE DATABASE t ENGINE = GITHUB(token='123456')
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: false,
+        opt_catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(16..17),
+        },
+        engine: Github(
+            "123456",
+        ),
+        options: [],
+    },
+)
+
+
+---------- Input ----------
+create database t engine = Default;
+---------- Output ---------
+CREATE DATABASE t ENGINE = DEFAULT
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: false,
+        opt_catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(16..17),
+        },
+        engine: Default,
+        options: [],
+    },
+)
+>>>>>>> be8811737 (feat(parser): add create database tests)
 
 
 ---------- Input ----------
