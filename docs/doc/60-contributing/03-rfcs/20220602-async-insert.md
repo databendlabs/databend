@@ -12,20 +12,20 @@ Async insert mode aims to improve the throughput of high rate of small inserts.
 
 # Motivation
 
-When housands of clients concurrently insert a small bacth of data, each insert will be excuted as follows:
+When thousands of clients concurrently insert a small batch of data, each insert will be executed as follows:
 
 `Parser` -> `Planner` -> `Interpreter` -> `Pipeline`
 
-It's unefficent because of I/O depth and cache locality.
+It's inefficient because of I/O depth and cache locality.
 
 To solve the problem, we want to buffer small inserts into batches in server which sacrifices tiny latency for better insert throughput, smaller block count and larger `DataBlock` in storage.
 
-After doing this, inserts into the same table will be prased and planned individual. The insert data will be convert to `DataBlock` and buffered. When some conditions are triggerd, the buffered `DataBlock` will be interpreted once which also is benifical for pipelines.
+After doing this, inserts into the same table will be parsed and planned individual. The insert data will be convert to `DataBlock` and buffered. When some conditions are triggered, the buffered `DataBlock` will be interpreted once which also is beneficial for pipelines.
 
 # Design
 
 ## Buffer Structure
-In order to buffer data of different tables. We need a `HashMap` to save datablocks of different insert plan. The settings of inserts also should be considered. But the settings of `QueryContext` take up big space which is unnecessary. Therefore, we save the changed settings. It's the settings which are differnt from default values of settings.
+In order to buffer data of different tables. We need a `HashMap` to save datablocks of different insert plan. The settings of inserts also should be considered. But the settings of `QueryContext` take up big space which is unnecessary. Therefore, we save the changed settings. It's the settings which are different from default values of settings.
 
 **The key of HashMap:**
 
@@ -68,9 +68,9 @@ pub struct Entry {
 }
 ```
 
-Each insert corresponds to each `block`. The `finished` and `notify` is for query response. When server completed a batch of inserts, the entry will be finishd and notified.
+Each insert corresponds to each `block`. The `finished` and `notify` is for query response. When server completed a batch of inserts, the entry will be finished and notified.
 
-The `data_size` is the meomry size of `entries`. The `first_update` is the timestamp of the first insert into the bucket. The `last_update` is the timestamp of the last insert into the bucket. They all are used to trigger the batch inserts.
+The `data_size` is the memory size of `entries`. The `first_update` is the timestamp of the first insert into the bucket. The `last_update` is the timestamp of the last insert into the bucket. They all are used to trigger the batch inserts.
 
 ## Execution
 
@@ -103,20 +103,20 @@ impl AsyncInsertQueue {
 ```
 
 - `session_mgr`: needed because of `AsyncInsertQueue` needs a `QueryContext` when it process a batch of data.
-- `runtime`: a global storage runtime to excute the insert task.
+- `runtime`: a global storage runtime to execute the insert task.
 - `max_data_size`: the maximum memory size of the buffered data collected per insert before being inserted.
 - `busy_timeout`: the maximum timeout in milliseconds since the first insert before inserting collected data.
 - `stale_timeout`: the maximum timeout in milliseconds since the last insert before inserting collected data.
 - `queue`: the buffer to cache batch inserts which is a `HashMap` because we need to distinguish different inserts.
-- `current_processing_insert`: inserts which are processing and clients wait for the processing result. We use `QueryId` as the key to distinguish differnet clients.
+- `current_processing_insert`: inserts which are processing and clients wait for the processing result. We use `QueryId` as the key to distinguish different clients.
 
-When `databend-query` starts, `AsyncInsertQueue` starts according to a config `enable_async_insert`. If `enable_async_insert` is true, the queue will call `start` method. Every insert will call `push` method with `InsertPlan` and `QueryContext` as inputs and call `wait_for_processing_insert` to waiting. The queue receives many inserts and two ticker task `busy_check` and `stale_check` runs in the background. When specific condtion is triggered, the queue will call `schedule` to schedule the task of batch inserts and the data will be `process`ed by the runtime executor.
+When `databend-query` starts, `AsyncInsertQueue` starts according to a config `enable_async_insert`. If `enable_async_insert` is true, the queue will call `start` method. Every insert will call `push` method with `InsertPlan` and `QueryContext` as inputs and call `wait_for_processing_insert` to waiting. The queue receives many inserts and two ticker task `busy_check` and `stale_check` runs in the background. When specific condition is triggered, the queue will call `schedule` to schedule the task of batch inserts and the data will be `process`ed by the runtime executor.
 
 # Some Details
 
-`AsyncInsertQueue` is a global instance, so we better put it in the `SessionManager`. But the queue also needs `SessionManager` which is a circular dependency. Therefore, the `session_mgr` of `AsyncInsertQueue` must be `Arc<RwLock<Option<Arc<SessionManager>>>>`, not `Arc<SeesionManager>`. We need to modify the `AsyncInsertQueue` after `SessionManager` has been initialized. Maybe we should use `Weak` better here.
+`AsyncInsertQueue` is a global instance, so we better put it in the `SessionManager`. But the queue also needs `SessionManager` which is a circular dependency. Therefore, the `session_mgr` of `AsyncInsertQueue` must be `Arc<RwLock<Option<Arc<SessionManager>>>>`, not `Arc<SessionManager>`. We need to modify the `AsyncInsertQueue` after `SessionManager` has been initialized. Maybe we should use `Weak` better here.
 
-The mothod arguments of `AsyncInsertQueue` is `Arc<Self>` because tokio runtime needs a static lifetime of task.
+The method arguments of `AsyncInsertQueue` is `Arc<Self>` because tokio runtime needs a static lifetime of task.
 
 # Configs
 
