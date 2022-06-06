@@ -628,15 +628,23 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
 }
 
 pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
-    let mut rename_table = map(
+    let rename_table = map(
         rule! {
             RENAME ~ TO ~ #ident
         },
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
     );
 
+    let cluster_by = map(
+        rule! {
+            CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+        },
+        |(_, _, _, cluster_by, _)| AlterTableAction::AlterClusterKey { cluster_by },
+    );
+
     rule!(
         #rename_table
+        | #cluster_by
     )(i)
 }
 

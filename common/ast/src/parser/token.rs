@@ -629,6 +629,8 @@ pub enum TokenKind {
     XOR,
     #[token("YEAR", ignore(ascii_case))]
     YEAR,
+    #[token("NULLIF", ignore(ascii_case))]
+    NULLIF,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -749,7 +751,7 @@ impl TokenKind {
             // | TokenKind::NORMALIZE
             | TokenKind::NOT
             | TokenKind::NULL
-            // | TokenKind::NULLIF
+            | TokenKind::NULLIF
             // | TokenKind::NUMERIC
             // | TokenKind::ONLY
             | TokenKind::OR

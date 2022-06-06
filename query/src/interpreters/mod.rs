@@ -14,6 +14,7 @@
 
 mod access;
 mod interpreter;
+mod interpreter_alter_cluster_key;
 mod interpreter_call;
 mod interpreter_common;
 mod interpreter_copy;
@@ -81,6 +82,7 @@ mod stream;
 pub use access::ManagementModeAccess;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
+pub use interpreter_alter_cluster_key::AlterClusterKeyInterpreter;
 pub use interpreter_call::CallInterpreter;
 pub use interpreter_copy::CopyInterpreter;
 pub use interpreter_database_create::CreateDatabaseInterpreter;

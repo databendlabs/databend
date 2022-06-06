@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod query;
-mod statement_common;
-mod statement_copy;
-mod statement_create_table;
-mod statement_select;
-mod value_source;
+use std::sync::Arc;
+
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+
+use crate::Expression;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct AlterClusterKeyPlan {
+    pub tenant: String,
+    pub catalog_name: String,
+    pub database_name: String,
+    pub table_name: String,
+    pub cluster_keys: Vec<Expression>,
+}
+
+impl AlterClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

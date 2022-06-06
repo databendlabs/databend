@@ -15,6 +15,7 @@
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::net::Ipv4Addr;
+use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
 use common_base::base::tokio;
@@ -80,6 +81,7 @@ pub struct MetaNode {
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<MetaResult<()>>>>,
+    pub joined_tasks: AtomicI32,
 }
 
 impl Opened for MetaNode {
@@ -132,6 +134,7 @@ impl MetaNodeBuilder {
             running_tx: tx,
             running_rx: rx,
             join_handles: Mutex::new(Vec::new()),
+            joined_tasks: AtomicI32::new(1),
         });
 
         if self.monitor_metrics {
@@ -317,8 +320,6 @@ impl MetaNode {
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn stop(&self) -> MetaResult<i32> {
-        // TODO(xp): need to be reentrant.
-
         let mut rx = self.raft.metrics();
 
         self.raft
@@ -338,29 +339,28 @@ impl MetaNode {
         }
         tracing::info!("shutdown raft");
 
-        // raft counts 1
-        let mut joined = 1;
         for j in self.join_handles.lock().await.iter_mut() {
             let _rst = j
                 .await
                 .map_error_to_meta_error(MetaError::MetaServiceError, || "fail to join")?;
-            joined += 1;
+            // TODO(luhuanbing): Add joined node information to enrich debugging information
+            self.joined_tasks
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
 
         tracing::info!("shutdown: id={}", self.sto.id);
+        let joined = self.joined_tasks.load(std::sync::atomic::Ordering::Relaxed);
         Ok(joined)
     }
 
     // spawn a monitor to watch raft state changes such as leader changes,
     // and manually add non-voter to cluster so that non-voter receives raft logs.
     pub async fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
-        //TODO: return a handle for join
-        // TODO: every state change triggers add_non_voter!!!
+        // TODO(luhuanbing): every state change triggers add_non_voter is not very reasonable
         let mut running_rx = mn.running_rx.clone();
         let mut jh = mn.join_handles.lock().await;
         let mut current_leader: Option<u64> = None;
 
-        // TODO: reduce dependency: it does not need all of the fields in MetaNode
         let mn = mn.clone();
 
         let span = tracing::span!(tracing::Level::INFO, "watch-metrics");
@@ -392,7 +392,6 @@ impl MetaNode {
                                 }
 
                                 if cur == mn.sto.id {
-                                    // TODO: check result
                                     let _rst = mn.add_configured_non_voters().await;
 
                                     if _rst.is_err() {

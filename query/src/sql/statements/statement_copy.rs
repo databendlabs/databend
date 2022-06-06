@@ -20,8 +20,6 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::OnErrorMode;
-use common_meta_types::StageParams;
-use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::CopyMode;
 use common_planners::CopyPlan;
@@ -34,9 +32,9 @@ use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::Query;
 
-use super::location_to_stage_path;
 use super::parse_copy_file_format_options;
-use super::parse_stage_storage;
+use super::parse_stage_location;
+use super::parse_uri_location;
 use super::DfQueryStatement;
 use crate::sessions::QueryContext;
 use crate::sql::statements::resolve_table;
@@ -65,11 +63,7 @@ pub struct DfCopy {
 impl AnalyzableStatement for DfCopy {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         // Stage info.
-        let (mut stage_info, path) = if self.location.starts_with('@') {
-            self.analyze_named(&ctx).await?
-        } else {
-            self.analyze_location().await?
-        };
+        let (mut stage_info, path) = self.analyze_location(&ctx).await?;
 
         if !self.file_format_options.is_empty() {
             stage_info.file_format_options =
@@ -176,35 +170,15 @@ impl AnalyzableStatement for DfCopy {
 }
 
 impl DfCopy {
-    // Named stage(start with `@`):
-    // copy into mytable from @my_ext_stage
-    // file_format = (type = csv);
-    async fn analyze_named(&self, ctx: &Arc<QueryContext>) -> Result<(UserStageInfo, String)> {
-        location_to_stage_path(self.location.as_str(), ctx).await
-    }
-
-    // External stage(location starts without `@`):
-    // copy into table from 's3://mybucket/data/files'
-    // credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
-    // encryption=(master_key = 'my_master_key')
-    // file_format = (type = csv field_delimiter = '|' skip_header = 1)"
-    async fn analyze_location(&self) -> Result<(UserStageInfo, String)> {
-        let (stage_storage, path) = parse_stage_storage(
-            &self.location,
-            &self.credential_options,
-            &self.encryption_options,
-        )?;
-        // Stage params.
-        let stage_params = StageParams {
-            storage: stage_storage,
-        };
-        // Stage info.
-        let stage = UserStageInfo {
-            stage_name: self.location.clone(),
-            stage_type: StageType::External,
-            stage_params,
-            ..Default::default()
-        };
-        Ok((stage, path))
+    async fn analyze_location(&self, ctx: &Arc<QueryContext>) -> Result<(UserStageInfo, String)> {
+        if self.location.starts_with('@') {
+            parse_stage_location(ctx, &self.location).await
+        } else {
+            parse_uri_location(
+                &self.location,
+                &self.credential_options,
+                &self.encryption_options,
+            )
+        }
     }
 }

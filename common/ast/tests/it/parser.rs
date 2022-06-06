@@ -290,6 +290,8 @@ fn test_expr() {
             AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
+        r#"nullif(1, 1)"#,
+        r#"nullif(a, b)"#,
     ];
 
     for case in cases {

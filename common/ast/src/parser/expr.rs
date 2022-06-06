@@ -321,6 +321,10 @@ pub enum ExprElement<'a> {
         interval: Expr<'a>,
         unit: IntervalKind,
     },
+    NullIf {
+        expr1: Expr<'a>,
+        expr2: Expr<'a>,
+    },
 }
 
 struct ExprParser;
@@ -493,6 +497,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 date: Box::new(date),
                 interval: Box::new(interval),
                 unit,
+            },
+            ExprElement::NullIf { expr1, expr2 } => Expr::NullIf {
+                span: elem.span.0,
+                expr1: Box::new(expr1),
+                expr2: Box::new(expr2),
             },
             _ => unreachable!(),
         };
@@ -846,6 +855,17 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             unit,
         },
     );
+    let nullif = map(
+        rule! {
+            NULLIF
+            ~ ^"("
+            ~ ^#subexpr(0)
+            ~ ^","
+            ~ ^#subexpr(0)
+            ~ ^")"
+        },
+        |(_, _, expr1, _, expr2, _)| ExprElement::NullIf { expr1, expr2 },
+    );
     let (rest, (span, elem)) = consumed(alt((
         rule! (
             #is_null : "`... IS [NOT] NULL`"
@@ -863,6 +883,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             | #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
+            | #nullif: "`NULLIF(..., ...)`"
         ),
         rule!(
             #count_all : "COUNT(*)"

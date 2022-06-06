@@ -18,6 +18,7 @@ package databend_proto;
 
 message S3StorageConfig {
   uint64 version = 100;
+  uint64 min_compatible = 101;
 
   string region = 1;
   string endpoint_url = 2;
@@ -26,10 +27,12 @@ message S3StorageConfig {
   string bucket = 5;
   string root = 6;
   string master_key = 7;
+  bool disable_credential_loader = 8;
 }
 
 message FsStorageConfig {
   uint64 version = 100;
+  uint64 min_compatible = 101;
 
   string root = 1;
 }

@@ -21,7 +21,7 @@ jobs:
           - aarch64
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: Get the version
@@ -72,7 +72,7 @@ jobs:
           - musl
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: Get the version
@@ -174,7 +174,7 @@ jobs:
           - distroless
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Get the version
         id: get_version

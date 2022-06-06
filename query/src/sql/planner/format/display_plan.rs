@@ -28,6 +28,9 @@ impl Plan {
             }
             Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
             Plan::ShowStages => Ok("ShowStages".to_string()),
+            Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
+            Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
+            Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
         }
     }
 }
