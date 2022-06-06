@@ -171,9 +171,6 @@ impl StageSource {
                 StorageParams::S3(cfg) => {
                     let mut cfg = cfg.clone();
 
-                    // Disable credential loading for external stage.
-                    cfg.disable_credential_loader = true;
-
                     // If we are running of s3, use ctx cfg's endpoint instead.
                     // TODO(xuanwo): it's better support user input.
                     if let StorageParams::S3(ctx_cfg) = ctx.get_config().storage.params {
