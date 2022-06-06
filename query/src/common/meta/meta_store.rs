@@ -111,7 +111,7 @@ impl MetaStoreProvider {
             Ok(MetaStore::L(meta_store))
         } else {
             tracing::info!(conf = debug(&self.rpc_conf), "use remote meta");
-            let client = MetaGrpcClient::try_new(&self.rpc_conf).await?;
+            let client = MetaGrpcClient::try_new(&self.rpc_conf)?;
             Ok(MetaStore::R(client))
         }
     }

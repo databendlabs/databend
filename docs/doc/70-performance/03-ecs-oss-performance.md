@@ -1,6 +1,5 @@
 ---
 title: Databend on Alibaba Cloud ECS OSS Performance
-draft: true
 sidebar_label: On Alibaba OSS Performance
 description:
   Sub-second analytics on Alibaba Cloud ECS + OSS experience.

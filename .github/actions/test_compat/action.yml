@@ -18,27 +18,10 @@ runs:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
 
-    - name: Install python dependences
-      shell: bash
-      run: |
-        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql sqlalchemy clickhouse_driver
-
     - uses: actions/download-artifact@v2
       with:
         name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
-        path: ./current/
-
-    - uses: dsaltares/fetch-gh-release-asset@master
-      with:
-        repo: 'datafuselabs/databend'
-        # 2022-05-23
-        version: 'tags/v0.7.57-nightly'
-        file: 'databend-v0.7.57-nightly-x86_64-unknown-linux-gnu.tar.gz'
-
-    - shell: bash
-      run: |
-        mkdir ./old
-        tar -xf databend-v0.7.57-nightly-x86_64-unknown-linux-gnu.tar.gz -C ./old
+        path: ./bins/current/
 
     - name: Test compatibility
       shell: bash
@@ -58,4 +41,7 @@ runs:
           metasrv/_logs*/
           query/_logs*/
           store/_logs*/
+          .databend/
+          query.log
+          metasrv.log
           nohup.out

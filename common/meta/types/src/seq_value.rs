@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::convert::TryInto;
+use std::fmt::Formatter;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -27,11 +28,22 @@ pub struct KVMeta {
 }
 
 /// Some value bound with a seq number
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq)]
 pub struct SeqV<T = Vec<u8>> {
     pub seq: u64,
     pub meta: Option<KVMeta>,
     pub data: T,
+}
+
+impl<T: std::fmt::Debug> std::fmt::Debug for SeqV<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut de = f.debug_struct("SeqV");
+        de.field("seq", &self.seq);
+        de.field("meta", &self.meta);
+        de.field("data", &"[binary]");
+
+        de.finish()
+    }
 }
 
 pub trait IntoSeqV<T> {

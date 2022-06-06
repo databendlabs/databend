@@ -22,6 +22,7 @@ use bumpalo::Bump;
 use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
+use common_datablocks::HashMethodSerializer;
 use common_datavalues::prelude::MutableColumn;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -265,6 +266,10 @@ impl Processor for GroupByFinalTransform {
                     }
                     HashMethodKind::KeysU64(hash_method) => {
                         apply! { hash_method , &UInt64Column, RwLock<HashMap<u64, usize, ahash::RandomState>> }
+                    }
+                    _ => {
+                        let method = HashMethodSerializer::default();
+                        apply! { method , &StringColumn, RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>> }
                     }
                 }
             }};

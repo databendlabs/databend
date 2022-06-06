@@ -30,6 +30,7 @@ use common_meta_sled_store::init_sled_db;
 use common_tracing::init_global_tracing;
 use databend_meta::export::deserialize_to_kv_variant;
 use databend_meta::export::serialize_kv_variant;
+use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::net::TcpSocket;
@@ -38,7 +39,7 @@ use tokio::net::TcpSocket;
 ///
 /// We should make metactl config keeps backward compatibility too.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
-#[clap(about, version, author)]
+#[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
 struct Config {
     /// Run a command
     #[clap(long, default_value = "")]
@@ -371,8 +372,7 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 
     loop {
         i += 1;
-        let client =
-            MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None).await?;
+        let client = MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None)?;
 
         let res = client.get_kv("foo").await;
         println!("{}-th: get_kv(foo): {:?}", i, res);

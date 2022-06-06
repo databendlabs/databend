@@ -21,7 +21,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableMeta;
 use common_planners::validate_expression;
 use common_planners::CreateTablePlan;
 use common_planners::PlanNode;
@@ -117,7 +117,7 @@ impl AnalyzableStatement for DfCreateTable {
                 db,
                 table,
                 table_meta,
-                cluster_keys,
+                cluster_keys: self.cluster_keys.iter().map(ToString::to_string).collect(),
                 as_select: as_select_plan_node,
             }),
         )))

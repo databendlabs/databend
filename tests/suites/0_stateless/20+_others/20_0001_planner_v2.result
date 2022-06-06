@@ -101,6 +101,9 @@ NULL	2	3
 0
 685
 0.685
+====Having alias====
+0
+1
 ====INNER_JOIN====
 1	1
 2	2
@@ -187,6 +190,7 @@ new_planner
 16
 18
 === Test limit n, m ===
+9
 10
 11
 12
@@ -290,6 +294,7 @@ abc
 ===Array Literal===
 [1, 2, 3]
 []
+[[1, 2, 3], [1, 2, 3]]
 ====Correlated Subquery====
 0
 1
@@ -304,7 +309,7 @@ abc
 8
 9
 ===Explain===
-\n    Project: [a]\n        EvalScalar: []\n            Filter: [a > 0]\n                PhysicalScan: default.default.t1\n
+Project: [a]\n    EvalScalar: []\n        Filter: [a > 0]\n            PhysicalScan: default.default.t1\n
 ===Explain Pipeline===
 ProjectionTransform × 1 processor
   ProjectionTransform × 1 processor
@@ -312,6 +317,7 @@ ProjectionTransform × 1 processor
       TransformHashJoin × 1 processor
         ProjectionTransform × 1 processor
           FuseEngineSource × 1 processor
+
 BuildHashTable × 1 processor
   ProjectionTransform × 1 processor
     FuseEngineSource × 1 processor
@@ -325,3 +331,15 @@ BuildHashTable × 1 processor
 ('field', 2)
 ('field', 3)
 ('field', 4)
+====View====
+0
+====Cross Join====
+1	2	2	2
+1	2	3	5
+1	2	7	8
+2	3	2	2
+2	3	3	5
+2	3	7	8
+3	4	2	2
+3	4	3	5
+3	4	7	8

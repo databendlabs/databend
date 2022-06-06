@@ -241,27 +241,37 @@ impl<'a> Binder {
     ///     `SELECT a as b, COUNT(a) FROM t GROUP BY b`.
     ///   - Scalar expressions that can be evaluated in current scope(doesn't contain aliases), e.g.
     ///     column `a` and expression `a+1` in `SELECT a as b, COUNT(a) FROM t GROUP BY a, a+1`.
-    pub(super) async fn bind_aggregate(
+    pub async fn analyze_group_items(
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'a>,
         group_by: &[Expr<'a>],
-        child: SExpr,
-    ) -> Result<SExpr> {
+    ) -> Result<()> {
         let mut available_aliases = vec![];
 
         // Extract available aliases from `SELECT` clause,
         for item in select_list.items.iter() {
             if let SelectTarget::AliasedExpr { alias: Some(_), .. } = item.select_target {
-                let column =
-                    self.create_column_binding(None, item.alias.clone(), item.scalar.data_type());
+                let column = if let Scalar::BoundColumnRef(column_ref) = &item.scalar {
+                    let mut column = column_ref.column.clone();
+                    column.column_name = item.alias.clone();
+                    column
+                } else {
+                    self.create_column_binding(None, item.alias.clone(), item.scalar.data_type())
+                };
                 available_aliases.push((column, item.scalar.clone()));
             }
         }
 
         self.resolve_group_items(bind_context, select_list, group_by, &available_aliases)
-            .await?;
+            .await
+    }
 
+    pub(super) async fn bind_aggregate(
+        &mut self,
+        bind_context: &mut BindContext,
+        child: SExpr,
+    ) -> Result<SExpr> {
         // Enter in_grouping state
         bind_context.in_grouping = true;
 
@@ -325,11 +335,11 @@ impl<'a> Binder {
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
-                lit: Literal::Number(number_str),
+                lit: Literal::Integer(index),
                 ..
             } = expr
             {
-                let (scalar, alias) = Self::resolve_index_item(expr, number_str, select_list)?;
+                let (scalar, alias) = Self::resolve_index_item(expr, *index, select_list)?;
                 let key = format!("{:?}", &scalar);
                 if let Entry::Vacant(entry) = bind_context.aggregate_info.group_items_map.entry(key)
                 {
@@ -354,7 +364,7 @@ impl<'a> Binder {
             let (scalar_expr, data_type) = scalar_binder
                 .bind(expr)
                 .await
-                .or_else(|e| Self::resolve_alias_item(expr, available_aliases, e))?;
+                .or_else(|e| Self::resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
             if bind_context
                 .aggregate_info
@@ -392,25 +402,19 @@ impl<'a> Binder {
 
     fn resolve_index_item(
         expr: &Expr<'a>,
-        index_string: &str,
+        index: u64,
         select_list: &SelectList<'a>,
     ) -> Result<(Scalar, String)> {
-        let index = index_string.parse::<i32>().map_err(|_| {
-            ErrorCode::SemanticError(
-                expr.span()
-                    .display_error("non-integer constant in GROUP BY".to_string()),
-            )
-        })?;
         // Convert to zero-based index
-        let index = index - 1;
-        if index < 0 || index > (select_list.items.len() as i32) {
+        let index = index as usize - 1;
+        if index >= select_list.items.len() {
             return Err(ErrorCode::SemanticError(expr.span().display_error(
                 format!("GROUP BY position {} is not in select list", index),
             )));
         }
         let item = select_list
             .items
-            .get(index as usize)
+            .get(index)
             .ok_or_else(|| ErrorCode::LogicalError("Should not fail"))?;
 
         let scalar = item.scalar.clone();
@@ -420,18 +424,25 @@ impl<'a> Binder {
     }
 
     fn resolve_alias_item(
+        bind_context: &mut BindContext,
         expr: &Expr<'a>,
         available_aliases: &[(ColumnBinding, Scalar)],
         original_error: ErrorCode,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        let mut result: Vec<Scalar> = vec![];
+        let mut result: Vec<usize> = vec![];
         // If cannot resolve group item, then try to find an available alias
-        for (column_binding, scalar) in available_aliases.iter() {
+        for (i, (column_binding, _)) in available_aliases.iter().enumerate() {
+            // Alias of the select item
             let col_name = column_binding.column_name.as_str();
-            // TODO(leiysky): check if expr is a qualified name
-            if let Expr::ColumnRef { column, .. } = expr {
-                if col_name == column.name.to_lowercase().as_str() {
-                    result.push(scalar.clone());
+            if let Expr::ColumnRef {
+                column,
+                database: None,
+                table: None,
+                ..
+            } = expr
+            {
+                if col_name.eq_ignore_ascii_case(column.name.as_str()) {
+                    result.push(i);
                 }
             }
         }
@@ -443,7 +454,32 @@ impl<'a> Binder {
                 format!("GROUP BY \"{}\" is ambiguous", expr),
             )))
         } else {
-            Ok((result[0].clone(), result[0].data_type()))
+            let (column_binding, scalar) = available_aliases[result[0]].clone();
+            // We will add the alias to BindContext, so we can reference it
+            // in `HAVING` and `ORDER BY` clause.
+            bind_context.columns.push(column_binding.clone());
+
+            let index = column_binding.index;
+            bind_context.aggregate_info.group_items.push(ScalarItem {
+                scalar: scalar.clone(),
+                index,
+            });
+            bind_context.aggregate_info.group_items_map.insert(
+                format!("{:?}", &scalar),
+                bind_context.aggregate_info.group_items.len() - 1,
+            );
+
+            // Add a mapping (alias -> scalar), so we can resolve the alias later
+            let column_ref: Scalar = BoundColumnRef {
+                column: column_binding,
+            }
+            .into();
+            bind_context.aggregate_info.group_items_map.insert(
+                format!("{:?}", &column_ref),
+                bind_context.aggregate_info.group_items.len() - 1,
+            );
+
+            Ok((scalar.clone(), scalar.data_type()))
         }
     }
 }

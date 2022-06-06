@@ -20,7 +20,7 @@ use std::sync::Arc;
 use common_datavalues as dv;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
-use common_meta_types as mt;
+use common_meta_app::schema as mt;
 use common_protos::pb;
 
 use crate::check_ver;

@@ -94,7 +94,6 @@ fn alter_user_auth_test_normal(plugin_name: &str) -> Result<()> {
 #[test]
 fn create_user_test() -> Result<()> {
     // normal
-    create_user_auth_test_normal("plaintext_password")?;
     create_user_auth_test_normal("sha256_password")?;
     create_user_auth_test_normal("double_sha1_password")?;
 
@@ -179,7 +178,6 @@ fn create_user_test() -> Result<()> {
 fn alter_user_test() -> Result<()> {
     let password = "password".to_string();
 
-    alter_user_auth_test_normal("plaintext_password")?;
     alter_user_auth_test_normal("sha256_password")?;
     alter_user_auth_test_normal("double_sha1_password")?;
 

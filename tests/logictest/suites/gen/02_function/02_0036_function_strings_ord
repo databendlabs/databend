@@ -2,7 +2,7 @@ statement query T
 SELECT ORD(NULL);
 
 ----  
-None
+NULL
 
 statement query I 
 SELECT ORD('и');

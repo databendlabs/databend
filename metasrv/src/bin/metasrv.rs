@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_base::base::RuntimeTracker;
@@ -26,10 +27,17 @@ use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::init_meta_metrics_recorder;
+use databend_meta::version::METASRV_COMMIT_VERSION;
+use databend_meta::version::METASRV_SEMVER;
+use databend_meta::version::MIN_METACLI_SEMVER;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     let conf = Config::load()?;
+
+    if run_cmd(&conf) {
+        return Ok(());
+    }
 
     let _guards = init_global_tracing(
         "databend-meta",
@@ -37,7 +45,10 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         conf.log_level.as_str(),
     );
 
-    tracing::info!("{:?}", conf.clone());
+    tracing::info!("Databend-meta version: {}", METASRV_COMMIT_VERSION.as_str());
+    tracing::info!("Config: {:?}", serde_json::to_string_pretty(&conf).unwrap());
+
+    conf.raft_config.check()?;
 
     init_sled_db(conf.raft_config.raft_dir.clone());
     init_meta_metrics_recorder();
@@ -79,4 +90,38 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     tracing::info!("Databend-meta is done shutting down");
 
     Ok(())
+}
+
+fn run_cmd(conf: &Config) -> bool {
+    if conf.cmd.is_empty() {
+        return false;
+    }
+
+    match conf.cmd.as_str() {
+        "ver" => {
+            println!("version: {}", METASRV_SEMVER.deref());
+            println!("min-compatible-client-version: {}", MIN_METACLI_SEMVER);
+        }
+        "show-config" => {
+            println!(
+                "config:\n{}",
+                pretty(&conf).unwrap_or_else(|e| format!("error format config: {}", e))
+            );
+        }
+        _ => {
+            eprintln!("Invalid cmd: {}", conf.cmd);
+            eprintln!("Available cmds:");
+            eprintln!("  --cmd ver");
+            eprintln!("    Print version and min compatible meta-client version");
+            eprintln!("  --cmd show-config");
+            eprintln!("    Print effective config");
+        }
+    }
+
+    true
+}
+
+fn pretty<T>(v: &T) -> Result<String, serde_json::Error>
+where T: serde::Serialize {
+    serde_json::to_string_pretty(v)
 }

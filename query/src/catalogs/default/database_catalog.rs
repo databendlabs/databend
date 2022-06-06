@@ -17,26 +17,30 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropTableReply;
-use common_meta_types::DropTableReq;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateDatabaseReply;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::RenameDatabaseReply;
+use common_meta_app::schema::RenameDatabaseReq;
+use common_meta_app::schema::RenameTableReply;
+use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
+use common_meta_app::schema::UndropTableReply;
+use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateTableMetaReply;
+use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableOptionReply;
+use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
-use common_meta_types::RenameDatabaseReply;
-use common_meta_types::RenameDatabaseReq;
-use common_meta_types::RenameTableReply;
-use common_meta_types::RenameTableReq;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
-use common_meta_types::UndropTableReply;
-use common_meta_types::UndropTableReq;
-use common_meta_types::UpdateTableMetaReply;
-use common_meta_types::UpdateTableMetaReq;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
 use crate::catalogs::catalog::Catalog;
@@ -374,6 +378,24 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.undrop_table(req).await
     }
 
+    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        if req.tenant().is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while undrop database)",
+            ));
+        }
+        tracing::info!("UnDrop database from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(req.tenant(), req.db_name())
+            .await?
+        {
+            return self.immutable_catalog.undrop_database(req).await;
+        }
+        self.mutable_catalog.undrop_database(req).await
+    }
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -397,6 +419,18 @@ impl Catalog for DatabaseCatalog {
         }
 
         self.mutable_catalog.rename_table(req).await
+    }
+
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
+        if req.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while count tables)",
+            ));
+        }
+
+        let res = self.mutable_catalog.count_tables(req).await?;
+
+        Ok(res)
     }
 
     async fn upsert_table_option(

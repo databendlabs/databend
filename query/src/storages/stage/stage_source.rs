@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::init_s3_operator;
 use common_io::prelude::StorageParams;
+use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
@@ -31,7 +32,9 @@ use common_streams::CsvSourceBuilder;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
+use common_tracing::tracing::info;
 use futures::io::BufReader;
+use opendal::io_util::CompressAlgorithm;
 use opendal::io_util::SeekableReader;
 use opendal::BytesReader;
 use opendal::Operator;
@@ -190,20 +193,50 @@ impl StageSource {
         let path = file_name;
         let object = op.object(&path);
 
+        // TODO(xuanwo): we need to unify with MultipartFormat.
+        let compression_algo = match stage.file_format_options.compression {
+            StageFileCompression::Auto => CompressAlgorithm::from_path(&path),
+            StageFileCompression::Gzip => Some(CompressAlgorithm::Gzip),
+            StageFileCompression::Bz2 => Some(CompressAlgorithm::Bz2),
+            StageFileCompression::Brotli => Some(CompressAlgorithm::Brotli),
+            StageFileCompression::Zstd => Some(CompressAlgorithm::Zstd),
+            StageFileCompression::Deflate => Some(CompressAlgorithm::Zlib),
+            StageFileCompression::RawDeflate => Some(CompressAlgorithm::Deflate),
+            StageFileCompression::Lzo => {
+                return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"))
+            }
+            StageFileCompression::Snappy => {
+                return Err(ErrorCode::UnImplement(
+                    "compress type snappy is unimplemented",
+                ))
+            }
+            StageFileCompression::None => None,
+        };
+        info!(
+            "Read stage {} file {} via compression {:?}",
+            stage.stage_name, &path, compression_algo
+        );
+
         // Get the format(CSV, Parquet) source stream.
         let source = match &file_format {
             StageFileFormatType::Csv => Ok(Self::csv_source(
                 ctx.clone(),
                 self.schema.clone(),
                 stage,
-                Box::new(object.reader().await?),
+                match compression_algo {
+                    None => Box::new(object.reader().await?),
+                    Some(algo) => Box::new(object.decompress_reader_with(algo).await?),
+                },
             )
             .await?),
             StageFileFormatType::Json => Ok(Self::json_source(
                 ctx.clone(),
                 self.schema.clone(),
                 stage,
-                Box::new(object.reader().await?),
+                match compression_algo {
+                    None => Box::new(object.reader().await?),
+                    Some(algo) => Box::new(object.decompress_reader_with(algo).await?),
+                },
             )
             .await?),
             StageFileFormatType::Parquet => Ok(Self::parquet_source(

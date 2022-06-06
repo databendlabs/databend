@@ -60,19 +60,9 @@ pub fn query(i: Input) -> IResult<Query> {
                     span: span.0,
                     distinct: opt_distinct.is_some(),
                     select_list,
-                    from: opt_from_block.map(|(_, table_refs)| {
-                        table_refs
-                            .into_iter()
-                            .reduce(|left, right| {
-                                TableReference::Join(Join {
-                                    op: JoinOperator::CrossJoin,
-                                    condition: JoinCondition::None,
-                                    left: Box::new(left),
-                                    right: Box::new(right),
-                                })
-                            })
-                            .unwrap()
-                    }),
+                    from: opt_from_block
+                        .map(|(_, table_refs)| table_refs)
+                        .unwrap_or_default(),
                     selection: opt_where_block.map(|(_, selection)| selection),
                     group_by: opt_group_by_block
                         .map(|(_, _, group_by)| group_by)
@@ -252,11 +242,11 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
 
     let join = map(
         rule! {
-            #join_operator? ~ JOIN ~ #table_ref_without_join ~ #join_condition
+            #join_operator? ~ JOIN ~ #table_ref_without_join ~ #join_condition?
         },
         |(opt_op, _, right, condition)| JoinElement {
             op: opt_op.unwrap_or(JoinOperator::Inner),
-            condition,
+            condition: condition.unwrap_or(JoinCondition::None),
             right: Box::new(right),
         },
     );
@@ -299,6 +289,7 @@ pub fn join_operator(i: Input) -> IResult<JoinOperator> {
         value(JoinOperator::LeftOuter, rule! { LEFT ~ OUTER? }),
         value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
         value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),
+        value(JoinOperator::CrossJoin, rule! { CROSS }),
     ))(i)
 }
 

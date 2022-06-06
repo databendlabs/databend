@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use common_meta_types::AuthType;
 use common_meta_types::UserIdentity;
 
+use super::write_space_seperated_list;
 use super::Expr;
 use crate::ast::expr::Literal;
 use crate::ast::expr::TypeName;
@@ -77,16 +78,7 @@ pub enum Statement<'a> {
         database: Option<Identifier<'a>>,
         limit: Option<ShowLimit<'a>>,
     },
-    CreateTable {
-        if_not_exists: bool,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        source: Option<CreateTableSource<'a>>,
-        engine: Engine,
-        cluster_by: Vec<Expr<'a>>,
-        as_query: Option<Box<Query<'a>>>,
-        comment: Option<String>,
-    },
+    CreateTable(CreateTableStmt<'a>),
     // Describe schema of a table
     // Like `SHOW CREATE TABLE`
     Describe {
@@ -234,12 +226,46 @@ pub enum InsertSource<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CreateTableStmt<'a> {
+    pub if_not_exists: bool,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub source: Option<CreateTableSource<'a>>,
+    pub table_options: Vec<TableOption>,
+    pub cluster_by: Vec<Expr<'a>>,
+    pub as_query: Option<Box<Query<'a>>>,
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum CreateTableSource<'a> {
     Columns(Vec<ColumnDefinition<'a>>),
     Like {
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TableOption {
+    Engine(Engine),
+    Comment(String),
+}
+
+impl TableOption {
+    pub fn option_key(&self) -> String {
+        match self {
+            TableOption::Engine(_) => "ENGINE".to_string(),
+            TableOption::Comment(_) => "COMMENT".to_string(),
+        }
+    }
+
+    pub fn option_value(&self) -> String {
+        match self {
+            TableOption::Engine(engine) => engine.to_string(),
+            TableOption::Comment(comment) => comment.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -330,6 +356,15 @@ impl<'a> Display for ColumnDefinition<'a> {
             write!(f, " DEFAULT {default_expr}")?;
         }
         Ok(())
+    }
+}
+
+impl Display for TableOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TableOption::Engine(engine) => write!(f, "ENGINE = {engine}"),
+            TableOption::Comment(comment) => write!(f, "COMMENT = {comment}"),
+        }
     }
 }
 
@@ -468,16 +503,16 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " {limit}")?;
                 }
             }
-            Statement::CreateTable {
+            Statement::CreateTable(CreateTableStmt {
                 if_not_exists,
                 database,
                 table,
                 source,
-                engine,
+                table_options,
                 comment,
                 cluster_by,
                 as_query,
-            } => {
+            }) => {
                 write!(f, "CREATE TABLE ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
@@ -495,9 +530,10 @@ impl<'a> Display for Statement<'a> {
                     }
                     None => (),
                 }
-                if *engine != Engine::Null {
-                    write!(f, " ENGINE = {engine}")?;
-                }
+
+                // Format table options
+                write_space_seperated_list(f, table_options.iter())?;
+
                 if let Some(comment) = comment {
                     write!(f, " COMMENT = {comment}")?;
                 }

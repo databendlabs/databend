@@ -23,7 +23,7 @@ use crate::prelude::*;
 pub struct NullType {}
 
 impl NullType {
-    pub fn arc() -> DataTypeImpl {
+    pub fn new_impl() -> DataTypeImpl {
         DataTypeImpl::Null(Self {})
     }
 }

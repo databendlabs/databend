@@ -125,11 +125,6 @@ impl QueryContextShared {
             source_abort_handle.abort();
         }
 
-        let http_query = self.http_query.read();
-        if let Some(handle) = &*http_query {
-            handle.abort();
-        }
-
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
@@ -245,6 +240,9 @@ impl QueryContextShared {
         let mut http_query = self.http_query.write();
         *http_query = Some(handle);
     }
+    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
+        self.http_query.read().clone()
+    }
 
     pub fn attach_query_str(&self, query: &str) {
         let mut running_query = self.running_query.write();
@@ -278,12 +276,18 @@ impl QueryContextShared {
             format.field_delimiter = settings.get_field_delimiter()?;
             format.empty_as_default = settings.get_empty_as_default()? > 0;
             format.skip_header = settings.get_skip_header()? > 0;
+
             let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
                 ErrorCode::LogicalError("Timezone has been checked and should be valid.")
             })?;
             format.timezone = tz.parse::<Tz>().map_err(|_| {
                 ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
             })?;
+
+            let compress = String::from_utf8(settings.get_compression()?).map_err(|_| {
+                ErrorCode::UnknownCompressionType("Compress type must be valid utf-8")
+            })?;
+            format.compression = compress.parse()?
         }
         Ok(format)
     }

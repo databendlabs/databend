@@ -8,7 +8,7 @@ statement query T
 select parse_json(null);
 
 ----  
-None
+NULL
 
 statement query T 
 select parse_json(true);
@@ -35,7 +35,7 @@ select parse_json('null');
 null
 
 ----  http
-None
+NULL
 
 statement query T 
 select parse_json('true');
@@ -128,7 +128,7 @@ statement query T
 select try_parse_json(null);
 
 ----  
-None
+NULL
 
 statement query T 
 select try_parse_json(true);
@@ -155,7 +155,7 @@ select try_parse_json('null');
 null
 
 ----  http
-None
+NULL
 
 statement query T 
 select try_parse_json('true');
@@ -212,13 +212,13 @@ statement query T
 select try_parse_json('[1,');
 
 ----  
-None
+NULL
 
 statement query T 
 select try_parse_json('"ab');
 
 ----  
-None
+NULL
 
 statement query T 
 select try_parse_json(parse_json('123'));
@@ -233,13 +233,13 @@ statement query T
 select try_parse_json(parse_json('"abc"'));
 
 ----  
-None
+NULL
 
 statement query T 
 select try_parse_json(to_date('2022-01-01'));
 
 ----  
-None
+NULL
 
 statement ok
 DROP DATABASE IF EXISTS db1;

@@ -24,17 +24,17 @@ use common_streams::SendableDataBlockStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::sql::exec::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::ExplainPlan;
-use crate::sql::plans::RelOperator;
+use crate::sql::plans::Plan;
 use crate::sql::BindContext;
 use crate::sql::MetadataRef;
-use crate::sql::Planner;
 
 pub struct ExplainInterpreterV2 {
     ctx: Arc<QueryContext>,
-    query: String,
     schema: DataSchemaRef,
+    kind: ExplainKind,
+    plan: Plan,
 }
 
 #[async_trait::async_trait]
@@ -47,21 +47,23 @@ impl Interpreter for ExplainInterpreterV2 {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let mut planner = Planner::new(self.ctx.clone());
-        let (expr, bind_context, metadata) = planner.build_sexpr(self.query.as_str()).await?;
-        let blocks = match expr.plan() {
-            RelOperator::Explain(ExplainPlan { explain_kind }) => match explain_kind {
-                ExplainKind::Syntax => self.explain_syntax(expr, metadata.clone()).await?,
-                ExplainKind::Pipeline => {
-                    self.explain_pipeline(expr, bind_context, metadata.clone())
+        let blocks = match &self.kind {
+            ExplainKind::Syntax => self.explain_syntax(&self.plan).await?,
+            ExplainKind::Pipeline => match &self.plan {
+                Plan::Query {
+                    s_expr,
+                    metadata,
+                    bind_context,
+                } => {
+                    self.explain_pipeline(s_expr.clone(), *bind_context.clone(), metadata.clone())
                         .await?
                 }
-                ExplainKind::Graph => {
-                    return Err(ErrorCode::UnImplement("ExplainKind graph is unimplemented"));
+                _ => {
+                    return Err(ErrorCode::UnImplement("Unsupported EXPLAIN statement"));
                 }
             },
-            _ => {
-                return Err(ErrorCode::LogicalError("RelOperator should be explain"));
+            ExplainKind::Graph => {
+                return Err(ErrorCode::UnImplement("ExplainKind graph is unimplemented"));
             }
         };
         Ok(Box::pin(DataBlockStream::create(
@@ -81,22 +83,23 @@ impl Interpreter for ExplainInterpreterV2 {
 }
 
 impl ExplainInterpreterV2 {
-    pub fn try_create(ctx: Arc<QueryContext>, query: &str) -> Result<InterpreterPtr> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        plan: Plan,
+        kind: ExplainKind,
+    ) -> Result<InterpreterPtr> {
         let data_field = DataField::new("explain", DataTypeImpl::String(StringType::default()));
         let schema = DataSchemaRefExt::create(vec![data_field]);
         Ok(Arc::new(ExplainInterpreterV2 {
             ctx,
-            query: query.to_string(),
             schema,
+            plan,
+            kind,
         }))
     }
 
-    pub async fn explain_syntax(
-        &self,
-        plan: SExpr,
-        metadata: MetadataRef,
-    ) -> Result<Vec<DataBlock>> {
-        let result = plan.to_format_tree(&metadata).format_indent()?;
+    pub async fn explain_syntax(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
+        let result = plan.format_indent()?;
         let formatted_plan = Series::from_data(vec![result]);
         Ok(vec![DataBlock::create(self.schema.clone(), vec![
             formatted_plan,
@@ -105,14 +108,17 @@ impl ExplainInterpreterV2 {
 
     pub async fn explain_pipeline(
         &self,
-        plan: SExpr,
+        s_expr: SExpr,
         bind_context: BindContext,
         metadata: MetadataRef,
     ) -> Result<Vec<DataBlock>> {
-        let mut planner = Planner::new(self.ctx.clone());
-        let (root_pipeline, pipelines) = planner
-            .build_pipeline(plan.child(0)?.clone(), bind_context, metadata)
-            .await?;
+        let pb = PipelineBuilder::new(
+            self.ctx.clone(),
+            bind_context.result_columns(),
+            metadata,
+            s_expr,
+        );
+        let (root_pipeline, pipelines, _) = pb.spawn()?;
         let mut blocks = vec![];
         // Format root pipeline
         blocks.push(DataBlock::create(self.schema.clone(), vec![
@@ -127,7 +133,7 @@ impl ExplainInterpreterV2 {
         for pipeline in pipelines.iter() {
             blocks.push(DataBlock::create(self.schema.clone(), vec![
                 Series::from_data(
-                    format!("{:?}", pipeline)
+                    format!("\n{:?}", pipeline)
                         .lines()
                         .map(|s| s.as_bytes())
                         .collect::<Vec<_>>(),

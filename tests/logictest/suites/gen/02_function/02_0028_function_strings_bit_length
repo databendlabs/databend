@@ -20,5 +20,5 @@ statement query T
 SELECT BIT_LENGTH(NULL);
 
 ----  
-None
+NULL
 

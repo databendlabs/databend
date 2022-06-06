@@ -17,34 +17,38 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_api::SchemaApi;
-use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DatabaseIdent;
-use common_meta_types::DatabaseInfo;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::DatabaseNameIdent;
-use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropTableReply;
-use common_meta_types::DropTableReq;
-use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetTableReq;
-use common_meta_types::ListDatabaseReq;
-use common_meta_types::ListTableReq;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateDatabaseReply;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DatabaseIdent;
+use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListTableReq;
+use common_meta_app::schema::RenameDatabaseReply;
+use common_meta_app::schema::RenameDatabaseReq;
+use common_meta_app::schema::RenameTableReply;
+use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
+use common_meta_app::schema::UndropTableReply;
+use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateTableMetaReply;
+use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableOptionReply;
+use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
-use common_meta_types::RenameDatabaseReply;
-use common_meta_types::RenameDatabaseReq;
-use common_meta_types::RenameTableReply;
-use common_meta_types::RenameTableReq;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
-use common_meta_types::UndropTableReply;
-use common_meta_types::UndropTableReq;
-use common_meta_types::UpdateTableMetaReply;
-use common_meta_types::UpdateTableMetaReq;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
 use super::catalog_context::CatalogContext;
@@ -282,6 +286,11 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        let res = self.ctx.meta.undrop_database(req).await?;
+        Ok(res)
+    }
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         let res = self.ctx.meta.rename_table(req).await?;
         Ok(res)
@@ -297,6 +306,11 @@ impl Catalog for MutableCatalog {
 
     async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         let res = self.ctx.meta.update_table_meta(req).await?;
+        Ok(res)
+    }
+
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
+        let res = self.ctx.meta.count_tables(req).await?;
         Ok(res)
     }
 

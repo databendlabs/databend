@@ -271,15 +271,7 @@ impl StateMachine {
             Ok(None)
         });
 
-        let opt_applied_state = match result {
-            Ok(x) => x,
-            Err(meta_sto_err) => {
-                return match meta_sto_err {
-                    MetaStorageError::AppError(app_err) => Ok(AppliedState::AppError(app_err)),
-                    _ => Err(meta_sto_err),
-                }
-            }
-        };
+        let opt_applied_state = result?;
 
         tracing::debug!("sled tx done: {:?}", entry);
 
@@ -375,7 +367,7 @@ impl StateMachine {
         Ok((prev, None).into())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[tracing::instrument(level = "debug", skip(self, txn_tree, key, seq, value_op))]
     fn apply_update_kv_cmd(
         &self,
         key: &str,
@@ -384,6 +376,14 @@ impl StateMachine {
         value_meta: &Option<KVMeta>,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
+        tracing::debug!(
+            key = display(key),
+            seq = debug(seq),
+            value_op = debug(value_op),
+            value_meta = debug(value_meta),
+            "kv_cmd"
+        );
+
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let key_str = key.to_string();
         let (prev, result) = self.txn_sub_tree_upsert(

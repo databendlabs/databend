@@ -16,14 +16,17 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use futures::future::AbortHandle;
+use futures::future::Abortable;
 use futures::StreamExt;
 use serde::Deserialize;
 use serde::Serialize;
@@ -32,13 +35,24 @@ use ExecuteState::*;
 use super::http_query::HttpQueryRequest;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
-use crate::servers::http::v1::query::block_buffer::BlockBuffer;
+use crate::pipelines::new::executor::PipelineCompleteExecutor;
+use crate::pipelines::new::executor::PipelineExecutor;
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::NewPipe;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sql::exec::PipelineBuilder;
+use crate::sql::DfParser;
+use crate::sql::DfStatement;
 use crate::sql::PlanParser;
+use crate::sql::Planner;
+use crate::storages::result::block_buffer::BlockBuffer;
+use crate::storages::result::block_buffer::BlockBufferWriterMemOnly;
+use crate::storages::result::block_buffer::BlockBufferWriterWithResultTable;
 use crate::storages::result::ResultQueryInfo;
-use crate::storages::result::ResultTableWriter;
+use crate::storages::result::ResultTableSink;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum ExecuteStateKind {
@@ -47,7 +61,7 @@ pub enum ExecuteStateKind {
     Succeeded,
 }
 
-pub(crate) enum ExecuteState {
+pub enum ExecuteState {
     Running(ExecuteRunning),
     Stopped(ExecuteStopped),
 }
@@ -55,8 +69,8 @@ pub(crate) enum ExecuteState {
 impl ExecuteState {
     pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode>) {
         match self {
-            ExecuteState::Running(_) => (ExecuteStateKind::Running, None),
-            ExecuteState::Stopped(v) => match &v.reason {
+            Running(_) => (ExecuteStateKind::Running, None),
+            Stopped(v) => match &v.reason {
                 Ok(_) => (ExecuteStateKind::Succeeded, None),
                 Err(e) => (ExecuteStateKind::Failed, Some(e.clone())),
             },
@@ -64,7 +78,7 @@ impl ExecuteState {
     }
 }
 
-pub(crate) struct ExecuteRunning {
+pub struct ExecuteRunning {
     // used to kill query
     session: SessionRef,
     // mainly used to get progress for now
@@ -72,13 +86,13 @@ pub(crate) struct ExecuteRunning {
     interpreter: Arc<dyn Interpreter>,
 }
 
-pub(crate) struct ExecuteStopped {
+pub struct ExecuteStopped {
     progress: Option<ProgressValues>,
     reason: Result<()>,
     stop_time: Instant,
 }
 
-pub(crate) struct Executor {
+pub struct Executor {
     start_time: Instant,
     pub(crate) state: ExecuteState,
 }
@@ -130,19 +144,6 @@ impl Executor {
     }
 }
 
-pub struct HttpQueryHandle {
-    pub abort_sender: mpsc::Sender<()>,
-}
-
-impl HttpQueryHandle {
-    pub fn abort(&self) {
-        let sender = self.abort_sender.clone();
-        tokio::spawn(async move {
-            sender.send(()).await.ok();
-        });
-    }
-}
-
 impl ExecuteState {
     pub(crate) async fn try_create(
         request: &HttpQueryRequest,
@@ -153,44 +154,88 @@ impl ExecuteState {
         let sql = &request.sql;
         let start_time = Instant::now();
         ctx.attach_query_str(sql);
-        let plan = match PlanParser::parse(ctx.clone(), sql).await {
-            Ok(p) => p,
+
+        let (stmts, _) = match DfParser::parse_sql(sql, ctx.get_current_session().get_type()) {
+            Ok(t) => t,
             Err(e) => {
                 InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
                 return Err(e);
             }
         };
 
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        // Write Start to query log table.
-        let _ = interpreter
-            .start()
-            .await
-            .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+        let settings = ctx.get_settings();
+        if settings.get_enable_new_processor_framework()? != 0
+            && !ctx.get_config().query.management_mode
+            && ctx.get_cluster().is_empty()
+            && settings.get_enable_planner_v2()? != 0
+            && matches!(stmts.get(0), Some(DfStatement::Query(_)))
+        {
+            let mut planner = Planner::new(ctx.clone());
+            let (plan, _) = planner.plan_sql(sql).await?;
+            let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
-        let running_state = ExecuteRunning {
-            session,
-            ctx: ctx.clone(),
-            interpreter: interpreter.clone(),
-        };
-        let executor = Arc::new(RwLock::new(Executor {
-            start_time,
-            state: Running(running_state),
-        }));
+            // Write Start to query log table.
+            let _ = interpreter
+                .start()
+                .await
+                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
-        let executor_clone = executor.clone();
-        let ctx_clone = ctx.clone();
-        let block_buffer_clone = block_buffer.clone();
-        ctx.try_spawn(async move {
-            if let Err(err) =
-                execute(interpreter, ctx_clone, block_buffer, executor_clone.clone()).await
-            {
-                Executor::stop(&executor_clone, Err(err), false).await;
-                block_buffer_clone.stop_push().await;
+            let running_state = ExecuteRunning {
+                session,
+                ctx: ctx.clone(),
+                interpreter: interpreter.clone(),
             };
-        })?;
+            let executor = Arc::new(RwLock::new(Executor {
+                start_time,
+                state: Running(running_state),
+            }));
+            ctx.attach_http_query(HttpQueryHandle {
+                executor: executor.clone(),
+                block_buffer,
+            });
+            interpreter.execute(None).await.unwrap();
 
-        Ok(executor)
+            Ok(executor)
+        } else {
+            let plan = match PlanParser::parse(ctx.clone(), sql).await {
+                Ok(p) => p,
+                Err(e) => {
+                    InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
+                    return Err(e);
+                }
+            };
+
+            let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+            // Write Start to query log table.
+            let _ = interpreter
+                .start()
+                .await
+                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+
+            let running_state = ExecuteRunning {
+                session,
+                ctx: ctx.clone(),
+                interpreter: interpreter.clone(),
+            };
+            let executor = Arc::new(RwLock::new(Executor {
+                start_time,
+                state: Running(running_state),
+            }));
+
+            let executor_clone = executor.clone();
+            let ctx_clone = ctx.clone();
+            let block_buffer_clone = block_buffer.clone();
+            ctx.try_spawn(async move {
+                if let Err(err) =
+                    execute(interpreter, ctx_clone, block_buffer, executor_clone.clone()).await
+                {
+                    Executor::stop(&executor_clone, Err(err), false).await;
+                    block_buffer_clone.stop_push().await.unwrap();
+                };
+            })?;
+
+            Ok(executor)
+        }
     }
 }
 
@@ -202,47 +247,129 @@ async fn execute(
 ) -> Result<()> {
     let data_stream = interpreter.execute(None).await?;
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
+    let use_result_cache = !ctx.get_config().query.management_mode;
 
-    let mut result_table_writer: Option<ResultTableWriter> = None;
+    match data_stream.next().await {
+        None => {
+            Executor::stop(&executor, Ok(()), false).await;
+            block_buffer.stop_push().await?;
+        }
+        Some(Err(err)) => {
+            Executor::stop(&executor, Err(err), false).await;
+            block_buffer.stop_push().await?;
+        }
+        Some(Ok(block)) => {
+            let mut block_writer = if use_result_cache {
+                BlockBufferWriterWithResultTable::create(
+                    block_buffer.clone(),
+                    ctx.clone(),
+                    ResultQueryInfo {
+                        query_id: ctx.get_id(),
+                        schema: block.schema().clone(),
+                        user: ctx.get_current_user()?.identity(),
+                    },
+                )
+                .await?
+            } else {
+                Box::new(BlockBufferWriterMemOnly(block_buffer))
+            };
 
-    while let Some(block_r) = data_stream.next().await {
-        match block_r {
-            Ok(block) => {
-                if result_table_writer.is_none() {
-                    result_table_writer = Some(
-                        ResultTableWriter::new(ctx.clone(), ResultQueryInfo {
-                            query_id: ctx.get_id(),
-                            schema: block.schema().clone(),
-                            user: ctx.get_current_user()?.identity(),
-                        })
-                        .await?,
-                    );
-                    {
-                        block_buffer
-                            .init_reader(ctx.clone(), block.schema().clone())
-                            .await?;
+            block_writer.push(block).await?;
+            while let Some(block_r) = data_stream.next().await {
+                match block_r {
+                    Ok(block) => {
+                        block_writer.push(block.clone()).await?;
+                    }
+                    Err(err) => {
+                        block_writer.stop_push(true).await?;
+                        return Err(err);
                     }
                 };
-                let part_ptr = result_table_writer
-                    .as_mut()
-                    .ok_or_else(|| ErrorCode::UnknownException("server error"))?
-                    .append_block(block.clone())
-                    .await?;
-                block_buffer.push(block.clone(), part_ptr).await;
             }
-            Err(err) => {
-                block_buffer.stop_push().await;
-                if let Some(writer) = result_table_writer {
-                    writer.abort().await?;
-                }
-                return Err(err);
-            }
-        };
-    }
-    Executor::stop(&executor, Ok(()), false).await;
-    block_buffer.stop_push().await;
-    if let Some(mut writer) = result_table_writer {
-        writer.commit().await?;
+            Executor::stop(&executor, Ok(()), false).await;
+            block_writer.stop_push(false).await?;
+        }
     }
     Ok(())
+}
+
+#[derive(Clone)]
+pub struct HttpQueryHandle {
+    pub executor: Arc<RwLock<Executor>>,
+    pub block_buffer: Arc<BlockBuffer>,
+}
+
+impl HttpQueryHandle {
+    pub async fn execute(
+        self,
+        ctx: Arc<QueryContext>,
+        pb: PipelineBuilder,
+    ) -> Result<SendableDataBlockStream> {
+        let executor = self.executor.clone();
+        let block_buffer = self.block_buffer.clone();
+        let (mut root_pipeline, pipelines, schema) = pb.spawn()?;
+        let async_runtime = ctx.get_storage_runtime();
+
+        root_pipeline.resize(1)?;
+        let input = InputPort::create();
+
+        let query_info = ResultQueryInfo {
+            query_id: ctx.get_id(),
+            schema: schema.clone(),
+            user: ctx.get_current_user()?.identity(),
+        };
+        let data_accessor = ctx.get_storage_operator()?;
+
+        let sink = ResultTableSink::create(
+            input.clone(),
+            ctx.clone(),
+            data_accessor,
+            query_info,
+            self.block_buffer,
+        )?;
+        root_pipeline.add_pipe(NewPipe::SimplePipe {
+            outputs_port: vec![],
+            inputs_port: vec![input],
+            processors: vec![sink],
+        });
+        let pipeline_executor =
+            PipelineCompleteExecutor::try_create(async_runtime.clone(), root_pipeline)?;
+        let async_runtime_clone = async_runtime.clone();
+        let run = move || -> Result<()> {
+            for pipeline in pipelines {
+                let executor = PipelineExecutor::create(async_runtime_clone.clone(), pipeline)?;
+                executor.execute()?;
+            }
+            pipeline_executor.execute()
+        };
+
+        let (error_sender, mut error_receiver) = mpsc::channel::<Result<()>>(1);
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+
+        async_runtime.spawn(async move {
+            let error_receiver = Abortable::new(error_receiver.recv(), abort_registration);
+            ctx.add_source_abort_handle(abort_handle);
+            match error_receiver.await {
+                Err(_) => {
+                    Executor::stop(&executor, Err(ErrorCode::AbortedQuery("")), false).await;
+                    block_buffer.stop_push().await.unwrap();
+                }
+                Ok(Some(Err(e))) => {
+                    Executor::stop(&executor, Err(e), false).await;
+                    block_buffer.stop_push().await.unwrap();
+                }
+                _ => {
+                    Executor::stop(&executor, Ok(()), false).await;
+                    block_buffer.stop_push().await.unwrap();
+                }
+            }
+        });
+
+        std::thread::spawn(move || {
+            if let Err(cause) = run() {
+                error_sender.blocking_send(Err(cause)).unwrap();
+            }
+        });
+        Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
+    }
 }

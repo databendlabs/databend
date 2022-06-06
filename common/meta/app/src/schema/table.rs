@@ -23,10 +23,10 @@ use std::sync::Arc;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
+use common_meta_types::MatchSeq;
 use maplit::hashmap;
 
-use crate::database::DatabaseNameIdent;
-use crate::MatchSeq;
+use crate::schema::database::DatabaseNameIdent;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -281,6 +281,14 @@ pub struct TableIdList {
 impl TableIdList {
     pub fn new() -> TableIdList {
         TableIdList::default()
+    }
+
+    pub fn len(&self) -> usize {
+        self.id_list.len()
+    }
+
+    pub fn id_list(&self) -> &Vec<u64> {
+        &self.id_list
     }
 
     pub fn append(&mut self, table_id: u64) {
@@ -551,4 +559,26 @@ impl ListTableReq {
             },
         }
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+
+pub struct CountTablesKey {
+    pub tenant: String,
+}
+
+impl Display for CountTablesKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'", self.tenant)
+    }
+}
+
+/// count tables for a tenant
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct CountTablesReq {
+    pub tenant: String,
+}
+
+pub struct CountTablesReply {
+    pub count: u64,
 }

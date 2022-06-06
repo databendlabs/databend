@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_io::prelude::get_abs_path;
-use common_io::prelude::StorageParams;
 use common_meta_types::StageType;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -49,6 +47,8 @@ pub async fn upload_to_stage(
 
     let user_mgr = context.get_user_manager();
 
+    // TODO(xuanwo): logic here seems buggy, we need to fix it.
+    // It's incorrect to get operator from context if we are uploading an external stage.
     let op = context
         .get_storage_operator()
         .map_err(InternalServerError)?;
@@ -69,28 +69,17 @@ pub async fn upload_to_stage(
         .await
         .map_err(InternalServerError)?;
 
-    let relative_path = req
+    let mut relative_path = req
         .headers()
         .get("relative_path")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .trim_matches(|c| c == '/');
+        .unwrap_or("/")
+        .to_string();
 
-    let final_related_path: String;
-    match stage.stage_type {
-        // It's internal, so we already have an op which has the root path
-        // need to inject a tenant path
-        StageType::Internal => {
-            let prefix = format!("stage/{}", stage.stage_name);
-            final_related_path = get_abs_path(prefix.as_str(), relative_path);
-        }
-        // It's  external, so we need to join the root path
-        StageType::External => match stage.stage_params.storage {
-            StorageParams::S3(ref s3) => {
-                final_related_path = get_abs_path(s3.root.as_str(), relative_path);
-            }
-            _ => todo!("other stage is not supported"),
-        },
+    // It's internal, so we already have an op which has the root path
+    // need to inject a tenant path
+    if stage.stage_type == StageType::Internal {
+        relative_path = format!("/stage/{}/{}/", stage.stage_name, relative_path);
     }
 
     while let Ok(Some(field)) = multipart.next_field().await {
@@ -99,7 +88,7 @@ pub async fn upload_to_stage(
             None => uuid::Uuid::new_v4().to_string(),
         };
         let bytes = field.bytes().await.map_err(InternalServerError)?;
-        let obj = format!("{}/{}", final_related_path, name);
+        let obj = format!("{relative_path}{name}");
         let _ = op
             .object(&obj)
             .write(bytes)

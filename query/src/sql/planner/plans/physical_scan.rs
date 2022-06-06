@@ -18,7 +18,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
@@ -28,8 +28,8 @@ pub struct PhysicalScan {
 }
 
 impl Operator for PhysicalScan {
-    fn plan_type(&self) -> PlanType {
-        PlanType::PhysicalScan
+    fn plan_type(&self) -> RelOp {
+        RelOp::PhysicalScan
     }
 
     fn is_physical(&self) -> bool {

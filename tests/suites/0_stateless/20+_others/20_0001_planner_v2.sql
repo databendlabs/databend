@@ -106,6 +106,10 @@ select avg(number > 314) from numbers(1000);
 
 drop table t;
 
+select '====Having alias====';
+select number as a from numbers(1) group by a having a = 0;
+select number+1 as a from numbers(1) group by a having a = 1;
+
 -- Inner join
 select '====INNER_JOIN====';
 create table t(a int);
@@ -145,7 +149,6 @@ select '====SELECT_WITHOUT_FROM====';
 select 1 + 1;
 select to_int(8);
 select 'new_planner';
-select *; -- {ErrorCode 1065}
 
 -- limit
 select '=== Test limit ===';
@@ -153,7 +156,7 @@ select number from numbers(100) order by number asc limit 10;
 select '==================';
 select number*2 as number from numbers(100) order by number limit 10;
 select '=== Test limit n, m ===';
-select number from numbers(100) order by number asc limit 10, 10;
+select number from numbers(100) order by number asc limit 9, 11;
 select '==================';
 select number-2 as number from numbers(100) order by number asc limit 10, 10;
 select '=== Test limit with offset ===';
@@ -235,6 +238,7 @@ select trim(' abc ');
 select '===Array Literal===';
 select [1, 2, 3];
 select [];
+select [[1, 2, 3],[1, 2, 3]];
 
 select '====Correlated Subquery====';
 select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
@@ -261,5 +265,25 @@ drop table t;
 
 select '====Tuple====';
 select ('field', number) from numbers(5);
+
+select '====View====';
+drop view if exists temp;
+create view temp as select number from numbers(1);
+select number from temp;
+drop view temp;
+
+-- cross join
+select '====Cross Join====';
+create table t1(a int, b int);
+create table t2(c int, d int);
+insert into t1 values(1, 2), (2, 3), (3 ,4);
+insert into t2 values(2,2), (3, 5), (7 ,8);
+select * from t1, t2;
+drop table t1;
+drop table t2;
+
+-- test error code hint
+
+select 3 as a, 4 as a; -- {ErrorCode 1002 }
 
 set enable_planner_v2 = 0;

@@ -40,7 +40,7 @@ async fn test_user_manager() -> Result<()> {
 
     let auth_info = AuthInfo::Password {
         hash_value: Vec::from(pwd),
-        hash_method: PasswordHashMethod::PlainText,
+        hash_method: PasswordHashMethod::Sha256,
     };
 
     // add user hostname.
@@ -183,7 +183,7 @@ async fn test_user_manager() -> Result<()> {
         let pwd = "test";
         let auth_info = AuthInfo::Password {
             hash_value: Vec::from(pwd),
-            hash_method: PasswordHashMethod::PlainText,
+            hash_method: PasswordHashMethod::Sha256,
         };
         let user_info: UserInfo = User::new(user, hostname, auth_info.clone()).into();
         user_mgr.add_user(tenant, user_info.clone(), false).await?;
@@ -302,7 +302,7 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .await;
         assert!(res.is_err());
         assert_eq!(
-            "Code: 2201, displayText = only accept root from localhost 'default'@'otherhost'.",
+            "Code: 2201, displayText = only accept root from localhost, current: 'default'@'otherhost'.",
             res.err().unwrap().to_string()
         );
     }
@@ -356,7 +356,7 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .await;
         assert!(res.is_err());
         assert_eq!(
-            "Code: 2201, displayText = only accept root from localhost 'root'@'otherhost'.",
+            "Code: 2201, displayText = only accept root from localhost, current: 'root'@'otherhost'.",
             res.err().unwrap().to_string()
         );
     }

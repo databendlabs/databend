@@ -22,12 +22,15 @@ use common_ast::ast::Query;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::error::DisplayError;
+use common_datavalues::type_coercion::merge_types;
+use common_datavalues::ArrayType;
 use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::IntervalKind;
 use common_datavalues::IntervalType;
+use common_datavalues::NullType;
 use common_datavalues::StringType;
 use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
@@ -860,7 +863,8 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<(DataValue, DataTypeImpl)> {
         // TODO(leiysky): try cast value to required type
         let value = match literal {
-            Literal::Number(string) => DataValue::try_from_literal(string, None)?,
+            Literal::Integer(uint) => DataValue::UInt64(*uint),
+            Literal::Float(float) => DataValue::Float64(*float),
             Literal::String(string) => DataValue::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => DataValue::Boolean(*boolean),
             Literal::Null => DataValue::Null,
@@ -874,41 +878,37 @@ impl<'a> TypeChecker<'a> {
         Ok((value, data_type))
     }
 
-    async fn resolve_array(&self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
-        let mut values = Vec::with_capacity(exprs.len());
-        let mut first_data_type = None;
+    // TODO(leiysky): use an array builder function instead, since we should allow declaring
+    // an array with variable as element.
+    async fn resolve_array(&mut self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
+        let mut elems = Vec::with_capacity(exprs.len());
+        let mut types = Vec::with_capacity(exprs.len());
         for expr in exprs.iter() {
-            match expr {
-                Expr::Literal { lit, .. } => {
-                    let (value, data_type) = self.resolve_literal(lit, None)?;
-                    if let Some(dy) = first_data_type.as_ref() {
-                        if !data_type.eq(dy) {
-                            return Err(ErrorCode::SemanticError(expr.span().display_error(
-                                "Values in array should have same type".to_string(),
-                            )));
-                        }
-                    } else {
-                        first_data_type = Some(data_type);
-                    }
-                    values.push(value);
-                }
-                _ => {
-                    return Err(ErrorCode::SemanticError(
-                        expr.span()
-                            .display_error("Array only supports literal exprs".to_string()),
-                    ));
-                }
+            let (arg, data_type) = self.resolve(expr, None).await?;
+            types.push(data_type);
+            if let Scalar::ConstantExpr(elem) = arg {
+                elems.push(elem.value);
+            } else {
+                return Err(ErrorCode::SemanticError(
+                    expr.span()
+                        .display_error("Array element must be literal".to_string()),
+                ));
             }
         }
-        let array = DataValue::Array(values);
-        let data_type = array.data_type();
+        let element_type = if elems.is_empty() {
+            NullType::new_impl()
+        } else {
+            types
+                .iter()
+                .fold(Ok(types[0].clone()), |acc, v| merge_types(&acc?, v))?
+        };
         Ok((
             ConstantExpr {
-                value: array,
-                data_type: data_type.clone(),
+                value: DataValue::Array(elems),
+                data_type: ArrayType::new_impl(element_type.clone()),
             }
             .into(),
-            data_type,
+            ArrayType::new_impl(element_type),
         ))
     }
 

@@ -40,13 +40,13 @@ select if(number<1, true, null) from numbers(3) order by number;
 
 ----  mysql
 1
-None
-None
+NULL
+NULL
 
 ----  http
 true
-None
-None
+NULL
+NULL
 
 statement query T 
 select typeof(if(number % 3 = 0, to_uint32(1), to_int64(3))) from numbers(10) limit 1;
@@ -65,10 +65,10 @@ SELECT if (number % 3 = 1, null, number) as a FROM numbers(7) order by number;
 
 ----  
 0
-None
+NULL
 2
 3
-None
+NULL
 5
 6
 

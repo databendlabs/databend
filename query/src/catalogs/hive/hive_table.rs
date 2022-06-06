@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -62,7 +62,7 @@ impl Table for HiveTable {
         todo!()
     }
 
-    fn get_table_info(&self) -> &common_meta_types::TableInfo {
+    fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
