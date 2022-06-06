@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sessions::QueryContext;
@@ -74,22 +75,32 @@ impl<'a> DeletionCollector<'a> {
         for (seg_idx, replacements) in self.mutations {
             let seg_loc = &snapshot.segments[seg_idx];
             let segment = seg_reader.read(&seg_loc.0, None, seg_loc.1).await?;
-            // TODO handle empty segment
+            let block_positions = segment.blocks.iter().enumerate().fold(
+                HashMap::with_capacity(segment.blocks.len()),
+                |mut acc, (pos, block)| {
+                    acc.insert(&block.location, pos);
+                    acc
+                },
+            );
             let mut new_segment = SegmentInfo::new(segment.blocks.clone(), segment.summary.clone());
+
             for replacement in replacements {
-                // TODO remove this unwrap
-                let position = new_segment
-                    .blocks
-                    .iter()
-                    .position(|v| v.location == replacement.original_block_loc)
-                    .unwrap();
+                let position = block_positions
+                    .get(&replacement.original_block_loc)
+                    .ok_or_else(|| {
+                        ErrorCode::LogicalError(format!(
+                            "block location not found {:?}",
+                            &replacement.original_block_loc
+                        ))
+                    })?;
                 if let Some(block_meta) = replacement.new_block_meta {
-                    new_segment.blocks[position] = block_meta;
+                    new_segment.blocks[*position] = block_meta;
                 } else {
-                    new_segment.blocks.remove(position);
+                    new_segment.blocks.remove(*position);
                 }
             }
 
+            // TODO test this (in UT)
             if new_segment.blocks.is_empty() {
                 // remove the segment if no blocks there
                 new_snapshot.segments.remove(seg_idx);
@@ -134,6 +145,7 @@ impl<'a> DeletionCollector<'a> {
         operator.object(&snapshot_loc).write(bytes).await?;
         Ok((new_snapshot, snapshot_loc))
     }
+
     /// Replaces
     ///  the block located at `block_location` of segment indexed by `seg_idx`
     /// With a new block `r`
