@@ -22,7 +22,7 @@ use common_planners::Expression;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::operations::del::mutations_collector::Deletion;
+use crate::storages::fuse::operations::mutation::mutations_collector::Deletion;
 use crate::storages::fuse::FuseTable;
 
 //  the "tranform filter" of delete plan

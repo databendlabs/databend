@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod block_filter;
-mod delete;
-mod mutations_collector;
+pub mod block_filter;
+pub mod mutations_collector;
+
+pub use block_filter::delete_from_block;

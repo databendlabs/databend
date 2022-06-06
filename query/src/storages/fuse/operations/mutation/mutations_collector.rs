@@ -77,7 +77,6 @@ impl<'a> DeletionCollector<'a> {
             .get_storage_cache_manager()
             .get_table_segment_cache();
 
-        //let new_segment_summaries = HashMap::new();
         for (seg_idx, replacements) in self.mutations {
             let seg_loc = &snapshot.segments[seg_idx];
             let segment = seg_reader.read(&seg_loc.0, None, seg_loc.1).await?;

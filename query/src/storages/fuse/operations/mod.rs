@@ -14,9 +14,10 @@
 
 mod append;
 mod commit;
-mod del;
+mod delete;
 mod fuse_sink;
 mod gc;
+mod mutation;
 mod navigate;
 mod operation_log;
 mod read;
