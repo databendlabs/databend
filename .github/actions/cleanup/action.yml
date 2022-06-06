@@ -1,18 +1,8 @@
 name: 'Cleanup'
-description: 'This action is a cleanup action which free up the space for other actions. Inspired by easimon/maximize-build-space.'
+description: 'This action is a cleanup action which free up the space for other actions.'
 runs:
   using: "composite"
   steps:
-    - shell: bash
-      run: |
-        set -euo pipefail
-
-        echo "Removing dotnet... "
-        sudo rm -rf /usr/share/dotnet
-        echo "Removing android... "
-        sudo rm -rf /usr/local/lib/android
-        echo "Removing ghc... "
-        sudo rm -rf /opt/ghc
-
-        echo "Available storage:"
-        df -h
+    - uses: curoky/cleanup-disk-action@v2.0
+      with:
+        retain: 'python,node'

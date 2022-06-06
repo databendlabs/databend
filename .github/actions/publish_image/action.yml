@@ -44,7 +44,7 @@ runs:
       uses: docker/build-push-action@v3
       with:
         push: true
-        tags: datafuselabs/databend:master # assume latest tag is the latest release tag
+        tags: datafuselabs/databend:master  # assume latest tag is the latest release tag
         platforms: ${{ inputs.platform }}
         context: .
         file: ./docker/Dockerfile
