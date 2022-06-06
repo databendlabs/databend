@@ -1,0 +1,1217 @@
+statement ok
+set enable_planner_v2 = 1;
+
+statement query T 
+select '====SELECT_FROM_NUMBERS====';
+
+----  
+====SELECT_FROM_NUMBERS====
+
+statement query I 
+select * from numbers(10);
+
+----  
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement query T 
+select '====ALIAS====';
+
+----  
+====ALIAS====
+
+statement query II 
+select number as a, number + 1 as b from numbers(1);
+
+----  
+0 1
+
+statement query II 
+select number as a, number + 1 as b from numbers(1) group by a, number order by number;
+
+----  
+0 1
+
+statement query T 
+select '====SCALAR_EXPRESSION====';
+
+----  
+====SCALAR_EXPRESSION====
+
+statement query I 
+select extract(day from to_date('2022-05-13'));
+
+----  
+13
+
+statement query T 
+select '====COMPARISON====';
+
+----  
+====COMPARISON====
+
+statement query I 
+select * from numbers(10) where number between 1 and 9 and number > 2 and number < 8 and number is not null and number = 5 and number >= 5 and number <= 5;
+
+----  
+5
+
+statement query T 
+select '====CAST====';
+
+----  
+====CAST====
+
+statement query I 
+select * from numbers(10) where cast(number as string) = '5';
+
+----  
+5
+
+statement query I 
+select * from numbers(10) where try_cast(number as string) = '5';
+
+----  
+5
+
+statement query T 
+select '====BINARY_OPERATOR====';
+
+----  
+====BINARY_OPERATOR====
+
+statement query F 
+select (number + 1 - 2) * 3 / 4 from numbers(1);
+
+----  
+-0.75
+
+statement query T 
+select '====FUNCTIONS====';
+
+----  
+====FUNCTIONS====
+
+statement query F 
+select sin(cos(number)) from numbers(1);
+
+----  
+0.8414709848078965
+
+statement query T 
+select '====IN_LIST====';
+
+----  
+====IN_LIST====
+
+statement query I 
+select * from numbers(5) where number in (1, 3);
+
+----  
+1
+3
+
+statement query T 
+select '====MAP_ACCESS====';
+
+----  
+====MAP_ACCESS====
+
+statement query T 
+select parse_json('{"k1": [0, 1, 2]}'):k1[2];
+
+----  
+2
+
+statement query T 
+select parse_json('{"k1": [0, 1, 2]}')['k1'][2];
+
+----  
+2
+
+statement query T 
+select parse_json('{"k1": {"k2": [0, 1, 2]}}'):k1.k2[2];
+
+----  
+2
+
+statement query T 
+select '====AGGREGATOR====';
+
+----  
+====AGGREGATOR====
+
+statement ok
+create table t(a int, b int);
+
+statement ok
+insert into t values(1, 2), (2, 3), (3, 4);
+
+statement query I 
+select sum(a) + 1 from t group by a;
+
+----  
+2
+4
+3
+
+statement query I 
+select sum(a) from t group by a;
+
+----  
+1
+3
+2
+
+statement query I 
+select sum(a) from t;
+
+----  
+6
+
+statement query I 
+select count(a) from t group by a;
+
+----  
+1
+1
+1
+
+statement query I 
+select count(a) from t;
+
+----  
+3
+
+statement query I 
+select count() from t;
+
+----  
+3
+
+statement query I 
+select count() from t group by a;
+
+----  
+1
+1
+1
+
+statement query I 
+select count(1) from t;
+
+----  
+3
+
+statement query I 
+select count(1) from t group by a;
+
+----  
+1
+1
+1
+
+statement query I 
+select count(*) from t;
+
+----  
+3
+
+statement query I 
+select sum(a) from t group by a having sum(a) > 1;
+
+----  
+3
+2
+
+statement query I 
+select sum(a+1) from t group by a+1 having sum(a+1) = 2;
+
+----  
+2
+
+statement query I 
+select sum(a+1) from t group by a+1, b having sum(a+1) > 3;
+
+----  
+4
+
+statement ok
+drop table t;
+
+statement query II 
+select 1, sum(number) from numbers_mt(1000000);
+
+----  
+1 499999500000
+
+statement query B label(mysql,http)
+select count(*) = count(1) from numbers(1000);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query I 
+select count(1) from numbers(1000);
+
+----  
+1000
+
+statement query I 
+select sum(3) from numbers(1000);
+
+----  
+3000
+
+statement query I 
+select count(null) from numbers(1000);
+
+----  
+0
+
+statement query I 
+SELECT max(number) FROM numbers_mt (10) where number > 99999999998;
+
+----  
+0
+
+statement query I 
+SELECT max(number) FROM numbers_mt (10) where number > 2;
+
+----  
+9
+
+statement query II 
+SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 group by number%3, number%2 order by c1,c2;
+
+----  
+0 0
+0 1
+1 0
+1 1
+2 0
+2 1
+
+statement query I 
+SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 order by c1;
+
+----  
+0
+1
+2
+
+statement ok
+CREATE TABLE t(a UInt64 null, b UInt32 null, c UInt32) Engine = Fuse;
+
+statement ok
+INSERT INTO t(a,b, c)  SELECT if (number % 3 = 1, null, number) as a, number + 3 as b, number + 4 as c FROM numbers(10);
+
+statement query II 
+SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1,ct;
+
+----  
+0 4
+2 3
+NULL 3
+
+statement query III 
+SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1, a2;
+
+----  
+0 0 2
+0 2 2
+1 0 2
+1 2 1
+NULL NULL 3
+
+statement query III 
+SELECT a%2 as a1, to_uint64(c % 3) as c1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
+
+----  
+0 0 2
+0 1 2
+1 0 1
+1 1 2
+NULL 2 3
+
+statement query III 
+SELECT to_uint64(c % 3) as c1, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
+
+----  
+0 0 2
+1 0 2
+0 1 1
+1 1 2
+2 NULL 3
+
+statement query I 
+select number%2 as b from numbers(5) group by number % 2 having count(*) = 3 and sum(number) > 5;
+
+----  
+0
+
+statement query I 
+select count(*) from numbers(5) group by number % 2 having number % 2 + 1 = 2;
+
+----  
+2
+
+statement query II 
+select number, sum(number) from numbers(10) group by 1, number having sum(number) = 5;
+
+----  
+5 5
+
+statement query I 
+SELECT arg_min(user_name, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name);
+
+----  
+1
+
+statement query I 
+select sum_distinct(number) from ( select number % 100 as number from numbers(100000));
+
+----  
+4950
+
+statement query I 
+select count_distinct(number) from ( select number % 100 as number from numbers(100000));
+
+----  
+100
+
+statement query B label(mysql,http)
+select sum_distinct(number) /  count_distinct(number) = avg_distinct(number) from ( select number % 100 as number from numbers(100000));
+
+----  mysql
+1
+
+----  http
+true
+
+statement query I 
+select sum_if(number, number >= 100000 - 1) from numbers(100000);
+
+----  
+99999
+
+statement query B label(mysql,http)
+select sum_if(number, number > 100) /  count_if(number,  number > 100) = avg_if(number,  number > 100) from numbers(100000);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query I 
+select count_if(number, number>9) from numbers(10);
+
+----  
+0
+
+statement query I 
+select sum(number > 314) from numbers(1000);
+
+----  
+685
+
+statement query F 
+select avg(number > 314) from numbers(1000);
+
+----  
+0.685
+
+statement ok
+drop table t;
+
+statement query T 
+select '====Having alias====';
+
+----  
+====Having alias====
+
+statement query I 
+select number as a from numbers(1) group by a having a = 0;
+
+----  
+0
+
+statement query I 
+select number+1 as a from numbers(1) group by a having a = 1;
+
+----  
+1
+
+statement query T 
+select '====INNER_JOIN====';
+
+----  
+====INNER_JOIN====
+
+statement ok
+create table t(a int);
+
+statement ok
+insert into t values(1),(2),(3);
+
+statement ok
+create table t1(b float);
+
+statement ok
+insert into t1 values(1.0),(2.0),(3.0);
+
+statement ok
+create table t2(c smallint unsigned null);
+
+statement ok
+insert into t2 values(1),(2),(null);
+
+statement ok
+select * from t inner join t1 on t.a = t1.b;
+
+statement ok
+select * from t inner join t2 on t.a = t2.c;
+
+statement ok
+select * from t inner join t2 on t.a = t2.c + 1;
+
+statement ok
+select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c;
+
+statement ok
+select * from t1 inner join t on t.a = t1.b;
+
+statement ok
+select * from t2 inner join t on t.a = t2.c;
+
+statement ok
+select * from t2 inner join t on t.a = t2.c + 1;
+
+statement ok
+select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c;
+
+statement ok
+select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
+
+statement ok
+select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5;
+
+statement query T 
+select '====ORDER_BY====';
+
+----  
+====ORDER_BY====
+
+statement query II 
+SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc;
+
+----  
+2 0
+2 0
+2 1
+1 0
+1 1
+1 1
+0 0
+0 0
+0 1
+0 1
+
+statement query IT 
+SELECT number, null from numbers(3) order by number desc;
+
+----  
+2 NULL
+1 NULL
+0 NULL
+
+statement query II 
+SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number desc;
+
+----  
+0 1
+0 0
+0 1
+0 0
+1 1
+1 0
+1 1
+2 0
+2 1
+2 0
+
+statement query I 
+SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s;
+
+----  
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement ok
+create table t3(a int, b int);
+
+statement ok
+insert into t3 values(1,2),(2,3);
+
+statement ok
+drop table t;
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
+drop table t3;
+
+statement query T 
+select '====SELECT_WITHOUT_FROM====';
+
+----  
+====SELECT_WITHOUT_FROM====
+
+statement query I 
+select 1 + 1;
+
+----  
+2
+
+statement query I 
+select to_int(8);
+
+----  
+8
+
+statement query T 
+select 'new_planner';
+
+----  
+new_planner
+
+statement query T 
+select '=== Test limit ===';
+
+----  
+=== Test limit ===
+
+statement query I 
+select number from numbers(100) order by number asc limit 10;
+
+----  
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement query T 
+select '==================';
+
+----  
+==================
+
+statement query I 
+select number*2 as number from numbers(100) order by number limit 10;
+
+----  
+0
+2
+4
+6
+8
+10
+12
+14
+16
+18
+
+statement query T 
+select '=== Test limit n, m ===';
+
+----  
+=== Test limit n, m ===
+
+statement query I 
+select number from numbers(100) order by number asc limit 9, 11;
+
+----  
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query T 
+select '==================';
+
+----  
+==================
+
+statement query I 
+select number-2 as number from numbers(100) order by number asc limit 10, 10;
+
+----  
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+
+statement query T 
+select '=== Test limit with offset ===';
+
+----  
+=== Test limit with offset ===
+
+statement query I 
+select number from numbers(100) order by number asc limit 10 offset 10;
+
+----  
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query T 
+select '==============================';
+
+----  
+==============================
+
+statement query F 
+select number/2 as number from numbers(100) order by number asc limit 10 offset 10;
+
+----  
+5.0
+5.5
+6.0
+6.5
+7.0
+7.5
+8.0
+8.5
+9.0
+9.5
+
+statement query T 
+select '=== Test offset ===';
+
+----  
+=== Test offset ===
+
+statement query I 
+select number from numbers(10) order by number asc offset 5;
+
+----  
+5
+6
+7
+8
+9
+
+statement query T 
+select '===================';
+
+----  
+===================
+
+statement query I 
+select number+number as number from numbers(10) order by number asc offset 5;
+
+----  
+10
+12
+14
+16
+18
+
+statement query T 
+select '====Memory Table====';
+
+----  
+====Memory Table====
+
+statement ok
+drop table if exists temp;
+
+statement ok
+create table temp (a int) engine = Memory;
+
+statement ok
+insert into temp values (1);
+
+statement query I 
+select a from temp;
+
+----  
+1
+
+statement ok
+drop table temp;
+
+statement query T 
+select '=== Test Subquery In From ===';
+
+----  
+=== Test Subquery In From ===
+
+statement ok
+create table t(a int, b int);
+
+statement ok
+insert into t values(1, 2),(2, 3);
+
+statement query I 
+select t1.a from (select * from t) as t1;
+
+----  
+1
+2
+
+statement query III 
+SELECT a,b,count() from (SELECT cast((number%4) AS bigint) as a, cast((number%20) AS bigint) as b from numbers(100)) group by a,b order by a,b limit 3 ;
+
+----  
+0 0 5
+0 4 5
+0 8 5
+
+statement ok
+drop table t;
+
+statement query T 
+select '====Context Function====';
+
+----  
+====Context Function====
+
+statement ok
+use default;
+
+statement query T 
+select database();
+
+----  
+default
+
+statement query T 
+select '==== Distinct =====';
+
+----  
+==== Distinct =====
+
+statement query I 
+SELECT DISTINCT * FROM numbers(3) ORDER BY  number;
+
+----  
+0
+1
+2
+
+statement query I 
+SELECT DISTINCT 1 FROM numbers(3);
+
+----  
+1
+
+statement query I 
+SELECT DISTINCT (number %3) as c FROM numbers(1000) ORDER BY c;
+
+----  
+0
+1
+2
+
+statement query I 
+SELECT DISTINCT count(number %3) as c FROM numbers(10)  group by number % 3 ORDER BY c;
+
+----  
+3
+4
+
+statement query T 
+select '===Inner Join with Using===';
+
+----  
+===Inner Join with Using===
+
+statement ok
+drop table if exists t1;
+
+statement ok
+create table t1(a int, b int);
+
+statement ok
+insert into t1 values(7, 8), (3, 4), (5, 6);
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t2(a int, d int);
+
+statement ok
+insert into t2 values(1, 2), (3, 4), (5, 6);
+
+statement ok
+select * from t1 join t2 using(a);
+
+statement ok
+select t1.a from t1 join t2 using(a);
+
+statement ok
+select t2.d from t1 join t2 using(a);
+
+statement ok
+select * from t1 natural join t2;
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement query T 
+select '===Inner Join with duplicate keys===';
+
+----  
+===Inner Join with duplicate keys===
+
+statement ok
+create table t1(a int, b int);
+
+statement ok
+insert into t1 values(1, 2), (1, 3), (2, 4);
+
+statement ok
+create table t2(c int, d int);
+
+statement ok
+insert into t2 values(1, 2), (2, 6);
+
+statement ok
+select * from t2 inner join t1 on t1.a = t2.c;
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement query T 
+select '===Trim Function===';
+
+----  
+===Trim Function===
+
+statement query T 
+select trim(leading ' ' from '      abc');
+
+----  
+abc
+
+statement query T 
+select trim(leading ' ' from '');
+
+----  
+	
+
+statement query T 
+select trim(leading 'ab' from 'abab');
+
+----  
+	
+
+statement query T 
+select trim(leading 'ab' from 'abc');
+
+----  
+c
+
+statement query T 
+select trim(trailing ' ' from 'abc    ');
+
+----  
+abc
+
+statement query T 
+select trim(trailing ' ' from '');
+
+----  
+	
+
+statement query T 
+select trim(trailing 'ab' from 'abab');
+
+----  
+	
+
+statement query T 
+select trim(trailing 'ab' from 'cab');
+
+----  
+c
+
+statement query T 
+select trim(both 'ab' from 'abab');
+
+----  
+	
+
+statement query T 
+select trim(both 'ab' from 'abcab');
+
+----  
+c
+
+statement query T 
+select trim(' abc ');
+
+----  
+abc
+
+statement query T 
+select '===Array Literal===';
+
+----  
+===Array Literal===
+
+statement query I label(mysql,http)
+select [1, 2, 3];
+
+----  mysql
+[1, 2, 3]
+
+----  http
+{'Array': [{'UInt64': 1}, {'UInt64': 2}, {'UInt64': 3}]}
+
+statement query T label(mysql,http)
+select [];
+
+----  mysql
+[]
+
+----  http
+{'Array': []}
+
+statement query T label(mysql,http)
+select [[1, 2, 3],[1, 2, 3]];
+
+----  mysql
+[[1, 2, 3], [1, 2, 3]]
+
+----  http
+{'Array': [{'Array': [{'UInt64': 1}, {'UInt64': 2}, {'UInt64': 3}]}, {'Array': [{'UInt64': 1}, {'UInt64': 2}, {'UInt64': 3}]}]}
+
+statement query T 
+select '====Correlated Subquery====';
+
+----  
+====Correlated Subquery====
+
+statement query I 
+select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
+
+----  
+0
+1
+
+statement query I 
+select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;
+
+----  
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement query T 
+select '===Explain===';
+
+----  
+===Explain===
+
+statement ok
+create table t1(a int, b int);
+
+statement ok
+create table t2(a int, b int);
+
+statement query T label(mysql,http)
+explain select t1.a from t1 where a > 0;
+
+----  mysql
+Project: [a]
+    EvalScalar: []
+        Filter: [a > 0]
+            PhysicalScan: default.default.t1
+
+
+----  http
+Projection: a:Int32
+  Filter: (a > 0)
+    ReadDataSource: scan schema: [a:Int32], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [(a > 0)]]
+
+statement query T 
+select '===Explain Pipeline===';
+
+----  
+===Explain Pipeline===
+
+statement ok
+explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement query T 
+select '===Position Function===';
+
+----  
+===Position Function===
+
+statement query I 
+SELECT POSITION('bar' IN 'foobarbar');
+
+----  
+4
+
+statement query I 
+SELECT POSITION('xbar' IN 'foobar');
+
+----  
+0
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t (a varchar);
+
+statement ok
+insert into t values ('foo');
+
+statement query I 
+select POSITION('o' IN t.a) from t;
+
+----  
+2
+
+statement ok
+drop table t;
+
+statement query T 
+select '====Tuple====';
+
+----  
+====Tuple====
+
+statement ok
+select ('field', number) from numbers(5);
+
+statement query T 
+select '====View====';
+
+----  
+====View====
+
+statement ok
+drop view if exists temp;
+
+statement ok
+create view temp as select number from numbers(1);
+
+statement query I 
+select number from temp;
+
+----  
+0
+
+statement ok
+drop view temp;
+
+statement query T 
+select '====Cross Join====';
+
+----  
+====Cross Join====
+
+statement ok
+create table t1(a int, b int);
+
+statement ok
+create table t2(c int, d int);
+
+statement ok
+insert into t1 values(1, 2), (2, 3), (3 ,4);
+
+statement ok
+insert into t2 values(2,2), (3, 5), (7 ,8);
+
+statement ok
+select * from t1, t2;
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement error 1002 
+select 3 as a, 4 as a; 
+
+statement ok
+set enable_planner_v2 = 0;
+

@@ -143,14 +143,23 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/test_stateless_cluster_macos
 
-  test_sqllogic_standalone:
+  test_sqllogic_standalone_macos:
+    runs-on: macos-11
+    needs: build_macos
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/test_sqllogic_standalone_macos
+
+  test_sqllogic_standalone_linux:
     runs-on: ubuntu-latest
     needs: build_linux
     steps:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - uses: ./.github/actions/test_sqllogic_standalone
+      - uses: ./.github/actions/test_sqllogic_standalone_linux
 
   test_stateful_standalone:
     runs-on: ubuntu-latest
