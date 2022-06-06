@@ -342,7 +342,8 @@ impl AsyncInsertQueue {
         let session = session_mgr.create_session(SessionType::HTTPQuery).await;
         let ctx = session.unwrap().create_query_context().await.unwrap();
 
-        ctx.apply_changed_settings(key.changed_settings.clone()).unwrap();
+        ctx.apply_changed_settings(key.changed_settings.clone())
+            .unwrap();
 
         let interpreter =
             InsertInterpreter::try_create(ctx.clone(), insert_plan.as_ref().clone(), true).unwrap();
