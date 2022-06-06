@@ -23,6 +23,7 @@ use super::SelectInterpreterV2;
 use super::ShowMetricsInterpreter;
 use super::ShowProcessListInterpreter;
 use super::ShowSettingsInterpreter;
+use crate::interpreters::CreateUserInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -67,6 +68,9 @@ impl InterpreterFactoryV2 {
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
             Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
+            Plan::CreateUser(create_user) => {
+                CreateUserInterpreter::try_create(ctx, *create_user.clone())
+            }
         }?;
         Ok(inner)
     }
