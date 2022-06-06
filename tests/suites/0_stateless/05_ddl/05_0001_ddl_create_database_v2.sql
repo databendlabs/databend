@@ -33,6 +33,4 @@ DROP SCHEMA system; -- {ErrorCode 1002}
 
 CREATE SCHEMA catalog_not_exist.t; -- {ErrorCode 1006}
 
-CREATE DATABASE db ENGINE = engine_not_exists; -- {ErrorCode 1005}
-
 set enable_planner_v2 = 0;
