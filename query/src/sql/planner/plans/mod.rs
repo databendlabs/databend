@@ -70,4 +70,5 @@ pub enum Plan {
 
     // DDL
     CreateTable(CreateTablePlan),
+    ShowStages,
 }

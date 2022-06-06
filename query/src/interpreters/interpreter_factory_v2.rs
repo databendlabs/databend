@@ -20,6 +20,7 @@ use super::CreateTableInterpreter;
 use super::ExplainInterpreterV2;
 use super::InterpreterPtr;
 use super::SelectInterpreterV2;
+use super::ShowStagesInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -34,7 +35,7 @@ impl InterpreterFactoryV2 {
     pub fn check(stmt: &DfStatement) -> bool {
         matches!(
             stmt,
-            DfStatement::Query(_) | DfStatement::Explain(_) | DfStatement::CreateTable(_)
+            DfStatement::Query(_) | DfStatement::Explain(_) | DfStatement::CreateTable(_) | DfStatement::ShowStages(_)
         )
     }
 
@@ -55,6 +56,9 @@ impl InterpreterFactoryV2 {
             }
             Plan::CreateTable(create_table) => {
                 CreateTableInterpreter::try_create(ctx, create_table.clone())
+            }
+            Plan::ShowStages => {
+                ShowStagesInterpreter::try_create(ctx)   
             }
         }?;
         Ok(inner)

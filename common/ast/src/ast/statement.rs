@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -200,8 +201,7 @@ pub enum Statement<'a> {
     },
     // stages
     ShowStages,
-    CreateStage {
-    },
+    CreateStage(CreateStageStmt),
     RemoveStage{
     },
     ListStage {
@@ -311,6 +311,23 @@ pub enum OptimizeTableAction {
     All,
     Purge,
     Compact,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateStageStmt {
+        pub if_not_exists: bool,
+        pub stage_name: String,
+    
+        pub location: String,
+        pub credential_options: BTreeMap<String, String>,
+        pub encryption_options: BTreeMap<String, String>,
+       
+        pub file_format_options: BTreeMap<String, String>,
+        pub on_error: String,
+        pub size_limit: Option<u64>,
+        pub validation_mode: String,
+        pub comments: String
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -819,8 +836,10 @@ impl<'a> Display for Statement<'a> {
             Statement::ListStage { stage_name } => {
                 write!(f, "LIST @{stage_name}")?;
             },
-            Statement::ShowStages => todo!(),
-            Statement::CreateStage {  } => todo!(),
+            Statement::ShowStages => {
+                write!(f, "SHOW STAGES")?;
+            },
+            Statement::CreateStage { .. } => todo!(),
             Statement::RemoveStage {  } => todo!(),
         }
         Ok(())

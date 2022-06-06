@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common_meta_types::AuthType;
 use common_meta_types::UserIdentity;
 use nom::branch::alt;
@@ -272,6 +274,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
     );
     let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
+    let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
     let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
     let show_metrics = value(Statement::ShowMetrics, rule! { SHOW ~ METRICS });
     let show_functions = map(
@@ -416,6 +419,49 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
     );
     
+    // stages
+    let create_stage = map(
+        rule! {
+            CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #ident
+            ~ ( URL ~ "=" ~ #literal_string
+                ~ (CREDENTIALS ~ #options)?
+                ~ (ENCRYPTION ~ #options)?
+              )?
+            ~ ( FILE_FORMAT ~ "=" #options)?
+            ~ ( ON_ERROR ~ "=" #ident)?
+            ~ ( SIZE_LIMIT ~ "=" #literal_u64)?
+            ~ ( VALIDATION_MODE ~ "=" #ident)?
+            ~ ( COMMENT ~ "=" #literal_string)?
+        },
+        |(
+            _,
+            _,
+            opt_if_not_exists,
+            stage,
+            url,
+            file_format,
+            on_error,
+            size_limit,
+            validation_mode,
+            comment,
+        )| {
+            let location = url.map(|v| v.2);
+            Statement::CreateStage(CreateStageStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                stage_name: stage.to_string(),
+                location: location.unwrap_or_default(),
+                credential_options: todo!(),
+                encryption_options: todo!(),
+                file_format_options: todo!(),
+                on_error: todo!(),
+                size_limit: todo!(),
+                validation_mode: todo!(),
+                comments: todo!(),
+            })
+        },
+    );
+    
     let list_stage = map(
         rule! {
             LIST ~ #at_string
@@ -452,6 +498,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
             | #show_settings : "`SHOW SETTINGS`"
+            | #show_stages : "`SHOW STAGES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
             | #show_metrics : "`SHOW METRICS`"
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
@@ -464,6 +511,10 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
+            | #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
+                [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
+                [ COPY_OPTIONS = ( copyOptions ) ]
+                [ COMMENT = '<string_literal>' ]`"
             | #list_stage: "`LIST @<stage_name>`"
         ),
     ))(i)
@@ -694,4 +745,22 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),
     ))(i)
+}
+
+
+// parse: (k = v ...)* into a map
+pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
+    map(
+        rule! {
+            "(" ~ (#ident ~ "=" ~ #literal_string)* ~ ")"
+        },
+        |(_, opts, _)| {
+            let mut map = BTreeMap::new();
+            
+            for (k, _, v) in opts {
+                map.insert(k.to_string(), v);
+            }
+            map
+        },
+    )(i)
 }

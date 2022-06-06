@@ -108,6 +108,10 @@ impl<'a> Binder {
                 let plan = self.bind_create_table(stmt).await?;
                 Ok(plan)
             }
+            
+            Statement::ShowStages => {
+                Ok(Plan::ShowStages)
+            }
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "UnImplemented stmt {stmt} in binder"

@@ -27,6 +27,7 @@ impl Plan {
                 Ok(format!("{:?}:\n{}", kind, result))
             }
             Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
+            Plan::ShowStages => Ok("ShowStages".to_string()),
         }
     }
 }

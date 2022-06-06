@@ -339,6 +339,8 @@ pub enum TokenKind {
     END,
     #[token("ENDPOINT_URL", ignore(ascii_case))]
     ENDPOINT_URL,
+    #[token("ENCRYPTION", ignore(ascii_case))]
+    ENCRYPTION,
     #[token("ENGINE", ignore(ascii_case))]
     ENGINE,
     #[token("EPOCH", ignore(ascii_case))]
@@ -443,6 +445,8 @@ pub enum TokenKind {
     LIST,
     #[token("MAP", ignore(ascii_case))]
     MAP,
+    #[token("MASTER_KEY", ignore(ascii_case))]
+    MASTER_KEY,
     #[token("MEMORY", ignore(ascii_case))]
     MEMORY,
     #[token("METRICS", ignore(ascii_case))]
@@ -483,6 +487,8 @@ pub enum TokenKind {
     ORDER,
     #[token("OUTER", ignore(ascii_case))]
     OUTER,
+    #[token("ON_ERROR", ignore(ascii_case))]
+    ON_ERROR,
     #[token("OVERWRITE", ignore(ascii_case))]
     OVERWRITE,
     #[token("PARQUET", ignore(ascii_case))]
@@ -525,6 +531,8 @@ pub enum TokenKind {
     SET,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
+    #[token("STAGES", ignore(ascii_case))]
+    STAGES,
     #[token("SHA256_PASSWORD", ignore(ascii_case))]
     SHA256_PASSWORD,
     #[token("SHOW", ignore(ascii_case))]
@@ -601,6 +609,8 @@ pub enum TokenKind {
     USING,
     #[token("VALUES", ignore(ascii_case))]
     VALUES,
+    #[token("VALIDATION_MODE", ignore(ascii_case))]
+    VALIDATION_MODE,
     #[token("VARCHAR", ignore(ascii_case))]
     VARCHAR,
     #[token("VARIANT", ignore(ascii_case))]
