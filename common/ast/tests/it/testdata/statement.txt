@@ -2663,3 +2663,26 @@ Query(
 )
 
 
+---------- Input ----------
+create user 'test-e'@'localhost' identified by 'password';
+---------- Output ---------
+CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        if_not_exists: false,
+        user: UserIdentity {
+            username: "test-e",
+            hostname: "localhost",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "password",
+            ),
+        },
+        role_options: [],
+    },
+)
+
+
