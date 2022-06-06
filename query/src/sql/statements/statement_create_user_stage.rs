@@ -54,7 +54,6 @@ impl AnalyzableStatement for DfCreateUserStage {
         let mut stage_info = match self.location.is_empty() {
             true => UserStageInfo {
                 stage_type: StageType::Internal,
-                stage_name: self.stage_name.clone(),
                 ..Default::default()
             },
             false => {
@@ -67,6 +66,7 @@ impl AnalyzableStatement for DfCreateUserStage {
                 stage_storage
             }
         };
+        stage_info.stage_name = self.stage_name.clone();
 
         if !self.file_format_options.is_empty() {
             stage_info.file_format_options =
