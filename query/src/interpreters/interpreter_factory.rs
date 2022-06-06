@@ -27,6 +27,7 @@ use super::ListInterpreter;
 use super::ShowStagesInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
+use crate::interpreters::AlterClusterKeyInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CallInterpreter;
@@ -177,6 +178,9 @@ impl InterpreterFactory {
             PlanNode::DescribeUserStage(v) => {
                 DescribeUserStageInterpreter::try_create(ctx_clone, v)
             }
+
+            // alter.
+            PlanNode::AlterClusterKey(v) => AlterClusterKeyInterpreter::try_create(ctx_clone, v),
 
             // others
             PlanNode::List(v) => ListInterpreter::try_create(ctx_clone, v),

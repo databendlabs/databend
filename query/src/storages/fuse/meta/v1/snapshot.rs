@@ -20,6 +20,7 @@ use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::storages::fuse::meta::common::ClusterKey;
 use crate::storages::fuse::meta::common::FormatVersion;
 use crate::storages::fuse::meta::common::Location;
 use crate::storages::fuse::meta::common::SnapshotId;
@@ -51,6 +52,9 @@ pub struct TableSnapshot {
     /// We rely on background merge tasks to keep merging segments, so that
     /// this the size of this vector could be kept reasonable
     pub segments: Vec<Location>,
+
+    // The metadata of the cluster keys.
+    pub cluster_key_meta: Option<ClusterKey>,
 }
 
 impl TableSnapshot {
@@ -61,6 +65,7 @@ impl TableSnapshot {
         schema: DataSchema,
         summary: Statistics,
         segments: Vec<Location>,
+        cluster_key_meta: Option<ClusterKey>,
     ) -> Self {
         // timestamp of the snapshot should always larger than the previous one's
         let now = Utc::now();
@@ -80,6 +85,7 @@ impl TableSnapshot {
             schema,
             summary,
             segments,
+            cluster_key_meta,
         }
     }
 
@@ -100,6 +106,7 @@ impl From<v0::TableSnapshot> for TableSnapshot {
             schema: s.schema,
             summary: s.summary,
             segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
+            cluster_key_meta: None,
         }
     }
 }

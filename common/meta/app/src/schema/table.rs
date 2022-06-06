@@ -174,7 +174,11 @@ pub struct TableMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
-    pub cluster_keys: Option<String>,
+    pub cluster_key: Option<String>,
+    // The vector of cluster keys.
+    pub cluster_keys: Vec<String>,
+    // The default cluster keys id.
+    pub default_cluster_key_id: Option<u32>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
@@ -237,13 +241,28 @@ impl Default for TableMeta {
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),
-            cluster_keys: None,
+            cluster_key: None,
+            cluster_keys: vec![],
+            default_cluster_key_id: None,
             created_on: Default::default(),
             updated_on: Default::default(),
             comment: "".to_string(),
             drop_on: None,
             statistics: Default::default(),
         }
+    }
+}
+
+impl TableMeta {
+    pub fn push_cluster_key(mut self, cluster_key: String) -> Self {
+        self.cluster_keys.push(cluster_key.clone());
+        self.cluster_key = Some(cluster_key);
+        self.default_cluster_key_id = Some(self.cluster_keys.len() as u32 - 1);
+        self
+    }
+
+    pub fn cluster_key(&self) -> Option<(u32, String)> {
+        self.default_cluster_key_id.zip(self.cluster_key.clone())
     }
 }
 

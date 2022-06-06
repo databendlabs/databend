@@ -47,7 +47,7 @@ where
 pub struct StorageDescription {
     pub engine_name: String,
     pub comment: String,
-    pub support_order_key: bool,
+    pub support_cluster_key: bool,
 }
 
 pub trait StorageDescriptor: Send + Sync {

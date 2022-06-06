@@ -18,13 +18,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::storages::index::ClusterStatistics;
 use crate::storages::index::ColumnStatistics;
 
 pub type ColumnId = u32;
 pub type FormatVersion = u64;
 pub type SnapshotId = Uuid;
 pub type Location = (String, FormatVersion);
+pub type ClusterKey = (u32, String);
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Statistics {
@@ -35,7 +35,6 @@ pub struct Statistics {
     pub compressed_byte_size: u64,
 
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
-    pub cluster_stats: Option<ClusterStatistics>,
 }
 
 /// Thing has a u64 version nubmer

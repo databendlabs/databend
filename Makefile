@@ -7,14 +7,6 @@ NUM_CPUS ?= 2
 TENANT_ID ?= "tenant"
 CLUSTER_ID ?= "test"
 
-# yamllint vars
-YAML_FILES ?= $(shell find . -path ./target -prune -type f -name '*.yaml' -or -name '*.yml')
-YAML_DOCKER_ARGS ?= run --rm --user "$$(id -u)" -v "$${PWD}:/component" --workdir /component
-YAMLLINT_ARGS ?= --no-warnings
-YAMLLINT_CONFIG ?= .yamllint.yml
-YAMLLINT_IMAGE ?= docker.io/cytopia/yamllint:latest
-YAMLLINT_DOCKER ?= docker $(YAML_DOCKER_ARGS) $(YAMLLINT_IMAGE)
-
 CARGO_TARGET_DIR ?= $(CURDIR)/target
 
 # Setup dev toolchain
@@ -34,8 +26,11 @@ lint:
 	# Bash file formatter(make setup to install)
 	shfmt -l -w scripts/*
 
-lint-yaml: $(YAML_FILES)
-	$(YAMLLINT_DOCKER) -f parsable -c $(YAMLLINT_CONFIG) $(YAMLLINT_ARGS) -- $?
+lint-yaml:
+	yamllint -f auto .
+
+check-license:
+	license-eye -v info -c .licenserc.yaml header check
 
 miri:
 	cargo miri setup

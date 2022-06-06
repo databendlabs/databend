@@ -35,6 +35,7 @@ use uuid::Uuid;
 use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
+use crate::storages::fuse::meta::ClusterKey;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
@@ -168,6 +169,7 @@ impl FuseTable {
                 schema,
                 summary,
                 segments,
+                self.cluster_key_meta.clone(),
             )
         } else {
             Self::merge_table_operations(
@@ -176,6 +178,7 @@ impl FuseTable {
                 prev_version,
                 segments,
                 summary,
+                self.cluster_key_meta.clone(),
             )?
         };
 
@@ -221,6 +224,7 @@ impl FuseTable {
         prev_version: u64,
         mut new_segments: Vec<Location>,
         statistics: Statistics,
+        cluster_key_meta: Option<ClusterKey>,
     ) -> Result<TableSnapshot> {
         // 1. merge stats with previous snapshot, if any
         let stats = if let Some(snapshot) = &previous {
@@ -245,6 +249,7 @@ impl FuseTable {
             schema.clone(),
             stats,
             new_segments,
+            cluster_key_meta,
         );
         Ok(new_snapshot)
     }
@@ -303,16 +308,10 @@ impl FuseTable {
                 acc.block_count += stats.block_count;
                 acc.uncompressed_byte_size += stats.uncompressed_byte_size;
                 acc.compressed_byte_size += stats.compressed_byte_size;
-                (acc.col_stats, acc.cluster_stats) = if acc.col_stats.is_empty() {
-                    (stats.col_stats.clone(), stats.cluster_stats.clone())
+                acc.col_stats = if acc.col_stats.is_empty() {
+                    stats.col_stats.clone()
                 } else {
-                    (
-                        statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats])?,
-                        statistics::reduce_cluster_stats(&[
-                            &acc.cluster_stats,
-                            &stats.cluster_stats,
-                        ]),
-                    )
+                    statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats])?
                 };
                 seg_acc.push(loc.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))

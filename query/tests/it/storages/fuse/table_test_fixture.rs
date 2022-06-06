@@ -134,7 +134,9 @@ impl TestFixture {
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
                 .into(),
-                cluster_keys: Some("(id)".to_string()),
+                cluster_key: Some("(id)".to_string()),
+                cluster_keys: vec!["(id)".to_string()],
+                default_cluster_key_id: Some(0),
                 ..Default::default()
             },
             as_select: None,
