@@ -45,9 +45,14 @@ pub struct ColumnStatistics {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ClusterStatistics {
+    #[serde(default = "default_cluster_key_id")]
     pub cluster_key_id: u32,
     pub min: Vec<DataValue>,
     pub max: Vec<DataValue>,
+}
+
+fn default_cluster_key_id() -> u32 {
+    0
 }
 
 #[derive(Clone)]
