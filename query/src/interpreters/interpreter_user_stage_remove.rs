@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::storages::stage::StageSource;
 
 #[derive(Debug)]
 pub struct RemoveUserStageInterpreter {
@@ -55,9 +56,7 @@ impl Interpreter for RemoveUserStageInterpreter {
 
         if !plan.file_name.is_empty() {
             files.push(plan.file_name);
-        }
-
-        if !plan.pattern.is_empty() {
+        } else if !plan.pattern.is_empty() {
             files.append(
                 &mut list_files(
                     ctx.clone(),
@@ -69,10 +68,9 @@ impl Interpreter for RemoveUserStageInterpreter {
             );
         }
 
-        let op = ctx.get_storage_operator()?;
+        let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
         for name in files.into_iter() {
             let obj = format!("{}/{}", plan.path, name);
-            //todo error map
             let _ = op.object(&obj).delete().await;
         }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,16 +35,16 @@ impl AnalyzableStatement for DfRemoveStage {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(_ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let pattern = self.pattern.clone();
-        let path_vec: Vec<&str> = self.location.split('/').filter(|v| !v.is_empty()).collect();
-        //get file_name
+        let path_vec: Vec<&str> = self.location.split('/').collect();
+        //judge file or directory
         let mut file_name = "".to_string();
         if path_vec.len() > 1 {
             file_name = path_vec[path_vec.len() - 1].to_string();
         }
         //get path
-        let path = if file_name.is_empty() {
+        let path = if !file_name.is_empty() {
             let path_vec: Vec<&str> = self.location.splitn(2, &file_name).collect();
-            path_vec[1].to_string()
+            path_vec[0].to_string()
         } else {
             self.location.to_string()
         };

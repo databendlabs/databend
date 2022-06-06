@@ -86,7 +86,6 @@ fn remove_stage_test() -> Result<()> {
         DfStatement::RemoveStage(DfRemoveStage {
             location: "@stage1/file1.csv".to_string(),
             pattern: "".to_string(),
-            ..Default::default()
         }),
     )?;
 
@@ -95,7 +94,6 @@ fn remove_stage_test() -> Result<()> {
         DfStatement::RemoveStage(DfRemoveStage {
             location: "@stage1".to_string(),
             pattern: "file.*csv".to_string(),
-            ..Default::default()
         }),
     )?;
 
