@@ -159,6 +159,10 @@ spec:
               value: "0.0.0.0"
             - name: QUERY_CLICKHOUSE_HANDLER_PORT
               value: "9000"
+            - name: QUERY_CLICKHOUSE_HTTP_HANDLER_HOST
+              value: "0.0.0.0"
+            - name: QUERY_CLICKHOUSE_HTTP_HANDLER_PORT
+              value: "9000"
             - name: QUERY_FLIGHT_API_ADDRESS
               value: "$(POD_IP):9090"
           envFrom:
