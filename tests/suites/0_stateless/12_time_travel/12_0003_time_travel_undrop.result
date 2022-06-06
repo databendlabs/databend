@@ -1,0 +1,15 @@
+show tables should give empty list, if all the tables droppped
+after undrop, table should appear
+t
+after undrop, data should appear
+1
+2
+Tables of same name
+-- the latest t should be recovered, which has 1 row
+1
+-- the first t should be recovered, which has 2 row
+2
+-- undrop database
+t1
+1
+2

@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
@@ -29,9 +27,9 @@ pub struct PhysicalScan {
     pub columns: ColumnSet,
 }
 
-impl BasePlan for PhysicalScan {
-    fn plan_type(&self) -> PlanType {
-        PlanType::PhysicalScan
+impl Operator for PhysicalScan {
+    fn plan_type(&self) -> RelOp {
+        RelOp::PhysicalScan
     }
 
     fn is_physical(&self) -> bool {
@@ -48,10 +46,6 @@ impl BasePlan for PhysicalScan {
 
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
         None
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 

@@ -20,7 +20,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -42,6 +42,7 @@ use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
+use crate::storages::NavigationPoint;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -52,21 +53,28 @@ pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
-    pub(crate) order_keys: Vec<Expression>,
+    pub(crate) cluster_keys: Vec<Expression>,
+    pub(crate) read_only: bool,
 }
 
 impl FuseTable {
     pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+        let r = Self::do_create(table_info, false)?;
+        Ok(r)
+    }
+
+    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
-        let mut order_keys = Vec::new();
-        if let Some(order) = &table_info.meta.order_keys {
-            order_keys = PlanParser::parse_exprs(order)?;
+        let mut cluster_keys = Vec::new();
+        if let Some(order) = &table_info.meta.cluster_keys {
+            cluster_keys = PlanParser::parse_exprs(order)?;
         }
 
         Ok(Box::new(FuseTable {
             table_info,
-            order_keys,
+            cluster_keys,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
+            read_only,
         }))
     }
 
@@ -80,10 +88,6 @@ impl FuseTable {
 
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
-    }
-
-    pub fn cluster_keys(&self) -> Vec<Expression> {
-        self.order_keys.clone()
     }
 
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
@@ -116,7 +120,7 @@ impl FuseTable {
 
     pub fn snapshot_format_version(&self) -> u64 {
         match self.snapshot_loc() {
-            Some(loc) => TableMetaLocationGenerator::snaphost_version(loc.as_str()),
+            Some(loc) => TableMetaLocationGenerator::snapshot_version(loc.as_str()),
             None => {
                 // No snapshot location here, indicates that there are no data of this table yet
                 // in this case, we just returns the current snapshot version
@@ -143,6 +147,17 @@ impl FuseTable {
             ))
         })
     }
+
+    pub fn check_mutable(&self) -> Result<()> {
+        if self.read_only {
+            Err(ErrorCode::TableNotWritable(format!(
+                "Table {} is in read-only mode",
+                self.table_info.desc.as_str()
+            )))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -167,6 +182,10 @@ impl Table for FuseTable {
         true
     }
 
+    fn cluster_keys(&self) -> Vec<Expression> {
+        self.cluster_keys.clone()
+    }
+
     #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn read_partitions(
         &self,
@@ -182,7 +201,7 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        self.do_read(ctx, &plan.push_downs).await
+        self.do_read(ctx, &plan.push_downs)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
@@ -196,6 +215,7 @@ impl Table for FuseTable {
     }
 
     fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+        self.check_mutable()?;
         self.do_append2(ctx, pipeline)
     }
 
@@ -205,6 +225,7 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
+        self.check_mutable()?;
         let log_entry_stream = self.append_chunks(ctx, stream).await?;
         let data_block_stream =
             log_entry_stream.map(|append_log_entry_res| match append_log_entry_res {
@@ -221,6 +242,7 @@ impl Table for FuseTable {
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
+        self.check_mutable()?;
         // only append operation supported currently
         let append_log_entries = operations
             .iter()
@@ -235,11 +257,13 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
+        self.check_mutable()?;
         self.do_truncate(ctx, truncate_plan).await
     }
 
     async fn optimize(&self, ctx: Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {
-        self.do_optimize(ctx, keep_last_snapshot).await
+        self.check_mutable()?;
+        self.do_gc(&ctx, keep_last_snapshot).await
     }
 
     async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
@@ -250,5 +274,17 @@ impl Table for FuseTable {
             data_size_compressed: Some(s.compressed_data_bytes),
             index_length: None, // we do not have it yet
         }))
+    }
+
+    async fn navigate_to(
+        &self,
+        ctx: Arc<QueryContext>,
+        point: &NavigationPoint,
+    ) -> Result<Arc<dyn Table>> {
+        let NavigationPoint::SnapshotID(snapshot_id) = point;
+        let res = self
+            .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
+            .await?;
+        Ok(res)
     }
 }

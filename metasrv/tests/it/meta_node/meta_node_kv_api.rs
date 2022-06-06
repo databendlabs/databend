@@ -19,7 +19,7 @@ use async_trait::async_trait;
 use common_base::base::tokio;
 use common_meta_api::KVApiBuilder;
 use common_meta_api::KVApiTestSuite;
-use common_tracing::tracing::Instrument;
+use common_tracing::tracing;
 use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
 
@@ -69,15 +69,11 @@ impl KVApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_kv_api() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-
     let builder = MetaNodeUnitTestBuilder {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
 
-    async { KVApiTestSuite {}.test_all(builder).await }
-        .instrument(ut_span)
-        .await
+    KVApiTestSuite {}.test_all(builder).await
 }

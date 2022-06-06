@@ -25,7 +25,8 @@ use pretty_assertions::assert_eq;
 fn test_default_config() -> Result<()> {
     let actual = Config::default();
 
-    let tom_expect = r#"config_file = ""
+    let tom_expect = r#"cmd = ""
+config_file = ""
 
 [query]
 tenant_id = "admin"

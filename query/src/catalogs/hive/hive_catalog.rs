@@ -18,6 +18,29 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hive_meta_store::TThriftHiveMetastoreSyncClient;
 use common_hive_meta_store::ThriftHiveMetastoreSyncClient;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateDatabaseReply;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::RenameDatabaseReply;
+use common_meta_app::schema::RenameDatabaseReq;
+use common_meta_app::schema::RenameTableReply;
+use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
+use common_meta_app::schema::UndropTableReply;
+use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateTableMetaReply;
+use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableOptionReply;
+use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::*;
 use thrift::protocol::*;
 use thrift::transport::*;
@@ -91,6 +114,12 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot undrop database in HIVE catalog",
+        ))
+    }
+
     async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
         Err(ErrorCode::UnImplement(
             "Cannot rename database in HIVE catalog",
@@ -134,6 +163,16 @@ impl Catalog for HiveCatalog {
         todo!()
     }
 
+    async fn list_tables_history(
+        &self,
+        _tenant: &str,
+        _db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Err(ErrorCode::UnImplement(
+            "Cannot list table history in HIVE catalog",
+        ))
+    }
+
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "Cannot create table in HIVE catalog",
@@ -142,6 +181,12 @@ impl Catalog for HiveCatalog {
 
     async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
         Err(ErrorCode::UnImplement("Cannot drop table in HIVE catalog"))
+    }
+
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot undrop table in HIVE catalog",
+        ))
     }
 
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
@@ -178,6 +223,10 @@ impl Catalog for HiveCatalog {
         Err(ErrorCode::UnImplement(
             "Cannot update table meta in HIVE catalog",
         ))
+    }
+
+    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
+        unimplemented!()
     }
 
     ///

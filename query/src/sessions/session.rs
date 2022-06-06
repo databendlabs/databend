@@ -35,6 +35,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
+use crate::users::RoleCacheMgr;
 use crate::Config;
 
 #[derive(MallocSizeOf)]
@@ -102,7 +103,7 @@ impl Session {
     pub fn kill(self: &Arc<Self>) {
         let session_ctx = self.session_ctx.clone();
         session_ctx.set_abort(true);
-        if session_ctx.query_context_shared_is_none() {
+        if session_ctx.get_current_query_id().is_some() {
             if let Some(io_shutdown) = session_ctx.take_io_shutdown_tx() {
                 let (tx, rx) = oneshot::channel();
                 if io_shutdown.send(tx).is_ok() {
@@ -147,8 +148,8 @@ impl Session {
         Ok(shared)
     }
 
-    pub fn query_context_shared_is_none(&self) -> bool {
-        self.session_ctx.query_context_shared_is_none()
+    pub fn get_current_query_id(&self) -> Option<String> {
+        self.session_ctx.get_current_query_id()
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
@@ -263,5 +264,9 @@ impl Session {
 
     pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {
         self.status.clone()
+    }
+
+    pub fn get_role_cache_manager(self: &Arc<Self>) -> Arc<RoleCacheMgr> {
+        self.session_mgr.get_role_cache_manager()
     }
 }

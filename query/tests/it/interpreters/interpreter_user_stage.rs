@@ -14,6 +14,7 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_meta_types::TenantQuota;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::*;
 use futures::StreamExt;
@@ -52,11 +53,11 @@ async fn test_user_stage_interpreter() -> Result<()> {
 
         common_datablocks::assert_blocks_eq(
             vec![
-                "+------------+------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+",
-                "| name       | stage_type | stage_params                                                                                                                                                                                                       | copy_options                                  | file_format_options                                                                                                | comment |",
-                "+------------+------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+",
-                r#"| test_stage | External   | StageParams { storage: S3(StorageS3Config { endpoint_url: "https://s3.amazonaws.com", region: "", bucket: "load", root: "/files/", access_key_id: "******b3c", secret_access_key: "******y6z", master_key: "" }) } | CopyOptions { on_error: None, size_limit: 0 } | FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None } |         |"#,
-                "+------------+------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+",
+                "+------------+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+",
+                "| name       | stage_type | stage_params                                                                                                                                                                                                                                         | copy_options                                  | file_format_options                                                                                                | comment |",
+                "+------------+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+",
+                r#"| test_stage | External   | StageParams { storage: S3(StorageS3Config { endpoint_url: "https://s3.amazonaws.com", region: "", bucket: "load", root: "/files/", disable_credential_loader: false, access_key_id: "******b3c", secret_access_key: "******y6z", master_key: "" }) } | CopyOptions { on_error: None, size_limit: 0 } | FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None } |         |"#,
+                "+------------+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+",
             ],
             &blocks,
         );
@@ -66,6 +67,27 @@ async fn test_user_stage_interpreter() -> Result<()> {
     let user_mgr = ctx.get_user_manager();
     let stage = user_mgr.get_stage(&tenant, "test_stage").await;
     assert!(stage.is_ok());
+
+    // quota limit
+    {
+        let quota_api = user_mgr.get_tenant_quota_api_client(&tenant)?;
+        let quota = TenantQuota {
+            max_stages: 1,
+            ..Default::default()
+        };
+        quota_api.set_quota(&quota, None).await?;
+        let query =
+            "CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "CreateUserStageInterpreter");
+        let res = executor.execute(None).await;
+        assert!(res.is_err());
+        assert_eq!(
+            res.err().unwrap().to_string(),
+            "Code: 2903, displayText = Max stages quota exceeded 1."
+        )
+    }
 
     // drop
     {

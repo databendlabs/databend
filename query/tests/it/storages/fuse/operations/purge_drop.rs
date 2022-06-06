@@ -34,11 +34,27 @@ async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
     // let's Drop
     let qry = format!("drop table '{}'.'{}'", db, tbl);
     execute_command(ctx.clone(), qry.as_str()).await?;
-    // there should be no files left inside test root (dirs are kept, though)
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    // ingests some test data
+    append_sample_data(1, &fixture).await?;
+    // let's Drop
+    let qry = format!("drop table '{}'.'{}' all", db, tbl);
+    execute_command(ctx.clone(), qry.as_str()).await?;
+
     check_data_dir(
         &fixture,
-        "drop table: there should be no file left",
-        0,
+        "drop table: there should be 1 snapshot, 0 segment/block",
+        1,
         0,
         0,
     )

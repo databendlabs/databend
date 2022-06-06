@@ -46,7 +46,7 @@ impl ToCastFunction {
     pub fn register(factory: &mut FunctionFactory) {
         let type_factory = TypeFactory::instance();
 
-        for name in type_factory.register_names() {
+        for name in type_factory.conversion_names() {
             let to_name = format!("to_{}", name.to_lowercase());
             factory.register(&to_name, Self::cast_function_creator(name).unwrap());
         }

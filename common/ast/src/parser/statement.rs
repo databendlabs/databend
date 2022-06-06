@@ -102,12 +102,13 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let show_tables = map(
         rule! {
-            SHOW ~ FULL? ~ TABLES ~ ( FROM ~ ^#ident )? ~ #show_limit?
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( FROM ~ ^#ident )? ~ #show_limit?
         },
-        |(_, opt_full, _, opt_database, limit)| Statement::ShowTables {
+        |(_, opt_full, _, opt_history, opt_database, limit)| Statement::ShowTables {
             database: opt_database.map(|(_, database)| database),
             full: opt_full.is_some(),
             limit,
+            with_history: opt_history.is_some(),
         },
     );
     let show_create_table = map(
@@ -133,7 +134,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             CREATE ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #ident ~ "." )? ~ #ident
             ~ #create_table_source?
-            ~ #engine?
+            ~ ( #table_option )*
             ~ ( COMMENT ~ "=" ~ #literal_string )?
             ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( AS ~ ^#query )?
@@ -145,23 +146,23 @@ pub fn statement(i: Input) -> IResult<Statement> {
             opt_database,
             table,
             source,
-            opt_engine,
+            table_options,
             opt_comment,
             opt_cluster_by,
             opt_as_query,
         )| {
-            Statement::CreateTable {
+            Statement::CreateTable(CreateTableStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 database: opt_database.map(|(database, _)| database),
                 table,
                 source,
-                engine: opt_engine.unwrap_or(Engine::Null),
+                table_options,
                 comment: opt_comment.map(|(_, _, comment)| comment),
                 cluster_by: opt_cluster_by
                     .map(|(_, _, _, exprs, _)| exprs)
                     .unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
-            }
+            })
         },
     );
     let describe = map(
@@ -176,10 +177,20 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let drop_table = map(
         rule! {
-            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
+            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ( ALL )?
         },
-        |(_, _, opt_if_exists, opt_database, table)| Statement::DropTable {
+        |(_, _, opt_if_exists, opt_database, table, opt_all)| Statement::DropTable {
             if_exists: opt_if_exists.is_some(),
+            database: opt_database.map(|(database, _)| database),
+            table,
+            all: opt_all.is_some(),
+        },
+    );
+    let undrop_table = map(
+        rule! {
+            UNDROP ~ TABLE ~ ( #ident ~ "." )? ~ #ident
+        },
+        |(_, _, opt_database, table)| Statement::UnDropTable {
             database: opt_database.map(|(database, _)| database),
             table,
         },
@@ -418,9 +429,10 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
-            | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`"
+            | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
             | #describe : "`DESCRIBE [<database>.]<table>`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
+            | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
@@ -604,6 +616,18 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     )(i)
 }
 
+pub fn table_option(i: Input) -> IResult<TableOption> {
+    alt((
+        map(engine, TableOption::Engine),
+        map(
+            rule! {
+                COMMENT ~ ^"=" ~ #literal_string
+            },
+            |(_, _, comment)| TableOption::Comment(comment),
+        ),
+    ))(i)
+}
+
 pub fn engine(i: Input) -> IResult<Engine> {
     let engine = alt((
         value(Engine::Null, rule! { NULL }),
@@ -656,7 +680,6 @@ pub fn user_identity(i: Input) -> IResult<UserIdentity> {
 pub fn auth_type(i: Input) -> IResult<AuthType> {
     alt((
         value(AuthType::NoPassword, rule! { NO_PASSWORD }),
-        value(AuthType::PlaintextPassword, rule! { PLAINTEXT_PASSWORD }),
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),

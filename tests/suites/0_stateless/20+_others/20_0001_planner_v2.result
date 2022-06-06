@@ -92,6 +92,7 @@ NULL	2	3
 0
 2
 5	5
+1
 4950
 100
 1
@@ -100,6 +101,9 @@ NULL	2	3
 0
 685
 0.685
+====Having alias====
+0
+1
 ====INNER_JOIN====
 1	1
 2	2
@@ -120,6 +124,11 @@ NULL	2	3
 1	2
 2	3
 1000
+0
+1
+2
+3
+4
 ====ORDER_BY====
 2	0
 2	0
@@ -181,6 +190,7 @@ new_planner
 16
 18
 === Test limit n, m ===
+9
 10
 11
 12
@@ -265,3 +275,71 @@ default
 6
 4	3	4
 6	5	6
+===Inner Join with duplicate keys===
+1	2	1	2
+1	2	1	3
+2	6	2	4
+===Trim Function===
+abc
+
+
+c
+abc
+
+
+c
+
+c
+abc
+===Array Literal===
+[1, 2, 3]
+[]
+[[1, 2, 3], [1, 2, 3]]
+====Correlated Subquery====
+0
+1
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+===Explain===
+Project: [a]\n    EvalScalar: []\n        Filter: [a > 0]\n            PhysicalScan: default.default.t1\n
+===Explain Pipeline===
+ProjectionTransform × 1 processor
+  ProjectionTransform × 1 processor
+    ProjectionTransform × 1 processor
+      TransformHashJoin × 1 processor
+        ProjectionTransform × 1 processor
+          FuseEngineSource × 1 processor
+
+BuildHashTable × 1 processor
+  ProjectionTransform × 1 processor
+    FuseEngineSource × 1 processor
+===Position Function===
+4
+0
+2
+====Tuple====
+('field', 0)
+('field', 1)
+('field', 2)
+('field', 3)
+('field', 4)
+====View====
+0
+====Cross Join====
+1	2	2	2
+1	2	3	5
+1	2	7	8
+2	3	2	2
+2	3	3	5
+2	3	7	8
+3	4	2	2
+3	4	3	5
+3	4	7	8

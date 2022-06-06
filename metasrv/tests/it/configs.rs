@@ -63,6 +63,7 @@ single = false
 join = ["j1", "j2"]
 id = 20
 sled_tree_prefix = "sled_foo"
+cluster_name = "foo_cluster"
              "#
     )?;
 
@@ -70,7 +71,6 @@ sled_tree_prefix = "sled_foo"
         let cfg = Config::load().expect("load must success");
         assert_eq!(cfg.log_level, "ERROR");
         assert_eq!(cfg.log_dir, "foo/logs");
-        assert_eq!(cfg.metric_api_address, "127.0.0.1:8000");
         assert_eq!(cfg.admin_api_address, "127.0.0.1:9000");
         assert_eq!(cfg.admin_tls_server_cert, "admin tls cert");
         assert_eq!(cfg.admin_tls_server_key, "admin tls key");
@@ -89,6 +89,7 @@ sled_tree_prefix = "sled_foo"
         assert_eq!(cfg.raft_config.join, vec!["j1", "j2"]);
         assert_eq!(cfg.raft_config.id, 20);
         assert_eq!(cfg.raft_config.sled_tree_prefix, "sled_foo");
+        assert_eq!(cfg.raft_config.cluster_name, "foo_cluster");
     });
 
     temp_env::with_vars(
@@ -102,6 +103,21 @@ sled_tree_prefix = "sled_foo"
         || {
             let cfg = Config::load().expect("load must success");
             assert_eq!(cfg.log_level, "DEBUG");
+        },
+    );
+
+    // Test raft config.
+    temp_env::with_vars(
+        vec![
+            (
+                "METASRV_CONFIG_FILE",
+                Some(file_path.to_str().expect("must be valid str")),
+            ),
+            ("KVSRV_API_PORT", Some("123")),
+        ],
+        || {
+            let cfg = Config::load().expect("load must success");
+            assert_eq!(cfg.raft_config.raft_api_port, 123);
         },
     );
 

@@ -87,7 +87,7 @@ impl Function for FunctionAdapter {
 
     fn return_type(&self) -> DataTypeImpl {
         if self.inner.is_none() {
-            return NullType::arc();
+            return NullType::new_impl();
         }
 
         let inner = self.inner.as_ref().unwrap();

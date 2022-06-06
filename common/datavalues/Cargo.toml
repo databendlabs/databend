@@ -17,6 +17,7 @@ common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
 common-macros = { path = "../macros" }
+primitive-types = "0.6.1"
 
 # Github dependencies
 opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "15786d3", package = "opensrv-clickhouse" }

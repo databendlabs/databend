@@ -73,7 +73,7 @@ async fn test_expression_evaluator() -> Result<()> {
     )?;
 
     let func_ctx = create_query_context().await?.try_get_function_context()?;
-    let result = ExpressionEvaluator::eval(func_ctx, &expr, &block)?;
+    let result = ExpressionEvaluator::eval(&func_ctx, &expr, &block)?;
 
     assert_eq!(
         result.get(0),

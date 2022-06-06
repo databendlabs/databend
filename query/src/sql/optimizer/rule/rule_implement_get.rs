@@ -21,7 +21,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::PhysicalScan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 
 pub struct RuleImplementGet {
     id: RuleID,
@@ -34,7 +34,7 @@ impl RuleImplementGet {
             id: RuleID::ImplementGet,
             pattern: SExpr::create_leaf(
                 PatternPlan {
-                    plan_type: PlanType::LogicalGet,
+                    plan_type: RelOp::LogicalGet,
                 }
                 .into(),
             ),
@@ -48,7 +48,7 @@ impl Rule for RuleImplementGet {
     }
 
     fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()> {
-        let plan = expression.plan();
+        let plan = expression.plan().clone();
         let logical_get: LogicalGet = plan.try_into()?;
 
         let result = SExpr::create_leaf(

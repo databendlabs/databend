@@ -27,6 +27,7 @@ pub trait BinaryWrite {
     fn write_string(&mut self, text: impl AsRef<str>) -> Result<()>;
     fn write_uvarint(&mut self, v: u64) -> Result<()>;
     fn write_binary(&mut self, text: impl AsRef<[u8]>) -> Result<()>;
+    fn write_raw(&mut self, text: impl AsRef<[u8]>) -> Result<()>;
 
     fn write_opt_scalar<V>(&mut self, v: &Option<V>) -> Result<()>
     where V: Marshal + StatBuffer {
@@ -68,6 +69,12 @@ where T: std::io::Write
     fn write_binary(&mut self, text: impl AsRef<[u8]>) -> Result<()> {
         let bytes = text.as_ref();
         self.write_uvarint(bytes.len() as u64)?;
+        self.write_all(bytes)?;
+        Ok(())
+    }
+
+    fn write_raw(&mut self, text: impl AsRef<[u8]>) -> Result<()> {
+        let bytes = text.as_ref();
         self.write_all(bytes)?;
         Ok(())
     }

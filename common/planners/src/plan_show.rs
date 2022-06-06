@@ -26,6 +26,7 @@ use crate::ShowMetricsPlan;
 use crate::ShowProcessListsPlan;
 use crate::ShowRolesPlan;
 use crate::ShowSettingsPlan;
+use crate::ShowStagesPlan;
 use crate::ShowTablesPlan;
 use crate::ShowUsersPlan;
 
@@ -53,6 +54,7 @@ pub enum ShowPlan {
     ShowGrants(ShowGrantsPlan),
     ShowRoles(ShowRolesPlan),
     ShowTabStat(ShowTabStatPlan),
+    ShowStages(ShowStagesPlan),
 }
 
 impl ShowPlan {

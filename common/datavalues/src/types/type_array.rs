@@ -123,7 +123,7 @@ impl DataType for ArrayType {
         ArrayDeserializer {
             inner: Box::new(self.inner.create_deserializer(capacity)),
             builder: MutableArrayColumn::with_capacity_meta(capacity, ColumnMeta::Array {
-                data_type: *self.inner.clone(),
+                inner_type: *self.inner.clone(),
             }),
         }
         .into()
@@ -133,7 +133,7 @@ impl DataType for ArrayType {
         Box::new(MutableArrayColumn::with_capacity_meta(
             capacity,
             ColumnMeta::Array {
-                data_type: *self.inner.clone(),
+                inner_type: *self.inner.clone(),
             },
         ))
     }

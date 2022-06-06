@@ -36,8 +36,8 @@ use tokio_stream::StreamExt;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
-use crate::interpreters::SelectInterpreterV2;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::MySQLFederated;
@@ -45,8 +45,8 @@ use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::DfParser;
-use crate::sql::DfStatement;
 use crate::sql::PlanParser;
+use crate::sql::Planner;
 use crate::users::CertifiedInfo;
 
 struct InteractiveWorkerBase<W: std::io::Write> {
@@ -294,63 +294,61 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let (stmts, hints) =
                     DfParser::parse_sql(query, context.get_current_session().get_type())?;
 
-                let interpreter: Arc<dyn Interpreter> =
+                let interpreter: Result<Arc<dyn Interpreter>> =
                     if settings.get_enable_new_processor_framework()? != 0
                         && context.get_cluster().is_empty()
                         && settings.get_enable_planner_v2()? != 0
-                        && matches!(stmts.get(0), Some(DfStatement::Query(_)))
+                        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
                     {
-                        // New planner is enabled, and the statement is ensured to be `SELECT` statement.
-                        SelectInterpreterV2::try_create(context.clone(), query)?
+                        let mut planner = Planner::new(context.clone());
+                        planner
+                            .plan_sql(query)
+                            .await
+                            .and_then(|v| InterpreterFactoryV2::get(context.clone(), &v.0))
                     } else {
                         let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
-                        if let (Some(hint_error_code), Err(error_code)) = (
-                            hints
-                                .iter()
-                                .find(|v| v.error_code.is_some())
-                                .and_then(|x| x.error_code),
-                            &plan,
-                        ) {
-                            // Pre-check if parsing error can be ignored
-                            if hint_error_code == error_code.code() {
-                                return Ok((vec![DataBlock::empty()], String::from("")));
-                            }
-                        }
-
-                        let plan = match plan {
-                            Ok(p) => p,
-                            Err(e) => {
-                                InterpreterQueryLog::fail_to_start(context, e.clone()).await;
-                                return Err(e);
-                            }
-                        };
-                        tracing::debug!("Get logic plan:\n{:?}", plan);
-                        InterpreterFactory::get(context.clone(), plan)?
+                        plan.and_then(|v| InterpreterFactory::get(context.clone(), v))
                     };
 
-                match hints
+                let hint = hints
                     .iter()
                     .find(|v| v.error_code.is_some())
-                    .and_then(|x| x.error_code)
-                {
-                    None => Self::exec_query(interpreter, &context).await,
-                    Some(hint_error_code) => match Self::exec_query(interpreter, &context).await {
-                        Ok(_) => Err(ErrorCode::UnexpectedError(format!(
-                            "Expected server error code: {} but got: Ok.",
-                            hint_error_code
-                        ))),
-                        Err(error_code) => {
-                            if hint_error_code == error_code.code() {
+                    .and_then(|x| x.error_code);
+
+                match (hint, interpreter) {
+                    (None, Ok(interpreter)) => Self::exec_query(interpreter, &context).await,
+                    (Some(code), Ok(interpreter)) => {
+                        let res = Self::exec_query(interpreter, &context).await;
+                        match res {
+                            Ok(_) => Err(ErrorCode::UnexpectedError(format!(
+                                "Expected server error code: {} but got: Ok.",
+                                code
+                            ))),
+                            Err(e) => {
+                                if code != e.code() {
+                                    return Err(ErrorCode::UnexpectedError(format!(
+                                        "Expected server error code: {} but got: Ok.",
+                                        code
+                                    )));
+                                }
                                 Ok((vec![DataBlock::empty()], String::from("")))
-                            } else {
-                                let actual_code = error_code.code();
-                                Err(error_code.add_message(format!(
-                                    "Expected server error code: {} but got: {}.",
-                                    hint_error_code, actual_code
-                                )))
                             }
                         }
-                    },
+                    }
+                    (None, Err(e)) => {
+                        InterpreterQueryLog::fail_to_start(context, e.clone()).await;
+                        Err(e)
+                    }
+                    (Some(code), Err(e)) => {
+                        if code != e.code() {
+                            InterpreterQueryLog::fail_to_start(context, e.clone()).await;
+                            return Err(ErrorCode::UnexpectedError(format!(
+                                "Expected server error code: {} but got: Ok.",
+                                code
+                            )));
+                        }
+                        Ok((vec![DataBlock::empty()], String::from("")))
+                    }
                 }
             }
         }

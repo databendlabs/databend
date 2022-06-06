@@ -17,7 +17,7 @@ use common_datavalues::prelude::*;
 #[test]
 fn test_empty_array_column() {
     let mut builder = MutableArrayColumn::with_capacity_meta(16, ColumnMeta::Array {
-        data_type: Int32Type::new_impl(),
+        inner_type: Int32Type::new_impl(),
     });
     let data_column: ArrayColumn = builder.finish();
     let mut iter = data_column.iter();
@@ -41,7 +41,7 @@ fn test_new_from_data() {
 #[test]
 fn test_mutable_array_column() {
     let mut builder = MutableArrayColumn::with_capacity_meta(16, ColumnMeta::Array {
-        data_type: Int32Type::new_impl(),
+        inner_type: Int32Type::new_impl(),
     });
 
     let v0 = ArrayValue::new(vec![1i32.into(), 2i32.into(), 3i32.into()]);

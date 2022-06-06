@@ -146,10 +146,12 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::ShowCreateDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateDatabase(v) => v.analyze(ctx).await,
             DfStatement::DropDatabase(v) => v.analyze(ctx).await,
+            DfStatement::UnDropDatabase(v) => v.analyze(ctx).await,
             DfStatement::AlterDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateTable(v) => v.analyze(ctx).await,
             DfStatement::DescribeTable(v) => v.analyze(ctx).await,
             DfStatement::DropTable(v) => v.analyze(ctx).await,
+            DfStatement::UnDropTable(v) => v.analyze(ctx).await,
             DfStatement::AlterTable(v) => v.analyze(ctx).await,
             DfStatement::RenameTable(v) => v.analyze(ctx).await,
             DfStatement::TruncateTable(v) => v.analyze(ctx).await,
@@ -190,6 +192,7 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::AlterView(v) => v.analyze(ctx).await,
             DfStatement::DropView(v) => v.analyze(ctx).await,
             DfStatement::ShowTabStat(v) => v.analyze(ctx).await,
+            DfStatement::ShowStages(v) => v.analyze(ctx).await,
         }
     }
 }

@@ -24,7 +24,7 @@ impl<'a> Injector for MetadataMapInjector<'a> {
     /// Set a key and value in the MetadataMap.  Does nothing if the key or value are not valid inputs
     fn set(&mut self, key: &str, value: String) {
         if let Ok(key) = tonic::metadata::MetadataKey::from_bytes(key.as_bytes()) {
-            if let Ok(val) = tonic::metadata::MetadataValue::from_str(&value) {
+            if let Ok(val) = tonic::metadata::AsciiMetadataValue::try_from(&value) {
                 self.0.insert(key, val);
             }
         }

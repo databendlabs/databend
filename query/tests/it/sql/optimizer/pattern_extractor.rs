@@ -16,9 +16,9 @@ use databend_query::sql::optimizer::MExpr;
 use databend_query::sql::optimizer::Memo;
 use databend_query::sql::optimizer::PatternExtractor;
 use databend_query::sql::optimizer::SExpr;
-use databend_query::sql::plans::BasePlan;
+use databend_query::sql::plans::Operator;
 use databend_query::sql::plans::PatternPlan;
-use databend_query::sql::plans::PlanType;
+use databend_query::sql::plans::RelOp;
 
 fn compare_s_expr(lhs: &SExpr, rhs: &SExpr) -> bool {
     // Compare children first
@@ -42,12 +42,12 @@ fn test_unary_expression() {
     //  LogicalGet
     let expr = SExpr::create_unary(
         PatternPlan {
-            plan_type: PlanType::Project,
+            plan_type: RelOp::Project,
         }
         .into(),
         SExpr::create_leaf(
             PatternPlan {
-                plan_type: PlanType::LogicalGet,
+                plan_type: RelOp::LogicalGet,
             }
             .into(),
         ),
@@ -58,10 +58,10 @@ fn test_unary_expression() {
     //  Pattern
     let pattern = SExpr::create_unary(
         From::from(PatternPlan {
-            plan_type: PlanType::Project,
+            plan_type: RelOp::Project,
         }),
         SExpr::create_leaf(From::from(PatternPlan {
-            plan_type: PlanType::Pattern,
+            plan_type: RelOp::Pattern,
         })),
     );
 
@@ -81,11 +81,11 @@ fn test_unary_expression() {
 
     let expected = vec![SExpr::create(
         From::from(PatternPlan {
-            plan_type: PlanType::Project,
+            plan_type: RelOp::Project,
         }),
         vec![SExpr::create(
             From::from(PatternPlan {
-                plan_type: PlanType::LogicalGet,
+                plan_type: RelOp::LogicalGet,
             }),
             vec![],
             Some(0),
@@ -102,10 +102,10 @@ fn test_multiple_expression() {
     //  LogicalGet
     let expr = SExpr::create_unary(
         From::from(PatternPlan {
-            plan_type: PlanType::Project,
+            plan_type: RelOp::Project,
         }),
         SExpr::create_leaf(From::from(PatternPlan {
-            plan_type: PlanType::LogicalGet,
+            plan_type: RelOp::LogicalGet,
         })),
     );
 
@@ -114,12 +114,12 @@ fn test_multiple_expression() {
     //  LogicalGet
     let pattern = SExpr::create_unary(
         PatternPlan {
-            plan_type: PlanType::Project,
+            plan_type: RelOp::Project,
         }
         .into(),
         SExpr::create_leaf(
             PatternPlan {
-                plan_type: PlanType::LogicalGet,
+                plan_type: RelOp::LogicalGet,
             }
             .into(),
         ),
@@ -134,7 +134,7 @@ fn test_multiple_expression() {
         MExpr::create(
             0,
             PatternPlan {
-                plan_type: PlanType::LogicalGet,
+                plan_type: RelOp::LogicalGet,
             }
             .into(),
             vec![],
@@ -154,12 +154,12 @@ fn test_multiple_expression() {
 
     let expected_expr = SExpr::create(
         PatternPlan {
-            plan_type: PlanType::Project,
+            plan_type: RelOp::Project,
         }
         .into(),
         vec![SExpr::create(
             PatternPlan {
-                plan_type: PlanType::LogicalGet,
+                plan_type: RelOp::LogicalGet,
             }
             .into(),
             vec![],

@@ -23,7 +23,6 @@ use enum_dispatch::enum_dispatch;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
-use crate::sql::BindContext;
 
 #[enum_dispatch]
 pub trait ScalarExpr {
@@ -259,21 +258,38 @@ impl ScalarExpr for CastExpr {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SubqueryType {
+    Any,
+    All,
+    Scalar,
+    Exists,
+    NotExists,
+}
+
 #[derive(Clone, Debug)]
 pub struct SubqueryExpr {
+    pub typ: SubqueryType,
     pub subquery: SExpr,
     pub data_type: DataTypeImpl,
     pub allow_multi_rows: bool,
-    pub output_context: Box<BindContext>,
+    pub outer_columns: ColumnSet,
 }
 
 impl ScalarExpr for SubqueryExpr {
     fn data_type(&self) -> DataTypeImpl {
-        self.data_type.clone()
+        match &self.typ {
+            SubqueryType::Scalar => self.data_type.clone(),
+
+            SubqueryType::Any
+            | SubqueryType::All
+            | SubqueryType::Exists
+            | SubqueryType::NotExists => BooleanType::new_impl(),
+        }
     }
 
     fn used_columns(&self) -> ColumnSet {
-        todo!()
+        self.outer_columns.clone()
     }
 }
 

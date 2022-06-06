@@ -18,6 +18,7 @@ use anyhow::Result;
 use common_base::base::tokio;
 use common_base::base::GlobalSequence;
 use common_base::base::Stoppable;
+use common_meta_grpc::ClientHandle;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
@@ -131,11 +132,6 @@ impl MetaSrvTestContext {
             config.admin_api_address = format!("{}:{}", host, http_port);
         }
 
-        {
-            let metric_port = next_port();
-            config.metric_api_address = format!("{}:{}", host, metric_port);
-        }
-
         tracing::info!("new test context config: {:?}", config);
 
         MetaSrvTestContext {
@@ -149,10 +145,10 @@ impl MetaSrvTestContext {
         self.meta_node.clone().unwrap()
     }
 
-    pub async fn grpc_client(&self) -> anyhow::Result<Arc<MetaGrpcClient>> {
+    pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle>> {
         let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
         Ok(client)
     }
 

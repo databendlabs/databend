@@ -27,7 +27,7 @@ use common_management::UserApi;
 use common_management::UserMgr;
 use common_meta_api::KVApi;
 
-use crate::common::MetaClientProvider;
+use crate::common::MetaStoreProvider;
 use crate::Config;
 
 pub struct UserApiProvider {
@@ -36,10 +36,12 @@ pub struct UserApiProvider {
 
 impl UserApiProvider {
     pub async fn create_global(conf: Config) -> Result<Arc<UserApiProvider>> {
-        let client = MetaClientProvider::new(conf.meta.to_meta_grpc_client_conf())
-            .try_get_kv_client()
+        let client = MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf())
+            .try_get_meta_store()
             .await?;
-        Ok(Arc::new(UserApiProvider { client }))
+        Ok(Arc::new(UserApiProvider {
+            client: client.arc(),
+        }))
     }
 
     pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<dyn UserApi>> {

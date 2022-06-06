@@ -15,14 +15,22 @@
 use crate::Incompatible;
 
 pub const VER: u64 = 1;
-const OLDEST_COMPATIBLE_VER: u64 = 1;
+pub const MIN_COMPATIBLE_VER: u64 = 1;
 
-pub fn check_ver(ver: u64) -> Result<(), Incompatible> {
-    if ver > VER || ver < OLDEST_COMPATIBLE_VER {
+pub fn check_ver(msg_ver: u64, msg_min_compatible: u64) -> Result<(), Incompatible> {
+    if VER < msg_min_compatible {
         return Err(Incompatible {
             reason: format!(
-                "ver={} is not compatible with [{}, {}]",
-                ver, OLDEST_COMPATIBLE_VER, VER
+                "executable ver={} is smaller than the message min compatible ver: {}",
+                VER, msg_min_compatible
+            ),
+        });
+    }
+    if msg_ver < MIN_COMPATIBLE_VER {
+        return Err(Incompatible {
+            reason: format!(
+                "message ver={} is smaller than executable min compatible ver: {}",
+                msg_ver, MIN_COMPATIBLE_VER
             ),
         });
     }

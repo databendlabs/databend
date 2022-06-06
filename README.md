@@ -1,7 +1,5 @@
+<img src="https://repository-images.githubusercontent.com/302827809/a01c8064-0196-45d9-b326-1762d6d3062b" alt="databend" />
 <div align="center">
-
-<p align="center"><img alt="Databend Logo" src="website/static/img/favicon.svg" width="20%"/></p>
-<p align="center">A Modern Cloud Data Warehouse with the Elasticity and Performance both on Object Storage</p>
  
 <h4 align="center">
   <a href="https://databend.rs/doc">Documentation</a>  |
@@ -19,7 +17,7 @@
 <img src="https://img.shields.io/github/workflow/status/datafuselabs/databend/Release" alt="CI Status" />
 </a>
 
-<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="patform" />
+<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
 
 <a href="https://opensource.org/licenses/Apache-2.0">
 <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="license" />
@@ -30,11 +28,10 @@
 <br>
 
 - [What is Databend?](#what-is-databend)
-- [Design Overview](#design-overview)
-   - [Meta Service Layer](#meta-service-layer)
-   - [Compute Layer](#compute-layer)
-   - [Storage Layer](#storage-layer)
+- [Architecture](#architecture)
+- [Try Databend](#try-databend)
 - [Getting Started](#getting-started)
+- [Contributing](#contributing)
 - [Community](#community)
 - [Roadmap](#roadmap)
 
@@ -64,87 +61,33 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
   Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into the table.
  
-## Design Overview
-
-This is the high-level architecture of Databend. It consists of three components:
-- `meta service layer`
-- `compute layer`
-- `storage layer`
+## Architecture
 
 ![Databend Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)
 
-### Meta Service Layer
+## Try Databend
 
-The meta service is a layer to service multiple tenants. This layer implements a persistent key-value store to store each tenant's state.
-In the current implementation, the meta service has many components:
+### Install Databend
 
-- Metadata, which manages all metadata of databases, tables, clusters, the transaction, etc.
-- Administration, which stores user info, user management, access control information, usage statistics, etc.
-- Security, which performs authorization and authentication to protect the privacy of users' data.
+Prepare the image (once) from Docker Hub (this will download about 170 MB data):
 
-The code of `Meta Service Layer` mainly resides in the `metasrv` directory of the repository.
+```shell
+docker pull datafuselabs/databend
+```
 
-### Compute Layer
+To run Databend quickly:
+```shell
+docker run --net=host  datafuselabs/databend
+```
 
-The compute layer is the layer that carries out computation for query processing. This layer may consist of many clusters,
-and each cluster may consist of many nodes. Each node is a computing unit and is a collection of components:
+### Connect to Databend
 
-- **Planner**
+[MySQL](https://databend.rs/doc/reference/api/mysql-handler) wire protocol on port `3307` 
+```shell
+mysql -h127.0.0.1 -uroot -P3307
+```
 
-  The query planner builds an execution plan from the user's SQL statement and represents the query with different types of relational operators (such as `Projection`, `Filter`, `Limit`, etc.).
-
-  For example:
-  ```
-  databend :) EXPLAIN SELECT avg(number) FROM numbers(100000) GROUP BY number % 3
-  ┌─explain─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ Projection: avg(number):Float64                                                                                                                                                         │
-  │   AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[avg(number)]]                                                                                                                       │
-  │     AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[avg(number)]]                                                                                                                   │
-  │       Expression: (number % 3):UInt8, number:UInt64 (Before GroupBy)                                                                                                                    │
-  │         ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000, partitions_scanned: 11, partitions_total: 11], push_downs: [projections: [0]] │
-  └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-  ```
-
-- **Optimizer**
-
-  A rule-based optimizer, some rules like predicate push down or pruning of unused columns.
-
-- **Processors**
-
-  A Pull&Push-Based query execution pipeline, which is built by planner instructions.
-  Each pipeline executor is a processor(such as `SourceTransform`, `FilterTransform`, etc.), it has zero or more inputs and zero or more outputs, and connected as a pipeline, it also can be distributed on multiple nodes judged by your query workload.
-
-  For example:
-  ```
-  databend :) EXPLAIN PIPELINE SELECT avg(number) FROM numbers(100000) GROUP BY number % 3
-  ┌─explain────────────────────────────────────────────────────────────────────────────────┐
-  │ ProjectionTransform × 16 processors                                                    │
-  │   Mixed (GroupByFinalTransform × 1 processor) to (ProjectionTransform × 16 processors) │
-  │     GroupByFinalTransform × 1 processor                                                │
-  │       Merge (GroupByPartialTransform × 16 processors) to (GroupByFinalTransform × 1)   │
-  │         GroupByPartialTransform × 16 processors                                        │
-  │           ExpressionTransform × 16 processors                                          │
-  │             SourceTransform × 16 processors                                            │
-  └────────────────────────────────────────────────────────────────────────────────────────┘
-  ```
-
-Node is the smallest unit of the compute layer. A set of nodes can be registered as one cluster via namespace.
-Many clusters can attach the same database, so they can serve the query in parallel by different users.
-When you add new nodes to a cluster, the currently running computational tasks can be scaled(known as work-stealing) guarantee.
-
-The `Compute Layer` codes are mainly in the `query` directory.
-
-### Storage Layer
-
-Databend stores data in an efficient, columnar format as Parquet files.
-Each Parquet file is sorted by the primary key before being written to the underlying shared storage.
-For efficient pruning, Databend also creates indexes for each Parquet file:
-
-- `min_max.idx` The index file stores the *minimum* and *maximum* value of this Parquet file.
-- `sparse.idx` The index file store the <key, parquet-page> mapping for every [N] records granularity.
-
-With the indexes, we can speed up the queries by reducing the I/O and CPU costs.
-Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 has `min_max.idx` of `[4, 6)` in column `x` if the query predicate is `WHERE x < 4`, only f1 needs to be accessed and processed.
+Let's run some [benchmark queries](https://databend.rs/doc/performance/local-vector-performance).
 
 ## Getting Started
 
@@ -196,6 +139,13 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 - [How to Create a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-create-view)
 - [How to Drop a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-drop-view)
 - [How to Alter a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-alter-view)
+
+## User-Defined Functions
+
+- [How to Create a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-create-function)
+- [How to Drop a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-drop-function)
+- [How to Alter a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-alter-function)
+
  
 ### Load Data
 
@@ -214,6 +164,17 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 ### Performance
 
 - [How to Benchmark Databend](https://databend.rs/doc/learn/analyze-ontime-with-databend-on-ec2-and-s3)
+
+
+## Contributing
+
+Databend is an open source project, you can help with ideas, code, or documentation, we appreciate any efforts that help us to make the project better!
+Once the code been merged, your name will be stored in the **system.contributors** table forever.
+
+To get started with contributing:
+
+- [Building Databend From Source](https://databend.rs/doc/contributing/building-from-source)
+- [The First Good Pull Request](https://databend.rs/doc/contributing/good-pr)
 
 
 ## Community

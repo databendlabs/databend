@@ -13,11 +13,24 @@ const config = {
     tagline: 'The modern Cloud Data Warehouse, activate your object storage(S3, Azure Blob, or MinIO) for real-time analytics.',
     url: 'https://databend.rs',
     baseUrl: '/',
-    onBrokenLinks: 'throw',
+    onBrokenLinks: 'warn',
     onBrokenMarkdownLinks: 'warn',
-    favicon: 'img/favicon.svg',
+    favicon: 'img/logo/logo-no-text.svg',
     organizationName: 'datafuselabs',
     projectName: 'databend',
+
+    i18n: {
+        defaultLocale: 'en-US',
+        locales: ['en-US', 'zh-CN'],
+        localeConfigs: {
+            'en-US': {
+                label: 'English',
+            },
+            'zh-CN': {
+                label: '简体中文',
+            },
+        },
+    },
 
     presets: [
         [
@@ -43,8 +56,8 @@ const config = {
                     priority: 0.5,
                 },
                 gtag: {
-                  trackingID: 'G-WBQPTTG4ZG',
-                  anonymizeIP: true,
+                    trackingID: 'G-WBQPTTG4ZG',
+                    anonymizeIP: true,
                 },
             }),
         ],
@@ -76,30 +89,40 @@ const config = {
                 title: 'Databend',
                 logo: {
                     alt: 'Databend Logo',
-                    src: 'img/favicon.svg',
+                    src: 'img/logo/logo-no-text.svg',
                 },
                 items: [
-                  {
-                    to: '/doc',
-                    label: 'Documentation',
-                    position: 'right',
-                  },
-                  {
-                     to: '/doc/contributing/good-pr',
-                     label: 'Contributing',
-                     position: 'right',
-                  },
-                  {
-                      href: 'https://perf.databend.rs',
-                      label: 'Benchmarking',
-                      position: 'right',
-                  },
-                  {to: '/blog', label: 'Blog', position: 'right'}, // or position: 'right'
-                  {
-                      href: 'https://github.com/datafuselabs/databend',
-                      label: 'GitHub',
-                      position: 'right',
-                  },
+                    {
+                        to: '/doc',
+                        label: 'Documentation',
+                        position: 'right',
+                    },
+                    {
+                        to: '/doc/contributing/good-pr',
+                        label: 'Contributing',
+                        position: 'right',
+                    },
+                    {
+                        href: 'https://perf.databend.rs',
+                        label: 'Benchmarking',
+                        position: 'right',
+                    },
+                    {to: '/blog', label: 'Blog', position: 'right'}, // or position: 'right'
+                    {
+                        href: 'https://github.com/datafuselabs/databend',
+                        label: 'GitHub',
+                        position: 'right',
+                    },
+                    {
+                        type: 'localeDropdown',
+                        position: 'right',
+                        dropdownItemsAfter: [
+                            {
+                                to: 'https://databend.crowdin.com/databend',
+                                label: 'Help Us Translate',
+                            },
+                        ],
+                    },
                 ],
             },
             footer: {
@@ -169,7 +192,12 @@ const config = {
                 apiKey: 'cb5d6af612410c0fced698ff39ccd47a',
                 indexName: 'databend-rs-docs',
                 contextualSearch: true,
-            }
+            },
+            image: 'img/logo/logo-no-text.png',
+            metadata: [
+              {name: 'twitter:card', content: 'summary_large_image'},
+              {name: 'twitter:site', content: '@databend.rs'}
+            ],
         }),
 };
 

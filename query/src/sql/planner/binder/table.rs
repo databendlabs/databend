@@ -17,8 +17,12 @@ use std::sync::Arc;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
+use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
+use common_ast::parser::error::Backtrace;
 use common_ast::parser::error::DisplayError;
+use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -33,6 +37,7 @@ use crate::sql::plans::LogicalGet;
 use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
 use crate::sql::IndexType;
+use crate::storages::view::view_table::QUERY;
 use crate::storages::Table;
 use crate::storages::ToReadDataSourcePlan;
 use crate::table_functions::TableFunction;
@@ -40,6 +45,7 @@ use crate::table_functions::TableFunction;
 impl<'a> Binder {
     pub(super) async fn bind_one_table(
         &mut self,
+        bind_context: &BindContext,
         stmt: &SelectStmt<'a>,
     ) -> Result<(SExpr, BindContext)> {
         for select_target in &stmt.select_list {
@@ -57,30 +63,31 @@ impl<'a> Binder {
         let database = "system";
         let tenant = self.ctx.get_tenant();
         let table_meta: Arc<dyn Table> = self
-            .resolve_data_source(tenant.as_str(), catalog, database, "one")
+            .resolve_data_source(tenant.as_str(), catalog, database, "one", &None)
             .await?;
         let source = table_meta.read_plan(self.ctx.clone(), None).await?;
-        let table_index = self.metadata.add_table(
+        let table_index = self.metadata.write().add_table(
             CATALOG_DEFAULT.to_owned(),
             database.to_string(),
             table_meta,
             source,
         );
 
-        self.bind_base_table(table_index).await
+        self.bind_base_table(bind_context, table_index)
     }
 
     pub(super) async fn bind_table_reference(
         &mut self,
         bind_context: &BindContext,
-        stmt: &TableReference<'a>,
+        table_ref: &TableReference<'a>,
     ) -> Result<(SExpr, BindContext)> {
-        match stmt {
+        match table_ref {
             TableReference::Table {
                 catalog,
                 database,
                 table,
                 alias,
+                travel_point,
             } => {
                 // Get catalog name
                 let catalog = catalog
@@ -107,28 +114,58 @@ impl<'a> Binder {
                         catalog.as_str(),
                         database.as_str(),
                         table.as_str(),
+                        travel_point,
                     )
                     .await?;
-                let source = table_meta.read_plan(self.ctx.clone(), None).await?;
-                let table_index = self
-                    .metadata
-                    .add_table(catalog, database, table_meta, source);
+                match table_meta.engine() {
+                    "VIEW" => {
+                        let query = table_meta
+                            .options()
+                            .get(QUERY)
+                            .ok_or_else(|| ErrorCode::LogicalError("Invalid VIEW object"))?;
+                        let tokens = tokenize_sql(query.as_str())?;
+                        let backtrace = Backtrace::new();
+                        let stmts = parse_sql(&tokens, &backtrace)?;
+                        if stmts.len() > 1 {
+                            return Err(ErrorCode::UnImplement("unsupported multiple statements"));
+                        }
+                        if let Statement::Query(query) = &stmts[0] {
+                            self.bind_query(bind_context, query).await
+                        } else {
+                            Err(ErrorCode::LogicalError(format!(
+                                "Invalid VIEW object: {}",
+                                table_meta.name()
+                            )))
+                        }
+                    }
+                    _ => {
+                        let source = table_meta
+                            .read_plan_with_catalog(self.ctx.clone(), catalog.clone(), None)
+                            .await?;
+                        let table_index = self
+                            .metadata
+                            .write()
+                            .add_table(catalog, database, table_meta, source);
 
-                let (s_expr, mut bind_context) = self.bind_base_table(table_index).await?;
-                if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias)?;
+                        let (s_expr, mut bind_context) =
+                            self.bind_base_table(bind_context, table_index)?;
+                        if let Some(alias) = alias {
+                            bind_context.apply_table_alias(alias)?;
+                        }
+                        Ok((s_expr, bind_context))
+                    }
                 }
-                Ok((s_expr, bind_context))
             }
             TableReference::TableFunction {
                 name,
                 params,
                 alias,
             } => {
-                let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());
+                let mut scalar_binder =
+                    ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
                 let mut args = Vec::with_capacity(params.len());
                 for arg in params.iter() {
-                    args.push(scalar_binder.bind_expr(arg).await?);
+                    args.push(scalar_binder.bind(arg).await?);
                 }
 
                 let expressions = args
@@ -158,14 +195,14 @@ impl<'a> Binder {
                 let table = table_meta.as_table();
 
                 let source = table.read_plan(self.ctx.clone(), None).await?;
-                let table_index = self.metadata.add_table(
+                let table_index = self.metadata.write().add_table(
                     CATALOG_DEFAULT.to_string(),
                     "system".to_string(),
                     table.clone(),
                     source,
                 );
 
-                let (s_expr, mut bind_context) = self.bind_base_table(table_index).await?;
+                let (s_expr, mut bind_context) = self.bind_base_table(bind_context, table_index)?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias)?;
                 }
@@ -182,10 +219,15 @@ impl<'a> Binder {
         }
     }
 
-    async fn bind_base_table(&mut self, table_index: IndexType) -> Result<(SExpr, BindContext)> {
-        let mut bind_context = BindContext::new();
-        let columns = self.metadata.columns_by_table_index(table_index);
-        let table = self.metadata.table(table_index);
+    fn bind_base_table(
+        &mut self,
+        bind_context: &BindContext,
+        table_index: IndexType,
+    ) -> Result<(SExpr, BindContext)> {
+        let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        let metadata = self.metadata.read();
+        let columns = metadata.columns_by_table_index(table_index);
+        let table = metadata.table(table_index);
         for column in columns.iter() {
             let column_binding = ColumnBinding {
                 table_name: Some(table.name.clone()),

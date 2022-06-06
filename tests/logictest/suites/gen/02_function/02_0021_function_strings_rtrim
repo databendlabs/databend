@@ -20,5 +20,5 @@ statement query T
 select rtrim(null);
 
 ----  
-None
+NULL
 

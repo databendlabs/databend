@@ -2,7 +2,7 @@ statement query T
 SELECT REVERSE(NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT REVERSE('');

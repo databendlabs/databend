@@ -104,6 +104,9 @@ pub struct StorageS3Config {
     pub secret_access_key: String,
     pub master_key: String,
     pub root: String,
+    /// This flag is used internally to control whether or not databend load
+    /// credentials from environment like env, profile and web token.
+    pub disable_credential_loader: bool,
 }
 
 impl Default for StorageS3Config {
@@ -116,6 +119,7 @@ impl Default for StorageS3Config {
             secret_access_key: "".to_string(),
             master_key: "".to_string(),
             root: "".to_string(),
+            disable_credential_loader: false,
         }
     }
 }
@@ -127,6 +131,7 @@ impl Debug for StorageS3Config {
             .field("region", &self.region)
             .field("bucket", &self.bucket)
             .field("root", &self.root)
+            .field("disable_credential_loader", &self.disable_credential_loader)
             .field("access_key_id", &mask_string(&self.access_key_id, 3))
             .field(
                 "secret_access_key",

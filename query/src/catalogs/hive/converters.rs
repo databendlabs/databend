@@ -22,7 +22,13 @@ use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hive_meta_store as hms;
-use common_meta_types::*;
+use common_meta_app::schema::DatabaseIdent;
+use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 
 use super::hive_database::HiveDatabase;
 use super::hive_database::HIVE_DATABASE_ENGIE;

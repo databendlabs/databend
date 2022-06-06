@@ -45,7 +45,10 @@ impl<'a> Binder {
         let mut scalars = HashMap::new();
         for item in select_list.items.iter() {
             let column_binding = if let Scalar::BoundColumnRef(ref column_ref) = item.scalar {
-                column_ref.column.clone()
+                let mut column_binding = column_ref.column.clone();
+                // We should apply alias for the ColumnBinding, since it comes from table
+                column_binding.column_name = item.alias.clone();
+                column_binding
             } else {
                 let column_binding =
                     self.create_column_binding(None, item.alias.clone(), item.scalar.data_type());
@@ -165,8 +168,9 @@ impl<'a> Binder {
                     }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
-                    let scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());
-                    let (bound_expr, _) = scalar_binder.bind_expr(expr).await?;
+                    let mut scalar_binder =
+                        ScalarBinder::new(input_context, self.ctx.clone(), self.metadata.clone());
+                    let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {

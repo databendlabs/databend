@@ -14,6 +14,7 @@
 
 mod array_get;
 mod array_length;
+mod as_type;
 mod check_json;
 mod get;
 mod get_path;
@@ -25,6 +26,7 @@ mod semi_structured;
 
 pub use array_get::ArrayGetFunction;
 pub use array_length::ArrayLengthFunction;
+pub use as_type::as_function_creator;
 pub use check_json::CheckJsonFunction;
 pub use get::GetFunction;
 pub use get::GetIgnoreCaseFunction;

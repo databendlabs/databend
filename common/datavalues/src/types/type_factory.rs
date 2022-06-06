@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -22,13 +23,15 @@ use once_cell::sync::Lazy;
 use crate::prelude::*;
 
 pub struct TypeFactory {
+    // types used by type conversion functions
+    conversion_types: HashSet<String>,
     case_insensitive_types: HashMap<String, DataTypeImpl>,
 }
 
 static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
     let mut type_factory = TypeFactory::create();
 
-    type_factory.register(NullType::arc());
+    type_factory.register(NullType::new_impl());
     type_factory.register(BooleanType::new_impl());
     type_factory.register(StringType::new_impl());
 
@@ -66,6 +69,7 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
 impl TypeFactory {
     pub fn create() -> Self {
         Self {
+            conversion_types: HashSet::new(),
             case_insensitive_types: HashMap::new(),
         }
     }
@@ -100,6 +104,7 @@ impl TypeFactory {
         for name in names {
             self.case_insensitive_types
                 .insert(name.to_lowercase(), data_type.clone());
+            self.conversion_types.insert(name);
         }
     }
 
@@ -127,5 +132,9 @@ impl TypeFactory {
             }
         }
         self.case_insensitive_types.extend(nulls);
+    }
+
+    pub fn conversion_names(&self) -> Vec<&str> {
+        self.conversion_types.iter().map(|s| s.as_str()).collect()
     }
 }

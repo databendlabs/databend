@@ -2,7 +2,6 @@
 # databend-meta -c databend-meta-node-3.toml
 
 log_dir            = "./.databend/logs3"
-metric_api_address = "0.0.0.0:28300"
 admin_api_address  = "0.0.0.0:28301"
 grpc_api_address   = "0.0.0.0:28302"
 

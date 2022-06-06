@@ -1,4 +1,5 @@
 import json
+import os
 
 import environs
 import requests
@@ -97,8 +98,10 @@ class HttpConnector():
         self._database = database
         self._session_max_idle_time = 300
         self._session = None
+        self._additonal_headers = dict()
         e = environs.Env()
-        self._additonal_headers = e.dict("ADDITIONAL_HEADERS")
+        if os.getenv("ADDITIONAL_HEADERS") is not None:
+            self._additonal_headers = e.dict("ADDITIONAL_HEADERS")
 
     def query(self, statement, session=None):
         url = "http://{}:{}/v1/query/".format(self._host, self._port)
@@ -118,13 +121,23 @@ class HttpConnector():
         query_sql = {'sql': parseSQL(statement)}
         if session is not None:
             query_sql['session'] = session
-        response = requests.post(url,
-                                 data=json.dumps(query_sql),
-                                 auth=(self._user, ""),
-                                 headers={
-                                     **headers,
-                                     **self._additonal_headers
-                                 })
+        log.debug("http headers: {}".format({
+            **headers,
+            **self._additonal_headers
+        }))
+        if "Authorization" not in self._additonal_headers:
+            response = requests.post(url,
+                                     data=json.dumps(query_sql),
+                                     auth=(self._user, ""),
+                                     headers=headers)
+        else:
+            response = requests.post(url,
+                                     data=json.dumps(query_sql),
+                                     headers={
+                                         **headers,
+                                         **self._additonal_headers
+                                     })
+
         try:
             return json.loads(response.content)
         except Exception as err:
@@ -172,6 +185,7 @@ class HttpConnector():
 
 
 # if __name__ == '__main__':
+#     from config import http_config
 #     connector = HttpConnector()
-#     connector.connect("127.0.0.1", 8000)
-#     connector.query_with_session("show databases;")
+#     connector.connect(**http_config)
+#     connector.query_without_session("show databases;")

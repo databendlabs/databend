@@ -23,21 +23,21 @@ use crate::sql::plans::EvalScalar;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::Project;
 use crate::sql::IndexType;
-use crate::sql::Metadata;
+use crate::sql::MetadataRef;
 
-pub struct DataSchemaBuilder<'a> {
-    metadata: &'a Metadata,
+pub struct DataSchemaBuilder {
+    metadata: MetadataRef,
 }
 
-impl<'a> DataSchemaBuilder<'a> {
-    pub fn new(metadata: &'a Metadata) -> Self {
+impl DataSchemaBuilder {
+    pub fn new(metadata: MetadataRef) -> Self {
         DataSchemaBuilder { metadata }
     }
 
     pub fn build_project(&self, plan: &Project) -> Result<DataSchemaRef> {
         let mut fields = Vec::with_capacity(plan.columns.len());
         for index in plan.columns.iter() {
-            let column_entry = self.metadata.column(*index);
+            let column_entry = self.metadata.read().column(*index).clone();
             let field_name = format_field_name(column_entry.name.as_str(), *index);
             let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
@@ -53,7 +53,7 @@ impl<'a> DataSchemaBuilder<'a> {
     ) -> Result<DataSchemaRef> {
         let mut fields = input_schema.fields().clone();
         for item in plan.items.iter() {
-            let column_entry = self.metadata.column(item.index);
+            let column_entry = self.metadata.read().column(item.index).clone();
             let field_name = format_field_name(column_entry.name.as_str(), item.index);
             let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
@@ -65,7 +65,7 @@ impl<'a> DataSchemaBuilder<'a> {
     pub fn build_physical_scan(&self, plan: &PhysicalScan) -> Result<DataSchemaRef> {
         let mut fields: Vec<DataField> = vec![];
         for index in plan.columns.iter() {
-            let column_entry = self.metadata.column(*index);
+            let column_entry = self.metadata.read().column(*index).clone();
             let field_name = format_field_name(column_entry.name.as_str(), *index);
             let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
@@ -77,7 +77,7 @@ impl<'a> DataSchemaBuilder<'a> {
     pub fn build_canonical_schema(&self, columns: &[IndexType]) -> DataSchemaRef {
         let mut fields: Vec<DataField> = vec![];
         for index in columns {
-            let column_entry = self.metadata.column(*index);
+            let column_entry = self.metadata.read().column(*index).clone();
             let field_name = column_entry.name.clone();
             let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);

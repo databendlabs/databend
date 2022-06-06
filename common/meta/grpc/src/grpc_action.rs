@@ -16,57 +16,57 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
+use common_meta_types::protobuf::WatchRequest;
+use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::CreateShareReply;
 use common_meta_types::CreateShareReq;
-use common_meta_types::CreateTableReply;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DatabaseInfo;
-use common_meta_types::DropDatabaseReply;
-use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropShareReply;
 use common_meta_types::DropShareReq;
-use common_meta_types::DropTableReply;
-use common_meta_types::DropTableReq;
-use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetKVActionReply;
+use common_meta_types::GetKVReply;
+use common_meta_types::GetKVReq;
 use common_meta_types::GetShareReq;
-use common_meta_types::GetTableReq;
-use common_meta_types::ListDatabaseReq;
-use common_meta_types::ListTableReq;
-use common_meta_types::MGetKVActionReply;
-use common_meta_types::MetaId;
-use common_meta_types::PrefixListReply;
-use common_meta_types::RenameDatabaseReply;
-use common_meta_types::RenameDatabaseReq;
-use common_meta_types::RenameTableReply;
-use common_meta_types::RenameTableReq;
+use common_meta_types::ListKVReply;
+use common_meta_types::ListKVReq;
+use common_meta_types::MGetKVReply;
+use common_meta_types::MGetKVReq;
 use common_meta_types::ShareInfo;
-use common_meta_types::TableInfo;
-use common_meta_types::UpsertKVAction;
-use common_meta_types::UpsertKVActionReply;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
+use common_meta_types::UpsertKVReply;
+use common_meta_types::UpsertKVReq;
+use tonic::codegen::InterceptedService;
+use tonic::transport::Channel;
 use tonic::Request;
 
+use crate::grpc_client::AuthInterceptor;
+use crate::message::ExportReq;
+use crate::message::MakeClient;
+
+/// Bind a request type to its corresponding response type.
 pub trait RequestFor {
     type Reply;
 }
 
+// TODO: reduce this and MetaGrpcReadReq into one enum?
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaGrpcWriteReq {
-    UpsertKV(UpsertKVAction),
+    UpsertKV(UpsertKVReq),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaGrpcReadReq {
-    GetKV(GetKVAction),
-    MGetKV(MGetKVAction),
+    GetKV(GetKVReq),
+    MGetKV(MGetKVReq),
+    // #[deprecated(since = "0.7.57-nightly", note = "deprecated since 2022-05-23")]
     PrefixListKV(PrefixListReq),
+    ListKV(ListKVReq), // since 2022-05-23
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct PrefixListReq(pub String);
 
 /// Try convert tonic::Request<RaftRequest> to DoActionAction.
 impl TryInto<MetaGrpcWriteReq> for Request<RaftRequest> {
@@ -132,96 +132,35 @@ impl TryInto<Request<RaftRequest>> for MetaGrpcReadReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct GetKVAction {
-    pub key: String,
+impl RequestFor for GetKVReq {
+    type Reply = GetKVReply;
 }
 
-// Explicitly defined (the request / reply relation)
-// this can be simplified by using macro (see code below)
-impl RequestFor for GetKVAction {
-    type Reply = GetKVActionReply;
+impl RequestFor for MGetKVReq {
+    type Reply = MGetKVReply;
 }
 
-// - MGetKV
-
-// Again, impl chooses to wrap it up
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct MGetKVAction {
-    pub keys: Vec<String>,
+impl RequestFor for ListKVReq {
+    type Reply = ListKVReply;
 }
 
-// here we use a macro to simplify the declarations
-impl RequestFor for MGetKVAction {
-    type Reply = MGetKVActionReply;
+impl RequestFor for UpsertKVReq {
+    type Reply = UpsertKVReply;
 }
 
-// - prefix list
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct PrefixListReq(pub String);
-impl RequestFor for PrefixListReq {
-    type Reply = PrefixListReply;
+impl RequestFor for WatchRequest {
+    type Reply = tonic::codec::Streaming<WatchResponse>;
 }
 
-impl RequestFor for UpsertKVAction {
-    type Reply = UpsertKVActionReply;
+impl RequestFor for ExportReq {
+    type Reply = tonic::codec::Streaming<WatchResponse>;
 }
 
-// == database actions ==
-
-impl RequestFor for CreateDatabaseReq {
-    type Reply = CreateDatabaseReply;
+impl RequestFor for MakeClient {
+    type Reply = MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>;
 }
 
-impl RequestFor for GetDatabaseReq {
-    type Reply = Arc<DatabaseInfo>;
-}
-
-impl RequestFor for DropDatabaseReq {
-    type Reply = DropDatabaseReply;
-}
-
-impl RequestFor for RenameDatabaseReq {
-    type Reply = RenameDatabaseReply;
-}
-
-// == table actions ==
-
-impl RequestFor for CreateTableReq {
-    type Reply = CreateTableReply;
-}
-
-impl RequestFor for DropTableReq {
-    type Reply = DropTableReply;
-}
-
-impl RequestFor for RenameTableReq {
-    type Reply = RenameTableReply;
-}
-
-impl RequestFor for GetTableReq {
-    type Reply = Arc<TableInfo>;
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTableExtReq {
-    pub tbl_id: MetaId,
-}
-impl RequestFor for GetTableExtReq {
-    type Reply = TableInfo;
-}
-
-impl RequestFor for UpsertTableOptionReq {
-    type Reply = UpsertTableOptionReply;
-}
-
-impl RequestFor for ListTableReq {
-    type Reply = Vec<Arc<TableInfo>>;
-}
-
-impl RequestFor for ListDatabaseReq {
-    type Reply = Vec<Arc<DatabaseInfo>>;
-}
+// -- share
 
 impl RequestFor for CreateShareReq {
     type Reply = CreateShareReply;
@@ -233,4 +172,8 @@ impl RequestFor for DropShareReq {
 
 impl RequestFor for GetShareReq {
     type Reply = Arc<ShareInfo>;
+}
+
+impl RequestFor for TxnRequest {
+    type Reply = TxnReply;
 }

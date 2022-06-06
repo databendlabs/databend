@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_base::base::RuntimeTracker;
 use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_global_tracing;
 use common_tracing::set_panic_hook;
@@ -31,10 +33,15 @@ use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
 use databend_query::Config;
+use databend_query::QUERY_SEMVER;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     let conf: Config = Config::load()?;
+
+    if run_cmd(&conf) {
+        return Ok(());
+    }
 
     if conf.meta.address.is_empty() {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
@@ -169,4 +176,25 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     shutdown_handle.wait_for_termination_request().await;
     tracing::info!("Shutdown server.");
     Ok(())
+}
+
+fn run_cmd(conf: &Config) -> bool {
+    if conf.cmd.is_empty() {
+        return false;
+    }
+
+    match conf.cmd.as_str() {
+        "ver" => {
+            println!("version: {}", QUERY_SEMVER.deref());
+            println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
+        }
+        _ => {
+            eprintln!("Invalid cmd: {}", conf.cmd);
+            eprintln!("Available cmds:");
+            eprintln!("  --cmd ver");
+            eprintln!("    Print version and the min compatible databend-meta version");
+        }
+    }
+
+    true
 }

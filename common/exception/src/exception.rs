@@ -40,6 +40,41 @@ impl ToString for ErrorCodeBacktrace {
     }
 }
 
+impl From<&str> for ErrorCodeBacktrace {
+    fn from(s: &str) -> Self {
+        Self::Serialized(Arc::new(s.to_string()))
+    }
+}
+impl From<String> for ErrorCodeBacktrace {
+    fn from(s: String) -> Self {
+        Self::Serialized(Arc::new(s))
+    }
+}
+
+impl From<Arc<String>> for ErrorCodeBacktrace {
+    fn from(s: Arc<String>) -> Self {
+        Self::Serialized(s)
+    }
+}
+
+impl From<Backtrace> for ErrorCodeBacktrace {
+    fn from(bt: Backtrace) -> Self {
+        Self::Origin(Arc::new(bt))
+    }
+}
+
+impl From<&Backtrace> for ErrorCodeBacktrace {
+    fn from(bt: &Backtrace) -> Self {
+        Self::Serialized(Arc::new(bt.to_string()))
+    }
+}
+
+impl From<Arc<Backtrace>> for ErrorCodeBacktrace {
+    fn from(bt: Arc<Backtrace>) -> Self {
+        Self::Origin(bt)
+    }
+}
+
 #[derive(Error)]
 pub struct ErrorCode {
     code: u16,
@@ -80,6 +115,16 @@ impl ErrorCode {
             cause: self.cause,
             backtrace: self.backtrace,
         }
+    }
+
+    /// Set backtrace info for this error.
+    ///
+    /// Useful when trying to keep original backtrace
+    pub fn set_backtrace(mut self, bt: Option<impl Into<ErrorCodeBacktrace>>) -> Self {
+        if let Some(b) = bt {
+            self.backtrace = Some(b.into());
+        }
+        self
     }
 
     pub fn backtrace(&self) -> Option<ErrorCodeBacktrace> {

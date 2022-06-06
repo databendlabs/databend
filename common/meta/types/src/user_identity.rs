@@ -31,6 +31,10 @@ impl UserIdentity {
     pub fn is_localhost(&self) -> bool {
         &self.hostname.to_lowercase() == "localhost" || &self.hostname == "127.0.0.1"
     }
+
+    pub fn is_root(&self) -> bool {
+        self.username.eq("root") || self.username.eq("default")
+    }
 }
 
 impl fmt::Display for UserIdentity {

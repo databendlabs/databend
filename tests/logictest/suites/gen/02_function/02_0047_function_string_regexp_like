@@ -23,19 +23,19 @@ statement query T
 select regexp_like('foo', null);
 
 ----  
-None
+NULL
 
 statement query T 
 select regexp_like(null, null);
 
 ----  
-None
+NULL
 
 statement query T 
 select regexp_like('foo', 'FOO', null);
 
 ----  
-None
+NULL
 
 statement query B label(mysql,http)
 select regexp_like('foo', 'FOO', 'c');

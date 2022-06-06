@@ -15,6 +15,7 @@
 pub mod admins;
 mod procedure;
 mod procedure_factory;
+pub mod stats;
 pub mod systems;
 
 pub use procedure::Procedure;

@@ -10,11 +10,11 @@ USE db1;
 statement ok
 CREATE TABLE IF NOT EXISTS t1(a int, b varchar) Engine = fuse;
 
-statement query TTTTIIII 
+statement query TTTTIIIII 
 SELECT * FROM system.tables WHERE database='db1';
 
 ----  
-db1 t1 fuse 1970-01-01 00:00:00.000 +0000 None None None None
+db1 t1 fuse 1970-01-01 00:00:00.000 +0000 NULL 0 0 0 NULL
 
 statement ok
 DROP TABLE t1;

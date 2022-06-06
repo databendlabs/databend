@@ -2,13 +2,13 @@ statement query T
 SELECT CHAR(NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT CHAR(97, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT CHAR(97);

@@ -14,19 +14,19 @@ statement query I
 SELECT try_cast(Null as Int64);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT try_cast(Null as Varchar);
 
 ----  
-None
+NULL
 
 statement query B 
 SELECT try_cast(Null as Boolean);
 
 ----  
-None
+NULL
 
 statement query B label(mysql,http)
 SELECT try_cast('33' as signed) = 33;

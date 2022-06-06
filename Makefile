@@ -26,7 +26,7 @@ fmt:
 
 lint:
 	cargo fmt
-	cargo clippy --tests -- -D warnings
+	cargo clippy --all -- -D warnings
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt
 	# Python file formatter(make setup to install)
@@ -46,6 +46,9 @@ run: build-release
 
 run-debug: build-debug
 	bash ./scripts/ci/deploy/databend-query-standalone.sh
+
+run-debug-management: build-debug
+	bash ./scripts/ci/deploy/databend-query-management-mode.sh
 
 build:
 	bash ./scripts/build/build-debug.sh

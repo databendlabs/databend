@@ -35,7 +35,7 @@ impl AnalyzableStatement for DfList {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         if !self.location.starts_with('@') {
             return Err(ErrorCode::SyntaxException(
-                "List stage uri must be started with @, for example: '@stage_name[/<path>]'",
+                "List stage uri must be started with @, for example: '@stage_name[/<path>/]'",
             ));
         }
         let (stage, path) = location_to_stage_path(&self.location, &ctx).await?;

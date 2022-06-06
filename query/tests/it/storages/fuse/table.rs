@@ -17,7 +17,7 @@ use std::default::Default;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::TruncateTablePlan;

@@ -7,9 +7,6 @@ inputs:
   dockerhub_token:
     description: "The token of dockerhub"
     required: true
-  dockerhub_namespace:
-    description: "The namespace of dockerhub"
-    required: true
   target:
     description: ""
     required: true
@@ -39,13 +36,15 @@ runs:
       with:
         name: release-${{ github.sha }}-${{ inputs.target }}
         path: ./target/release
+    - shell: bash
+      run: chmod +x ./target/release/databend-*
 
     - name: Build and publish databend image
       id: docker_build
       uses: docker/build-push-action@v3
       with:
         push: true
-        tags: ${{ inputs.dockerhub_namespace }}/databend:master # assume latest tag is the latest release tag
+        tags: datafuselabs/databend:master # assume latest tag is the latest release tag
         platforms: ${{ inputs.platform }}
         context: .
         file: ./docker/Dockerfile

@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::get_abs_path;
 use common_io::prelude::parse_escape_string;
 use common_io::prelude::StorageParams;
 use common_io::prelude::StorageS3Config;
@@ -26,31 +25,55 @@ use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_tracing::tracing::debug;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
 
 /// Returns user's stage info and relative path towards the stage's root.
+///
+/// If input location is empty we will convert it to `/` means the root of stage
+///
+/// - @mystage => (mystage, "/")
+///
+/// If input location is endswith `/`, it's a folder.
+///
+/// - @mystage/ => (mystage, "/")
+///
+/// Otherwise, it's a file
+///
+/// - @mystage/abc => (mystage, "abc")
+///
+/// For internal stage, we will also add prefix `/stage/<stage>/`
+///
+/// - @internal/abc => (internal, "/stage/internal/abc")
 pub async fn location_to_stage_path(
     location: &str,
     ctx: &Arc<QueryContext>,
 ) -> Result<(UserStageInfo, String)> {
     let mgr = ctx.get_user_manager();
     let s: Vec<&str> = location.split('@').collect();
-    // @my_ext_stage/abc
-    let names: Vec<&str> = s[1].splitn(2, '/').collect();
+    // @my_ext_stage/abc/
+    let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
     let stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
 
-    let path = if names.len() > 1 { names[1] } else { "" };
+    let path = names.get(1).unwrap_or(&"");
 
     let relative_path = match stage.stage_type {
         // It's internal, so we should prefix with stage name.
         StageType::Internal => {
-            let prefix = format!("stage/{}", stage.stage_name);
-            get_abs_path(prefix.as_str(), path)
+            format!("/stage/{}/{}", stage.stage_name, path)
         }
-        StageType::External => path.to_string(),
+        StageType::External => {
+            if path.is_empty() {
+                "/".to_string()
+            } else {
+                path.to_string()
+            }
+        }
     };
+
+    debug!("parsed stage: {stage:?}, path: {relative_path}");
     Ok((stage, relative_path))
 }
 
@@ -63,10 +86,10 @@ pub fn parse_stage_storage(
     // TODO(xuanwo): we should make the path logic more clear, ref: https://github.com/datafuselabs/databend/issues/5295
 
     // Parse uri.
-    // 's3://<bucket>[/<path>]'
+    // 's3://<bucket>[/<path>/]'
     let uri = location.parse::<http::Uri>().map_err(|_e| {
         ErrorCode::SyntaxException(
-            "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
+            "File location uri must be specified, for example: 's3://<bucket>[/<path>/]'",
         )
     })?;
 
@@ -79,14 +102,19 @@ pub fn parse_stage_storage(
         })?
         .to_string();
     // Path maybe a dir or a file.
-    let path = uri.path().to_string();
+    let mut path = uri.path().to_string();
+    // Rewrite path to `/` if it's empty to fit the directory check rule.
+    if path.is_empty() {
+        path = "/".to_string();
+    }
+
     // Path endswith `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
     let (root, path) = if path.ends_with('/') {
-        (path.as_str(), "")
+        (path.as_str(), "/")
     } else {
-        ("", path.as_str())
+        ("/", path.as_str())
     };
 
     // File storage plan.
@@ -158,12 +186,22 @@ pub fn parse_copy_file_format_options(
             .as_bytes(),
     );
 
+    // Compression delimiter.
+    let compression = parse_escape_string(
+        file_format_options
+            .get("compression")
+            .unwrap_or(&"none".to_string())
+            .as_bytes(),
+    )
+    .parse()
+    .map_err(ErrorCode::UnknownCompressionType)?;
+
     Ok(FileFormatOptions {
         format: file_format,
         skip_header,
         field_delimiter,
         record_delimiter,
-        compression: Default::default(),
+        compression,
     })
 }
 

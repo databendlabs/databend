@@ -177,8 +177,9 @@ pub enum Expr<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
-    // Numeric literal value
-    Number(String),
+    Integer(u64),
+    Float(f64),
+    BigInt { lit: String, is_hex: bool },
     // Quoted string literal value
     String(String),
     Boolean(bool),
@@ -476,8 +477,17 @@ impl Display for TrimWhere {
 impl Display for Literal {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Literal::Number(val) => {
+            Literal::Integer(val) => {
                 write!(f, "{val}")
+            }
+            Literal::Float(val) => {
+                write!(f, "{val}")
+            }
+            Literal::BigInt { lit, is_hex } => {
+                if *is_hex {
+                    write!(f, "0x")?;
+                }
+                write!(f, "{lit}")
             }
             Literal::String(val) => {
                 write!(f, "\'{val}\'")
@@ -702,7 +712,7 @@ impl<'a> Display for Expr<'a> {
                 unit,
                 ..
             } => {
-                write!(f, "DATEADD({date}, INTERVAL {interval} {unit})")?;
+                write!(f, "DATE_ADD({date}, INTERVAL {interval} {unit})")?;
             }
         }
 

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
-use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 
 use crate::users::auth::jwt::JwtAuthenticator;
@@ -33,6 +32,7 @@ pub struct AuthMgr {
 pub enum Credential {
     Jwt {
         token: String,
+        hostname: Option<String>,
     },
     Password {
         name: String,
@@ -52,7 +52,10 @@ impl AuthMgr {
 
     pub async fn auth(&self, credential: &Credential) -> Result<(Option<String>, UserInfo)> {
         match credential {
-            Credential::Jwt { token: t } => {
+            Credential::Jwt {
+                token: t,
+                hostname: h,
+            } => {
                 let jwt = match &self.jwt {
                     Some(j) => j.parse_jwt(t.as_str()).await?,
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
@@ -71,14 +74,20 @@ impl AuthMgr {
                             user_info.grants.grant_role(role);
                         }
                     }
-                    self.user_mgr.add_user(&tenant, user_info, true).await?;
-                }
-                Ok((
-                    Some(tenant.clone()),
+                    self.user_mgr.ensure_builtin_roles(&tenant).await?;
                     self.user_mgr
-                        .get_user(&tenant, UserIdentity::new(user_name, "%"))
-                        .await?,
-                ))
+                        .add_user(&tenant, user_info.clone(), true)
+                        .await?;
+                }
+                let user = self
+                    .user_mgr
+                    .get_user_with_client_ip(
+                        &tenant,
+                        user_name,
+                        h.as_ref().unwrap_or(&"%".to_string()),
+                    )
+                    .await?;
+                Ok((Some(tenant.clone()), user))
             }
             Credential::Password {
                 name: n,

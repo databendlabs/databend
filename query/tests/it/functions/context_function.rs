@@ -33,6 +33,12 @@ async fn test_context_function_build_arg_from_ctx() -> Result<()> {
         assert_eq!("'root'@'127.0.0.1'", format!("{:?}", args[0]));
     }
 
+    // Ok.
+    {
+        let args = ContextFunction::build_args_from_ctx(ctx.clone(), "user")?;
+        assert_eq!("'root'@'127.0.0.1'", format!("{:?}", args[0]));
+    }
+
     // Error.
     {
         let result = ContextFunction::build_args_from_ctx(ctx, "databasexx").is_err();

@@ -102,8 +102,9 @@ impl Column for ArrayColumn {
     }
 
     fn column_meta(&self) -> ColumnMeta {
+        let data_type: ArrayType = self.data_type.clone().try_into().unwrap();
         ColumnMeta::Array {
-            data_type: self.data_type.clone(),
+            inner_type: data_type.inner_type().clone(),
         }
     }
 
@@ -185,10 +186,9 @@ impl ScalarColumn for ArrayColumn {
 
 impl std::fmt::Debug for ArrayColumn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut data = Vec::new();
+        let mut data = Vec::with_capacity(self.len());
         for idx in 0..self.len() {
-            let x = self.get(idx);
-            data.push(format!("{:?}", x));
+            data.push(format!("{:?}", self.get(idx)));
         }
         let head = "ArrayColumn";
         let iter = data.iter();

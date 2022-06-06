@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
+use common_exception::Result;
 
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::plans::ScalarItem;
 
 #[derive(Clone, Debug)]
@@ -33,9 +35,9 @@ pub struct AggregatePlan {
     pub from_distinct: bool,
 }
 
-impl BasePlan for AggregatePlan {
-    fn plan_type(&self) -> PlanType {
-        PlanType::Aggregate
+impl Operator for AggregatePlan {
+    fn plan_type(&self) -> RelOp {
+        RelOp::Aggregate
     }
 
     fn is_physical(&self) -> bool {
@@ -46,16 +48,12 @@ impl BasePlan for AggregatePlan {
         true
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
-        todo!()
-    }
-
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
-        todo!()
+        Some(self)
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
+    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
+        Some(self)
     }
 }
 
@@ -66,7 +64,28 @@ impl PhysicalPlan for AggregatePlan {
 }
 
 impl LogicalPlan for AggregatePlan {
-    fn compute_relational_prop(&self, _expression: &SExpr) -> RelationalProperty {
-        todo!()
+    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+
+        // Derive output columns
+        let mut output_columns = ColumnSet::new();
+        for group_item in self.group_items.iter() {
+            output_columns.insert(group_item.index);
+        }
+        for agg in self.aggregate_functions.iter() {
+            output_columns.insert(agg.index);
+        }
+
+        // Derive outer columns
+        let outer_columns = input_prop
+            .outer_columns
+            .difference(&output_columns)
+            .cloned()
+            .collect();
+
+        Ok(RelationalProperty {
+            output_columns,
+            outer_columns,
+        })
     }
 }
