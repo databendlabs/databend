@@ -275,7 +275,7 @@ async fn execute(
                             .clone()
                             .wait_for_processing_insert(
                                 ctx.get_id(),
-                                tokio::time::Duration::from_secs(
+                                Duration::from_secs(
                                     ctx.get_config().query.wait_for_async_insert_timeout,
                                 ),
                             )

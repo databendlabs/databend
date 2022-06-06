@@ -213,11 +213,13 @@ impl AsyncInsertQueue {
         // stale timeout
         let stale_timeout = self.stale_timeout;
         if !stale_timeout.is_zero() {
-            let mut intv = interval(stale_timeout);
-            loop {
-                intv.tick().await;
-                self.clone().stale_check();
-            }
+            self.clone().runtime.as_ref().inner().spawn(async move {
+                let mut intv = interval(stale_timeout);
+                loop {
+                    intv.tick().await;
+                    self.clone().stale_check();
+                }
+            });
         }
     }
 
@@ -270,7 +272,7 @@ impl AsyncInsertQueue {
         };
 
         let entry = Arc::new(Entry::try_create(data_block.clone()));
-        let key = InsertKey::try_create(plan, settings.clone());
+        let key = InsertKey::try_create(plan, settings);
 
         let mut queue = self_arc.queue.write();
 

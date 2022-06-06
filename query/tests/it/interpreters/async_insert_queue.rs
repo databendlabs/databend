@@ -25,7 +25,6 @@ use futures::TryStreamExt;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
-#[allow(clippy::await_holding_lock)]
 async fn test_async_insert_queue() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
     let session_manager = SessionManagerBuilder::create_with_conf(conf.clone()).build()?;
@@ -56,8 +55,10 @@ async fn test_async_insert_queue() -> Result<()> {
             .unwrap();
 
         {
-            let mut queue = async_insert_queue.session_mgr.write();
-            *queue = Some(session_manager.clone());
+            {
+                let mut queue = async_insert_queue.session_mgr.write();
+                *queue = Some(session_manager.clone());
+            }
             async_insert_queue.clone().start().await;
         }
 
