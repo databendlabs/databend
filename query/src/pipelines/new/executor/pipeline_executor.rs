@@ -67,6 +67,10 @@ impl PipelineExecutor {
         Ok(())
     }
 
+    pub fn is_finished(&self) -> bool {
+        self.global_tasks_queue.is_finished()
+    }
+
     pub fn execute(self: &Arc<Self>) -> Result<()> {
         let mut thread_join_handles = self.execute_threads(self.threads_num);
 

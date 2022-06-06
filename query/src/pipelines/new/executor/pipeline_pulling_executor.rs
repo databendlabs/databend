@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_base::base::Runtime;
 use common_datablocks::DataBlock;
@@ -116,6 +117,18 @@ impl PipelinePullingExecutor {
             Ok(data_block) => data_block,
             Err(_recv_err) => Err(ErrorCode::LogicalError("Logical error, receiver error.")),
         }
+    }
+
+    pub fn try_pull_data<F>(&mut self, f: F) -> Result<Option<DataBlock>> where F: Fn() -> bool {
+        while !f() && !self.executor.is_finished() {
+            return match self.receiver.recv_timeout(Duration::from_millis(100)) {
+                Ok(data_block) => data_block,
+                Err(RecvTimeoutError::Timeout) => { continue; }
+                Err(RecvTimeoutError::Disconnected) => Err(ErrorCode::LogicalError("Logical error, receiver error.")),
+            };
+        }
+
+        Ok(None)
     }
 }
 
