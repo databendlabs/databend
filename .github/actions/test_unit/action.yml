@@ -8,8 +8,13 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # - name: Maximize build space
-    #   uses: ./.github/actions/cleanup
+    - name: Set Swap Space to 10GB
+      uses: pierotofy/set-swap-space@v1.0
+      with:
+        swap-size-gb: 10
+
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
 
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
@@ -60,3 +65,7 @@ runs:
           query/_logs*/
           store/_logs*/
           .databend/
+
+    # for cache
+    - shell: bash
+      run: cargo metadata --all-features --format-version 1 > ./target/metadata.json

@@ -74,7 +74,7 @@ jobs:
           target: ${{ matrix.target }}
 
   test_unit:
-    runs-on: [self-hosted, x64, Linux]
+    runs-on: ubuntu-latest
     needs: check
     steps:
       - uses: actions/checkout@v3
