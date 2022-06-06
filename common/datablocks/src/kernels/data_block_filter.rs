@@ -22,9 +22,9 @@ use common_exception::Result;
 use crate::DataBlock;
 
 impl DataBlock {
-    pub fn filter_block(block: &DataBlock, predicate: &ColumnRef) -> Result<DataBlock> {
+    pub fn filter_block(block: DataBlock, predicate: &ColumnRef) -> Result<DataBlock> {
         if block.num_columns() == 0 || block.num_rows() == 0 {
-            return Ok(block.clone());
+            return Ok(block);
         }
 
         let predict_boolean_nonull = Self::cast_to_nonull_boolean(predicate)?;
@@ -32,7 +32,7 @@ impl DataBlock {
         if predict_boolean_nonull.is_const() {
             let flag = predict_boolean_nonull.get_bool(0)?;
             if flag {
-                return Ok(block.clone());
+                return Ok(block);
             } else {
                 return Ok(DataBlock::empty_with_schema(block.schema().clone()));
             }
@@ -42,7 +42,7 @@ impl DataBlock {
         let rows = boolean_col.len();
         let count_zeros = boolean_col.values().null_count();
         match count_zeros {
-            0 => Ok(block.clone()),
+            0 => Ok(block),
             _ => {
                 if count_zeros == rows {
                     return Ok(DataBlock::empty_with_schema(block.schema().clone()));

@@ -103,7 +103,7 @@ impl Transform for TransformFilterImpl<true> {
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let filter_block = self.executor.execute(&data)?;
-        self.correct_with_schema(DataBlock::filter_block(&data, filter_block.column(0))?)
+        self.correct_with_schema(DataBlock::filter_block(data, filter_block.column(0))?)
     }
 }
 
@@ -114,6 +114,6 @@ impl Transform for TransformFilterImpl<false> {
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let filter_block = self.executor.execute(&data)?;
-        self.correct_with_schema(DataBlock::filter_block(&data, filter_block.column(0))?)
+        self.correct_with_schema(DataBlock::filter_block(data, filter_block.column(0))?)
     }
 }

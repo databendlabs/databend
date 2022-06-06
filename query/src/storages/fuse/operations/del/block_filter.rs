@@ -25,6 +25,7 @@ use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::operations::del::mutations_collector::Deletion;
 use crate::storages::fuse::FuseTable;
 
+//  the "tranform filter" of delete plan
 pub async fn delete_from_block(
     table: &FuseTable,
     block_meta: &BlockMeta,
@@ -73,7 +74,7 @@ pub async fn delete_from_block(
     )?;
 
     // get the single col data block, which indicates the rows should be kept/removed
-    let filter_block = expr_exec.execute(&data_block)?;
+    let filter_result = expr_exec.execute(&data_block)?;
 
     // read the whole block
     let whole_block = if filtering_whole_block {
@@ -85,9 +86,8 @@ pub async fn delete_from_block(
     };
 
     // returns the data remains after deletion
-    let data_block = DataBlock::filter_block(&whole_block, filter_block.column(0))?;
+    let data_block = DataBlock::filter_block(whole_block, filter_result.column(0))?;
     let res = if data_block.num_rows() == block_meta.row_count as usize {
-        // TODO: this works , but not acceptable (the whole data block is cloned here)
         Deletion::NothingDeleted
     } else {
         Deletion::Remains(data_block)

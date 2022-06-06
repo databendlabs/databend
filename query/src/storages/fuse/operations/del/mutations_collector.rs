@@ -90,7 +90,7 @@ impl<'a> DeletionCollector<'a> {
                 }
             }
 
-            if new_segment.blocks.len() == 0 {
+            if new_segment.blocks.is_empty() {
                 // remove the segment if no blocks there
                 new_snapshot.segments.remove(seg_idx);
             } else {

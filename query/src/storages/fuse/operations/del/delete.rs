@@ -89,17 +89,15 @@ impl FuseTable {
         // delete block one by one.
         // this could be executed in a distributed manner, till new planner, pipeline settled down totally
         for (seg_idx, block_meta) in block_metas {
-            let proj = plan.projection.clone(); // TODO WTF
+            let proj = plan.projection.clone();
             match delete_from_block(self, &block_meta, &ctx, proj, filter).await? {
                 Deletion::NothingDeleted => {
-                    debug!("Nothing deleted");
                     // false positive, we should keep the whole block
                     continue;
                 }
                 Deletion::Remains(r) => {
                     // after deletion, the data block `r` remains, let keep it  by replacing the block
                     // located at `block_meta.location`, of segment indexed by `seg_idx`, with a new block `r`
-                    debug!("got remains {:?}", &r);
                     deletion_collector
                         .replace_with(seg_idx, &block_meta.location, r)
                         .await?
