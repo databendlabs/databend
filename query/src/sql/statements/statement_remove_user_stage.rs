@@ -42,13 +42,12 @@ impl AnalyzableStatement for DfRemoveStage {
             file_name = path_vec[path_vec.len() - 1].to_string();
         }
         //get path
-        let path: String;
-        if file_name.is_empty() {
+        let path = if file_name.is_empty() {
             let path_vec: Vec<&str> = self.location.splitn(2, &file_name).collect();
-            path = path_vec[1].to_string();
+            path_vec[1].to_string()
         } else {
-            path = self.location.to_string();
-        }
+            self.location.to_string()
+        };
         let (stage, path) = location_to_stage_path(&path, &_ctx).await?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::RemoveUserStage(RemoveUserStagePlan {
