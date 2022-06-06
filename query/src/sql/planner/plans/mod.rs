@@ -27,6 +27,7 @@ mod physical_scan;
 mod project;
 mod scalar;
 mod sort;
+mod union;
 
 pub use aggregate::AggregatePlan;
 pub use apply::CrossApply;
@@ -59,6 +60,7 @@ pub use project::Project;
 pub use scalar::*;
 pub use sort::SortItem;
 pub use sort::SortPlan;
+pub use union::UnionPlan;
 
 use super::BindContext;
 use super::MetadataRef;

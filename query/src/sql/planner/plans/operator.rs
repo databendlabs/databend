@@ -32,6 +32,7 @@ use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::union::UnionPlan;
 
 #[enum_dispatch]
 pub trait Operator {
@@ -78,6 +79,7 @@ pub enum RelOp {
     Limit,
     CrossApply,
     Max1Row,
+    Union,
 
     // Pattern
     Pattern,
@@ -101,6 +103,7 @@ pub enum RelOperator {
     Limit(LimitPlan),
     CrossApply(CrossApply),
     Max1Row(Max1Row),
+    Union(UnionPlan),
 
     Pattern(PatternPlan),
 }

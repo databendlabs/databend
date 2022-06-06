@@ -22,6 +22,7 @@ use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
+use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,6 +34,7 @@ use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::plans::Filter;
 use crate::sql::plans::Scalar;
+use crate::sql::plans::UnionPlan;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -139,20 +141,67 @@ impl<'a> Binder {
     }
 
     #[async_recursion]
+    pub(crate) async fn bind_set_expr(
+        &mut self,
+        bind_context: &BindContext,
+        set_expr: &SetExpr,
+        query: Option<&Query>,
+    ) -> Result<(SExpr, BindContext)> {
+        match set_expr {
+            SetExpr::Select(stmt) => match query {
+                Some(query) => {
+                    self.bind_select_stmt(bind_context, stmt, &query.order_by)
+                        .await
+                }
+                None => self.bind_select_stmt(bind_context, stmt, &vec![]).await,
+            },
+            SetExpr::Query(stmt) => self.bind_query(bind_context, stmt).await,
+            SetExpr::SetOperation {
+                op,
+                all,
+                left,
+                right,
+            } => {
+                let (left_expr, left_bind_context) =
+                    self.bind_set_expr(bind_context, &*left, None).await?;
+                let (right_expr, right_bind_context) =
+                    self.bind_set_expr(bind_context, &*right, None).await?;
+                if left_bind_context.columns.len() != right_bind_context.columns.len() {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "SetOperation must have the same number of columns",
+                    )));
+                } else {
+                    for (left_col, right_col) in left_bind_context
+                        .columns
+                        .iter()
+                        .zip(right_bind_context.columns.iter())
+                    {
+                        if !left_col.data_type.eq(&right_col.data_type) {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "SetOperation's types cannot be matched"
+                            )));
+                        }
+                    }
+                }
+                match (op, all) {
+                    (SetOperator::Union, true) => {
+                        let union_plan = UnionPlan {};
+                        let expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
+                        Ok((expr, left_bind_context))
+                    }
+                    _ => Err(ErrorCode::UnImplement("Unsupported query type")),
+                }
+            }
+        }
+    }
+
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &BindContext,
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
-        let (mut s_expr, bind_context) = match &query.body {
-            SetExpr::Select(stmt) => {
-                self.bind_select_stmt(bind_context, stmt, &query.order_by)
-                    .await
-            }
-            SetExpr::Query(stmt) => self.bind_query(bind_context, stmt).await,
-            _ => Err(ErrorCode::UnImplement("Unsupported query type")),
-        }?;
-
+        let (mut s_expr, bind_context) =
+            self.bind_set_expr(bind_context, &query.body, Some(query)).await?;
         if !query.limit.is_empty() {
             if query.limit.len() == 1 {
                 s_expr = self
