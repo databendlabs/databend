@@ -32,6 +32,7 @@ pub use aggregate::AggregatePlan;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_planners::CreateTablePlan;
+use common_planners::CreateUserPlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
@@ -75,4 +76,7 @@ pub enum Plan {
     ShowMetrics,
     ShowProcessList,
     ShowSettings,
+
+    // DCL
+    CreateUser(Box<CreateUserPlan>),
 }

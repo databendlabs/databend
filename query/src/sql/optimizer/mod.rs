@@ -57,9 +57,11 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
         }),
 
         // Passthrough
-        Plan::ShowMetrics | Plan::ShowProcessList | Plan::ShowSettings | Plan::CreateTable(_) => {
-            Ok(plan)
-        }
+        Plan::ShowMetrics
+        | Plan::ShowProcessList
+        | Plan::ShowSettings
+        | Plan::CreateTable(_)
+        | Plan::CreateUser(_) => Ok(plan),
     }
 }
 
