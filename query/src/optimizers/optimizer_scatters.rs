@@ -309,7 +309,7 @@ impl PlanRewriter for ScattersOptimizerImpl {
     fn rewrite_window_func(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
         let new_input = Arc::new(self.rewrite_plan_node(&plan.input)?);
 
-        self.input = Some(new_input.clone());
+        self.input = Some(new_input);
 
         match self.running_mode {
             RunningMode::Cluster => self.cluster_window(plan),

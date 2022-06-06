@@ -264,9 +264,7 @@ impl PlanParser {
             false => {
                 let exprs = data.window_expressions.to_vec();
                 exprs.into_iter().try_fold(plan, |input, window_func| {
-                    PlanBuilder::from(&input)
-                        .window_func(window_func.clone())?
-                        .build()
+                    PlanBuilder::from(&input).window_func(window_func)?.build()
                 })
             }
         }

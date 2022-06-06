@@ -1874,6 +1874,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rsa",
+ "segment-tree",
  "serde",
  "serde-bridge",
  "serde_json",
@@ -5628,6 +5629,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "segment-tree"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f7dbd0d32cabaa6c7c3286d756268247538d613b621227bfe59237d7bbb271a"
 
 [[package]]
 name = "semver"

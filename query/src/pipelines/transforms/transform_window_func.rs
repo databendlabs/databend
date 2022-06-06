@@ -17,28 +17,35 @@ use std::cmp::Ordering;
 use std::ops::Range;
 use std::sync::Arc;
 
+use bumpalo::Bump;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::partition::lexicographical_partition_ranges;
 use common_arrow::arrow::compute::sort::SortColumn;
 use common_datablocks::DataBlock;
+use common_datavalues::ColumnRef;
 use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::Series;
-use common_functions::aggregates::eval_aggr;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::StateAddr;
 use common_functions::scalars::assert_numeric;
 use common_functions::window::WindowFrame;
 use common_functions::window::WindowFrameBound;
 use common_functions::window::WindowFrameUnits;
-use common_planners::sort;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use enum_extract::let_extract;
 use futures::StreamExt;
+use segment_tree::ops::Commutative;
+use segment_tree::ops::Identity;
+use segment_tree::ops::Operation;
+use segment_tree::SegmentPoint;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
@@ -97,7 +104,9 @@ impl WindowFuncTransform {
         );
         sort_exprs.extend(order_by.to_owned());
         let sort_column_desc = get_sort_descriptions(block.schema(), &sort_exprs)?;
-        let block = DataBlock::sort_block(&block, &sort_column_desc, None)?;
+
+        // todo Fixme: empty partition by
+        let block = DataBlock::sort_block(block, &sort_column_desc, None)?;
 
         // set default window frame
         let window_frame = match window_frame {
@@ -129,27 +138,41 @@ impl WindowFuncTransform {
 
         // function calculate
         let mut arguments: Vec<ColumnWithField> = Vec::with_capacity(args.len());
+        let mut arg_fields = Vec::with_capacity(args.len());
         for arg in args {
             let arg_field: DataField = arg.to_data_field(&self.input_schema)?;
+            arg_fields.push(arg_field.clone());
             let arg_column = block.try_column_by_name(arg_field.name()).unwrap();
             arguments.push(ColumnWithField::new(Arc::clone(arg_column), arg_field));
         }
+
+        let function = if !AggregateFunctionFactory::instance().check(op) {
+            unimplemented!("not yet impl built-in window func");
+        } else {
+            AggregateFunctionFactory::instance().get(op, params.clone(), arg_fields)?
+        };
+
+        let arena = Arc::new(Bump::with_capacity(
+            2 * block.num_rows() * function.state_layout().size(),
+        ));
+        let segment_tree_state = Self::new_partition_aggr_func(
+            function.clone(),
+            &arguments
+                .iter()
+                .map(|a| a.column().clone())
+                .collect::<Vec<_>>(),
+            arena,
+        );
 
         let window_col_per_tuple = (0..block.num_rows())
             .map(|i| {
                 let frame = &frame_bounds[i];
                 let frame_start = frame.start;
                 let frame_end = frame.end;
-                let frame_size = frame_end - frame_start;
-                let args_slice = arguments
-                    .iter()
-                    .map(|c| c.slice(frame_start, frame_size))
-                    .collect::<Vec<_>>();
-                // at the moment, only supports aggr function
-                if !AggregateFunctionFactory::instance().check(op) {
-                    unimplemented!("not yet impl built-in window func");
-                }
-                eval_aggr(op, params.to_owned(), &args_slice, frame_size).unwrap()
+                let state = segment_tree_state.query(frame_start, frame_end);
+                let mut builder = function.return_type().unwrap().create_mutable(1);
+                function.merge_result(state, builder.as_mut()).unwrap();
+                builder.to_column()
             })
             .collect::<Vec<_>>();
 
@@ -398,6 +421,32 @@ impl WindowFuncTransform {
             },
         }
     }
+
+    /// Actually, the computation is row based
+    fn new_partition_aggr_func(
+        func: AggregateFunctionRef,
+        arguments: &[ColumnRef],
+        arena: Arc<Bump>,
+    ) -> SegmentPoint<StateAddr, Agg> {
+        let rows = arguments[0].len();
+        let state_per_tuple = (0..rows)
+            .map(|i| {
+                arguments
+                    .iter()
+                    .map(|c| c.slice(i, 1))
+                    .collect::<Vec<ColumnRef>>()
+            })
+            .map(|args| {
+                let place = arena.alloc_layout(func.state_layout());
+                let state_addr = place.into();
+                func.init_state(state_addr);
+                func.accumulate(state_addr, &args, None, 1)
+                    .expect("Failed to initialize the state");
+                state_addr
+            })
+            .collect::<Vec<_>>();
+        SegmentPoint::build(state_per_tuple, Agg { func, arena })
+    }
 }
 
 #[async_trait::async_trait]
@@ -459,5 +508,44 @@ impl Processor for WindowFuncTransform {
             None,
             vec![block],
         )))
+    }
+}
+
+struct Agg {
+    func: AggregateFunctionRef,
+    arena: Arc<Bump>,
+}
+
+impl Operation<StateAddr> for Agg {
+    fn combine(&self, a: &StateAddr, b: &StateAddr) -> StateAddr {
+        let place = self.arena.alloc_layout(self.func.state_layout());
+        let state_addr = place.into();
+        self.func.init_state(state_addr);
+        self.func
+            .merge(state_addr, *a)
+            .expect("Failed to merge states");
+        self.func
+            .merge(state_addr, *b)
+            .expect("Failed to merge states");
+        state_addr
+    }
+
+    fn combine_mut(&self, a: &mut StateAddr, b: &StateAddr) {
+        self.func.merge(*a, *b).expect("Failed to merge states");
+    }
+
+    fn combine_mut2(&self, a: &StateAddr, b: &mut StateAddr) {
+        self.func.merge(*b, *a).expect("Failed to merge states");
+    }
+}
+
+impl Commutative<StateAddr> for Agg {}
+
+impl Identity<StateAddr> for Agg {
+    fn identity(&self) -> StateAddr {
+        let place = self.arena.alloc_layout(self.func.state_layout());
+        let state_addr = place.into();
+        self.func.init_state(state_addr);
+        state_addr
     }
 }

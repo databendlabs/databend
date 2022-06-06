@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod function;
-mod window_frame;
-
-pub use function::*;
-pub use window_frame::*;
+pub enum WindowFunction {
+    AggregateFunction,
+    BuiltInFunction,
+}
