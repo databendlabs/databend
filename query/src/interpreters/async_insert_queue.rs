@@ -84,10 +84,8 @@ impl Hash for InsertKey {
         );
         state.write(table.as_bytes());
         let values = self.changed_settings.get_setting_values();
-        for value in values.into_iter() {
-            let serialized = serde_json::to_string(&value).unwrap();
-            state.write(serialized.as_bytes());
-        }
+        let serialized = serde_json::to_string(&values).unwrap();
+        state.write(serialized.as_bytes());
     }
 }
 
