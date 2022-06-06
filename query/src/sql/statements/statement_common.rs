@@ -23,6 +23,7 @@ use common_io::prelude::StorageParams;
 use common_io::prelude::StorageS3Config;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
+use common_meta_types::StageParams;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_tracing::tracing::debug;
@@ -30,6 +31,13 @@ use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
 
+/// Named stage(start with `@`):
+///
+/// ```sql
+/// copy into mytable from @my_ext_stage
+///     file_format = (type = csv);
+/// ```
+///
 /// Returns user's stage info and relative path towards the stage's root.
 ///
 /// If input location is empty we will convert it to `/` means the root of stage
@@ -47,9 +55,9 @@ use crate::sessions::QueryContext;
 /// For internal stage, we will also add prefix `/stage/<stage>/`
 ///
 /// - @internal/abc => (internal, "/stage/internal/abc")
-pub async fn location_to_stage_path(
-    location: &str,
+pub async fn parse_stage_location(
     ctx: &Arc<QueryContext>,
+    location: &str,
 ) -> Result<(UserStageInfo, String)> {
     let mgr = ctx.get_user_manager();
     let s: Vec<&str> = location.split('@').collect();
@@ -65,11 +73,14 @@ pub async fn location_to_stage_path(
             format!("/stage/{}/{}", stage.stage_name, path)
         }
         StageType::External => {
+            let mut path = path.to_string();
             if path.is_empty() {
-                "/".to_string()
-            } else {
-                path.to_string()
+                path.push('/');
             }
+            if !path.starts_with('/') {
+                path.insert(0, '/')
+            }
+            path
         }
     };
 
@@ -77,11 +88,19 @@ pub async fn location_to_stage_path(
     Ok((stage, relative_path))
 }
 
-pub fn parse_stage_storage(
+/// External stage(location starts without `@`):
+///
+/// ```sql
+/// copy into table from 's3://mybucket/data/files'
+///     credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
+///     encryption=(master_key = 'my_master_key')
+///     file_format = (type = csv field_delimiter = '|' skip_header = 1)"
+/// ```
+pub fn parse_uri_location(
     location: &str,
     credential_options: &BTreeMap<String, String>,
     encryption_options: &BTreeMap<String, String>,
-) -> Result<(StorageParams, String)> {
+) -> Result<(UserStageInfo, String)> {
     // TODO(xuanwo): we should support use non-aws s3 as stage like oss.
     // TODO(xuanwo): we should make the path logic more clear, ref: https://github.com/datafuselabs/databend/issues/5295
 
@@ -118,7 +137,7 @@ pub fn parse_stage_storage(
     };
 
     // File storage plan.
-    match uri.scheme_str() {
+    let (stage_storage, path) = match uri.scheme_str() {
         None => Err(ErrorCode::SyntaxException(
             "File location scheme must be specified",
         )),
@@ -140,6 +159,7 @@ pub fn parse_stage_storage(
                         .get("master_key")
                         .cloned()
                         .unwrap_or_default(),
+                    disable_credential_loader: true,
                     ..Default::default()
                 };
 
@@ -151,7 +171,18 @@ pub fn parse_stage_storage(
                 "File location uri unsupported, must be one of [s3, @stage]",
             )),
         },
-    }
+    }?;
+
+    let stage = UserStageInfo {
+        stage_name: location.to_string(),
+        stage_type: StageType::External,
+        stage_params: StageParams {
+            storage: stage_storage,
+        },
+        ..Default::default()
+    };
+
+    Ok((stage, path))
 }
 
 pub fn parse_copy_file_format_options(

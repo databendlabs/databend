@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_planners::ListPlan;
 use common_planners::PlanNode;
 
-use super::location_to_stage_path;
+use super::parse_stage_location;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -38,7 +38,7 @@ impl AnalyzableStatement for DfList {
                 "List stage uri must be started with @, for example: '@stage_name[/<path>/]'",
             ));
         }
-        let (stage, path) = location_to_stage_path(&self.location, &ctx).await?;
+        let (stage, path) = parse_stage_location(&ctx, &self.location).await?;
 
         let plan_node = ListPlan {
             path,
