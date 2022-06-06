@@ -18,10 +18,11 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use futures::stream::AbortHandle;
+use futures::stream::Abortable;
 use futures::Stream;
-use futures::stream::{Abortable, AbortHandle};
-use common_streams::AbortStream;
 
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 
@@ -36,7 +37,10 @@ impl ProcessorExecutorStream {
         let is_aborted = Arc::new(Abortable::new((), reg));
 
         executor.start();
-        Ok((handle, Self { is_aborted, executor }))
+        Ok((handle, Self {
+            is_aborted,
+            executor,
+        }))
     }
 }
 
@@ -46,14 +50,17 @@ impl Stream for ProcessorExecutorStream {
     fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let is_aborted = self.is_aborted.clone();
         let self_ = Pin::get_mut(self);
-        match self_.executor.try_pull_data(move || is_aborted.is_aborted()) {
+        match self_
+            .executor
+            .try_pull_data(move || is_aborted.is_aborted())
+        {
             Err(cause) => Poll::Ready(Some(Err(cause))),
             Ok(Some(data)) => Poll::Ready(Some(Ok(data))),
             Ok(None) => match self_.is_aborted.is_aborted() {
                 false => Poll::Ready(None),
                 true => Poll::Ready(Some(Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed",
-                ))))
+                )))),
             },
         }
     }
