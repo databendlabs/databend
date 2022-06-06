@@ -204,8 +204,6 @@ pub enum Statement<'a> {
     },
     RemoveStage{
     },
-    Copy{
-    },
     ListStage {
         stage_name: String
     }
@@ -821,6 +819,9 @@ impl<'a> Display for Statement<'a> {
             Statement::ListStage { stage_name } => {
                 write!(f, "LIST @{stage_name}")?;
             },
+            Statement::ShowStages => todo!(),
+            Statement::CreateStage {  } => todo!(),
+            Statement::RemoveStage {  } => todo!(),
         }
         Ok(())
     }

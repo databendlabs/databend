@@ -1021,7 +1021,7 @@ pub fn literal_string(i: Input) -> IResult<String> {
 
 pub fn at_string(i: Input) -> IResult<String> {
     match_token(AtString)(i).and_then(|(i2, token)| {
-        Ok((i2, token.text()[1..token.text().len() - 1].to_string()))
+        Ok((i2, token.text()[1..token.text().len()].to_string()))
     })
 }
 
