@@ -47,8 +47,7 @@ async fn test_fuse_table_block_appender() -> Result<()> {
         DEFAULT_BLOCK_PER_SEGMENT,
         0,
         locs.clone(),
-        schema.clone(),
-        vec![],
+        None,
     )
     .await
     .collect::<Vec<_>>()
@@ -65,7 +64,7 @@ async fn test_fuse_table_block_appender() -> Result<()> {
     let number_of_blocks = 30;
     let max_rows_per_block = 3;
     let max_blocks_per_segment = 1;
-    let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1, 2, 3])]);
+    let block = DataBlock::create(schema, vec![Series::from_data(vec![1, 2, 3])]);
     let blocks = std::iter::repeat(Ok(block)).take(number_of_blocks);
     let block_stream = futures::stream::iter(blocks);
 
@@ -75,8 +74,7 @@ async fn test_fuse_table_block_appender() -> Result<()> {
         max_rows_per_block,
         max_blocks_per_segment,
         locs.clone(),
-        schema.clone(),
-        vec![],
+        None,
     )
     .await
     .collect::<Vec<_>>()
@@ -96,8 +94,7 @@ async fn test_fuse_table_block_appender() -> Result<()> {
         DEFAULT_BLOCK_PER_SEGMENT,
         0,
         locs,
-        schema,
-        vec![],
+        None,
     )
     .await
     .collect::<Vec<_>>()
@@ -266,8 +263,7 @@ async fn test_block_stream_writer() -> Result<()> {
             max_rows_per_block,
             max_blocks_per_segment,
             locs,
-            DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]),
-            vec![],
+            None,
         )
         .await;
         let segs = stream.try_collect::<Vec<_>>().await?;

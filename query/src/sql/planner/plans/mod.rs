@@ -69,5 +69,5 @@ pub enum Plan {
     },
 
     // DDL
-    CreateTable(CreateTablePlan),
+    CreateTable(Box<CreateTablePlan>),
 }

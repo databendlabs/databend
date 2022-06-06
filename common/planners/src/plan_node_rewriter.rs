@@ -26,6 +26,7 @@ use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::plan_table_undrop::UnDropTablePlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterClusterKeyPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::AlterViewPlan;
@@ -199,6 +200,9 @@ pub trait PlanRewriter: Sized {
 
             // Kill.
             PlanNode::Kill(plan) => self.rewrite_kill(plan),
+
+            // Alter.
+            PlanNode::AlterClusterKey(plan) => self.rewrite_alter_cluster_key(plan),
         }
     }
 
@@ -510,6 +514,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_alter_user_udf(&mut self, plan: &AlterUserUDFPlan) -> Result<PlanNode> {
         Ok(PlanNode::AlterUserUDF(plan.clone()))
+    }
+
+    fn rewrite_alter_cluster_key(&mut self, plan: &AlterClusterKeyPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AlterClusterKey(plan.clone()))
     }
 }
 

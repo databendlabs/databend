@@ -42,6 +42,7 @@ use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;
 use crate::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use crate::storages::index::ClusterKeyInfo;
 
 pub type AppendOperationLogEntryStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<AppendOperationLogEntry>> + Send>>;
@@ -60,14 +61,21 @@ impl FuseTable {
 
         let da = ctx.get_storage_operator()?;
 
+        let cluster_key_info = self.cluster_key_meta.clone().map(|(id, _)| ClusterKeyInfo {
+            cluster_key_id: id,
+            cluster_key_index: vec![],
+            exprs: self.cluster_keys.clone(),
+            expression_executor: None,
+            data_schema: self.table_info.schema(),
+        });
+
         let mut segment_stream = BlockStreamWriter::write_block_stream(
             ctx.clone(),
             stream,
             rows_per_block,
             block_per_seg,
             self.meta_location_generator().clone(),
-            self.table_info.schema().clone(),
-            self.cluster_keys.clone(),
+            cluster_key_info,
         )
         .await;
 
@@ -117,12 +125,12 @@ impl FuseTable {
             )
         })?;
 
-        let mut cluster_keys_index = Vec::with_capacity(self.cluster_keys.len());
-        let mut expression_executor = None;
+        let mut cluster_key_info = None;
         if !self.cluster_keys.is_empty() {
             let input_schema = self.table_info.schema();
             let mut merged = input_schema.fields().clone();
 
+            let mut cluster_key_index = Vec::with_capacity(self.cluster_keys.len());
             for expr in &self.cluster_keys {
                 let cname = expr.column_name();
                 let index = match merged.iter().position(|x| x.name() == &cname) {
@@ -132,11 +140,12 @@ impl FuseTable {
                     }
                     Some(idx) => idx,
                 };
-                cluster_keys_index.push(index);
+                cluster_key_index.push(index);
             }
 
             let output_schema = DataSchemaRefExt::create(merged);
 
+            let mut expression_executor = None;
             if output_schema != input_schema {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
                     ExpressionTransform::try_create(
@@ -186,6 +195,14 @@ impl FuseTable {
                     sort_descs.clone(),
                 )
             })?;
+
+            cluster_key_info = Some(ClusterKeyInfo {
+                cluster_key_id: self.cluster_key_meta.as_ref().unwrap().0,
+                cluster_key_index,
+                exprs: self.cluster_keys.clone(),
+                expression_executor,
+                data_schema: input_schema.clone(),
+            });
         }
 
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
@@ -199,8 +216,7 @@ impl FuseTable {
                     block_per_seg,
                     da.clone(),
                     self.meta_location_generator().clone(),
-                    cluster_keys_index.clone(),
-                    expression_executor.clone(),
+                    cluster_key_info.clone(),
                 )?,
             );
         }

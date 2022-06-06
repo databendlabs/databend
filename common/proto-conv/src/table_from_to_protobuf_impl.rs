@@ -130,7 +130,9 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: p.engine,
             engine_options: p.engine_options,
             options: p.options,
+            cluster_key: p.cluster_key,
             cluster_keys: p.cluster_keys,
+            default_cluster_key_id: p.default_cluster_key_id,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
             drop_on: match p.drop_on {
@@ -155,7 +157,9 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             options: self.options.clone(),
+            cluster_key: self.cluster_key.clone(),
             cluster_keys: self.cluster_keys.clone(),
+            default_cluster_key_id: self.default_cluster_key_id,
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
             drop_on: match self.drop_on {

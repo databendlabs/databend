@@ -77,6 +77,18 @@ pub trait Table: Sync + Send {
         vec![]
     }
 
+    async fn alter_cluster_keys(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _catalog_name: &str,
+        _cluster_key_str: String,
+    ) -> Result<()> {
+        Err(ErrorCode::UnsupportedEngineParams(format!(
+            "Unsupported clustering keys for engine: {}",
+            self.engine()
+        )))
+    }
+
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,
