@@ -122,7 +122,7 @@ impl PipelineExecutor {
                 self.global_tasks_queue.steal_task_to_context(&mut context);
             }
 
-            while context.has_task() {
+            while !self.global_tasks_queue.is_finished() && context.has_task() {
                 if let Some(executed_pid) = context.execute_task(self)? {
                     // We immediately schedule the processor again.
                     let schedule_queue = self.graph.schedule_queue(executed_pid)?;
