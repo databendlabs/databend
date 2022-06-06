@@ -436,18 +436,17 @@ impl<'a> Display for Statement<'a> {
             }
             Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists,
+                opt_catalog,
                 database,
                 engine,
                 ..
             }) => {
-                write!(f, "CREATE DATABASE")?;
+                write!(f, "CREATE DATABASE ")?;
                 if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
+                    write!(f, "IF NOT EXISTS ")?;
                 }
-                write!(f, " {database}")?;
-                // if *engine != Engine::Null {
+                write_period_separated_list(f, opt_catalog.iter().chain(Some(database)))?;
                 write!(f, " ENGINE = {engine}")?;
-                // }
                 // TODO(leiysky): display rest information
             }
             Statement::DropDatabase {

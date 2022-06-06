@@ -78,6 +78,7 @@ fn test_statement() {
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
         r#"create database if not exists a;"#,
+        r#"create database catalog.t engine = Default;"#,
         r#"create database t engine = Github(token='123456');"#,
         r#"create database t engine = Default;"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,

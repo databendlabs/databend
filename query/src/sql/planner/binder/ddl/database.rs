@@ -28,7 +28,6 @@ impl<'a> Binder {
         &self,
         stmt: &CreateDatabaseStmt<'a>,
     ) -> Result<Plan> {
-        println!("bind create database:{:?}", stmt);
         let catalog = stmt
             .opt_catalog
             .as_ref()

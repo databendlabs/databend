@@ -523,8 +523,32 @@ CreateDatabase(
         options: [],
     },
 )
-<<<<<<< HEAD
-=======
+
+
+---------- Input ----------
+create database catalog.t engine = Default;
+---------- Output ---------
+CREATE DATABASE catalog.t ENGINE = DEFAULT
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: false,
+        opt_catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(16..23),
+            },
+        ),
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(24..25),
+        },
+        engine: Default,
+        options: [],
+    },
+)
 
 
 ---------- Input ----------
@@ -567,7 +591,6 @@ CreateDatabase(
         options: [],
     },
 )
->>>>>>> be8811737 (feat(parser): add create database tests)
 
 
 ---------- Input ----------
