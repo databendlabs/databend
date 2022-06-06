@@ -56,8 +56,8 @@ SHOW TABLES LIKE 'settings';
 Showing the tables named as `"t4"`, including the dropped ones that are still within their retention periods: 
 
 ```sql
-mysql> drop table t4;
-mysql> show tables history like 't4';
+DROP TABLE t4;
+SHOW TABLES HISTORY LIKE 't4';
 +-------------------+-------------------------------+
 | Tables_in_default | drop_time                     |
 +-------------------+-------------------------------+
