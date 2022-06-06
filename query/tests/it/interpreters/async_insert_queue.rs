@@ -94,8 +94,10 @@ async fn test_async_insert_queue() -> Result<()> {
             .unwrap();
 
         {
-            let mut queue = async_insert_queue.session_mgr.write();
-            *queue = Some(session_manager.clone());
+            {
+                let mut queue = async_insert_queue.session_mgr.write();
+                *queue = Some(session_manager.clone());
+            }
             async_insert_queue.clone().start().await;
         }
 
