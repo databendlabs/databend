@@ -19,7 +19,7 @@ use common_planners::PlanNode;
 use common_planners::RemoveUserStagePlan;
 use common_tracing::tracing;
 
-use super::location_to_stage_path;
+use super::parse_stage_location;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -48,7 +48,7 @@ impl AnalyzableStatement for DfRemoveStage {
         } else {
             self.location.to_string()
         };
-        let (stage, path) = location_to_stage_path(&path, &_ctx).await?;
+        let (stage, path) = parse_stage_location(&_ctx, &path).await?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::RemoveUserStage(RemoveUserStagePlan {
                 stage,
