@@ -517,6 +517,12 @@ pub struct QueryConfig {
     pub clickhouse_handler_port: u16,
 
     #[clap(long, default_value = "127.0.0.1")]
+    pub clickhouse_http_handler_host: String,
+
+    #[clap(long, default_value = "8124")]
+    pub clickhouse_http_handler_port: u16,
+
+    #[clap(long, default_value = "127.0.0.1")]
     pub http_handler_host: String,
 
     #[clap(long, default_value = "8000")]
@@ -660,6 +666,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             max_active_sessions: self.max_active_sessions,
             clickhouse_handler_host: self.clickhouse_handler_host,
             clickhouse_handler_port: self.clickhouse_handler_port,
+            clickhouse_http_handler_host: self.clickhouse_http_handler_host,
+            clickhouse_http_handler_port: self.clickhouse_http_handler_port,
             http_handler_host: self.http_handler_host,
             http_handler_port: self.http_handler_port,
             http_handler_result_timeout_millis: self.http_handler_result_timeout_millis,
@@ -710,6 +718,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             max_active_sessions: inner.max_active_sessions,
             clickhouse_handler_host: inner.clickhouse_handler_host,
             clickhouse_handler_port: inner.clickhouse_handler_port,
+            clickhouse_http_handler_host: inner.clickhouse_http_handler_host,
+            clickhouse_http_handler_port: inner.clickhouse_http_handler_port,
             http_handler_host: inner.http_handler_host,
             http_handler_port: inner.http_handler_port,
             http_handler_result_timeout_millis: inner.http_handler_result_timeout_millis,
