@@ -13,7 +13,9 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use common_cache::Cache;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -70,6 +72,10 @@ impl<'a> DeletionCollector<'a> {
         let snapshot = self.base_snapshot;
         let mut new_snapshot = TableSnapshot::from_previous(snapshot);
         let seg_reader = MetaReaders::segment_info_reader(self.ctx);
+        let segment_info_cache = self
+            .ctx
+            .get_storage_cache_manager()
+            .get_table_segment_cache();
 
         //let new_segment_summaries = HashMap::new();
         for (seg_idx, replacements) in self.mutations {
@@ -109,14 +115,18 @@ impl<'a> DeletionCollector<'a> {
                 new_segment.summary = new_summary;
 
                 let new_seg_loc = self.location_generator.gen_segment_info_location();
-                let loc = (new_seg_loc, SegmentInfo::VERSION);
+                let loc = (new_seg_loc.clone(), SegmentInfo::VERSION);
 
-                // write the new segment, TODO update cache
                 let bytes = serde_json::to_vec(&new_segment)?;
                 let operator = self.ctx.get_storage_operator()?;
                 operator.object(loc.0.as_str()).write(bytes).await?;
 
-                new_snapshot.segments[seg_idx] = loc;
+                new_snapshot.segments[seg_idx] = loc.clone();
+
+                if let Some(ref cache) = segment_info_cache {
+                    let cache = &mut cache.write().await;
+                    cache.put(new_seg_loc, Arc::new(new_segment));
+                }
             }
         }
 
