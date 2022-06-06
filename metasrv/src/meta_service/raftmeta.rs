@@ -356,13 +356,11 @@ impl MetaNode {
     // spawn a monitor to watch raft state changes such as leader changes,
     // and manually add non-voter to cluster so that non-voter receives raft logs.
     pub async fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
-        //TODO: return a handle for join
-        // TODO: every state change triggers add_non_voter!!!
+        // TODO(luhuanbing): every state change triggers add_non_voter is not very reasonable
         let mut running_rx = mn.running_rx.clone();
         let mut jh = mn.join_handles.lock().await;
         let mut current_leader: Option<u64> = None;
 
-        // TODO: reduce dependency: it does not need all of the fields in MetaNode
         let mn = mn.clone();
 
         let span = tracing::span!(tracing::Level::INFO, "watch-metrics");
@@ -394,7 +392,6 @@ impl MetaNode {
                                 }
 
                                 if cur == mn.sto.id {
-                                    // TODO: check result
                                     let _rst = mn.add_configured_non_voters().await;
 
                                     if _rst.is_err() {
