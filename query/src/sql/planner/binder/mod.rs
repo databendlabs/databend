@@ -109,6 +109,10 @@ impl<'a> Binder {
                 Ok(plan)
             }
 
+            Statement::ShowMetrics => Ok(Plan::ShowMetrics),
+            Statement::ShowProcessList => Ok(Plan::ShowProcessList),
+            Statement::ShowSettings => Ok(Plan::ShowSettings),
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "UnImplemented stmt {stmt} in binder"
             ))),
