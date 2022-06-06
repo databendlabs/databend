@@ -109,14 +109,14 @@ impl InterpreterFactory {
             PlanNode::Show(ShowPlan::ShowGrants(v)) => {
                 ShowGrantsInterpreter::try_create(ctx_clone, v)
             }
-            PlanNode::Show(ShowPlan::ShowMetrics(v)) => {
-                ShowMetricsInterpreter::try_create(ctx_clone, v)
+            PlanNode::Show(ShowPlan::ShowMetrics(_)) => {
+                ShowMetricsInterpreter::try_create(ctx_clone)
             }
-            PlanNode::Show(ShowPlan::ShowProcessList(v)) => {
-                ShowProcessListInterpreter::try_create(ctx_clone, v)
+            PlanNode::Show(ShowPlan::ShowProcessList(_)) => {
+                ShowProcessListInterpreter::try_create(ctx_clone)
             }
-            PlanNode::Show(ShowPlan::ShowSettings(v)) => {
-                ShowSettingsInterpreter::try_create(ctx_clone, v)
+            PlanNode::Show(ShowPlan::ShowSettings(_)) => {
+                ShowSettingsInterpreter::try_create(ctx_clone)
             }
             PlanNode::Show(ShowPlan::ShowUsers(v)) => {
                 ShowUsersInterpreter::try_create(ctx_clone, v)

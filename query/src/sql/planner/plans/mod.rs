@@ -70,4 +70,9 @@ pub enum Plan {
 
     // DDL
     CreateTable(Box<CreateTablePlan>),
+
+    // System
+    ShowMetrics,
+    ShowProcessList,
+    ShowSettings,
 }
