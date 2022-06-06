@@ -66,13 +66,16 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let create_database = map(
         rule! {
-            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #ident ~ #engine?
+            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #database_engine?
         },
-        |(_, _, opt_if_not_exists, database, opt_engine)| Statement::CreateDatabase {
-            if_not_exists: opt_if_not_exists.is_some(),
-            database,
-            engine: opt_engine.unwrap_or(Engine::Null),
-            options: vec![],
+        |(_, _, opt_if_not_exists, opt_catalog, database, opt_engine)| {
+            Statement::CreateDatabase(CreateDatabaseStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                opt_catalog: opt_catalog.map(|(catalog, _)| catalog),
+                database,
+                engine: opt_engine.unwrap_or(DatabaseEngine::Default),
+                options: vec![],
+            })
         },
     );
     let drop_database = map(
@@ -643,6 +646,25 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Fuse, rule! { FUSE }),
         value(Engine::Github, rule! { GITHUB }),
         value(Engine::View, rule! { VIEW }),
+    ));
+
+    map(
+        rule! {
+            ENGINE ~ ^"=" ~ ^#engine
+        },
+        |(_, _, engine)| engine,
+    )(i)
+}
+
+pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
+    let engine = alt((
+        value(DatabaseEngine::Default, rule! {DEFAULT}),
+        map(
+            rule! {
+                GITHUB ~ "(" ~ TOKEN ~ ^"=" ~ #literal_string ~ ")"
+            },
+            |(_, _, _, _, github_token, _)| DatabaseEngine::Github(github_token),
+        ),
     ));
 
     map(

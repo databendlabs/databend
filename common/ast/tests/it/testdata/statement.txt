@@ -508,18 +508,21 @@ UseDatabase {
 ---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
-CREATE DATABASE IF NOT EXISTS a
+CREATE DATABASE IF NOT EXISTS a ENGINE = DEFAULT
 ---------- AST ------------
-CreateDatabase {
-    if_not_exists: true,
-    database: Identifier {
-        name: "a",
-        quote: None,
-        span: Ident(30..31),
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: true,
+        opt_catalog: None,
+        database: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(30..31),
+        },
+        engine: Default,
+        options: [],
     },
-    engine: Null,
-    options: [],
-}
+)
 
 
 ---------- Input ----------

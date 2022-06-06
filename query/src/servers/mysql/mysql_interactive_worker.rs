@@ -300,6 +300,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         && settings.get_enable_planner_v2()? != 0
                         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
                     {
+                        println!("new planner");
                         let mut planner = Planner::new(context.clone());
                         planner
                             .plan_sql(query)

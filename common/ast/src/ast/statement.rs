@@ -44,12 +44,7 @@ pub enum Statement<'a> {
     ShowCreateDatabase {
         database: Identifier<'a>,
     },
-    CreateDatabase {
-        if_not_exists: bool,
-        database: Identifier<'a>,
-        engine: Engine,
-        options: Vec<SQLProperty>,
-    },
+    CreateDatabase(CreateDatabaseStmt<'a>),
     DropDatabase {
         if_exists: bool,
         database: Identifier<'a>,
@@ -215,6 +210,15 @@ pub enum InsertSource<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CreateDatabaseStmt<'a> {
+    pub if_not_exists: bool,
+    pub opt_catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+    pub engine: DatabaseEngine,
+    pub options: Vec<SQLProperty>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStmt<'a> {
     pub if_not_exists: bool,
     pub database: Option<Identifier<'a>>,
@@ -264,6 +268,12 @@ pub enum Engine {
     Fuse,
     Github,
     View,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DatabaseEngine {
+    Default,
+    Github(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -358,6 +368,16 @@ impl Display for TableOption {
     }
 }
 
+impl Display for DatabaseEngine {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let DatabaseEngine::Github(token) = self {
+            write!(f, "GITHUB(token={token})")
+        } else {
+            write!(f, "DEFAULT")
+        }
+    }
+}
+
 impl Display for Engine {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -414,20 +434,20 @@ impl<'a> Display for Statement<'a> {
             Statement::ShowCreateDatabase { database } => {
                 write!(f, "SHOW CREATE DATABASE {database}")?;
             }
-            Statement::CreateDatabase {
+            Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists,
                 database,
                 engine,
                 ..
-            } => {
+            }) => {
                 write!(f, "CREATE DATABASE")?;
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
                 write!(f, " {database}")?;
-                if *engine != Engine::Null {
-                    write!(f, " ENGINE = {engine}")?;
-                }
+                // if *engine != Engine::Null {
+                write!(f, " ENGINE = {engine}")?;
+                // }
                 // TODO(leiysky): display rest information
             }
             Statement::DropDatabase {

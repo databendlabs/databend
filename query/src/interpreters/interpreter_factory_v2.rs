@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use super::CreateDatabaseInterpreter;
 use super::CreateTableInterpreter;
 use super::ExplainInterpreterV2;
 use super::InterpreterPtr;
@@ -43,6 +44,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowMetrics(_)
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
+                | DfStatement::CreateDatabase(_)
         )
     }
 
@@ -63,6 +65,9 @@ impl InterpreterFactoryV2 {
             }
             Plan::CreateTable(create_table) => {
                 CreateTableInterpreter::try_create(ctx, *create_table.clone())
+            }
+            Plan::CreateDatabase(create_database) => {
+                CreateDatabaseInterpreter::try_create(ctx, create_database.clone())
             }
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
