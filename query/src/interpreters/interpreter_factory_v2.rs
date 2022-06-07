@@ -20,6 +20,10 @@ use super::CreateTableInterpreter;
 use super::ExplainInterpreterV2;
 use super::InterpreterPtr;
 use super::SelectInterpreterV2;
+use super::ShowMetricsInterpreter;
+use super::ShowProcessListInterpreter;
+use super::ShowSettingsInterpreter;
+use crate::interpreters::CreateUserInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -34,7 +38,12 @@ impl InterpreterFactoryV2 {
     pub fn check(stmt: &DfStatement) -> bool {
         matches!(
             stmt,
-            DfStatement::Query(_) | DfStatement::Explain(_) | DfStatement::CreateTable(_)
+            DfStatement::Query(_)
+                | DfStatement::Explain(_)
+                | DfStatement::CreateTable(_)
+                | DfStatement::ShowMetrics(_)
+                | DfStatement::ShowProcessList(_)
+                | DfStatement::ShowSettings(_)
         )
     }
 
@@ -55,6 +64,12 @@ impl InterpreterFactoryV2 {
             }
             Plan::CreateTable(create_table) => {
                 CreateTableInterpreter::try_create(ctx, *create_table.clone())
+            }
+            Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
+            Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
+            Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
+            Plan::CreateUser(create_user) => {
+                CreateUserInterpreter::try_create(ctx, *create_user.clone())
             }
         }?;
         Ok(inner)

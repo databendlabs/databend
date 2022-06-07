@@ -27,6 +27,10 @@ impl Plan {
                 Ok(format!("{:?}:\n{}", kind, result))
             }
             Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
+            Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
+            Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
+            Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
+            Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
         }
     }
 }

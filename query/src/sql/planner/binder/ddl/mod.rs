@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod table;
+mod user;

@@ -2,13 +2,14 @@
 title: SHOW TABLES
 ---
 
-Shows the list of tables in the currently selected database.
+Shows a list of tables in the currently selected database.
 
 ## Syntax
 
 ```
 SHOW [EXTENDED] [FULL] TABLES
     [{FROM | IN} db_name]
+    [HISTORY]
     [LIKE 'pattern' | WHERE expr]
 ```
 
@@ -40,7 +41,9 @@ SHOW TABLES;
 +------------------+
 ```
 
+
 Showing the tables with table name `"settings"`:
+
 ```sql
 SHOW TABLES LIKE 'settings';
 +------------------+
@@ -50,7 +53,20 @@ SHOW TABLES LIKE 'settings';
 +------------------+
 ```
 
+Showing the tables named as `"t4"`, including the dropped ones that are still within their retention periods: 
+
+```sql
+DROP TABLE t4;
+SHOW TABLES HISTORY LIKE 't4';
++-------------------+-------------------------------+
+| Tables_in_default | drop_time                     |
++-------------------+-------------------------------+
+| t4                | 2022-05-25 05:56:49.622 +0000 |
++-------------------+-------------------------------+
+```
+
 Showing the tables begin with `"co"`:
+
 ```sql
 SHOW TABLES LIKE 'co%';
 +------------------+
@@ -63,6 +79,7 @@ SHOW TABLES LIKE 'co%';
 ```
 
 Showing the tables begin with `"co"` with `WHERE`:
+
 ```sql
 SHOW TABLES WHERE table_name LIKE 'co%';
 +------------------+
@@ -75,6 +92,7 @@ SHOW TABLES WHERE table_name LIKE 'co%';
 ```
 
 Showing the tables are inside `"system"`:
+
 ```sql
 SHOW TABLES FROM 'system';
 +------------------+

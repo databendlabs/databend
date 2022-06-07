@@ -109,6 +109,14 @@ impl<'a> Binder {
                 Ok(plan)
             }
 
+            Statement::ShowMetrics => Ok(Plan::ShowMetrics),
+            Statement::ShowProcessList => Ok(Plan::ShowProcessList),
+            Statement::ShowSettings => Ok(Plan::ShowSettings),
+            Statement::CreateUser(stmt) => {
+                let plan = self.bind_create_user(stmt).await?;
+                Ok(plan)
+            }
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "UnImplemented stmt {stmt} in binder"
             ))),

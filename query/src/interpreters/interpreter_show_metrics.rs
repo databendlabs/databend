@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_planners::ShowMetricsPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
@@ -32,7 +31,7 @@ pub struct ShowMetricsInterpreter {
 }
 
 impl ShowMetricsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, _plan: ShowMetricsPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<InterpreterPtr> {
         Ok(Arc::new(ShowMetricsInterpreter { ctx }))
     }
 

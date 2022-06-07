@@ -164,7 +164,8 @@ impl CreateTableInterpreter {
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan_node),
         };
-        let insert_interpreter = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?;
+        let insert_interpreter =
+            InsertInterpreter::try_create(self.ctx.clone(), insert_plan, false)?;
         insert_interpreter.execute(input_stream).await?;
 
         Ok(Box::pin(DataBlockStream::create(
