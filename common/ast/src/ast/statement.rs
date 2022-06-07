@@ -209,7 +209,7 @@ pub enum InsertSource<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateDatabaseStmt<'a> {
     pub if_not_exists: bool,
-    pub opt_catalog: Option<Identifier<'a>>,
+    pub catalog: Option<Identifier<'a>>,
     pub database: Identifier<'a>,
     pub engine: DatabaseEngine,
     pub options: Vec<SQLProperty>,
@@ -460,7 +460,7 @@ impl<'a> Display for Statement<'a> {
             }
             Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists,
-                opt_catalog,
+                catalog,
                 database,
                 engine,
                 ..
@@ -469,7 +469,7 @@ impl<'a> Display for Statement<'a> {
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
-                write_period_separated_list(f, opt_catalog.iter().chain(Some(database)))?;
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
                 write!(f, " ENGINE = {engine}")?;
                 // TODO(leiysky): display rest information
             }

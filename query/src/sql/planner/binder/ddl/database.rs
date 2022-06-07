@@ -29,7 +29,7 @@ impl<'a> Binder {
         stmt: &CreateDatabaseStmt<'a>,
     ) -> Result<Plan> {
         let catalog = stmt
-            .opt_catalog
+            .catalog
             .as_ref()
             .map(|catalog| catalog.name.clone())
             .unwrap_or_else(|| self.ctx.get_current_catalog());
@@ -58,7 +58,7 @@ impl<'a> Binder {
         let (engine, engine_options) = match &stmt.engine {
             DatabaseEngine::Github(token) => {
                 let engine_options =
-                    BTreeMap::from_iter(std::iter::once(("token".to_string(), token.clone())));
+                    BTreeMap::from_iter(vec![("token".to_string(), token.clone())]);
                 ("github", engine_options)
             }
             DatabaseEngine::Default => ("default", BTreeMap::default()),

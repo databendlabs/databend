@@ -71,7 +71,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         |(_, _, opt_if_not_exists, opt_catalog, database, opt_engine)| {
             Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
-                opt_catalog: opt_catalog.map(|(catalog, _)| catalog),
+                catalog: opt_catalog.map(|(catalog, _)| catalog),
                 database,
                 engine: opt_engine.unwrap_or(DatabaseEngine::Default),
                 options: vec![],
