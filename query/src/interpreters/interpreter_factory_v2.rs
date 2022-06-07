@@ -25,6 +25,7 @@ use super::ShowMetricsInterpreter;
 use super::ShowProcessListInterpreter;
 use super::ShowSettingsInterpreter;
 use crate::interpreters::CreateUserInterpreter;
+use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -76,6 +77,7 @@ impl InterpreterFactoryV2 {
             Plan::CreateView(create_view) => {
                 CreateViewInterpreter::try_create(ctx, *create_view.clone())
             }
+            Plan::DropUser(drop_user) => DropUserInterpreter::try_create(ctx, *drop_user.clone()),
         }?;
         Ok(inner)
     }
