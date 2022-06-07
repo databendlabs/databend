@@ -1,6 +1,10 @@
 name: "Setup Build Tool Binaries"
 description: "Setup Build Tool Binaries"
 inputs:
+  registry:
+    description: "Build Tool Docker Registry"
+    required: false
+    default: datafuselabs
   image:
     description: "Build Tool Docker Image to use"
     required: true
@@ -28,7 +32,7 @@ runs:
         cat <<EOF >$BIN_LOCAL/build-tool
         #!/bin/bash
         script_name=\$(basename "\$0")
-        export IMAGE=datafuselabs/build-tool:${{ inputs.image }}
+        export IMAGE=${{ inputs.registry }}/build-tool:${{ inputs.image }}
         export CARGO_INCREMENTAL=0
         export CARGO_TERM_COLOR=always
         export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR
