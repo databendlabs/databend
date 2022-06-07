@@ -25,7 +25,7 @@ clickhouse_handler_port = 9002
 
 # Databend Query ClickHouse Handler.
 clickhouse_http_handler_host = "0.0.0.0"
-clickhouse_http_handler_port = 8127
+clickhouse_http_handler_port = 8126
 
 # Databend Query HTTP Handler.
 http_handler_host = "0.0.0.0"
