@@ -18,9 +18,10 @@ use std::thread::JoinHandle;
 
 use common_base::base::Runtime;
 use common_base::base::Thread;
+use common_base::exit_scope;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
+use common_tracing::{log_panic, set_panic_hook, tracing};
 
 use crate::pipelines::new::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
@@ -75,7 +76,13 @@ impl PipelineExecutor {
             match join_handle.join() {
                 Ok(Ok(_)) => Ok(()),
                 Ok(Err(cause)) => Err(cause),
-                Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
+                Err(cause) => match cause.downcast_ref::<&'static str>() {
+                    None => match cause.downcast_ref::<String>() {
+                        None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+                        Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                    },
+                    Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                },
             }?;
         }
 
@@ -89,6 +96,15 @@ impl PipelineExecutor {
             let this = self.clone();
             let name = format!("PipelineExecutor-{}", thread_num);
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
+                let this_clone = this.clone();
+                std::panic::set_hook(Box::new(move |panic| {
+                    if !this_clone.is_finished() {
+                        this_clone.finish();
+                    }
+
+                    log_panic(panic);
+                }));
+
                 match this.execute_single_thread(thread_num) {
                     Ok(_) => Ok(()),
                     Err(cause) => this.throw_error(thread_num, cause),
