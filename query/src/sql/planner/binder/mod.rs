@@ -116,6 +116,10 @@ impl<'a> Binder {
                 let plan = self.bind_create_user(stmt).await?;
                 Ok(plan)
             }
+            Statement::CreateView(stmt) => {
+                let plan = self.bind_create_view(stmt).await?;
+                Ok(plan)
+            }
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "UnImplemented stmt {stmt} in binder"
