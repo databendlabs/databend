@@ -62,7 +62,8 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
         | Plan::ShowSettings
         | Plan::CreateTable(_)
         | Plan::CreateUser(_)
-        | Plan::CreateView(_) => Ok(plan),
+        | Plan::CreateView(_)
+        | Plan::DropUser(_) => Ok(plan),
     }
 }
 
