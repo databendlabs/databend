@@ -22,7 +22,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::IndexType;
@@ -40,8 +40,8 @@ pub struct ScalarItem {
 }
 
 impl Operator for EvalScalar {
-    fn plan_type(&self) -> PlanType {
-        PlanType::EvalScalar
+    fn plan_type(&self) -> RelOp {
+        RelOp::EvalScalar
     }
 
     fn is_physical(&self) -> bool {

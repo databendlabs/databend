@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
@@ -30,6 +32,8 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
@@ -374,6 +378,24 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.undrop_table(req).await
     }
 
+    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        if req.tenant().is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while undrop database)",
+            ));
+        }
+        tracing::info!("UnDrop database from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(req.tenant(), req.db_name())
+            .await?
+        {
+            return self.immutable_catalog.undrop_database(req).await;
+        }
+        self.mutable_catalog.undrop_database(req).await
+    }
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -397,6 +419,18 @@ impl Catalog for DatabaseCatalog {
         }
 
         self.mutable_catalog.rename_table(req).await
+    }
+
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
+        if req.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while count tables)",
+            ));
+        }
+
+        let res = self.mutable_catalog.count_tables(req).await?;
+
+        Ok(res)
     }
 
     async fn upsert_table_option(

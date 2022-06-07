@@ -20,6 +20,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_meta_app::schema::CountTablesReq;
 use common_meta_types::UserOptionFlag;
 
 use crate::procedures::Procedure;
@@ -50,20 +51,15 @@ impl Procedure for TenantTablesProcedure {
     }
 
     async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
-        // TODO:(everpcpc) more efficient catalog method to get stats
-        let mut table_counts: Vec<u32> = Vec::with_capacity(args.len());
+        let mut table_counts: Vec<u64> = Vec::with_capacity(args.len());
         for tenant in args.iter() {
-            let mut table_count = 0_u32;
             let catalog = ctx.get_catalog(ctx.get_current_catalog())?;
-            let databases = catalog.list_databases(tenant.as_str()).await?;
-            for db in databases.iter() {
-                if db.engine() == "SYSTEM" {
-                    continue;
-                }
-                let tables = catalog.list_tables(tenant.as_str(), db.name()).await?;
-                table_count += tables.len() as u32;
-            }
-            table_counts.push(table_count);
+            let table_count = catalog
+                .count_tables(CountTablesReq {
+                    tenant: tenant.to_string(),
+                })
+                .await?;
+            table_counts.push(table_count.count);
         }
 
         Ok(DataBlock::create(self.schema(), vec![

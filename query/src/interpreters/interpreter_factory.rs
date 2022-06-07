@@ -28,6 +28,7 @@ use super::ShowStagesInterpreter;
 use crate::interpreters::interpreter_delete::DeleteInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
+use crate::interpreters::AlterClusterKeyInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CallInterpreter;
@@ -72,6 +73,7 @@ use crate::interpreters::ShowTabStatInterpreter;
 use crate::interpreters::ShowTablesInterpreter;
 use crate::interpreters::ShowUsersInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
+use crate::interpreters::UnDropDatabaseInterpreter;
 use crate::interpreters::UnDropTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::QueryContext;
@@ -87,7 +89,7 @@ impl InterpreterFactory {
         let inner = match plan.clone() {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx_clone, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx_clone, v),
-            PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
+            PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v, false),
             PlanNode::Delete(v) => DeleteInterpreter::try_create(ctx_clone, v),
             PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
             PlanNode::Call(v) => CallInterpreter::try_create(ctx_clone, v),
@@ -109,14 +111,14 @@ impl InterpreterFactory {
             PlanNode::Show(ShowPlan::ShowGrants(v)) => {
                 ShowGrantsInterpreter::try_create(ctx_clone, v)
             }
-            PlanNode::Show(ShowPlan::ShowMetrics(v)) => {
-                ShowMetricsInterpreter::try_create(ctx_clone, v)
+            PlanNode::Show(ShowPlan::ShowMetrics(_)) => {
+                ShowMetricsInterpreter::try_create(ctx_clone)
             }
-            PlanNode::Show(ShowPlan::ShowProcessList(v)) => {
-                ShowProcessListInterpreter::try_create(ctx_clone, v)
+            PlanNode::Show(ShowPlan::ShowProcessList(_)) => {
+                ShowProcessListInterpreter::try_create(ctx_clone)
             }
-            PlanNode::Show(ShowPlan::ShowSettings(v)) => {
-                ShowSettingsInterpreter::try_create(ctx_clone, v)
+            PlanNode::Show(ShowPlan::ShowSettings(_)) => {
+                ShowSettingsInterpreter::try_create(ctx_clone)
             }
             PlanNode::Show(ShowPlan::ShowUsers(v)) => {
                 ShowUsersInterpreter::try_create(ctx_clone, v)
@@ -135,6 +137,7 @@ impl InterpreterFactory {
                 ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
             }
             PlanNode::RenameDatabase(v) => RenameDatabaseInterpreter::try_create(ctx_clone, v),
+            PlanNode::UnDropDatabase(v) => UnDropDatabaseInterpreter::try_create(ctx_clone, v),
 
             // Table related transforms
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
@@ -177,6 +180,9 @@ impl InterpreterFactory {
             PlanNode::DescribeUserStage(v) => {
                 DescribeUserStageInterpreter::try_create(ctx_clone, v)
             }
+
+            // alter.
+            PlanNode::AlterClusterKey(v) => AlterClusterKeyInterpreter::try_create(ctx_clone, v),
 
             // others
             PlanNode::List(v) => ListInterpreter::try_create(ctx_clone, v),

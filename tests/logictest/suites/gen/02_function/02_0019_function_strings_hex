@@ -20,5 +20,5 @@ statement query T
 select hex(null);
 
 ----  
-None
+NULL
 

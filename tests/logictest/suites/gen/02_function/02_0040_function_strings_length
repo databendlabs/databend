@@ -26,5 +26,5 @@ statement query T
 SELECT LENGTH(NULL);
 
 ----  
-None
+NULL
 

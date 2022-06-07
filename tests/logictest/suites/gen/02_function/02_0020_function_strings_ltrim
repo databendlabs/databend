@@ -20,5 +20,5 @@ statement query T
 select ltrim(null);
 
 ----  
-None
+NULL
 

@@ -26,6 +26,7 @@ use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::plan_table_undrop::UnDropTablePlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterClusterKeyPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::AlterViewPlan;
@@ -82,6 +83,7 @@ use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
+use crate::UnDropDatabasePlan;
 use crate::UseDatabasePlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
@@ -150,7 +152,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
             PlanNode::RenameDatabase(plan) => self.rewrite_rename_database(plan),
-
+            PlanNode::UnDropDatabase(plan) => self.rewrite_undrop_database(plan),
             // Table.
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
@@ -202,6 +204,9 @@ pub trait PlanRewriter: Sized {
 
             // Kill.
             PlanNode::Kill(plan) => self.rewrite_kill(plan),
+
+            // Alter.
+            PlanNode::AlterClusterKey(plan) => self.rewrite_alter_cluster_key(plan),
         }
     }
 
@@ -419,6 +424,10 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::DropDatabase(plan.clone()))
     }
 
+    fn rewrite_undrop_database(&mut self, plan: &UnDropDatabasePlan) -> Result<PlanNode> {
+        Ok(PlanNode::UnDropDatabase(plan.clone()))
+    }
+
     fn rewrite_insert_into(&mut self, plan: &InsertPlan) -> Result<PlanNode> {
         Ok(PlanNode::Insert(plan.clone()))
     }
@@ -513,6 +522,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_alter_user_udf(&mut self, plan: &AlterUserUDFPlan) -> Result<PlanNode> {
         Ok(PlanNode::AlterUserUDF(plan.clone()))
+    }
+
+    fn rewrite_alter_cluster_key(&mut self, plan: &AlterClusterKeyPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AlterClusterKey(plan.clone()))
     }
 }
 

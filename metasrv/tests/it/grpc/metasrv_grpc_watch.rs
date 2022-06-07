@@ -22,6 +22,7 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
+use common_tracing::tracing;
 
 use crate::init_meta_ut;
 
@@ -68,15 +69,13 @@ async fn test_watch_main(
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_watch() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Watch some key.
     // - Write some data.
     // - Assert watcher get all the update.
 
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let mut seq: u64 = 1;

@@ -30,6 +30,7 @@ use super::statements::DfGrantRoleStatement;
 use super::statements::DfList;
 use super::statements::DfRevokeRoleStatement;
 use super::statements::DfShowStages;
+use super::statements::DfUnDropDatabase;
 use crate::sql::statements::DfAlterDatabase;
 use crate::sql::statements::DfAlterTable;
 use crate::sql::statements::DfAlterUDF;
@@ -98,6 +99,7 @@ pub enum DfStatement<'a> {
     DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
     UnDropTable(DfUnDropTable),
+    UnDropDatabase(DfUnDropDatabase),
     AlterTable(DfAlterTable),
     TruncateTable(DfTruncateTable),
     OptimizeTable(DfOptimizeTable),

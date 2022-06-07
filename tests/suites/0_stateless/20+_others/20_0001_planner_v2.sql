@@ -149,7 +149,6 @@ select '====SELECT_WITHOUT_FROM====';
 select 1 + 1;
 select to_int(8);
 select 'new_planner';
-select *; -- {ErrorCode 1065}
 
 -- limit
 select '=== Test limit ===';
@@ -157,7 +156,7 @@ select number from numbers(100) order by number asc limit 10;
 select '==================';
 select number*2 as number from numbers(100) order by number limit 10;
 select '=== Test limit n, m ===';
-select number from numbers(100) order by number asc limit 10, 10;
+select number from numbers(100) order by number asc limit 9, 11;
 select '==================';
 select number-2 as number from numbers(100) order by number asc limit 10, 10;
 select '=== Test limit with offset ===';
@@ -272,5 +271,28 @@ drop view if exists temp;
 create view temp as select number from numbers(1);
 select number from temp;
 drop view temp;
+
+-- cross join
+select '====Cross Join====';
+create table t1(a int, b int);
+create table t2(c int, d int);
+insert into t1 values(1, 2), (2, 3), (3 ,4);
+insert into t2 values(2,2), (3, 5), (7 ,8);
+select * from t1, t2;
+drop table t1;
+drop table t2;
+
+-- test error code hint
+
+select 3 as a, 4 as a; -- {ErrorCode 1002 }
+-- udf
+select '====UDF====';
+CREATE FUNCTION a_plus_3 AS (a) -> a+3;
+SELECT a_plus_3(2);
+CREATE FUNCTION cal1 AS (a,b,c,d,e) -> a + c * (e / b) - d;
+SELECT cal1(1, 2, 3, 4, 6);
+CREATE FUNCTION notnull1 AS (p) -> not(is_null(p));
+SELECT notnull1(null);
+SELECT notnull1('null');
 
 set enable_planner_v2 = 0;

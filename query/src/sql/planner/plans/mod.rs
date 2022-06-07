@@ -15,13 +15,13 @@
 mod aggregate;
 mod apply;
 mod eval_scalar;
-mod explain;
 mod filter;
 mod hash_join;
 mod limit;
 mod logical_get;
 mod logical_join;
 mod max_one_row;
+mod operator;
 mod pattern;
 mod physical_scan;
 mod project;
@@ -30,17 +30,20 @@ mod sort;
 
 pub use aggregate::AggregatePlan;
 pub use apply::CrossApply;
-use common_exception::Result;
-use enum_dispatch::enum_dispatch;
+use common_ast::ast::ExplainKind;
+use common_planners::CreateTablePlan;
+use common_planners::CreateUserPlan;
+use common_planners::CreateViewPlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
-pub use explain::ExplainPlan;
 pub use filter::FilterPlan;
 pub use hash_join::PhysicalHashJoin;
 pub use limit::LimitPlan;
 pub use logical_get::LogicalGet;
+pub use logical_join::JoinType;
 pub use logical_join::LogicalInnerJoin;
 pub use max_one_row::Max1Row;
+pub use operator::*;
 pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
 pub use project::Project;
@@ -48,84 +51,34 @@ pub use scalar::*;
 pub use sort::SortItem;
 pub use sort::SortPlan;
 
-use crate::sql::optimizer::PhysicalProperty;
-use crate::sql::optimizer::RelExpr;
-use crate::sql::optimizer::RelationalProperty;
+use super::BindContext;
+use super::MetadataRef;
 use crate::sql::optimizer::SExpr;
 
-#[enum_dispatch]
-pub trait Operator {
-    fn plan_type(&self) -> PlanType;
+#[derive(Clone)]
+pub enum Plan {
+    // Query statement, `SELECT`
+    Query {
+        s_expr: SExpr,
+        metadata: MetadataRef,
+        bind_context: Box<BindContext>,
+    },
 
-    fn is_physical(&self) -> bool;
+    // Explain query statement, `EXPLAIN`
+    Explain {
+        kind: ExplainKind,
+        plan: Box<Plan>,
+    },
 
-    fn is_logical(&self) -> bool;
+    // DDL
+    CreateTable(Box<CreateTablePlan>),
+    CreateView(Box<CreateViewPlan>),
 
-    fn is_pattern(&self) -> bool {
-        false
-    }
+    // System
+    ShowMetrics,
+    ShowProcessList,
+    ShowSettings,
 
-    fn as_logical(&self) -> Option<&dyn LogicalPlan>;
-
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan>;
-}
-
-pub trait LogicalPlan {
-    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty>;
-}
-
-pub trait PhysicalPlan {
-    fn compute_physical_prop(&self, expression: &SExpr) -> PhysicalProperty;
-}
-
-/// Relational operator
-#[derive(Clone, PartialEq, Debug)]
-pub enum PlanType {
-    // Logical operators
-    LogicalGet,
-    LogicalInnerJoin,
-
-    // Physical operators
-    PhysicalScan,
-    PhysicalHashJoin,
-
-    // Operators that are both logical and physical
-    Project,
-    EvalScalar,
-    Filter,
-    Aggregate,
-    Sort,
-    Limit,
-    CrossApply,
-    Max1Row,
-
-    // Pattern
-    Pattern,
-
-    // Explain
-    Explain,
-}
-
-/// Relational operators
-#[enum_dispatch(Operator)]
-#[derive(Clone, Debug)]
-pub enum RelOperator {
-    LogicalGet(LogicalGet),
-    LogicalInnerJoin(LogicalInnerJoin),
-
-    PhysicalScan(PhysicalScan),
-    PhysicalHashJoin(PhysicalHashJoin),
-
-    Project(Project),
-    EvalScalar(EvalScalar),
-    Filter(FilterPlan),
-    Aggregate(AggregatePlan),
-    Sort(SortPlan),
-    Limit(LimitPlan),
-    CrossApply(CrossApply),
-    Max1Row(Max1Row),
-
-    Pattern(PatternPlan),
-
-    Explain(ExplainPlan),
+    // DCL
+    CreateUser(Box<CreateUserPlan>),
 }

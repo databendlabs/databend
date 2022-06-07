@@ -17,15 +17,13 @@
 use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_grpc::MetaGrpcClient;
+use common_tracing::tracing;
 
 use crate::init_meta_ut;
 use crate::tests::start_metasrv;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
@@ -35,11 +33,8 @@ async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> 
         .await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_database_create_get_drop_in_diff_tenant() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
@@ -49,11 +44,8 @@ async fn test_meta_grpc_client_database_create_get_drop_in_diff_tenant() -> anyh
         .await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_database_list() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
@@ -61,11 +53,8 @@ async fn test_meta_grpc_client_database_list() -> anyhow::Result<()> {
     SchemaApiTestSuite {}.database_list(client.as_ref()).await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_database_list_in_diff_tenant() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
@@ -75,11 +64,8 @@ async fn test_meta_grpc_client_database_list_in_diff_tenant() -> anyhow::Result<
         .await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_database_rename() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
@@ -87,11 +73,8 @@ async fn test_meta_grpc_client_database_rename() -> anyhow::Result<()> {
     SchemaApiTestSuite {}.database_rename(&client).await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_database_drop_undrop_list_history() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
@@ -101,11 +84,8 @@ async fn test_meta_grpc_client_database_drop_undrop_list_history() -> anyhow::Re
         .await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
@@ -115,11 +95,8 @@ async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
         .await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_table_rename() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
@@ -127,11 +104,8 @@ async fn test_meta_grpc_client_table_rename() -> anyhow::Result<()> {
     SchemaApiTestSuite {}.table_rename(client.as_ref()).await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_table_upsert_option() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
@@ -141,11 +115,8 @@ async fn test_meta_grpc_client_table_upsert_option() -> anyhow::Result<()> {
         .await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_table_drop_undrop_list_history() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
@@ -155,8 +126,17 @@ async fn test_meta_grpc_client_table_drop_undrop_list_history() -> anyhow::Resul
         .await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_grpc_client_table_list() -> anyhow::Result<()> {
+    let (_tc, addr) = start_metasrv().await?;
+
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+
+    SchemaApiTestSuite {}.table_list(client.as_ref()).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn test_meta_gpc_client_table_drop_out_of_retention_time_history() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -164,7 +144,51 @@ async fn test_meta_grpc_client_table_list() -> anyhow::Result<()> {
 
     let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
 
-    SchemaApiTestSuite {}.table_list(client.as_ref()).await
+    SchemaApiTestSuite {}
+        .table_drop_out_of_retention_time_history(client.as_ref(), client.as_ref())
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn test_meta_gpc_client_database_drop_out_of_retention_time_history() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    let (_tc, addr) = start_metasrv().await?;
+
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+
+    SchemaApiTestSuite {}
+        .database_drop_out_of_retention_time_history(client.as_ref(), client.as_ref())
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn test_meta_gpc_client_database_gc_out_of_retention_time() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    let (_tc, addr) = start_metasrv().await?;
+
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+
+    SchemaApiTestSuite {}
+        .database_gc_out_of_retention_time(client.as_ref(), client.as_ref())
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn test_meta_gpc_client_table_gc_out_of_retention_time() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    let (_tc, addr) = start_metasrv().await?;
+
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+
+    SchemaApiTestSuite {}
+        .table_gc_out_of_retention_time(client.as_ref(), client.as_ref())
+        .await
 }
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 3)]

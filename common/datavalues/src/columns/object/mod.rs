@@ -131,8 +131,8 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
 
         Arc::new(LargeBinaryArray::from_data(
             self.data_type().arrow_type(),
-            Buffer::from_slice(offsets),
-            Buffer::from_slice(values),
+            Buffer::from(offsets),
+            Buffer::from(values),
             None,
         ))
     }
@@ -239,7 +239,12 @@ pub type VariantColumn = ObjectColumn<VariantValue>;
 
 impl<T: ObjectType> std::fmt::Debug for ObjectColumn<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO(b41sh): implement display_fmt
-        write!(f, "ObjectColumn")
+        let mut data = Vec::with_capacity(self.len());
+        for idx in 0..self.len() {
+            data.push(format!("{}", self.get(idx)));
+        }
+        let head = T::column_name();
+        let iter = data.iter();
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
     }
 }

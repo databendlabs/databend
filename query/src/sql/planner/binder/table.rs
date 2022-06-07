@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
+use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
 use common_ast::parser::error::Backtrace;
 use common_ast::parser::error::DisplayError;
@@ -78,9 +79,9 @@ impl<'a> Binder {
     pub(super) async fn bind_table_reference(
         &mut self,
         bind_context: &BindContext,
-        stmt: &TableReference<'a>,
+        table_ref: &TableReference<'a>,
     ) -> Result<(SExpr, BindContext)> {
-        match stmt {
+        match table_ref {
             TableReference::Table {
                 catalog,
                 database,
@@ -128,10 +129,19 @@ impl<'a> Binder {
                         if stmts.len() > 1 {
                             return Err(ErrorCode::UnImplement("unsupported multiple statements"));
                         }
-                        self.bind_statement(bind_context, &stmts[0]).await
+                        if let Statement::Query(query) = &stmts[0] {
+                            self.bind_query(bind_context, query).await
+                        } else {
+                            Err(ErrorCode::LogicalError(format!(
+                                "Invalid VIEW object: {}",
+                                table_meta.name()
+                            )))
+                        }
                     }
                     _ => {
-                        let source = table_meta.read_plan(self.ctx.clone(), None).await?;
+                        let source = table_meta
+                            .read_plan_with_catalog(self.ctx.clone(), catalog.clone(), None)
+                            .await?;
                         let table_index = self
                             .metadata
                             .write()

@@ -368,6 +368,7 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_undrop_table(),
+                Keyword::DATABASE => self.parse_undrop_database(),
                 _ => self.expected("drop statement", Token::Word(w)),
             },
             unexpected => self.expected("drop statement", unexpected),

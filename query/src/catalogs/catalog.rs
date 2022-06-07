@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
@@ -29,6 +31,8 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
@@ -60,6 +64,8 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()>;
+
+    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply>;
 
     async fn exists_database(&self, tenant: &str, db_name: &str) -> Result<bool> {
         match self.get_database(tenant, db_name).await {
@@ -125,6 +131,8 @@ pub trait Catalog: DynClone + Send + Sync {
     ) -> Result<UpsertTableOptionReply>;
 
     async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply>;
+
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply>;
 
     ///
     /// Table function

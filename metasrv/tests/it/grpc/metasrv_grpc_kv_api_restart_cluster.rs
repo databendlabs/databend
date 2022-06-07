@@ -36,11 +36,8 @@ use crate::tests::start_metasrv_with_context;
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test upsert kv and read on different nodes.
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
         format!("t-restart-cluster-{}-{}-{}", x.config_id, x.id, k)
@@ -131,11 +128,8 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test read kv using same grpc client.
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
         format!("t-restart-cluster-{}-{}-{}", x.config_id, x.id, k)

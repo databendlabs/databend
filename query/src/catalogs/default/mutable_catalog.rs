@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_api::SchemaApi;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
@@ -38,6 +40,8 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
@@ -282,6 +286,11 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        let res = self.ctx.meta.undrop_database(req).await?;
+        Ok(res)
+    }
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         let res = self.ctx.meta.rename_table(req).await?;
         Ok(res)
@@ -297,6 +306,11 @@ impl Catalog for MutableCatalog {
 
     async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         let res = self.ctx.meta.update_table_meta(req).await?;
+        Ok(res)
+    }
+
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
+        let res = self.ctx.meta.count_tables(req).await?;
         Ok(res)
     }
 

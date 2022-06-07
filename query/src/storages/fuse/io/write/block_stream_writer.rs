@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -35,6 +34,7 @@ use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::operations::column_metas;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
+use crate::storages::index::ClusterKeyInfo;
 
 pub type SegmentInfoStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<SegmentInfo>> + Send>>;
@@ -45,12 +45,7 @@ pub struct BlockStreamWriter {
     number_of_blocks_accumulated: usize,
     statistics_accumulator: Option<StatisticsAccumulator>,
     meta_locations: TableMetaLocationGenerator,
-
-    data_schema: DataSchemaRef,
-    cluster_keys: Vec<Expression>,
-    cluster_keys_index: Option<Vec<usize>>,
-    expression_executor: Option<ExpressionExecutor>,
-
+    cluster_key_info: Option<ClusterKeyInfo>,
     ctx: Arc<QueryContext>,
 }
 
@@ -61,8 +56,7 @@ impl BlockStreamWriter {
         row_per_block: usize,
         block_per_segment: usize,
         meta_locations: TableMetaLocationGenerator,
-        data_schema: DataSchemaRef,
-        cluster_keys: Vec<Expression>,
+        cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Result<SegmentInfoStream> {
         // filter out empty blocks
         let block_stream =
@@ -82,8 +76,7 @@ impl BlockStreamWriter {
             block_per_segment,
             meta_locations,
             ctx,
-            data_schema,
-            cluster_keys,
+            cluster_key_info,
         )?;
         let segments = Self::transform(Box::pin(block_stream), block_writer);
 
@@ -94,8 +87,7 @@ impl BlockStreamWriter {
         num_block_threshold: usize,
         meta_locations: TableMetaLocationGenerator,
         ctx: Arc<QueryContext>,
-        data_schema: DataSchemaRef,
-        cluster_keys: Vec<Expression>,
+        cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Result<Self> {
         let data_accessor = ctx.get_storage_operator()?;
         Ok(Self {
@@ -104,10 +96,7 @@ impl BlockStreamWriter {
             number_of_blocks_accumulated: 0,
             statistics_accumulator: None,
             meta_locations,
-            data_schema,
-            cluster_keys,
-            cluster_keys_index: None,
-            expression_executor: None,
+            cluster_key_info,
             ctx,
         })
     }
@@ -144,53 +133,56 @@ impl BlockStreamWriter {
     }
 
     async fn write_block(&mut self, data_block: DataBlock) -> Result<Option<SegmentInfo>> {
-        let input_schema = data_block.schema().clone();
-        let cluster_keys_index = if let Some(cluster_keys_index) = &self.cluster_keys_index {
-            cluster_keys_index.clone()
-        } else {
-            let fields = input_schema.fields().clone();
-            let index = self
-                .cluster_keys
-                .iter()
-                .map(|e| {
-                    let cname = e.column_name();
-                    // TODO remove this unwrap
-                    fields.iter().position(|f| f.name() == &cname).unwrap()
-                })
-                .collect::<Vec<_>>();
-            self.cluster_keys_index = Some(index.clone());
-            index
-        };
-
-        let cluster_stats = BlockStatistics::clusters_statistics(cluster_keys_index, &data_block)?;
-        // Remove unused columns before serialize
-        let block = if self.data_schema != input_schema {
-            let executor = if let Some(executor) = &self.expression_executor {
-                executor.clone()
-            } else {
-                let exprs: Vec<Expression> = input_schema
-                    .fields()
+        let mut cluster_stats = None;
+        let mut block = data_block;
+        if let Some(v) = self.cluster_key_info.as_mut() {
+            let input_schema = block.schema().clone();
+            let cluster_key_index = if v.cluster_key_index.is_empty() {
+                let fields = input_schema.fields().clone();
+                let index = v
+                    .exprs
                     .iter()
-                    .map(|f| Expression::Column(f.name().to_owned()))
-                    .collect();
-
-                let executor = ExpressionExecutor::try_create(
-                    self.ctx.clone(),
-                    "remove unused columns",
-                    input_schema,
-                    self.data_schema.clone(),
-                    exprs,
-                    true,
-                )?;
-                executor.validate()?;
-                self.expression_executor = Some(executor.clone());
-                executor
+                    .map(|e| {
+                        let cname = e.column_name();
+                        fields.iter().position(|f| f.name() == &cname).unwrap()
+                    })
+                    .collect::<Vec<_>>();
+                v.cluster_key_index = index.clone();
+                index
+            } else {
+                v.cluster_key_index.clone()
             };
 
-            executor.execute(&data_block)?
-        } else {
-            data_block
-        };
+            cluster_stats =
+                BlockStatistics::clusters_statistics(v.cluster_key_id, cluster_key_index, &block)?;
+
+            // Remove unused columns before serialize
+            if v.data_schema != input_schema {
+                let executor = if let Some(executor) = &v.expression_executor {
+                    executor.clone()
+                } else {
+                    let exprs: Vec<Expression> = input_schema
+                        .fields()
+                        .iter()
+                        .map(|f| Expression::Column(f.name().to_owned()))
+                        .collect();
+
+                    let executor = ExpressionExecutor::try_create(
+                        self.ctx.clone(),
+                        "remove unused columns",
+                        input_schema,
+                        v.data_schema.clone(),
+                        exprs,
+                        true,
+                    )?;
+                    executor.validate()?;
+                    v.expression_executor = Some(executor.clone());
+                    executor
+                };
+
+                block = executor.execute(&block)?;
+            }
+        }
 
         let mut acc = self.statistics_accumulator.take().unwrap_or_default();
         let partial_acc = acc.begin(&block, cluster_stats)?;
@@ -202,14 +194,12 @@ impl BlockStreamWriter {
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {
             let summary = acc.summary()?;
-            let cluster_stats = acc.summary_clusters();
             let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
                 row_count: acc.summary_row_count,
                 block_count: acc.summary_block_count,
                 uncompressed_byte_size: acc.in_memory_size,
                 compressed_byte_size: acc.file_size,
                 col_stats: summary,
-                cluster_stats,
             });
 
             // Reset state
@@ -257,14 +247,12 @@ impl Compactor<DataBlock, SegmentInfo> for BlockStreamWriter {
             None => Ok(None),
             Some(acc) => {
                 let summary = acc.summary()?;
-                let cluster_stats = acc.summary_clusters();
                 let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
                     row_count: acc.summary_row_count,
                     block_count: acc.summary_block_count,
                     uncompressed_byte_size: acc.in_memory_size,
                     compressed_byte_size: acc.file_size,
                     col_stats: summary,
-                    cluster_stats,
                 });
                 Ok(Some(seg))
             }

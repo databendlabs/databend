@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
@@ -29,6 +31,8 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
@@ -165,9 +169,21 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
+    async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot undrop database in system database",
+        ))
+    }
+
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         Err(ErrorCode::UnImplement(
             "Cannot rename table in system database",
+        ))
+    }
+
+    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot count tables in system database",
         ))
     }
 

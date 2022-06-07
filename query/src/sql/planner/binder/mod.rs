@@ -24,16 +24,16 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use self::subquery::SubqueryRewriter;
+use super::plans::Plan;
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
-use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::MetadataRef;
-use crate::sql::plans::ExplainPlan;
 use crate::storages::NavigationPoint;
 use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod ddl;
 mod distinct;
 mod join;
 mod limit;
@@ -72,41 +72,58 @@ impl<'a> Binder {
         }
     }
 
-    pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
+    pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<Plan> {
         let init_bind_context = BindContext::new();
-        let (mut s_expr, bind_context) = self.bind_statement(&init_bind_context, stmt).await?;
-        let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
-        s_expr = rewriter.rewrite(&s_expr)?;
-        Ok(BindResult::create(s_expr, bind_context))
+        let plan = self.bind_statement(&init_bind_context, stmt).await?;
+        Ok(plan)
     }
 
+    #[async_recursion::async_recursion]
     async fn bind_statement(
         &mut self,
         bind_context: &BindContext,
         stmt: &Statement<'a>,
-    ) -> Result<(SExpr, BindContext)> {
+    ) -> Result<Plan> {
         match stmt {
-            Statement::Query(query) => self.bind_query(bind_context, query).await,
-            Statement::Explain { query, kind } => match query.as_ref() {
-                Statement::Query(query) => {
-                    let (expr, bind_context) = self.bind_query(bind_context, query).await?;
-                    let explain_plan = ExplainPlan {
-                        explain_kind: kind.clone(),
-                    };
-                    let new_expr = SExpr::create_unary(explain_plan.into(), expr);
-                    Ok((new_expr, bind_context))
-                }
-                _ => {
-                    return Err(ErrorCode::UnImplement(format!(
-                        "UnImplemented stmt {stmt} in explain"
-                    )));
-                }
-            },
-            _ => {
-                return Err(ErrorCode::UnImplement(format!(
-                    "UnImplemented stmt {stmt} in binder"
-                )));
+            Statement::Query(query) => {
+                let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
+                s_expr = rewriter.rewrite(&s_expr)?;
+                Ok(Plan::Query {
+                    s_expr,
+                    metadata: self.metadata.clone(),
+                    bind_context: Box::new(bind_context),
+                })
             }
+
+            Statement::Explain { query, kind } => {
+                let plan = self.bind_statement(bind_context, query).await?;
+                Ok(Plan::Explain {
+                    kind: kind.clone(),
+                    plan: Box::new(plan),
+                })
+            }
+
+            Statement::CreateTable(stmt) => {
+                let plan = self.bind_create_table(stmt).await?;
+                Ok(plan)
+            }
+
+            Statement::ShowMetrics => Ok(Plan::ShowMetrics),
+            Statement::ShowProcessList => Ok(Plan::ShowProcessList),
+            Statement::ShowSettings => Ok(Plan::ShowSettings),
+            Statement::CreateUser(stmt) => {
+                let plan = self.bind_create_user(stmt).await?;
+                Ok(plan)
+            }
+            Statement::CreateView(stmt) => {
+                let plan = self.bind_create_view(stmt).await?;
+                Ok(plan)
+            }
+
+            _ => Err(ErrorCode::UnImplement(format!(
+                "UnImplemented stmt {stmt} in binder"
+            ))),
         }
     }
 
@@ -146,20 +163,6 @@ impl<'a> Binder {
             index,
             data_type,
             visible_in_unqualified_wildcard: true,
-        }
-    }
-}
-
-pub struct BindResult {
-    pub s_expr: SExpr,
-    pub bind_context: BindContext,
-}
-
-impl BindResult {
-    pub fn create(s_expr: SExpr, bind_context: BindContext) -> Self {
-        BindResult {
-            s_expr,
-            bind_context,
         }
     }
 }

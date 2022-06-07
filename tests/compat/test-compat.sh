@@ -7,6 +7,10 @@ echo " === SCRIPT_PATH: $SCRIPT_PATH"
 cd "$SCRIPT_PATH/../../"
 pwd
 
+query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
+query_test_path="tests/suites/0_stateless/05_ddl"
+bend_repo_url="https://github.com/datafuselabs/databend"
+
 usage()
 {
     echo " === test latest query being compatible with minimal compatible metasrv"
@@ -65,32 +69,56 @@ download_binary()
     chmod +x ./bins/$ver/*
 }
 
+# Clone only specified dir or file in the specified commit
+git_partial_clone()
+{
+    local repo_url="$1"
+    local branch="$2"
+    local worktree_path="$3"
+    local local_path="$4"
+
+    echo " === Clone $repo_url@$branch:$worktree_path"
+    echo " ===    To $local_path/$worktree_path"
+
+    rm -rf "$local_path" || echo "no $local_path"
+
+    git clone \
+        -b "$branch" \
+        --depth 1  \
+        --filter=blob:none  \
+        --sparse \
+        "$repo_url" \
+        "$local_path"
+
+    cd "$local_path"
+    git sparse-checkout set "$worktree_path"
+
+    echo " === Done clone from $repo_url@$branch:$worktree_path"
+
+    ls "$worktree_path"
+
+}
+
 
 # Download test suite for a specific version of query.
 download_test_suite()
 {
     local ver="$1"
 
-    local path="tests/suites/0_stateless/05_ddl"
+    echo " === Download test suites from $ver:$query_test_path"
 
-    echo " === Download test suites from $ver:$path"
+    git_partial_clone "$bend_repo_url" "v$ver-nightly" "$query_test_path" old_suite
+}
 
-    rm -rf shadow || echo "no shadow dir"
+# Download config.toml for a specific version of query.
+download_query_config()
+{
+    local ver="$1"
+    local local_dir="$2"
 
-    git clone \
-        -b v$ver-nightly \
-        --depth 1  \
-        --filter=blob:none  \
-        --sparse \
-        "https://github.com/datafuselabs/databend" \
-        shadow
+    echo " === Download query config.toml from $ver:$query_config_path"
 
-    cd shadow
-    git sparse-checkout set $path
-
-    echo " === Done download test suites from $ver:$path"
-
-    ls $path
+    git_partial_clone "$bend_repo_url" "v$ver-nightly" "$query_config_path" "$local_dir"
 }
 
 kill_proc()
@@ -147,23 +175,36 @@ run_test()
     export RUST_BACKTRACE=1
 
     echo ' === Start databend-meta...'
+
     nohup "$metasrv" --single --log-level=DEBUG &
     python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
     echo ' === Start databend-query...'
-    nohup "$query" -c scripts/ci/deploy/config/databend-query-node-1.toml &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
 
-    echo " === Starting metasrv related test: 05_ddl"
     if [ "$query_ver" = "current" ]; then
-        ./tests/databend-test --suites tests/suites --mode 'standalone' --run-dir 0_stateless -- 05_
+        config_path="$query_config_path"
     else
         (
-            # download suites into ./shadow
+            download_query_config "$query_ver" old_config;
+        )
+        config_path="old_config/$query_config_path"
+    fi
+
+    nohup "$query" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query.log &
+    python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
+
+    echo " === Run metasrv related test: 05_ddl"
+
+    if [ "$query_ver" = "current" ]; then
+        suite_path="tests/suites"
+    else
+        (
+            # download suites into ./old_suite
             download_test_suite $query_ver;
         )
-        ./tests/databend-test --suites shadow/tests/suites --mode 'standalone' --run-dir 0_stateless -- 05_
+        suite_path="old_suite/tests/suites"
     fi
+    ./tests/databend-test --suites "$suite_path" --mode 'standalone' --run-dir 0_stateless -- 05_
 }
 
 # -- main --

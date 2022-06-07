@@ -34,7 +34,6 @@ use crate::storages::index::StatisticsOfColumns;
 pub struct StatisticsAccumulator {
     pub blocks_metas: Vec<BlockMeta>,
     pub blocks_statistics: Vec<StatisticsOfColumns>,
-    pub cluster_statistics: Vec<Option<ClusterStatistics>>,
     pub summary_row_count: u64,
     pub summary_block_count: u64,
     pub in_memory_size: u64,
@@ -59,7 +58,6 @@ impl StatisticsAccumulator {
         self.in_memory_size += block_in_memory_size;
         let block_stats = columns_statistics(block)?;
         self.blocks_statistics.push(block_stats.clone());
-        self.cluster_statistics.push(cluster_stats.clone());
         Ok(PartiallyAccumulated {
             accumulator: self,
             block_row_count: block.num_rows() as u64,
@@ -81,8 +79,6 @@ impl StatisticsAccumulator {
         self.summary_row_count += statistics.block_rows_size;
         self.blocks_statistics
             .push(statistics.block_column_statistics.clone());
-        self.cluster_statistics
-            .push(statistics.block_cluster_statistics.clone());
 
         let row_count = statistics.block_rows_size;
         let block_size = statistics.block_bytes_size;
@@ -106,10 +102,6 @@ impl StatisticsAccumulator {
 
     pub fn summary(&self) -> Result<StatisticsOfColumns> {
         super::reduce_block_statistics(&self.blocks_statistics)
-    }
-
-    pub fn summary_clusters(&self) -> Option<ClusterStatistics> {
-        super::reduce_cluster_stats(&self.cluster_statistics)
     }
 }
 
@@ -175,23 +167,28 @@ impl BlockStatistics {
     }
 
     pub fn clusters_statistics(
-        cluster_keys: Vec<usize>,
+        cluster_key_id: u32,
+        cluster_key_index: Vec<usize>,
         block: &DataBlock,
     ) -> Result<Option<ClusterStatistics>> {
-        if cluster_keys.is_empty() {
+        if cluster_key_index.is_empty() {
             return Ok(None);
         }
 
-        let mut min = Vec::with_capacity(cluster_keys.len());
-        let mut max = Vec::with_capacity(cluster_keys.len());
+        let mut min = Vec::with_capacity(cluster_key_index.len());
+        let mut max = Vec::with_capacity(cluster_key_index.len());
 
-        for key in cluster_keys.iter() {
+        for key in cluster_key_index.iter() {
             let col = block.column(*key);
             min.push(col.get_checked(0)?);
             max.push(col.get_checked(col.len() - 1)?);
         }
 
-        Ok(Some(ClusterStatistics { min, max }))
+        Ok(Some(ClusterStatistics {
+            cluster_key_id,
+            min,
+            max,
+        }))
     }
 }
 

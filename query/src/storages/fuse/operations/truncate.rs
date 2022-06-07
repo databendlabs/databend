@@ -45,6 +45,7 @@ impl FuseTable {
                 prev_snapshot.schema.clone(),
                 Default::default(),
                 vec![],
+                self.cluster_key_meta.clone(),
             );
             let loc = self.meta_location_generator();
             let new_snapshot_loc =

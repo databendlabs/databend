@@ -8,73 +8,73 @@ statement query T
 select check_json(null);
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json(true);
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json(123);
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json(12.34);
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json('null');
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json('true');
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json('-17');
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json('123.12');
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json('1.912e2');
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json('"Om ara pa ca na dhih"  ');
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json('[-1, 12, 289, 2188, false]');
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json('{ "x" : "abc", "y" : false, "z": 10} ');
 
 ----  
-None
+NULL
 
 statement query T 
 select check_json('[1,');

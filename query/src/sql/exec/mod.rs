@@ -18,28 +18,46 @@ mod util;
 
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
+use common_datablocks::HashMethodKind;
+use common_datablocks::HashMethodSerializer;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
 use common_planners::RewriteHelper;
+use primitive_types::U256;
+use primitive_types::U512;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
+use super::plans::JoinType;
 use super::plans::RelOperator;
 use super::MetadataRef;
+use crate::common::HashMap;
 use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
 use crate::pipelines::new::processors::ChainingHashTable;
 use crate::pipelines::new::processors::ExpressionTransform;
 use crate::pipelines::new::processors::HashJoinState;
+use crate::pipelines::new::processors::HashTable;
+use crate::pipelines::new::processors::KeyU128HashTable;
+use crate::pipelines::new::processors::KeyU16HashTable;
+use crate::pipelines::new::processors::KeyU256HashTable;
+use crate::pipelines::new::processors::KeyU32HashTable;
+use crate::pipelines::new::processors::KeyU512HashTable;
+use crate::pipelines::new::processors::KeyU64HashTable;
+use crate::pipelines::new::processors::KeyU8HashTable;
 use crate::pipelines::new::processors::ProjectionTransform;
+use crate::pipelines::new::processors::SerializerHashTable;
 use crate::pipelines::new::processors::SinkBuildHashTable;
 use crate::pipelines::new::processors::Sinker;
 use crate::pipelines::new::processors::SortMergeCompactor;
@@ -54,6 +72,7 @@ use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
 use crate::pipelines::transforms::get_sort_descriptions;
+use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
 use crate::sql::exec::expression_builder::ExpressionBuilder;
@@ -106,24 +125,24 @@ impl PipelineBuilder {
         format_field_name(name.as_str(), column_index)
     }
 
-    pub fn spawn(mut self) -> Result<(NewPipeline, Vec<NewPipeline>)> {
+    pub fn spawn(mut self) -> Result<(NewPipeline, Vec<NewPipeline>, Arc<DataSchema>)> {
         let expr = self.expression.clone();
         let mut pipeline = NewPipeline::create();
         let schema = self.build_pipeline(self.ctx.clone(), &expr, &mut pipeline)?;
-        self.align_data_schema(schema, &mut pipeline)?;
+        let schema = self.align_data_schema(schema, &mut pipeline)?;
         let settings = self.ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         for pipeline in self.pipelines.iter_mut() {
             pipeline.set_max_threads(settings.get_max_threads()? as usize);
         }
-        Ok((pipeline, self.pipelines))
+        Ok((pipeline, self.pipelines, schema))
     }
 
     fn align_data_schema(
         &mut self,
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
-    ) -> Result<()> {
+    ) -> Result<Arc<DataSchema>> {
         let mut projections = Vec::with_capacity(self.result_columns.len());
         let mut output_fields = Vec::with_capacity(self.result_columns.len());
         for (index, name) in self.result_columns.iter() {
@@ -147,7 +166,7 @@ impl PipelineBuilder {
                 self.ctx.clone(),
             )
         })?;
-        Ok(())
+        Ok(output_schema)
     }
 
     pub fn build_pipeline(
@@ -514,13 +533,14 @@ impl PipelineBuilder {
             .map(|scalar| eb.build(scalar))
             .collect::<Result<Vec<Expression>>>()?;
 
-        let hash_join_state = Arc::new(ChainingHashTable::try_create(
+        let hash_join_state = create_join_state(
+            ctx.clone(),
+            hash_join.join_type.clone(),
             build_expressions,
             probe_expressions,
             build_schema,
             probe_schema,
-            ctx.clone(),
-        )?);
+        )?;
 
         // Build side
         self.build_sink_hash_table(hash_join_state.clone(), &mut child_pipeline)?;
@@ -701,4 +721,119 @@ impl PipelineBuilder {
         })?;
         Ok(schema_builder.build_join(input_schema, subquery_schema))
     }
+}
+
+fn create_join_state(
+    ctx: Arc<QueryContext>,
+    join_type: JoinType,
+    build_expressions: Vec<Expression>,
+    probe_expressions: Vec<Expression>,
+    build_schema: DataSchemaRef,
+    probe_schema: DataSchemaRef,
+) -> Result<Arc<ChainingHashTable>> {
+    let hash_key_types = build_expressions
+        .iter()
+        .map(|expr| expr.to_data_type(&build_schema))
+        .collect::<Result<Vec<DataTypeImpl>>>()?;
+    let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
+    Ok(match method {
+        HashMethodKind::SingleString(_) | HashMethodKind::Serializer(_) => {
+            Arc::new(ChainingHashTable::try_create(
+                ctx,
+                join_type,
+                HashTable::SerializerHashTable(SerializerHashTable {
+                    hash_table: HashMap::<KeysRef, Vec<RowPtr>>::create(),
+                    hash_method: HashMethodSerializer::default(),
+                }),
+                build_expressions,
+                probe_expressions,
+                build_schema,
+                probe_schema,
+            )?)
+        }
+        HashMethodKind::KeysU8(hash_method) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            join_type,
+            HashTable::KeyU8HashTable(KeyU8HashTable {
+                hash_table: HashMap::<u8, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU16(hash_method) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            join_type,
+            HashTable::KeyU16HashTable(KeyU16HashTable {
+                hash_table: HashMap::<u16, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU32(hash_method) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            join_type,
+            HashTable::KeyU32HashTable(KeyU32HashTable {
+                hash_table: HashMap::<u32, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU64(hash_method) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            join_type,
+            HashTable::KeyU64HashTable(KeyU64HashTable {
+                hash_table: HashMap::<u64, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU128(hash_method) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            join_type,
+            HashTable::KeyU128HashTable(KeyU128HashTable {
+                hash_table: HashMap::<u128, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU256(hash_method) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            join_type,
+            HashTable::KeyU256HashTable(KeyU256HashTable {
+                hash_table: HashMap::<U256, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+        HashMethodKind::KeysU512(hash_method) => Arc::new(ChainingHashTable::try_create(
+            ctx,
+            join_type,
+            HashTable::KeyU512HashTable(KeyU512HashTable {
+                hash_table: HashMap::<U512, Vec<RowPtr>>::create(),
+                hash_method,
+            }),
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+        )?),
+    })
 }

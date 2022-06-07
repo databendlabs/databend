@@ -79,6 +79,7 @@ fn test_statement() {
         r#"use "a";"#,
         r#"create database if not exists a;"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,
+        r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
         r#"DROP table table1;"#,
@@ -104,6 +105,7 @@ fn test_statement() {
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
+        r#"create user 'test-e'@'localhost' identified by 'password';"#,
     ];
 
     for case in cases {
@@ -138,7 +140,7 @@ fn test_statements_in_legacy_suites() {
         // TODO(andylokandy): support all cases eventually
         // Remove currently unimplemented cases
         let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|DELETE).*\n",
+            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|DELETE).*\n",
         )
         .unwrap()
         .replace_all(&file_str, "")
@@ -168,6 +170,7 @@ fn test_statement_error() {
         r#"drop a"#,
         r#"insert into t format"#,
         r#"alter database system x rename to db"#,
+        r#"create user 'test-e'@'localhost' identified bi 'password';"#,
     ];
 
     for case in cases {
@@ -187,6 +190,8 @@ fn test_query() {
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
         r#"select * from a limit 3 offset 4 format csv"#,
+        r#"select * from customer inner join orders"#,
+        r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on a = b limit 1"#,
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
@@ -221,7 +226,6 @@ fn test_query_error() {
     let cases = &[
         r#"select * from customer join where a = b"#,
         r#"select * from join customer"#,
-        r#"select * from t inner join t1"#,
         r#"select * from customer natural inner join orders on a = b"#,
         r#"select * order a"#,
         r#"select * order"#,
@@ -288,6 +292,8 @@ fn test_expr() {
             AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
+        r#"nullif(1, 1)"#,
+        r#"nullif(a, b)"#,
     ];
 
     for case in cases {
