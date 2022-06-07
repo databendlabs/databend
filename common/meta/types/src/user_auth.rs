@@ -146,6 +146,17 @@ impl AuthInfo {
         AuthInfo::new(new_auth_type, auth_string)
     }
 
+    pub fn alter2(
+        &self,
+        auth_type: &Option<AuthType>,
+        auth_string: &Option<String>,
+    ) -> Result<AuthInfo> {
+        let old_auth_type = self.get_type();
+        let new_auth_type = auth_type.clone().unwrap_or(old_auth_type);
+
+        AuthInfo::new(new_auth_type, auth_string)
+    }
+
     pub fn get_type(&self) -> AuthType {
         match self {
             AuthInfo::None => AuthType::NoPassword,

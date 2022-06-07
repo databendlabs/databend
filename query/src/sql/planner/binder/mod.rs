@@ -113,6 +113,16 @@ impl<'a> Binder {
             Statement::ShowMetrics => Ok(Plan::ShowMetrics),
             Statement::ShowProcessList => Ok(Plan::ShowProcessList),
             Statement::ShowSettings => Ok(Plan::ShowSettings),
+            Statement::AlterUser {
+                user,
+                auth_option,
+                role_options,
+            } => {
+                let plan = self
+                    .bind_alter_user(user, auth_option, role_options)
+                    .await?;
+                Ok(plan)
+            }
             Statement::CreateUser(stmt) => {
                 let plan = self.bind_create_user(stmt).await?;
                 Ok(plan)

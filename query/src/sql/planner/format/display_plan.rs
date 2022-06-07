@@ -30,6 +30,7 @@ impl Plan {
             Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
             Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
             Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
+            Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
             Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
