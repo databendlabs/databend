@@ -110,6 +110,7 @@ fn test_statement() {
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"create user 'test-e'@'localhost' identified by 'password';"#,
         r#"drop user if exists 'test-j'@'localhost';"#,
+        r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
     ];
 
     for case in cases {
@@ -176,6 +177,7 @@ fn test_statement_error() {
         r#"alter database system x rename to db"#,
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
         r#"drop usar if exists 'test-j'@'localhost';"#,
+        r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
     ];
 
     for case in cases {

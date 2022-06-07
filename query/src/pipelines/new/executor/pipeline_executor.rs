@@ -79,7 +79,13 @@ impl PipelineExecutor {
             match join_handle.join() {
                 Ok(Ok(_)) => Ok(()),
                 Ok(Err(cause)) => Err(cause),
-                Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
+                Err(cause) => match cause.downcast_ref::<&'static str>() {
+                    None => match cause.downcast_ref::<String>() {
+                        None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+                        Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                    },
+                    Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                },
             }?;
         }
 
@@ -93,9 +99,29 @@ impl PipelineExecutor {
             let this = self.clone();
             let name = format!("PipelineExecutor-{}", thread_num);
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
-                match this.execute_single_thread(thread_num) {
-                    Ok(_) => Ok(()),
-                    Err(cause) => this.throw_error(thread_num, cause),
+                let this_clone = this.clone();
+                let try_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                    move || -> Result<()> {
+                        match this_clone.execute_single_thread(thread_num) {
+                            Ok(_) => Ok(()),
+                            Err(cause) => this_clone.throw_error(thread_num, cause),
+                        }
+                    },
+                ));
+
+                match try_result {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(cause)) => Err(cause),
+                    Err(cause) => {
+                        this.finish()?;
+                        match cause.downcast_ref::<&'static str>() {
+                            None => match cause.downcast_ref::<String>() {
+                                None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+                                Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                            },
+                            Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                        }
+                    }
                 }
             }));
         }

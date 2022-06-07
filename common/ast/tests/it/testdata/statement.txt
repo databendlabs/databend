@@ -2815,3 +2815,27 @@ DropUser {
 }
 
 
+---------- Input ----------
+alter user 'test-e'@'localhost' identified by 'new-password';
+---------- Output ---------
+ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password'
+---------- AST ------------
+AlterUser {
+    user: Some(
+        UserIdentity {
+            username: "test-e",
+            hostname: "localhost",
+        },
+    ),
+    auth_option: Some(
+        AuthOption {
+            auth_type: None,
+            password: Some(
+                "new-password",
+            ),
+        },
+    ),
+    role_options: [],
+}
+
+
