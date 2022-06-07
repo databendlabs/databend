@@ -16,14 +16,18 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
+use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::CreateTableInterpreter;
+use super::CreateUserStageInterpreter;
 use super::ExplainInterpreterV2;
 use super::InterpreterPtr;
+use super::ListInterpreter;
 use super::SelectInterpreterV2;
-use super::ShowStagesInterpreter;
 use super::ShowMetricsInterpreter;
 use super::ShowProcessListInterpreter;
 use super::ShowSettingsInterpreter;
+use super::ShowStagesInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -38,9 +42,10 @@ impl InterpreterFactoryV2 {
     pub fn check(stmt: &DfStatement) -> bool {
         matches!(
             stmt,
-            DfStatement::Query(_) | DfStatement::Explain(_) | DfStatement::CreateTable(_) 
-                | DfStatement::ShowStages(_)
+            DfStatement::Query(_)
                 | DfStatement::Explain(_)
+                | DfStatement::CreateStage(_)
+                | DfStatement::ShowStages(_)
                 | DfStatement::CreateTable(_)
                 | DfStatement::ShowMetrics(_)
                 | DfStatement::ShowProcessList(_)
@@ -66,9 +71,14 @@ impl InterpreterFactoryV2 {
             Plan::CreateTable(create_table) => {
                 CreateTableInterpreter::try_create(ctx, *create_table.clone())
             }
-            Plan::ShowStages => {
-                ShowStagesInterpreter::try_create(ctx)   
+            Plan::CreateStage(create_stage) => {
+                CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())
             }
+            Plan::ShowStages => ShowStagesInterpreter::try_create(ctx),
+            Plan::DropStage(s) => DropUserStageInterpreter::try_create(ctx, *s.clone()),
+            Plan::DescStage(s) => DescribeUserStageInterpreter::try_create(ctx, *s.clone()),
+            Plan::ListStage(s) => ListInterpreter::try_create(ctx, *s.clone()),
+
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
             Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),

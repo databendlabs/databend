@@ -113,7 +113,7 @@ pub enum TokenKind {
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     QuotedString,
-    
+
     #[regex(r#"@([^\s`;'"])+"#)]
     AtString,
 
@@ -277,6 +277,8 @@ pub enum TokenKind {
     CLUSTER,
     #[token("COMMENT", ignore(ascii_case))]
     COMMENT,
+    #[token("COMMENTS", ignore(ascii_case))]
+    COMMENTS,
     #[token("COMPACT", ignore(ascii_case))]
     COMPACT,
     #[token("CONFIGRELOAD", ignore(ascii_case))]
@@ -515,6 +517,8 @@ pub enum TokenKind {
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
     RENAME,
+    #[token("REMOVE", ignore(ascii_case))]
+    REMOVE,
     #[token("RIGHT", ignore(ascii_case))]
     RIGHT,
     #[token("RLIKE", ignore(ascii_case))]

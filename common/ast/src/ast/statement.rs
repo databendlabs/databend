@@ -200,13 +200,22 @@ pub enum Statement<'a> {
         description: Option<String>,
     },
     // stages
-    ShowStages,
     CreateStage(CreateStageStmt),
-    RemoveStage{
+    ShowStages,
+    DropStage {
+        if_exists: bool,
+        stage_name: String,
+    },
+    DescStage {
+        stage_name: String,
+    },
+    RemoveStage {
+        stage_name: String,
     },
     ListStage {
-        stage_name: String
-    }
+        stage_name: String,
+        pattern: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -314,21 +323,20 @@ pub enum OptimizeTableAction {
     Compact,
 }
 
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateStageStmt {
-        pub if_not_exists: bool,
-        pub stage_name: String,
-    
-        pub location: String,
-        pub credential_options: BTreeMap<String, String>,
-        pub encryption_options: BTreeMap<String, String>,
-       
-        pub file_format_options: BTreeMap<String, String>,
-        pub on_error: String,
-        pub size_limit: Option<u64>,
-        pub validation_mode: String,
-        pub comments: String
+    pub if_not_exists: bool,
+    pub stage_name: String,
+
+    pub location: String,
+    pub credential_options: BTreeMap<String, String>,
+    pub encryption_options: BTreeMap<String, String>,
+
+    pub file_format_options: BTreeMap<String, String>,
+    pub on_error: String,
+    pub size_limit: usize,
+    pub validation_mode: String,
+    pub comments: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -838,14 +846,85 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " DESC = '{description}'")?;
                 }
             }
-            Statement::ListStage { stage_name } => {
+            Statement::ListStage {
+                stage_name,
+                pattern,
+            } => {
                 write!(f, "LIST @{stage_name}")?;
-            },
+                if !pattern.is_empty() {
+                    write!(f, " PATTERN = '{pattern}'")?;
+                }
+            }
             Statement::ShowStages => {
                 write!(f, "SHOW STAGES")?;
-            },
-            Statement::CreateStage { .. } => todo!(),
-            Statement::RemoveStage {  } => todo!(),
+            }
+            Statement::DropStage {
+                if_exists,
+                stage_name,
+            } => {
+                write!(f, "DROP STAGES")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {stage_name}")?;
+            }
+            Statement::CreateStage(stmt) => {
+                write!(f, "CREATE STAGE")?;
+                if stmt.if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {}", stmt.stage_name)?;
+
+                if !stmt.location.is_empty() {
+                    write!(f, " URL = '{}'", stmt.location)?;
+
+                    if !stmt.credential_options.is_empty() {
+                        write!(f, " CREDENTIALS = (")?;
+                        for (k, v) in stmt.credential_options.iter() {
+                            write!(f, " {} = '{}'", k, v)?;
+                        }
+                        write!(f, " )")?;
+                    }
+
+                    if !stmt.encryption_options.is_empty() {
+                        write!(f, " ENCRYPTION = (")?;
+                        for (k, v) in stmt.encryption_options.iter() {
+                            write!(f, " {} = '{}'", k, v)?;
+                        }
+                        write!(f, " )")?;
+                    }
+                }
+
+                if !stmt.file_format_options.is_empty() {
+                    write!(f, " FILE_FORMAT = (")?;
+                    for (k, v) in stmt.file_format_options.iter() {
+                        write!(f, " {} = '{}'", k, v)?;
+                    }
+                    write!(f, " )")?;
+                }
+
+                if !stmt.on_error.is_empty() {
+                    write!(f, " ON_ERROR = {}", stmt.on_error)?;
+                }
+
+                if stmt.size_limit != 0 {
+                    write!(f, " SIZE_LIMIT = {}", stmt.size_limit)?;
+                }
+
+                if !stmt.validation_mode.is_empty() {
+                    write!(f, " VALIDATION_MODE = {}", stmt.validation_mode)?;
+                }
+
+                if !stmt.comments.is_empty() {
+                    write!(f, " COMMENTS = '{}'", stmt.comments)?;
+                }
+            }
+            Statement::RemoveStage { stage_name } => {
+                write!(f, "REMOVE STAGE @{stage_name}")?;
+            }
+            Statement::DescStage { stage_name } => {
+                write!(f, "DESC STAGE {stage_name}")?;
+            }
         }
         Ok(())
     }

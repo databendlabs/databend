@@ -418,58 +418,99 @@ pub fn statement(i: Input) -> IResult<Statement> {
             }
         },
     );
-    
+
     // stages
     let create_stage = map(
         rule! {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident
             ~ ( URL ~ "=" ~ #literal_string
-                ~ (CREDENTIALS ~ #options)?
-                ~ (ENCRYPTION ~ #options)?
+                ~ (CREDENTIALS ~ "=" ~ #options)?
+                ~ (ENCRYPTION ~ "=" ~ #options)?
               )?
-            ~ ( FILE_FORMAT ~ "=" #options)?
-            ~ ( ON_ERROR ~ "=" #ident)?
-            ~ ( SIZE_LIMIT ~ "=" #literal_u64)?
-            ~ ( VALIDATION_MODE ~ "=" #ident)?
-            ~ ( COMMENT ~ "=" #literal_string)?
+            ~ ( FILE_FORMAT ~ "=" ~ #options)?
+            ~ ( ON_ERROR ~ "=" ~ #ident)?
+            ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
+            ~ ( VALIDATION_MODE ~ "=" ~ #ident)?
+            ~ ( (COMMENT | COMMENTS) ~ "=" ~ #literal_string)?
         },
         |(
             _,
             _,
             opt_if_not_exists,
             stage,
-            url,
-            file_format,
-            on_error,
-            size_limit,
-            validation_mode,
-            comment,
+            url_opt,
+            file_format_opt,
+            on_error_opt,
+            size_limit_opt,
+            validation_mode_opt,
+            comment_opt,
         )| {
-            let location = url.map(|v| v.2);
+            let mut credential_options = BTreeMap::new();
+            let mut encryption_options = BTreeMap::new();
+            let mut location = String::new();
+            if let Some((_, _, url, c, e)) = url_opt {
+                location = url;
+                credential_options = c.map(|v| v.2).unwrap_or_default();
+                encryption_options = e.map(|v| v.2).unwrap_or_default();
+            }
+
             Statement::CreateStage(CreateStageStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 stage_name: stage.to_string(),
-                location: location.unwrap_or_default(),
-                credential_options: todo!(),
-                encryption_options: todo!(),
-                file_format_options: todo!(),
-                on_error: todo!(),
-                size_limit: todo!(),
-                validation_mode: todo!(),
-                comments: todo!(),
+                location,
+                credential_options,
+                encryption_options,
+                file_format_options: file_format_opt
+                    .map(|(_, _, file_format_opt)| file_format_opt)
+                    .unwrap_or_default(),
+                on_error: on_error_opt.map(|v| v.2.to_string()).unwrap_or_default(),
+                size_limit: size_limit_opt.map(|v| v.2 as usize).unwrap_or_default(),
+                validation_mode: validation_mode_opt
+                    .map(|v| v.2.to_string())
+                    .unwrap_or_default(),
+                comments: comment_opt.map(|v| v.2).unwrap_or_default(),
             })
         },
     );
-    
+
     let list_stage = map(
         rule! {
-            LIST ~ #at_string
+            LIST ~ #at_string ~ (PATTERN ~ "=" ~ #literal_string)?
         },
-        |(_, stage_name)| Statement::ListStage {
-            stage_name
+        |(_, stage_name, pattern_opt)| Statement::ListStage {
+            stage_name,
+            pattern: pattern_opt.map(|v| v.2).unwrap_or_default(),
         },
-    );  
+    );
+
+    let _remove_stage = map(
+        rule! {
+            REMOVE ~ #at_string
+        },
+        |(_, stage_name)| Statement::RemoveStage {
+            stage_name,
+        },
+    );
+
+    let drop_stage = map(
+        rule! {
+            DROP ~ STAGE ~ ( IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, stage_name)| Statement::DropStage {
+            if_exists: opt_if_exists.is_some(),
+            stage_name: stage_name.to_string(),
+        },
+    );
+
+    let desc_stage = map(
+        rule! {
+            DESC ~ STAGE ~ #ident
+        },
+        |(_, _, stage_name)| Statement::DescStage {
+            stage_name: stage_name.to_string(),
+        },
+    );
 
     alt((
         rule!(
@@ -515,7 +556,10 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
                 [ COPY_OPTIONS = ( copyOptions ) ]
                 [ COMMENT = '<string_literal>' ]`"
-            | #list_stage: "`LIST @<stage_name>`"
+            | #desc_stage: "`DESC STAGE <stage_name>`"
+            // | #remove_stage: "`REMOVE @<stage_name>`"
+            | #list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
+            | #drop_stage: "`DROP STAGE <stage_name>`"
         ),
     ))(i)
 }
@@ -755,18 +799,26 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
     ))(i)
 }
 
-
 // parse: (k = v ...)* into a map
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
+    let ident_with_format = alt((
+        map(rule! { FORMAT }, |_| "FORMAT".to_string()),
+        map(rule! {#ident}, |expr| expr.to_string()),
+    ));
+    
+    let ident_to_string = alt((
+        map(rule! {#ident}, |expr| expr.to_string()),
+    ));
+
     map(
         rule! {
-            "(" ~ (#ident ~ "=" ~ #literal_string)* ~ ")"
+            "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #literal_string) )* ~ ")"
         },
         |(_, opts, _)| {
             let mut map = BTreeMap::new();
-            
+
             for (k, _, v) in opts {
-                map.insert(k.to_string(), v);
+                map.insert(k, v);
             }
             map
         },

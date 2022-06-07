@@ -2593,6 +2593,34 @@ Query(
 
 
 ---------- Input ----------
+CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( FORMAT = 'CSV' compression = 'GZIP' record_delimiter = ',' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: true,
+        stage_name: "test_stage",
+        location: "s3://load/files/",
+        credential_options: {
+            "aws_key_id": "1a2b3c",
+            "aws_secret_key": "4x5y6z",
+        },
+        encryption_options: {},
+        file_format_options: {
+            "FORMAT": "CSV",
+            "compression": "GZIP",
+            "record_delimiter": ",",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
 list @stage_a;
 ---------- Output ---------
 LIST @stage_a

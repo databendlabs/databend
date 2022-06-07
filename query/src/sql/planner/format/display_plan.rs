@@ -27,10 +27,14 @@ impl Plan {
                 Ok(format!("{:?}:\n{}", kind, result))
             }
             Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
-            Plan::ShowStages => Ok("ShowStages".to_string()),
+            Plan::CreateStage(create_stage) => Ok(format!("{:?}", create_stage)),
+            Plan::ShowStages => Ok("SHOW STAGES".to_string()),
             Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
             Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
             Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
+            Plan::DropStage(s) => Ok(format!("{:?}", s)),
+            Plan::DescStage(s) => Ok(format!("{:?}", s)),
+            Plan::ListStage(s) => Ok(format!("{:?}", s)),
         }
     }
 }

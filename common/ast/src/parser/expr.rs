@@ -1041,9 +1041,8 @@ pub fn literal_string(i: Input) -> IResult<String> {
 }
 
 pub fn at_string(i: Input) -> IResult<String> {
-    match_token(AtString)(i).and_then(|(i2, token)| {
-        Ok((i2, token.text()[1..token.text().len()].to_string()))
-    })
+    match_token(AtString)(i)
+        .map(|(i2, token)| (i2, token.text()[1..token.text().len()].to_string()))
 }
 
 pub fn type_name(i: Input) -> IResult<TypeName> {

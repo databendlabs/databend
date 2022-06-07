@@ -32,6 +32,10 @@ pub use aggregate::AggregatePlan;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_planners::CreateTablePlan;
+use common_planners::CreateUserStagePlan;
+use common_planners::DescribeUserStagePlan;
+use common_planners::DropUserStagePlan;
+use common_planners::ListPlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
@@ -69,10 +73,16 @@ pub enum Plan {
     },
 
     // DDL
-    CreateTable(CreateTablePlan),
-    ShowStages,
     CreateTable(Box<CreateTablePlan>),
-    
+
+    CreateStage(Box<CreateUserStagePlan>),
+    DropStage(Box<DropUserStagePlan>),
+    DescStage(Box<DescribeUserStagePlan>),
+    ListStage(Box<ListPlan>),
+    ShowStages,
+    // TODO
+    // RemoveStage(Box<RemoveStagePlan>),
+
     // System
     ShowMetrics,
     ShowProcessList,

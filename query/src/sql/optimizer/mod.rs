@@ -55,16 +55,16 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
             kind,
             plan: Box::new(optimize(*plan)?),
         }),
-<<<<<<< HEAD
-        Plan::CreateTable(_) => Ok(plan),
-        Plan::ShowStages => Ok(plan),
-=======
-
         // Passthrough
-        Plan::ShowMetrics | Plan::ShowProcessList | Plan::ShowSettings | Plan::CreateTable(_) => {
-            Ok(plan)
-        }
->>>>>>> main
+        Plan::CreateTable(_)
+        | Plan::CreateStage(_)
+        | Plan::ShowStages
+        | Plan::ShowMetrics
+        | Plan::ShowProcessList
+        | Plan::ShowSettings
+        | Plan::DropStage(_)
+        | Plan::DescStage(_)
+        | Plan::ListStage(_) => Ok(plan),
     }
 }
 
