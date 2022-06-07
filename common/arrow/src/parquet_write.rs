@@ -42,7 +42,6 @@ where
     let created_by = Some("Arrow2 - Native Rust implementation of Arrow".to_string());
     let mut file_writer = FileWriter::new(writer, parquet_schema, options, created_by);
 
-    file_writer.start()?;
     for group in row_groups {
         file_writer.write(group?)?;
     }
