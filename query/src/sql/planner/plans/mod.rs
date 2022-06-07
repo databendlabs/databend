@@ -33,6 +33,7 @@ pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
+use common_planners::CreateViewPlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
@@ -71,6 +72,7 @@ pub enum Plan {
 
     // DDL
     CreateTable(Box<CreateTablePlan>),
+    CreateView(Box<CreateViewPlan>),
 
     // System
     ShowMetrics,

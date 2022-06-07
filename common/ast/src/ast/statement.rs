@@ -121,12 +121,7 @@ pub enum Statement<'a> {
     },
 
     // Views
-    CreateView {
-        if_not_exists: bool,
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
-        query: Box<Query<'a>>,
-    },
+    CreateView(CreateViewStmt<'a>),
     AlterView {
         database: Option<Identifier<'a>>,
         view: Identifier<'a>,
@@ -261,6 +256,14 @@ pub enum Engine {
     Fuse,
     Github,
     View,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateViewStmt<'a> {
+    pub if_not_exists: bool,
+    pub database: Option<Identifier<'a>>,
+    pub view: Identifier<'a>,
+    pub query: Box<Query<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -645,12 +648,12 @@ impl<'a> Display for Statement<'a> {
                     }
                 }
             }
-            Statement::CreateView {
+            Statement::CreateView(CreateViewStmt {
                 if_not_exists,
                 database,
                 view,
                 query,
-            } => {
+            }) => {
                 write!(f, "CREATE VIEW ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
