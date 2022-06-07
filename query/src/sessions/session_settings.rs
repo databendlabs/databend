@@ -328,6 +328,42 @@ impl Settings {
         result
     }
 
+    pub fn get_changed_settings(&self) -> Settings {
+        let settings = self.settings.read();
+        let mut values = vec![];
+        for (_k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
+            if v.user_setting.value != v.default_value {
+                values.push(v.clone());
+            }
+        }
+        let new_settings = Arc::new(RwLock::new(HashMap::default()));
+        {
+            let mut new_settings_mut = new_settings.write();
+            for value in values {
+                let name = value.user_setting.name.clone();
+                new_settings_mut.insert(name, value.clone());
+            }
+        }
+        Settings {
+            settings: new_settings,
+        }
+    }
+
+    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        let mut settings = self.settings.write();
+        let values = changed_settings.get_setting_values();
+        for value in values.into_iter() {
+            if let DataValue::Struct(vals) = value {
+                let key = vals[0].to_string();
+                let mut val = settings.get_mut(&key).ok_or_else(|| {
+                    ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key))
+                })?;
+                val.user_setting.value = vals[2].clone();
+            }
+        }
+        Ok(())
+    }
+
     pub fn get_setting_values_short(&self) -> BTreeMap<String, DataValue> {
         let settings = self.settings.read();
 

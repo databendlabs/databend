@@ -88,7 +88,7 @@ impl InterpreterFactory {
         let inner = match plan.clone() {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx_clone, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx_clone, v),
-            PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
+            PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v, false),
             PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
             PlanNode::Call(v) => CallInterpreter::try_create(ctx_clone, v),
             PlanNode::Show(ShowPlan::ShowDatabases(v)) => {

@@ -126,6 +126,12 @@ impl AuthInfo {
         AuthInfo::new(auth_type, auth_string)
     }
 
+    pub fn create2(auth_type: &Option<AuthType>, auth_string: &Option<String>) -> Result<AuthInfo> {
+        let default = AuthType::DoubleSha1Password;
+        let auth_type = auth_type.clone().unwrap_or(default);
+        AuthInfo::new(auth_type, auth_string)
+    }
+
     pub fn alter(
         &self,
         auth_type: &Option<String>,

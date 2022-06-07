@@ -320,7 +320,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( WITH ~ ^#role_option+ )?
         },
         |(_, _, opt_if_not_exists, user, _, opt_auth_type, opt_password, opt_role_options)| {
-            Statement::CreateUser {
+            Statement::CreateUser(CreateUserStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 user,
                 auth_option: AuthOption {
@@ -330,7 +330,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 role_options: opt_role_options
                     .map(|(_, role_options)| role_options)
                     .unwrap_or_default(),
-            }
+            })
         },
     );
     let alter_user = map(

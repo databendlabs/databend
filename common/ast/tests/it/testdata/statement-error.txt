@@ -103,3 +103,13 @@ error:
   | while parsing `ALTER DATABASE [IF EXISTS] <action>`
 
 
+---------- Input ----------
+create user 'test-e'@'localhost' identified bi 'password';
+---------- Output ---------
+error: 
+  --> SQL:1:45
+  |
+1 | create user 'test-e'@'localhost' identified bi 'password';
+  |                                             ^^ expected `WITH`, `BY`, or `;`
+
+

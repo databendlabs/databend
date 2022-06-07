@@ -17,4 +17,5 @@ mod memory_table;
 mod memory_table_stream;
 
 pub use memory_table::MemoryTable;
+pub use memory_table::MemoryTableSink;
 pub use memory_table_stream::MemoryTableStream;
