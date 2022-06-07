@@ -76,7 +76,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, or `FUNCTION`
+  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, `FUNCTION`, or 1 more ...
 
 
 ---------- Input ----------

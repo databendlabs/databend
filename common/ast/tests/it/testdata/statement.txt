@@ -2708,7 +2708,6 @@ Query(
 
 
 ---------- Input ----------
-<<<<<<< HEAD
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( FORMAT = 'CSV' compression = 'GZIP' record_delimiter = ',' )
@@ -2732,7 +2731,22 @@ CreateStage(
         size_limit: 0,
         validation_mode: "",
         comments: "",
-=======
+    },
+)
+
+
+---------- Input ----------
+list @stage_a;
+---------- Output ---------
+LIST @stage_a
+---------- AST ------------
+ListStage {
+    stage_name: "stage_a",
+    pattern: "",
+}
+
+
+---------- Input ----------
 create user 'test-e'@'localhost' identified by 'password';
 ---------- Output ---------
 CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password'
@@ -2751,21 +2765,7 @@ CreateUser(
             ),
         },
         role_options: [],
->>>>>>> main
     },
 )
 
 
-<<<<<<< HEAD
----------- Input ----------
-list @stage_a;
----------- Output ---------
-LIST @stage_a
----------- AST ------------
-ListStage {
-    stage_name: "stage_a",
-}
-
-
-=======
->>>>>>> main

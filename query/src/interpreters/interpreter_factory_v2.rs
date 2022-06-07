@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use super::CreateUserInterpreter;
 use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::CreateTableInterpreter;
+use super::CreateUserInterpreter;
 use super::CreateUserStageInterpreter;
 use super::CreateViewInterpreter;
 use super::ExplainInterpreterV2;
@@ -31,8 +31,8 @@ use super::ShowProcessListInterpreter;
 use super::ShowSettingsInterpreter;
 use super::ShowStagesInterpreter;
 use crate::sessions::QueryContext;
-use crate::sql::DfStatement;
 use crate::sql::plans::Plan;
+use crate::sql::DfStatement;
 
 /// InterpreterFactory is the entry of Interpreter.
 pub struct InterpreterFactoryV2;

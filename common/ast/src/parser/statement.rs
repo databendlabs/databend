@@ -490,9 +490,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             REMOVE ~ #at_string
         },
-        |(_, stage_name)| Statement::RemoveStage {
-            stage_name,
-        },
+        |(_, stage_name)| Statement::RemoveStage { stage_name },
     );
 
     let drop_stage = map(
@@ -807,10 +805,8 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
         map(rule! { FORMAT }, |_| "FORMAT".to_string()),
         map(rule! {#ident}, |expr| expr.to_string()),
     ));
-    
-    let ident_to_string = alt((
-        map(rule! {#ident}, |expr| expr.to_string()),
-    ));
+
+    let ident_to_string = alt((map(rule! {#ident}, |expr| expr.to_string()),));
 
     map(
         rule! {
