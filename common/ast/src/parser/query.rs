@@ -26,56 +26,22 @@ use crate::rule;
 pub fn query(i: Input) -> IResult<Query> {
     map(
         consumed(rule! {
-            SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
-            ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
-            ~ ( WHERE ~ ^#expr )?
-            ~ ( GROUP ~ ^BY ~ ^#comma_separated_list1(expr) )?
-            ~ ( HAVING ~ ^#expr )?
+            #set_expr
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( LIMIT ~ ^#comma_separated_list1(expr) )?
             ~ ( OFFSET ~ ^#expr )?
             ~ ( FORMAT ~ #ident )?
             : "`SELECT ...`"
         }),
-        |(
-            span,
-            (
-                _select,
-                opt_distinct,
-                select_list,
-                opt_from_block,
-                opt_where_block,
-                opt_group_by_block,
-                opt_having_block,
-                opt_order_by_block,
-                opt_limit_block,
-                opt_offset_block,
-                opt_format,
-            ),
-        )| {
-            Query {
-                span: span.0,
-                body: SetExpr::Select(Box::new(SelectStmt {
-                    // TODO(andylokandy): span should exclude order by
-                    span: span.0,
-                    distinct: opt_distinct.is_some(),
-                    select_list,
-                    from: opt_from_block
-                        .map(|(_, table_refs)| table_refs)
-                        .unwrap_or_default(),
-                    selection: opt_where_block.map(|(_, selection)| selection),
-                    group_by: opt_group_by_block
-                        .map(|(_, _, group_by)| group_by)
-                        .unwrap_or_default(),
-                    having: opt_having_block.map(|(_, having)| having),
-                })),
-                order_by: opt_order_by_block
-                    .map(|(_, _, order_by)| order_by)
-                    .unwrap_or_default(),
-                limit: opt_limit_block.map(|(_, limit)| limit).unwrap_or_default(),
-                offset: opt_offset_block.map(|(_, offset)| offset),
-                format: opt_format.map(|(_, format)| format.name),
-            }
+        |(span, (body, opt_order_by_block, opt_limit_block, opt_offset_block, opt_format))| Query {
+            span: span.0,
+            body,
+            order_by: opt_order_by_block
+                .map(|(_, _, order_by)| order_by)
+                .unwrap_or_default(),
+            limit: opt_limit_block.map(|(_, limit)| limit).unwrap_or_default(),
+            offset: opt_offset_block.map(|(_, offset)| offset),
+            format: opt_format.map(|(_, format)| format.name),
         },
     )(i)
 }
@@ -308,6 +274,71 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
             expr,
             asc: opt_asc.map(|asc| asc.kind == ASC),
             nulls_first: None,
+        },
+    )(i)
+}
+
+pub fn set_expr(i: Input) -> IResult<SetExpr> {
+    let select = map(
+        rule! {
+             SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
+                ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
+                ~ ( WHERE ~ ^#expr )?
+                ~ ( GROUP ~ ^BY ~ ^#comma_separated_list1(expr) )?
+                ~ ( HAVING ~ ^#expr )?
+        },
+        |(
+            _select,
+            opt_distinct,
+            select_list,
+            opt_from_block,
+            opt_where_block,
+            opt_group_by_block,
+            opt_having_block,
+        )| {
+            SetExpr::Select(Box::new(SelectStmt {
+                span: &[],
+                distinct: opt_distinct.is_some(),
+                select_list,
+                from: opt_from_block
+                    .map(|(_, table_refs)| table_refs)
+                    .unwrap_or_default(),
+                selection: opt_where_block.map(|(_, selection)| selection),
+                group_by: opt_group_by_block
+                    .map(|(_, _, group_by)| group_by)
+                    .unwrap_or_default(),
+                having: opt_having_block.map(|(_, having)| having),
+            }))
+        },
+    );
+
+    map(
+        rule!(#select ~ (UNION | EXCEPT | INTERSECT)? ~ ALL? ~ #set_expr?),
+        |(select, set_operator, all_kind, set_expr)| {
+            let all = all_kind.is_some();
+            let left = Box::new(select.clone());
+            match set_operator.map(|token| token.kind) {
+                Some(TokenKind::UNION) => SetExpr::SetOperation {
+                    op: SetOperator::Union,
+                    all,
+                    left,
+                    right: Box::new(set_expr.unwrap()),
+                },
+                Some(TokenKind::EXCEPT) => SetExpr::SetOperation {
+                    op: SetOperator::Except,
+                    all,
+                    left,
+                    right: Box::new(set_expr.unwrap()),
+                },
+                Some(TokenKind::INTERSECT) => SetExpr::SetOperation {
+                    op: SetOperator::Intersect,
+                    all,
+                    left,
+                    right: Box::new(set_expr.unwrap()),
+                },
+                None => select,
+                _ => unreachable!(),
+            }
         },
     )(i)
 }

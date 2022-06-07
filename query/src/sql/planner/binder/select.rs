@@ -34,7 +34,6 @@ use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::plans::Filter;
 use crate::sql::plans::Scalar;
-use crate::sql::plans::UnionPlan;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -145,16 +144,10 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         set_expr: &SetExpr,
-        query: Option<&Query>,
+        order_by: &[OrderByExpr],
     ) -> Result<(SExpr, BindContext)> {
         match set_expr {
-            SetExpr::Select(stmt) => match query {
-                Some(query) => {
-                    self.bind_select_stmt(bind_context, stmt, &query.order_by)
-                        .await
-                }
-                None => self.bind_select_stmt(bind_context, stmt, &vec![]).await,
-            },
+            SetExpr::Select(stmt) => self.bind_select_stmt(bind_context, stmt, order_by).await,
             SetExpr::Query(stmt) => self.bind_query(bind_context, stmt).await,
             SetExpr::SetOperation {
                 op,
@@ -162,35 +155,8 @@ impl<'a> Binder {
                 left,
                 right,
             } => {
-                let (left_expr, left_bind_context) =
-                    self.bind_set_expr(bind_context, &*left, None).await?;
-                let (right_expr, right_bind_context) =
-                    self.bind_set_expr(bind_context, &*right, None).await?;
-                if left_bind_context.columns.len() != right_bind_context.columns.len() {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "SetOperation must have the same number of columns",
-                    )));
-                } else {
-                    for (left_col, right_col) in left_bind_context
-                        .columns
-                        .iter()
-                        .zip(right_bind_context.columns.iter())
-                    {
-                        if !left_col.data_type.eq(&right_col.data_type) {
-                            return Err(ErrorCode::SemanticError(format!(
-                                "SetOperation's types cannot be matched"
-                            )));
-                        }
-                    }
-                }
-                match (op, all) {
-                    (SetOperator::Union, true) => {
-                        let union_plan = UnionPlan {};
-                        let expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
-                        Ok((expr, left_bind_context))
-                    }
-                    _ => Err(ErrorCode::UnImplement("Unsupported query type")),
-                }
+                self.bind_set_operator(bind_context, left, right, op, all)
+                    .await
             }
         }
     }
@@ -198,10 +164,11 @@ impl<'a> Binder {
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &BindContext,
-        query: &Query,
+        query: &Query<'_>,
     ) -> Result<(SExpr, BindContext)> {
-        let (mut s_expr, bind_context) =
-            self.bind_set_expr(bind_context, &query.body, Some(query)).await?;
+        let (mut s_expr, bind_context) = self
+            .bind_set_expr(bind_context, &query.body, &query.order_by)
+            .await?;
         if !query.limit.is_empty() {
             if query.limit.len() == 1 {
                 s_expr = self
@@ -241,5 +208,118 @@ impl<'a> Binder {
         };
         let new_expr = SExpr::create_unary(filter_plan.into(), child);
         Ok(new_expr)
+    }
+
+    pub(super) async fn bind_set_operator(
+        &mut self,
+        bind_context: &BindContext,
+        left: &Box<SetExpr<'_>>,
+        right: &Box<SetExpr<'_>>,
+        op: &SetOperator,
+        all: &bool,
+    ) -> Result<(SExpr, BindContext)> {
+        let (left_expr, left_bind_context) =
+            self.bind_set_expr(bind_context, &*left, &vec![]).await?;
+        let (right_expr, right_bind_context) =
+            self.bind_set_expr(bind_context, &*right, &vec![]).await?;
+        if left_bind_context.columns.len() != right_bind_context.columns.len() {
+            return Err(ErrorCode::SemanticError(format!(
+                "SetOperation must have the same number of columns",
+            )));
+        } else {
+            for (left_col, right_col) in left_bind_context
+                .columns
+                .iter()
+                .zip(right_bind_context.columns.iter())
+            {
+                if !left_col.data_type.eq(&right_col.data_type) {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "SetOperation's types cannot be matched"
+                    )));
+                }
+            }
+        }
+        match (op, all) {
+            (SetOperator::Intersect, true) => {
+                // Transfer Intersect to Semi join
+                self.bind_intersect(left_bind_context, right_bind_context, left_expr, right_expr)
+            }
+            (SetOperator::Except, true) => {
+                // Transfer Except to Anti join
+                self.bind_except(left_bind_context, right_bind_context, left_expr, right_expr)
+            }
+            _ => Err(ErrorCode::UnImplement("Unsupported query type")),
+        }
+    }
+
+    fn bind_intersect(
+        &mut self,
+        left_context: BindContext,
+        right_context: BindContext,
+        left_expr: SExpr,
+        right_expr: SExpr,
+    ) -> Result<(SExpr, BindContext)> {
+        self.bind_intersect_or_except(
+            left_context,
+            right_context,
+            left_expr,
+            right_expr,
+            JoinType::SemiJoin,
+        )
+    }
+
+    fn bind_except(
+        &mut self,
+        left_context: BindContext,
+        right_context: BindContext,
+        left_expr: SExpr,
+        right_expr: SExpr,
+    ) -> Result<(SExpr, BindContext)> {
+        self.bind_intersect_or_except(
+            left_context,
+            right_context,
+            left_expr,
+            right_expr,
+            JoinType::AntiJoin,
+        )
+    }
+
+    fn bind_intersect_or_except(
+        &mut self,
+        left_context: BindContext,
+        right_context: BindContext,
+        left_expr: SExpr,
+        right_expr: SExpr,
+        join_type: JoinType,
+    ) -> Result<(SExpr, BindContext)> {
+        let mut left_conditions = Vec::with_capacity(left_context.columns.len());
+        let mut right_conditions = Vec::with_capacity(right_context.columns.len());
+        assert_eq!(left_context.columns.len(), right_context.columns.len());
+        for (left_column, right_column) in left_context
+            .columns
+            .iter()
+            .zip(right_context.columns.iter())
+        {
+            left_conditions.push(
+                BoundColumnRef {
+                    column: left_column.clone(),
+                }
+                .into(),
+            );
+            right_conditions.push(
+                BoundColumnRef {
+                    column: right_column.clone(),
+                }
+                .into(),
+            );
+        }
+        let s_expr = self.bind_join_with_type(
+            join_type,
+            left_conditions,
+            right_conditions,
+            left_expr,
+            right_expr,
+        )?;
+        Ok((s_expr, left_context))
     }
 }

@@ -533,6 +533,12 @@ pub enum TokenKind {
     SECOND,
     #[token("SELECT", ignore(ascii_case))]
     SELECT,
+    #[token("UNION", ignore(ascii_case))]
+    UNION,
+    #[token("EXCEPT", ignore(ascii_case))]
+    EXCEPT,
+    #[token("INTERSECT", ignore(ascii_case))]
+    INTERSECT,
     #[token("SET", ignore(ascii_case))]
     SET,
     #[token("SETTINGS", ignore(ascii_case))]
@@ -772,6 +778,9 @@ impl TokenKind {
             // | TokenKind::REFERENCES
             // | TokenKind::ROW
             | TokenKind::SELECT
+            | TokenKind::UNION
+            | TokenKind::EXCEPT
+            | TokenKind::INTERSECT
             // | TokenKind::SESSION_USER
             // | TokenKind::SETOF
             | TokenKind::SMALLINT
@@ -897,6 +906,9 @@ impl TokenKind {
             // | TokenKind::REFERENCES
             | TokenKind::RIGHT
             | TokenKind::SELECT
+            | TokenKind::UNION
+            | TokenKind::INTERSECT
+            | TokenKind::EXCEPT
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
             // | TokenKind::SOME

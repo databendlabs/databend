@@ -266,7 +266,6 @@ impl ChainingHashTable {
                         }
                     }
                     JoinType::AntiJoin => {
-                        for (i, key) in serialized_probe_keys
                             .iter()
                             .enumerate()
                             .take(input.num_rows())
@@ -280,23 +279,6 @@ impl ChainingHashTable {
                         }
                     }
                     _ => unreachable!(),
-                }
-            }
-            HashTable::KeyU8HashTable(table) => {
-                return self.result_blocks(
-                    &table.hash_table,
-                    &table.hash_method,
-                    probe_keys,
-                    input,
-                );
-            }
-            HashTable::KeyU16HashTable(table) => {
-                return self.result_blocks(
-                    &table.hash_table,
-                    &table.hash_method,
-                    probe_keys,
-                    input,
-                );
             }
             HashTable::KeyU32HashTable(table) => {
                 return self.result_blocks(
