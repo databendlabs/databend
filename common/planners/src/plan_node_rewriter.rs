@@ -704,7 +704,7 @@ impl RewriteHelper {
                             args: new_args,
                             partition_by: new_partition_by,
                             order_by: new_order_by,
-                            window_frame: window_frame.clone(),
+                            window_frame: *window_frame,
                         })
                     }
                     (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => Err(e),
