@@ -513,7 +513,7 @@ CREATE DATABASE IF NOT EXISTS a ENGINE = DEFAULT
 CreateDatabase(
     CreateDatabaseStmt {
         if_not_exists: true,
-        opt_catalog: None,
+        catalog: None,
         database: Identifier {
             name: "a",
             quote: None,
@@ -533,7 +533,7 @@ CREATE DATABASE catalog.t ENGINE = DEFAULT
 CreateDatabase(
     CreateDatabaseStmt {
         if_not_exists: false,
-        opt_catalog: Some(
+        catalog: Some(
             Identifier {
                 name: "catalog",
                 quote: None,
@@ -559,7 +559,7 @@ CREATE DATABASE t ENGINE = GITHUB(token='123456')
 CreateDatabase(
     CreateDatabaseStmt {
         if_not_exists: false,
-        opt_catalog: None,
+        catalog: None,
         database: Identifier {
             name: "t",
             quote: None,
@@ -581,7 +581,7 @@ CREATE DATABASE t ENGINE = DEFAULT
 CreateDatabase(
     CreateDatabaseStmt {
         if_not_exists: false,
-        opt_catalog: None,
+        catalog: None,
         database: Identifier {
             name: "t",
             quote: None,
