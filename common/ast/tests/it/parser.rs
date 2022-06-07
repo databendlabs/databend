@@ -109,6 +109,7 @@ fn test_statement() {
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"create user 'test-e'@'localhost' identified by 'password';"#,
+        r#"drop user if exists 'test-j'@'localhost';"#,
     ];
 
     for case in cases {
@@ -174,6 +175,7 @@ fn test_statement_error() {
         r#"insert into t format"#,
         r#"alter database system x rename to db"#,
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
+        r#"drop usar if exists 'test-j'@'localhost';"#,
     ];
 
     for case in cases {

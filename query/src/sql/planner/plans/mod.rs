@@ -35,6 +35,7 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
 use common_planners::CreateViewPlan;
+use common_planners::DropUserPlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
@@ -83,4 +84,5 @@ pub enum Plan {
 
     // DCL
     CreateUser(Box<CreateUserPlan>),
+    DropUser(Box<DropUserPlan>),
 }

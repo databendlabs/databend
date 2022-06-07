@@ -2801,3 +2801,17 @@ CreateUser(
 )
 
 
+---------- Input ----------
+drop user if exists 'test-j'@'localhost';
+---------- Output ---------
+DROP USER IF EXISTS 'test-j'@'localhost'
+---------- AST ------------
+DropUser {
+    if_exists: true,
+    user: UserIdentity {
+        username: "test-j",
+        hostname: "localhost",
+    },
+}
+
+
