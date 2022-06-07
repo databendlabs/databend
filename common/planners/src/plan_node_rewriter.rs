@@ -673,7 +673,43 @@ impl RewriteHelper {
                 }
             }
 
-            Expression::WindowFunction { .. } => todo!("not figure out yet @doki"),
+            Expression::WindowFunction {
+                op,
+                params,
+                args,
+                partition_by,
+                order_by,
+                window_frame,
+            } => {
+                let new_args: Result<Vec<Expression>> = args
+                    .iter()
+                    .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
+                    .collect();
+
+                let new_partition_by: Result<Vec<Expression>> = partition_by
+                    .iter()
+                    .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
+                    .collect();
+
+                let new_order_by: Result<Vec<Expression>> = order_by
+                    .iter()
+                    .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
+                    .collect();
+
+                match (new_args, new_partition_by, new_order_by) {
+                    (Ok(new_args), Ok(new_partition_by), Ok(new_order_by)) => {
+                        Ok(Expression::WindowFunction {
+                            op: op.clone(),
+                            params: params.clone(),
+                            args: new_args,
+                            partition_by: new_partition_by,
+                            order_by: new_order_by,
+                            window_frame: window_frame.clone(),
+                        })
+                    }
+                    (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => Err(e),
+                }
+            }
 
             Expression::Alias(alias, plan) => {
                 if data.inside_aliases.contains(alias) {

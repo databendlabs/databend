@@ -112,8 +112,6 @@ impl ScattersOptimizerImpl {
     }
 
     fn cluster_window(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
-        self.running_mode = RunningMode::Cluster;
-
         match self.input.take() {
             None => Err(ErrorCode::LogicalError("Cluster window input is None")),
             Some(input) => {
@@ -130,25 +128,34 @@ impl ScattersOptimizerImpl {
                     panic!()
                 );
 
-                let mut concat_ws_args = vec![Expression::create_literal(DataValue::String(
-                    "#".as_bytes().to_vec(),
-                ))];
-                concat_ws_args.extend(partition_by.to_owned());
-                let concat_partition_by =
-                    Expression::create_scalar_function("concat_ws", concat_ws_args);
+                let stage_input = if !partition_by.is_empty() {
+                    let mut concat_ws_args = vec![Expression::create_literal(DataValue::String(
+                        "#".as_bytes().to_vec(),
+                    ))];
+                    concat_ws_args.extend(partition_by.to_owned());
+                    let concat_partition_by =
+                        Expression::create_scalar_function("concat_ws", concat_ws_args);
 
-                let scatters_expr =
-                    Expression::create_scalar_function("sipHash", vec![concat_partition_by]);
+                    let scatters_expr =
+                        Expression::create_scalar_function("sipHash", vec![concat_partition_by]);
 
-                let scatter_plan = PlanNode::Stage(StagePlan {
-                    scatters_expr,
-                    kind: StageKind::Normal,
-                    input,
-                });
+                    PlanNode::Stage(StagePlan {
+                        scatters_expr,
+                        kind: StageKind::Normal,
+                        input,
+                    })
+                } else {
+                    self.running_mode = RunningMode::Standalone;
+                    PlanNode::Stage(StagePlan {
+                        scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
+                        kind: StageKind::Convergent,
+                        input,
+                    })
+                };
 
                 Ok(PlanNode::WindowFunc(WindowFuncPlan {
                     window_func: plan.window_func.to_owned(),
-                    input: Arc::new(scatter_plan),
+                    input: Arc::new(stage_input),
                     schema: plan.schema.to_owned(),
                 }))
             }

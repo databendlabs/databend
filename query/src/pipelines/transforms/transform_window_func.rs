@@ -89,9 +89,9 @@ impl WindowFuncTransform {
         );
 
         // sort block by partition_by and order_by exprs
-        let mut sort_exprs: Vec<Expression> =
+        let mut partition_sort_exprs: Vec<Expression> =
             Vec::with_capacity(partition_by.len() + order_by.len());
-        sort_exprs.extend(
+        partition_sort_exprs.extend(
             partition_by
                 .iter()
                 .map(|part_by_expr| Expression::Sort {
@@ -102,11 +102,14 @@ impl WindowFuncTransform {
                 })
                 .collect::<Vec<_>>(),
         );
-        sort_exprs.extend(order_by.to_owned());
-        let sort_column_desc = get_sort_descriptions(block.schema(), &sort_exprs)?;
+        partition_sort_exprs.extend(order_by.to_owned());
 
-        // todo Fixme: empty partition by
-        let block = DataBlock::sort_block(block, &sort_column_desc, None)?;
+        let block = if !partition_sort_exprs.is_empty() {
+            let sort_column_desc = get_sort_descriptions(block.schema(), &partition_sort_exprs)?;
+            DataBlock::sort_block(block, &sort_column_desc, None)?
+        } else {
+            block.to_owned()
+        };
 
         // set default window frame
         let window_frame = match window_frame {
@@ -210,8 +213,14 @@ impl WindowFuncTransform {
             })
             .collect::<Vec<SortColumn>>();
 
-        let mut partition_boundaries =
-            lexicographical_partition_ranges(&partition_by_sort_column).unwrap();
+        let partition_boundaries = if !partition_by_sort_column.is_empty() {
+            lexicographical_partition_ranges(&partition_by_sort_column)
+                .unwrap()
+                .collect::<Vec<_>>()
+        } else {
+            vec![0..block.num_rows(); 1]
+        };
+        let mut partition_boundaries = partition_boundaries.into_iter();
         let mut partition = partition_boundaries.next().unwrap();
 
         match (frame_units, start, end) {
