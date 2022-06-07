@@ -14,3 +14,5 @@
 
 mod stage;
 mod table;
+mod user;
+mod view;

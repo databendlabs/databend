@@ -79,6 +79,7 @@ fn test_statement() {
         r#"use "a";"#,
         r#"create database if not exists a;"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,
+        r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
         r#"DROP table table1;"#,
@@ -106,6 +107,7 @@ fn test_statement() {
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')"#,
         r#"list @stage_a;"#,
+        r#"create user 'test-e'@'localhost' identified by 'password';"#,
     ];
 
     for case in cases {
@@ -170,6 +172,7 @@ fn test_statement_error() {
         r#"drop a"#,
         r#"insert into t format"#,
         r#"alter database system x rename to db"#,
+        r#"create user 'test-e'@'localhost' identified bi 'password';"#,
     ];
 
     for case in cases {

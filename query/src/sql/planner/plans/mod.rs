@@ -36,6 +36,8 @@ use common_planners::CreateUserStagePlan;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropUserStagePlan;
 use common_planners::ListPlan;
+use common_planners::CreateUserPlan;
+use common_planners::CreateViewPlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
@@ -74,6 +76,7 @@ pub enum Plan {
 
     // DDL
     CreateTable(Box<CreateTablePlan>),
+    CreateView(Box<CreateViewPlan>),
 
     CreateStage(Box<CreateUserStagePlan>),
     DropStage(Box<DropUserStagePlan>),
@@ -87,4 +90,7 @@ pub enum Plan {
     ShowMetrics,
     ShowProcessList,
     ShowSettings,
+
+    // DCL
+    CreateUser(Box<CreateUserPlan>),
 }

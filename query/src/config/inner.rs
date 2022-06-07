@@ -104,6 +104,8 @@ pub struct QueryConfig {
     pub max_active_sessions: u64,
     pub clickhouse_handler_host: String,
     pub clickhouse_handler_port: u16,
+    pub clickhouse_http_handler_host: String,
+    pub clickhouse_http_handler_port: u16,
     pub http_handler_host: String,
     pub http_handler_port: u16,
     pub http_handler_result_timeout_millis: u64,
@@ -146,6 +148,12 @@ pub struct QueryConfig {
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     pub management_mode: bool,
     pub jwt_key_file: String,
+    pub enable_async_insert: bool,
+    pub async_insert_max_data_size: u64,
+    pub async_insert_busy_timeout: u64,
+    pub async_insert_stale_timeout: u64,
+    pub wait_for_async_insert: bool,
+    pub wait_for_async_insert_timeout: u64,
 }
 
 impl Default for QueryConfig {
@@ -159,6 +167,8 @@ impl Default for QueryConfig {
             max_active_sessions: 256,
             clickhouse_handler_host: "127.0.0.1".to_string(),
             clickhouse_handler_port: 9000,
+            clickhouse_http_handler_host: "127.0.0.1".to_string(),
+            clickhouse_http_handler_port: 8124,
             http_handler_host: "127.0.0.1".to_string(),
             http_handler_port: 8000,
             http_handler_result_timeout_millis: 10000,
@@ -188,6 +198,12 @@ impl Default for QueryConfig {
             table_disk_cache_mb_size: 1024,
             management_mode: false,
             jwt_key_file: "".to_string(),
+            enable_async_insert: false,
+            async_insert_max_data_size: 10000,
+            async_insert_busy_timeout: 200,
+            async_insert_stale_timeout: 0,
+            wait_for_async_insert: true,
+            wait_for_async_insert_timeout: 100,
         }
     }
 }

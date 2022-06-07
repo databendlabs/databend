@@ -19,3 +19,4 @@ pub mod middleware;
 pub mod v1;
 
 pub use http_services::HttpHandler;
+pub use http_services::HttpHandlerKind;

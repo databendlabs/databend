@@ -165,10 +165,11 @@ impl CopyInterpreter {
 
         let async_runtime = ctx.get_storage_runtime();
         let executor = PipelinePullingExecutor::try_create(async_runtime, pipeline)?;
-        let source_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
+        let (handler, stream) = ProcessorExecutorStream::create(executor)?;
+        self.ctx.add_source_abort_handle(handler);
 
         let operations = table
-            .append_data(ctx.clone(), source_stream)
+            .append_data(ctx.clone(), Box::pin(stream))
             .await?
             .try_collect()
             .await?;

@@ -18,6 +18,8 @@ use std::fmt::Formatter;
 
 use common_meta_types::AuthType;
 use common_meta_types::UserIdentity;
+use common_meta_types::UserOption;
+use common_meta_types::UserOptionFlag;
 
 use super::write_space_seperated_list;
 use super::Expr;
@@ -120,12 +122,7 @@ pub enum Statement<'a> {
     },
 
     // Views
-    CreateView {
-        if_not_exists: bool,
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
-        query: Box<Query<'a>>,
-    },
+    CreateView(CreateViewStmt<'a>),
     AlterView {
         database: Option<Identifier<'a>>,
         view: Identifier<'a>,
@@ -163,12 +160,7 @@ pub enum Statement<'a> {
     },
 
     // User
-    CreateUser {
-        if_not_exists: bool,
-        user: UserIdentity,
-        auth_option: AuthOption,
-        role_options: Vec<RoleOption>,
-    },
+    CreateUser(CreateUserStmt),
     AlterUser {
         // None means current user
         user: Option<UserIdentity>,
@@ -285,6 +277,14 @@ pub enum Engine {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CreateViewStmt<'a> {
+    pub if_not_exists: bool,
+    pub database: Option<Identifier<'a>>,
+    pub view: Identifier<'a>,
+    pub query: Box<Query<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct SQLProperty {
     pub name: String,
     pub value: String,
@@ -345,6 +345,14 @@ pub enum KillTarget {
     Connection,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateUserStmt {
+    pub if_not_exists: bool,
+    pub user: UserIdentity,
+    pub auth_option: AuthOption,
+    pub role_options: Vec<RoleOption>,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AuthOption {
     pub auth_type: Option<AuthType>,
@@ -357,6 +365,25 @@ pub enum RoleOption {
     NoTenantSetting,
     ConfigReload,
     NoConfigReload,
+}
+
+impl RoleOption {
+    pub fn apply(&self, option: &mut UserOption) {
+        match self {
+            Self::TenantSetting => {
+                option.set_option_flag(UserOptionFlag::TenantSetting);
+            }
+            Self::NoTenantSetting => {
+                option.unset_option_flag(UserOptionFlag::TenantSetting);
+            }
+            Self::ConfigReload => {
+                option.set_option_flag(UserOptionFlag::ConfigReload);
+            }
+            Self::NoConfigReload => {
+                option.unset_option_flag(UserOptionFlag::ConfigReload);
+            }
+        }
+    }
 }
 
 impl<'a> Display for ShowLimit<'a> {
@@ -655,12 +682,12 @@ impl<'a> Display for Statement<'a> {
                     }
                 }
             }
-            Statement::CreateView {
+            Statement::CreateView(CreateViewStmt {
                 if_not_exists,
                 database,
                 view,
                 query,
-            } => {
+            }) => {
                 write!(f, "CREATE VIEW ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
@@ -747,12 +774,12 @@ impl<'a> Display for Statement<'a> {
                     InsertSource::Select { query } => write!(f, " {query}")?,
                 }
             }
-            Statement::CreateUser {
+            Statement::CreateUser(CreateUserStmt {
                 if_not_exists,
                 user,
                 auth_option,
                 role_options,
-            } => {
+            }) => {
                 write!(f, "CREATE USER")?;
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;

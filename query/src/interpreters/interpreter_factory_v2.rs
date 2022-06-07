@@ -16,10 +16,12 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use super::CreateUserInterpreter;
 use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::CreateTableInterpreter;
 use super::CreateUserStageInterpreter;
+use super::CreateViewInterpreter;
 use super::ExplainInterpreterV2;
 use super::InterpreterPtr;
 use super::ListInterpreter;
@@ -29,8 +31,8 @@ use super::ShowProcessListInterpreter;
 use super::ShowSettingsInterpreter;
 use super::ShowStagesInterpreter;
 use crate::sessions::QueryContext;
-use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
+use crate::sql::plans::Plan;
 
 /// InterpreterFactory is the entry of Interpreter.
 pub struct InterpreterFactoryV2;
@@ -47,6 +49,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::CreateStage(_)
                 | DfStatement::ShowStages(_)
                 | DfStatement::CreateTable(_)
+                | DfStatement::CreateView(_)
                 | DfStatement::ShowMetrics(_)
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
@@ -82,6 +85,12 @@ impl InterpreterFactoryV2 {
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
             Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
+            Plan::CreateUser(create_user) => {
+                CreateUserInterpreter::try_create(ctx, *create_user.clone())
+            }
+            Plan::CreateView(create_view) => {
+                CreateViewInterpreter::try_create(ctx, *create_view.clone())
+            }
         }?;
         Ok(inner)
     }

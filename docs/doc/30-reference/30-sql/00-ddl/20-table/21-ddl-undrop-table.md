@@ -7,6 +7,7 @@ Restores the recent version of a dropped table.
 **See also:**
 - [CREATE TABLE](./10-ddl-create-table.md)
 - [DROP TABLE](./20-ddl-drop-table.md)
+- [SHOW TABLES](../../40-show/show-tables.md)
 
 ## Syntax
 
