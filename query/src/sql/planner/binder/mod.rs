@@ -22,6 +22,7 @@ use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::DropUserPlan;
 
 use self::subquery::SubqueryRewriter;
 use super::plans::Plan;
@@ -119,6 +120,14 @@ impl<'a> Binder {
             Statement::CreateView(stmt) => {
                 let plan = self.bind_create_view(stmt).await?;
                 Ok(plan)
+            }
+
+            Statement::DropUser { if_exists, user } => {
+                let plan = DropUserPlan {
+                    if_exists: *if_exists,
+                    user: user.clone(),
+                };
+                Ok(Plan::DropUser(Box::new(plan)))
             }
 
             _ => Err(ErrorCode::UnImplement(format!(
