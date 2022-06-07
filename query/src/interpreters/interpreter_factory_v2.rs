@@ -24,6 +24,7 @@ use super::SelectInterpreterV2;
 use super::ShowMetricsInterpreter;
 use super::ShowProcessListInterpreter;
 use super::ShowSettingsInterpreter;
+use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateUserInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
@@ -71,6 +72,9 @@ impl InterpreterFactoryV2 {
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
             Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
+            Plan::AlterUser(alter_user) => {
+                AlterUserInterpreter::try_create(ctx, *alter_user.clone())
+            }
             Plan::CreateUser(create_user) => {
                 CreateUserInterpreter::try_create(ctx, *create_user.clone())
             }
