@@ -19,6 +19,7 @@ pub use server::Server;
 pub use server::ShutdownHandle;
 
 pub use self::http::HttpHandler;
+pub use self::http::HttpHandlerKind;
 pub use self::mysql::MySQLConnection;
 pub use self::mysql::MySQLFederated;
 pub use self::mysql::MySQLHandler;

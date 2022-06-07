@@ -32,6 +32,7 @@ use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSession;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
+use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::SessionManager;
 use databend_query::users::auth::jwt::CustomClaims;
 use databend_query::users::auth::jwt::EnsureUser;
@@ -900,6 +901,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
             .http_handler_tls_server_key(TEST_SERVER_KEY)
             .http_handler_tls_server_cert(TEST_SERVER_CERT)
             .build()?,
+        HttpHandlerKind::Query,
     );
 
     let listening = srv.start(address_str.parse()?).await?;
@@ -942,6 +944,7 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
             .http_handler_tls_server_key(TEST_SERVER_KEY)
             .http_handler_tls_server_cert(TEST_SERVER_CERT)
             .build()?,
+        HttpHandlerKind::Query,
     );
 
     let listening = srv.start(address_str.parse()?).await?;
@@ -967,6 +970,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
             .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
             .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
             .build()?,
+        HttpHandlerKind::Query,
     );
     let listening = srv.start(address_str.parse()?).await?;
 
@@ -1014,6 +1018,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
             .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
             .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
             .build()?,
+        HttpHandlerKind::Query,
     );
     let listening = srv.start(address_str.parse()?).await?;
 
