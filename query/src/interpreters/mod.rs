@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod access;
+mod async_insert_queue;
 mod interpreter;
 mod interpreter_alter_cluster_key;
 mod interpreter_call;
@@ -80,6 +81,7 @@ mod plan_schedulers;
 mod stream;
 
 pub use access::ManagementModeAccess;
+pub use async_insert_queue::AsyncInsertQueue;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_alter_cluster_key::AlterClusterKeyInterpreter;

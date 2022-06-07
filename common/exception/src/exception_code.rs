@@ -153,6 +153,8 @@ build_exceptions! {
 
     PanicError(1104),
 
+    // Async insert error codes
+    AsyncInsertTimeoutError(1105),
 }
 
 // Metasvr errors [2001, 3000].

@@ -28,6 +28,7 @@ use databend_query::api::RpcService;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::HttpHandler;
+use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
@@ -99,18 +100,36 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
             listening.port(),
         );
     }
+
     // HTTP handler.
     {
         let hostname = conf.query.http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
 
-        let mut srv = HttpHandler::create(session_manager.clone());
+        let mut srv = HttpHandler::create(session_manager.clone(), HttpHandlerKind::Query);
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
-        let http_handler_usage = HttpHandler::usage(listening);
+        let http_handler_usage = HttpHandlerKind::Query.usage(listening);
         tracing::info!(
             "Http handler listening on {} {}",
+            listening,
+            http_handler_usage
+        );
+    }
+
+    // clickhouse HTTP handler.
+    {
+        let hostname = conf.query.clickhouse_http_handler_host.clone();
+        let listening = format!("{}:{}", hostname, conf.query.clickhouse_http_handler_port);
+
+        let mut srv = HttpHandler::create(session_manager.clone(), HttpHandlerKind::Clickhouse);
+        let listening = srv.start(listening.parse()?).await?;
+        shutdown_handle.add_service(srv);
+
+        let http_handler_usage = HttpHandlerKind::Clickhouse.usage(listening);
+        tracing::info!(
+            "clickhouse Http handler listening on {} {}",
             listening,
             http_handler_usage
         );
@@ -153,6 +172,24 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
             conf.query.cluster_id,
             conf.meta.address
         );
+    }
+
+    // Async Insert Queue
+    {
+        if conf.query.enable_async_insert {
+            let async_insert_queue = session_manager
+                .clone()
+                .get_async_insert_queue()
+                .read()
+                .clone()
+                .unwrap();
+            {
+                let mut queue = async_insert_queue.session_mgr.write();
+                *queue = Some(session_manager.clone());
+            }
+            async_insert_queue.clone().start().await;
+            tracing::info!("Databend async insert has been enabled.")
+        }
     }
 
     tracing::info!("Ready for connections.");

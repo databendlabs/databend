@@ -32,6 +32,7 @@ impl Plan {
             Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
             Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
             Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
+            Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
         }
     }
 }

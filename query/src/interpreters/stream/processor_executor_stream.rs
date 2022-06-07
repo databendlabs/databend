@@ -13,23 +13,34 @@
 // limitations under the License.
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::stream::AbortHandle;
+use futures::stream::Abortable;
 use futures::Stream;
 
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 
 pub struct ProcessorExecutorStream {
+    is_aborted: Arc<Abortable<()>>,
     executor: PipelinePullingExecutor,
 }
 
 impl ProcessorExecutorStream {
-    pub fn create(mut executor: PipelinePullingExecutor) -> Result<Self> {
+    pub fn create(mut executor: PipelinePullingExecutor) -> Result<(AbortHandle, Self)> {
+        let (handle, reg) = AbortHandle::new_pair();
+        let is_aborted = Arc::new(Abortable::new((), reg));
+
         executor.start();
-        Ok(Self { executor })
+        Ok((handle, Self {
+            is_aborted,
+            executor,
+        }))
     }
 }
 
@@ -37,11 +48,20 @@ impl Stream for ProcessorExecutorStream {
     type Item = Result<DataBlock>;
 
     fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let is_aborted = self.is_aborted.clone();
         let self_ = Pin::get_mut(self);
-        match self_.executor.pull_data() {
-            Ok(None) => Poll::Ready(None),
+        match self_
+            .executor
+            .try_pull_data(move || is_aborted.is_aborted())
+        {
             Err(cause) => Poll::Ready(Some(Err(cause))),
             Ok(Some(data)) => Poll::Ready(Some(Ok(data))),
+            Ok(None) => match self_.is_aborted.is_aborted() {
+                false => Poll::Ready(None),
+                true => Poll::Ready(Some(Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed",
+                )))),
+            },
         }
     }
 }

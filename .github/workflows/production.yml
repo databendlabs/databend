@@ -18,7 +18,7 @@ env:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -64,7 +64,7 @@ jobs:
           target: ${{ matrix.target }}
 
   test_unit:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux]
     needs: check
     steps:
       - uses: actions/checkout@v3

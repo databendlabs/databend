@@ -15,3 +15,4 @@
 mod database;
 mod table;
 mod user;
+mod view;

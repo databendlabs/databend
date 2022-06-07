@@ -245,11 +245,13 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( #ident ~ "." )? ~ #ident
             ~ AS ~ #query
         },
-        |(_, _, opt_if_not_exists, opt_database, view, _, query)| Statement::CreateView {
-            if_not_exists: opt_if_not_exists.is_some(),
-            database: opt_database.map(|(database, _)| database),
-            view,
-            query: Box::new(query),
+        |(_, _, opt_if_not_exists, opt_database, view, _, query)| {
+            Statement::CreateView(CreateViewStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                database: opt_database.map(|(database, _)| database),
+                view,
+                query: Box::new(query),
+            })
         },
     );
     let alter_view = map(

@@ -25,6 +25,7 @@ use common_meta_types::UserPrivilegeSet;
 use databend_query::clusters::Cluster;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::QueryContextShared;
+use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::storages::StorageContext;
 use databend_query::Config;
@@ -33,6 +34,12 @@ use crate::tests::SessionManagerBuilder;
 
 pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
+    create_query_context_with_session(sessions).await
+}
+
+pub async fn create_query_context_with_session(
+    sessions: Arc<SessionManager>,
+) -> Result<Arc<QueryContext>> {
     let dummy_session = sessions.create_session(SessionType::Dummy).await?;
 
     // Set user with all privileges
