@@ -137,8 +137,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.11.2"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=48a3087#48a308772fcc18fce890447b0bfa30611fc813e6"
+version = "0.12.0"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=6608071#660807164be0afe71b8ce2868bc3a6a6a00db608"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -153,13 +153,12 @@ dependencies = [
  "hash_hasher",
  "indexmap",
  "itertools",
+ "json-deserializer",
  "lexical-core",
  "multiversion",
  "num-traits",
  "parquet2",
  "regex",
- "serde",
- "serde_json",
  "simdutf8",
  "streaming-iterator",
  "strength_reduce",
@@ -3382,6 +3381,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "json-deserializer"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47631885425c482fcf2dc4b182fc973c3c5b81a8f43a028055559bd24cccfa6e"
+
+[[package]]
 name = "jsonwebtoken"
 version = "7.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4686,8 +4691,8 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.12.0"
-source = "git+https://github.com/datafuse-extras/parquet2?rev=03c108b#03c108bfcae58a6ba2b6a54132888dea964b3950"
+version = "0.13.0"
+source = "git+https://github.com/datafuse-extras/parquet2?branch=parquet2-0.13-patch1#68f8646b752fba409ce765d5349d069acbb984cf"
 dependencies = [
  "async-stream",
  "bitpacking",

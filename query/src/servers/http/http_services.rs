@@ -35,43 +35,68 @@ use crate::servers::Server;
 use crate::sessions::SessionManager;
 use crate::Config;
 
+pub enum HttpHandlerKind {
+    Query,
+    Clickhouse,
+}
+
+impl HttpHandlerKind {
+    pub fn usage(&self, sock: SocketAddr) -> String {
+        match self {
+            HttpHandlerKind::Query => {
+                let json = r#"{"foo": "bar"}"#;
+                format!(
+                    r#" examples:
+curl -u root: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
+echo '{}' "#,
+                    sock, json,
+                )
+            }
+            HttpHandlerKind::Clickhouse => {
+                format!(
+                    r#" examples:
+curl '{:?}/clickhouse/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
+                    sock,
+                )
+            }
+        }
+    }
+}
+
 pub struct HttpHandler {
     session_manager: Arc<SessionManager>,
     shutdown_handler: HttpShutdownHandler,
+    kind: HttpHandlerKind,
 }
 
 impl HttpHandler {
-    pub fn create(session_manager: Arc<SessionManager>) -> Box<dyn Server> {
+    pub fn create(session_manager: Arc<SessionManager>, kind: HttpHandlerKind) -> Box<dyn Server> {
         Box::new(HttpHandler {
             session_manager,
             shutdown_handler: HttpShutdownHandler::create("http handler".to_string()),
+            kind,
         })
     }
 
-    pub fn usage(sock: SocketAddr) -> String {
-        let json = r#"{"foo": "bar"}"#;
-        format!(
-            r#" examples:
-curl -u root: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
-echo '{}' | curl '{:?}/clickhouse/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
-            sock, json, sock
-        )
-    }
-
     fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
-        Route::new()
-            .at(
-                "/",
-                get(poem::endpoint::make_sync(move |_| Self::usage(sock))),
-            )
-            .nest("/clickhouse", clickhouse_router())
-            .nest("/v1/query", query_route())
-            .at("/v1/streaming_load", put(streaming_load))
-            .at("/v1/upload_to_stage", put(upload_to_stage))
-            .with(HTTPSessionMiddleware {
-                session_manager: self.session_manager.clone(),
-            })
-            .boxed()
+        let ep = match self.kind {
+            HttpHandlerKind::Query => Route::new()
+                .at(
+                    "/",
+                    get(poem::endpoint::make_sync(move |_| {
+                        HttpHandlerKind::Query.usage(sock)
+                    })),
+                )
+                .nest("/clickhouse", clickhouse_router())
+                .nest("/v1/query", query_route())
+                .at("/v1/streaming_load", put(streaming_load))
+                .at("/v1/upload_to_stage", put(upload_to_stage)),
+            HttpHandlerKind::Clickhouse => Route::new().nest("/", clickhouse_router()),
+        };
+        ep.with(HTTPSessionMiddleware {
+            session_manager: self.session_manager.clone(),
+        })
+        .boxed()
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
