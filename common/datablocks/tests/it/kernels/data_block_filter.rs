@@ -88,7 +88,7 @@ fn test_filter_const_data_block() -> Result<()> {
     ]);
 
     let predicate = Series::from_data(vec![true, false, true, true, false, false]);
-    let block = DataBlock::filter_block(block.clone(), &predicate)?;
+    let block = DataBlock::filter_block(block, &predicate)?;
 
     common_datablocks::assert_blocks_eq(
         vec![
@@ -122,7 +122,7 @@ fn test_filter_all_const_data_block() -> Result<()> {
     ]);
 
     let predicate = Series::from_data(vec![true, false, true, true, false, false]);
-    let block = DataBlock::filter_block(block.clone(), &predicate)?;
+    let block = DataBlock::filter_block(block, &predicate)?;
 
     common_datablocks::assert_blocks_eq(
         vec![
