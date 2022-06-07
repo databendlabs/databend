@@ -32,6 +32,7 @@ pub use aggregate::AggregatePlan;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_planners::AlterUserPlan;
+use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
 use common_planners::CreateViewPlan;
@@ -74,6 +75,7 @@ pub enum Plan {
 
     // DDL
     CreateTable(Box<CreateTablePlan>),
+    CreateDatabase(CreateDatabasePlan),
     CreateView(Box<CreateViewPlan>),
 
     // System

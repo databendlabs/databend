@@ -110,6 +110,11 @@ impl<'a> Binder {
                 Ok(plan)
             }
 
+            Statement::CreateDatabase(stmt) => {
+                let plan = self.bind_create_database(stmt).await?;
+                Ok(plan)
+            }
+
             Statement::ShowMetrics => Ok(Plan::ShowMetrics),
             Statement::ShowProcessList => Ok(Plan::ShowProcessList),
             Statement::ShowSettings => Ok(Plan::ShowSettings),

@@ -26,7 +26,9 @@ with NativeClient(name='client1>') as client1:
     client1.expect(prompt)
     client1.expect('')
 
-    client1.send('SELECT max(number), sum(number) FROM numbers_mt(100000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10;')
+    client1.send(
+        'SELECT max(number), sum(number) FROM numbers_mt(100000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10;'
+    )
     time.sleep(0.5)
 
     mycursor = mydb.cursor()
