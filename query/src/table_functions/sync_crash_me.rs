@@ -14,7 +14,6 @@
 //
 
 use std::any::Any;
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -39,8 +38,8 @@ use futures::Stream;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::{AsyncSource, SyncSource, SyncSourcer};
-use crate::pipelines::new::processors::AsyncSourcer;
+use crate::pipelines::new::processors::SyncSource;
+use crate::pipelines::new::processors::SyncSourcer;
 use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
@@ -180,7 +179,7 @@ impl TableFunction for SyncCrashMeTable {
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-        where Self: 'a {
+    where Self: 'a {
         self
     }
 }

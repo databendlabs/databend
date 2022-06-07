@@ -18,10 +18,10 @@ use std::thread::JoinHandle;
 
 use common_base::base::Runtime;
 use common_base::base::Thread;
-use common_base::exit_scope;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::{log_panic, set_panic_hook, tracing};
+use common_tracing::log_panic;
+use common_tracing::tracing;
 
 use crate::pipelines::new::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
@@ -103,7 +103,9 @@ impl PipelineExecutor {
                 let this_clone = this.clone();
                 std::panic::set_hook(Box::new(move |panic| {
                     if !this_clone.is_finished() {
-                        this_clone.finish();
+                        if let Err(cause) = this_clone.finish() {
+                            tracing::warn!("Catch error when finish pipeline executor {:?}", cause);
+                        }
                     }
 
                     log_panic(panic);

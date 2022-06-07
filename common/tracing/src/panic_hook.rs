@@ -32,12 +32,12 @@ pub fn log_panic(panic: &PanicInfo) {
     let backtrace = format!("{:?}", backtrace);
     if let Some(location) = panic.location() {
         tracing::error!(
-                message = %panic,
-                backtrace = %backtrace,
-                panic.file = location.file(),
-                panic.line = location.line(),
-                panic.column = location.column(),
-            );
+            message = %panic,
+            backtrace = %backtrace,
+            panic.file = location.file(),
+            panic.line = location.line(),
+            panic.column = location.column(),
+        );
     } else {
         tracing::error!(message = %panic, backtrace = %backtrace);
     }

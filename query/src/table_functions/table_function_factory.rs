@@ -28,8 +28,8 @@ use crate::storages::fuse::table_functions::ClusteringInformationTable;
 use crate::storages::fuse::table_functions::FuseSegmentTable;
 use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
-use crate::table_functions::NumbersTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
+use crate::table_functions::NumbersTable;
 use crate::table_functions::TableFunction;
 
 pub type TableArgs = Option<Vec<Expression>>;
