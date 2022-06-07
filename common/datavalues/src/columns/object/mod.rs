@@ -131,8 +131,8 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
 
         Arc::new(LargeBinaryArray::from_data(
             self.data_type().arrow_type(),
-            Buffer::from_slice(offsets),
-            Buffer::from_slice(values),
+            Buffer::from(offsets),
+            Buffer::from(values),
             None,
         ))
     }
