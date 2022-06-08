@@ -14,9 +14,10 @@
 
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
-mod plan_alter_cluster_key;
 mod plan_broadcast;
 mod plan_call;
+mod plan_cluster_key_alter;
+mod plan_cluster_key_drop;
 mod plan_copy;
 mod plan_database_create;
 mod plan_database_drop;
@@ -106,9 +107,10 @@ mod plan_view_drop;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
-pub use plan_alter_cluster_key::AlterClusterKeyPlan;
 pub use plan_broadcast::BroadcastPlan;
 pub use plan_call::CallPlan;
+pub use plan_cluster_key_alter::AlterClusterKeyPlan;
+pub use plan_cluster_key_drop::DropClusterKeyPlan;
 pub use plan_copy::CopyMode;
 pub use plan_copy::CopyPlan;
 pub use plan_copy::ValidationMode;

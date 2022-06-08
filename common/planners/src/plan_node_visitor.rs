@@ -34,6 +34,7 @@ use crate::CreateUserUDFPlan;
 use crate::CreateViewPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
+use crate::DropClusterKeyPlan;
 use crate::DropDatabasePlan;
 use crate::DropRolePlan;
 use crate::DropTablePlan;
@@ -213,8 +214,9 @@ pub trait PlanVisitor {
             // Kill.
             PlanNode::Kill(plan) => self.visit_kill_query(plan),
 
-            // Alter.
+            // Cluster Key.
             PlanNode::AlterClusterKey(plan) => self.visit_alter_cluster_key(plan),
+            PlanNode::DropClusterKey(plan) => self.visit_drop_cluster_key(plan),
         }
     }
 
@@ -482,6 +484,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_alter_cluster_key(&mut self, _: &AlterClusterKeyPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_cluster_key(&mut self, _: &DropClusterKeyPlan) -> Result<()> {
         Ok(())
     }
 }

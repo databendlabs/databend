@@ -305,6 +305,7 @@ pub enum AlterDatabaseAction<'a> {
 pub enum AlterTableAction<'a> {
     RenameTable { new_table: Identifier<'a> },
     AlterClusterKey { cluster_by: Vec<Expr<'a>> },
+    DropClusterKey,
     // TODO(wuzhiguo): AddColumn etc
 }
 
@@ -629,6 +630,9 @@ impl<'a> Display for Statement<'a> {
                     AlterTableAction::AlterClusterKey { cluster_by } => {
                         write!(f, " CLUSTER BY ")?;
                         write_comma_separated_list(f, cluster_by)?;
+                    }
+                    AlterTableAction::DropClusterKey => {
+                        write!(f, " DROP CLUSTER KEY")?;
                     }
                 }
             }
