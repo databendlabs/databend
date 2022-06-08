@@ -68,23 +68,26 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #database_engine?
         },
-        |(_, _, opt_if_not_exists, opt_catalog, database, opt_engine)| {
+        |(_, _, opt_if_not_exists, opt_catalog, database, engine)| {
             Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 catalog: opt_catalog.map(|(catalog, _)| catalog),
                 database,
-                engine: opt_engine.unwrap_or(DatabaseEngine::Default),
+                engine,
                 options: vec![],
             })
         },
     );
     let drop_database = map(
         rule! {
-            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, opt_if_exists, database)| Statement::DropDatabase {
-            if_exists: opt_if_exists.is_some(),
-            database,
+        |(_, _, opt_if_exists, opt_catalog, database)| {
+            Statement::DropDatabase(DropDatabaseStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog: opt_catalog.map(|(catalog, _)| catalog),
+                database,
+            })
         },
     );
     let alter_database = map(

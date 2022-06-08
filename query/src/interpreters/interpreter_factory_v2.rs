@@ -19,6 +19,7 @@ use common_exception::Result;
 use super::CreateDatabaseInterpreter;
 use super::CreateTableInterpreter;
 use super::CreateViewInterpreter;
+use super::DropDatabaseInterpreter;
 use super::ExplainInterpreterV2;
 use super::InterpreterPtr;
 use super::SelectInterpreterV2;
@@ -50,6 +51,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
                 | DfStatement::CreateDatabase(_)
+                | DfStatement::DropDatabase(_)
         )
     }
 
@@ -73,6 +75,9 @@ impl InterpreterFactoryV2 {
             }
             Plan::CreateDatabase(create_database) => {
                 CreateDatabaseInterpreter::try_create(ctx, create_database.clone())
+            }
+            Plan::DropDatabase(drop_database) => {
+                DropDatabaseInterpreter::try_create(ctx, drop_database.clone())
             }
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
