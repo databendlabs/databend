@@ -266,10 +266,12 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( #ident ~ "." )? ~ #ident
             ~ AS ~ #query
         },
-        |(_, _, opt_database, view, _, query)| Statement::AlterView {
-            database: opt_database.map(|(database, _)| database),
-            view,
-            query: Box::new(query),
+        |(_, _, opt_database, view, _, query)| {
+            Statement::AlterView(AlterViewStmt {
+                database: opt_database.map(|(database, _)| database),
+                view,
+                query: Box::new(query),
+            })
         },
     );
     let drop_view = map(

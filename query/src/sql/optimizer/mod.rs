@@ -62,13 +62,14 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
         | Plan::CreateDatabase(_)
         | Plan::DropDatabase(_)
         | Plan::CreateTable(_)
-        | Plan::CreateUser(_)
         | Plan::CreateView(_)
+        | Plan::AlterView(_)
         | Plan::CreateStage(_)
         | Plan::ShowStages
         | Plan::DropStage(_)
         | Plan::DescStage(_)
         | Plan::ListStage(_)
+        | Plan::CreateUser(_)
         | Plan::DropUser(_)
         | Plan::AlterUser(_) => Ok(plan),
     }

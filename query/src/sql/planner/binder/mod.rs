@@ -162,17 +162,20 @@ impl<'a> Binder {
                 let plan = self.bind_create_user(stmt).await?;
                 Ok(plan)
             }
-            Statement::CreateView(stmt) => {
-                let plan = self.bind_create_view(stmt).await?;
-                Ok(plan)
-            }
-
             Statement::DropUser { if_exists, user } => {
                 let plan = DropUserPlan {
                     if_exists: *if_exists,
                     user: user.clone(),
                 };
                 Ok(Plan::DropUser(Box::new(plan)))
+            }
+            Statement::CreateView(stmt) => {
+                let plan = self.bind_create_view(stmt).await?;
+                Ok(plan)
+            }
+            Statement::AlterView(stmt) => {
+                let plan = self.bind_alter_view(stmt).await?;
+                Ok(plan)
             }
 
             _ => Err(ErrorCode::UnImplement(format!(

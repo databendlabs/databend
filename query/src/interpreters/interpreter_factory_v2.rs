@@ -18,6 +18,7 @@ use common_exception::Result;
 
 use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
+use super::AlterViewInterpreter;
 use super::CreateDatabaseInterpreter;
 use super::CreateTableInterpreter;
 use super::CreateUserInterpreter;
@@ -54,6 +55,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowStages(_)
                 | DfStatement::CreateTable(_)
                 | DfStatement::CreateView(_)
+                | DfStatement::AlterView(_)
                 | DfStatement::ShowMetrics(_)
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
@@ -103,10 +105,13 @@ impl InterpreterFactoryV2 {
             Plan::CreateUser(create_user) => {
                 CreateUserInterpreter::try_create(ctx, *create_user.clone())
             }
+            Plan::DropUser(drop_user) => DropUserInterpreter::try_create(ctx, *drop_user.clone()),
             Plan::CreateView(create_view) => {
                 CreateViewInterpreter::try_create(ctx, *create_view.clone())
             }
-            Plan::DropUser(drop_user) => DropUserInterpreter::try_create(ctx, *drop_user.clone()),
+            Plan::AlterView(alter_view) => {
+                AlterViewInterpreter::try_create(ctx, *alter_view.clone())
+            }
         }?;
         Ok(inner)
     }
