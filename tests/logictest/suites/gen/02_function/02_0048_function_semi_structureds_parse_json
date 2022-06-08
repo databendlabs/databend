@@ -100,6 +100,7 @@ select parse_json(parse_json('123'));
 ----  
 123
 
+-- http handler could not parse
 statement ok
 select parse_json(parse_json('"\\\"abc\\\""'));
 
@@ -251,7 +252,7 @@ statement ok
 USE db1;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(v String null) Engine = fuse;
 
 statement ok
 insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}');
@@ -275,7 +276,7 @@ statement ok
 select try_parse_json(v), v from t1;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t2(v String null) Engine = fuse;
 
 statement ok
 insert into t2 values ('abc'),('[1,');

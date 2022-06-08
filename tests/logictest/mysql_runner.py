@@ -1,6 +1,5 @@
 from abc import ABC
 from datetime import datetime, date
-from types import NoneType
 
 import mysql.connector
 
@@ -51,7 +50,7 @@ class TestMySQL(logictest.SuiteRunner, ABC):
         vals = []
         for (ri, row) in enumerate(r):
             for (i, v) in enumerate(row):
-                if isinstance(v, NoneType):
+                if isinstance(v, type(None)):
                     vals.append("NULL")
                     continue
 

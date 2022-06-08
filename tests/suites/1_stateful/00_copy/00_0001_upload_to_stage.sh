@@ -11,3 +11,8 @@ curl  -H "stage_name:s2" -F "upload=@${CURDIR}/00_0001_upload_to_stage.sh" -u ro
 
 echo "list @s2" | $MYSQL_CLIENT_CONNECT
 echo "drop stage s2;" | $MYSQL_CLIENT_CONNECT
+
+# test drop stage
+echo "CREATE STAGE if not exists s2;" | $MYSQL_CLIENT_CONNECT
+echo "list @s2" | $MYSQL_CLIENT_CONNECT
+echo "drop stage s2;" | $MYSQL_CLIENT_CONNECT 

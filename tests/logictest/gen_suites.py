@@ -8,6 +8,7 @@ import copy
 import time
 
 import mysql.connector
+import fire
 
 from log import log
 from config import mysql_config, http_config
@@ -116,6 +117,8 @@ def parse_cases(sql_file):
             for row in r:
                 rowlist = []
                 for item in row:
+                    if item is None:
+                        item = "NULL"
                     rowlist.append(str(item))
                 row_string = " ".join(rowlist)
                 if len(row_string) == 0:  # empty line replace with tab
@@ -251,10 +254,16 @@ def output():
     print("=================================")
 
 
-def main():
+def main(pattern=".*"):
+    log.debug("Case filter regex pattern is {}".format(pattern))
     all_cases = get_all_cases()
 
     for file in all_cases:
+        if not re.match(pattern, file):
+            log.debug("Test file {}  does not match pattern {}".format(file, pattern))
+            continue
+        log.info("Test file {} match pattern {}".format(file, pattern))
+
         # .result will be ignore
         if '.result' in file or '.result_filter' in file:
             continue
@@ -275,4 +284,4 @@ if __name__ == '__main__':
     log.info(
         "Start generate sqllogictest suites from path: {} to path: {}".format(
             suite_path, logictest_path))
-    main()
+    fire.Fire(main)
