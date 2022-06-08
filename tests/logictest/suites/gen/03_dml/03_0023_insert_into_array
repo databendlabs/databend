@@ -202,8 +202,20 @@ INSERT INTO t11 (id, arr) VALUES(1, [true, true]), (2, [false, false]), (3, [tru
 statement ok
 select * from t11;
 
-statement ok
+statement query BB label(mysql,http)
 select arr[0], arr[1] from t11;
+
+---- mysql
+1 1
+0 0
+1 0
+0 1
+
+---- http
+true true
+false false
+true false
+false true
 
 statement query T 
 select '==Array(Date)==';
@@ -244,8 +256,12 @@ INSERT INTO t13 (id, arr) VALUES(3, ['1000000-01-01 01:01:01', '2000000-01-01 01
 statement ok
 select * from t13;
 
-statement ok
+statement query TT
 select arr[0], arr[1] from t13;
+
+---- 
+2021-01-01 01:01:01 2022-01-01 01:01:01
+1990-12-01 10:11:12 2030-01-12 22:00:00
 
 statement query T 
 select '==Array(String)==';
@@ -262,8 +278,12 @@ INSERT INTO t14 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']);
 statement ok
 select * from t14;
 
-statement ok
+statement query TT
 select arr[0], arr[1] from t14;
+
+----
+aa bb
+cc dd
 
 statement query T 
 select '==Array(String) Nullable==';
@@ -280,8 +300,14 @@ INSERT INTO t15 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']), (3, null),
 statement ok
 select * from t15;
 
-statement ok
+statement query TT
 select arr[0], arr[1] from t15;
+
+----
+aa bb
+cc dd
+NULL NULL
+ee ff
 
 statement query T 
 select '==Array(Int64) Nullable==';
@@ -298,8 +324,13 @@ INSERT INTO t16 (id, arr) VALUES(1, [1,2,3,4]), (2, [5,6,7,8]), (3, null);
 statement ok
 select * from t16;
 
-statement ok
+statement query II
 select arr[0], arr[1] from t16;
+
+----
+1 2
+5 6
+NULL NULL
 
 statement ok
 DROP DATABASE db1;

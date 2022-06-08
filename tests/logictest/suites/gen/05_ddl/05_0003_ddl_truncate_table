@@ -20,7 +20,7 @@ statement ok
 DROP TABLE IF EXISTS t2;
 
 statement ok
-CREATE TABLE t2(c1 int) ENGINE = Memory;
+CREATE TABLE t2(c1 int) Engine = fuse;
 
 statement ok
 INSERT INTO TABLE t2 values(1);
