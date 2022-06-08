@@ -35,6 +35,7 @@ use crate::CreateUserUDFPlan;
 use crate::CreateViewPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
+use crate::DropClusterKeyPlan;
 use crate::DropDatabasePlan;
 use crate::DropRolePlan;
 use crate::DropTablePlan;
@@ -114,8 +115,9 @@ pub enum PlanNode {
     // List
     List(ListPlan),
 
-    // Alter.
+    // Cluster key.
     AlterClusterKey(AlterClusterKeyPlan),
+    DropClusterKey(DropClusterKeyPlan),
 
     // Show.
     Show(ShowPlan),
@@ -280,8 +282,9 @@ impl PlanNode {
             // Kill.
             PlanNode::Kill(v) => v.schema(),
 
-            // Alter
+            // Cluster key.
             PlanNode::AlterClusterKey(v) => v.schema(),
+            PlanNode::DropClusterKey(v) => v.schema(),
         }
     }
 
@@ -384,8 +387,9 @@ impl PlanNode {
             // Kill.
             PlanNode::Kill(_) => "KillQuery",
 
-            // Alter.
+            // Cluster key.
             PlanNode::AlterClusterKey(_) => "AlterClusterKeyPlan",
+            PlanNode::DropClusterKey(_) => "DropClusterKeyPlan",
         }
     }
 

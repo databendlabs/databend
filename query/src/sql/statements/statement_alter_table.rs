@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AlterClusterKeyPlan;
+use common_planners::DropClusterKeyPlan;
 use common_planners::PlanNode;
 use common_planners::RenameTableEntity;
 use common_planners::RenameTablePlan;
@@ -40,6 +41,7 @@ pub struct DfAlterTable {
 pub enum AlterTableAction {
     RenameTable(ObjectName),
     AlterClusterKey(Vec<Expr>),
+    DropClusterKey,
     // TODO AddColumn etc.
 }
 
@@ -88,6 +90,14 @@ impl AnalyzableStatement for DfAlterTable {
                     }),
                 )))
             }
+            AlterTableAction::DropClusterKey => Ok(AnalyzedResult::SimpleQuery(Box::new(
+                PlanNode::DropClusterKey(DropClusterKeyPlan {
+                    tenant,
+                    catalog_name,
+                    database_name,
+                    table_name,
+                }),
+            ))),
         }
     }
 }
