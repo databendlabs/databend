@@ -2839,3 +2839,52 @@ AlterUser {
 }
 
 
+---------- Input ----------
+ALTER TABLE t CLUSTER BY(c1);
+---------- Output ---------
+ALTER TABLE t CLUSTER BY c1
+---------- AST ------------
+AlterTable {
+    if_exists: false,
+    database: None,
+    table: Identifier {
+        name: "t",
+        quote: None,
+        span: Ident(12..13),
+    },
+    action: AlterClusterKey {
+        cluster_by: [
+            ColumnRef {
+                span: [
+                    Ident(25..27),
+                ],
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "c1",
+                    quote: None,
+                    span: Ident(25..27),
+                },
+            },
+        ],
+    },
+}
+
+
+---------- Input ----------
+ALTER TABLE t DROP CLUSTER KEY;
+---------- Output ---------
+ALTER TABLE t DROP CLUSTER KEY
+---------- AST ------------
+AlterTable {
+    if_exists: false,
+    database: None,
+    table: Identifier {
+        name: "t",
+        quote: None,
+        span: Ident(12..13),
+    },
+    action: DropClusterKey,
+}
+
+

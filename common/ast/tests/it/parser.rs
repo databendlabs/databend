@@ -111,6 +111,8 @@ fn test_statement() {
         r#"create user 'test-e'@'localhost' identified by 'password';"#,
         r#"drop user if exists 'test-j'@'localhost';"#,
         r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
+        r#"ALTER TABLE t CLUSTER BY(c1);"#,
+        r#"ALTER TABLE t DROP CLUSTER KEY;"#,
     ];
 
     for case in cases {
