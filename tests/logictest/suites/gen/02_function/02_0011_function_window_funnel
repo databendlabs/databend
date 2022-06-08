@@ -61,8 +61,14 @@ select 2 = window_funnel(10000)(d, event = 1000, event = 1001) from funnel_test;
 ----  http
 true
 
-statement ok
+statement query B label(mysql,http)
 select 3 = window_funnel(10000)(d, event = 1000, event = 1001, event = 1002) from funnel_test;
+
+----  mysql
+1
+
+----  http
+true
 
 statement query B label(mysql,http)
 select 4 = window_funnel(10000)(d, event = 1000, event = 1001, event = 1002, event = 1008) from funnel_test;
