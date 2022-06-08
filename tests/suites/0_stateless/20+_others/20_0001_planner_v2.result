@@ -347,3 +347,8 @@ BuildHashTable × 1 processor
 6.0
 0
 1
+====Intersect Distinct===
+3	4
+2	3
+====Except Distinct===
+1	2
