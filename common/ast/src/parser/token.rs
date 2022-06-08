@@ -579,6 +579,8 @@ pub enum TokenKind {
     TINYINT,
     #[token("TO", ignore(ascii_case))]
     TO,
+    #[token("TOKEN", ignore(ascii_case))]
+    TOKEN,
     #[token("TRAILING", ignore(ascii_case))]
     TRAILING,
     #[token("TRIM", ignore(ascii_case))]

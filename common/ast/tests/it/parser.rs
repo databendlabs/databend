@@ -78,6 +78,9 @@ fn test_statement() {
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
         r#"create database if not exists a;"#,
+        r#"create database catalog.t engine = Default;"#,
+        r#"create database t engine = Github(token='123456');"#,
+        r#"create database t engine = Default;"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,
         r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"truncate table test;"#,
@@ -108,6 +111,8 @@ fn test_statement() {
         r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')"#,
         r#"list @stage_a;"#,
         r#"create user 'test-e'@'localhost' identified by 'password';"#,
+        r#"drop user if exists 'test-j'@'localhost';"#,
+        r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
     ];
 
     for case in cases {
@@ -173,6 +178,8 @@ fn test_statement_error() {
         r#"insert into t format"#,
         r#"alter database system x rename to db"#,
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
+        r#"drop usar if exists 'test-j'@'localhost';"#,
+        r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
     ];
 
     for case in cases {

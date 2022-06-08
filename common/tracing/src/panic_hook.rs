@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::backtrace::Backtrace;
+use std::panic::PanicInfo;
 
 pub fn set_panic_hook() {
     // Set a panic hook that records the panic as a `tracing` event at the
@@ -22,18 +23,22 @@ pub fn set_panic_hook() {
     // will include the current span, allowing the context in which the panic
     // occurred to be recorded.
     std::panic::set_hook(Box::new(|panic| {
-        let backtrace = Backtrace::force_capture();
-        let backtrace = format!("{:?}", backtrace);
-        if let Some(location) = panic.location() {
-            tracing::error!(
-                message = %panic,
-                backtrace = %backtrace,
-                panic.file = location.file(),
-                panic.line = location.line(),
-                panic.column = location.column(),
-            );
-        } else {
-            tracing::error!(message = %panic, backtrace = %backtrace);
-        }
+        log_panic(panic);
     }));
+}
+
+pub fn log_panic(panic: &PanicInfo) {
+    let backtrace = Backtrace::force_capture();
+    let backtrace = format!("{:?}", backtrace);
+    if let Some(location) = panic.location() {
+        tracing::error!(
+            message = %panic,
+            backtrace = %backtrace,
+            panic.file = location.file(),
+            panic.line = location.line(),
+            panic.column = location.column(),
+        );
+    } else {
+        tracing::error!(message = %panic, backtrace = %backtrace);
+    }
 }

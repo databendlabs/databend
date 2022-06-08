@@ -18,6 +18,7 @@ use common_exception::Result;
 
 use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
+use super::CreateDatabaseInterpreter;
 use super::CreateTableInterpreter;
 use super::CreateUserInterpreter;
 use super::CreateUserStageInterpreter;
@@ -30,6 +31,8 @@ use super::ShowMetricsInterpreter;
 use super::ShowProcessListInterpreter;
 use super::ShowSettingsInterpreter;
 use super::ShowStagesInterpreter;
+use crate::interpreters::AlterUserInterpreter;
+use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -53,6 +56,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowMetrics(_)
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
+                | DfStatement::CreateDatabase(_)
         )
     }
 
@@ -82,15 +86,22 @@ impl InterpreterFactoryV2 {
             Plan::DescStage(s) => DescribeUserStageInterpreter::try_create(ctx, *s.clone()),
             Plan::ListStage(s) => ListInterpreter::try_create(ctx, *s.clone()),
 
+            Plan::CreateDatabase(create_database) => {
+                CreateDatabaseInterpreter::try_create(ctx, create_database.clone())
+            }
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
             Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
+            Plan::AlterUser(alter_user) => {
+                AlterUserInterpreter::try_create(ctx, *alter_user.clone())
+            }
             Plan::CreateUser(create_user) => {
                 CreateUserInterpreter::try_create(ctx, *create_user.clone())
             }
             Plan::CreateView(create_view) => {
                 CreateViewInterpreter::try_create(ctx, *create_view.clone())
             }
+            Plan::DropUser(drop_user) => DropUserInterpreter::try_create(ctx, *drop_user.clone()),
         }?;
         Ok(inner)
     }

@@ -31,11 +31,14 @@ mod sort;
 pub use aggregate::AggregatePlan;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
+use common_planners::AlterUserPlan;
+use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
 use common_planners::CreateUserStagePlan;
 use common_planners::CreateViewPlan;
 use common_planners::DescribeUserStagePlan;
+use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
 use common_planners::ListPlan;
 pub use eval_scalar::EvalScalar;
@@ -76,6 +79,7 @@ pub enum Plan {
 
     // DDL
     CreateTable(Box<CreateTablePlan>),
+    CreateDatabase(CreateDatabasePlan),
     CreateView(Box<CreateViewPlan>),
 
     CreateStage(Box<CreateUserStagePlan>),
@@ -92,5 +96,7 @@ pub enum Plan {
     ShowSettings,
 
     // DCL
+    AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
+    DropUser(Box<DropUserPlan>),
 }

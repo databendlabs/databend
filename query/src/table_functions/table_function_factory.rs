@@ -28,6 +28,7 @@ use crate::storages::fuse::table_functions::ClusteringInformationTable;
 use crate::storages::fuse::table_functions::FuseSegmentTable;
 use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
+use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::NumbersTable;
 use crate::table_functions::TableFunction;
 
@@ -109,6 +110,11 @@ impl TableFunctionFactory {
         creators.insert(
             "clustering_information".to_string(),
             (next_id(), Arc::new(ClusteringInformationTable::create)),
+        );
+
+        creators.insert(
+            "sync_crash_me".to_string(),
+            (next_id(), Arc::new(SyncCrashMeTable::create)),
         );
 
         creators.insert(
