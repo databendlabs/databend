@@ -233,6 +233,15 @@ impl Session {
         Arc::new(self.session_settings.clone())
     }
 
+    pub fn get_changed_settings(self: &Arc<Self>) -> Arc<Settings> {
+        Arc::new(self.session_settings.get_changed_settings())
+    }
+
+    pub fn apply_changed_settings(self: &Arc<Self>, changed_settings: Arc<Settings>) -> Result<()> {
+        self.session_settings
+            .apply_changed_settings(changed_settings)
+    }
+
     pub fn get_session_manager(self: &Arc<Self>) -> Arc<SessionManager> {
         self.session_mgr.clone()
     }

@@ -20,6 +20,7 @@ use crate::RemotePlan;
 use crate::plan_table_undrop::UnDropTablePlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterClusterKeyPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::AlterViewPlan;
@@ -72,6 +73,7 @@ use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
+use crate::UnDropDatabasePlan;
 use crate::UseDatabasePlan;
 
 /// `PlanVisitor` implements visitor pattern(reference [syn](https://docs.rs/syn/1.0.72/syn/visit/trait.Visit.html)) for `PlanNode`.
@@ -159,7 +161,7 @@ pub trait PlanVisitor {
             PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
             PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
             PlanNode::RenameDatabase(plan) => self.visit_rename_database(plan),
-
+            PlanNode::UnDropDatabase(plan) => self.visit_undrop_database(plan),
             // Table.
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
@@ -211,6 +213,9 @@ pub trait PlanVisitor {
 
             // Kill.
             PlanNode::Kill(plan) => self.visit_kill_query(plan),
+
+            // Alter.
+            PlanNode::AlterClusterKey(plan) => self.visit_alter_cluster_key(plan),
         }
     }
 
@@ -398,6 +403,10 @@ pub trait PlanVisitor {
         Ok(())
     }
 
+    fn visit_undrop_database(&mut self, _: &UnDropDatabasePlan) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_use_database(&mut self, _: &UseDatabasePlan) -> Result<()> {
         Ok(())
     }
@@ -470,6 +479,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_alter_user_udf(&mut self, _: &AlterUserUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_alter_cluster_key(&mut self, _: &AlterClusterKeyPlan) -> Result<()> {
         Ok(())
     }
 }

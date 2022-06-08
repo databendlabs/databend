@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::operator_list_files;
 use common_planners::CopyMode;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
@@ -29,6 +28,7 @@ use common_planners::StageTableInfo;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use futures::StreamExt;
 use futures::TryStreamExt;
 use regex::Regex;
 
@@ -75,9 +75,24 @@ impl CopyInterpreter {
                         files_with_path.push(new_path.to_string_lossy().to_string());
                     }
                     files_with_path
+                } else if !path.ends_with('/') {
+                    let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
+                    if op.object(path).is_exist().await? {
+                        vec![path.to_string()]
+                    } else {
+                        vec![]
+                    }
                 } else {
                     let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
-                    operator_list_files(&op, path).await?
+                    let mut list = vec![];
+
+                    // TODO: we could rewrite into try_collect.
+                    let mut objects = op.object(path).list().await?;
+                    while let Some(object) = objects.next().await {
+                        list.push(object?.path());
+                    }
+
+                    list
                 };
 
                 Ok(files_with_path)
@@ -150,10 +165,11 @@ impl CopyInterpreter {
 
         let async_runtime = ctx.get_storage_runtime();
         let executor = PipelinePullingExecutor::try_create(async_runtime, pipeline)?;
-        let source_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
+        let (handler, stream) = ProcessorExecutorStream::create(executor)?;
+        self.ctx.add_source_abort_handle(handler);
 
         let operations = table
-            .append_data(ctx.clone(), source_stream)
+            .append_data(ctx.clone(), Box::pin(stream))
             .await?
             .try_collect()
             .await?;

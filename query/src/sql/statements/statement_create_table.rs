@@ -99,14 +99,15 @@ impl AnalyzableStatement for DfCreateTable {
         let mut cluster_keys = vec![];
         for k in self.cluster_keys.iter() {
             let expr = expression_analyzer.analyze_sync(k)?;
+            // TODO(zhyass): Not all expressions are valid for cluster key.
             validate_expression(&expr, &table_meta.schema)?;
             cluster_keys.push(expr);
         }
 
         if !cluster_keys.is_empty() {
             let cluster_keys: Vec<String> = cluster_keys.iter().map(|e| e.column_name()).collect();
-            let order_keys_sql = format!("({})", cluster_keys.join(", "));
-            table_meta.cluster_keys = Some(order_keys_sql);
+            let cluster_keys_sql = format!("({})", cluster_keys.join(", "));
+            table_meta = table_meta.push_cluster_key(cluster_keys_sql);
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
@@ -117,7 +118,7 @@ impl AnalyzableStatement for DfCreateTable {
                 db,
                 table,
                 table_meta,
-                cluster_keys,
+                cluster_keys: self.cluster_keys.iter().map(ToString::to_string).collect(),
                 as_select: as_select_plan_node,
             }),
         )))

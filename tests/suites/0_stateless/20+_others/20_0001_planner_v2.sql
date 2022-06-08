@@ -282,4 +282,17 @@ select * from t1, t2;
 drop table t1;
 drop table t2;
 
+-- test error code hint
+
+select 3 as a, 4 as a; -- {ErrorCode 1002 }
+-- udf
+select '====UDF====';
+CREATE FUNCTION a_plus_3 AS (a) -> a+3;
+SELECT a_plus_3(2);
+CREATE FUNCTION cal1 AS (a,b,c,d,e) -> a + c * (e / b) - d;
+SELECT cal1(1, 2, 3, 4, 6);
+CREATE FUNCTION notnull1 AS (p) -> not(is_null(p));
+SELECT notnull1(null);
+SELECT notnull1('null');
+
 set enable_planner_v2 = 0;

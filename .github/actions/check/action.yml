@@ -9,24 +9,19 @@ runs:
   steps:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
-
-    # If you need to reset the cache version, increment the number after `v`
-    - uses: Swatinem/rust-cache@v1
       with:
-        sharedKey: base-v2
+        registry: public.ecr.aws/i7g1w5q7
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN
 
     - name: Check License Header
-      uses: apache/skywalking-eyes@v0.2.0
+      shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
-      with:
-        log: info
+      run: make check-license
 
     - name: YAML Lint
-      uses: ibiqlik/action-yamllint@v3
-      with:
-        file_or_dir: ./
-        config_file: .yamllint.yml
+      shell: bash
+      run: make lint-yaml
 
     - name: Format
       shell: bash
@@ -48,8 +43,4 @@ runs:
 
     - name: Check toml format
       shell: bash
-      run: build-tool taplo fmt --check
-
-    # for cache
-    - shell: bash
-      run: cargo metadata --all-features --format-version 1 > ./target/metadata.json
+      run: taplo fmt --check

@@ -108,7 +108,9 @@ fn new_table_info() -> mt::TableInfo {
             engine: "44".to_string(),
             engine_options: btreemap! {s("abc") => s("def")},
             options: btreemap! {s("xyz") => s("foo")},
-            cluster_keys: Some("(a + 2, b)".to_string()),
+            cluster_key: Some("(a + 2, b)".to_string()),
+            cluster_keys: vec!["(a + 2, b)".to_string()],
+            default_cluster_key_id: Some(0),
             created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
             updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
             comment: s("table_comment"),
@@ -138,11 +140,25 @@ fn test_incompatible() -> anyhow::Result<()> {
     let db_info = new_db_info();
     let mut p = db_info.to_pb()?;
     p.ver = 2;
+    p.min_compatible = 2;
 
     let res = mt::DatabaseInfo::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("ver=2 is not compatible with [1, 1]")
+            reason: s("executable ver=1 is smaller than the message min compatible ver: 2")
+        },
+        res.unwrap_err()
+    );
+
+    let db_info = new_db_info();
+    let mut p = db_info.to_pb()?;
+    p.ver = 0;
+    p.min_compatible = 0;
+
+    let res = mt::DatabaseInfo::from_pb(p);
+    assert_eq!(
+        Incompatible {
+            reason: s("message ver=0 is smaller than executable min compatible ver: 1")
         },
         res.unwrap_err()
     );
@@ -315,7 +331,9 @@ fn test_load_old() -> anyhow::Result<()> {
                 engine: "44".to_string(),
                 engine_options: btreemap! {s("abc") => s("def")},
                 options: btreemap! {s("xyz") => s("foo")},
-                cluster_keys: Some("(a + 2, b)".to_string()),
+                cluster_key: Some("(a + 2, b)".to_string()),
+                cluster_keys: vec![],
+                default_cluster_key_id: None,
                 created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
                 updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
                 comment: s("table_comment"),

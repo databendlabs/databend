@@ -125,11 +125,6 @@ impl QueryContextShared {
             source_abort_handle.abort();
         }
 
-        let http_query = self.http_query.read();
-        if let Some(handle) = &*http_query {
-            handle.abort();
-        }
-
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
@@ -175,6 +170,14 @@ impl QueryContextShared {
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
+    }
+
+    pub fn get_changed_settings(&self) -> Arc<Settings> {
+        self.session.get_changed_settings()
+    }
+
+    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        self.session.apply_changed_settings(changed_settings)
     }
 
     pub fn get_catalogs(&self) -> Arc<CatalogManager> {
@@ -244,6 +247,9 @@ impl QueryContextShared {
     pub fn attach_http_query_handle(&self, handle: HttpQueryHandle) {
         let mut http_query = self.http_query.write();
         *http_query = Some(handle);
+    }
+    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
+        self.http_query.read().clone()
     }
 
     pub fn attach_query_str(&self, query: &str) {

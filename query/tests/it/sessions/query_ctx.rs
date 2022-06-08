@@ -37,11 +37,8 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
     conf.storage.params = StorageParams::S3(StorageS3Config {
         region: "us-east-2".to_string(),
         endpoint_url: mock_server.uri(),
-        access_key_id: "".to_string(),
-        secret_access_key: "".to_string(),
         bucket: "bucket".to_string(),
-        root: "".to_string(),
-        master_key: "".to_string(),
+        ..Default::default()
     });
 
     let qctx = crate::tests::create_query_context_with_config(conf, None).await?;

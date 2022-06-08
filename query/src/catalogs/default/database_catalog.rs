@@ -32,6 +32,8 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
@@ -374,6 +376,24 @@ impl Catalog for DatabaseCatalog {
             return self.immutable_catalog.undrop_table(req).await;
         }
         self.mutable_catalog.undrop_table(req).await
+    }
+
+    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        if req.tenant().is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while undrop database)",
+            ));
+        }
+        tracing::info!("UnDrop database from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(req.tenant(), req.db_name())
+            .await?
+        {
+            return self.immutable_catalog.undrop_database(req).await;
+        }
+        self.mutable_catalog.undrop_database(req).await
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {

@@ -23,6 +23,10 @@ mysql_handler_port = 3307
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9001
 
+# Databend Query ClickHouse HTTP Handler.
+clickhouse_http_handler_host = "0.0.0.0"
+clickhouse_http_handler_port = 8125
+
 # Databend Query HTTP Handler.
 http_handler_host = "0.0.0.0"
 http_handler_port = 8001
@@ -31,7 +35,7 @@ tenant_id = "test_tenant"
 cluster_id = "test_cluster"
 
 [log]
-level = "DEBUG"
+level = "INFO"
 dir = "./.databend/logs"
 
 [meta]

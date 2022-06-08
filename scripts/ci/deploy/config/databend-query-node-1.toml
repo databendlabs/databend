@@ -23,6 +23,10 @@ mysql_handler_port = 3307
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9001
 
+# Databend Query ClickHouse Handler.
+clickhouse_http_handler_host = "0.0.0.0"
+clickhouse_http_handler_port = 8125
+
 # Databend Query HTTP Handler.
 http_handler_host = "0.0.0.0"
 http_handler_port = 8001
@@ -44,7 +48,7 @@ dir = "./.databend/logs"
 query_enabled = false
 
 [meta]
-# To enable embedded meta-store, set meta_address to ""
+# To enable embedded meta-store, set meta_address to "".
 meta_embedded_dir = "./.databend/meta_embedded_1"
 meta_address = "0.0.0.0:9191"
 meta_username = "root"

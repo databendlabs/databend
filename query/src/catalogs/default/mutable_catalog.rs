@@ -40,6 +40,8 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
@@ -281,6 +283,11 @@ impl Catalog for MutableCatalog {
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         let res = self.ctx.meta.undrop_table(req).await?;
+        Ok(res)
+    }
+
+    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        let res = self.ctx.meta.undrop_database(req).await?;
         Ok(res)
     }
 

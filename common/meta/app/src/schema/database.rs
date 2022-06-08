@@ -123,6 +123,14 @@ impl DbIdList {
         DbIdList::default()
     }
 
+    pub fn len(&self) -> usize {
+        self.id_list.len()
+    }
+
+    pub fn id_list(&self) -> &Vec<u64> {
+        &self.id_list
+    }
+
     pub fn append(&mut self, table_id: u64) {
         self.id_list.push(table_id);
     }
@@ -219,6 +227,15 @@ impl Display for UndropDatabaseReq {
             "undrop_db:{}/{}",
             self.name_ident.tenant, self.name_ident.db_name
         )
+    }
+}
+
+impl UndropDatabaseReq {
+    pub fn tenant(&self) -> &str {
+        &self.name_ident.tenant
+    }
+    pub fn db_name(&self) -> &str {
+        &self.name_ident.db_name
     }
 }
 

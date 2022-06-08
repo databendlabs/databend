@@ -118,7 +118,7 @@ impl ExplainInterpreterV2 {
             metadata,
             s_expr,
         );
-        let (root_pipeline, pipelines) = pb.spawn()?;
+        let (root_pipeline, pipelines, _) = pb.spawn()?;
         let mut blocks = vec![];
         // Format root pipeline
         blocks.push(DataBlock::create(self.schema.clone(), vec![
