@@ -155,6 +155,7 @@ class HttpConnector():
         self._session = None
 
     # query_with_session keep session_id for every query
+    # return a list of response util empty next_uri
     def query_with_session(self, statement):
         current_session = self._session
         if current_session is None:
@@ -164,33 +165,42 @@ class HttpConnector():
                 "max_idle_time": self._session_max_idle_time
             }
 
+        response_list = list()
         response = self.query(statement, current_session)
         log.info("response content: {}".format(response))
-        for i in range(3):
+        response_list.append(response)
+        for i in range(6):
             if response['next_uri'] is not None:
                 try:
                     resp = requests.get(url="http://{}:{}{}".format(self._host,self._port,response['next_uri']), headers=self.make_headers())
-                    response = json.loads(resp.content)
+                    response = json.loads(resp.content)      
                     log.info("Sql in progress, fetch next_uri content: {}".format(response))
+                    response_list.append(response)
                 except Exception as err:
                     log.warning("Fetch next_uri response with error: {}".format(str(err)))
-                time.sleep(2)
+                time.sleep(1)
                 continue
             break
+        if response['next_uri'] is not None:
+            log.warning("Retry out of times, next_uri stil not none!")
 
         if self._session is None:
             if response is not None and "session_id" in response:
                 self._session = {"id": response["session_id"]}
-        return response
+        return response_list
 
     def fetch_all(self, statement):
-        # TODO use next_uri to get all results
-        resp = self.query_with_session(statement)
-        if resp is None:
+        resp_list = self.query_with_session(statement)
+        if len(resp_list) == 0 :
             log.warning("fetch all with empty results")
             return None
-        self._query_option = get_query_options(resp)  # record schema
-        return get_result(resp)
+        self._query_option = get_query_options(resp_list[0])  # record schema
+        data_list = list()
+        for response in resp_list:
+            data = get_result(response)
+            if len(data) != 0:
+                data_list.extend(data)
+        return data_list
 
     def get_query_option(self):
         return self._query_option

@@ -106,7 +106,6 @@ impl MetaService for MetaServiceImpl {
         let min_compatible = to_digit_ver(&MIN_METACLI_SEMVER);
 
         // backward compatibility: no version in handshake.
-        // TODO(xp): remove this when merged.
         if protocol_version > 0 && protocol_version < min_compatible {
             return Err(Status::invalid_argument(format!(
                 "meta-client protocol_version({}) < metasrv min-compatible({})",
