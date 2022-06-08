@@ -304,5 +304,7 @@ insert into t2 values(2,2), (3, 5), (7 ,8), (2, 3), (3, 4);
 select * from t1 intersect select * from t2;
 select '====Except Distinct===';
 select * from t1 except select * from t2;
+drop table t1;
+drop table t2;
 
 set enable_planner_v2 = 0;

@@ -293,11 +293,9 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
                 let stmts_hints =
                     DfParser::parse_sql(query, context.get_current_session().get_type());
-                let mut stmts = vec![];
                 let mut hints = vec![];
                 let interpreter: Result<Arc<dyn Interpreter>>;
-                if let Ok((s, h)) = stmts_hints {
-                    stmts = s;
+                if let Ok((stmts, h)) = stmts_hints {
                     hints = h;
                     interpreter = if settings.get_enable_new_processor_framework()? != 0
                         && context.get_cluster().is_empty()
@@ -314,6 +312,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         plan.and_then(|v| InterpreterFactory::get(context.clone(), v))
                     };
                 } else {
+                    // If old parser failed, try new planner
                     let mut planner = Planner::new(context.clone());
                     interpreter = planner
                         .plan_sql(query)
