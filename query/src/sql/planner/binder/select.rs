@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use async_recursion::async_recursion;
 use common_ast::ast::Expr;
 use common_ast::ast::Join;
@@ -240,15 +242,15 @@ impl<'a> Binder {
             }
         }
         match (op, all) {
-            (SetOperator::Intersect, true) => {
+            (SetOperator::Intersect, false) => {
                 // Transfer Intersect to Semi join
                 self.bind_intersect(left_bind_context, right_bind_context, left_expr, right_expr)
             }
-            (SetOperator::Except, true) => {
+            (SetOperator::Except, false) => {
                 // Transfer Except to Anti join
                 self.bind_except(left_bind_context, right_bind_context, left_expr, right_expr)
             }
-            _ => Err(ErrorCode::UnImplement("Unsupported query type")),
+            _ => Err(ErrorCode::UnImplement("Unsupported query type, currently, databend only support intersect distinct and except distinct")),
         }
     }
 
@@ -292,6 +294,12 @@ impl<'a> Binder {
         right_expr: SExpr,
         join_type: JoinType,
     ) -> Result<(SExpr, BindContext)> {
+        let left_expr = self.bind_distinct(
+            &left_context,
+            left_context.all_column_bindings(),
+            &mut HashMap::new(),
+            left_expr,
+        )?;
         let mut left_conditions = Vec::with_capacity(left_context.columns.len());
         let mut right_conditions = Vec::with_capacity(right_context.columns.len());
         assert_eq!(left_context.columns.len(), right_context.columns.len());
