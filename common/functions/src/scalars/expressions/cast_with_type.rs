@@ -174,7 +174,9 @@ pub fn cast_with_type(
         for x in viewer {
             check_timestamp(x)?;
         }
-    } else if nonull_data_type.data_type_id() == TypeID::Array {
+    } else if nonull_data_type.data_type_id() == TypeID::Array
+        || nonull_data_type.data_type_id() == TypeID::Struct
+    {
         return Err(ErrorCode::BadDataValueType(format!(
             "Cast error happens in casting from {} to {}",
             from_type.name(),

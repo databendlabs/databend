@@ -262,6 +262,16 @@ impl DataValue {
         }
     }
 
+    pub fn as_struct(&self) -> Result<Vec<DataValue>> {
+        match self {
+            DataValue::Struct(vals) => Ok(vals.to_vec()),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get struct values",
+                other.value_type()
+            ))),
+        }
+    }
+
     pub fn as_const_column(&self, data_type: &DataTypeImpl, size: usize) -> Result<ColumnRef> {
         data_type.create_constant_column(self, size)
     }
