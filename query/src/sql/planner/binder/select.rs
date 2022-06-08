@@ -215,19 +215,18 @@ impl<'a> Binder {
     pub(super) async fn bind_set_operator(
         &mut self,
         bind_context: &BindContext,
-        left: &Box<SetExpr<'_>>,
-        right: &Box<SetExpr<'_>>,
+        left: &'_ SetExpr<'_>,
+        right: &'_ SetExpr<'_>,
         op: &SetOperator,
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_expr, left_bind_context) =
-            self.bind_set_expr(bind_context, &*left, &vec![]).await?;
+        let (left_expr, left_bind_context) = self.bind_set_expr(bind_context, &*left, &[]).await?;
         let (right_expr, right_bind_context) =
-            self.bind_set_expr(bind_context, &*right, &vec![]).await?;
+            self.bind_set_expr(bind_context, &*right, &[]).await?;
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
-            return Err(ErrorCode::SemanticError(format!(
+            return Err(ErrorCode::SemanticError(
                 "SetOperation must have the same number of columns",
-            )));
+            ));
         } else {
             for (left_col, right_col) in left_bind_context
                 .columns
@@ -235,9 +234,9 @@ impl<'a> Binder {
                 .zip(right_bind_context.columns.iter())
             {
                 if !left_col.data_type.eq(&right_col.data_type) {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "SetOperation's types cannot be matched"
-                    )));
+                    return Err(ErrorCode::SemanticError(
+                        "SetOperation's types cannot be matched",
+                    ));
                 }
             }
         }
