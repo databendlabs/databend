@@ -28,6 +28,7 @@ impl Plan {
             }
             Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
             Plan::CreateDatabase(create_database) => Ok(format!("{:?}", create_database)),
+            Plan::DropDatabase(drop_database) => Ok(format!("{:?}", drop_database)),
             Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
             Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
             Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),

@@ -1,0 +1,21 @@
+set enable_planner_v2 = 1;
+
+DROP DATABASE IF EXISTS db;
+
+CREATE DATABASE db;
+DROP DATABASE catalog_not_exist.db; -- {ErrorCode 1006}
+DROP DATABASE db;
+DROP DATABASE IF EXISTS db;
+DROP DATABASE db; -- {ErrorCode 1003}
+
+CREATE DATABASE db;
+DROP DATABASE default.db;
+DROP DATABASE IF EXISTS db;
+
+DROP SCHEMA IF EXISTS db;
+CREATE SCHEMA db;
+DROP SCHEMA db;
+DROP SCHEMA IF EXISTS db;
+DROP SCHEMA db; -- {ErrorCode 1003}
+
+set enable_planner_v2 = 0;
