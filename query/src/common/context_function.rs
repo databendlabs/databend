@@ -49,6 +49,9 @@ impl ContextFunction {
             "connection_id" => vec![Expression::create_literal(DataValue::String(
                 ctx.get_connection_id().into_bytes(),
             ))],
+            "timezone" => vec![Expression::create_literal(DataValue::String(
+                ctx.get_settings().get_timezone()?,
+            ))],
             _ => vec![],
         })
     }

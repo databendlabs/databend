@@ -839,6 +839,16 @@ impl<'a> TypeChecker<'a> {
                 };
                 Some(self.resolve_function("connection_id", &[&arg], None).await)
             }
+            "timezone" => {
+                let tz = self.ctx.get_settings().get_timezone().unwrap();
+                // No need to map err, the tz in settings is valid.
+                let tz = String::from_utf8(tz).unwrap();
+                let arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::String(tz),
+                };
+                Some(self.resolve_function("timezone", &[&arg], None).await)
+            }
             _ => None,
         }
     }
