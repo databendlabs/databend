@@ -151,6 +151,24 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "The threshold of keys to open two-level aggregation, default value: 10000",
             },
+            SettingValue {
+                default_value: DataValue::UInt64(0),
+                user_setting: UserSetting::create("client_enable_async_insert", DataValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "Whether the client open async insert mode, default value: 0",
+            },
+            SettingValue {
+                default_value: DataValue::UInt64(1),
+                user_setting: UserSetting::create("wait_for_async_insert", DataValue::UInt64(1)),
+                level: ScopeLevel::Session,
+                desc: "Whether the client wait for the reply of async insert, default value: 1"
+            },
+            SettingValue {
+                default_value: DataValue::UInt64(100),
+                user_setting: UserSetting::create("wait_for_async_insert_timeout", DataValue::UInt64(100)),
+                level: ScopeLevel::Session,
+                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100"
+            }
         ];
 
         let settings = Arc::new(RwLock::new(HashMap::default()));
@@ -263,6 +281,36 @@ impl Settings {
     // Set group by two level threshold
     pub fn set_group_by_two_level_threshold(&self, val: u64) -> Result<()> {
         let key = "group_by_two_level_threshold";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_client_enable_async_insert(&self) -> Result<u64> {
+        let key = "client_enable_async_insert";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_client_enable_async_insert(&self, val: u64) -> Result<()> {
+        let key = "client_enable_async_insert";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_wait_for_async_insert(&self) -> Result<u64> {
+        let key = "wait_for_async_insert";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_wait_for_async_insert(&self, val: u64) -> Result<()> {
+        let key = "wait_for_async_insert";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_wait_for_async_insert_timeout(&self) -> Result<u64> {
+        let key = "wait_for_async_insert_timeout";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_wait_for_async_insert_timeout(&self, val: u64) -> Result<()> {
+        let key = "wait_for_async_insert_timeout";
         self.try_set_u64(key, val, false)
     }
 

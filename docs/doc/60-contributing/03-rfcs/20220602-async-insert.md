@@ -124,6 +124,10 @@ The method arguments of `AsyncInsertQueue` is `Arc<Self>` because tokio runtime 
 - `async_insert_max_data_size`: The maximum memory size of the buffered data collected per insert before being inserted.
 - `async_insert_busy_timeout`: The maximum timeout in milliseconds since the first insert before inserting collected data.
 - `async_insert_stale_timeout`: The maximum timeout in milliseconds since the last insert before inserting collected data.
+
+# Settings
+
+- `client_enable_async_insert`: Client open async insert mode.
 - `wait_for_async_insert`: Enable waiting for processing of async insert.
 - `wait_for_async_insert_timeout`: The timeout in seconds for waiting for processing of async insert.
 

@@ -637,14 +637,6 @@ pub struct QueryConfig {
     /// The maximum timeout in milliseconds since the last insert before inserting collected data.
     #[clap(long, default_value = "0")]
     pub async_insert_stale_timeout: u64,
-
-    /// If it's true, the client will wait for the query response of insert.
-    #[clap(long, parse(try_from_str), default_value = "true")]
-    pub wait_for_async_insert: bool,
-
-    /// The timeout in seconds for waiting for processing of async insert.
-    #[clap(long, default_value = "100")]
-    pub wait_for_async_insert_timeout: u64,
 }
 
 impl Default for QueryConfig {
@@ -701,8 +693,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: self.async_insert_max_data_size,
             async_insert_busy_timeout: self.async_insert_busy_timeout,
             async_insert_stale_timeout: self.async_insert_stale_timeout,
-            wait_for_async_insert: self.wait_for_async_insert,
-            wait_for_async_insert_timeout: self.wait_for_async_insert_timeout,
         })
     }
 }
@@ -753,8 +743,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: inner.async_insert_max_data_size,
             async_insert_busy_timeout: inner.async_insert_busy_timeout,
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
-            wait_for_async_insert: inner.wait_for_async_insert,
-            wait_for_async_insert_timeout: inner.wait_for_async_insert_timeout,
         }
     }
 }

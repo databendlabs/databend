@@ -255,6 +255,7 @@ async fn execute(
 ) -> Result<()> {
     let data_stream: Result<SendableDataBlockStream> =
         if ctx.clone().get_config().query.enable_async_insert
+            && ctx.get_settings().get_client_enable_async_insert()? == 1
             && matches!(&*plan, PlanNode::Insert(_))
         {
             match &*plan {
@@ -270,14 +271,17 @@ async fn execute(
                         .clone()
                         .push(Arc::new(insert_plan.to_owned()), ctx.clone())
                         .await?;
-                    if ctx.get_config().query.wait_for_async_insert {
+
+                    let wait_for_async_insert = ctx.get_settings().get_wait_for_async_insert()?;
+                    let wait_for_async_insert_timeout =
+                        ctx.get_settings().get_wait_for_async_insert_timeout()?;
+
+                    if wait_for_async_insert == 1 {
                         queue
                             .clone()
                             .wait_for_processing_insert(
                                 ctx.get_id(),
-                                Duration::from_secs(
-                                    ctx.get_config().query.wait_for_async_insert_timeout,
-                                ),
+                                Duration::from_secs(wait_for_async_insert_timeout),
                             )
                             .await?;
                     }

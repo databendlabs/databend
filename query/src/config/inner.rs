@@ -152,8 +152,6 @@ pub struct QueryConfig {
     pub async_insert_max_data_size: u64,
     pub async_insert_busy_timeout: u64,
     pub async_insert_stale_timeout: u64,
-    pub wait_for_async_insert: bool,
-    pub wait_for_async_insert_timeout: u64,
 }
 
 impl Default for QueryConfig {
@@ -202,8 +200,6 @@ impl Default for QueryConfig {
             async_insert_max_data_size: 10000,
             async_insert_busy_timeout: 200,
             async_insert_stale_timeout: 0,
-            wait_for_async_insert: true,
-            wait_for_async_insert_timeout: 100,
         }
     }
 }
