@@ -27,6 +27,8 @@ use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
 
+use super::error::ErrorKind;
+
 pub fn statements(i: Input) -> IResult<Vec<Statement>> {
     let stmt = map(statement, Some);
     let eoi = map(rule! { &EOI }, |_| None);
@@ -824,12 +826,18 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
 
 // parse: (k = v ...)* into a map
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let ident_with_format = alt((
-        map(rule! { FORMAT }, |_| "FORMAT".to_string()),
-        map(ident, |ident| ident.to_string()),
-    ));
+    let ident_to_string = |i| map_res(ident, |ident| {
+        if ident.quote.is_none() {
+            Ok(ident.to_string())
+        } else {
+            Err(ErrorKind::Other("unexpected quoted identifier, try to remove the quote"))
+        }
+    })(i);
 
-    let ident_to_string = alt((map(ident, |expr| expr.to_string()),));
+    let ident_with_format = alt((
+        ident_to_string,
+        map(rule! { FORMAT }, |_| "FORMAT".to_string()),
+    ));
 
     map(
         rule! {
