@@ -451,9 +451,15 @@ pub fn statement(i: Input) -> IResult<Statement> {
             validation_mode_opt,
             comment_opt,
         )| {
-            let (location, credential_options, encryption_options) = url_opt.map(|(_, _, url, c, e)| {
-                (url, c.map(|v| v.2).unwrap_or_default(), e.map(|v| v.2).unwrap_or_default())
-            }).unwrap_or_default();
+            let (location, credential_options, encryption_options) = url_opt
+                .map(|(_, _, url, c, e)| {
+                    (
+                        url,
+                        c.map(|v| v.2).unwrap_or_default(),
+                        e.map(|v| v.2).unwrap_or_default(),
+                    )
+                })
+                .unwrap_or_default();
 
             Statement::CreateStage(CreateStageStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
@@ -829,8 +835,6 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
         rule! {
             "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #literal_string) )* ~ ")"
         },
-        |(_, opts, _)| {
-            BTreeMap::from_iter(opts.iter().map(|(k,_,v)| (k.clone(), v.clone())))
-        },
+        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.clone(), v.clone()))),
     )(i)
 }
