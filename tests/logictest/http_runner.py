@@ -31,7 +31,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
 
     def execute_error(self, statement):
         resp = self.get_connection().query_with_session(statement)
-        return http_connector.get_error(resp)
+        return http_connector.get_error(resp[0])
 
     def execute_query(self, statement):
         results = self.get_connection().fetch_all(statement.text)
