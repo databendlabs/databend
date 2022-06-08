@@ -68,9 +68,10 @@ impl<'a> DeletionCollector<'a> {
     }
 
     pub async fn into_new_snapshot(self) -> Result<(TableSnapshot, String)> {
+        // TODO docs!!!
         let snapshot = self.base_snapshot;
         let mut new_snapshot = TableSnapshot::from_previous(snapshot);
-        let seg_reader = MetaReaders::segment_info_reader(self.ctx);
+        let segment_reader = MetaReaders::segment_info_reader(self.ctx);
 
         let segment_info_cache = self
             .ctx
@@ -78,13 +79,13 @@ impl<'a> DeletionCollector<'a> {
             .get_table_segment_cache();
         let seg_writer = SegmentWriter::new(
             &self.data_accessor,
-            &self.location_generator,
+            self.location_generator,
             &segment_info_cache,
         );
 
         for (seg_idx, replacements) in self.mutations {
             let seg_loc = &snapshot.segments[seg_idx];
-            let segment = seg_reader.read(&seg_loc.0, None, seg_loc.1).await?;
+            let segment = segment_reader.read(&seg_loc.0, None, seg_loc.1).await?;
 
             let block_positions = segment
                 .blocks
@@ -123,11 +124,9 @@ impl<'a> DeletionCollector<'a> {
             }
         }
 
-        //new_snapshot.prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version()));
-
         let mut new_segment_summaries = vec![];
         for (loc, ver) in &new_snapshot.segments {
-            let seg = seg_reader.read(loc, None, *ver).await?;
+            let seg = segment_reader.read(loc, None, *ver).await?;
             // only need the summary, drop the reference to segment ASAP
             new_segment_summaries.push(seg.summary.clone())
         }
@@ -162,7 +161,7 @@ impl<'a> DeletionCollector<'a> {
         let new_block_meta = if replace_with.num_rows() == 0 {
             None
         } else {
-            let block_writer = BlockWriter::new(&self.data_accessor, &self.location_generator);
+            let block_writer = BlockWriter::new(&self.data_accessor, self.location_generator);
             Some(block_writer.write_block(replace_with).await?)
         };
         let original_block_loc = location_of_block_to_be_replaced;

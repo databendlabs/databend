@@ -85,7 +85,7 @@ impl FuseTable {
             .await?;
 
         // delete block one by one.
-        // this could be executed in a distributed manner, till new planner, pipeline settled down totally
+        // this could be executed in a distributed manner (till new planner, pipeline settled down)
         for (seg_idx, block_meta) in block_metas {
             let proj = plan.projection.clone();
             match delete_from_block(self, &block_meta, &ctx, proj, filter).await? {
