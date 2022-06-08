@@ -451,14 +451,9 @@ pub fn statement(i: Input) -> IResult<Statement> {
             validation_mode_opt,
             comment_opt,
         )| {
-            let mut credential_options = BTreeMap::new();
-            let mut encryption_options = BTreeMap::new();
-            let mut location = String::new();
-            if let Some((_, _, url, c, e)) = url_opt {
-                location = url;
-                credential_options = c.map(|v| v.2).unwrap_or_default();
-                encryption_options = e.map(|v| v.2).unwrap_or_default();
-            }
+            let (location, credential_options, encryption_options) = url_opt.map(|(_, _, url, c, e)| {
+                (url, c.map(|v| v.2).unwrap_or_default(), e.map(|v| v.2).unwrap_or_default())
+            }).unwrap_or_default();
 
             Statement::CreateStage(CreateStageStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
@@ -825,22 +820,17 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
     let ident_with_format = alt((
         map(rule! { FORMAT }, |_| "FORMAT".to_string()),
-        map(rule! {#ident}, |expr| expr.to_string()),
+        map(ident, |ident| ident.to_string()),
     ));
 
-    let ident_to_string = alt((map(rule! {#ident}, |expr| expr.to_string()),));
+    let ident_to_string = alt((map(ident, |expr| expr.to_string()),));
 
     map(
         rule! {
             "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #literal_string) )* ~ ")"
         },
         |(_, opts, _)| {
-            let mut map = BTreeMap::new();
-
-            for (k, _, v) in opts {
-                map.insert(k, v);
-            }
-            map
+            BTreeMap::from_iter(opts.iter().map(|(k,_,v)| (k.clone(), v.clone())))
         },
     )(i)
 }
