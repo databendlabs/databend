@@ -140,6 +140,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/test_sqllogic_standalone_macos
+        with:
+          profile: release
 
   test_sqllogic_standalone_linux:
     runs-on: ubuntu-latest
@@ -149,6 +151,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/test_sqllogic_standalone_linux
+        with:
+          profile: release
 
   publish_image:
     runs-on: ubuntu-latest
