@@ -25,7 +25,6 @@ use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::operations::mutation::mutations_collector::Deletion;
 use crate::storages::fuse::FuseTable;
 
-//  the "tranform filter" of delete plan
 pub async fn delete_from_block(
     table: &FuseTable,
     block_meta: &BlockMeta,

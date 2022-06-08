@@ -13,9 +13,7 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use common_cache::Cache;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,12 +22,12 @@ use opendal::Operator;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;
+use crate::storages::fuse::io::SegmentWriter;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::statistics::reducers::reduce_block_metas;
 use crate::storages::fuse::statistics::reducers::reduce_statistics;
 
@@ -54,7 +52,7 @@ pub struct DeletionCollector<'a> {
 }
 
 impl<'a> DeletionCollector<'a> {
-    pub fn new(
+    pub fn try_create(
         ctx: &'a QueryContext,
         location_generator: &'a TableMetaLocationGenerator,
         base_snapshot: &'a TableSnapshot,
@@ -78,18 +76,23 @@ impl<'a> DeletionCollector<'a> {
             .ctx
             .get_storage_cache_manager()
             .get_table_segment_cache();
+        let seg_writer = SegmentWriter::new(
+            &self.data_accessor,
+            &self.location_generator,
+            &segment_info_cache,
+        );
 
-        let operator = self.ctx.get_storage_operator()?;
         for (seg_idx, replacements) in self.mutations {
             let seg_loc = &snapshot.segments[seg_idx];
             let segment = seg_reader.read(&seg_loc.0, None, seg_loc.1).await?;
-            let block_positions = segment.blocks.iter().enumerate().fold(
-                HashMap::with_capacity(segment.blocks.len()),
-                |mut acc, (pos, block)| {
-                    acc.insert(&block.location, pos);
-                    acc
-                },
-            );
+
+            let block_positions = segment
+                .blocks
+                .iter()
+                .enumerate()
+                .map(|(idx, meta)| (&meta.location, idx))
+                .collect::<HashMap<_, _>>();
+
             let mut new_segment = SegmentInfo::new(segment.blocks.clone(), segment.summary.clone());
 
             for replacement in replacements {
@@ -115,29 +118,16 @@ impl<'a> DeletionCollector<'a> {
             } else {
                 let new_summary = reduce_block_metas(&new_segment.blocks)?;
                 new_segment.summary = new_summary;
-
-                let new_seg_loc = self.location_generator.gen_segment_info_location();
-                let loc = (new_seg_loc.clone(), SegmentInfo::VERSION);
-
-                let bytes = serde_json::to_vec(&new_segment)?;
-                operator.object(loc.0.as_str()).write(bytes).await?;
-
-                new_snapshot.segments[seg_idx] = loc.clone();
-
-                if let Some(ref cache) = segment_info_cache {
-                    let cache = &mut cache.write().await;
-                    cache.put(new_seg_loc, Arc::new(new_segment));
-                }
+                let new_segment_location = seg_writer.write_segment(new_segment).await?;
+                new_snapshot.segments[seg_idx] = new_segment_location;
             }
         }
 
-        new_snapshot.prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version()));
+        //new_snapshot.prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version()));
 
-        // TODO refine this: newly generated segment could be kept in cache
         let mut new_segment_summaries = vec![];
-        let segment_reader = MetaReaders::segment_info_reader(self.ctx);
         for (loc, ver) in &new_snapshot.segments {
-            let seg = segment_reader.read(loc, None, *ver).await?;
+            let seg = seg_reader.read(loc, None, *ver).await?;
             // only need the summary, drop the reference to segment ASAP
             new_segment_summaries.push(seg.summary.clone())
         }
@@ -152,8 +142,10 @@ impl<'a> DeletionCollector<'a> {
             new_snapshot.format_version(),
         )?;
         let bytes = serde_json::to_vec(&new_snapshot)?;
-        let operator = self.ctx.get_storage_operator()?;
-        operator.object(&snapshot_loc).write(bytes).await?;
+        self.data_accessor
+            .object(&snapshot_loc)
+            .write(bytes)
+            .await?;
         Ok((new_snapshot, snapshot_loc))
     }
 
@@ -163,7 +155,7 @@ impl<'a> DeletionCollector<'a> {
     pub async fn replace_with(
         &mut self,
         seg_idx: usize,
-        block_location: &Location,
+        location_of_block_to_be_replaced: Location,
         replace_with: DataBlock,
     ) -> Result<()> {
         // write new block, and keep the mutations
@@ -173,7 +165,7 @@ impl<'a> DeletionCollector<'a> {
             let block_writer = BlockWriter::new(&self.data_accessor, &self.location_generator);
             Some(block_writer.write_block(replace_with).await?)
         };
-        let original_block_loc = block_location.clone();
+        let original_block_loc = location_of_block_to_be_replaced;
         self.mutations
             .entry(seg_idx)
             .or_default()

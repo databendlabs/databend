@@ -47,8 +47,8 @@ impl FuseTable {
         }
 
         // check if unconditional deletion
-        let filter = if let Some(val) = &plan.selection {
-            val
+        if let Some(filter) = &plan.selection {
+            self.delete_rows(ctx, &snapshot, filter, plan).await
         } else {
             // deleting the whole table... just a truncate
             let purge = false;
@@ -59,9 +59,7 @@ impl FuseTable {
             return self
                 .do_truncate(ctx.clone(), purge, plan.catalog_name.as_str())
                 .await;
-        };
-
-        self.delete_rows(ctx, &snapshot, filter, plan).await
+        }
     }
 
     async fn delete_rows(
@@ -72,7 +70,7 @@ impl FuseTable {
         plan: &DeletePlan,
     ) -> Result<()> {
         let mut deletion_collector =
-            DeletionCollector::new(ctx.as_ref(), &self.meta_location_generator, snapshot)?;
+            DeletionCollector::try_create(ctx.as_ref(), &self.meta_location_generator, snapshot)?;
         let schema = self.table_info.schema();
         // TODO refine pruner
         let extras = Extras {
@@ -99,7 +97,7 @@ impl FuseTable {
                     // after deletion, the data block `r` remains, let keep it  by replacing the block
                     // located at `block_meta.location`, of segment indexed by `seg_idx`, with a new block `r`
                     deletion_collector
-                        .replace_with(seg_idx, &block_meta.location, r)
+                        .replace_with(seg_idx, block_meta.location.clone(), r)
                         .await?
                 }
             }
