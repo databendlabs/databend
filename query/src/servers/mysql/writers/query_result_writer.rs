@@ -169,7 +169,11 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
 
                                 (_, DataValue::UInt64(v)) => row_writer.write_col(v)?,
 
-                                (_, DataValue::Float64(v)) => row_writer.write_col(v)?,
+                                (_, DataValue::Float64(_)) => row_writer
+                                    // mysql writer use a text protocol,
+                                    // it use format!() to serialize number,
+                                    // the result will be different with our serializer for floats
+                                    .write_col(serializer.serialize_field(row_index, format)?)?,
                                 (_, v) => {
                                     return Err(ErrorCode::BadDataValueType(format!(
                                         "Unsupported column type:{:?}, expected type in schema: {:?}",
