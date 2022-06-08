@@ -600,6 +600,48 @@ CreateDatabase(
 
 
 ---------- Input ----------
+drop database catalog.t;
+---------- Output ---------
+DROP DATABASE catalog.t
+---------- AST ------------
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: false,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(14..21),
+            },
+        ),
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(22..23),
+        },
+    },
+)
+
+
+---------- Input ----------
+drop database if exists t;
+---------- Output ---------
+DROP DATABASE IF EXISTS t
+---------- AST ------------
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: true,
+        catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(24..25),
+        },
+    },
+)
+
+
+---------- Input ----------
 create table c(a DateTime null, b DateTime(3));
 ---------- Output ---------
 CREATE TABLE c (a DATETIME NULL, b DATETIME(3) NOT NULL)
@@ -1008,14 +1050,17 @@ DROP database if exists db1;
 ---------- Output ---------
 DROP DATABASE IF EXISTS db1
 ---------- AST ------------
-DropDatabase {
-    if_exists: true,
-    database: Identifier {
-        name: "db1",
-        quote: None,
-        span: Ident(24..27),
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: true,
+        catalog: None,
+        database: Identifier {
+            name: "db1",
+            quote: None,
+            span: Ident(24..27),
+        },
     },
-}
+)
 
 
 ---------- Input ----------

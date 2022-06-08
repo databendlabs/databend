@@ -80,11 +80,14 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let drop_database = map(
         rule! {
-            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, opt_if_exists, database)| Statement::DropDatabase {
-            if_exists: opt_if_exists.is_some(),
-            database,
+        |(_, _, opt_if_exists, opt_catalog, database)| {
+            Statement::DropDatabase(DropDatabaseStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog: opt_catalog.map(|(catalog, _)| catalog),
+                database,
+            })
         },
     );
     let alter_database = map(

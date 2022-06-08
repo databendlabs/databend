@@ -16,14 +16,38 @@ use std::collections::BTreeMap;
 
 use common_ast::ast::CreateDatabaseStmt;
 use common_ast::ast::DatabaseEngine;
+use common_ast::ast::DropDatabaseStmt;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_planners::CreateDatabasePlan;
+use common_planners::DropDatabasePlan;
 
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
 
 impl<'a> Binder {
+    pub(in crate::sql::planner::binder) async fn bind_drop_database(
+        &self,
+        stmt: &DropDatabaseStmt<'a>,
+    ) -> Result<Plan> {
+        let catalog = stmt
+            .catalog
+            .as_ref()
+            .map(|catalog| catalog.name.clone())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+
+        let tenant = self.ctx.get_tenant();
+        let db = stmt.database.name.clone();
+        let if_exists = stmt.if_exists;
+
+        Ok(Plan::DropDatabase(DropDatabasePlan {
+            tenant,
+            catalog,
+            db,
+            if_exists,
+        }))
+    }
+
     pub(in crate::sql::planner::binder) async fn bind_create_database(
         &self,
         stmt: &CreateDatabaseStmt<'a>,

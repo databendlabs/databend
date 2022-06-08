@@ -36,6 +36,7 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
 use common_planners::CreateViewPlan;
+use common_planners::DropDatabasePlan;
 use common_planners::DropUserPlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
@@ -77,6 +78,7 @@ pub enum Plan {
     CreateTable(Box<CreateTablePlan>),
     CreateDatabase(CreateDatabasePlan),
     CreateView(Box<CreateViewPlan>),
+    DropDatabase(DropDatabasePlan),
 
     // System
     ShowMetrics,

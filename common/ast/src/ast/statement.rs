@@ -47,10 +47,7 @@ pub enum Statement<'a> {
         database: Identifier<'a>,
     },
     CreateDatabase(CreateDatabaseStmt<'a>),
-    DropDatabase {
-        if_exists: bool,
-        database: Identifier<'a>,
-    },
+    DropDatabase(DropDatabaseStmt<'a>),
     AlterDatabase {
         if_exists: bool,
         database: Identifier<'a>,
@@ -208,6 +205,13 @@ pub struct CreateDatabaseStmt<'a> {
     pub database: Identifier<'a>,
     pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropDatabaseStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -478,15 +482,16 @@ impl<'a> Display for Statement<'a> {
                 }
                 // TODO(leiysky): display rest information
             }
-            Statement::DropDatabase {
-                database,
+            Statement::DropDatabase(DropDatabaseStmt {
                 if_exists,
-            } => {
-                write!(f, "DROP DATABASE")?;
+                catalog,
+                database,
+            }) => {
+                write!(f, "DROP DATABASE ")?;
                 if *if_exists {
-                    write!(f, " IF EXISTS")?;
+                    write!(f, "IF EXISTS ")?;
                 }
-                write!(f, " {database}")?;
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
             }
             Statement::AlterDatabase {
                 if_exists,
