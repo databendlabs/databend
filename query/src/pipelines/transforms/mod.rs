@@ -32,7 +32,6 @@ mod transform_window_func;
 pub mod group_by;
 mod streams;
 mod transform_sink;
-pub mod window_func;
 
 pub use streams::AddOnStream;
 pub use transform_aggregator_final::AggregatorFinalTransform;

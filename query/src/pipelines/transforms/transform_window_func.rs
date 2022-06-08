@@ -377,49 +377,57 @@ impl WindowFuncTransform {
                             let mut end = partition.end;
                             match frame_start {
                                 WindowFrameBound::Preceding(Some(preceding)) => {
-                                    let idx = order_by_values.partition_point(|x| {
+                                    let offset = order_by_values[start..end].partition_point(|x| {
                                         let min = DataValue::from(
                                             current_value.as_f64().unwrap() - preceding as f64,
                                         );
                                         x.cmp(&min) == Ordering::Less
                                     });
-                                    start = std::cmp::max(start, idx);
+                                    start += offset;
                                 }
                                 WindowFrameBound::CurrentRow => {
-                                    start = i;
+                                    let offset = order_by_values[start..end].partition_point(|x| {
+                                        let peer = DataValue::from(current_value.as_f64().unwrap());
+                                        x.cmp(&peer) == Ordering::Less
+                                    });
+                                    start += offset;
                                 }
                                 WindowFrameBound::Following(Some(following)) => {
-                                    let idx = order_by_values.partition_point(|x| {
+                                    let offset = order_by_values[start..end].partition_point(|x| {
                                         let max = DataValue::from(
                                             current_value.as_f64().unwrap() + following as f64,
                                         );
                                         x.cmp(&max) == Ordering::Less
                                     });
-                                    start = std::cmp::min(end, idx);
+                                    start += offset;
                                 }
                                 _ => (),
                             }
                             match frame_end {
                                 WindowFrameBound::Preceding(Some(preceding)) => {
-                                    let idx = order_by_values.partition_point(|x| {
+                                    let offset = order_by_values[start..end].partition_point(|x| {
                                         let min = DataValue::from(
                                             current_value.as_f64().unwrap() - preceding as f64,
                                         );
                                         x.cmp(&min) != Ordering::Greater
                                     });
-                                    end = std::cmp::max(start, idx);
+                                    end = start + offset;
                                 }
                                 WindowFrameBound::CurrentRow => {
-                                    end = i + 1;
+                                    let offset = order_by_values[start..end].partition_point(|x| {
+                                        let peer = DataValue::from(current_value.as_f64().unwrap());
+                                        x.cmp(&peer) != Ordering::Greater
+                                    });
+                                    end = start + offset;
                                 }
                                 WindowFrameBound::Following(Some(following)) => {
-                                    let idx = order_by_values.partition_point(|x| {
+                                    let offset = order_by_values[start..end].partition_point(|x| {
                                         let max = DataValue::from(
                                             current_value.as_f64().unwrap() + following as f64,
                                         );
                                         x.cmp(&max) != Ordering::Greater
                                     });
-                                    end = std::cmp::min(end, idx);
+                                    end = start + offset;
                                 }
                                 _ => (),
                             }
