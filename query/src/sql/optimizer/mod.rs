@@ -61,6 +61,7 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
         | Plan::ShowProcessList
         | Plan::ShowSettings
         | Plan::CreateDatabase(_)
+        | Plan::DropDatabase(_)
         | Plan::CreateTable(_)
         | Plan::CreateUser(_)
         | Plan::CreateView(_)

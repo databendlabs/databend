@@ -22,6 +22,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use common_planners::Expression;
@@ -167,6 +168,56 @@ impl FuseTable {
             Ok(())
         }
     }
+
+    async fn update_table_meta(
+        &self,
+        ctx: &QueryContext,
+        catalog_name: &str,
+        snapshot: &TableSnapshot,
+        meta: &mut TableMeta,
+    ) -> Result<()> {
+        let uuid = snapshot.snapshot_id;
+        let snapshot_loc = self
+            .meta_location_generator()
+            .snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
+        let bytes = serde_json::to_vec(snapshot)?;
+        let operator = ctx.get_storage_operator()?;
+        operator.object(&snapshot_loc).write(bytes).await?;
+
+        // set new snapshot location
+        meta.options
+            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), snapshot_loc.clone());
+        // remove legacy options
+        meta.options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+
+        let table_id = self.table_info.ident.table_id;
+        let table_version = self.table_info.ident.seq;
+        let req = UpdateTableMetaReq {
+            table_id,
+            seq: MatchSeq::Exact(table_version),
+            new_table_meta: meta.clone(),
+        };
+
+        let catalog = ctx.get_catalog(catalog_name)?;
+        let result = catalog.update_table_meta(req).await;
+        match result {
+            Ok(_) => {
+                if let Some(snapshot_cache) =
+                    ctx.get_storage_cache_manager().get_table_snapshot_cache()
+                {
+                    let cache = &mut snapshot_cache.write().await;
+                    cache.put(snapshot_loc, Arc::new(snapshot.clone()));
+                }
+                Ok(())
+            }
+            Err(e) => {
+                // commit snapshot to meta server failed, try to delete it.
+                // "major GC" will collect this, if deletion failure (even after DAL retried)
+                let _ = operator.object(&snapshot_loc).delete().await;
+                Err(e)
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -226,48 +277,53 @@ impl Table for FuseTable {
             cluster_key_meta,
         );
 
-        let uuid = new_snapshot.snapshot_id;
-        let snapshot_loc = self
-            .meta_location_generator()
-            .snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
-        let bytes = serde_json::to_vec(&new_snapshot)?;
-        let operator = ctx.get_storage_operator()?;
-        operator.object(&snapshot_loc).write(bytes).await?;
+        self.update_table_meta(
+            ctx.as_ref(),
+            catalog_name,
+            &new_snapshot,
+            &mut new_table_meta,
+        )
+        .await
+    }
 
-        // set new snapshot location
-        new_table_meta
-            .options
-            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), snapshot_loc.clone());
-        // remove legacy options
-        new_table_meta.options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    async fn drop_cluster_keys(&self, ctx: Arc<QueryContext>, catalog_name: &str) -> Result<()> {
+        if self.cluster_key_meta.is_none() {
+            return Ok(());
+        }
 
-        let table_id = self.table_info.ident.table_id;
-        let table_version = self.table_info.ident.seq;
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
-            new_table_meta,
+        let mut new_table_meta = self.get_table_info().meta.clone();
+        new_table_meta.cluster_key = None;
+        new_table_meta.default_cluster_key_id = None;
+
+        let schema = self.schema().as_ref().clone();
+
+        let prev = self.read_table_snapshot(ctx.as_ref()).await?;
+        let prev_version = self.snapshot_format_version();
+        let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
+        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
+        let (summary, segments) = if let Some(v) = prev {
+            (v.summary.clone(), v.segments.clone())
+        } else {
+            (FuseStatistics::default(), vec![])
         };
 
-        let catalog = ctx.get_catalog(catalog_name)?;
-        let result = catalog.update_table_meta(req).await;
-        match result {
-            Ok(_) => {
-                if let Some(snapshot_cache) =
-                    ctx.get_storage_cache_manager().get_table_snapshot_cache()
-                {
-                    let cache = &mut snapshot_cache.write().await;
-                    cache.put(snapshot_loc, Arc::new(new_snapshot));
-                }
-                Ok(())
-            }
-            Err(e) => {
-                // commit snapshot to meta server failed, try to delete it.
-                // "major GC" will collect this, if deletion failure (even after DAL retried)
-                let _ = operator.object(&snapshot_loc).delete().await;
-                Err(e)
-            }
-        }
+        let new_snapshot = TableSnapshot::new(
+            Uuid::new_v4(),
+            &prev_timestamp,
+            prev_snapshot_id,
+            schema,
+            summary,
+            segments,
+            None,
+        );
+
+        self.update_table_meta(
+            ctx.as_ref(),
+            catalog_name,
+            &new_snapshot,
+            &mut new_table_meta,
+        )
+        .await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

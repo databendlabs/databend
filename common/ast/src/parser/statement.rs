@@ -68,23 +68,26 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #database_engine?
         },
-        |(_, _, opt_if_not_exists, opt_catalog, database, opt_engine)| {
+        |(_, _, opt_if_not_exists, opt_catalog, database, engine)| {
             Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 catalog: opt_catalog.map(|(catalog, _)| catalog),
                 database,
-                engine: opt_engine.unwrap_or(DatabaseEngine::Default),
+                engine,
                 options: vec![],
             })
         },
     );
     let drop_database = map(
         rule! {
-            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, opt_if_exists, database)| Statement::DropDatabase {
-            if_exists: opt_if_exists.is_some(),
-            database,
+        |(_, _, opt_if_exists, opt_catalog, database)| {
+            Statement::DropDatabase(DropDatabaseStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog: opt_catalog.map(|(catalog, _)| catalog),
+                database,
+            })
         },
     );
     let alter_database = map(
@@ -579,16 +582,24 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
     );
 
-    let cluster_by = map(
+    let alter_cluster_key = map(
         rule! {
             CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
         },
         |(_, _, _, cluster_by, _)| AlterTableAction::AlterClusterKey { cluster_by },
     );
 
+    let drop_cluster_key = map(
+        rule! {
+            DROP ~ CLUSTER ~ KEY
+        },
+        |(_, _, _)| AlterTableAction::DropClusterKey,
+    );
+
     rule!(
         #rename_table
-        | #cluster_by
+        | #alter_cluster_key
+        | #drop_cluster_key
     )(i)
 }
 

@@ -61,7 +61,7 @@ use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::incr_meta_metrics_leader_change;
 use crate::metrics::incr_meta_metrics_read_failed;
-use crate::metrics::set_meta_metrics_has_leader;
+use crate::metrics::set_meta_metrics_current_leader;
 use crate::metrics::set_meta_metrics_is_leader;
 use crate::metrics::set_meta_metrics_proposals_applied;
 use crate::network::Network;
@@ -405,9 +405,9 @@ impl MetaNode {
                                 } else {
                                     set_meta_metrics_is_leader(false);
                                 }
-                                set_meta_metrics_has_leader(true);
+                                set_meta_metrics_current_leader(cur);
                             } else {
-                                set_meta_metrics_has_leader(false);
+                                set_meta_metrics_current_leader(0);
                                 set_meta_metrics_is_leader(false);
                             }
                             if let Some(last_applied) = mm.last_applied {

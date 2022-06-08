@@ -47,10 +47,7 @@ pub enum Statement<'a> {
         database: Identifier<'a>,
     },
     CreateDatabase(CreateDatabaseStmt<'a>),
-    DropDatabase {
-        if_exists: bool,
-        database: Identifier<'a>,
-    },
+    DropDatabase(DropDatabaseStmt<'a>),
     AlterDatabase {
         if_exists: bool,
         database: Identifier<'a>,
@@ -206,8 +203,15 @@ pub struct CreateDatabaseStmt<'a> {
     pub if_not_exists: bool,
     pub catalog: Option<Identifier<'a>>,
     pub database: Identifier<'a>,
-    pub engine: DatabaseEngine,
+    pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropDatabaseStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -305,6 +309,7 @@ pub enum AlterDatabaseAction<'a> {
 pub enum AlterTableAction<'a> {
     RenameTable { new_table: Identifier<'a> },
     AlterClusterKey { cluster_by: Vec<Expr<'a>> },
+    DropClusterKey,
     // TODO(wuzhiguo): AddColumn etc
 }
 
@@ -473,18 +478,21 @@ impl<'a> Display for Statement<'a> {
                     write!(f, "IF NOT EXISTS ")?;
                 }
                 write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
-                write!(f, " ENGINE = {engine}")?;
+                if let Some(engine) = engine {
+                    write!(f, " ENGINE = {engine}")?;
+                }
                 // TODO(leiysky): display rest information
             }
-            Statement::DropDatabase {
-                database,
+            Statement::DropDatabase(DropDatabaseStmt {
                 if_exists,
-            } => {
-                write!(f, "DROP DATABASE")?;
+                catalog,
+                database,
+            }) => {
+                write!(f, "DROP DATABASE ")?;
                 if *if_exists {
-                    write!(f, " IF EXISTS")?;
+                    write!(f, "IF EXISTS ")?;
                 }
-                write!(f, " {database}")?;
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
             }
             Statement::AlterDatabase {
                 if_exists,
@@ -629,6 +637,9 @@ impl<'a> Display for Statement<'a> {
                     AlterTableAction::AlterClusterKey { cluster_by } => {
                         write!(f, " CLUSTER BY ")?;
                         write_comma_separated_list(f, cluster_by)?;
+                    }
+                    AlterTableAction::DropClusterKey => {
+                        write!(f, " DROP CLUSTER KEY")?;
                     }
                 }
             }

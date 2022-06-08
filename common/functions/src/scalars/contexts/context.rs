@@ -16,6 +16,7 @@ use crate::scalars::ConnectionIdFunction;
 use crate::scalars::CurrentUserFunction;
 use crate::scalars::DatabaseFunction;
 use crate::scalars::FunctionFactory;
+use crate::scalars::TzFunction;
 use crate::scalars::UserFunction;
 use crate::scalars::VersionFunction;
 
@@ -29,5 +30,6 @@ impl ContextFunction {
         factory.register("version", VersionFunction::desc());
         factory.register("current_user", CurrentUserFunction::desc());
         factory.register("user", UserFunction::desc());
+        factory.register("timezone", TzFunction::desc());
     }
 }
