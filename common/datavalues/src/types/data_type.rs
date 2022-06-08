@@ -128,18 +128,15 @@ where Self: Sized
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
 
-    fn create_serializer_const<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        let col: &ConstColumn = Series::check_get(col)?;
-        let inner = Box::new(self.create_serializer_inner(col.inner())?);
-        Ok(ConstSerializer {
-            inner,
-            size: col.len(),
-        }
-        .into())
-    }
     fn create_serializer<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
         if col.is_const() {
-            self.create_serializer_const(col)
+            let col: &ConstColumn = Series::check_get(col)?;
+            let inner = Box::new(self.create_serializer_inner(col.inner())?);
+            Ok(ConstSerializer {
+                inner,
+                size: col.len(),
+            }
+            .into())
         } else {
             self.create_serializer_inner(col)
         }
