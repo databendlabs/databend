@@ -23,7 +23,8 @@ mod operation_log;
 mod read;
 mod read_partitions;
 mod truncate;
-mod util;
+
+pub mod util;
 
 pub use fuse_sink::FuseTableSink;
 pub use operation_log::AppendOperationLogEntry;

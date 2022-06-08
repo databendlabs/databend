@@ -21,3 +21,4 @@ pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
 pub use block_writer::serialize_data_blocks;
 pub use block_writer::write_block;
+pub use block_writer::BlockWriter;

@@ -25,4 +25,5 @@ pub use write::serialize_data_blocks;
 pub use write::write_block;
 pub use write::BlockCompactor;
 pub use write::BlockStreamWriter;
+pub use write::BlockWriter;
 pub use write::SegmentInfoStream;

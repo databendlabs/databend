@@ -19,9 +19,10 @@ use common_cache::Cache;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use opendal::Operator;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::write_block;
+use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::BlockMeta;
@@ -29,8 +30,6 @@ use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
-use crate::storages::fuse::operations::util::column_metas;
-use crate::storages::fuse::statistics::accumulator;
 use crate::storages::fuse::statistics::reducers::reduce_block_metas;
 use crate::storages::fuse::statistics::reducers::reduce_statistics;
 
@@ -39,7 +38,6 @@ pub enum Deletion {
     Remains(DataBlock),
 }
 
-#[allow(dead_code)]
 pub struct Replacement {
     original_block_loc: Location,
     new_block_meta: Option<BlockMeta>,
@@ -52,6 +50,7 @@ pub struct DeletionCollector<'a> {
     ctx: &'a QueryContext,
     location_generator: &'a TableMetaLocationGenerator,
     base_snapshot: &'a TableSnapshot,
+    data_accessor: Operator,
 }
 
 impl<'a> DeletionCollector<'a> {
@@ -59,24 +58,28 @@ impl<'a> DeletionCollector<'a> {
         ctx: &'a QueryContext,
         location_generator: &'a TableMetaLocationGenerator,
         base_snapshot: &'a TableSnapshot,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let data_accessor = ctx.get_storage_operator()?;
+        Ok(Self {
             mutations: HashMap::new(),
             ctx,
             location_generator,
             base_snapshot,
-        }
+            data_accessor,
+        })
     }
 
     pub async fn into_new_snapshot(self) -> Result<(TableSnapshot, String)> {
         let snapshot = self.base_snapshot;
         let mut new_snapshot = TableSnapshot::from_previous(snapshot);
         let seg_reader = MetaReaders::segment_info_reader(self.ctx);
+
         let segment_info_cache = self
             .ctx
             .get_storage_cache_manager()
             .get_table_segment_cache();
 
+        let operator = self.ctx.get_storage_operator()?;
         for (seg_idx, replacements) in self.mutations {
             let seg_loc = &snapshot.segments[seg_idx];
             let segment = seg_reader.read(&seg_loc.0, None, seg_loc.1).await?;
@@ -117,7 +120,6 @@ impl<'a> DeletionCollector<'a> {
                 let loc = (new_seg_loc.clone(), SegmentInfo::VERSION);
 
                 let bytes = serde_json::to_vec(&new_segment)?;
-                let operator = self.ctx.get_storage_operator()?;
                 operator.object(loc.0.as_str()).write(bytes).await?;
 
                 new_snapshot.segments[seg_idx] = loc.clone();
@@ -168,7 +170,8 @@ impl<'a> DeletionCollector<'a> {
         let new_block_meta = if replace_with.num_rows() == 0 {
             None
         } else {
-            Some(self.write_new_block(replace_with).await?)
+            let block_writer = BlockWriter::new(&self.data_accessor, &self.location_generator);
+            Some(block_writer.write_block(replace_with).await?)
         };
         let original_block_loc = block_location.clone();
         self.mutations
@@ -179,27 +182,5 @@ impl<'a> DeletionCollector<'a> {
                 new_block_meta,
             });
         Ok(())
-    }
-
-    async fn write_new_block(&mut self, block: DataBlock) -> Result<BlockMeta> {
-        let location = self.location_generator.gen_block_location();
-        let data_accessor = self.ctx.get_storage_operator()?;
-        let row_count = block.num_rows() as u64;
-        let block_size = block.memory_size() as u64;
-        let col_stats = accumulator::columns_statistics(&block)?;
-        let (file_size, file_meta_data) = write_block(block, data_accessor, &location).await?;
-        let col_metas = column_metas(&file_meta_data)?;
-        let cluster_stats = None; // TODO confirm this with zhyass
-        let location = (location, DataBlock::VERSION);
-        let block_meta = BlockMeta::new(
-            row_count,
-            block_size,
-            file_size,
-            col_stats,
-            col_metas,
-            cluster_stats,
-            location,
-        );
-        Ok(block_meta)
     }
 }

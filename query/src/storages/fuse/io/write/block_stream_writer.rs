@@ -188,7 +188,7 @@ impl BlockStreamWriter {
         let partial_acc = acc.begin(&block, cluster_stats)?;
         let location = self.meta_locations.gen_block_location();
         let (file_size, file_meta_data) =
-            block_writer::write_block(block, self.data_accessor.clone(), &location).await?;
+            block_writer::write_block(block, &self.data_accessor, &location).await?;
         let col_metas = column_metas(&file_meta_data)?;
         acc = partial_acc.end(file_size, location, col_metas);
         self.number_of_blocks_accumulated += 1;

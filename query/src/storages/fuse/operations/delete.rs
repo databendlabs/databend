@@ -72,7 +72,7 @@ impl FuseTable {
         plan: &DeletePlan,
     ) -> Result<()> {
         let mut deletion_collector =
-            DeletionCollector::new(ctx.as_ref(), &self.meta_location_generator, snapshot);
+            DeletionCollector::new(ctx.as_ref(), &self.meta_location_generator, snapshot)?;
         let schema = self.table_info.schema();
         // TODO refine pruner
         let extras = Extras {

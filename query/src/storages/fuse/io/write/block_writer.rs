@@ -28,9 +28,53 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
 
+use crate::storages::fuse::io::TableMetaLocationGenerator;
+use crate::storages::fuse::meta::BlockMeta;
+use crate::storages::fuse::meta::Versioned;
+use crate::storages::fuse::operations::util;
+use crate::storages::fuse::statistics::accumulator;
+
+pub struct BlockWriter<'a> {
+    location_generator: &'a TableMetaLocationGenerator,
+    data_accessor: &'a Operator,
+}
+
+impl<'a> BlockWriter<'a> {
+    pub fn new(
+        data_accessor: &'a Operator,
+        location_generator: &'a TableMetaLocationGenerator,
+    ) -> Self {
+        Self {
+            location_generator,
+            data_accessor,
+        }
+    }
+    pub async fn write_block(&self, block: DataBlock) -> Result<BlockMeta> {
+        let location = self.location_generator.gen_block_location();
+        let data_accessor = &self.data_accessor;
+        let row_count = block.num_rows() as u64;
+        let block_size = block.memory_size() as u64;
+        let col_stats = accumulator::columns_statistics(&block)?;
+        let (file_size, file_meta_data) = write_block(block, data_accessor, &location).await?;
+        let col_metas = util::column_metas(&file_meta_data)?;
+        let cluster_stats = None; // TODO confirm this with zhyass
+        let location = (location, DataBlock::VERSION);
+        let block_meta = BlockMeta::new(
+            row_count,
+            block_size,
+            file_size,
+            col_stats,
+            col_metas,
+            cluster_stats,
+            location,
+        );
+        Ok(block_meta)
+    }
+}
+
 pub async fn write_block(
     block: DataBlock,
-    data_accessor: Operator,
+    data_accessor: &Operator,
     location: &str,
 ) -> Result<(u64, FileMetaData)> {
     // we need a configuration of block size threshold here
