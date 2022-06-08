@@ -139,7 +139,7 @@ fn test_statements_in_legacy_suites() {
         // TODO(andylokandy): support all cases eventually
         // Remove currently unimplemented cases
         let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP).*\n",
+            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|OVER).*\n",
         )
         .unwrap()
         .replace_all(&file_str, "")
