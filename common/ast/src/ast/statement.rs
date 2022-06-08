@@ -46,16 +46,8 @@ pub enum Statement<'a> {
     ShowCreateDatabase {
         database: Identifier<'a>,
     },
-    CreateDatabase {
-        if_not_exists: bool,
-        database: Identifier<'a>,
-        engine: Engine,
-        options: Vec<SQLProperty>,
-    },
-    DropDatabase {
-        if_exists: bool,
-        database: Identifier<'a>,
-    },
+    CreateDatabase(CreateDatabaseStmt<'a>),
+    DropDatabase(DropDatabaseStmt<'a>),
     AlterDatabase {
         if_exists: bool,
         database: Identifier<'a>,
@@ -121,12 +113,7 @@ pub enum Statement<'a> {
     },
 
     // Views
-    CreateView {
-        if_not_exists: bool,
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
-        query: Box<Query<'a>>,
-    },
+    CreateView(CreateViewStmt<'a>),
     AlterView {
         database: Option<Identifier<'a>>,
         view: Identifier<'a>,
@@ -212,6 +199,22 @@ pub enum InsertSource<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CreateDatabaseStmt<'a> {
+    pub if_not_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+    pub engine: Option<DatabaseEngine>,
+    pub options: Vec<SQLProperty>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropDatabaseStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStmt<'a> {
     pub if_not_exists: bool,
     pub database: Option<Identifier<'a>>,
@@ -264,6 +267,20 @@ pub enum Engine {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum DatabaseEngine {
+    Default,
+    Github(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateViewStmt<'a> {
+    pub if_not_exists: bool,
+    pub database: Option<Identifier<'a>>,
+    pub view: Identifier<'a>,
+    pub query: Box<Query<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct SQLProperty {
     pub name: String,
     pub value: String,
@@ -292,6 +309,7 @@ pub enum AlterDatabaseAction<'a> {
 pub enum AlterTableAction<'a> {
     RenameTable { new_table: Identifier<'a> },
     AlterClusterKey { cluster_by: Vec<Expr<'a>> },
+    DropClusterKey,
     // TODO(wuzhiguo): AddColumn etc
 }
 
@@ -382,6 +400,16 @@ impl Display for TableOption {
     }
 }
 
+impl Display for DatabaseEngine {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let DatabaseEngine::Github(token) = self {
+            write!(f, "GITHUB(token=\'{token}\')")
+        } else {
+            write!(f, "DEFAULT")
+        }
+    }
+}
+
 impl Display for Engine {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -438,31 +466,33 @@ impl<'a> Display for Statement<'a> {
             Statement::ShowCreateDatabase { database } => {
                 write!(f, "SHOW CREATE DATABASE {database}")?;
             }
-            Statement::CreateDatabase {
+            Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists,
+                catalog,
                 database,
                 engine,
                 ..
-            } => {
-                write!(f, "CREATE DATABASE")?;
+            }) => {
+                write!(f, "CREATE DATABASE ")?;
                 if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
+                    write!(f, "IF NOT EXISTS ")?;
                 }
-                write!(f, " {database}")?;
-                if *engine != Engine::Null {
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
+                if let Some(engine) = engine {
                     write!(f, " ENGINE = {engine}")?;
                 }
                 // TODO(leiysky): display rest information
             }
-            Statement::DropDatabase {
-                database,
+            Statement::DropDatabase(DropDatabaseStmt {
                 if_exists,
-            } => {
-                write!(f, "DROP DATABASE")?;
+                catalog,
+                database,
+            }) => {
+                write!(f, "DROP DATABASE ")?;
                 if *if_exists {
-                    write!(f, " IF EXISTS")?;
+                    write!(f, "IF EXISTS ")?;
                 }
-                write!(f, " {database}")?;
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
             }
             Statement::AlterDatabase {
                 if_exists,
@@ -608,6 +638,9 @@ impl<'a> Display for Statement<'a> {
                         write!(f, " CLUSTER BY ")?;
                         write_comma_separated_list(f, cluster_by)?;
                     }
+                    AlterTableAction::DropClusterKey => {
+                        write!(f, " DROP CLUSTER KEY")?;
+                    }
                 }
             }
             Statement::RenameTable {
@@ -645,12 +678,12 @@ impl<'a> Display for Statement<'a> {
                     }
                 }
             }
-            Statement::CreateView {
+            Statement::CreateView(CreateViewStmt {
                 if_not_exists,
                 database,
                 view,
                 query,
-            } => {
+            }) => {
                 write!(f, "CREATE VIEW ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;

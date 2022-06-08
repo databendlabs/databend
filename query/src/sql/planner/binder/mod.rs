@@ -22,6 +22,7 @@ use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::DropUserPlan;
 
 use self::subquery::SubqueryRewriter;
 use super::plans::Plan;
@@ -109,12 +110,43 @@ impl<'a> Binder {
                 Ok(plan)
             }
 
+            Statement::CreateDatabase(stmt) => {
+                let plan = self.bind_create_database(stmt).await?;
+                Ok(plan)
+            }
+            Statement::DropDatabase(stmt) => {
+                let plan = self.bind_drop_database(stmt).await?;
+                Ok(plan)
+            }
+
             Statement::ShowMetrics => Ok(Plan::ShowMetrics),
             Statement::ShowProcessList => Ok(Plan::ShowProcessList),
             Statement::ShowSettings => Ok(Plan::ShowSettings),
+            Statement::AlterUser {
+                user,
+                auth_option,
+                role_options,
+            } => {
+                let plan = self
+                    .bind_alter_user(user, auth_option, role_options)
+                    .await?;
+                Ok(plan)
+            }
             Statement::CreateUser(stmt) => {
                 let plan = self.bind_create_user(stmt).await?;
                 Ok(plan)
+            }
+            Statement::CreateView(stmt) => {
+                let plan = self.bind_create_view(stmt).await?;
+                Ok(plan)
+            }
+
+            Statement::DropUser { if_exists, user } => {
+                let plan = DropUserPlan {
+                    if_exists: *if_exists,
+                    user: user.clone(),
+                };
+                Ok(Plan::DropUser(Box::new(plan)))
             }
 
             _ => Err(ErrorCode::UnImplement(format!(

@@ -60,8 +60,13 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
         Plan::ShowMetrics
         | Plan::ShowProcessList
         | Plan::ShowSettings
+        | Plan::CreateDatabase(_)
+        | Plan::DropDatabase(_)
         | Plan::CreateTable(_)
-        | Plan::CreateUser(_) => Ok(plan),
+        | Plan::CreateUser(_)
+        | Plan::CreateView(_)
+        | Plan::DropUser(_)
+        | Plan::AlterUser(_) => Ok(plan),
     }
 }
 

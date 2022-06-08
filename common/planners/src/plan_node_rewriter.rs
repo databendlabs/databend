@@ -42,6 +42,7 @@ use crate::CreateUserUDFPlan;
 use crate::CreateViewPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
+use crate::DropClusterKeyPlan;
 use crate::DropDatabasePlan;
 use crate::DropRolePlan;
 use crate::DropTablePlan;
@@ -203,8 +204,9 @@ pub trait PlanRewriter: Sized {
             // Kill.
             PlanNode::Kill(plan) => self.rewrite_kill(plan),
 
-            // Alter.
+            // Cluster Key.
             PlanNode::AlterClusterKey(plan) => self.rewrite_alter_cluster_key(plan),
+            PlanNode::DropClusterKey(plan) => self.rewrite_drop_cluster_key(plan),
         }
     }
 
@@ -528,6 +530,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_alter_cluster_key(&mut self, plan: &AlterClusterKeyPlan) -> Result<PlanNode> {
         Ok(PlanNode::AlterClusterKey(plan.clone()))
+    }
+
+    fn rewrite_drop_cluster_key(&mut self, plan: &DropClusterKeyPlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropClusterKey(plan.clone()))
     }
 }
 

@@ -426,6 +426,8 @@ pub enum TokenKind {
     JULIAN,
     #[token("JWT", ignore(ascii_case))]
     JWT,
+    #[token("KEY", ignore(ascii_case))]
+    KEY,
     #[token("KILL", ignore(ascii_case))]
     KILL,
     #[token("LEADING", ignore(ascii_case))]
@@ -564,6 +566,8 @@ pub enum TokenKind {
     TINYINT,
     #[token("TO", ignore(ascii_case))]
     TO,
+    #[token("TOKEN", ignore(ascii_case))]
+    TOKEN,
     #[token("TRAILING", ignore(ascii_case))]
     TRAILING,
     #[token("TRIM", ignore(ascii_case))]

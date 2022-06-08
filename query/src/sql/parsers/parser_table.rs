@@ -158,6 +158,22 @@ impl<'a> DfParser<'a> {
 
                     Ok(DfStatement::AlterTable(cluster_by))
                 }
+                Keyword::DROP => {
+                    if self
+                        .parser
+                        .parse_keywords(&[Keyword::CLUSTER, Keyword::KEY])
+                    {
+                        Ok(DfStatement::AlterTable(DfAlterTable {
+                            if_exists,
+                            table_name,
+                            action: AlterTableAction::DropClusterKey,
+                        }))
+                    } else {
+                        Err(ParserError::ParserError(String::from(
+                            "Unsupported alter table statement!",
+                        )))
+                    }
+                }
                 _ => Err(ParserError::ParserError(String::from(
                     "Unsupported alter table statement!",
                 ))),

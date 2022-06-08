@@ -14,4 +14,5 @@
 
 mod connection_id;
 mod database;
+mod timezone;
 mod version;

@@ -113,3 +113,23 @@ error:
   |                                             ^^ expected `WITH`, `BY`, or `;`
 
 
+---------- Input ----------
+drop usar if exists 'test-j'@'localhost';
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | drop usar if exists 'test-j'@'localhost';
+  |      ^^^^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, or `FUNCTION`
+
+
+---------- Input ----------
+alter user 'test-e'@'localhost' identifie by 'new-password';
+---------- Output ---------
+error: 
+  --> SQL:1:33
+  |
+1 | alter user 'test-e'@'localhost' identifie by 'new-password';
+  |                                 ^^^^^^^^^ expected `IDENTIFIED`, `WITH`, or `;`
+
+

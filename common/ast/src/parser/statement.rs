@@ -66,22 +66,28 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let create_database = map(
         rule! {
-            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #ident ~ #engine?
+            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #database_engine?
         },
-        |(_, _, opt_if_not_exists, database, opt_engine)| Statement::CreateDatabase {
-            if_not_exists: opt_if_not_exists.is_some(),
-            database,
-            engine: opt_engine.unwrap_or(Engine::Null),
-            options: vec![],
+        |(_, _, opt_if_not_exists, opt_catalog, database, engine)| {
+            Statement::CreateDatabase(CreateDatabaseStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                catalog: opt_catalog.map(|(catalog, _)| catalog),
+                database,
+                engine,
+                options: vec![],
+            })
         },
     );
     let drop_database = map(
         rule! {
-            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, opt_if_exists, database)| Statement::DropDatabase {
-            if_exists: opt_if_exists.is_some(),
-            database,
+        |(_, _, opt_if_exists, opt_catalog, database)| {
+            Statement::DropDatabase(DropDatabaseStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog: opt_catalog.map(|(catalog, _)| catalog),
+                database,
+            })
         },
     );
     let alter_database = map(
@@ -242,11 +248,13 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( #ident ~ "." )? ~ #ident
             ~ AS ~ #query
         },
-        |(_, _, opt_if_not_exists, opt_database, view, _, query)| Statement::CreateView {
-            if_not_exists: opt_if_not_exists.is_some(),
-            database: opt_database.map(|(database, _)| database),
-            view,
-            query: Box::new(query),
+        |(_, _, opt_if_not_exists, opt_database, view, _, query)| {
+            Statement::CreateView(CreateViewStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                database: opt_database.map(|(database, _)| database),
+                view,
+                query: Box::new(query),
+            })
         },
     );
     let alter_view = map(
@@ -574,16 +582,24 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
     );
 
-    let cluster_by = map(
+    let alter_cluster_key = map(
         rule! {
             CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
         },
         |(_, _, _, cluster_by, _)| AlterTableAction::AlterClusterKey { cluster_by },
     );
 
+    let drop_cluster_key = map(
+        rule! {
+            DROP ~ CLUSTER ~ KEY
+        },
+        |(_, _, _)| AlterTableAction::DropClusterKey,
+    );
+
     rule!(
         #rename_table
-        | #cluster_by
+        | #alter_cluster_key
+        | #drop_cluster_key
     )(i)
 }
 
@@ -643,6 +659,25 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Fuse, rule! { FUSE }),
         value(Engine::Github, rule! { GITHUB }),
         value(Engine::View, rule! { VIEW }),
+    ));
+
+    map(
+        rule! {
+            ENGINE ~ ^"=" ~ ^#engine
+        },
+        |(_, _, engine)| engine,
+    )(i)
+}
+
+pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
+    let engine = alt((
+        value(DatabaseEngine::Default, rule! {DEFAULT}),
+        map(
+            rule! {
+                GITHUB ~ "(" ~ TOKEN ~ ^"=" ~ #literal_string ~ ")"
+            },
+            |(_, _, _, _, github_token, _)| DatabaseEngine::Github(github_token),
+        ),
     ));
 
     map(

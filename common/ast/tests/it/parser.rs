@@ -78,7 +78,13 @@ fn test_statement() {
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
         r#"create database if not exists a;"#,
+        r#"create database catalog.t engine = Default;"#,
+        r#"create database t engine = Github(token='123456');"#,
+        r#"create database t engine = Default;"#,
+        r#"drop database catalog.t;"#,
+        r#"drop database if exists t;"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,
+        r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
         r#"DROP table table1;"#,
@@ -105,6 +111,10 @@ fn test_statement() {
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"create user 'test-e'@'localhost' identified by 'password';"#,
+        r#"drop user if exists 'test-j'@'localhost';"#,
+        r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
+        r#"ALTER TABLE t CLUSTER BY(c1);"#,
+        r#"ALTER TABLE t DROP CLUSTER KEY;"#,
     ];
 
     for case in cases {
@@ -170,6 +180,8 @@ fn test_statement_error() {
         r#"insert into t format"#,
         r#"alter database system x rename to db"#,
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
+        r#"drop usar if exists 'test-j'@'localhost';"#,
+        r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
     ];
 
     for case in cases {
