@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::convert::TryInto;
+use std::string::FromUtf8Error;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::data::Action;
@@ -184,6 +185,7 @@ pub enum FlightAction {
     CancelAction(CancelAction),
     PreparePipeline(PreparePipeline),
     PreparePublisher(PreparePublisher),
+    ExecutePipeline(String),
 }
 
 impl FlightAction {
@@ -238,6 +240,10 @@ impl TryInto<FlightAction> for Action {
             "CancelAction" => Ok(FlightAction::CancelAction(self.body.try_into()?)),
             "PreparePipeline" => Ok(FlightAction::PreparePipeline(self.body.try_into()?)),
             "PreparePublisher" => Ok(FlightAction::PreparePublisher(self.body.try_into()?)),
+            "ExecutePipeline" => match String::from_utf8(self.body.to_owned()) {
+                Ok(query_id) => Ok(FlightAction::ExecutePipeline(query_id)),
+                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            },
             un_implemented => Err(Status::unimplemented(format!(
                 "UnImplement action {}",
                 un_implemented
@@ -270,6 +276,10 @@ impl TryInto<Action> for FlightAction {
             FlightAction::PreparePublisher(publisher) => Ok(Action {
                 r#type: String::from("PreparePublisher"),
                 body: publisher.try_into()?,
+            }),
+            FlightAction::ExecutePipeline(query_id) => Ok(Action {
+                r#type: String::from("ExecutePipeline"),
+                body: query_id.into_bytes(),
             })
         }
     }

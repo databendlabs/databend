@@ -29,6 +29,7 @@ use crate::api::rpc::exchange::exchange_subscriber::ExchangeSubscriber;
 use crate::api::rpc::flight_actions::{PreparePipeline, PreparePublisher};
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
+use crate::api::rpc::packet::ExecutePacket;
 use crate::Config;
 use crate::pipelines::new::processors::port::InputPort;
 
@@ -49,6 +50,15 @@ impl DataExchangeManager {
         match queries_coordinator.get_mut(&publisher_packet.query_id) {
             None => Err(ErrorCode::LogicalError(format!("Query {} not found in cluster.", publisher_packet.query_id))),
             Some(coordinator) => coordinator.init_publisher(self.config.clone(), publisher_packet)
+        }
+    }
+
+    pub fn handle_execute_pipeline(&self, query_id: &str) -> Result<()> {
+        let mut queries_coordinator = self.queries_coordinator.lock();
+
+        match queries_coordinator.get_mut(query_id) {
+            None => Err(ErrorCode::LogicalError(format!("Query {} not found in cluster.", publisher_packet.query_id))),
+            Some(coordinator) => coordinator.execute_pipeline()
         }
     }
 
@@ -128,7 +138,22 @@ impl DataExchangeManager {
         Ok(())
     }
 
-    // async fn execute_action(&self)
+    async fn execute_pipeline(&self, packets: Vec<ExecutePacket>, timeout: u64) -> Result<()> {
+        for execute_packet in packets.into_iter() {
+            if !execute_packet.executors_info.contains_key(&execute_packet.executor) {
+                return Err(ErrorCode::LogicalError(format!(
+                    "Not found {} node in cluster", &execute_packet.executor
+                )));
+            }
+
+            let executor_info = &execute_packet.executors_info[&execute_packet.executor];
+            let mut connection = self.create_client(&executor_info.flight_address).await?;
+            let action = FlightAction::ExecutePipeline(execute_packet.query_id);
+            connection.execute_action(action, timeout).await?;
+        }
+
+        Ok(())
+    }
 
     pub async fn submit_query_actions(&self, ctx: Arc<QueryContext>, actions: QueryFragmentsActions) -> Result<NewPipeline> {
         let settings = ctx.get_settings();
@@ -140,12 +165,13 @@ impl DataExchangeManager {
         self.prepare_pipeline(actions.prepare_packets(ctx.clone())?, timeout).await?;
 
         // Get local pipeline of local task
-        // let root_pipeline = self.build_root_pipeline(ctx.get_id(), root_fragment_id)?;
+        let schema = root_actions.get_schema()?;
+        let root_pipeline = self.build_root_pipeline(ctx.get_id(), root_fragment_id, schema)?;
 
         self.prepare_publisher(actions.prepare_publisher(ctx.clone())?, timeout).await?;
-        // TODO: execute distributed query
-        unimplemented!()
-        // Ok(root_pipeline)
+        self.execute_pipeline(actions.execute_packets(ctx.clone())?, timeout).await?;
+
+        Ok(root_pipeline)
     }
 
     fn build_root_pipeline(&self, query_id: String, fragment_id: String, schema: DataSchemaRef) -> Result<NewPipeline> {
@@ -207,6 +233,10 @@ impl QueryCoordinator {
         }
 
         Ok(())
+    }
+
+    pub fn execute_pipeline(&mut self) -> Result<()> {
+        Err(ErrorCode::UnImplement("execute_pipeline"))
     }
 
     pub fn init_publisher(&mut self, config: Config, packet: &PublisherPacket) -> Result<()> {

@@ -202,6 +202,11 @@ impl FlightService for DatabendQueryFlightService {
                 exchange_manager.handle_prepare_publisher(packet)?;
                 FlightResult { body: vec![] }
             }
+            FlightAction::ExecutePipeline(query_id) => {
+                let exchange_manager = self.sessions.get_data_exchange_manager();
+                exchange_manager.handle_execute_pipeline(query_id)?;
+                FlightResult { body: vec![] }
+            }
         };
 
         // let action_result = do_flight_action.await?;

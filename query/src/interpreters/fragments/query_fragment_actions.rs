@@ -2,10 +2,11 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use common_datavalues::DataSchemaRef;
 use common_exception::{ErrorCode, Result};
 use common_meta_types::NodeInfo;
 use common_planners::PlanNode;
-use crate::api::{DataExchange, ExecutorPacket, FragmentPacket, PublisherPacket};
+use crate::api::{DataExchange, ExecutePacket, ExecutorPacket, FragmentPacket, PublisherPacket};
 use crate::clusters::Cluster;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::sessions::QueryContext;
@@ -45,6 +46,25 @@ impl QueryFragmentActions {
 
     pub fn set_exchange(&mut self, exchange: DataExchange) {
         self.data_exchange = Some(exchange);
+    }
+
+    pub fn get_schema(&self) -> Result<DataSchemaRef> {
+        let mut actions_schema = Vec::with_capacity(self.fragment_actions.len());
+        for fragment_action in &self.fragment_actions {
+            actions_schema.push(fragment_action.node.schema());
+        }
+
+        if actions_schema.is_empty() {
+            return Err(ErrorCode::DataStructMissMatch("Schema miss match in fragment actions."));
+        }
+
+        for action_schema in &actions_schema {
+            if action_schema != &actions_schema[0] {
+                return Err(ErrorCode::DataStructMissMatch("Schema miss match in fragment actions."));
+            }
+        }
+
+        Ok(actions_schema[0].clone())
     }
 }
 
@@ -124,6 +144,22 @@ impl QueryFragmentsActions {
         }
 
         Ok(publisher_packets)
+    }
+
+    pub fn execute_packets(&self, ctx: Arc<QueryContext>) -> Result<Vec<ExecutePacket>> {
+        let nodes_info = Self::nodes_info(&ctx);
+        let mut execute_packets = Vec::with_capacity(nodes_info.len());
+
+        let cluster = ctx.get_cluster();
+        for (node_id, node_info) in &nodes_info {
+            execute_packets.push(ExecutePacket::create(
+                ctx.get_id(),
+                node_id.to_owned(),
+                nodes_info.clone(),
+            ));
+        }
+
+        Ok(execute_packets)
     }
 
     fn nodes_info(ctx: &Arc<QueryContext>) -> HashMap<String, Arc<NodeInfo>> {
