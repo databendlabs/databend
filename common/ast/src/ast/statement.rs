@@ -206,7 +206,7 @@ pub struct CreateDatabaseStmt<'a> {
     pub if_not_exists: bool,
     pub catalog: Option<Identifier<'a>>,
     pub database: Identifier<'a>,
-    pub engine: DatabaseEngine,
+    pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
 }
 
@@ -473,7 +473,9 @@ impl<'a> Display for Statement<'a> {
                     write!(f, "IF NOT EXISTS ")?;
                 }
                 write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
-                write!(f, " ENGINE = {engine}")?;
+                if let Some(engine) = engine {
+                    write!(f, " ENGINE = {engine}")?;
+                }
                 // TODO(leiysky): display rest information
             }
             Statement::DropDatabase {

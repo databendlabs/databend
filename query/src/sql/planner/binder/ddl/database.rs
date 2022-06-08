@@ -55,7 +55,8 @@ impl<'a> Binder {
             .map(|property| (property.name.clone(), property.value.clone()))
             .collect::<BTreeMap<String, String>>();
 
-        let (engine, engine_options) = match &stmt.engine {
+        let database_engine = stmt.engine.as_ref().unwrap_or(&DatabaseEngine::Default);
+        let (engine, engine_options) = match database_engine {
             DatabaseEngine::Github(token) => {
                 let engine_options =
                     BTreeMap::from_iter(vec![("token".to_string(), token.clone())]);

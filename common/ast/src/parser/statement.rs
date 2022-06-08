@@ -68,12 +68,12 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #database_engine?
         },
-        |(_, _, opt_if_not_exists, opt_catalog, database, opt_engine)| {
+        |(_, _, opt_if_not_exists, opt_catalog, database, engine)| {
             Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 catalog: opt_catalog.map(|(catalog, _)| catalog),
                 database,
-                engine: opt_engine.unwrap_or(DatabaseEngine::Default),
+                engine,
                 options: vec![],
             })
         },

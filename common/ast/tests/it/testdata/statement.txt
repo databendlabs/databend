@@ -508,7 +508,7 @@ UseDatabase {
 ---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
-CREATE DATABASE IF NOT EXISTS a ENGINE = DEFAULT
+CREATE DATABASE IF NOT EXISTS a
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
@@ -519,7 +519,7 @@ CreateDatabase(
             quote: None,
             span: Ident(30..31),
         },
-        engine: Default,
+        engine: None,
         options: [],
     },
 )
@@ -545,7 +545,9 @@ CreateDatabase(
             quote: None,
             span: Ident(24..25),
         },
-        engine: Default,
+        engine: Some(
+            Default,
+        ),
         options: [],
     },
 )
@@ -565,8 +567,10 @@ CreateDatabase(
             quote: None,
             span: Ident(16..17),
         },
-        engine: Github(
-            "123456",
+        engine: Some(
+            Github(
+                "123456",
+            ),
         ),
         options: [],
     },
@@ -587,7 +591,9 @@ CreateDatabase(
             quote: None,
             span: Ident(16..17),
         },
-        engine: Default,
+        engine: Some(
+            Default,
+        ),
         options: [],
     },
 )
