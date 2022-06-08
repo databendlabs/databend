@@ -38,6 +38,7 @@ use common_planners::CreateUserPlan;
 use common_planners::CreateUserStagePlan;
 use common_planners::CreateViewPlan;
 use common_planners::DescribeUserStagePlan;
+use common_planners::DropDatabasePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
 use common_planners::ListPlan;
@@ -81,6 +82,7 @@ pub enum Plan {
     CreateTable(Box<CreateTablePlan>),
     CreateDatabase(CreateDatabasePlan),
     CreateView(Box<CreateViewPlan>),
+    DropDatabase(DropDatabasePlan),
 
     CreateStage(Box<CreateUserStagePlan>),
     DropStage(Box<DropUserStagePlan>),

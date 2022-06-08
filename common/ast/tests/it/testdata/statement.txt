@@ -508,7 +508,7 @@ UseDatabase {
 ---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
-CREATE DATABASE IF NOT EXISTS a ENGINE = DEFAULT
+CREATE DATABASE IF NOT EXISTS a
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
@@ -519,7 +519,7 @@ CreateDatabase(
             quote: None,
             span: Ident(30..31),
         },
-        engine: Default,
+        engine: None,
         options: [],
     },
 )
@@ -545,7 +545,9 @@ CreateDatabase(
             quote: None,
             span: Ident(24..25),
         },
-        engine: Default,
+        engine: Some(
+            Default,
+        ),
         options: [],
     },
 )
@@ -565,8 +567,10 @@ CreateDatabase(
             quote: None,
             span: Ident(16..17),
         },
-        engine: Github(
-            "123456",
+        engine: Some(
+            Github(
+                "123456",
+            ),
         ),
         options: [],
     },
@@ -587,8 +591,52 @@ CreateDatabase(
             quote: None,
             span: Ident(16..17),
         },
-        engine: Default,
+        engine: Some(
+            Default,
+        ),
         options: [],
+    },
+)
+
+
+---------- Input ----------
+drop database catalog.t;
+---------- Output ---------
+DROP DATABASE catalog.t
+---------- AST ------------
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: false,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(14..21),
+            },
+        ),
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(22..23),
+        },
+    },
+)
+
+
+---------- Input ----------
+drop database if exists t;
+---------- Output ---------
+DROP DATABASE IF EXISTS t
+---------- AST ------------
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: true,
+        catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(24..25),
+        },
     },
 )
 
@@ -1002,14 +1050,17 @@ DROP database if exists db1;
 ---------- Output ---------
 DROP DATABASE IF EXISTS db1
 ---------- AST ------------
-DropDatabase {
-    if_exists: true,
-    database: Identifier {
-        name: "db1",
-        quote: None,
-        span: Ident(24..27),
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: true,
+        catalog: None,
+        database: Identifier {
+            name: "db1",
+            quote: None,
+            span: Ident(24..27),
+        },
     },
-}
+)
 
 
 ---------- Input ----------
@@ -2875,6 +2926,55 @@ AlterUser {
         },
     ),
     role_options: [],
+}
+
+
+---------- Input ----------
+ALTER TABLE t CLUSTER BY(c1);
+---------- Output ---------
+ALTER TABLE t CLUSTER BY c1
+---------- AST ------------
+AlterTable {
+    if_exists: false,
+    database: None,
+    table: Identifier {
+        name: "t",
+        quote: None,
+        span: Ident(12..13),
+    },
+    action: AlterClusterKey {
+        cluster_by: [
+            ColumnRef {
+                span: [
+                    Ident(25..27),
+                ],
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "c1",
+                    quote: None,
+                    span: Ident(25..27),
+                },
+            },
+        ],
+    },
+}
+
+
+---------- Input ----------
+ALTER TABLE t DROP CLUSTER KEY;
+---------- Output ---------
+ALTER TABLE t DROP CLUSTER KEY
+---------- AST ------------
+AlterTable {
+    if_exists: false,
+    database: None,
+    table: Identifier {
+        name: "t",
+        quote: None,
+        span: Ident(12..13),
+    },
+    action: DropClusterKey,
 }
 
 

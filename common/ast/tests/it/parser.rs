@@ -81,6 +81,8 @@ fn test_statement() {
         r#"create database catalog.t engine = Default;"#,
         r#"create database t engine = Github(token='123456');"#,
         r#"create database t engine = Default;"#,
+        r#"drop database catalog.t;"#,
+        r#"drop database if exists t;"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,
         r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"truncate table test;"#,
@@ -113,6 +115,8 @@ fn test_statement() {
         r#"create user 'test-e'@'localhost' identified by 'password';"#,
         r#"drop user if exists 'test-j'@'localhost';"#,
         r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
+        r#"ALTER TABLE t CLUSTER BY(c1);"#,
+        r#"ALTER TABLE t DROP CLUSTER KEY;"#,
     ];
 
     for case in cases {

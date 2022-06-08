@@ -433,6 +433,8 @@ pub enum TokenKind {
     JULIAN,
     #[token("JWT", ignore(ascii_case))]
     JWT,
+    #[token("KEY", ignore(ascii_case))]
+    KEY,
     #[token("KILL", ignore(ascii_case))]
     KILL,
     #[token("LEADING", ignore(ascii_case))]

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod connection_id;
-mod database;
-mod timezone;
-mod version;
+use common_datavalues::prelude::*;
+use common_exception::Result;
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
+
+#[test]
+fn test_timezone_function() -> Result<()> {
+    let tests = vec![ScalarFunctionTest {
+        name: "tz-function-passed",
+        columns: vec![Series::from_data(["Asia/Shanghai"])],
+        expect: Series::from_data(["Asia/Shanghai"]),
+        error: "",
+    }];
+
+    test_scalar_functions("timezone", &tests)
+}

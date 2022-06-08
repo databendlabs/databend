@@ -20,14 +20,13 @@ use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
 
+use super::error::ErrorKind;
 use crate::ast::*;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
-
-use super::error::ErrorKind;
 
 pub fn statements(i: Input) -> IResult<Vec<Statement>> {
     let stmt = map(statement, Some);
@@ -72,23 +71,26 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #database_engine?
         },
-        |(_, _, opt_if_not_exists, opt_catalog, database, opt_engine)| {
+        |(_, _, opt_if_not_exists, opt_catalog, database, engine)| {
             Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 catalog: opt_catalog.map(|(catalog, _)| catalog),
                 database,
-                engine: opt_engine.unwrap_or(DatabaseEngine::Default),
+                engine,
                 options: vec![],
             })
         },
     );
     let drop_database = map(
         rule! {
-            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, opt_if_exists, database)| Statement::DropDatabase {
-            if_exists: opt_if_exists.is_some(),
-            database,
+        |(_, _, opt_if_exists, opt_catalog, database)| {
+            Statement::DropDatabase(DropDatabaseStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog: opt_catalog.map(|(catalog, _)| catalog),
+                database,
+            })
         },
     );
     let alter_database = map(
@@ -685,16 +687,24 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
     );
 
-    let cluster_by = map(
+    let alter_cluster_key = map(
         rule! {
             CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
         },
         |(_, _, _, cluster_by, _)| AlterTableAction::AlterClusterKey { cluster_by },
     );
 
+    let drop_cluster_key = map(
+        rule! {
+            DROP ~ CLUSTER ~ KEY
+        },
+        |(_, _, _)| AlterTableAction::DropClusterKey,
+    );
+
     rule!(
         #rename_table
-        | #cluster_by
+        | #alter_cluster_key
+        | #drop_cluster_key
     )(i)
 }
 
@@ -826,13 +836,17 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
 
 // parse: (k = v ...)* into a map
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let ident_to_string = |i| map_res(ident, |ident| {
-        if ident.quote.is_none() {
-            Ok(ident.to_string())
-        } else {
-            Err(ErrorKind::Other("unexpected quoted identifier, try to remove the quote"))
-        }
-    })(i);
+    let ident_to_string = |i| {
+        map_res(ident, |ident| {
+            if ident.quote.is_none() {
+                Ok(ident.to_string())
+            } else {
+                Err(ErrorKind::Other(
+                    "unexpected quoted identifier, try to remove the quote",
+                ))
+            }
+        })(i)
+    };
 
     let ident_with_format = alt((
         ident_to_string,
