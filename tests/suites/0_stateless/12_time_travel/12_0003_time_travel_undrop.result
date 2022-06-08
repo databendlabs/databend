@@ -9,3 +9,7 @@ Tables of same name
 1
 -- the first t should be recovered, which has 2 row
 2
+-- undrop database
+t1
+1
+2

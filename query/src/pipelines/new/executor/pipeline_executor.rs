@@ -67,6 +67,10 @@ impl PipelineExecutor {
         Ok(())
     }
 
+    pub fn is_finished(&self) -> bool {
+        self.global_tasks_queue.is_finished()
+    }
+
     pub fn execute(self: &Arc<Self>) -> Result<()> {
         let mut thread_join_handles = self.execute_threads(self.threads_num);
 
@@ -75,7 +79,13 @@ impl PipelineExecutor {
             match join_handle.join() {
                 Ok(Ok(_)) => Ok(()),
                 Ok(Err(cause)) => Err(cause),
-                Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
+                Err(cause) => match cause.downcast_ref::<&'static str>() {
+                    None => match cause.downcast_ref::<String>() {
+                        None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+                        Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                    },
+                    Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                },
             }?;
         }
 
@@ -89,9 +99,29 @@ impl PipelineExecutor {
             let this = self.clone();
             let name = format!("PipelineExecutor-{}", thread_num);
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
-                match this.execute_single_thread(thread_num) {
-                    Ok(_) => Ok(()),
-                    Err(cause) => this.throw_error(thread_num, cause),
+                let this_clone = this.clone();
+                let try_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                    move || -> Result<()> {
+                        match this_clone.execute_single_thread(thread_num) {
+                            Ok(_) => Ok(()),
+                            Err(cause) => this_clone.throw_error(thread_num, cause),
+                        }
+                    },
+                ));
+
+                match try_result {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(cause)) => Err(cause),
+                    Err(cause) => {
+                        this.finish()?;
+                        match cause.downcast_ref::<&'static str>() {
+                            None => match cause.downcast_ref::<String>() {
+                                None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+                                Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                            },
+                            Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                        }
+                    }
                 }
             }));
         }
@@ -118,7 +148,7 @@ impl PipelineExecutor {
                 self.global_tasks_queue.steal_task_to_context(&mut context);
             }
 
-            while context.has_task() {
+            while !self.global_tasks_queue.is_finished() && context.has_task() {
                 if let Some(executed_pid) = context.execute_task(self)? {
                     // We immediately schedule the processor again.
                     let schedule_queue = self.graph.schedule_queue(executed_pid)?;

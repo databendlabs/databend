@@ -27,7 +27,6 @@ mod binary_write;
 
 mod buffer;
 mod configs;
-mod files;
 mod format_settings;
 mod marshal;
 mod operator;

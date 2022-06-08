@@ -94,9 +94,21 @@ If `endpoints` is configured, the `address` configuration will no longer take ef
 
 ### clickhouse_handler_port
 
-* The port to listen on for ClickHouse handler, e.g., `3307`.
+* The port to listen on for ClickHouse handler, e.g., `9000`.
 * Default: `9000`
 * Env variable: `QUERY_CLICKHOUSE_HANDLER_PORT`
+
+### clickhouse_http_handler_host
+
+* The IP address to listen on for ClickHouse HTTP handler, e.g., `0.0.0.0`.
+* Default: `"127.0.0.1"`
+* Env variable: `QUERY_CLICKHOUSE_HTTP_HANDLER_HOST`
+
+### clickhouse_http_handler_port
+
+* The port to listen on for ClickHouse HTTP handler, e.g., `8124`.
+* Default: `8124`
+* Env variable: `QUERY_CLICKHOUSE_HTTP_HANDLER_PORT`
 
 ### tenant_id
 

@@ -12,6 +12,7 @@ header:
     - "tools"
     # Ignore hidden files
     - ".cargo"
+    - ".databend"
     - ".devcontainer"
     - ".github"
     - ".dockerignore"

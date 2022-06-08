@@ -3,11 +3,12 @@ extends: default
 ignore: |
   build/
   target/
+  .databend/
 
 rules:
-  # 100 chars should be enough, but don't fail if a line is longer
+  # 120 chars should be enough, but don't fail if a line is longer
   line-length:
-    max: 100
+    max: 120
     level: warning
   braces: disable
   brackets: disable

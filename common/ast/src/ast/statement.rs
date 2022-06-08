@@ -17,7 +17,10 @@ use std::fmt::Formatter;
 
 use common_meta_types::AuthType;
 use common_meta_types::UserIdentity;
+use common_meta_types::UserOption;
+use common_meta_types::UserOptionFlag;
 
+use super::write_space_seperated_list;
 use super::Expr;
 use crate::ast::expr::Literal;
 use crate::ast::expr::TypeName;
@@ -43,12 +46,7 @@ pub enum Statement<'a> {
     ShowCreateDatabase {
         database: Identifier<'a>,
     },
-    CreateDatabase {
-        if_not_exists: bool,
-        database: Identifier<'a>,
-        engine: Engine,
-        options: Vec<SQLProperty>,
-    },
+    CreateDatabase(CreateDatabaseStmt<'a>),
     DropDatabase {
         if_exists: bool,
         database: Identifier<'a>,
@@ -77,16 +75,7 @@ pub enum Statement<'a> {
         database: Option<Identifier<'a>>,
         limit: Option<ShowLimit<'a>>,
     },
-    CreateTable {
-        if_not_exists: bool,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        source: Option<CreateTableSource<'a>>,
-        engine: Engine,
-        cluster_by: Vec<Expr<'a>>,
-        as_query: Option<Box<Query<'a>>>,
-        comment: Option<String>,
-    },
+    CreateTable(CreateTableStmt<'a>),
     // Describe schema of a table
     // Like `SHOW CREATE TABLE`
     Describe {
@@ -127,12 +116,7 @@ pub enum Statement<'a> {
     },
 
     // Views
-    CreateView {
-        if_not_exists: bool,
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
-        query: Box<Query<'a>>,
-    },
+    CreateView(CreateViewStmt<'a>),
     AlterView {
         database: Option<Identifier<'a>>,
         view: Identifier<'a>,
@@ -170,12 +154,7 @@ pub enum Statement<'a> {
     },
 
     // User
-    CreateUser {
-        if_not_exists: bool,
-        user: UserIdentity,
-        auth_option: AuthOption,
-        role_options: Vec<RoleOption>,
-    },
+    CreateUser(CreateUserStmt),
     AlterUser {
         // None means current user
         user: Option<UserIdentity>,
@@ -223,6 +202,27 @@ pub enum InsertSource<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CreateDatabaseStmt<'a> {
+    pub if_not_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+    pub engine: DatabaseEngine,
+    pub options: Vec<SQLProperty>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTableStmt<'a> {
+    pub if_not_exists: bool,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub source: Option<CreateTableSource<'a>>,
+    pub table_options: Vec<TableOption>,
+    pub cluster_by: Vec<Expr<'a>>,
+    pub as_query: Option<Box<Query<'a>>>,
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum CreateTableSource<'a> {
     Columns(Vec<ColumnDefinition<'a>>),
     Like {
@@ -232,12 +232,48 @@ pub enum CreateTableSource<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum TableOption {
+    Engine(Engine),
+    Comment(String),
+}
+
+impl TableOption {
+    pub fn option_key(&self) -> String {
+        match self {
+            TableOption::Engine(_) => "ENGINE".to_string(),
+            TableOption::Comment(_) => "COMMENT".to_string(),
+        }
+    }
+
+    pub fn option_value(&self) -> String {
+        match self {
+            TableOption::Engine(engine) => engine.to_string(),
+            TableOption::Comment(comment) => comment.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Engine {
     Null,
     Memory,
     Fuse,
     Github,
     View,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DatabaseEngine {
+    Default,
+    Github(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateViewStmt<'a> {
+    pub if_not_exists: bool,
+    pub database: Option<Identifier<'a>>,
+    pub view: Identifier<'a>,
+    pub query: Box<Query<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -268,6 +304,7 @@ pub enum AlterDatabaseAction<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AlterTableAction<'a> {
     RenameTable { new_table: Identifier<'a> },
+    AlterClusterKey { cluster_by: Vec<Expr<'a>> },
     // TODO(wuzhiguo): AddColumn etc
 }
 
@@ -284,6 +321,14 @@ pub enum KillTarget {
     Connection,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateUserStmt {
+    pub if_not_exists: bool,
+    pub user: UserIdentity,
+    pub auth_option: AuthOption,
+    pub role_options: Vec<RoleOption>,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AuthOption {
     pub auth_type: Option<AuthType>,
@@ -296,6 +341,25 @@ pub enum RoleOption {
     NoTenantSetting,
     ConfigReload,
     NoConfigReload,
+}
+
+impl RoleOption {
+    pub fn apply(&self, option: &mut UserOption) {
+        match self {
+            Self::TenantSetting => {
+                option.set_option_flag(UserOptionFlag::TenantSetting);
+            }
+            Self::NoTenantSetting => {
+                option.unset_option_flag(UserOptionFlag::TenantSetting);
+            }
+            Self::ConfigReload => {
+                option.set_option_flag(UserOptionFlag::ConfigReload);
+            }
+            Self::NoConfigReload => {
+                option.unset_option_flag(UserOptionFlag::ConfigReload);
+            }
+        }
+    }
 }
 
 impl<'a> Display for ShowLimit<'a> {
@@ -319,6 +383,25 @@ impl<'a> Display for ColumnDefinition<'a> {
             write!(f, " DEFAULT {default_expr}")?;
         }
         Ok(())
+    }
+}
+
+impl Display for TableOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TableOption::Engine(engine) => write!(f, "ENGINE = {engine}"),
+            TableOption::Comment(comment) => write!(f, "COMMENT = {comment}"),
+        }
+    }
+}
+
+impl Display for DatabaseEngine {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let DatabaseEngine::Github(token) = self {
+            write!(f, "GITHUB(token=\'{token}\')")
+        } else {
+            write!(f, "DEFAULT")
+        }
     }
 }
 
@@ -378,20 +461,19 @@ impl<'a> Display for Statement<'a> {
             Statement::ShowCreateDatabase { database } => {
                 write!(f, "SHOW CREATE DATABASE {database}")?;
             }
-            Statement::CreateDatabase {
+            Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists,
+                catalog,
                 database,
                 engine,
                 ..
-            } => {
-                write!(f, "CREATE DATABASE")?;
+            }) => {
+                write!(f, "CREATE DATABASE ")?;
                 if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
+                    write!(f, "IF NOT EXISTS ")?;
                 }
-                write!(f, " {database}")?;
-                if *engine != Engine::Null {
-                    write!(f, " ENGINE = {engine}")?;
-                }
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
+                write!(f, " ENGINE = {engine}")?;
                 // TODO(leiysky): display rest information
             }
             Statement::DropDatabase {
@@ -457,16 +539,16 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " {limit}")?;
                 }
             }
-            Statement::CreateTable {
+            Statement::CreateTable(CreateTableStmt {
                 if_not_exists,
                 database,
                 table,
                 source,
-                engine,
+                table_options,
                 comment,
                 cluster_by,
                 as_query,
-            } => {
+            }) => {
                 write!(f, "CREATE TABLE ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
@@ -484,9 +566,10 @@ impl<'a> Display for Statement<'a> {
                     }
                     None => (),
                 }
-                if *engine != Engine::Null {
-                    write!(f, " ENGINE = {engine}")?;
-                }
+
+                // Format table options
+                write_space_seperated_list(f, table_options.iter())?;
+
                 if let Some(comment) = comment {
                     write!(f, " COMMENT = {comment}")?;
                 }
@@ -543,6 +626,10 @@ impl<'a> Display for Statement<'a> {
                     AlterTableAction::RenameTable { new_table } => {
                         write!(f, " RENAME TO {new_table}")?;
                     }
+                    AlterTableAction::AlterClusterKey { cluster_by } => {
+                        write!(f, " CLUSTER BY ")?;
+                        write_comma_separated_list(f, cluster_by)?;
+                    }
                 }
             }
             Statement::RenameTable {
@@ -580,12 +667,12 @@ impl<'a> Display for Statement<'a> {
                     }
                 }
             }
-            Statement::CreateView {
+            Statement::CreateView(CreateViewStmt {
                 if_not_exists,
                 database,
                 view,
                 query,
-            } => {
+            }) => {
                 write!(f, "CREATE VIEW ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
@@ -672,12 +759,12 @@ impl<'a> Display for Statement<'a> {
                     InsertSource::Select { query } => write!(f, " {query}")?,
                 }
             }
-            Statement::CreateUser {
+            Statement::CreateUser(CreateUserStmt {
                 if_not_exists,
                 user,
                 auth_option,
                 role_options,
-            } => {
+            }) => {
                 write!(f, "CREATE USER")?;
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;

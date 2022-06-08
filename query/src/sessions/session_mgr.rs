@@ -38,6 +38,7 @@ use opendal::Operator;
 
 use crate::catalogs::CatalogManager;
 use crate::clusters::ClusterDiscovery;
+use crate::interpreters::AsyncInsertQueue;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
@@ -70,6 +71,7 @@ pub struct SessionManager {
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
+    async_insert_queue: Arc<RwLock<Option<Arc<AsyncInsertQueue>>>>,
 }
 
 impl SessionManager {
@@ -110,6 +112,17 @@ impl SessionManager {
         let user_api_provider = UserApiProvider::create_global(conf.clone()).await?;
         let role_cache_manager = Arc::new(RoleCacheMgr::new(user_api_provider.clone()));
 
+        let storage_runtime = Arc::new(storage_runtime);
+
+        let async_insert_queue =
+            Arc::new(RwLock::new(Some(Arc::new(AsyncInsertQueue::try_create(
+                Arc::new(RwLock::new(None)),
+                storage_runtime.clone(),
+                conf.clone().query.async_insert_max_data_size,
+                tokio::time::Duration::from_millis(conf.query.async_insert_busy_timeout),
+                tokio::time::Duration::from_millis(conf.query.async_insert_stale_timeout),
+            )))));
+
         Ok(Arc::new(SessionManager {
             conf: RwLock::new(conf),
             catalogs: RwLock::new(catalogs),
@@ -121,12 +134,13 @@ impl SessionManager {
             query_logger: RwLock::new(query_logger),
             status,
             storage_operator: RwLock::new(storage_operator),
-            storage_runtime: Arc::new(storage_runtime),
+            storage_runtime,
             _guards,
             user_api_provider: RwLock::new(user_api_provider),
             role_cache_manager: RwLock::new(role_cache_manager),
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
+            async_insert_queue,
         }))
     }
 
@@ -367,7 +381,7 @@ impl SessionManager {
         let op = op.with_backoff(backon::ExponentialBackoff::default());
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
-        op.check().await.map_err(|e| {
+        op.check(".databend").await.map_err(|e| {
             ErrorCode::StorageUnavailable(format!(
                 "current configured storage is not available: {e}"
             ))
@@ -422,5 +436,9 @@ impl SessionManager {
 
     pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
         self.query_logger.write().to_owned()
+    }
+
+    pub fn get_async_insert_queue(&self) -> Arc<RwLock<Option<Arc<AsyncInsertQueue>>>> {
+        self.async_insert_queue.clone()
     }
 }

@@ -23,7 +23,6 @@ use common_io::prelude::StorageFsConfig;
 use common_io::prelude::StorageParams;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::TableMeta;
-use common_planners::col;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::Expression;
@@ -135,11 +134,13 @@ impl TestFixture {
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
                 .into(),
-                cluster_keys: Some("(id)".to_string()),
+                cluster_key: Some("(id)".to_string()),
+                cluster_keys: vec!["(id)".to_string()],
+                default_cluster_key_id: Some(0),
                 ..Default::default()
             },
             as_select: None,
-            cluster_keys: vec![col("id")],
+            cluster_keys: vec!["id".to_string()],
         }
     }
 

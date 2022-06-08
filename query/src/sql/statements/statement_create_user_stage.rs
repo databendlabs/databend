@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::OnErrorMode;
-use common_meta_types::StageParams;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::CreateUserStagePlan;
@@ -27,7 +26,7 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 
 use super::parse_copy_file_format_options;
-use super::parse_stage_storage;
+use super::parse_uri_location;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -53,8 +52,19 @@ impl AnalyzableStatement for DfCreateUserStage {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let mut stage_info = match self.location.is_empty() {
-            true => self.analyze_internal().await?,
-            false => self.analyze_external().await?,
+            true => UserStageInfo {
+                stage_type: StageType::Internal,
+                ..Default::default()
+            },
+            false => {
+                let (stage_storage, _) = parse_uri_location(
+                    &self.location,
+                    &self.credential_options,
+                    &self.encryption_options,
+                )?;
+
+                stage_storage
+            }
         };
         stage_info.stage_name = self.stage_name.clone();
 
@@ -89,32 +99,5 @@ impl AnalyzableStatement for DfCreateUserStage {
                 user_stage_info: stage_info,
             }),
         )))
-    }
-}
-
-impl DfCreateUserStage {
-    async fn analyze_internal(&self) -> Result<UserStageInfo> {
-        Ok(UserStageInfo {
-            stage_type: StageType::Internal,
-            ..Default::default()
-        })
-    }
-
-    async fn analyze_external(&self) -> Result<UserStageInfo> {
-        let (stage_storage, _) = parse_stage_storage(
-            &self.location,
-            &self.credential_options,
-            &self.encryption_options,
-        )?;
-        // Stage params.
-        let stage_params = StageParams {
-            storage: stage_storage,
-        };
-        // Stage info.
-        Ok(UserStageInfo {
-            stage_type: StageType::External,
-            stage_params,
-            ..Default::default()
-        })
     }
 }

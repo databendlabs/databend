@@ -31,6 +31,12 @@ mod sort;
 pub use aggregate::AggregatePlan;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
+use common_planners::AlterUserPlan;
+use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
+use common_planners::CreateUserPlan;
+use common_planners::CreateViewPlan;
+use common_planners::DropUserPlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
@@ -66,4 +72,19 @@ pub enum Plan {
         kind: ExplainKind,
         plan: Box<Plan>,
     },
+
+    // DDL
+    CreateTable(Box<CreateTablePlan>),
+    CreateDatabase(CreateDatabasePlan),
+    CreateView(Box<CreateViewPlan>),
+
+    // System
+    ShowMetrics,
+    ShowProcessList,
+    ShowSettings,
+
+    // DCL
+    AlterUser(Box<AlterUserPlan>),
+    CreateUser(Box<CreateUserPlan>),
+    DropUser(Box<DropUserPlan>),
 }

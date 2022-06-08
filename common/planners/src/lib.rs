@@ -14,6 +14,7 @@
 
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
+mod plan_alter_cluster_key;
 mod plan_broadcast;
 mod plan_call;
 mod plan_copy;
@@ -21,6 +22,7 @@ mod plan_database_create;
 mod plan_database_drop;
 mod plan_database_rename;
 mod plan_database_show_create;
+mod plan_database_undrop;
 mod plan_empty;
 mod plan_explain;
 mod plan_expression;
@@ -104,6 +106,7 @@ mod plan_view_drop;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
+pub use plan_alter_cluster_key::AlterClusterKeyPlan;
 pub use plan_broadcast::BroadcastPlan;
 pub use plan_call::CallPlan;
 pub use plan_copy::CopyMode;
@@ -114,6 +117,7 @@ pub use plan_database_drop::DropDatabasePlan;
 pub use plan_database_rename::RenameDatabaseEntity;
 pub use plan_database_rename::RenameDatabasePlan;
 pub use plan_database_show_create::ShowCreateDatabasePlan;
+pub use plan_database_undrop::UnDropDatabasePlan;
 pub use plan_empty::EmptyPlan;
 pub use plan_explain::ExplainPlan;
 pub use plan_explain::ExplainType;

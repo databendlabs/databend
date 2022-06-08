@@ -564,6 +564,8 @@ pub enum TokenKind {
     TINYINT,
     #[token("TO", ignore(ascii_case))]
     TO,
+    #[token("TOKEN", ignore(ascii_case))]
+    TOKEN,
     #[token("TRAILING", ignore(ascii_case))]
     TRAILING,
     #[token("TRIM", ignore(ascii_case))]
@@ -616,6 +618,8 @@ pub enum TokenKind {
     XOR,
     #[token("YEAR", ignore(ascii_case))]
     YEAR,
+    #[token("NULLIF", ignore(ascii_case))]
+    NULLIF,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -736,7 +740,7 @@ impl TokenKind {
             // | TokenKind::NORMALIZE
             | TokenKind::NOT
             | TokenKind::NULL
-            // | TokenKind::NULLIF
+            | TokenKind::NULLIF
             // | TokenKind::NUMERIC
             // | TokenKind::ONLY
             | TokenKind::OR

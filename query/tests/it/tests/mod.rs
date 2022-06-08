@@ -25,6 +25,7 @@ pub use config::ConfigBuilder;
 pub use context::create_query_context;
 pub use context::create_query_context_with_cluster;
 pub use context::create_query_context_with_config;
+pub use context::create_query_context_with_session;
 pub use context::create_storage_context;
 pub use context::ClusterDescriptor;
 pub use number::NumberTestData;

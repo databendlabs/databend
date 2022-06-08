@@ -137,8 +137,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.11.2"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=48a3087#48a308772fcc18fce890447b0bfa30611fc813e6"
+version = "0.12.0"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=6608071#660807164be0afe71b8ce2868bc3a6a6a00db608"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -153,13 +153,12 @@ dependencies = [
  "hash_hasher",
  "indexmap",
  "itertools",
+ "json-deserializer",
  "lexical-core",
  "multiversion",
  "num-traits",
  "parquet2",
  "regex",
- "serde",
- "serde_json",
  "simdutf8",
  "streaming-iterator",
  "strength_reduce",
@@ -1409,7 +1408,7 @@ dependencies = [
  "common-base",
  "common-exception",
  "common-tracing",
- "metrics",
+ "metrics 0.18.1",
  "metrics-exporter-prometheus",
  "once_cell",
  "prometheus-parse",
@@ -2030,7 +2029,7 @@ dependencies = [
  "jwtk",
  "lazy_static",
  "maplit",
- "metrics",
+ "metrics 0.18.1",
  "mysql_async",
  "nom",
  "num",
@@ -2362,6 +2361,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad132dd8d0d0b546348d7d86cb3191aad14b34e5f979781fc005c80d4ac67ffd"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "errno"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f639046355ee4f37944e44f60642c6f3a7efa3cf6b78c78a0d989a8ce6c396a1"
+dependencies = [
+ "errno-dragonfly",
+ "libc",
+ "winapi",
+]
+
+[[package]]
+name = "errno-dragonfly"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa68f1b12764fab894d2755d2518754e71b4fd80ecfb822714a1206c2aab39bf"
+dependencies = [
+ "cc",
+ "libc",
 ]
 
 [[package]]
@@ -2899,10 +2919,11 @@ dependencies = [
 
 [[package]]
 name = "hdrs"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b63458420a6d683971b318d1241478eb23c811932d6b255166a3c0d5458a45c"
+checksum = "fe5377b8fe6bdec4c6af1058ac6477f6fb6a4422211e6f4dd6f420b4f084bf55"
 dependencies = [
+ "errno",
  "futures-io",
  "hdfs-sys",
  "libc",
@@ -3352,6 +3373,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "json-deserializer"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47631885425c482fcf2dc4b182fc973c3c5b81a8f43a028055559bd24cccfa6e"
+
+[[package]]
 name = "jsonwebtoken"
 version = "7.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3773,13 +3800,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "metrics"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "142c53885123b68d94108295a09d4afe1a1388ed95b54d5dacd9a454753030f2"
+dependencies = [
+ "ahash",
+ "metrics-macros",
+]
+
+[[package]]
 name = "metrics-exporter-prometheus"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b93b470b04c005178058e18ac8bb2eb3fda562cf87af5ea05ba8d44190d458c"
 dependencies = [
  "indexmap",
- "metrics",
+ "metrics 0.18.1",
  "metrics-util",
  "parking_lot 0.11.2",
  "quanta",
@@ -3807,7 +3844,7 @@ dependencies = [
  "crossbeam-epoch",
  "crossbeam-utils",
  "hashbrown 0.11.2",
- "metrics",
+ "metrics 0.18.1",
  "num_cpus",
  "parking_lot 0.11.2",
  "quanta",
@@ -4319,9 +4356,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.7.1"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aef886109f7df6225a0d2bbffee5a991e918646fd32a058bdc36fadfb7aa6bad"
+checksum = "9f5c06abf1472eec263c9b256d2854520eca4ddcaab1cb405e76be12ca0104ab"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -4337,15 +4374,13 @@ dependencies = [
  "hyper-tls",
  "log",
  "md5",
- "metrics",
+ "metrics 0.19.0",
  "minitrace",
  "once_cell",
  "parking_lot 0.12.1",
  "pin-project",
  "quick-xml",
  "reqsign",
- "reqwest",
- "roxmltree",
  "serde",
  "thiserror",
  "time 0.3.9",
@@ -4648,8 +4683,8 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.12.0"
-source = "git+https://github.com/datafuse-extras/parquet2?rev=03c108b#03c108bfcae58a6ba2b6a54132888dea964b3950"
+version = "0.13.0"
+source = "git+https://github.com/datafuse-extras/parquet2?branch=parquet2-0.13-patch2#10b3ca0e1038dc243ef3f80d5abe19c0f9e54c7c"
 dependencies = [
  "async-stream",
  "bitpacking",
@@ -5510,9 +5545,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.0.5"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34d61ab6431ae1ef7cc7d305830b5655bc0ff95f0b5980f415c6cb39d6af4065"
+checksum = "1f087f6f10eeed170005b95c43222ba9006a6bad46da78bf7121f1c74f22a289"
 dependencies = [
  "anyhow",
  "backon",
@@ -5529,7 +5564,6 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "quick-xml",
- "reqwest",
  "rust-ini",
  "serde",
  "serde_json",
@@ -5566,7 +5600,6 @@ dependencies = [
  "serde_urlencoded",
  "tokio",
  "tokio-native-tls",
- "tokio-util 0.6.10",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -5634,15 +5667,6 @@ dependencies = [
  "ahash",
  "griddle",
  "hashbrown 0.11.2",
-]
-
-[[package]]
-name = "roxmltree"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "921904a62e410e37e215c40381b7117f830d9d89ba60ab5236170541dd25646b"
-dependencies = [
- "xmlparser",
 ]
 
 [[package]]
@@ -7587,12 +7611,6 @@ checksum = "129e027ad65ce1453680623c3fb5163cbf7107bfe1aa32257e7d0e63f9ced188"
 dependencies = [
  "tap",
 ]
-
-[[package]]
-name = "xmlparser"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "114ba2b24d2167ef6d67d7d04c8cc86522b87f490025f39f0303b7db5bf5e3d8"
 
 [[package]]
 name = "xz2"
