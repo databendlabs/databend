@@ -60,6 +60,7 @@ use crate::OptimizeTablePlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RemoveUserStagePlan;
 use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
@@ -167,6 +168,7 @@ pub enum PlanNode {
     CreateUserStage(CreateUserStagePlan),
     DropUserStage(DropUserStagePlan),
     DescribeUserStage(DescribeUserStagePlan),
+    RemoveUserStage(RemoveUserStagePlan),
 
     // UDF.
     CreateUserUDF(CreateUserUDFPlan),
@@ -267,6 +269,7 @@ impl PlanNode {
             PlanNode::CreateUserStage(v) => v.schema(),
             PlanNode::DropUserStage(v) => v.schema(),
             PlanNode::DescribeUserStage(v) => v.schema(),
+            PlanNode::RemoveUserStage(v) => v.schema(),
 
             // List
             PlanNode::List(v) => v.schema(),
@@ -373,6 +376,7 @@ impl PlanNode {
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",
             PlanNode::DropUserStage(_) => "DropUserStagePlan",
             PlanNode::DescribeUserStage(_) => "DescribeUserStagePlan",
+            PlanNode::RemoveUserStage(_) => "RemoveUserStagePlan",
 
             // List
             PlanNode::List(_) => "ListPlan",

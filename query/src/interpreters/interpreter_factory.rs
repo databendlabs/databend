@@ -55,6 +55,7 @@ use crate::interpreters::InterceptorInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::KillInterpreter;
 use crate::interpreters::OptimizeTableInterpreter;
+use crate::interpreters::RemoveUserStageInterpreter;
 use crate::interpreters::RenameDatabaseInterpreter;
 use crate::interpreters::RevokePrivilegeInterpreter;
 use crate::interpreters::RevokeRoleInterpreter;
@@ -177,6 +178,7 @@ impl InterpreterFactory {
             PlanNode::DescribeUserStage(v) => {
                 DescribeUserStageInterpreter::try_create(ctx_clone, v)
             }
+            PlanNode::RemoveUserStage(v) => RemoveUserStageInterpreter::try_create(ctx_clone, v),
 
             // cluster key.
             PlanNode::AlterClusterKey(v) => AlterClusterKeyInterpreter::try_create(ctx_clone, v),

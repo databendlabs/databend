@@ -71,6 +71,7 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RemoveUserStagePlan;
 use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
@@ -189,6 +190,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::DropUserStage(plan) => self.rewrite_drop_user_stage(plan),
             PlanNode::DescribeUserStage(plan) => self.rewrite_describe_user_stage(plan),
             PlanNode::List(plan) => self.rewrite_list(plan),
+            PlanNode::RemoveUserStage(plan) => self.rewrite_remove_user_stage(plan),
 
             // UDF.
             PlanNode::CreateUserUDF(plan) => self.rewrite_create_user_udf(plan),
@@ -526,6 +528,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_alter_user_udf(&mut self, plan: &AlterUserUDFPlan) -> Result<PlanNode> {
         Ok(PlanNode::AlterUserUDF(plan.clone()))
+    }
+
+    fn rewrite_remove_user_stage(&mut self, plan: &RemoveUserStagePlan) -> Result<PlanNode> {
+        Ok(PlanNode::RemoveUserStage(plan.clone()))
     }
 
     fn rewrite_alter_cluster_key(&mut self, plan: &AlterClusterKeyPlan) -> Result<PlanNode> {

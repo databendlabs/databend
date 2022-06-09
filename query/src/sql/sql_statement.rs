@@ -53,6 +53,7 @@ use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
 use crate::sql::statements::DfOptimizeTable;
 use crate::sql::statements::DfQueryStatement;
+use crate::sql::statements::DfRemoveStage;
 use crate::sql::statements::DfRenameTable;
 use crate::sql::statements::DfRevokePrivilegeStatement;
 use crate::sql::statements::DfSetVariable;
@@ -148,6 +149,7 @@ pub enum DfStatement<'a> {
     CreateStage(DfCreateUserStage),
     DropStage(DfDropUserStage),
     DescribeStage(DfDescribeUserStage),
+    RemoveStage(DfRemoveStage),
     List(DfList),
     ShowStages(DfShowStages),
 
