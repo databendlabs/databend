@@ -21,42 +21,53 @@ use opensrv_clickhouse::types::column::ColumnFrom;
 use opensrv_clickhouse::types::column::NullableColumnData;
 use serde_json::Value;
 
-use crate::prelude::DataValue;
-use crate::ColumnRef;
-use crate::TypeSerializer;
+use crate::serializations::TypeSerializer;
 
 #[derive(Clone, Debug, Default)]
-pub struct NullSerializer {}
+pub struct NullSerializer {
+    pub size: usize,
+}
 
 const NULL_STR: &str = "NULL";
+const NULL_BYTES: &[u8] = b"NULL";
 
-impl TypeSerializer for NullSerializer {
-    fn serialize_value(&self, _value: &DataValue, _format: &FormatSettings) -> Result<String> {
+impl<'a> TypeSerializer<'a> for NullSerializer {
+    fn need_quote(&self) -> bool {
+        false
+    }
+
+    fn write_field(&self, _row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
+        buf.extend_from_slice(NULL_BYTES);
+    }
+
+    fn serialize_field(&self, _row_index: usize, _format: &FormatSettings) -> Result<String> {
         Ok(NULL_STR.to_owned())
     }
 
-    fn serialize_column(
-        &self,
-        column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<String>> {
-        let result: Vec<String> = vec![NULL_STR.to_owned(); column.len()];
-        Ok(result)
-    }
-
-    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let null = Value::Null;
-        let result: Vec<Value> = vec![null; column.len()];
+        let result: Vec<Value> = vec![null; self.size];
         Ok(result)
     }
 
-    fn serialize_clickhouse_format(
+    fn serialize_clickhouse_const(
         &self,
-        column: &ColumnRef,
+        _format: &FormatSettings,
+        size: usize,
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
+        let n = size * self.size;
+        let nulls = vec![1u8; n];
+        let inner = Vec::column_from::<ArcColumnWrapper>(vec![1u8; n]);
+        let data = NullableColumnData { nulls, inner };
+        Ok(Arc::new(data))
+    }
+
+    fn serialize_clickhouse_column(
+        &self,
         _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let nulls = vec![1u8; column.len()];
-        let inner = Vec::column_from::<ArcColumnWrapper>(vec![1u8; column.len()]);
+        let nulls = vec![1u8; self.size];
+        let inner = Vec::column_from::<ArcColumnWrapper>(vec![1u8; self.size]);
         let data = NullableColumnData { nulls, inner };
         Ok(Arc::new(data))
     }

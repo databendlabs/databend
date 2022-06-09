@@ -31,9 +31,9 @@ use opendal::ops::OpWrite;
 use opendal::Accessor;
 use opendal::BytesReader;
 use opendal::BytesWriter;
+use opendal::DirStreamer;
 use opendal::Layer;
-use opendal::Metadata;
-use opendal::ObjectStreamer;
+use opendal::ObjectMetadata;
 
 use crate::DalMetrics;
 
@@ -133,7 +133,7 @@ impl Accessor for DalContext {
         })
     }
 
-    async fn stat(&self, args: &OpStat) -> Result<Metadata> {
+    async fn stat(&self, args: &OpStat) -> Result<ObjectMetadata> {
         self.get_inner()?.stat(args).await
     }
 
@@ -141,7 +141,7 @@ impl Accessor for DalContext {
         self.get_inner()?.delete(args).await
     }
 
-    async fn list(&self, args: &OpList) -> Result<ObjectStreamer> {
+    async fn list(&self, args: &OpList) -> Result<DirStreamer> {
         self.get_inner()?.list(args).await
     }
 }

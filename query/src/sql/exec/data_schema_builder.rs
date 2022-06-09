@@ -87,7 +87,6 @@ impl DataSchemaBuilder {
     }
 
     pub fn build_join(&self, left: DataSchemaRef, right: DataSchemaRef) -> DataSchemaRef {
-        // TODO: NATURAL JOIN and USING
         let mut fields = Vec::with_capacity(left.num_fields() + right.num_fields());
         for field in left.fields().iter() {
             fields.push(field.clone());

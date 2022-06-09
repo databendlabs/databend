@@ -27,6 +27,8 @@ use super::data_type::ARROW_EXTENSION_META;
 use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::TimestampSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 /// timestamp ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999
 /// timestamp_max and timestamp_min means days offset from 1970-01-01 00:00:00.000000
@@ -142,10 +144,9 @@ impl DataType for TimestampType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        TimestampSerializer::default().into()
+    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        Ok(TimestampSerializer::<'a>::try_create(col)?.into())
     }
-
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         TimestampDeserializer {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),

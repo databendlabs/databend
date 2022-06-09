@@ -149,12 +149,13 @@ pub fn to_clickhouse_block(block: DataBlock, format: &FormatSettings) -> Result<
 
     for column_index in 0..block.num_columns() {
         let column = block.column(column_index);
+        let column = &column.convert_full_column();
         let field = block.schema().field(column_index);
         let name = field.name();
-        let serializer = field.data_type().create_serializer();
+        let serializer = field.data_type().create_serializer(column)?;
         result.append_column(column::new_column(
             name,
-            serializer.serialize_clickhouse_format(&column.convert_full_column(), format)?,
+            serializer.serialize_clickhouse_column(format)?,
         ));
     }
     Ok(result)

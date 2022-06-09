@@ -57,3 +57,7 @@ harness = false
 [[bench]]
 name = "data_type"
 harness = false
+
+[[bench]]
+name = "output_format"
+harness = false
