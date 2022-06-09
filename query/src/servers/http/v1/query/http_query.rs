@@ -47,6 +47,8 @@ pub struct HttpQueryRequest {
     pub sql: String,
     #[serde(default)]
     pub pagination: PaginationConf,
+    #[serde(default)]
+    pub string_fields: bool,
 }
 
 const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
@@ -209,6 +211,7 @@ impl HttpQuery {
         let data = Arc::new(TokioMutex::new(PageManager::new(
             request.pagination.max_rows_per_page,
             block_buffer,
+            request.string_fields,
         )));
         let query = HttpQuery {
             id,

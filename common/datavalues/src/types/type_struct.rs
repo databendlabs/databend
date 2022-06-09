@@ -22,6 +22,8 @@ use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::StructSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StructType {
@@ -96,18 +98,19 @@ impl DataType for StructType {
         ArrowType::Struct(fields)
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        let inners = self
-            .types
-            .iter()
-            .map(|v| Box::new(v.create_serializer()))
-            .collect();
-        StructSerializer {
+    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        let column: &StructColumn = Series::check_get(col)?;
+        let cols = column.values();
+        let mut inners = vec![];
+        for (t, c) in self.types.iter().zip(cols) {
+            inners.push(t.create_serializer(c)?)
+        }
+        Ok(StructSerializer {
             names: self.names.clone(),
             inners,
-            types: self.types.clone(),
+            column: col,
         }
-        .into()
+        .into())
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {

@@ -14,86 +14,67 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use opensrv_clickhouse::types::column::NullableColumnData;
 use serde_json::Value;
 
-use crate::prelude::DataValue;
-use crate::Column;
-use crate::ColumnRef;
-use crate::NullableColumn;
-use crate::Series;
-use crate::TypeSerializer;
-use crate::TypeSerializerImpl;
+use crate::serializations::TypeSerializer;
+use crate::serializations::TypeSerializerImpl;
 
-#[derive(Debug, Clone)]
-pub struct NullableSerializer {
-    pub inner: Box<TypeSerializerImpl>,
+const NULL_BYTES: &[u8] = b"NULL";
+
+#[derive(Clone)]
+pub struct NullableSerializer<'a> {
+    pub validity: &'a Bitmap,
+    pub inner: Box<TypeSerializerImpl<'a>>,
 }
 
-impl TypeSerializer for NullableSerializer {
-    fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String> {
-        if value.is_null() {
-            Ok("NULL".to_owned())
+impl<'a> TypeSerializer<'a> for NullableSerializer<'a> {
+    fn need_quote(&self) -> bool {
+        self.inner.need_quote()
+    }
+
+    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        if !self.validity.get_bit(row_index) {
+            buf.extend_from_slice(NULL_BYTES);
         } else {
-            self.inner.serialize_value(value, format)
+            self.inner.write_field(row_index, buf, format)
         }
     }
 
-    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>> {
-        let column: &NullableColumn = Series::check_get(column)?;
-        let rows = column.len();
-        let mut res = self.inner.serialize_column(column.inner(), format)?;
+    fn serialize_json(&self, format: &FormatSettings) -> Result<Vec<Value>> {
+        let mut res = self.inner.serialize_json(format)?;
+        let validity = self.validity;
 
-        (0..rows).for_each(|row| {
-            if column.null_at(row) {
-                res[row] = "NULL".to_owned();
-            }
-        });
-        Ok(res)
-    }
-
-    fn serialize_column_quoted(
-        &self,
-        column: &ColumnRef,
-        format: &FormatSettings,
-    ) -> Result<Vec<String>> {
-        let column: &NullableColumn = Series::check_get(column)?;
-        let rows = column.len();
-        let mut res = self.inner.serialize_column_quoted(column.inner(), format)?;
-
-        (0..rows).for_each(|row| {
-            if column.null_at(row) {
-                res[row] = "NULL".to_owned();
-            }
-        });
-        Ok(res)
-    }
-
-    fn serialize_json(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<Value>> {
-        let column: &NullableColumn = Series::check_get(column)?;
-        let rows = column.len();
-        let mut res = self.inner.serialize_json(column.inner(), format)?;
-
-        (0..rows).for_each(|row| {
-            if column.null_at(row) {
+        (0..validity.len()).for_each(|row| {
+            if !validity.get_bit(row) {
                 res[row] = Value::Null;
             }
         });
         Ok(res)
     }
 
-    fn serialize_clickhouse_format(
+    fn serialize_clickhouse_const(
         &self,
-        column: &ColumnRef,
+        format: &FormatSettings,
+        size: usize,
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
+        let inner = self.inner.serialize_clickhouse_const(format, size)?;
+        let nulls: Vec<_> = self.validity.iter().map(|v| !v as u8).collect();
+        let nulls = nulls.repeat(size);
+        let data = NullableColumnData { nulls, inner };
+
+        Ok(Arc::new(data))
+    }
+
+    fn serialize_clickhouse_column(
+        &self,
         format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let column: &NullableColumn = Series::check_get(column)?;
-        let inner = self
-            .inner
-            .serialize_clickhouse_format(column.inner(), format)?;
-        let nulls = column.ensure_validity().iter().map(|v| !v as u8).collect();
+        let inner = self.inner.serialize_clickhouse_column(format)?;
+        let nulls = self.validity.iter().map(|v| !v as u8).collect();
         let data = NullableColumnData { nulls, inner };
 
         Ok(Arc::new(data))
