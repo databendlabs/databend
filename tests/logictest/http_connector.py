@@ -132,7 +132,7 @@ class HttpConnector():
                 return sql  #  do nothing
 
         log.debug("http sql: " + parseSQL(statement))
-        query_sql = {'sql': parseSQL(statement)}
+        query_sql = {'sql': parseSQL(statement), "string_fields": True}
         if session is not None:
             query_sql['session'] = session
         log.debug("http headers {}".format(self.make_headers()))

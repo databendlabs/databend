@@ -226,7 +226,11 @@ pub(crate) async fn query_handler(
     let query = http_query_manager.try_create_query(ctx, req).await;
 
     // TODO(veeupup): get global query_ctx's format_settings, because we cann't set session settings now
-    let format = FormatSettings::default();
+    let format = FormatSettings {
+        false_bytes: vec![b'f', b'a', b'l', b's', b'e'],
+        true_bytes: vec![b't', b'r', b'u', b'e'],
+        ..Default::default()
+    };
     match query {
         Ok(query) => {
             let resp = query

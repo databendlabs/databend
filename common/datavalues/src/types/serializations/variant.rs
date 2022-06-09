@@ -24,53 +24,62 @@ use serde_json::Value;
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct VariantSerializer {}
+pub struct VariantSerializer<'a> {
+    values: &'a [VariantValue],
+}
 
-impl TypeSerializer for VariantSerializer {
-    fn serialize_value(&self, value: &DataValue, _format: &FormatSettings) -> Result<String> {
-        if let DataValue::Variant(v) = value {
-            Ok(v.to_string())
-        } else {
-            Err(ErrorCode::BadBytes("Incorrect Variant value"))
-        }
+impl<'a> VariantSerializer<'a> {
+    pub fn try_create(col: &'a ColumnRef) -> Result<Self> {
+        let column: &VariantColumn = Series::check_get(col)?;
+        let values = column.values();
+        Ok(Self { values })
+    }
+}
+
+impl<'a> TypeSerializer<'a> for VariantSerializer<'a> {
+    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
+        buf.extend_from_slice(self.values[row_index].to_string().as_bytes());
     }
 
-    fn serialize_column(
+    fn serialize_field(&self, row_index: usize, _format: &FormatSettings) -> Result<String> {
+        Ok(self.values[row_index].to_string())
+    }
+
+    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+        let result: Vec<Value> = self.values.iter().map(|v| v.as_ref().to_owned()).collect();
+        Ok(result)
+    }
+
+    fn serialize_clickhouse_const(
         &self,
-        column: &ColumnRef,
         _format: &FormatSettings,
-    ) -> Result<Vec<String>> {
-        let column: &VariantColumn = Series::check_get(column)?;
-        let result: Vec<String> = column.iter().map(|v| v.to_string()).collect();
-        Ok(result)
+        size: usize,
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
+        let strings: Vec<String> = self.values.iter().map(|v| v.to_string()).collect();
+        let mut values: Vec<String> = Vec::with_capacity(self.values.len() * size);
+        for _ in 0..size {
+            for v in strings.iter() {
+                values.push(v.clone())
+            }
+        }
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 
-    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
-        let column: &VariantColumn = Series::check_get(column)?;
-        let result: Vec<Value> = column.iter().map(|v| v.as_ref().to_owned()).collect();
-        Ok(result)
-    }
-
-    fn serialize_clickhouse_format(
+    fn serialize_clickhouse_column(
         &self,
-        column: &ColumnRef,
         _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let column: &VariantColumn = Series::check_get(column)?;
-        let values: Vec<String> = column.iter().map(|v| v.to_string()).collect();
-
+        let values: Vec<String> = self.values.iter().map(|v| v.to_string()).collect();
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 
     fn serialize_json_object(
         &self,
-        column: &ColumnRef,
         valids: Option<&Bitmap>,
         _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
-        let column: &VariantColumn = Series::check_get(column)?;
         let mut result: Vec<Value> = Vec::new();
-        for (i, v) in column.iter().enumerate() {
+        for (i, v) in self.values.iter().enumerate() {
             if let Some(valids) = valids {
                 if !valids.get_bit(i) {
                     result.push(Value::Null);
@@ -95,11 +104,10 @@ impl TypeSerializer for VariantSerializer {
 
     fn serialize_json_object_suppress_error(
         &self,
-        column: &ColumnRef,
         _format: &FormatSettings,
     ) -> Result<Vec<Option<Value>>> {
-        let column: &VariantColumn = Series::check_get(column)?;
-        let result: Vec<Option<Value>> = column
+        let result: Vec<Option<Value>> = self
+            .values
             .iter()
             .map(|v| match v.as_ref() {
                 Value::String(v) => match serde_json::from_str::<Value>(v.as_str()) {
