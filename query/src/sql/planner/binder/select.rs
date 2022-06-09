@@ -26,6 +26,9 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
+use common_datavalues::remove_nullable;
+use common_datavalues::type_coercion::numerical_coercion;
+use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -221,8 +224,9 @@ impl<'a> Binder {
         op: &SetOperator,
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_expr, left_bind_context) = self.bind_set_expr(bind_context, &*left, &[]).await?;
-        let (right_expr, right_bind_context) =
+        let (left_expr, mut left_bind_context) =
+            self.bind_set_expr(bind_context, &*left, &[]).await?;
+        let (right_expr, mut right_bind_context) =
             self.bind_set_expr(bind_context, &*right, &[]).await?;
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(
@@ -231,10 +235,20 @@ impl<'a> Binder {
         } else {
             for (left_col, right_col) in left_bind_context
                 .columns
-                .iter()
-                .zip(right_bind_context.columns.iter())
+                .iter_mut()
+                .zip(right_bind_context.columns.iter_mut())
             {
-                if &left_col.data_type != &right_col.data_type {
+                let left_data_type = remove_nullable(&left_col.data_type);
+                let right_data_type = remove_nullable(&right_col.data_type);
+                let left_id = left_data_type.data_type_id();
+                let right_id = right_data_type.data_type_id();
+                if left_id.is_numeric() && right_id.is_numeric() {
+                    let coercion_type =
+                        numerical_coercion(&left_data_type, &right_data_type, false)?;
+                    left_col.data_type = coercion_type.clone();
+                    right_col.data_type = coercion_type;
+                }
+                if left_col.data_type != right_col.data_type {
                     return Err(ErrorCode::SemanticError(
                         "SetOperation's types cannot be matched",
                     ));
