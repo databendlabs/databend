@@ -24,7 +24,7 @@ jobs:
       - uses: ./.github/actions/setup_docker
         id: login
         with:
-          repo: sqllogic/test
+          repo: sqllogictest
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
