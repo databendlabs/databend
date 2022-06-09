@@ -68,6 +68,7 @@ use common_meta_types::app_error::DropDbWithDropTime;
 use common_meta_types::app_error::DropTableWithDropTime;
 use common_meta_types::app_error::TableAlreadyExists;
 use common_meta_types::app_error::TableVersionMismatched;
+use common_meta_types::app_error::TxnRetryMaxTimes;
 use common_meta_types::app_error::UndropDbHasNoHistory;
 use common_meta_types::app_error::UndropDbWithNoDropTime;
 use common_meta_types::app_error::UndropTableAlreadyExists;
@@ -105,6 +106,7 @@ use crate::SchemaApi;
 use crate::TableIdGen;
 
 const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
+const TXN_MAX_RETRY_TIMES: u32 = 10;
 
 /// SchemaApi is implemented upon KVApi.
 /// Thus every type that impl KVApi impls SchemaApi.
@@ -121,7 +123,9 @@ impl<KV: KVApi> SchemaApi for KV {
                 CreateDatabaseWithDropTime::new(&name_key.db_name),
             )));
         }
-        loop {
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
             // Get db by name to ensure absence
             let (db_id_seq, db_id) = get_u64_value(self, name_key).await?;
             tracing::debug!(db_id_seq, db_id, ?name_key, "get_database");
@@ -197,12 +201,18 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             }
         }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("create_database", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
         let tenant_dbname = &req.name_ident;
+        let mut retry = 0;
 
-        loop {
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
             let res = get_db_or_err(
                 self,
                 tenant_dbname,
@@ -267,6 +277,10 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             }
         }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("drop_database", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     async fn undrop_database(
@@ -275,7 +289,9 @@ impl<KV: KVApi> SchemaApi for KV {
     ) -> Result<UndropDatabaseReply, MetaError> {
         let name_key = &req.name_ident;
 
-        loop {
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
             let res =
                 get_db_or_err(self, name_key, format!("undrop_database: {}", &name_key)).await;
 
@@ -365,6 +381,10 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             }
         }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("undrop_database", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     async fn rename_database(
@@ -377,7 +397,9 @@ impl<KV: KVApi> SchemaApi for KV {
             db_name: req.new_db_name.clone(),
         };
 
-        loop {
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
             // get old db, not exists return err
             let (old_db_id_seq, old_db_id) = get_u64_value(self, tenant_dbname).await?;
             if req.if_exists {
@@ -496,6 +518,10 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             }
         }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("rename_database", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError> {
@@ -651,7 +677,9 @@ impl<KV: KVApi> SchemaApi for KV {
             )));
         }
 
-        loop {
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
             // Get db by name to ensure presence
 
             let (_, db_id, db_meta_seq, db_meta) =
@@ -769,6 +797,10 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             }
         }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("create_table", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
@@ -778,7 +810,9 @@ impl<KV: KVApi> SchemaApi for KV {
         let mut tb_count = 0;
         let mut tb_count_seq;
 
-        loop {
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
             // Get db by name to ensure presence
 
             let (_, db_id, db_meta_seq, db_meta) =
@@ -886,6 +920,10 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             }
         }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("drop_table", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, MetaError> {
@@ -895,7 +933,9 @@ impl<KV: KVApi> SchemaApi for KV {
         let mut tb_count = 0;
         let mut tb_count_seq;
 
-        loop {
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
             // Get db by name to ensure presence
 
             let (_, db_id, db_meta_seq, db_meta) =
@@ -1029,6 +1069,10 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             }
         }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("undrop_table", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
@@ -1040,7 +1084,9 @@ impl<KV: KVApi> SchemaApi for KV {
             table_name: req.new_table_name.clone(),
         };
 
-        loop {
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
             // Get db by name to ensure presence
 
             let (_, db_id, db_meta_seq, db_meta) =
@@ -1207,6 +1253,10 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             }
         }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("rename_table", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError> {

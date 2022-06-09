@@ -76,7 +76,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, or `FUNCTION`
+  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, `FUNCTION`, or 1 more ...
 
 
 ---------- Input ----------
@@ -111,5 +111,25 @@ error:
   |
 1 | create user 'test-e'@'localhost' identified bi 'password';
   |                                             ^^ expected `WITH`, `BY`, or `;`
+
+
+---------- Input ----------
+drop usar if exists 'test-j'@'localhost';
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | drop usar if exists 'test-j'@'localhost';
+  |      ^^^^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, `FUNCTION`, or 1 more ...
+
+
+---------- Input ----------
+alter user 'test-e'@'localhost' identifie by 'new-password';
+---------- Output ---------
+error: 
+  --> SQL:1:33
+  |
+1 | alter user 'test-e'@'localhost' identifie by 'new-password';
+  |                                 ^^^^^^^^^ expected `IDENTIFIED`, `WITH`, or `;`
 
 

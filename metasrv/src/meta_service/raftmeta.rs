@@ -61,7 +61,7 @@ use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::incr_meta_metrics_leader_change;
 use crate::metrics::incr_meta_metrics_read_failed;
-use crate::metrics::set_meta_metrics_has_leader;
+use crate::metrics::set_meta_metrics_current_leader;
 use crate::metrics::set_meta_metrics_is_leader;
 use crate::metrics::set_meta_metrics_proposals_applied;
 use crate::network::Network;
@@ -405,9 +405,9 @@ impl MetaNode {
                                 } else {
                                     set_meta_metrics_is_leader(false);
                                 }
-                                set_meta_metrics_has_leader(true);
+                                set_meta_metrics_current_leader(cur);
                             } else {
-                                set_meta_metrics_has_leader(false);
+                                set_meta_metrics_current_leader(0);
                                 set_meta_metrics_is_leader(false);
                             }
                             if let Some(last_applied) = mm.last_applied {
@@ -563,7 +563,6 @@ impl MetaNode {
     /// This fn should be called once a node found it becomes leader.
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn add_configured_non_voters(&self) -> MetaResult<()> {
-        // TODO after leader established, add non-voter through apis
         let node_ids = self.sto.list_non_voters().await;
         for i in node_ids.iter() {
             let x = self.raft.add_learner(*i, true).await;
@@ -714,7 +713,6 @@ impl MetaNode {
         node_id: NodeId,
         endpoint: Endpoint,
     ) -> Result<AppliedState, MetaError> {
-        // TODO: use txid?
         let resp = self
             .write(LogEntry {
                 txid: None,
@@ -733,7 +731,6 @@ impl MetaNode {
     /// Remove a node from this cluster.
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn remove_node(&self, node_id: NodeId) -> Result<AppliedState, MetaError> {
-        // TODO: use txid?
         let resp = self
             .write(LogEntry {
                 txid: None,

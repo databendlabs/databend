@@ -90,6 +90,13 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    async fn drop_cluster_keys(&self, _ctx: Arc<QueryContext>, _catalog_name: &str) -> Result<()> {
+        Err(ErrorCode::UnsupportedEngineParams(format!(
+            "Unsupported clustering keys for engine: {}",
+            self.engine()
+        )))
+    }
+
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,

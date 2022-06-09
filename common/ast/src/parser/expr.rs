@@ -1040,6 +1040,11 @@ pub fn literal_string(i: Input) -> IResult<String> {
     )(i)
 }
 
+pub fn at_string(i: Input) -> IResult<String> {
+    match_token(AtString)(i)
+        .map(|(i2, token)| (i2, token.text()[1..token.text().len()].to_string()))
+}
+
 pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
     let ty_uint8 = value(

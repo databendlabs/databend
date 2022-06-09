@@ -24,6 +24,7 @@ use common_exception::Result;
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::plan_table_undrop::UnDropTablePlan;
+use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterClusterKeyPlan;
@@ -42,6 +43,7 @@ use crate::CreateViewPlan;
 use crate::DeletePlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
+use crate::DropClusterKeyPlan;
 use crate::DropDatabasePlan;
 use crate::DropRolePlan;
 use crate::DropTablePlan;
@@ -118,6 +120,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::Broadcast(plan) => self.rewrite_broadcast(plan),
             PlanNode::Remote(plan) => self.rewrite_remote(plan),
             PlanNode::Having(plan) => self.rewrite_having(plan),
+            PlanNode::WindowFunc(plan) => self.rewrite_window_func(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
             PlanNode::Sort(plan) => self.rewrite_sort(plan),
             PlanNode::Limit(plan) => self.rewrite_limit(plan),
@@ -205,8 +208,9 @@ pub trait PlanRewriter: Sized {
             // Kill.
             PlanNode::Kill(plan) => self.rewrite_kill(plan),
 
-            // Alter.
+            // Cluster Key.
             PlanNode::AlterClusterKey(plan) => self.rewrite_alter_cluster_key(plan),
+            PlanNode::DropClusterKey(plan) => self.rewrite_drop_cluster_key(plan),
         }
     }
 
@@ -322,6 +326,14 @@ pub trait PlanRewriter: Sized {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
         let new_predicate = self.rewrite_expr(&new_input.schema(), &plan.predicate)?;
         PlanBuilder::from(&new_input).having(new_predicate)?.build()
+    }
+
+    fn rewrite_window_func(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
+        let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
+        let new_window_func = self.rewrite_expr(&new_input.schema(), &plan.window_func)?;
+        PlanBuilder::from(&new_input)
+            .window_func(new_window_func)?
+            .build()
     }
 
     fn rewrite_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
@@ -527,6 +539,10 @@ pub trait PlanRewriter: Sized {
     fn rewrite_alter_cluster_key(&mut self, plan: &AlterClusterKeyPlan) -> Result<PlanNode> {
         Ok(PlanNode::AlterClusterKey(plan.clone()))
     }
+
+    fn rewrite_drop_cluster_key(&mut self, plan: &DropClusterKeyPlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropClusterKey(plan.clone()))
+    }
 }
 
 pub struct RewriteHelper {}
@@ -671,6 +687,44 @@ impl RewriteHelper {
                 }
             }
 
+            Expression::WindowFunction {
+                op,
+                params,
+                args,
+                partition_by,
+                order_by,
+                window_frame,
+            } => {
+                let new_args: Result<Vec<Expression>> = args
+                    .iter()
+                    .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
+                    .collect();
+
+                let new_partition_by: Result<Vec<Expression>> = partition_by
+                    .iter()
+                    .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
+                    .collect();
+
+                let new_order_by: Result<Vec<Expression>> = order_by
+                    .iter()
+                    .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
+                    .collect();
+
+                match (new_args, new_partition_by, new_order_by) {
+                    (Ok(new_args), Ok(new_partition_by), Ok(new_order_by)) => {
+                        Ok(Expression::WindowFunction {
+                            op: op.clone(),
+                            params: params.clone(),
+                            args: new_args,
+                            partition_by: new_partition_by,
+                            order_by: new_order_by,
+                            window_frame: *window_frame,
+                        })
+                    }
+                    (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => Err(e),
+                }
+            }
+
             Expression::Alias(alias, plan) => {
                 if data.inside_aliases.contains(alias) {
                     return Result::Err(ErrorCode::SyntaxException(format!(
@@ -781,6 +835,17 @@ impl RewriteHelper {
             }
             Expression::ScalarFunction { args, .. } => args.clone(),
             Expression::AggregateFunction { args, .. } => args.clone(),
+            Expression::WindowFunction {
+                args,
+                partition_by,
+                order_by,
+                ..
+            } => {
+                let mut v = args.clone();
+                v.extend(partition_by.clone());
+                v.extend(order_by.clone());
+                v
+            }
             Expression::Wildcard => vec![],
             Expression::Sort { expr, .. } => vec![expr.as_ref().clone()],
             Expression::Cast { expr, .. } => vec![expr.as_ref().clone()],
@@ -817,6 +882,24 @@ impl RewriteHelper {
                 for arg in args {
                     let mut col = Self::expression_plan_columns(arg)?;
                     v.append(&mut col);
+                }
+                v
+            }
+            Expression::WindowFunction {
+                args,
+                partition_by,
+                order_by,
+                ..
+            } => {
+                let mut v = vec![];
+                for arg_expr in args {
+                    v.append(&mut Self::expression_plan_columns(arg_expr)?)
+                }
+                for part_by_expr in partition_by {
+                    v.append(&mut Self::expression_plan_columns(part_by_expr)?)
+                }
+                for order_by_expr in order_by {
+                    v.append(&mut Self::expression_plan_columns(order_by_expr)?)
                 }
                 v
             }

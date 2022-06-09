@@ -26,6 +26,7 @@ use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateRolePlan;
 use crate::CreateTablePlan;
+use crate::DropClusterKeyPlan;
 use crate::DropDatabasePlan;
 use crate::DropRolePlan;
 use crate::DropTablePlan;
@@ -72,6 +73,9 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::AggregatorFinal(plan) => Self::format_aggregator_final(f, plan),
             PlanNode::Filter(plan) => write!(f, "Filter: {:?}", plan.predicate),
             PlanNode::Having(plan) => write!(f, "Having: {:?}", plan.predicate),
+            PlanNode::WindowFunc(plan) => {
+                write!(f, "WindowFunc: {:?}", plan.window_func)
+            }
             PlanNode::Sort(plan) => Self::format_sort(f, plan),
             PlanNode::Limit(plan) => Self::format_limit(f, plan),
             PlanNode::SubQueryExpression(plan) => Self::format_subquery_expr(f, plan),
@@ -87,6 +91,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::Copy(plan) => Self::format_copy(f, plan),
             PlanNode::Call(plan) => Self::format_call(f, plan),
             PlanNode::AlterClusterKey(plan) => Self::format_alter_cluster_key(f, plan),
+            PlanNode::DropClusterKey(plan) => Self::format_drop_cluster_key(f, plan),
             _ => {
                 let mut printed = true;
 
@@ -366,5 +371,13 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             plan.database_name, plan.table_name
         )?;
         write!(f, " cluster by {:?}", plan.cluster_keys)
+    }
+
+    fn format_drop_cluster_key(f: &mut Formatter, plan: &DropClusterKeyPlan) -> fmt::Result {
+        write!(
+            f,
+            "Alter table {:}.{:} drop cluster key",
+            plan.database_name, plan.table_name
+        )
     }
 }

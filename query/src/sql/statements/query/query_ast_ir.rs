@@ -24,6 +24,7 @@ pub struct QueryASTIR {
     pub having_predicate: Option<Expression>,
     pub group_by_expressions: Vec<Expression>,
     pub aggregate_expressions: Vec<Expression>,
+    pub window_expressions: Vec<Expression>,
     pub projection_expressions: Vec<Expression>,
     pub distinct: bool,
     pub order_by_expressions: Vec<Expression>,
@@ -44,6 +45,7 @@ pub trait QueryASTIRVisitor<Data> {
         Self::visit_group_by(&mut ir.group_by_expressions, data)?;
         Self::visit_order_by(&mut ir.order_by_expressions, data)?;
         Self::visit_aggregates(&mut ir.aggregate_expressions, data)?;
+        Self::visit_window(&mut ir.window_expressions, data)?;
         Self::visit_projection(&mut ir.projection_expressions, data)?;
         Ok(())
     }
@@ -70,6 +72,24 @@ pub trait QueryASTIRVisitor<Data> {
             Expression::AggregateFunction { args, .. } => {
                 for arg in args {
                     Self::visit_recursive_expr(arg, data)?;
+                }
+
+                Ok(())
+            }
+            Expression::WindowFunction {
+                args,
+                partition_by,
+                order_by,
+                ..
+            } => {
+                for expr in args {
+                    Self::visit_recursive_expr(expr, data)?;
+                }
+                for expr in partition_by {
+                    Self::visit_recursive_expr(expr, data)?;
+                }
+                for expr in order_by {
+                    Self::visit_recursive_expr(expr, data)?;
                 }
 
                 Ok(())
@@ -116,6 +136,14 @@ pub trait QueryASTIRVisitor<Data> {
         Ok(())
     }
 
+    fn visit_window(exprs: &mut Vec<Expression>, data: &mut Data) -> Result<()> {
+        for expr in exprs {
+            Self::visit_recursive_expr(expr, data)?;
+        }
+
+        Ok(())
+    }
+
     fn visit_order_by(exprs: &mut Vec<Expression>, data: &mut Data) -> Result<()> {
         for expr in exprs {
             Self::visit_recursive_expr(expr, data)?;
@@ -151,6 +179,10 @@ impl Debug for QueryASTIR {
 
         if !self.aggregate_expressions.is_empty() {
             debug_struct.field("aggregate", &self.aggregate_expressions);
+        }
+
+        if !self.window_expressions.is_empty() {
+            debug_struct.field("window", &self.window_expressions);
         }
 
         if self.distinct {

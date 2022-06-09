@@ -53,6 +53,7 @@ fn test_lexer() {
         r#""#,
         r#"x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '"#,
         r#"'中文' '日本語'"#,
+        r#"@abc 123"#,
         r#"42 3.5 4. .001 5e2 1.925e-3 .38e+7 1.e-01 0xfff x'deedbeef'"#,
         r#"create table "user" (id int, name varchar /* the user name */);"#,
     ];

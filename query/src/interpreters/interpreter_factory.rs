@@ -40,6 +40,7 @@ use crate::interpreters::CreateUserInterpreter;
 use crate::interpreters::CreateUserUDFInterpreter;
 use crate::interpreters::CreateViewInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
+use crate::interpreters::DropClusterKeyInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropRoleInterpreter;
 use crate::interpreters::DropTableInterpreter;
@@ -126,9 +127,7 @@ impl InterpreterFactory {
             PlanNode::Show(ShowPlan::ShowRoles(v)) => {
                 ShowRolesInterpreter::try_create(ctx_clone, v)
             }
-            PlanNode::Show(ShowPlan::ShowStages(v)) => {
-                ShowStagesInterpreter::try_create(ctx_clone, v)
-            }
+            PlanNode::Show(ShowPlan::ShowStages) => ShowStagesInterpreter::try_create(ctx_clone),
 
             // Database related transforms.
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx_clone, v),
@@ -181,8 +180,9 @@ impl InterpreterFactory {
                 DescribeUserStageInterpreter::try_create(ctx_clone, v)
             }
 
-            // alter.
+            // cluster key.
             PlanNode::AlterClusterKey(v) => AlterClusterKeyInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropClusterKey(v) => DropClusterKeyInterpreter::try_create(ctx_clone, v),
 
             // others
             PlanNode::List(v) => ListInterpreter::try_create(ctx_clone, v),

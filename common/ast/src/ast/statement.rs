@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -46,16 +47,8 @@ pub enum Statement<'a> {
     ShowCreateDatabase {
         database: Identifier<'a>,
     },
-    CreateDatabase {
-        if_not_exists: bool,
-        database: Identifier<'a>,
-        engine: Engine,
-        options: Vec<SQLProperty>,
-    },
-    DropDatabase {
-        if_exists: bool,
-        database: Identifier<'a>,
-    },
+    CreateDatabase(CreateDatabaseStmt<'a>),
+    DropDatabase(DropDatabaseStmt<'a>),
     AlterDatabase {
         if_exists: bool,
         database: Identifier<'a>,
@@ -190,6 +183,23 @@ pub enum Statement<'a> {
         definition: Box<Expr<'a>>,
         description: Option<String>,
     },
+    // stages
+    CreateStage(CreateStageStmt),
+    ShowStages,
+    DropStage {
+        if_exists: bool,
+        stage_name: String,
+    },
+    DescStage {
+        stage_name: String,
+    },
+    RemoveStage {
+        stage_name: String,
+    },
+    ListStage {
+        stage_name: String,
+        pattern: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -204,6 +214,22 @@ pub enum InsertSource<'a> {
     Streaming { format: String },
     Values { values_tokens: &'a [Token<'a>] },
     Select { query: Box<Query<'a>> },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateDatabaseStmt<'a> {
+    pub if_not_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+    pub engine: Option<DatabaseEngine>,
+    pub options: Vec<SQLProperty>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropDatabaseStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -259,6 +285,12 @@ pub enum Engine {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum DatabaseEngine {
+    Default,
+    Github(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateViewStmt<'a> {
     pub if_not_exists: bool,
     pub database: Option<Identifier<'a>>,
@@ -295,6 +327,7 @@ pub enum AlterDatabaseAction<'a> {
 pub enum AlterTableAction<'a> {
     RenameTable { new_table: Identifier<'a> },
     AlterClusterKey { cluster_by: Vec<Expr<'a>> },
+    DropClusterKey,
     // TODO(wuzhiguo): AddColumn etc
 }
 
@@ -303,6 +336,22 @@ pub enum OptimizeTableAction {
     All,
     Purge,
     Compact,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateStageStmt {
+    pub if_not_exists: bool,
+    pub stage_name: String,
+
+    pub location: String,
+    pub credential_options: BTreeMap<String, String>,
+    pub encryption_options: BTreeMap<String, String>,
+
+    pub file_format_options: BTreeMap<String, String>,
+    pub on_error: String,
+    pub size_limit: usize,
+    pub validation_mode: String,
+    pub comments: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -385,6 +434,16 @@ impl Display for TableOption {
     }
 }
 
+impl Display for DatabaseEngine {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let DatabaseEngine::Github(token) = self {
+            write!(f, "GITHUB(token=\'{token}\')")
+        } else {
+            write!(f, "DEFAULT")
+        }
+    }
+}
+
 impl Display for Engine {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -441,31 +500,33 @@ impl<'a> Display for Statement<'a> {
             Statement::ShowCreateDatabase { database } => {
                 write!(f, "SHOW CREATE DATABASE {database}")?;
             }
-            Statement::CreateDatabase {
+            Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists,
+                catalog,
                 database,
                 engine,
                 ..
-            } => {
-                write!(f, "CREATE DATABASE")?;
+            }) => {
+                write!(f, "CREATE DATABASE ")?;
                 if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
+                    write!(f, "IF NOT EXISTS ")?;
                 }
-                write!(f, " {database}")?;
-                if *engine != Engine::Null {
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
+                if let Some(engine) = engine {
                     write!(f, " ENGINE = {engine}")?;
                 }
                 // TODO(leiysky): display rest information
             }
-            Statement::DropDatabase {
-                database,
+            Statement::DropDatabase(DropDatabaseStmt {
                 if_exists,
-            } => {
-                write!(f, "DROP DATABASE")?;
+                catalog,
+                database,
+            }) => {
+                write!(f, "DROP DATABASE ")?;
                 if *if_exists {
-                    write!(f, " IF EXISTS")?;
+                    write!(f, "IF EXISTS ")?;
                 }
-                write!(f, " {database}")?;
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
             }
             Statement::AlterDatabase {
                 if_exists,
@@ -610,6 +671,9 @@ impl<'a> Display for Statement<'a> {
                     AlterTableAction::AlterClusterKey { cluster_by } => {
                         write!(f, " CLUSTER BY ")?;
                         write_comma_separated_list(f, cluster_by)?;
+                    }
+                    AlterTableAction::DropClusterKey => {
+                        write!(f, " DROP CLUSTER KEY")?;
                     }
                 }
             }
@@ -838,6 +902,85 @@ impl<'a> Display for Statement<'a> {
                 if let Some(description) = description {
                     write!(f, " DESC = '{description}'")?;
                 }
+            }
+            Statement::ListStage {
+                stage_name,
+                pattern,
+            } => {
+                write!(f, "LIST @{stage_name}")?;
+                if !pattern.is_empty() {
+                    write!(f, " PATTERN = '{pattern}'")?;
+                }
+            }
+            Statement::ShowStages => {
+                write!(f, "SHOW STAGES")?;
+            }
+            Statement::DropStage {
+                if_exists,
+                stage_name,
+            } => {
+                write!(f, "DROP STAGES")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {stage_name}")?;
+            }
+            Statement::CreateStage(stmt) => {
+                write!(f, "CREATE STAGE")?;
+                if stmt.if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {}", stmt.stage_name)?;
+
+                if !stmt.location.is_empty() {
+                    write!(f, " URL = '{}'", stmt.location)?;
+
+                    if !stmt.credential_options.is_empty() {
+                        write!(f, " CREDENTIALS = (")?;
+                        for (k, v) in stmt.credential_options.iter() {
+                            write!(f, " {} = '{}'", k, v)?;
+                        }
+                        write!(f, " )")?;
+                    }
+
+                    if !stmt.encryption_options.is_empty() {
+                        write!(f, " ENCRYPTION = (")?;
+                        for (k, v) in stmt.encryption_options.iter() {
+                            write!(f, " {} = '{}'", k, v)?;
+                        }
+                        write!(f, " )")?;
+                    }
+                }
+
+                if !stmt.file_format_options.is_empty() {
+                    write!(f, " FILE_FORMAT = (")?;
+                    for (k, v) in stmt.file_format_options.iter() {
+                        write!(f, " {} = '{}'", k, v)?;
+                    }
+                    write!(f, " )")?;
+                }
+
+                if !stmt.on_error.is_empty() {
+                    write!(f, " ON_ERROR = {}", stmt.on_error)?;
+                }
+
+                if stmt.size_limit != 0 {
+                    write!(f, " SIZE_LIMIT = {}", stmt.size_limit)?;
+                }
+
+                if !stmt.validation_mode.is_empty() {
+                    write!(f, " VALIDATION_MODE = {}", stmt.validation_mode)?;
+                }
+
+                if !stmt.comments.is_empty() {
+                    write!(f, " COMMENTS = '{}'", stmt.comments)?;
+                }
+            }
+            Statement::RemoveStage { stage_name } => {
+                write!(f, "REMOVE STAGE @{stage_name}")?;
+            }
+            Statement::DescStage { stage_name } => {
+                write!(f, "DESC STAGE {stage_name}")?;
             }
         }
         Ok(())

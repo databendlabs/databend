@@ -510,16 +510,135 @@ create database if not exists a;
 ---------- Output ---------
 CREATE DATABASE IF NOT EXISTS a
 ---------- AST ------------
-CreateDatabase {
-    if_not_exists: true,
-    database: Identifier {
-        name: "a",
-        quote: None,
-        span: Ident(30..31),
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(30..31),
+        },
+        engine: None,
+        options: [],
     },
-    engine: Null,
-    options: [],
-}
+)
+
+
+---------- Input ----------
+create database catalog.t engine = Default;
+---------- Output ---------
+CREATE DATABASE catalog.t ENGINE = DEFAULT
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: false,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(16..23),
+            },
+        ),
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(24..25),
+        },
+        engine: Some(
+            Default,
+        ),
+        options: [],
+    },
+)
+
+
+---------- Input ----------
+create database t engine = Github(token='123456');
+---------- Output ---------
+CREATE DATABASE t ENGINE = GITHUB(token='123456')
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(16..17),
+        },
+        engine: Some(
+            Github(
+                "123456",
+            ),
+        ),
+        options: [],
+    },
+)
+
+
+---------- Input ----------
+create database t engine = Default;
+---------- Output ---------
+CREATE DATABASE t ENGINE = DEFAULT
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(16..17),
+        },
+        engine: Some(
+            Default,
+        ),
+        options: [],
+    },
+)
+
+
+---------- Input ----------
+drop database catalog.t;
+---------- Output ---------
+DROP DATABASE catalog.t
+---------- AST ------------
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: false,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(14..21),
+            },
+        ),
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(22..23),
+        },
+    },
+)
+
+
+---------- Input ----------
+drop database if exists t;
+---------- Output ---------
+DROP DATABASE IF EXISTS t
+---------- AST ------------
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: true,
+        catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(24..25),
+        },
+    },
+)
 
 
 ---------- Input ----------
@@ -931,14 +1050,17 @@ DROP database if exists db1;
 ---------- Output ---------
 DROP DATABASE IF EXISTS db1
 ---------- AST ------------
-DropDatabase {
-    if_exists: true,
-    database: Identifier {
-        name: "db1",
-        quote: None,
-        span: Ident(24..27),
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: true,
+        catalog: None,
+        database: Identifier {
+            name: "db1",
+            quote: None,
+            span: Ident(24..27),
+        },
     },
-}
+)
 
 
 ---------- Input ----------
@@ -2708,6 +2830,45 @@ Query(
 
 
 ---------- Input ----------
+CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( FORMAT = 'CSV' compression = 'GZIP' record_delimiter = ',' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: true,
+        stage_name: "test_stage",
+        location: "s3://load/files/",
+        credential_options: {
+            "aws_key_id": "1a2b3c",
+            "aws_secret_key": "4x5y6z",
+        },
+        encryption_options: {},
+        file_format_options: {
+            "FORMAT": "CSV",
+            "compression": "GZIP",
+            "record_delimiter": ",",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
+list @stage_a;
+---------- Output ---------
+LIST @stage_a
+---------- AST ------------
+ListStage {
+    stage_name: "stage_a",
+    pattern: "",
+}
+
+
+---------- Input ----------
 create user 'test-e'@'localhost' identified by 'password';
 ---------- Output ---------
 CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password'
@@ -2728,5 +2889,92 @@ CreateUser(
         role_options: [],
     },
 )
+
+
+---------- Input ----------
+drop user if exists 'test-j'@'localhost';
+---------- Output ---------
+DROP USER IF EXISTS 'test-j'@'localhost'
+---------- AST ------------
+DropUser {
+    if_exists: true,
+    user: UserIdentity {
+        username: "test-j",
+        hostname: "localhost",
+    },
+}
+
+
+---------- Input ----------
+alter user 'test-e'@'localhost' identified by 'new-password';
+---------- Output ---------
+ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password'
+---------- AST ------------
+AlterUser {
+    user: Some(
+        UserIdentity {
+            username: "test-e",
+            hostname: "localhost",
+        },
+    ),
+    auth_option: Some(
+        AuthOption {
+            auth_type: None,
+            password: Some(
+                "new-password",
+            ),
+        },
+    ),
+    role_options: [],
+}
+
+
+---------- Input ----------
+ALTER TABLE t CLUSTER BY(c1);
+---------- Output ---------
+ALTER TABLE t CLUSTER BY c1
+---------- AST ------------
+AlterTable {
+    if_exists: false,
+    database: None,
+    table: Identifier {
+        name: "t",
+        quote: None,
+        span: Ident(12..13),
+    },
+    action: AlterClusterKey {
+        cluster_by: [
+            ColumnRef {
+                span: [
+                    Ident(25..27),
+                ],
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "c1",
+                    quote: None,
+                    span: Ident(25..27),
+                },
+            },
+        ],
+    },
+}
+
+
+---------- Input ----------
+ALTER TABLE t DROP CLUSTER KEY;
+---------- Output ---------
+ALTER TABLE t DROP CLUSTER KEY
+---------- AST ------------
+AlterTable {
+    if_exists: false,
+    database: None,
+    table: Identifier {
+        name: "t",
+        quote: None,
+        span: Ident(12..13),
+    },
+    action: DropClusterKey,
+}
 
 

@@ -2021,6 +2021,7 @@ dependencies = [
  "criterion",
  "dyn-clone",
  "enum_dispatch",
+ "enum_extract",
  "futures",
  "headers",
  "http",
@@ -2050,6 +2051,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rsa",
+ "segment-tree",
  "semver",
  "serde",
  "serde-bridge",
@@ -2319,6 +2321,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "enum_extract"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11578f9e8496eeb626c549e1b340a57e479840ff7ae13fe12d4dbd97c18779d1"
 
 [[package]]
 name = "enumflags2"
@@ -5936,6 +5944,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "segment-tree"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f7dbd0d32cabaa6c7c3286d756268247538d613b621227bfe59237d7bbb271a"
 
 [[package]]
 name = "semver"

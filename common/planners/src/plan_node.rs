@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 
 use crate::plan_table_undrop::UnDropTablePlan;
+use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterClusterKeyPlan;
@@ -36,6 +37,7 @@ use crate::CreateViewPlan;
 use crate::DeletePlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
+use crate::DropClusterKeyPlan;
 use crate::DropDatabasePlan;
 use crate::DropRolePlan;
 use crate::DropTablePlan;
@@ -90,6 +92,7 @@ pub enum PlanNode {
     AggregatorFinal(AggregatorFinalPlan),
     Filter(FilterPlan),
     Having(HavingPlan),
+    WindowFunc(WindowFuncPlan),
     Sort(SortPlan),
     Limit(LimitPlan),
     LimitBy(LimitByPlan),
@@ -118,8 +121,9 @@ pub enum PlanNode {
     // List
     List(ListPlan),
 
-    // Alter.
+    // Cluster key.
     AlterClusterKey(AlterClusterKeyPlan),
+    DropClusterKey(DropClusterKeyPlan),
 
     // Show.
     Show(ShowPlan),
@@ -198,6 +202,7 @@ impl PlanNode {
             PlanNode::AggregatorFinal(v) => v.schema(),
             PlanNode::Filter(v) => v.schema(),
             PlanNode::Having(v) => v.schema(),
+            PlanNode::WindowFunc(v) => v.schema(),
             PlanNode::Limit(v) => v.schema(),
             PlanNode::LimitBy(v) => v.schema(),
             PlanNode::ReadSource(v) => v.schema(),
@@ -287,8 +292,9 @@ impl PlanNode {
             // Kill.
             PlanNode::Kill(v) => v.schema(),
 
-            // Alter
+            // Cluster key.
             PlanNode::AlterClusterKey(v) => v.schema(),
+            PlanNode::DropClusterKey(v) => v.schema(),
         }
     }
 
@@ -305,6 +311,7 @@ impl PlanNode {
             PlanNode::AggregatorFinal(_) => "AggregatorFinalPlan",
             PlanNode::Filter(_) => "FilterPlan",
             PlanNode::Having(_) => "HavingPlan",
+            PlanNode::WindowFunc(_) => "WindowFuncPlan",
             PlanNode::Limit(_) => "LimitPlan",
             PlanNode::LimitBy(_) => "LimitByPlan",
             PlanNode::ReadSource(_) => "ReadSourcePlan",
@@ -394,8 +401,9 @@ impl PlanNode {
             // Kill.
             PlanNode::Kill(_) => "KillQuery",
 
-            // Alter.
+            // Cluster key.
             PlanNode::AlterClusterKey(_) => "AlterClusterKeyPlan",
+            PlanNode::DropClusterKey(_) => "DropClusterKeyPlan",
         }
     }
 
@@ -409,6 +417,7 @@ impl PlanNode {
             PlanNode::AggregatorFinal(v) => vec![v.input.clone()],
             PlanNode::Filter(v) => vec![v.input.clone()],
             PlanNode::Having(v) => vec![v.input.clone()],
+            PlanNode::WindowFunc(v) => vec![v.input.clone()],
             PlanNode::Limit(v) => vec![v.input.clone()],
             PlanNode::Explain(v) => vec![v.input.clone()],
             PlanNode::Select(v) => vec![v.input.clone()],

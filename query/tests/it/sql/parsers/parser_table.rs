@@ -321,3 +321,17 @@ fn alter_cluster_key() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn drop_cluster_key() -> Result<()> {
+    {
+        let sql = "ALTER TABLE t1 DROP CLUSTER KEY";
+        let expected = DfStatement::AlterTable(DfAlterTable {
+            if_exists: false,
+            table_name: ObjectName(vec![Ident::new("t1")]),
+            action: AlterTableAction::DropClusterKey,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+    Ok(())
+}

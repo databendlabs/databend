@@ -18,6 +18,7 @@
 use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::GetReply;
@@ -36,6 +37,11 @@ use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::metrics::incr_meta_metrics_proposals_failed;
 use crate::metrics::incr_meta_metrics_proposals_pending;
+use crate::metrics::incr_meta_metrics_recv_bytes_from_peer;
+use crate::metrics::incr_meta_metrics_snapshot_recv_failure_from_peer;
+use crate::metrics::incr_meta_metrics_snapshot_recv_inflights_from_peer;
+use crate::metrics::incr_meta_metrics_snapshot_recv_success_from_peer;
+use crate::metrics::sample_meta_metrics_snapshot_recv;
 
 pub type GrpcStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -47,6 +53,14 @@ pub struct RaftServiceImpl {
 impl RaftServiceImpl {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
         Self { meta_node }
+    }
+
+    fn incr_meta_metrics_recv_bytes_from_peer(&self, request: &tonic::Request<RaftRequest>) {
+        if let Some(addr) = request.remote_addr() {
+            let message: &RaftRequest = request.get_ref();
+            let bytes = message.data.len() as u64;
+            incr_meta_metrics_recv_bytes_from_peer(addr.to_string(), bytes);
+        }
     }
 }
 
@@ -138,6 +152,7 @@ impl RaftService for RaftServiceImpl {
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
         common_tracing::extract_remote_span_as_parent(&request);
 
+        self.incr_meta_metrics_recv_bytes_from_peer(&request);
         let req = request.into_inner();
 
         let ae_req =
@@ -163,8 +178,16 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
+        let start = Instant::now();
+        let addr = if let Some(addr) = request.remote_addr() {
+            addr.to_string()
+        } else {
+            "unknown address".to_string()
+        };
         common_tracing::extract_remote_span_as_parent(&request);
 
+        self.incr_meta_metrics_recv_bytes_from_peer(&request);
+        incr_meta_metrics_snapshot_recv_inflights_from_peer(addr.clone(), 1);
         let req = request.into_inner();
 
         let is_req =
@@ -175,14 +198,27 @@ impl RaftService for RaftServiceImpl {
             .raft
             .install_snapshot(is_req)
             .await
-            .map_err(|x| tonic::Status::internal(x.to_string()))?;
-        let data = serde_json::to_string(&resp).expect("fail to serialize resp");
-        let mes = RaftReply {
-            data,
-            error: "".to_string(),
-        };
+            .map_err(|x| tonic::Status::internal(x.to_string()));
 
-        Ok(tonic::Response::new(mes))
+        sample_meta_metrics_snapshot_recv(addr.clone(), start.elapsed().as_secs() as f64);
+        incr_meta_metrics_snapshot_recv_inflights_from_peer(addr.clone(), -1);
+
+        match resp {
+            Ok(resp) => {
+                let data = serde_json::to_string(&resp).expect("fail to serialize resp");
+                let mes = RaftReply {
+                    data,
+                    error: "".to_string(),
+                };
+
+                incr_meta_metrics_snapshot_recv_success_from_peer(addr.clone());
+                return Ok(tonic::Response::new(mes));
+            }
+            Err(e) => {
+                incr_meta_metrics_snapshot_recv_failure_from_peer(addr.clone());
+                return Err(e);
+            }
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self, request))]
@@ -192,6 +228,7 @@ impl RaftService for RaftServiceImpl {
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
         common_tracing::extract_remote_span_as_parent(&request);
 
+        self.incr_meta_metrics_recv_bytes_from_peer(&request);
         let req = request.into_inner();
 
         let v_req =

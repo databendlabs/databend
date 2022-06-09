@@ -55,6 +55,8 @@ pub struct QueryAnalyzeState {
     pub group_by_expressions: Vec<Expression>,
     pub aggregate_expressions: Vec<Expression>,
 
+    pub window_expressions: Vec<Expression>,
+
     // rebase on projection expressions without aliases, aggregate and group by expressions
     pub distinct_expressions: Vec<Expression>,
 
@@ -102,6 +104,10 @@ impl Debug for QueryAnalyzeState {
 
         if !self.aggregate_expressions.is_empty() {
             debug_struct.field("aggregate", &self.aggregate_expressions);
+        }
+
+        if !self.window_expressions.is_empty() {
+            debug_struct.field("window_func", &self.window_expressions);
         }
 
         if !self.expressions.is_empty() {

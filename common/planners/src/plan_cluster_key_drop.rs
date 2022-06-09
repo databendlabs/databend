@@ -12,5 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct ShowStagesPlan {}
+pub struct DropClusterKeyPlan {
+    pub tenant: String,
+    pub catalog_name: String,
+    pub database_name: String,
+    pub table_name: String,
+}
+
+impl DropClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

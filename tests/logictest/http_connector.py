@@ -1,5 +1,7 @@
 import json
 import os
+import time
+import base64
 
 import environs
 import requests
@@ -96,12 +98,24 @@ class HttpConnector():
         self._port = port
         self._user = user
         self._database = database
-        self._session_max_idle_time = 300
+        self._session_max_idle_time = 30 
         self._session = None
         self._additonal_headers = dict()
         e = environs.Env()
         if os.getenv("ADDITIONAL_HEADERS") is not None:
             self._additonal_headers = e.dict("ADDITIONAL_HEADERS")
+
+    def make_headers(self):
+        if "Authorization" not in self._additonal_headers:
+            return {
+                **headers,
+                "Authorization": "Basic "+ base64.b64encode("{}:{}".format(self._user, "").encode(encoding="utf-8")).decode()
+            }
+        else:
+            return {
+                **headers,
+                **self._additonal_headers
+            }
 
     def query(self, statement, session=None):
         url = "http://{}:{}/v1/query/".format(self._host, self._port)
@@ -121,28 +135,13 @@ class HttpConnector():
         query_sql = {'sql': parseSQL(statement)}
         if session is not None:
             query_sql['session'] = session
-        log.debug("http headers: {}".format({
-            **headers,
-            **self._additonal_headers
-        }))
-        if "Authorization" not in self._additonal_headers:
-            response = requests.post(url,
-                                     data=json.dumps(query_sql),
-                                     auth=(self._user, ""),
-                                     headers=headers)
-        else:
-            response = requests.post(url,
-                                     data=json.dumps(query_sql),
-                                     headers={
-                                         **headers,
-                                         **self._additonal_headers
-                                     })
+        log.debug("http headers {}".format(self.make_headers()))
+        response = requests.post(url, data=json.dumps(query_sql), headers=self.make_headers())
 
         try:
             return json.loads(response.content)
         except Exception as err:
-            log.error("http error, SQL: {}".format(statement))
-            log.error("content: {}".format(response.content))
+            log.error("http error, SQL: {}\ncontent: {}\nerror msg:{}".format(statement, response.content, str(err)))
             raise
 
     def set_database(self, database):
@@ -156,6 +155,7 @@ class HttpConnector():
         self._session = None
 
     # query_with_session keep session_id for every query
+    # return a list of response util empty next_uri
     def query_with_session(self, statement):
         current_session = self._session
         if current_session is None:
@@ -165,20 +165,42 @@ class HttpConnector():
                 "max_idle_time": self._session_max_idle_time
             }
 
+        response_list = list()
         response = self.query(statement, current_session)
+        log.info("response content: {}".format(response))
+        response_list.append(response)
+        for i in range(6):
+            if response['next_uri'] is not None:
+                try:
+                    resp = requests.get(url="http://{}:{}{}".format(self._host,self._port,response['next_uri']), headers=self.make_headers())
+                    response = json.loads(resp.content)      
+                    log.info("Sql in progress, fetch next_uri content: {}".format(response))
+                    response_list.append(response)
+                except Exception as err:
+                    log.warning("Fetch next_uri response with error: {}".format(str(err)))
+                time.sleep(1)
+                continue
+            break
+        if response['next_uri'] is not None:
+            log.warning("Retry out of times, next_uri stil not none!")
+
         if self._session is None:
             if response is not None and "session_id" in response:
                 self._session = {"id": response["session_id"]}
-        return response
+        return response_list
 
     def fetch_all(self, statement):
-        # TODO use next_uri to get all results
-        resp = self.query_with_session(statement)
-        if resp is None:
+        resp_list = self.query_with_session(statement)
+        if len(resp_list) == 0 :
             log.warning("fetch all with empty results")
             return None
-        self._query_option = get_query_options(resp)  # record schema
-        return get_result(resp)
+        self._query_option = get_query_options(resp_list[0])  # record schema
+        data_list = list()
+        for response in resp_list:
+            data = get_result(response)
+            if len(data) != 0:
+                data_list.extend(data)
+        return data_list
 
     def get_query_option(self):
         return self._query_option

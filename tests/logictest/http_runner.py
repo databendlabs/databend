@@ -1,5 +1,4 @@
 from abc import ABC
-from types import NoneType
 
 import logictest
 import http_connector
@@ -32,7 +31,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
 
     def execute_error(self, statement):
         resp = self.get_connection().query_with_session(statement)
-        return http_connector.get_error(resp)
+        return http_connector.get_error(resp[0])
 
     def execute_query(self, statement):
         results = self.get_connection().fetch_all(statement.text)
@@ -40,7 +39,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
         vals = []
         for (ri, row) in enumerate(results):
             for (i, v) in enumerate(row):
-                if isinstance(v, NoneType):
+                if isinstance(v, type(None)):
                     vals.append("NULL")
                     continue
 

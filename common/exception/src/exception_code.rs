@@ -192,6 +192,7 @@ build_exceptions! {
     DropTableWithDropTime(2314),
     DropDbWithDropTime(2315),
     UndropDbWithNoDropTime(2316),
+    TxnRetryMaxTimes(2317),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),
