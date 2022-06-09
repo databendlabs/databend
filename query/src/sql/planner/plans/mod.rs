@@ -35,9 +35,13 @@ use common_planners::AlterUserPlan;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
+use common_planners::CreateUserStagePlan;
 use common_planners::CreateViewPlan;
+use common_planners::DescribeUserStagePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropUserPlan;
+use common_planners::DropUserStagePlan;
+use common_planners::ListPlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
@@ -79,6 +83,14 @@ pub enum Plan {
     CreateDatabase(CreateDatabasePlan),
     CreateView(Box<CreateViewPlan>),
     DropDatabase(DropDatabasePlan),
+
+    CreateStage(Box<CreateUserStagePlan>),
+    DropStage(Box<DropUserStagePlan>),
+    DescStage(Box<DescribeUserStagePlan>),
+    ListStage(Box<ListPlan>),
+    ShowStages,
+    // TODO
+    // RemoveStage(Box<RemoveStagePlan>),
 
     // System
     ShowMetrics,

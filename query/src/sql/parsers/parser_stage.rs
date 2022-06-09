@@ -81,10 +81,16 @@ impl<'a> DfParser<'a> {
             on_error = self.parse_value_or_ident()?;
         }
 
-        let mut size_limit = "".to_string();
+        let mut size_limit = 0;
         if self.consume_token("SIZE_LIMIT") {
             self.expect_token("=")?;
-            size_limit = self.parse_value_or_ident()?;
+            let size_limit_str = self.parse_value_or_ident()?;
+            size_limit = size_limit_str.parse::<usize>().map_err(|_e| {
+                ParserError::ParserError(format!(
+                    "size_limit must be number, got: {}",
+                    size_limit_str
+                ))
+            })?;
         }
 
         // VALIDATION_MODE = RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS

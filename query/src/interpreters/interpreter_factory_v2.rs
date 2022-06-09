@@ -16,18 +16,23 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
+use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::CreateDatabaseInterpreter;
 use super::CreateTableInterpreter;
+use super::CreateUserInterpreter;
+use super::CreateUserStageInterpreter;
 use super::CreateViewInterpreter;
 use super::DropDatabaseInterpreter;
 use super::ExplainInterpreterV2;
 use super::InterpreterPtr;
+use super::ListInterpreter;
 use super::SelectInterpreterV2;
 use super::ShowMetricsInterpreter;
 use super::ShowProcessListInterpreter;
 use super::ShowSettingsInterpreter;
+use super::ShowStagesInterpreter;
 use crate::interpreters::AlterUserInterpreter;
-use crate::interpreters::CreateUserInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
@@ -45,6 +50,8 @@ impl InterpreterFactoryV2 {
             stmt,
             DfStatement::Query(_)
                 | DfStatement::Explain(_)
+                | DfStatement::CreateStage(_)
+                | DfStatement::ShowStages(_)
                 | DfStatement::CreateTable(_)
                 | DfStatement::CreateView(_)
                 | DfStatement::ShowMetrics(_)
@@ -73,6 +80,14 @@ impl InterpreterFactoryV2 {
             Plan::CreateTable(create_table) => {
                 CreateTableInterpreter::try_create(ctx, *create_table.clone())
             }
+            Plan::CreateStage(create_stage) => {
+                CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())
+            }
+            Plan::ShowStages => ShowStagesInterpreter::try_create(ctx),
+            Plan::DropStage(s) => DropUserStageInterpreter::try_create(ctx, *s.clone()),
+            Plan::DescStage(s) => DescribeUserStageInterpreter::try_create(ctx, *s.clone()),
+            Plan::ListStage(s) => ListInterpreter::try_create(ctx, *s.clone()),
+
             Plan::CreateDatabase(create_database) => {
                 CreateDatabaseInterpreter::try_create(ctx, create_database.clone())
             }
