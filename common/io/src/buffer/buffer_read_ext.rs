@@ -46,8 +46,42 @@ pub trait BufferReadExt: BufferRead {
 
     fn read_quoted_text(&mut self, buf: &mut Vec<u8>, quota: u8) -> Result<()> {
         self.must_ignore_byte(quota)?;
-        self.keep_read(buf, |b| b != quota)?;
-        self.must_ignore_byte(quota)
+
+        loop {
+            self.keep_read(buf, |b| b != quota && b != b'\\')?;
+            if self.ignore_byte(quota)? {
+                return Ok(());
+            } else if self.ignore_byte(b'\\')? {
+                let b = self.fill_buf()?;
+                if b.is_empty() {
+                    return Err(std::io::Error::new(
+                        ErrorKind::InvalidData,
+                        "Expected to have terminated string literal.".to_string(),
+                    ));
+                }
+                let c = b[0];
+                self.ignore_byte(c)?;
+                match c {
+                    b'n' => buf.push(b'\n'),
+                    b't' => buf.push(b'\t'),
+                    b'r' => buf.push(b'\r'),
+                    b'0' => buf.push(b'\0'),
+                    b'\'' => buf.push(b'\''),
+                    b'\\' => buf.push(b'\\'),
+                    b'\"' => buf.push(b'\"'),
+                    _ => {
+                        buf.push(b'\\');
+                        buf.push(c);
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        Err(std::io::Error::new(
+            ErrorKind::InvalidData,
+            "Expected to have terminated string literal.".to_string(),
+        ))
     }
 
     fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>) -> Result<()> {
