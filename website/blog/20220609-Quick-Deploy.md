@@ -14,7 +14,11 @@ authors:
 Deploying a data warehouse sounds like a big job to you? Definitely NOT. Databend can be deployed to your laptop and uses the local file system as storage. You can complete the deployment in a few minutes even if you're new to Databend.
 Now let's get started!
 
-<table><tr><td bgcolor=navyblue>Databend requires a scalabe storage (for example, object storage) to work. This blog uses local file system to provide you a hands-on experience. Never use a local file system as storage for production purposes.</td></tr></table>
+:::Note
+
+Databend requires a scalabe storage (for example, object storage) to work. This blog uses local file system to provide you a hands-on experience. Never use a local file system as storage for production purposes.
+
+:::
 
 
 ## STEP 1. Downloading Databend
@@ -34,7 +38,7 @@ c. Move the extracted files `databend-meta` and `databend-query` to the folder `
 
 a. Create a file named `databend-meta.toml` in the folder `/usr/local/databend/etc` with the following content:
 
-```
+```toml
 dir = "metadata/_logs"
 admin_api_address = "127.0.0.1:8101"
 grpc_api_address = "127.0.0.1:9101"
@@ -50,7 +54,7 @@ b. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 
 c. Run the following command to start databend-meta:
 
-```
+```shell
 ./databend-meta -c ../etc/databend-meta.toml > meta.log 2>&1 &
 ```
 
@@ -62,9 +66,9 @@ curl -I  http://127.0.0.1:8101/v1/health
 
 ## STEP 3. Deploying a Standalone databend-query
 
-a. Create a file named `databend-meta.toml` in the folder `/usr/local/databend/etc` with the following content:
+a. Create a file named `databend-query.toml` in the folder `/usr/local/databend/etc` with the following content:
 
-```
+```toml
 [log]
 level = "INFO"
 dir = "benddata/_logs"
@@ -117,7 +121,7 @@ c. Run the following command to start databend-meta:
 
 d. Run the following command to check if databend-meta was started successfully: 
 
-```vb
+```shell
 curl -I  http://127.0.0.1:8001/v1/health
 ```
 
