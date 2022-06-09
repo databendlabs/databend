@@ -35,6 +35,7 @@ use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
+use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::sql::SQLCommon;
 use crate::storages::Table;
@@ -279,6 +280,10 @@ impl QueryContextShared {
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
         let settings = self.get_settings();
         let mut format = FormatSettings::default();
+        if let SessionType::MySQL = self.session.get_type() {
+            format.false_bytes = vec![b'0'];
+            format.true_bytes = vec![b'1'];
+        }
         {
             format.record_delimiter = settings.get_record_delimiter()?;
             format.field_delimiter = settings.get_field_delimiter()?;

@@ -21,9 +21,6 @@ use serde_json::Value;
 
 use crate::prelude::*;
 
-const TRUE_BYTES: &[u8] = &[b'1'];
-const FALSE_BYTES: &[u8] = &[b'0'];
-
 #[derive(Clone)]
 pub struct BooleanSerializer {
     pub(crate) values: Bitmap,
@@ -42,11 +39,11 @@ impl<'a> TypeSerializer<'a> for BooleanSerializer {
         false
     }
 
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
+    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
         let v = if self.values.get_bit(row_index) {
-            TRUE_BYTES
+            &format.true_bytes
         } else {
-            FALSE_BYTES
+            &format.false_bytes
         };
         buf.extend_from_slice(v);
     }
