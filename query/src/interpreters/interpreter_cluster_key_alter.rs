@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
+use common_planners::validate_clustering;
 use common_planners::validate_expression;
 use common_planners::AlterTableClusterKeyPlan;
 use common_streams::DataBlockStream;
@@ -73,9 +74,9 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         let schema = table.schema();
         let cluster_keys = plan.cluster_keys.clone();
         // Let's validate the expressions firstly.
-        // TODO(zhyass): Not all expressions are valid for cluster key.
         for expr in cluster_keys.iter() {
             validate_expression(expr, &schema)?;
+            validate_clustering(expr)?;
         }
 
         let cluster_key_vec: Vec<String> = cluster_keys.iter().map(|e| e.column_name()).collect();
