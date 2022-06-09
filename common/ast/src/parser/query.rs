@@ -278,8 +278,8 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
     )(i)
 }
 
-pub fn set_expr(i: Input) -> IResult<SetExpr> {
-    let select = map(
+pub fn select(i: Input) -> IResult<SetExpr> {
+    map(
         rule! {
              SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
                 ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
@@ -310,33 +310,93 @@ pub fn set_expr(i: Input) -> IResult<SetExpr> {
                 having: opt_having_block.map(|(_, having)| having),
             }))
         },
-    );
+    )(i)
+}
 
+pub fn parenthesized_select(i: Input) -> IResult<SetExpr> {
     map(
-        rule!(#select ~ (UNION | EXCEPT | INTERSECT)? ~ ALL? ~ #set_expr?),
-        |(select, set_operator, all_kind, set_expr)| {
+        rule! (
+            "(" ~ (#parenthesized_select  | #select ) ~ ")"
+        ),
+        |(_, select, _)| select,
+    )(i)
+}
+
+pub fn select_or_set_expr(i: Input) -> IResult<SetExpr> {
+    map(
+        consumed(
+            rule!((#select | #parenthesized_select) ~ (UNION | EXCEPT | INTERSECT)? ~ ALL? ~ (#select_or_set_expr| #parenthesized_select_or_set_expr)?),
+        ),
+        |(span, (select, set_operator, all_kind, set_expr))| {
             let all = all_kind.is_some();
-            let left = Box::new(select.clone());
             match set_operator.map(|token| token.kind) {
-                Some(TokenKind::UNION) => SetExpr::SetOperation {
+                Some(TokenKind::UNION) => SetExpr::SetOperation(Box::new(SetOperation {
+                    span: span.0,
                     op: SetOperator::Union,
                     all,
-                    left,
+                    left: Box::new(select),
                     right: Box::new(set_expr.unwrap()),
-                },
-                Some(TokenKind::EXCEPT) => SetExpr::SetOperation {
+                })),
+                Some(TokenKind::EXCEPT) => SetExpr::SetOperation(Box::new(SetOperation {
+                    span: span.0,
                     op: SetOperator::Except,
                     all,
-                    left,
+                    left: Box::new(select),
                     right: Box::new(set_expr.unwrap()),
-                },
-                Some(TokenKind::INTERSECT) => SetExpr::SetOperation {
+                })),
+                Some(TokenKind::INTERSECT) => SetExpr::SetOperation(Box::new(SetOperation {
+                    span: span.0,
                     op: SetOperator::Intersect,
                     all,
-                    left,
+                    left: Box::new(select),
                     right: Box::new(set_expr.unwrap()),
-                },
+                })),
                 None => select,
+                _ => unreachable!(),
+            }
+        },
+    )(i)
+}
+
+pub fn parenthesized_select_or_set_expr(i: Input) -> IResult<SetExpr> {
+    map(
+        rule! (
+            "(" ~ (#parenthesized_select_or_set_expr  | #select_or_set_expr ) ~ ")"
+        ),
+        |(_, select_or_set_expr, _)| select_or_set_expr,
+    )(i)
+}
+
+pub fn set_expr(i: Input) -> IResult<SetExpr> {
+    map(
+        consumed(
+            rule!((#select_or_set_expr | #parenthesized_select_or_set_expr) ~ (UNION | EXCEPT | INTERSECT)? ~ ALL? ~ (#select_or_set_expr | #parenthesized_select_or_set_expr)?),
+        ),
+        |(span, (set_expr1, set_operator, all_kind, set_expr2))| {
+            let all = all_kind.is_some();
+            match set_operator.map(|token| token.kind) {
+                Some(TokenKind::UNION) => SetExpr::SetOperation(Box::new(SetOperation {
+                    span: span.0,
+                    op: SetOperator::Union,
+                    all,
+                    left: Box::new(set_expr1),
+                    right: Box::new(set_expr2.unwrap()),
+                })),
+                Some(TokenKind::EXCEPT) => SetExpr::SetOperation(Box::new(SetOperation {
+                    span: span.0,
+                    op: SetOperator::Except,
+                    all,
+                    left: Box::new(set_expr1),
+                    right: Box::new(set_expr2.unwrap()),
+                })),
+                Some(TokenKind::INTERSECT) => SetExpr::SetOperation(Box::new(SetOperation {
+                    span: span.0,
+                    op: SetOperator::Intersect,
+                    all,
+                    left: Box::new(set_expr1),
+                    right: Box::new(set_expr2.unwrap()),
+                })),
+                None => set_expr1,
                 _ => unreachable!(),
             }
         },

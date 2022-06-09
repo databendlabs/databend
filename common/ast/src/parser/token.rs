@@ -778,9 +778,6 @@ impl TokenKind {
             // | TokenKind::REFERENCES
             // | TokenKind::ROW
             | TokenKind::SELECT
-            | TokenKind::UNION
-            | TokenKind::EXCEPT
-            | TokenKind::INTERSECT
             // | TokenKind::SESSION_USER
             // | TokenKind::SETOF
             | TokenKind::SMALLINT
@@ -819,14 +816,14 @@ impl TokenKind {
             // | TokenKind::CHAR
             // | TokenKind::CHARACTER
             | TokenKind::CREATE
-            // | TokenKind::EXCEPT
+            | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FOR
             | TokenKind::FROM
             // | TokenKind::GRANT
             | TokenKind::GROUP
             | TokenKind::HAVING
-            // | TokenKind::INTERSECT
+            | TokenKind::INTERSECT
             | TokenKind::INTO
             | TokenKind::LIMIT
             | TokenKind::OFFSET
@@ -835,7 +832,7 @@ impl TokenKind {
             // | TokenKind::PRECISION
             // | TokenKind::RETURNING
             | TokenKind::TO
-            // | TokenKind::UNION
+            | TokenKind::UNION
             | TokenKind::WHERE
             // | TokenKind::WINDOW
             | TokenKind::WITH
@@ -906,9 +903,6 @@ impl TokenKind {
             // | TokenKind::REFERENCES
             | TokenKind::RIGHT
             | TokenKind::SELECT
-            | TokenKind::UNION
-            | TokenKind::INTERSECT
-            | TokenKind::EXCEPT
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
             // | TokenKind::SOME
@@ -927,14 +921,14 @@ impl TokenKind {
             | TokenKind::ARRAY
             | TokenKind::AS
             | TokenKind::CREATE
-            // | TokenKind::EXCEPT
+            | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FOR
             | TokenKind::FROM
             // | TokenKind::GRANT
             | TokenKind::GROUP
             | TokenKind::HAVING
-            // | TokenKind::INTERSECT
+            | TokenKind::INTERSECT
             | TokenKind::INTO
             // | TokenKind::ISNULL
             | TokenKind::LIMIT
@@ -946,7 +940,7 @@ impl TokenKind {
             // | TokenKind::OVERLAPS 
             // | TokenKind::RETURNING
             | TokenKind::TO
-            // | TokenKind::UNION
+            | TokenKind::UNION
             | TokenKind::WHERE
             // | TokenKind::WINDOW
             | TokenKind::WITH

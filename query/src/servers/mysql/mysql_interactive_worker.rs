@@ -311,13 +311,17 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
                         plan.and_then(|v| InterpreterFactory::get(context.clone(), v))
                     };
-                } else {
+                } else if settings.get_enable_planner_v2()? != 0 {
                     // If old parser failed, try new planner
                     let mut planner = Planner::new(context.clone());
                     interpreter = planner
                         .plan_sql(query)
                         .await
                         .and_then(|v| InterpreterFactoryV2::get(context.clone(), &v.0));
+                } else {
+                    return Err(stmts_hints
+                        .err()
+                        .ok_or_else(|| ErrorCode::LogicalError("stmts_hints must be error"))?);
                 }
 
                 let hint = hints

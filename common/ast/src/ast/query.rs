@@ -40,18 +40,22 @@ pub struct Query<'a> {
     pub format: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetOperation<'a> {
+    pub span: &'a [Token<'a>],
+    pub op: SetOperator,
+    pub all: bool,
+    pub left: Box<SetExpr<'a>>,
+    pub right: Box<SetExpr<'a>>,
+}
+
 // A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
 #[derive(Debug, Clone, PartialEq)]
 pub enum SetExpr<'a> {
     Select(Box<SelectStmt<'a>>),
     Query(Box<Query<'a>>),
     // UNION/EXCEPT/INTERSECT operator
-    SetOperation {
-        op: SetOperator,
-        all: bool,
-        left: Box<SetExpr<'a>>,
-        right: Box<SetExpr<'a>>,
-    },
+    SetOperation(Box<SetOperation<'a>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -369,14 +373,9 @@ impl<'a> Display for SetExpr<'a> {
             SetExpr::Query(query) => {
                 write!(f, "({query})")?;
             }
-            SetExpr::SetOperation {
-                op,
-                all,
-                left,
-                right,
-            } => {
-                write!(f, "{left}")?;
-                match op {
+            SetExpr::SetOperation(set_operation) => {
+                write!(f, "{}", set_operation.left)?;
+                match set_operation.op {
                     SetOperator::Union => {
                         write!(f, " UNION ")?;
                     }
@@ -387,10 +386,10 @@ impl<'a> Display for SetExpr<'a> {
                         write!(f, " INTERSECT")?;
                     }
                 }
-                if *all {
+                if set_operation.all {
                     write!(f, " ALL")?;
                 }
-                write!(f, "{right}")?;
+                write!(f, "{}", set_operation.right)?;
             }
         }
         Ok(())

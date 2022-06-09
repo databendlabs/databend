@@ -151,14 +151,15 @@ impl<'a> Binder {
         match set_expr {
             SetExpr::Select(stmt) => self.bind_select_stmt(bind_context, stmt, order_by).await,
             SetExpr::Query(stmt) => self.bind_query(bind_context, stmt).await,
-            SetExpr::SetOperation {
-                op,
-                all,
-                left,
-                right,
-            } => {
-                self.bind_set_operator(bind_context, left, right, op, all)
-                    .await
+            SetExpr::SetOperation(set_operation) => {
+                self.bind_set_operator(
+                    bind_context,
+                    &set_operation.left,
+                    &set_operation.right,
+                    &set_operation.op,
+                    &set_operation.all,
+                )
+                .await
             }
         }
     }
@@ -215,8 +216,8 @@ impl<'a> Binder {
     pub(super) async fn bind_set_operator(
         &mut self,
         bind_context: &BindContext,
-        left: &'_ SetExpr<'_>,
-        right: &'_ SetExpr<'_>,
+        left: &SetExpr<'_>,
+        right: &SetExpr<'_>,
         op: &SetOperator,
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {
@@ -233,7 +234,7 @@ impl<'a> Binder {
                 .iter()
                 .zip(right_bind_context.columns.iter())
             {
-                if !left_col.data_type.eq(&right_col.data_type) {
+                if &left_col.data_type != &right_col.data_type {
                     return Err(ErrorCode::SemanticError(
                         "SetOperation's types cannot be matched",
                     ));
