@@ -14,7 +14,7 @@ authors:
 Deploying a data warehouse sounds like a big job to you? Definitely NOT. Databend can be deployed to your laptop and uses the local file system as storage. You can complete the deployment in a few minutes even if you're new to Databend.
 Now let's get started!
 
-:::Note
+:::tip
 
 Databend requires a scalabe storage (for example, object storage) to work. This blog uses local file system to provide you a hands-on experience. Never use a local file system as storage for production purposes.
 
