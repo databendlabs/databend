@@ -9,7 +9,7 @@ authors:
   tags: [databend, deploy]
 ---
 
-**Deploying Databend on Your Computer in Minutes**
+**Deploying Databend on Your Laptop in Minutes**
 
 
 Deploying a data warehouse sounds like a big job to you? Definitely NOT. Databend can be deployed to your laptop and uses the local file system as storage. You can complete the deployment in a few minutes even if you're new to Databend.
