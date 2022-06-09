@@ -1,0 +1,3 @@
+test_stage_internal	Internal	StageParams { storage: Fs(StorageFsConfig { root: "_data" }) }	CopyOptions { on_error: None, size_limit: 0 }	FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: "", record_delimiter: "NONE", compression: Auto }	
+test_stage	External	
+test_stage_internal	Internal	

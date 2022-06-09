@@ -78,12 +78,15 @@ impl Interpreter for SelectInterpreter {
         {
             let async_runtime = self.ctx.get_storage_runtime();
             let new_pipeline = self.create_new_pipeline()?;
+            tracing::debug!("get new_pipeline:\n{:?}", new_pipeline);
             let executor = PipelinePullingExecutor::try_create(async_runtime, new_pipeline)?;
             let (handler, stream) = ProcessorExecutorStream::create(executor)?;
             self.ctx.add_source_abort_handle(handler);
             return Ok(Box::pin(stream));
         }
         let optimized_plan = self.rewrite_plan()?;
+        tracing::debug!("get optimized plan:\n{:?}", optimized_plan);
+
         plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
     }
 

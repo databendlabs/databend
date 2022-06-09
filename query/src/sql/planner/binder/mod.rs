@@ -22,7 +22,9 @@ use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::DescribeUserStagePlan;
 use common_planners::DropUserPlan;
+use common_planners::DropUserStagePlan;
 
 use self::subquery::SubqueryRewriter;
 use super::plans::Plan;
@@ -109,6 +111,30 @@ impl<'a> Binder {
                 let plan = self.bind_create_table(stmt).await?;
                 Ok(plan)
             }
+
+            Statement::CreateStage(stmt) => {
+                let plan = self.bind_create_stage(stmt).await?;
+                Ok(plan)
+            }
+
+            Statement::ShowStages => Ok(Plan::ShowStages),
+
+            Statement::DropStage {
+                stage_name,
+                if_exists,
+            } => Ok(Plan::DropStage(Box::new(DropUserStagePlan {
+                if_exists: *if_exists,
+                name: stage_name.clone(),
+            }))),
+            Statement::DescStage { stage_name } => {
+                Ok(Plan::DescStage(Box::new(DescribeUserStagePlan {
+                    name: stage_name.clone(),
+                })))
+            }
+            Statement::ListStage {
+                stage_name,
+                pattern,
+            } => self.bind_list_stage(stage_name, pattern).await,
 
             Statement::CreateDatabase(stmt) => {
                 let plan = self.bind_create_database(stmt).await?;

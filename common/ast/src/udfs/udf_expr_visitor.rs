@@ -163,6 +163,15 @@ pub trait UDFExprVisitor: Sized + Send {
             };
         }
 
+        if let Some(over) = &function.over {
+            for partition_by in &over.partition_by {
+                UDFExprTraverser::accept(partition_by, self)?;
+            }
+            for order_by in &over.order_by {
+                UDFExprTraverser::accept(&order_by.expr, self)?;
+            }
+        }
+
         Ok(())
     }
 

@@ -17,6 +17,7 @@ use common_exception::Result;
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::plan_table_undrop::UnDropTablePlan;
+use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterClusterKeyPlan;
@@ -131,6 +132,7 @@ pub trait PlanVisitor {
             PlanNode::Broadcast(plan) => self.visit_broadcast(plan),
             PlanNode::Remote(plan) => self.visit_remote(plan),
             PlanNode::Having(plan) => self.visit_having(plan),
+            PlanNode::WindowFunc(plan) => self.visit_window_func(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
             PlanNode::Limit(plan) => self.visit_limit(plan),
             PlanNode::LimitBy(plan) => self.visit_limit_by(plan),
@@ -297,6 +299,11 @@ pub trait PlanVisitor {
     fn visit_having(&mut self, plan: &HavingPlan) -> Result<()> {
         self.visit_plan_node(plan.input.as_ref())?;
         self.visit_expr(&plan.predicate)
+    }
+
+    fn visit_window_func(&mut self, plan: &WindowFuncPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.visit_expr(&plan.window_func)
     }
 
     fn visit_sort(&mut self, plan: &SortPlan) -> Result<()> {
