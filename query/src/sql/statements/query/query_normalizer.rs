@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::extract_aliases;
 use common_planners::find_aggregate_exprs_in_expr;
+use common_planners::find_window_exprs_in_expr;
 use common_planners::resolve_aliases_to_exprs;
 use common_planners::Expression;
 use common_tracing::tracing;
@@ -50,6 +51,7 @@ impl QueryNormalizer {
                 having_predicate: None,
                 group_by_expressions: vec![],
                 aggregate_expressions: vec![],
+                window_expressions: vec![],
                 distinct: false,
                 order_by_expressions: vec![],
                 projection_expressions: vec![],
@@ -118,6 +120,7 @@ impl QueryNormalizer {
 
         for projection_expression in &projection_expressions {
             self.add_aggregate_function(projection_expression)?;
+            self.add_window_function(projection_expression)?;
         }
 
         self.query_ast_ir.projection_expressions = projection_expressions;
@@ -241,6 +244,16 @@ impl QueryNormalizer {
                 .contains(&aggregate_expr)
             {
                 self.query_ast_ir.aggregate_expressions.push(aggregate_expr);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn add_window_function(&mut self, expr: &Expression) -> Result<()> {
+        for window_expr in find_window_exprs_in_expr(expr) {
+            if !self.query_ast_ir.window_expressions.contains(&window_expr) {
+                self.query_ast_ir.window_expressions.push(window_expr);
             }
         }
 

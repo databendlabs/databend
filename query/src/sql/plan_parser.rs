@@ -129,7 +129,10 @@ impl PlanParser {
         let having = Self::build_having_plan(before_order, data)?;
         tracing::debug!("Build having plan:\n{:?}", having);
 
-        let distinct = Self::build_distinct_plan(having, data)?;
+        let window = Self::build_window_plan(having, data)?;
+        tracing::debug!("Build window plan node:\n{:?}", window);
+
+        let distinct = Self::build_distinct_plan(window, data)?;
         tracing::debug!("Build distinct plan:\n{:?}", distinct);
 
         let order_by = Self::build_order_by_plan(distinct, data)?;
@@ -252,6 +255,18 @@ impl PlanParser {
                     .expression(&data.expressions, "Before OrderBy")?
                     .build(),
             },
+        }
+    }
+
+    fn build_window_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
+        match data.window_expressions.is_empty() {
+            true => Ok(plan),
+            false => {
+                let exprs = data.window_expressions.to_vec();
+                exprs.into_iter().try_fold(plan, |input, window_func| {
+                    PlanBuilder::from(&input).window_func(window_func)?.build()
+                })
+            }
         }
     }
 

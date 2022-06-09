@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core_intrinsics)]
-#![feature(duration_checked_float)]
-#![feature(portable_simd)]
-
-pub mod aggregates;
-pub mod rdoc;
-pub mod scalars;
-pub mod window;
-
-use aggregates::AggregateFunctionFactory;
-use scalars::FunctionFactory;
-
-pub fn is_builtin_function(name: &str) -> bool {
-    FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
+pub enum WindowFunction {
+    AggregateFunction,
+    BuiltInFunction,
 }
