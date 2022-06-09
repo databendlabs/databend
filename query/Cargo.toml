@@ -63,6 +63,7 @@ sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "13
 ahash = "0.7.6"
 async-channel = "1.6.1"
 async-compat = "0.2.1"
+async-recursion = "1.0.0"
 async-stream = "0.3.3"
 async-trait = "0.1.53"
 backoff = "0.4.0"
