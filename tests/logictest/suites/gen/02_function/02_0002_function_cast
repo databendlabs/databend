@@ -464,7 +464,7 @@ statement query F
 SELECT parse_json(12.34)::float32;
 
 ----  
-12.34000015258789
+12.34
 
 statement query F 
 SELECT parse_json(1234.5678)::float64;
@@ -476,7 +476,7 @@ statement query F
 SELECT parse_json('"12.34"')::float32;
 
 ----  
-12.34000015258789
+12.34
 
 statement query F 
 SELECT parse_json('"1234.5678"')::float64;
@@ -529,26 +529,20 @@ SELECT parse_json(1)::array;
 ----  
 [1]
 
-statement query T label(mysql,http)
+statement query T
 SELECT parse_json('"ab"')::array;
 
-----  mysql
+----
 ["ab"]
-
-----  http
-['ab']
 
 statement error 1010
 SELECT parse_json('null')::array; 
 
-statement query T label(mysql,http)
+statement query T
 SELECT parse_json('{"a":1,"b":2}')::object;
 
-----  mysql
+----
 {"a":1,"b":2}
-
-----  http
-{'a': 1, 'b': 2}
 
 statement error 1010
 SELECT parse_json('"abc"')::object; 
@@ -558,4 +552,3 @@ SELECT parse_json('[1,2,3]')::object;
 
 statement error 1010
 SELECT parse_json('null')::object; 
-

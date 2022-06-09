@@ -100,6 +100,9 @@ stateless-cluster-test-tls: build-debug
 metactl-test: build-debug
 	bash ./tests/metactl/test-metactl.sh
 
+meta-bench: build-release
+	bash ./scripts/benchmark/run-meta-benchmark.sh 10 1000
+
 test: unit-test stateless-test sqllogic-test metactl-test
 
 docker:

@@ -118,13 +118,13 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         match convert_schema(block.schema()) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
-                let columns_size = block.num_columns();
                 let mut row_writer = dataset_writer.start(&columns)?;
 
                 for block in &blocks {
+                    let serializers = block.get_serializers()?;
                     let rows_size = block.column(0).len();
                     for row_index in 0..rows_size {
-                        for col_index in 0..columns_size {
+                        for (col_index, serializer) in serializers.iter().enumerate() {
                             let val = block.column(col_index).get_checked(row_index)?;
                             if val.is_null() {
                                 row_writer.write_col(None::<u8>)?;
@@ -155,36 +155,25 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 (TypeID::String, DataValue::String(v)) => {
                                     row_writer.write_col(v)?
                                 }
-                                (TypeID::Array, DataValue::Array(_)) => {
-                                    let serializer = data_type.create_serializer();
-                                    row_writer
-                                        .write_col(serializer.serialize_value(&val, format)?)?
-                                }
-                                (TypeID::Struct, DataValue::Struct(_)) => {
-                                    let serializer = data_type.create_serializer();
-                                    row_writer
-                                        .write_col(serializer.serialize_value(&val, format)?)?
-                                }
-                                (TypeID::Variant, DataValue::Variant(_)) => {
-                                    let serializer = data_type.create_serializer();
-                                    row_writer
-                                        .write_col(serializer.serialize_value(&val, format)?)?
-                                }
-                                (TypeID::VariantArray, DataValue::Variant(_)) => {
-                                    let serializer = data_type.create_serializer();
-                                    row_writer
-                                        .write_col(serializer.serialize_value(&val, format)?)?
-                                }
-                                (TypeID::VariantObject, DataValue::Variant(_)) => {
-                                    let serializer = data_type.create_serializer();
-                                    row_writer
-                                        .write_col(serializer.serialize_value(&val, format)?)?
-                                }
+                                (TypeID::Array, DataValue::Array(_)) => row_writer
+                                    .write_col(serializer.serialize_field(row_index, format)?)?,
+                                (TypeID::Struct, DataValue::Struct(_)) => row_writer
+                                    .write_col(serializer.serialize_field(row_index, format)?)?,
+                                (TypeID::Variant, DataValue::Variant(_)) => row_writer
+                                    .write_col(serializer.serialize_field(row_index, format)?)?,
+                                (TypeID::VariantArray, DataValue::Variant(_)) => row_writer
+                                    .write_col(serializer.serialize_field(row_index, format)?)?,
+                                (TypeID::VariantObject, DataValue::Variant(_)) => row_writer
+                                    .write_col(serializer.serialize_field(row_index, format)?)?,
                                 (_, DataValue::Int64(v)) => row_writer.write_col(v)?,
 
                                 (_, DataValue::UInt64(v)) => row_writer.write_col(v)?,
 
-                                (_, DataValue::Float64(v)) => row_writer.write_col(v)?,
+                                (_, DataValue::Float64(_)) => row_writer
+                                    // mysql writer use a text protocol,
+                                    // it use format!() to serialize number,
+                                    // the result will be different with our serializer for floats
+                                    .write_col(serializer.serialize_field(row_index, format)?)?,
                                 (_, v) => {
                                     return Err(ErrorCode::BadDataValueType(format!(
                                         "Unsupported column type:{:?}, expected type in schema: {:?}",
