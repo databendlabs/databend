@@ -40,6 +40,6 @@ jobs:
             ${{ steps.login.outputs.ecr_repo }}:latest
             ${{ steps.login.outputs.ecr_repo }}:${{ steps.get_version.outputs.VERSION }}
           platforms: linux/amd64
-          context: ./tests/logictest/docker/
-          file: ./tests/logictest/docker/Dockerfile
+          context: ./tests/logictest/
+          file: ./tests/logictest/Dockerfile
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
