@@ -62,7 +62,7 @@ async fn main() {
             let client =
                 MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None);
             if client.is_err() {
-                return ();
+                return;
             }
             let client = client.unwrap();
             for i in 0..config.number {
@@ -74,7 +74,6 @@ async fn main() {
                     .upsert_kv(UpsertKVReq::new(&node_key, seq, value, None))
                     .await;
             }
-            ()
         });
         handles.push(handle)
     }
