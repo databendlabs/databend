@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::tokio;
+use common_base::base::{Thread, tokio};
 use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use common_exception::{ErrorCode, Result};
@@ -57,7 +57,7 @@ impl DataExchangeManager {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
         match queries_coordinator.get_mut(query_id) {
-            None => Err(ErrorCode::LogicalError(format!("Query {} not found in cluster.", publisher_packet.query_id))),
+            None => Err(ErrorCode::LogicalError(format!("Query {} not found in cluster.", query_id))),
             Some(coordinator) => coordinator.execute_pipeline()
         }
     }
@@ -236,7 +236,22 @@ impl QueryCoordinator {
     }
 
     pub fn execute_pipeline(&mut self) -> Result<()> {
-        Err(ErrorCode::UnImplement("execute_pipeline"))
+        let mut pipelines = Vec::with_capacity(self.fragments_coordinator.len());
+
+        for (_, coordinator) in self.fragments_coordinator.iter_mut() {
+            if let Some(pipeline) = coordinator.pipeline.take() {
+                pipelines.push(pipeline);
+            }
+        }
+
+        let async_runtime = self.ctx.get_storage_runtime();
+        let complete_executor = PipelineCompleteExecutor::from_pipelines(async_runtime, pipelines)?;
+
+        Thread::named_spawn(Some(String::from("Executor")), move || {
+            complete_executor.execute().unwrap();
+        });
+
+        Ok(())
     }
 
     pub fn init_publisher(&mut self, config: Config, packet: &PublisherPacket) -> Result<()> {

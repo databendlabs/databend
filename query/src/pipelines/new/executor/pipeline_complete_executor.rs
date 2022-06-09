@@ -28,10 +28,7 @@ pub struct PipelineCompleteExecutor {
 // Use this executor when the pipeline is complete pipeline (has source and sink)
 #[allow(dead_code)]
 impl PipelineCompleteExecutor {
-    pub fn try_create(
-        async_runtime: Arc<Runtime>,
-        pipeline: NewPipeline,
-    ) -> Result<PipelineCompleteExecutor> {
+    pub fn try_create(async_runtime: Arc<Runtime>, pipeline: NewPipeline) -> Result<PipelineCompleteExecutor> {
         if !pipeline.is_complete_pipeline()? {
             return Err(ErrorCode::LogicalError(
                 "Logical error, PipelineCompleteExecutor can only work on complete pipeline.",
@@ -40,6 +37,19 @@ impl PipelineCompleteExecutor {
 
         let executor = PipelineExecutor::create(async_runtime, pipeline)?;
 
+        Ok(PipelineCompleteExecutor { executor })
+    }
+
+    pub fn from_pipelines(async_runtime: Arc<Runtime>, pipelines: Vec<NewPipeline>) -> Result<PipelineCompleteExecutor> {
+        for pipeline in &pipelines {
+            if !pipeline.is_complete_pipeline()? {
+                return Err(ErrorCode::LogicalError(
+                    "Logical error, PipelineCompleteExecutor can only work on complete pipeline.",
+                ));
+            }
+        }
+
+        let executor = PipelineExecutor::from_pipelines(async_runtime, pipelines)?;
         Ok(PipelineCompleteExecutor { executor })
     }
 
