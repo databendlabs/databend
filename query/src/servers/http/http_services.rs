@@ -35,6 +35,7 @@ use crate::servers::Server;
 use crate::sessions::SessionManager;
 use crate::Config;
 
+#[derive(Copy, Clone)]
 pub enum HttpHandlerKind {
     Query,
     Clickhouse,
@@ -94,6 +95,7 @@ impl HttpHandler {
             HttpHandlerKind::Clickhouse => Route::new().nest("/", clickhouse_router()),
         };
         ep.with(HTTPSessionMiddleware {
+            kind: self.kind,
             session_manager: self.session_manager.clone(),
         })
         .boxed()
