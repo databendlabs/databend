@@ -366,7 +366,7 @@ impl Catalog for DatabaseCatalog {
                 "Tenant can not empty(while undrop table)",
             ));
         }
-        tracing::info!("UnDrop table from req:{:?}", req);
+        tracing::info!("Undrop table from req:{:?}", req);
 
         if self
             .immutable_catalog
@@ -384,7 +384,7 @@ impl Catalog for DatabaseCatalog {
                 "Tenant can not empty(while undrop database)",
             ));
         }
-        tracing::info!("UnDrop database from req:{:?}", req);
+        tracing::info!("Undrop database from req:{:?}", req);
 
         if self
             .immutable_catalog

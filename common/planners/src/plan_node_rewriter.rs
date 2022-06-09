@@ -23,11 +23,11 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::plan_table_undrop::UnDropTablePlan;
+use crate::plan_table_undrop::UndropTablePlan;
 use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
-use crate::AlterClusterKeyPlan;
+use crate::AlterTableClusterKeyPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::AlterViewPlan;
@@ -42,9 +42,9 @@ use crate::CreateUserUDFPlan;
 use crate::CreateViewPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
-use crate::DropClusterKeyPlan;
 use crate::DropDatabasePlan;
 use crate::DropRolePlan;
+use crate::DropTableClusterKeyPlan;
 use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
@@ -85,7 +85,7 @@ use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
-use crate::UnDropDatabasePlan;
+use crate::UndropDatabasePlan;
 use crate::UseDatabasePlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
@@ -152,11 +152,11 @@ pub trait PlanRewriter: Sized {
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
             PlanNode::RenameDatabase(plan) => self.rewrite_rename_database(plan),
-            PlanNode::UnDropDatabase(plan) => self.rewrite_undrop_database(plan),
+            PlanNode::UndropDatabase(plan) => self.rewrite_undrop_database(plan),
             // Table.
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
-            PlanNode::UnDropTable(plan) => self.rewrite_undrop_table(plan),
+            PlanNode::UndropTable(plan) => self.rewrite_undrop_table(plan),
             PlanNode::RenameTable(plan) => self.rewrite_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
@@ -207,8 +207,8 @@ pub trait PlanRewriter: Sized {
             PlanNode::Kill(plan) => self.rewrite_kill(plan),
 
             // Cluster Key.
-            PlanNode::AlterClusterKey(plan) => self.rewrite_alter_cluster_key(plan),
-            PlanNode::DropClusterKey(plan) => self.rewrite_drop_cluster_key(plan),
+            PlanNode::AlterTableClusterKey(plan) => self.rewrite_alter_table_cluster_key(plan),
+            PlanNode::DropTableClusterKey(plan) => self.rewrite_drop_table_cluster_key(plan),
         }
     }
 
@@ -426,16 +426,16 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::DropTable(plan.clone()))
     }
 
-    fn rewrite_undrop_table(&mut self, plan: &UnDropTablePlan) -> Result<PlanNode> {
-        Ok(PlanNode::UnDropTable(plan.clone()))
+    fn rewrite_undrop_table(&mut self, plan: &UndropTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::UndropTable(plan.clone()))
     }
 
     fn rewrite_drop_database(&mut self, plan: &DropDatabasePlan) -> Result<PlanNode> {
         Ok(PlanNode::DropDatabase(plan.clone()))
     }
 
-    fn rewrite_undrop_database(&mut self, plan: &UnDropDatabasePlan) -> Result<PlanNode> {
-        Ok(PlanNode::UnDropDatabase(plan.clone()))
+    fn rewrite_undrop_database(&mut self, plan: &UndropDatabasePlan) -> Result<PlanNode> {
+        Ok(PlanNode::UndropDatabase(plan.clone()))
     }
 
     fn rewrite_insert_into(&mut self, plan: &InsertPlan) -> Result<PlanNode> {
@@ -534,12 +534,18 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::RemoveUserStage(plan.clone()))
     }
 
-    fn rewrite_alter_cluster_key(&mut self, plan: &AlterClusterKeyPlan) -> Result<PlanNode> {
-        Ok(PlanNode::AlterClusterKey(plan.clone()))
+    fn rewrite_alter_table_cluster_key(
+        &mut self,
+        plan: &AlterTableClusterKeyPlan,
+    ) -> Result<PlanNode> {
+        Ok(PlanNode::AlterTableClusterKey(plan.clone()))
     }
 
-    fn rewrite_drop_cluster_key(&mut self, plan: &DropClusterKeyPlan) -> Result<PlanNode> {
-        Ok(PlanNode::DropClusterKey(plan.clone()))
+    fn rewrite_drop_table_cluster_key(
+        &mut self,
+        plan: &DropTableClusterKeyPlan,
+    ) -> Result<PlanNode> {
+        Ok(PlanNode::DropTableClusterKey(plan.clone()))
     }
 }
 

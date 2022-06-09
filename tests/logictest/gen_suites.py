@@ -260,7 +260,8 @@ def main(pattern=".*"):
 
     for file in all_cases:
         if not re.match(pattern, file):
-            log.debug("Test file {}  does not match pattern {}".format(file, pattern))
+            log.debug("Test file {}  does not match pattern {}".format(
+                file, pattern))
             continue
         log.info("Test file {} match pattern {}".format(file, pattern))
 

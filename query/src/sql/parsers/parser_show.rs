@@ -24,8 +24,8 @@ use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowKind;
 use crate::sql::statements::DfShowStages;
-use crate::sql::statements::DfShowTabStat;
 use crate::sql::statements::DfShowTables;
+use crate::sql::statements::DfShowTablesStatus;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -51,7 +51,7 @@ impl<'a> DfParser<'a> {
             fromdb = Some(self.parser.parse_object_name()?.0[0].value.clone());
         }
         let kind = self.parse_show_kind()?;
-        Ok(DfStatement::ShowTabStat(DfShowTabStat::create(
+        Ok(DfStatement::ShowTablesStatus(DfShowTablesStatus::create(
             kind, fromdb,
         )))
     }

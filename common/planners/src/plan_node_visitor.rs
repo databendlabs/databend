@@ -16,11 +16,11 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::plan_table_undrop::UnDropTablePlan;
+use crate::plan_table_undrop::UndropTablePlan;
 use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
-use crate::AlterClusterKeyPlan;
+use crate::AlterTableClusterKeyPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::AlterViewPlan;
@@ -35,9 +35,9 @@ use crate::CreateUserUDFPlan;
 use crate::CreateViewPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
-use crate::DropClusterKeyPlan;
 use crate::DropDatabasePlan;
 use crate::DropRolePlan;
+use crate::DropTableClusterKeyPlan;
 use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
@@ -75,7 +75,7 @@ use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
-use crate::UnDropDatabasePlan;
+use crate::UndropDatabasePlan;
 use crate::UseDatabasePlan;
 
 /// `PlanVisitor` implements visitor pattern(reference [syn](https://docs.rs/syn/1.0.72/syn/visit/trait.Visit.html)) for `PlanNode`.
@@ -164,11 +164,11 @@ pub trait PlanVisitor {
             PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
             PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
             PlanNode::RenameDatabase(plan) => self.visit_rename_database(plan),
-            PlanNode::UnDropDatabase(plan) => self.visit_undrop_database(plan),
+            PlanNode::UndropDatabase(plan) => self.visit_undrop_database(plan),
             // Table.
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
-            PlanNode::UnDropTable(plan) => self.visit_undrop_table(plan),
+            PlanNode::UndropTable(plan) => self.visit_undrop_table(plan),
             PlanNode::RenameTable(plan) => self.visit_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
@@ -219,8 +219,8 @@ pub trait PlanVisitor {
             PlanNode::Kill(plan) => self.visit_kill_query(plan),
 
             // Cluster Key.
-            PlanNode::AlterClusterKey(plan) => self.visit_alter_cluster_key(plan),
-            PlanNode::DropClusterKey(plan) => self.visit_drop_cluster_key(plan),
+            PlanNode::AlterTableClusterKey(plan) => self.visit_alter_table_cluster_key(plan),
+            PlanNode::DropTableClusterKey(plan) => self.visit_drop_table_cluster_key(plan),
         }
     }
 
@@ -409,11 +409,11 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_undrop_table(&mut self, _: &UnDropTablePlan) -> Result<()> {
+    fn visit_undrop_table(&mut self, _: &UndropTablePlan) -> Result<()> {
         Ok(())
     }
 
-    fn visit_undrop_database(&mut self, _: &UnDropDatabasePlan) -> Result<()> {
+    fn visit_undrop_database(&mut self, _: &UndropDatabasePlan) -> Result<()> {
         Ok(())
     }
 
@@ -496,11 +496,11 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_alter_cluster_key(&mut self, _: &AlterClusterKeyPlan) -> Result<()> {
+    fn visit_alter_table_cluster_key(&mut self, _: &AlterTableClusterKeyPlan) -> Result<()> {
         Ok(())
     }
 
-    fn visit_drop_cluster_key(&mut self, _: &DropClusterKeyPlan) -> Result<()> {
+    fn visit_drop_table_cluster_key(&mut self, _: &DropTableClusterKeyPlan) -> Result<()> {
         Ok(())
     }
 }

@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::validate_expression;
-use common_planners::AlterClusterKeyPlan;
+use common_planners::AlterTableClusterKeyPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -26,21 +26,24 @@ use super::Interpreter;
 use super::InterpreterPtr;
 use crate::sessions::QueryContext;
 
-pub struct AlterClusterKeyInterpreter {
+pub struct AlterTableClusterKeyInterpreter {
     ctx: Arc<QueryContext>,
-    plan: AlterClusterKeyPlan,
+    plan: AlterTableClusterKeyPlan,
 }
 
-impl AlterClusterKeyInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterClusterKeyPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(AlterClusterKeyInterpreter { ctx, plan }))
+impl AlterTableClusterKeyInterpreter {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        plan: AlterTableClusterKeyPlan,
+    ) -> Result<InterpreterPtr> {
+        Ok(Arc::new(AlterTableClusterKeyInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for AlterClusterKeyInterpreter {
+impl Interpreter for AlterTableClusterKeyInterpreter {
     fn name(&self) -> &str {
-        "AlterClusterKeyInterpreter"
+        "AlterTableClusterKeyInterpreter"
     }
 
     async fn execute(
@@ -79,7 +82,7 @@ impl Interpreter for AlterClusterKeyInterpreter {
         let cluster_key_str = format!("({})", cluster_key_vec.join(", "));
 
         table
-            .alter_cluster_keys(self.ctx.clone(), &self.plan.catalog_name, cluster_key_str)
+            .alter_table_cluster_keys(self.ctx.clone(), &self.plan.catalog_name, cluster_key_str)
             .await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

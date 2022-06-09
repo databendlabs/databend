@@ -64,9 +64,9 @@ pub struct DfCreateTable {
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog, db, table) = resolve_table(&ctx, &self.name, "CREATE TABLE")?;
+        let (catalog, database, table) = resolve_table(&ctx, &self.name, "CREATE TABLE")?;
         let mut table_meta = self
-            .table_meta(ctx.clone(), catalog.as_str(), db.as_str())
+            .table_meta(ctx.clone(), catalog.as_str(), database.as_str())
             .await?;
         let if_not_exists = self.if_not_exists;
         let tenant = ctx.get_tenant();
@@ -115,7 +115,7 @@ impl AnalyzableStatement for DfCreateTable {
                 if_not_exists,
                 tenant,
                 catalog,
-                db,
+                database,
                 table,
                 table_meta,
                 cluster_keys: self.cluster_keys.iter().map(ToString::to_string).collect(),
