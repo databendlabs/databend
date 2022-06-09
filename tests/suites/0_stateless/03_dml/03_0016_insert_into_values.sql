@@ -12,4 +12,11 @@ select * from t1;
 select sum(a),sum(b) from t1;
 
 
+CREATE TABLE IF NOT EXISTS t_str(a Varchar);
+INSERT INTO t_str(a) values( 'a"b\"c\'d');
+INSERT INTO t_str(a) values( 'a"b\"c\\\'d');
+select * from t_str;
+
+drop table t_str;
+
 DROP DATABASE db1;
