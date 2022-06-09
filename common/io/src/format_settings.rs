@@ -41,8 +41,8 @@ impl Default for FormatSettings {
             skip_header: false,
             compression: Compression::None,
             timezone: "UTC".parse::<Tz>().unwrap(),
-            true_bytes: vec![b't', b'r', b'u', b'e'],
-            false_bytes: vec![b'f', b'a', b'l', b's', b'e'],
+            true_bytes: vec![b'1'],
+            false_bytes: vec![b'0'],
         }
     }
 }

@@ -280,9 +280,9 @@ impl QueryContextShared {
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
         let settings = self.get_settings();
         let mut format = FormatSettings::default();
-        if let SessionType::MySQL = self.session.get_type() {
-            format.false_bytes = vec![b'0'];
-            format.true_bytes = vec![b'1'];
+        if let SessionType::HTTPQuery = self.session.get_type() {
+            format.false_bytes = vec![b'f', b'a', b'l', b's', b'e'];
+            format.true_bytes = vec![b't', b'r', b'u', b'e'];
         }
         {
             format.record_delimiter = settings.get_record_delimiter()?;
