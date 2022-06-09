@@ -1,7 +1,6 @@
 ---
 title: Deploying Databend on Your Laptop in Minutes
-description: This is my first post on Databend.
-slug: Quick-Deploy
+description: A quick Databend deployment guide
 authors:
 - name: Eric
   url: https://github.com/soyeric128
@@ -18,7 +17,7 @@ Now let's get started!
 <table><tr><td bgcolor=navyblue>Databend requires a scalabe storage (for example, object storage) to work. This blog uses local file system to provide you a hands-on experience. Never use a local file system as storage for production purposes.</td></tr></table>
 
 
-##STEP 1. Downloading Databend
+## STEP 1. Downloading Databend
 
 a. Create a folder named `databend` in the directory `/usr/local`. Then create the following subfolders in the folder `databend`:
 
@@ -31,7 +30,7 @@ b. Download and extract the latest Databend package for your platform from [http
 
 c. Move the extracted files `databend-meta` and `databend-query` to the folder `/usr/local/databend/bin`.
 
-##STEP 2. Deploying a Standalone databend-meta
+## STEP 2. Deploying a Standalone databend-meta
 
 a. Create a file named `databend-meta.toml` in the folder `/usr/local/databend/etc` with the following content:
 
@@ -61,7 +60,7 @@ d. Run the following command to check if databend-meta was started successfully:
 curl -I  http://127.0.0.1:8101/v1/health
 ```
 
-##STEP 3. Deploying a Standalone databend-query
+## STEP 3. Deploying a Standalone databend-query
 
 a. Create a file named `databend-meta.toml` in the folder `/usr/local/databend/etc` with the following content:
 
@@ -135,8 +134,4 @@ CREATE TABLE t1(a int);
 INSERT INTO t1 VALUES(1), (2);
 
 SELECT * FROM t1;
-
 ```
-
-
-
