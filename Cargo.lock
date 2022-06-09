@@ -983,6 +983,7 @@ dependencies = [
  "pratt",
  "pretty_assertions",
  "regex",
+ "serde",
  "sqlparser",
  "thiserror",
 ]
@@ -1421,6 +1422,7 @@ name = "common-planners"
 version = "0.1.0"
 dependencies = [
  "bitflags",
+ "common-ast",
  "common-datablocks",
  "common-datavalues",
  "common-exception",

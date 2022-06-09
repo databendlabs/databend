@@ -38,9 +38,9 @@ impl AnalyzableStatement for DfUseDatabase {
             return Result::Err(ErrorCode::SyntaxException("Use database name is empty"));
         }
 
-        let db = self.name.0[0].value.clone();
+        let database = self.name.0[0].value.clone();
         Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::UseDatabase(UseDatabasePlan { db }),
+            PlanNode::UseDatabase(UseDatabasePlan { database }),
         )))
     }
 }

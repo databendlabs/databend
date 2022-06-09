@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::OptimizeTableAction;
 use common_exception::Result;
-use common_planners::Optimization;
 use common_planners::OptimizeTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -53,10 +53,16 @@ impl Interpreter for OptimizeTableInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
-        let operation = &plan.operation;
 
-        let do_purge = operation.contains(Optimization::PURGE);
-        let do_compact = operation.contains(Optimization::COMPACT);
+        let action = &plan.action;
+        let do_purge = matches!(
+            action,
+            OptimizeTableAction::Purge | OptimizeTableAction::All
+        );
+        let do_compact = matches!(
+            action,
+            OptimizeTableAction::Compact | OptimizeTableAction::All
+        );
 
         if do_compact {
             // it is a "simple and violent" strategy, to be optimized later
