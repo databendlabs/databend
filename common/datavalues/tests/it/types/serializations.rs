@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
+use common_datavalues::serializations::NullSerializer;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use pretty_assertions::assert_eq;
@@ -25,7 +26,6 @@ fn test_serializers() -> Result<()> {
     struct Test {
         name: &'static str,
         data_type: DataTypeImpl,
-        value: DataValue,
         column: ColumnRef,
         val_str: &'static str,
         col_str: Vec<String>,
@@ -35,7 +35,6 @@ fn test_serializers() -> Result<()> {
         Test {
             name: "boolean",
             data_type: BooleanType::new_impl(),
-            value: DataValue::Boolean(true),
             column: Series::from_data(vec![true, false, true]),
             val_str: "1",
             col_str: vec!["1".to_owned(), "0".to_owned(), "1".to_owned()],
@@ -43,7 +42,6 @@ fn test_serializers() -> Result<()> {
         Test {
             name: "int8",
             data_type: Int8Type::new_impl(),
-            value: DataValue::Int64(1),
             column: Series::from_data(vec![1i8, 2i8, 1]),
             val_str: "1",
             col_str: vec!["1".to_owned(), "2".to_owned(), "1".to_owned()],
@@ -51,7 +49,6 @@ fn test_serializers() -> Result<()> {
         Test {
             name: "datetime32",
             data_type: TimestampType::new_impl(0),
-            value: DataValue::UInt64(1630320462000000),
             column: Series::from_data(vec![1630320462000000i64, 1637117572000000i64, 1000000]),
             val_str: "2021-08-30 10:47:42",
             col_str: vec![
@@ -63,7 +60,6 @@ fn test_serializers() -> Result<()> {
         Test {
             name: "date32",
             data_type: DateType::new_impl(),
-            value: DataValue::Int64(18869),
             column: Series::from_data(vec![18869i32, 18948i32, 1]),
             val_str: "2021-08-30",
             col_str: vec![
@@ -75,7 +71,6 @@ fn test_serializers() -> Result<()> {
         Test {
             name: "string",
             data_type: StringType::new_impl(),
-            value: DataValue::String("hello".as_bytes().to_vec()),
             column: Series::from_data(vec!["hello", "world", "NULL"]),
             val_str: "hello",
             col_str: vec!["hello".to_owned(), "world".to_owned(), "NULL".to_owned()],
@@ -83,16 +78,12 @@ fn test_serializers() -> Result<()> {
         Test {
             name: "array",
             data_type: DataTypeImpl::Array(ArrayType::create(StringType::new_impl())),
-            value: DataValue::Array(vec![
-                DataValue::String("data".as_bytes().to_vec()),
-                DataValue::String("bend".as_bytes().to_vec()),
-            ]),
             column: Arc::new(ArrayColumn::from_data(
                 DataTypeImpl::Array(ArrayType::create(StringType::new_impl())),
                 vec![0, 1, 3, 6].into(),
                 Series::from_data(vec!["test", "data", "bend", "hello", "world", "NULL"]),
             )),
-            val_str: "['data', 'bend']",
+            val_str: "['test']",
             col_str: vec![
                 "['test']".to_owned(),
                 "['data', 'bend']".to_owned(),
@@ -105,7 +96,6 @@ fn test_serializers() -> Result<()> {
                 vec!["date".to_owned(), "integer".to_owned()],
                 vec![DateType::new_impl(), Int8Type::new_impl()],
             )),
-            value: DataValue::Struct(vec![DataValue::Int64(18869), DataValue::Int64(1)]),
             column: Arc::new(StructColumn::from_data(
                 vec![
                     Series::from_data(vec![18869i32, 18948i32, 1]),
@@ -126,7 +116,6 @@ fn test_serializers() -> Result<()> {
         Test {
             name: "variant",
             data_type: VariantType::new_impl(),
-            value: DataValue::Variant(VariantValue::from(json!(true))),
             column: Arc::new(VariantColumn::new_from_vec(vec![
                 VariantValue::from(json!(null)),
                 VariantValue::from(json!(true)),
@@ -134,7 +123,7 @@ fn test_serializers() -> Result<()> {
                 VariantValue::from(json!(123)),
                 VariantValue::from(json!(12.34)),
             ])),
-            val_str: "true",
+            val_str: "null",
             col_str: vec![
                 "null".to_owned(),
                 "true".to_owned(),
@@ -147,11 +136,14 @@ fn test_serializers() -> Result<()> {
 
     let format = FormatSettings::default();
     for test in tests {
-        let serializer = test.data_type.create_serializer();
-        let val_res = serializer.serialize_value(&test.value, &format)?;
+        let serializer = test.data_type.create_serializer(&test.column)?;
+        let val_res = serializer.serialize_field(0, &format)?;
         assert_eq!(&val_res, test.val_str, "case: {:#?}", test.name);
 
-        let col_res = serializer.serialize_column(&test.column, &format)?;
+        let mut col_res = vec![];
+        for i in 0..test.column.len() {
+            col_res.push(serializer.serialize_field(i, &format)?);
+        }
         assert_eq!(col_res, test.col_str, "case: {:#?}", test.name);
     }
 
@@ -170,14 +162,17 @@ fn test_serializers() -> Result<()> {
                 DateType::new_impl(),
             ],
         );
-        let serializer = data_type.create_serializer();
-        let value = DataValue::Struct(vec![
-            DataValue::Float64(1.2),
-            DataValue::String("hello".as_bytes().to_vec()),
-            DataValue::Boolean(true),
-            DataValue::UInt64(18869),
-        ]);
-        let result = serializer.serialize_value(&value, &format)?;
+        let column: ColumnRef = Arc::new(StructColumn::from_data(
+            vec![
+                Series::from_data(vec![1.2f64]),
+                Series::from_data(vec!["hello"]),
+                Series::from_data(vec![true]),
+                Series::from_data(vec![18869i32]),
+            ],
+            DataTypeImpl::Struct(data_type),
+        ));
+        let serializer = column.data_type().create_serializer(&column)?;
+        let result = serializer.serialize_field(0, &format)?;
         let expect = "(1.2, 'hello', 1, '2021-08-30')";
         assert_eq!(&result, expect);
     }
@@ -196,8 +191,8 @@ fn test_convert_arrow() {
 
 #[test]
 fn test_enum_dispatch() -> Result<()> {
-    let c = StringSerializer {};
+    let c = NullSerializer { size: 0 };
     let d: TypeSerializerImpl = c.into();
-    let _: StringSerializer = d.try_into()?;
+    let _: NullSerializer = d.try_into()?;
     Ok(())
 }

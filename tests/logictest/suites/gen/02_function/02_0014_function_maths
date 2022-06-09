@@ -110,14 +110,11 @@ SELECT ln(NULL);
 ----  
 NULL
 
-statement query F label(mysql,http)
+statement query F
 SELECT ln(1, 2);
 
-----  mysql
+----
 inf
-
-----  http
-NULL
 
 statement query T 
 SELECT log10(NULL);
@@ -223,14 +220,11 @@ SELECT tan(pi()/4);
 ----  
 0.9999999999999999
 
-statement query F label(mysql,http)
+statement query F
 SELECT cot(0);
 
-----  mysql
+----
 inf
-
-----  http
-NULL
 
 statement query F 
 SELECT cot(pi()/4);
@@ -251,7 +245,7 @@ SELECT asin(1.1);
 nan
 
 ----  http
-NULL
+NaN
 
 statement query F 
 SELECT acos(1);
@@ -266,7 +260,7 @@ SELECT acos(1.0001);
 nan
 
 ----  http
-NULL
+NaN
 
 statement query F 
 SELECT atan(1);
@@ -355,7 +349,7 @@ SELECT sqrt(-4);
 nan
 
 ----  http
-NULL
+NaN
 
 statement error 1007
 SELECT sqrt('a'); 

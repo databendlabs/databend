@@ -68,11 +68,11 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         let mut formater = fmt.create_format(schema.clone());
         let buffer = formater.serialize_block(&block, &format_setting)?;
 
-        let json_block = String::from_utf8(buffer)?;
+        let csv_block = String::from_utf8(buffer)?;
         let expect = "1\ta\t1\t1.1\t1970-01-02\n\
                             2\tb\t1\t2.2\t1970-01-03\n\
                             3\tc\t0\t3.3\t1970-01-04\n";
-        assert_eq!(&json_block, expect);
+        assert_eq!(&csv_block, expect);
     }
 
     {

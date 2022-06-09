@@ -25,13 +25,14 @@ use super::output_format_parquet::ParquetOutputFormat;
 use super::output_format_values::ValuesOutputFormat;
 use crate::formats::output_format_csv::CSVOutputFormat;
 use crate::formats::output_format_csv::TSVOutputFormat;
-
 pub trait OutputFormat: Send {
     fn serialize_block(
         &mut self,
-        data_block: &DataBlock,
-        format_setting: &FormatSettings,
-    ) -> Result<Vec<u8>>;
+        _data_block: &DataBlock,
+        _format_setting: &FormatSettings,
+    ) -> Result<Vec<u8>> {
+        unimplemented!()
+    }
 
     fn finalize(&mut self) -> Result<Vec<u8>>;
 }
