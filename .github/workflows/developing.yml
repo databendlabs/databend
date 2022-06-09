@@ -57,7 +57,7 @@ jobs:
           target: ${{ matrix.target }}
 
   build_linux:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux]
     needs: check
     strategy:
       matrix:
