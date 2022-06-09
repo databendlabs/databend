@@ -464,7 +464,7 @@ statement query F
 SELECT parse_json(12.34)::float32;
 
 ----  
-12.34000015258789
+12.34
 
 statement query F 
 SELECT parse_json(1234.5678)::float64;
@@ -476,7 +476,7 @@ statement query F
 SELECT parse_json('"12.34"')::float32;
 
 ----  
-12.34000015258789
+12.34
 
 statement query F 
 SELECT parse_json('"1234.5678"')::float64;
