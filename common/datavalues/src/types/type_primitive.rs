@@ -21,6 +21,8 @@ use common_exception::Result;
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::NumberSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 #[derive(Default, Clone, Copy, serde::Deserialize, serde::Serialize)]
 
@@ -108,8 +110,11 @@ macro_rules! impl_numeric {
                 ArrowType::$tname
             }
 
-            fn create_serializer(&self) -> TypeSerializerImpl {
-                NumberSerializer::<$ty>::default().into()
+            fn create_serializer_inner<'a>(
+                &self,
+                col: &'a ColumnRef,
+            ) -> Result<TypeSerializerImpl<'a>> {
+                Ok(NumberSerializer::<'a, $ty>::try_create(col)?.into())
             }
 
             fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
