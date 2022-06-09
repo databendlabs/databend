@@ -65,24 +65,10 @@ pub async fn parse_stage_location(
     let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
     let stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
 
-    let path = names.get(1).unwrap_or(&"");
+    let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
 
-    let relative_path = match stage.stage_type {
-        // It's internal, so we should prefix with stage name.
-        StageType::Internal => {
-            format!("/stage/{}/{}", stage.stage_name, path)
-        }
-        StageType::External => {
-            let mut path = path.to_string();
-            if path.is_empty() {
-                path.push('/');
-            }
-            if !path.starts_with('/') {
-                path.insert(0, '/')
-            }
-            path
-        }
-    };
+    let prefix = stage.get_prefix();
+    let relative_path = format!("{prefix}{path}");
 
     debug!("parsed stage: {stage:?}, path: {relative_path}");
     Ok((stage, relative_path))

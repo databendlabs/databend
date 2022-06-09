@@ -1379,6 +1379,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "common-building",
+ "common-datavalues",
  "common-exception",
  "common-io",
  "derive_more",

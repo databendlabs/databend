@@ -176,13 +176,13 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 let txn_req = TxnRequest {
                     condition: vec![
-                        txn_cond_seq(name_key, Eq, 0)?,
-                        txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq)?,
+                        txn_cond_seq(name_key, Eq, 0),
+                        txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
                     ],
                     if_then: vec![
-                        txn_op_put(name_key, serialize_u64(db_id)?)?, // (tenant, db_name) -> db_id
-                        txn_op_put(&id_key, serialize_struct(&req.meta)?)?, // (db_id) -> db_meta
-                        txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?)?, // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
+                        txn_op_put(name_key, serialize_u64(db_id)?), // (tenant, db_name) -> db_id
+                        txn_op_put(&id_key, serialize_struct(&req.meta)?), // (db_id) -> db_meta
+                        txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?), // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
                     ],
                     else_then: vec![],
                 };
@@ -253,12 +253,12 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 let txn_req = TxnRequest {
                     condition: vec![
-                        txn_cond_seq(tenant_dbname, Eq, db_id_seq)?,
-                        txn_cond_seq(&db_id_key, Eq, db_meta_seq)?,
+                        txn_cond_seq(tenant_dbname, Eq, db_id_seq),
+                        txn_cond_seq(&db_id_key, Eq, db_meta_seq),
                     ],
                     if_then: vec![
-                        txn_op_del(tenant_dbname)?, // (tenant, db_name) -> db_id
-                        txn_op_put(&db_id_key, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
+                        txn_op_del(tenant_dbname), // (tenant, db_name) -> db_id
+                        txn_op_put(&db_id_key, serialize_struct(&db_meta)?), // (db_id) -> db_meta
                     ],
                     else_then: vec![],
                 };
@@ -357,13 +357,13 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 let txn_req = TxnRequest {
                     condition: vec![
-                        txn_cond_seq(name_key, Eq, 0)?,
-                        txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq)?,
-                        txn_cond_seq(&dbid, Eq, db_meta_seq)?,
+                        txn_cond_seq(name_key, Eq, 0),
+                        txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
+                        txn_cond_seq(&dbid, Eq, db_meta_seq),
                     ],
                     if_then: vec![
-                        txn_op_put(name_key, serialize_u64(db_id)?)?, // (tenant, db_name) -> db_id
-                        txn_op_put(&dbid, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
+                        txn_op_put(name_key, serialize_u64(db_id)?), // (tenant, db_name) -> db_id
+                        txn_op_put(&dbid, serialize_struct(&db_meta)?), // (db_id) -> db_meta
                     ],
                     else_then: vec![],
                 };
@@ -488,17 +488,17 @@ impl<KV: KVApi> SchemaApi for KV {
                 let txn_req = TxnRequest {
                     condition: vec![
                         // Prevent renaming or deleting in other threads.
-                        txn_cond_seq(tenant_dbname, Eq, old_db_id_seq)?,
-                        txn_cond_seq(&tenant_newdbname, Eq, 0)?,
-                        txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq)?,
-                        txn_cond_seq(&new_dbid_idlist, Eq, new_db_id_list_seq)?,
+                        txn_cond_seq(tenant_dbname, Eq, old_db_id_seq),
+                        txn_cond_seq(&tenant_newdbname, Eq, 0),
+                        txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
+                        txn_cond_seq(&new_dbid_idlist, Eq, new_db_id_list_seq),
                     ],
                     if_then: vec![
-                        txn_op_del(tenant_dbname)?, // del old_db_name
+                        txn_op_del(tenant_dbname), // del old_db_name
                         //Renaming db should not affect the seq of db_meta. Just modify db name.
-                        txn_op_put(&tenant_newdbname, serialize_u64(old_db_id)?)?, // (tenant, new_db_name) -> old_db_id
-                        txn_op_put(&new_dbid_idlist, serialize_struct(&new_db_id_list)?)?, // _fd_db_id_list/tenant/new_db_name -> new_db_id_list
-                        txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?)?, // _fd_db_id_list/tenant/db_name -> db_id_list
+                        txn_op_put(&tenant_newdbname, serialize_u64(old_db_id)?), // (tenant, new_db_name) -> old_db_id
+                        txn_op_put(&new_dbid_idlist, serialize_struct(&new_db_id_list)?), // _fd_db_id_list/tenant/new_db_name -> new_db_id_list
+                        txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?), // _fd_db_id_list/tenant/db_name -> db_id_list
                     ],
                     else_then: vec![],
                 };
@@ -762,23 +762,23 @@ impl<KV: KVApi> SchemaApi for KV {
                     condition: vec![
                         // db has not to change, i.e., no new table is created.
                         // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
+                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
                         // no other table with the same name is inserted.
-                        txn_cond_seq(&dbid_tbname, Eq, 0)?,
+                        txn_cond_seq(&dbid_tbname, Eq, 0),
                         // no other table id with the same name is append.
-                        txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq)?,
+                        txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
                         // update table count atomicly
-                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq)?,
+                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq),
                     ],
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
-                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
-                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
-                        txn_op_put(&tbid, serialize_struct(&req.table_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
-                        txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
-                        txn_op_put(&tb_count_key, serialize_u64(tb_count + 1)?)?, // _fd_table_count/tenant -> tb_count
+                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), // (db_id) -> db_meta
+                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), // (tenant, db_id, tb_name) -> tb_id
+                        txn_op_put(&tbid, serialize_struct(&req.table_meta)?), // (tenant, db_id, tb_id) -> tb_meta
+                        txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?), // _fd_table_id_list/db_id/table_name -> tb_id_list
+                        txn_op_put(&tb_count_key, serialize_u64(tb_count + 1)?), // _fd_table_count/tenant -> tb_count
                     ],
                     else_then: vec![],
                 };
@@ -886,22 +886,22 @@ impl<KV: KVApi> SchemaApi for KV {
                     condition: vec![
                         // db has not to change, i.e., no new table is created.
                         // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
+                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
                         // still this table id
-                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
+                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
                         // table is not changed
-                        txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
+                        txn_cond_seq(&tbid, Eq, tb_meta_seq),
                         // update table count atomicly
-                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq)?,
+                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq),
                     ],
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
-                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
-                        txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
-                        txn_op_put(&tbid, serialize_struct(&tb_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
-                        txn_op_put(&tb_count_key, serialize_u64(tb_count - 1)?)?, // _fd_table_count/tenant -> tb_count
+                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), // (db_id) -> db_meta
+                        txn_op_del(&dbid_tbname), // (db_id, tb_name) -> tb_id
+                        txn_op_put(&tbid, serialize_struct(&tb_meta)?), // (tenant, db_id, tb_id) -> tb_meta
+                        txn_op_put(&tb_count_key, serialize_u64(tb_count - 1)?), // _fd_table_count/tenant -> tb_count
                     ],
                     else_then: vec![],
                 };
@@ -1034,23 +1034,23 @@ impl<KV: KVApi> SchemaApi for KV {
                     condition: vec![
                         // db has not to change, i.e., no new table is created.
                         // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
+                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
                         // still this table id
-                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
+                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
                         // table is not changed
-                        txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
+                        txn_cond_seq(&tbid, Eq, tb_meta_seq),
                         // update table count atomicly
-                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq)?,
+                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq),
                     ],
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
-                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
-                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
+                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), // (db_id) -> db_meta
+                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), // (tenant, db_id, tb_name) -> tb_id
                         //txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
-                        txn_op_put(&tbid, serialize_struct(&tb_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
-                        txn_op_put(&tb_count_key, serialize_u64(tb_count + 1)?)?, // _fd_table_count/tenant -> tb_count
+                        txn_op_put(&tbid, serialize_struct(&tb_meta)?), // (tenant, db_id, tb_id) -> tb_meta
+                        txn_op_put(&tb_count_key, serialize_u64(tb_count + 1)?), // _fd_table_count/tenant -> tb_count
                     ],
                     else_then: vec![],
                 };
@@ -1200,26 +1200,26 @@ impl<KV: KVApi> SchemaApi for KV {
                 let condition = vec![
                     // db has not to change, i.e., no new table is created.
                     // Renaming db is OK and does not affect the seq of db_meta.
-                    txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
-                    txn_cond_seq(&DatabaseId { db_id: new_db_id }, Eq, new_db_meta_seq)?,
+                    txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
+                    txn_cond_seq(&DatabaseId { db_id: new_db_id }, Eq, new_db_meta_seq),
                     // table_name->table_id does not change.
                     // Updating the table meta is ok.
-                    txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
-                    txn_cond_seq(&newdbid_newtbname, Eq, 0)?,
+                    txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
+                    txn_cond_seq(&newdbid_newtbname, Eq, 0),
                     // no other table id with the same name is append.
-                    txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq)?,
-                    txn_cond_seq(&new_dbid_tbname_idlist, Eq, new_tb_id_list_seq)?,
+                    txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
+                    txn_cond_seq(&new_dbid_tbname_idlist, Eq, new_tb_id_list_seq),
                 ];
 
                 let mut then_ops = vec![
-                    txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
-                    txn_op_put(&newdbid_newtbname, serialize_u64(table_id)?)?, // (db_id, new_tb_name) -> tb_id
+                    txn_op_del(&dbid_tbname), // (db_id, tb_name) -> tb_id
+                    txn_op_put(&newdbid_newtbname, serialize_u64(table_id)?), // (db_id, new_tb_name) -> tb_id
                     // Changing a table in a db has to update the seq of db_meta,
                     // to block the batch-delete-tables when deleting a db.
                     // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
-                    txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
-                    txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/old_table_name -> tb_id_list
-                    txn_op_put(&new_dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?)?, // _fd_table_id_list/db_id/new_table_name -> tb_id_list
+                    txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), // (db_id) -> db_meta
+                    txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?), // _fd_table_id_list/db_id/old_table_name -> tb_id_list
+                    txn_op_put(&new_dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?), // _fd_table_id_list/db_id/new_table_name -> tb_id_list
                 ];
 
                 if db_id != new_db_id {
@@ -1228,7 +1228,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_op_put(
                             &DatabaseId { db_id: new_db_id },
                             serialize_struct(&new_db_meta)?,
-                        )?, // (db_id) -> db_meta
+                        ), // (db_id) -> db_meta
                     );
                 }
 
@@ -1540,10 +1540,10 @@ impl<KV: KVApi> SchemaApi for KV {
             let txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
-                    txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
+                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
                 ],
                 if_then: vec![
-                    txn_op_put(&tbid, serialize_struct(&table_meta)?)?, // tb_id -> tb_meta
+                    txn_op_put(&tbid, serialize_struct(&table_meta)?), // tb_id -> tb_meta
                 ],
                 else_then: vec![],
             };
@@ -1596,10 +1596,10 @@ impl<KV: KVApi> SchemaApi for KV {
             let txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
-                    txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
+                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
                 ],
                 if_then: vec![
-                    txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?)?, // tb_id -> tb_meta
+                    txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?), // tb_id -> tb_meta
                 ],
                 else_then: vec![],
             };
@@ -1669,8 +1669,8 @@ impl<KV: KVApi> SchemaApi for KV {
 
             let txn_req = TxnRequest {
                 // table count should not be changed.
-                condition: vec![txn_cond_seq(&key, Eq, seq)?],
-                if_then: vec![txn_op_put(&key, serialize_u64(cnt)?)?],
+                condition: vec![txn_cond_seq(&key, Eq, seq)],
+                if_then: vec![txn_op_put(&key, serialize_u64(cnt)?)],
                 else_then: vec![],
             };
 
@@ -1766,21 +1766,21 @@ async fn gc_dropped_table(
             // construct the txn request
             let mut condition = vec![
                 // condition: table id list not changed
-                txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq)?,
+                txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
                 // condition: database exists
-                txn_cond_seq(tenant_dbname, Eq, db_id_seq)?,
+                txn_cond_seq(tenant_dbname, Eq, db_id_seq),
             ];
             // remove table id keys not changed
             for key in remove_table_keys.iter() {
-                condition.push(txn_cond_seq(&key.0, Eq, key.1)?);
+                condition.push(txn_cond_seq(&key.0, Eq, key.1));
             }
             let mut if_then = vec![
                 // save new table id list
-                txn_op_put(&dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?)?,
+                txn_op_put(&dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?),
             ];
             // remove out of time table meta
             for key in remove_table_keys.iter() {
-                if_then.push(txn_op_del(&key.0)?);
+                if_then.push(txn_op_del(&key.0));
             }
             let txn_req = TxnRequest {
                 condition,
@@ -1861,19 +1861,19 @@ async fn gc_dropped_db(
         // construct the txn request
         let mut condition = vec![
             // condition: db id list not changed,
-            txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq)?,
+            txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
         ];
         for key in removed_id_keys.iter() {
             // condition: db meta not changed,
-            condition.push(txn_cond_seq(&key.0, Eq, key.1)?);
+            condition.push(txn_cond_seq(&key.0, Eq, key.1));
         }
         let mut if_then = vec![
             // save new db id list
-            txn_op_put(&dbid_idlist, serialize_struct(&new_db_id_list)?)?,
+            txn_op_put(&dbid_idlist, serialize_struct(&new_db_id_list)?),
         ];
         for key in removed_id_keys.iter() {
             // remove out of retention time table meta
-            if_then.push(txn_op_del(&key.0)?);
+            if_then.push(txn_op_del(&key.0));
         }
 
         let txn_req = TxnRequest {
@@ -2113,40 +2113,33 @@ async fn fetch_id<T: KVApiKey>(kv_api: &impl KVApi, generator: T) -> Result<u64,
 }
 
 /// Build a TxnCondition that compares the seq of a record.
-fn txn_cond_seq(
-    key: &impl KVApiKey,
-    op: ConditionResult,
-    seq: u64,
-) -> Result<TxnCondition, MetaError> {
-    let cond = TxnCondition {
+pub fn txn_cond_seq(key: &impl KVApiKey, op: ConditionResult, seq: u64) -> TxnCondition {
+    TxnCondition {
         key: key.to_key(),
         expected: op as i32,
         target: Some(Target::Seq(seq)),
-    };
-    Ok(cond)
+    }
 }
 
 /// Build a txn operation that puts a record.
-fn txn_op_put(key: &impl KVApiKey, value: Vec<u8>) -> Result<TxnOp, MetaError> {
-    let put = TxnOp {
+pub fn txn_op_put(key: &impl KVApiKey, value: Vec<u8>) -> TxnOp {
+    TxnOp {
         request: Some(Request::Put(TxnPutRequest {
             key: key.to_key(),
             value,
             prev_value: true,
         })),
-    };
-    Ok(put)
+    }
 }
 
 /// Build a txn operation that deletes a record.
-fn txn_op_del(key: &impl KVApiKey) -> Result<TxnOp, MetaError> {
-    let put = TxnOp {
+pub fn txn_op_del(key: &impl KVApiKey) -> TxnOp {
+    TxnOp {
         request: Some(Request::Delete(TxnDeleteRequest {
             key: key.to_key(),
             prev_value: true,
         })),
-    };
-    Ok(put)
+    }
 }
 
 async fn send_txn(

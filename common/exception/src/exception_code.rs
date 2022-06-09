@@ -202,6 +202,8 @@ build_exceptions! {
     UnknownStage(2501),
     StageAlreadyExists(2502),
     IllegalUserStageFormat(2503),
+    StageFileAlreadyExists(2504),
+    IllegalStageFileFormat(2505),
 
     // User defined function error codes.
     IllegalUDFFormat(2601),
