@@ -1,0 +1,27 @@
+[package]
+name = "databend-metabench"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "databend-metabench"
+doctest = false
+test = false
+
+[dependencies]
+# Workspace dependencies
+common-base = { path = "../../common/base" }
+common-meta-api = { path = "../../common/meta/api" }
+common-meta-grpc = { path = "../../common/meta/grpc" }
+common-meta-types = { path = "../../common/meta/types" }
+databend-meta = { path = "../../metasrv" }
+
+# Crates.io dependencies
+clap = { version = "3.1.8", features = ["derive", "env"] }
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.79"
+tokio-stream = "0.1.8"
