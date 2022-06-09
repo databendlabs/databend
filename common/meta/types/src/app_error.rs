@@ -314,6 +314,22 @@ impl UnknownShareId {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("TxnRetryMaxTimes: Txn {op} has retry {max_retry} times, abort.")]
+pub struct TxnRetryMaxTimes {
+    op: String,
+    max_retry: u32,
+}
+
+impl TxnRetryMaxTimes {
+    pub fn new(op: &str, max_retry: u32) -> Self {
+        Self {
+            op: op.to_string(),
+            max_retry,
+        }
+    }
+}
+
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub enum AppError {
     #[error(transparent)]
@@ -372,6 +388,9 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownShareId(#[from] UnknownShareId),
+
+    #[error(transparent)]
+    TxnRetryMaxTimes(#[from] TxnRetryMaxTimes),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -452,6 +471,15 @@ impl AppErrorMessage for UnknownShareId {
     }
 }
 
+impl AppErrorMessage for TxnRetryMaxTimes {
+    fn message(&self) -> String {
+        format!(
+            "TxnRetryMaxTimes: Txn {} has retry {} times",
+            self.op, self.max_retry
+        )
+    }
+}
+
 impl AppErrorMessage for UndropTableWithNoDropTime {
     fn message(&self) -> String {
         format!("Undrop table '{}' with no drop_on time", self.table_name)
@@ -512,6 +540,7 @@ impl From<AppError> for ErrorCode {
             AppError::ShareAlreadyExists(err) => ErrorCode::ShareAlreadyExists(err.message()),
             AppError::UnknownShare(err) => ErrorCode::UnknownShare(err.message()),
             AppError::UnknownShareId(err) => ErrorCode::UnknownShareId(err.message()),
+            AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
         }
     }
 }
