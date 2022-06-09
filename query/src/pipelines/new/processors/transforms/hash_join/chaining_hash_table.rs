@@ -144,16 +144,40 @@ impl ChainingHashTable {
     {
         let mut results: Vec<DataBlock> = vec![];
         let keys = method.build_keys(&probe_keys, input.num_rows())?;
-        for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
-            let probe_result_ptr = hash_table.find_key(key);
-            if probe_result_ptr.is_none() {
-                // No matched row for current probe row
-                continue;
+        match self.join_type {
+            JoinType::InnerJoin => {
+                for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
+                    let probe_result_ptr = hash_table.find_key(key);
+                    if probe_result_ptr.is_none() {
+                        // No matched row for current probe row
+                        continue;
+                    }
+                    let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
+                    let build_block = self.row_space.gather(probe_result_ptrs)?;
+                    let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
+                    results.push(self.merge_block(&build_block, &probe_block)?);
+                }
             }
-            let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-            let build_block = self.row_space.gather(probe_result_ptrs)?;
-            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-            results.push(self.merge_block(&build_block, &probe_block)?);
+            JoinType::SemiJoin => {
+                for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
+                    let probe_result_ptr = hash_table.find_key(key);
+                    if probe_result_ptr.is_none() {
+                        // No matched row for current probe row
+                        continue;
+                    }
+                    results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
+                }
+            }
+            JoinType::AntiJoin => {
+                for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
+                    let probe_result_ptr = hash_table.find_key(key);
+                    if probe_result_ptr.is_none() {
+                        // No matched row for current probe row
+                        results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
+                    }
+                }
+            }
+            _ => unreachable!(),
         }
         Ok(results)
     }
@@ -192,37 +216,8 @@ impl ChainingHashTable {
         }
         Ok(results)
     }
-}
 
-impl HashJoinState for ChainingHashTable {
-    fn build(&self, input: DataBlock) -> Result<()> {
-        let func_ctx = self.ctx.try_get_function_context()?;
-        let build_cols = self
-            .build_expressions
-            .iter()
-            .map(|expr| ExpressionEvaluator::eval(&func_ctx, expr, &input))
-            .collect::<Result<Vec<ColumnRef>>>()?;
-
-        match &*self.hash_table.read() {
-            HashTable::SerializerHashTable(table) => {
-                let mut build_cols_ref = Vec::with_capacity(build_cols.len());
-                for build_col in build_cols.iter() {
-                    build_cols_ref.push(build_col);
-                }
-                let build_keys = table
-                    .hash_method
-                    .build_keys(&build_cols_ref, input.num_rows())?;
-                // Save build_keys in row_space to avoid memory leak
-                self.row_space.push_keys(input, build_keys)
-            }
-            _ => self.row_space.push_cols(input, build_cols),
-        }
-    }
-
-    fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
-        if self.join_type == JoinType::CrossJoin {
-            return self.probe_cross_join(input);
-        }
+    fn probe_join(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let probe_keys = self
             .probe_expressions
@@ -236,21 +231,55 @@ impl HashJoinState for ChainingHashTable {
                 let serialized_probe_keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                for (i, key) in serialized_probe_keys
-                    .iter()
-                    .enumerate()
-                    .take(input.num_rows())
-                {
-                    let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
-                    let probe_result_ptr = table.hash_table.find_key(&keys_ref);
-                    if probe_result_ptr.is_none() {
-                        // No matched row for current probe row
-                        continue;
+                match self.join_type {
+                    JoinType::InnerJoin => {
+                        for (i, key) in serialized_probe_keys
+                            .iter()
+                            .enumerate()
+                            .take(input.num_rows())
+                        {
+                            let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
+                            let probe_result_ptr = table.hash_table.find_key(&keys_ref);
+                            if probe_result_ptr.is_none() {
+                                // No matched row for current probe row
+                                continue;
+                            }
+                            let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
+                            let build_block = self.row_space.gather(probe_result_ptrs)?;
+                            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
+                            results.push(self.merge_block(&build_block, &probe_block)?);
+                        }
                     }
-                    let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-                    let build_block = self.row_space.gather(probe_result_ptrs)?;
-                    let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                    results.push(self.merge_block(&build_block, &probe_block)?);
+                    JoinType::SemiJoin => {
+                        for (i, key) in serialized_probe_keys
+                            .iter()
+                            .enumerate()
+                            .take(input.num_rows())
+                        {
+                            let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
+                            let probe_result_ptr = table.hash_table.find_key(&keys_ref);
+                            if probe_result_ptr.is_none() {
+                                // No matched row for current probe row
+                                continue;
+                            }
+                            results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
+                        }
+                    }
+                    JoinType::AntiJoin => {
+                        for (i, key) in serialized_probe_keys
+                            .iter()
+                            .enumerate()
+                            .take(input.num_rows())
+                        {
+                            let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
+                            let probe_result_ptr = table.hash_table.find_key(&keys_ref);
+                            if probe_result_ptr.is_none() {
+                                // No matched row for current probe row
+                                results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
+                            }
+                        }
+                    }
+                    _ => unreachable!(),
                 }
             }
             HashTable::KeyU8HashTable(table) => {
@@ -311,6 +340,40 @@ impl HashJoinState for ChainingHashTable {
             }
         }
         Ok(results)
+    }
+}
+
+impl HashJoinState for ChainingHashTable {
+    fn build(&self, input: DataBlock) -> Result<()> {
+        let func_ctx = self.ctx.try_get_function_context()?;
+        let build_cols = self
+            .build_expressions
+            .iter()
+            .map(|expr| ExpressionEvaluator::eval(&func_ctx, expr, &input))
+            .collect::<Result<Vec<ColumnRef>>>()?;
+
+        match &*self.hash_table.read() {
+            HashTable::SerializerHashTable(table) => {
+                let mut build_cols_ref = Vec::with_capacity(build_cols.len());
+                for build_col in build_cols.iter() {
+                    build_cols_ref.push(build_col);
+                }
+                let build_keys = table
+                    .hash_method
+                    .build_keys(&build_cols_ref, input.num_rows())?;
+                // Save build_keys in row_space to avoid memory leak
+                self.row_space.push_keys(input, build_keys)
+            }
+            _ => self.row_space.push_cols(input, build_cols),
+        }
+    }
+
+    fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+        match self.join_type {
+            JoinType::InnerJoin | JoinType::SemiJoin | JoinType::AntiJoin => self.probe_join(input),
+            JoinType::CrossJoin => self.probe_cross_join(input),
+            _ => unimplemented!("{} is unimplemented", self.join_type),
+        }
     }
 
     fn attach(&self) -> Result<()> {

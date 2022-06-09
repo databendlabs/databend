@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use common_exception::Result;
 
 use super::ScalarExpr;
@@ -96,5 +99,19 @@ impl LogicalPlan for LogicalInnerJoin {
             output_columns,
             outer_columns,
         })
+    }
+}
+
+impl Display for JoinType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JoinType::InnerJoin => write!(f, "InnerJoin"),
+            JoinType::LeftJoin => write!(f, "LeftJoin"),
+            JoinType::RightJoin => write!(f, "RightJoin"),
+            JoinType::FullJoin => write!(f, "FullJoin"),
+            JoinType::SemiJoin => write!(f, "SemiJoin"),
+            JoinType::AntiJoin => write!(f, "AntiJoin"),
+            JoinType::CrossJoin => write!(f, "CrossJoin"),
+        }
     }
 }

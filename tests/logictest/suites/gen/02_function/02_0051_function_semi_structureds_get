@@ -70,25 +70,19 @@ select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["e
 ----  
 1
 
-statement query T label(mysql,http)
+statement query T
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer.name');
 
-----  mysql
+----
 "databend"
 
-----  http
-databend
-
-statement query T label(mysql,http)
+statement query T
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][0]');
 
-----  mysql
+----
 "ext"
 
-----  http
-ext
-
-statement query T 
+statement query T
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][2]');
 
 ----  
