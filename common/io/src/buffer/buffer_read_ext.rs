@@ -81,7 +81,7 @@ pub trait BufferReadExt: BufferRead {
         Err(std::io::Error::new(
             ErrorKind::InvalidData,
             "Expected to have terminated string literal.".to_string(),
-        ));
+        ))
     }
 
     fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>) -> Result<()> {
