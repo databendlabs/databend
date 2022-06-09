@@ -55,7 +55,6 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
             kind,
             plan: Box::new(optimize(*plan)?),
         }),
-
         // Passthrough
         Plan::ShowMetrics
         | Plan::ShowProcessList
@@ -65,6 +64,11 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
         | Plan::CreateTable(_)
         | Plan::CreateUser(_)
         | Plan::CreateView(_)
+        | Plan::CreateStage(_)
+        | Plan::ShowStages
+        | Plan::DropStage(_)
+        | Plan::DescStage(_)
+        | Plan::ListStage(_)
         | Plan::DropUser(_)
         | Plan::AlterUser(_) => Ok(plan),
     }
