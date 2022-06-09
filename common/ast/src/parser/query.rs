@@ -280,24 +280,27 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 
 pub fn select(i: Input) -> IResult<SetExpr> {
     map(
-        rule! {
+        consumed(rule! {
              SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
                 ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
                 ~ ( WHERE ~ ^#expr )?
                 ~ ( GROUP ~ ^BY ~ ^#comma_separated_list1(expr) )?
                 ~ ( HAVING ~ ^#expr )?
-        },
+        }),
         |(
-            _select,
-            opt_distinct,
-            select_list,
-            opt_from_block,
-            opt_where_block,
-            opt_group_by_block,
-            opt_having_block,
+            span,
+            (
+                _select,
+                opt_distinct,
+                select_list,
+                opt_from_block,
+                opt_where_block,
+                opt_group_by_block,
+                opt_having_block,
+            ),
         )| {
             SetExpr::Select(Box::new(SelectStmt {
-                span: &[],
+                span: span.0,
                 distinct: opt_distinct.is_some(),
                 select_list,
                 from: opt_from_block
