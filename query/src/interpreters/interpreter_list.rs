@@ -25,7 +25,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use common_tracing::tracing::info;
-use futures::StreamExt;
+use futures::TryStreamExt;
 use regex::Regex;
 
 use crate::interpreters::Interpreter;
@@ -55,15 +55,14 @@ impl ListInterpreter {
         let mut files = if path.ends_with('/') {
             let mut list = vec![];
             let mut objects = op.object(path).list().await?;
-            while let Some(object) = objects.next().await {
-                let name = object?.name();
-                list.push(name);
+            while let Some(de) = objects.try_next().await? {
+                list.push(de.name().to_string());
             }
             list
         } else {
             let o = op.object(path);
             match o.metadata().await {
-                Ok(_) => vec![o.name()],
+                Ok(_) => vec![o.name().to_string()],
                 Err(e) if e.kind() == io::ErrorKind::NotFound => vec![],
                 Err(e) => return Err(e.into()),
             }
@@ -78,9 +77,8 @@ impl ListInterpreter {
             })?;
 
             let matched_files = files
-                .iter()
+                .into_iter()
                 .filter(|file| regex.is_match(file))
-                .cloned()
                 .collect();
             files = matched_files;
         }

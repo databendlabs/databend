@@ -28,7 +28,6 @@ use common_planners::StageTableInfo;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-use futures::StreamExt;
 use futures::TryStreamExt;
 use regex::Regex;
 
@@ -88,8 +87,8 @@ impl CopyInterpreter {
 
                     // TODO: we could rewrite into try_collect.
                     let mut objects = op.object(path).list().await?;
-                    while let Some(object) = objects.next().await {
-                        list.push(object?.path());
+                    while let Some(de) = objects.try_next().await? {
+                        list.push(de.path().to_string());
                     }
 
                     list
