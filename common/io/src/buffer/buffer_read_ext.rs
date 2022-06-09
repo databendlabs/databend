@@ -78,7 +78,7 @@ pub trait BufferReadExt: BufferRead {
                 break;
             }
         }
-        return Err(std::io::Error::new(
+        Err(std::io::Error::new(
             ErrorKind::InvalidData,
             "Expected to have terminated string literal.".to_string(),
         ));
