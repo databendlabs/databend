@@ -77,7 +77,7 @@ pub async fn list_files(
         stage.stage_name
     );
 
-    let mut files = if path.ends_with('/') {
+    let mut files: Vec<String> = if path.ends_with('/') {
         let mut list = vec![];
         let mut objects = op.object(path).list().await?;
         while let Some(object) = objects.next().await {

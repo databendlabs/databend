@@ -12,26 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::ListPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-use common_tracing::tracing::info;
-use futures::TryStreamExt;
-use regex::Regex;
 
+use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
-use crate::storages::stage::StageSource;
 
 pub struct ListInterpreter {
     ctx: Arc<QueryContext>,
@@ -98,7 +93,13 @@ impl Interpreter for ListInterpreter {
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let files = self.list_files().await?;
+        let files = list_files(
+            self.ctx.clone(),
+            self.plan.stage.clone(),
+            self.plan.path.clone(),
+            self.plan.pattern.clone(),
+        )
+        .await?;
         tracing::info!("list file list:{:?}, pattern:{}", &files, self.plan.pattern);
 
         let block = DataBlock::create(self.plan.schema(), vec![Series::from_data(files)]);
