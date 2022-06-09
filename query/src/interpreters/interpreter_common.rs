@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserStageInfo;
 use common_tracing::tracing::info;
-use futures::StreamExt;
+use futures::TryStreamExt;
 use regex::Regex;
 
 use crate::sessions::QueryContext;
@@ -73,22 +73,21 @@ pub async fn list_files(
     let path = &path;
     let pattern = &pattern;
     info!(
-        "list files {:?} with path {path}, pattern {pattern}",
+        "list stage {:?} with path {path}, pattern {pattern}",
         stage.stage_name
     );
 
-    let mut files: Vec<String> = if path.ends_with('/') {
+    let mut files = if path.ends_with('/') {
         let mut list = vec![];
         let mut objects = op.object(path).list().await?;
-        while let Some(object) = objects.next().await {
-            let name = object?.name();
-            list.push(name);
+        while let Some(de) = objects.try_next().await? {
+            list.push(de.name().to_string());
         }
         list
     } else {
         let o = op.object(path);
         match o.metadata().await {
-            Ok(_) => vec![o.name()],
+            Ok(_) => vec![o.name().to_string()],
             Err(e) if e.kind() == io::ErrorKind::NotFound => vec![],
             Err(e) => return Err(e.into()),
         }
@@ -101,10 +100,10 @@ pub async fn list_files(
                 pattern, e
             ))
         })?;
+
         let matched_files = files
-            .iter()
+            .into_iter()
             .filter(|file| regex.is_match(file))
-            .cloned()
             .collect();
         files = matched_files;
     }

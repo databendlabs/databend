@@ -37,49 +37,6 @@ impl ListInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: ListPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(ListInterpreter { ctx, plan }))
     }
-
-    async fn list_files(&self) -> Result<Vec<String>> {
-        let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
-        let path = &self.plan.path;
-        let pattern = &self.plan.pattern;
-        info!(
-            "list stage {:?} with path {path}, pattern {pattern}",
-            self.plan.stage.stage_name
-        );
-
-        let mut files = if path.ends_with('/') {
-            let mut list = vec![];
-            let mut objects = op.object(path).list().await?;
-            while let Some(de) = objects.try_next().await? {
-                list.push(de.name().to_string());
-            }
-            list
-        } else {
-            let o = op.object(path);
-            match o.metadata().await {
-                Ok(_) => vec![o.name().to_string()],
-                Err(e) if e.kind() == io::ErrorKind::NotFound => vec![],
-                Err(e) => return Err(e.into()),
-            }
-        };
-
-        if !pattern.is_empty() {
-            let regex = Regex::new(pattern).map_err(|e| {
-                ErrorCode::SyntaxException(format!(
-                    "Pattern format invalid, got:{}, error:{:?}",
-                    pattern, e
-                ))
-            })?;
-
-            let matched_files = files
-                .into_iter()
-                .filter(|file| regex.is_match(file))
-                .collect();
-            files = matched_files;
-        }
-
-        Ok(files)
-    }
 }
 
 #[async_trait::async_trait]
