@@ -308,24 +308,21 @@ pub enum SetOperationElement<'a> {
 
 pub fn set_operation_element(i: Input) -> IResult<SetOperationElement> {
     let set_operator = map(
-        consumed(rule!((UNION | EXCEPT | INTERSECT) ~ ALL?)),
-        |(span, (op, all))| match op.kind {
-            TokenKind::UNION => SetOperationElement::SetOperation {
+        consumed(rule! {
+            ( UNION | EXCEPT | INTERSECT ) ~ ALL?
+        }),
+        |(span, (op, all))| {
+            let op = match op.kind {
+                UNION => SetOperator::Union,
+                INTERSECT => SetOperator::Intersect,
+                Except => SetOperator::Except,
+                _ => unreachable!(),
+            };
+            SetOperationElement::SetOperation {
                 span: span.0,
-                op: SetOperator::Union,
+                op,
                 all: all.is_some(),
-            },
-            TokenKind::INTERSECT => SetOperationElement::SetOperation {
-                span: span.0,
-                op: SetOperator::Intersect,
-                all: all.is_some(),
-            },
-            TokenKind::EXCEPT => SetOperationElement::SetOperation {
-                span: span.0,
-                op: SetOperator::Except,
-                all: all.is_some(),
-            },
-            _ => unreachable!(),
+            }
         },
     );
 
@@ -368,37 +365,29 @@ pub fn set_operation_element(i: Input) -> IResult<SetOperationElement> {
     let group = map(
         rule! {
            "("
-           ~ ^#sub_set_operation()
+           ~ ^#set_operation
            ~ ^")"
         },
         |(_, set_expr, _)| SetOperationElement::Group(set_expr),
     );
 
-    map(rule!(#group |#set_operator | #select_stmt), |elem| elem)(i)
+    rule!( #group | #set_operator | #select_stmt)(i)
 }
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
-    context("SetOperation", sub_set_operation())(i)
-}
-
-pub fn sub_set_operation() -> impl FnMut(Input) -> IResult<SetExpr> {
-    move |i| {
-        let higher_prec_set_operation_element =
-            |i| set_operation_element(i).and_then(|(rest, elem)| Ok((rest, elem)));
-        let (rest, set_operation_elements) = rule!(#higher_prec_set_operation_element+)(i)?;
-        let mut iter = set_operation_elements.into_iter();
-        let set_expr = SetOperationParser
-            .parse(&mut iter)
-            .map_err(|err| map_pratt_error(rest.slice(..1), err))
-            .map_err(nom::Err::Error)?;
-        if let Some(_) = iter.next() {
-            return Err(nom::Err::Error(Error::from_error_kind(
-                rest.slice(..1),
-                ErrorKind::Other("unable to parse rest of the expression"),
-            )));
-        }
-        Ok((rest, set_expr))
+    let (rest, set_operation_elements) = rule!(#set_operation_element+)(i)?;
+    let mut iter = set_operation_elements.into_iter();
+    let set_expr = SetOperationParser
+        .parse(&mut iter)
+        .map_err(|err| Error::from_error_kind(rest.slice(..1), ErrorKind::from(err)))
+        .map_err(nom::Err::Error)?;
+    if let Some(_) = iter.next() {
+        return Err(nom::Err::Error(Error::from_error_kind(
+            rest.slice(..1),
+            ErrorKind::Other("unable to parse rest of the expression"),
+        )));
     }
+    Ok((rest, set_expr))
 }
 
 struct SetOperationParser;
@@ -472,7 +461,7 @@ impl<'a, I: Iterator<Item = SetOperationElement<'a>>> PrattParser<I> for SetOper
         _op: Self::Input,
         _rhs: Self::Output,
     ) -> Result<Self::Output, Self::Error> {
-        todo!()
+        unreachable!()
     }
 
     fn postfix(
@@ -480,35 +469,6 @@ impl<'a, I: Iterator<Item = SetOperationElement<'a>>> PrattParser<I> for SetOper
         _lhs: Self::Output,
         _op: Self::Input,
     ) -> Result<Self::Output, Self::Error> {
-        todo!()
-    }
-}
-
-fn map_pratt_error<'a>(
-    next_token: Input<'a>,
-    err: PrattError<SetOperationElement<'a>, pratt::NoError>,
-) -> Error<'a> {
-    match err {
-        PrattError::EmptyInput => Error::from_error_kind(
-            next_token,
-            ErrorKind::Other("expected more tokens for expression"),
-        ),
-        PrattError::UnexpectedNilfix(_) => Error::from_error_kind(
-            next_token,
-            ErrorKind::Other("unable to parse the expression value"),
-        ),
-        PrattError::UnexpectedPrefix(_) => Error::from_error_kind(
-            next_token,
-            ErrorKind::Other("unable to parse the prefix operator"),
-        ),
-        PrattError::UnexpectedInfix(_) => Error::from_error_kind(
-            next_token,
-            ErrorKind::Other("unable to parse the binary operator"),
-        ),
-        PrattError::UnexpectedPostfix(_) => Error::from_error_kind(
-            next_token,
-            ErrorKind::Other("unable to parse the postfix operator"),
-        ),
-        PrattError::UserError(_) => unreachable!(),
+        unreachable!()
     }
 }

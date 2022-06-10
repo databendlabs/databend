@@ -335,6 +335,8 @@ pub enum TokenKind {
     DOY,
     #[token("DROP", ignore(ascii_case))]
     DROP,
+    #[token("EXCEPT", ignore(ascii_case))]
+    EXCEPT,
     #[token("ELSE", ignore(ascii_case))]
     ELSE,
     #[token("END", ignore(ascii_case))]
@@ -393,6 +395,8 @@ pub enum TokenKind {
     HISTORY,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
+    #[token("INTERSECT", ignore(ascii_case))]
+    INTERSECT,
     #[token("IDENTIFIED", ignore(ascii_case))]
     IDENTIFIED,
     #[token("IF", ignore(ascii_case))]
@@ -533,12 +537,6 @@ pub enum TokenKind {
     SECOND,
     #[token("SELECT", ignore(ascii_case))]
     SELECT,
-    #[token("UNION", ignore(ascii_case))]
-    UNION,
-    #[token("EXCEPT", ignore(ascii_case))]
-    EXCEPT,
-    #[token("INTERSECT", ignore(ascii_case))]
-    INTERSECT,
     #[token("SET", ignore(ascii_case))]
     SET,
     #[token("SETTINGS", ignore(ascii_case))]
@@ -601,6 +599,8 @@ pub enum TokenKind {
     TRY_CAST,
     #[token("TYPE", ignore(ascii_case))]
     TYPE,
+    #[token("UNION", ignore(ascii_case))]
+    UNION,
     #[token("UINT16", ignore(ascii_case))]
     UINT16,
     #[token("UINT32", ignore(ascii_case))]

@@ -56,7 +56,6 @@ impl Planner {
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();
         let stmts = parse_sql(&tokens, &backtrace)?;
-        dbg!(stmts.clone());
         if stmts.len() > 1 {
             return Err(ErrorCode::UnImplement("unsupported multiple statements"));
         }

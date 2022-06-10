@@ -131,12 +131,12 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
         let expr = ExprParser
             .parse_input(&mut iter, Precedence(0))
             .map_err(|err| {
-                map_pratt_error(
+                Error::from_error_kind(
                     iter.next()
                         .map(|elem| elem.span)
                         // It's safe to slice one more token because EOI is always added.
                         .unwrap_or_else(|| rest.slice(..1)),
-                    err,
+                    ErrorKind::from(err),
                 )
             })
             .map_err(nom::Err::Error)?;
@@ -148,35 +148,6 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
         } else {
             Ok((rest, expr))
         }
-    }
-}
-
-fn map_pratt_error<'a>(
-    next_token: Input<'a>,
-    err: PrattError<WithSpan<'a>, pratt::NoError>,
-) -> Error<'a> {
-    match err {
-        PrattError::EmptyInput => Error::from_error_kind(
-            next_token,
-            ErrorKind::Other("expected more tokens for expression"),
-        ),
-        PrattError::UnexpectedNilfix(elem) => Error::from_error_kind(
-            elem.span,
-            ErrorKind::Other("unable to parse the expression value"),
-        ),
-        PrattError::UnexpectedPrefix(elem) => Error::from_error_kind(
-            elem.span,
-            ErrorKind::Other("unable to parse the prefix operator"),
-        ),
-        PrattError::UnexpectedInfix(elem) => Error::from_error_kind(
-            elem.span,
-            ErrorKind::Other("unable to parse the binary operator"),
-        ),
-        PrattError::UnexpectedPostfix(elem) => Error::from_error_kind(
-            elem.span,
-            ErrorKind::Other("unable to parse the postfix operator"),
-        ),
-        PrattError::UserError(_) => unreachable!(),
     }
 }
 
