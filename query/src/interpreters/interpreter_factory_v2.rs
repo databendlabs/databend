@@ -28,6 +28,7 @@ use super::ExplainInterpreterV2;
 use super::InterpreterPtr;
 use super::ListInterpreter;
 use super::RemoveUserStageInterpreter;
+use super::RenameDatabaseInterpreter;
 use super::SelectInterpreterV2;
 use super::ShowMetricsInterpreter;
 use super::ShowProcessListInterpreter;
@@ -64,6 +65,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowSettings(_)
                 | DfStatement::CreateDatabase(_)
                 | DfStatement::DropDatabase(_)
+                | DfStatement::AlterDatabase(_)
         )
     }
 
@@ -95,10 +97,13 @@ impl InterpreterFactoryV2 {
             Plan::RemoveStage(s) => RemoveUserStageInterpreter::try_create(ctx, *s.clone()),
 
             Plan::CreateDatabase(create_database) => {
-                CreateDatabaseInterpreter::try_create(ctx, create_database.clone())
+                CreateDatabaseInterpreter::try_create(ctx, *create_database.clone())
             }
             Plan::DropDatabase(drop_database) => {
-                DropDatabaseInterpreter::try_create(ctx, drop_database.clone())
+                DropDatabaseInterpreter::try_create(ctx, *drop_database.clone())
+            }
+            Plan::RenameDatabase(rename_database) => {
+                RenameDatabaseInterpreter::try_create(ctx, *rename_database.clone())
             }
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),

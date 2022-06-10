@@ -16,6 +16,7 @@ use common_base::base::tokio;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::clickhouse_router;
+use databend_query::servers::HttpHandlerKind;
 use http::Uri;
 use poem::error::Result as PoemResult;
 use poem::http::Method;
@@ -252,7 +253,10 @@ impl Server {
         let session_manager = SessionManagerBuilder::create().build().unwrap();
         let endpoint = Route::new()
             .nest("/", clickhouse_router())
-            .with(HTTPSessionMiddleware { session_manager });
+            .with(HTTPSessionMiddleware {
+                kind: HttpHandlerKind::Clickhouse,
+                session_manager,
+            });
         Server { endpoint }
     }
 

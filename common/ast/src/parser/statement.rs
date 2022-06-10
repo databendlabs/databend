@@ -95,12 +95,15 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let alter_database = map(
         rule! {
-            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #ident ~ #alter_database_action
+            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #alter_database_action
         },
-        |(_, _, opt_if_exists, database, action)| Statement::AlterDatabase {
-            if_exists: opt_if_exists.is_some(),
-            database,
-            action,
+        |(_, _, opt_if_exists, opt_catalog, database, action)| {
+            Statement::AlterDatabase(AlterDatabaseStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog: opt_catalog.map(|(catalog, _)| catalog),
+                database,
+                action,
+            })
         },
     );
     let use_database = map(

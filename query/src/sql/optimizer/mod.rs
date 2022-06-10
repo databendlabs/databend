@@ -71,7 +71,8 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
         | Plan::ListStage(_)
         | Plan::RemoveStage(_)
         | Plan::DropUser(_)
-        | Plan::AlterUser(_) => Ok(plan),
+        | Plan::AlterUser(_)
+        | Plan::RenameDatabase(_) => Ok(plan),
     }
 }
 

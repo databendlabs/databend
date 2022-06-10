@@ -99,11 +99,11 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
     );
     let projection = map(
         rule! {
-            #expr ~ ( AS ~ #ident_after_as )?
+            #expr ~ #alias_name?
         },
         |(expr, alias)| SelectTarget::AliasedExpr {
             expr: Box::new(expr),
-            alias: alias.map(|(_, name)| name),
+            alias,
         },
     );
 
@@ -158,14 +158,20 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     )(i)
 }
 
-pub fn table_alias(i: Input) -> IResult<TableAlias> {
-    map(
-        rule! { #ident | #map(rule! { AS ~ #ident_after_as }, |(_, name)| name) },
-        |name| TableAlias {
-            name,
-            columns: vec![],
-        },
+pub fn alias_name(i: Input) -> IResult<Identifier> {
+    let as_alias = map(rule! { AS ~ #ident_after_as }, |(_, name)| name);
+
+    rule!(
+        #ident
+        | #as_alias
     )(i)
+}
+
+pub fn table_alias(i: Input) -> IResult<TableAlias> {
+    map(alias_name, |name| TableAlias {
+        name,
+        columns: vec![],
+    })(i)
 }
 
 pub fn table_function(i: Input) -> IResult<TableReference> {

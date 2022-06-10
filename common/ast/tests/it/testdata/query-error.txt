@@ -68,3 +68,13 @@ error:
   | while parsing `SELECT ...`
 
 
+---------- Input ----------
+select 1 1
+---------- Output ---------
+error: 
+  --> SQL:1:10
+  |
+1 | select 1 1
+  |          ^ expected <Ident>, <QuotedString>, `AS`, `,`, `FROM`, `WHERE`, or 6 more ...
+
+
