@@ -31,7 +31,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
-use crate::sql::plans::FilterPlan;
+use crate::sql::plans::Filter;
 use crate::sql::plans::Scalar;
 
 // A normalized IR for `SELECT` clause.
@@ -186,7 +186,7 @@ impl<'a> Binder {
         let mut scalar_binder =
             ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
         let (scalar, _) = scalar_binder.bind(expr).await?;
-        let filter_plan = FilterPlan {
+        let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
             is_having: false,
         };

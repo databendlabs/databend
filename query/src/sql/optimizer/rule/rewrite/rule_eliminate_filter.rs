@@ -14,52 +14,52 @@
 
 use common_exception::Result;
 
-use crate::sql::optimizer::rule::transform_state::TransformState;
 use crate::sql::optimizer::rule::Rule;
 use crate::sql::optimizer::rule::RuleID;
+use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::LogicalGet;
+use crate::sql::plans::Filter;
 use crate::sql::plans::PatternPlan;
-use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::RelOp;
 
-pub struct RuleImplementGet {
+pub struct RuleEliminateFilter {
     id: RuleID,
     pattern: SExpr,
 }
 
-impl RuleImplementGet {
+impl RuleEliminateFilter {
     pub fn new() -> Self {
-        RuleImplementGet {
-            id: RuleID::ImplementGet,
-            pattern: SExpr::create_leaf(
+        Self {
+            id: RuleID::EliminateEvalScalar,
+            // Filter
+            //  \
+            //   *
+            pattern: SExpr::create_unary(
                 PatternPlan {
-                    plan_type: RelOp::LogicalGet,
+                    plan_type: RelOp::Filter,
                 }
                 .into(),
+                SExpr::create_leaf(
+                    PatternPlan {
+                        plan_type: RelOp::Pattern,
+                    }
+                    .into(),
+                ),
             ),
         }
     }
 }
 
-impl Rule for RuleImplementGet {
+impl Rule for RuleEliminateFilter {
     fn id(&self) -> RuleID {
         self.id
     }
 
-    fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()> {
-        let plan = expression.plan().clone();
-        let logical_get: LogicalGet = plan.try_into()?;
-
-        let result = SExpr::create_leaf(
-            PhysicalScan {
-                table_index: logical_get.table_index,
-                columns: logical_get.columns,
-            }
-            .into(),
-        );
-        state.add_result(result);
-
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+        let eval_scalar: Filter = s_expr.plan().clone().try_into()?;
+        if eval_scalar.predicates.is_empty() {
+            state.add_result(s_expr.child(0)?.clone());
+        }
         Ok(())
     }
 

@@ -15,6 +15,7 @@
 use std::fmt::Display;
 
 use common_datavalues::format_data_type_sql;
+use itertools::Itertools;
 
 use super::FormatTreeNode;
 use crate::sql::optimizer::SExpr;
@@ -24,7 +25,7 @@ use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
-use crate::sql::plans::FilterPlan;
+use crate::sql::plans::Filter;
 use crate::sql::plans::LimitPlan;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::LogicalInnerJoin;
@@ -210,9 +211,11 @@ pub fn format_project(
         .iter()
         .map(|entry| entry.name.clone())
         .collect::<Vec<String>>();
+    // Sorted by column index to make display of Project stable
     let project_columns = op
         .columns
         .iter()
+        .sorted()
         .map(|idx| column_names[*idx].clone())
         .collect::<Vec<String>>()
         .join(",");
@@ -236,7 +239,7 @@ pub fn format_eval_scalar(
 pub fn format_filter(
     f: &mut std::fmt::Formatter<'_>,
     metadata: &MetadataRef,
-    op: &FilterPlan,
+    op: &Filter,
 ) -> std::fmt::Result {
     let scalars = op
         .predicates
