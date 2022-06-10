@@ -35,7 +35,7 @@ use crate::rule;
 pub fn query(i: Input) -> IResult<Query> {
     map(
         consumed(rule! {
-            #set_expr
+            #set_operation
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( LIMIT ~ ^#comma_separated_list1(expr) )?
             ~ ( OFFSET ~ ^#expr )?
@@ -288,9 +288,16 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum SetExprElement<'a> {
-    Select(SelectStmt<'a>),
-    Query(Query<'a>),
+pub enum SetOperationElement<'a> {
+    SelectStmt {
+        span: &'a [Token<'a>],
+        distinct: bool,
+        select_list: Vec<SelectTarget<'a>>,
+        from: Vec<TableReference<'a>>,
+        selection: Option<Expr<'a>>,
+        group_by: Vec<Expr<'a>>,
+        having: Option<Expr<'a>>,
+    },
     SetOperation {
         span: &'a [Token<'a>],
         op: SetOperator,
@@ -299,9 +306,30 @@ pub enum SetExprElement<'a> {
     Group(SetExpr<'a>),
 }
 
-pub fn set_expr_element(i: Input) -> IResult<SetExprElement> {
-    dbg!(i.0.clone());
-    let select = map(
+pub fn set_operation_element(i: Input) -> IResult<SetOperationElement> {
+    let set_operator = map(
+        consumed(rule!((UNION | EXCEPT | INTERSECT) ~ ALL?)),
+        |(span, (op, all))| match op.kind {
+            TokenKind::UNION => SetOperationElement::SetOperation {
+                span: span.0,
+                op: SetOperator::Union,
+                all: all.is_some(),
+            },
+            TokenKind::INTERSECT => SetOperationElement::SetOperation {
+                span: span.0,
+                op: SetOperator::Intersect,
+                all: all.is_some(),
+            },
+            TokenKind::EXCEPT => SetOperationElement::SetOperation {
+                span: span.0,
+                op: SetOperator::Except,
+                all: all.is_some(),
+            },
+            _ => unreachable!(),
+        },
+    );
+
+    let select_stmt = map(
         consumed(rule! {
              SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
                 ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
@@ -321,7 +349,7 @@ pub fn set_expr_element(i: Input) -> IResult<SetExprElement> {
                 opt_having_block,
             ),
         )| {
-            SetExprElement::Select(SelectStmt {
+            SetOperationElement::SelectStmt {
                 span: span.0,
                 distinct: opt_distinct.is_some(),
                 select_list,
@@ -333,68 +361,33 @@ pub fn set_expr_element(i: Input) -> IResult<SetExprElement> {
                     .map(|(_, _, group_by)| group_by)
                     .unwrap_or_default(),
                 having: opt_having_block.map(|(_, having)| having),
-            })
-        },
-    );
-
-    let set_operator = map(
-        consumed(rule!((UNION | EXCEPT | INTERSECT) ~ ALL?)),
-        |(span, (op, all))| match op.kind {
-            TokenKind::UNION => SetExprElement::SetOperation {
-                span: span.0,
-                op: SetOperator::Union,
-                all: all.is_some(),
-            },
-            TokenKind::INTERSECT => SetExprElement::SetOperation {
-                span: span.0,
-                op: SetOperator::Intersect,
-                all: all.is_some(),
-            },
-            TokenKind::EXCEPT => SetExprElement::SetOperation {
-                span: span.0,
-                op: SetOperator::Except,
-                all: all.is_some(),
-            },
-            _ => unreachable!(),
+            }
         },
     );
 
     let group = map(
         rule! {
            "("
-           ~ ^#sub_set_expr()
+           ~ ^#sub_set_operation()
            ~ ^")"
         },
-        |(_, set_expr, _)| SetExprElement::Group(set_expr),
+        |(_, set_expr, _)| SetOperationElement::Group(set_expr),
     );
 
-    let query_in_set_expr = map(consumed(rule!(#query)), |(span, query)| {
-        SetExprElement::Query(Query {
-            span: span.0,
-            body: query.body,
-            order_by: query.order_by,
-            limit: query.limit,
-            offset: query.offset,
-            format: query.format,
-        })
-    });
-    map(
-        rule!(#select | #group | #query_in_set_expr | #set_operator),
-        |elem| elem,
-    )(i)
+    map(rule!(#group |#set_operator | #select_stmt), |elem| elem)(i)
 }
 
-pub fn set_expr(i: Input) -> IResult<SetExpr> {
-    context("set_expr", sub_set_expr())(i)
+pub fn set_operation(i: Input) -> IResult<SetExpr> {
+    context("SetOperation", sub_set_operation())(i)
 }
 
-pub fn sub_set_expr() -> impl FnMut(Input) -> IResult<SetExpr> {
+pub fn sub_set_operation() -> impl FnMut(Input) -> IResult<SetExpr> {
     move |i| {
-        let higher_prec_set_expr_element =
-            |i| set_expr_element(i).and_then(|(rest, elem)| Ok((rest, elem)));
-        let (rest, set_expr_elements) = rule!(#higher_prec_set_expr_element+)(i)?;
-        let mut iter = set_expr_elements.into_iter();
-        let set_expr = SetExprParser
+        let higher_prec_set_operation_element =
+            |i| set_operation_element(i).and_then(|(rest, elem)| Ok((rest, elem)));
+        let (rest, set_operation_elements) = rule!(#higher_prec_set_operation_element+)(i)?;
+        let mut iter = set_operation_elements.into_iter();
+        let set_expr = SetOperationParser
             .parse(&mut iter)
             .map_err(|err| map_pratt_error(rest.slice(..1), err))
             .map_err(nom::Err::Error)?;
@@ -408,16 +401,16 @@ pub fn sub_set_expr() -> impl FnMut(Input) -> IResult<SetExpr> {
     }
 }
 
-struct SetExprParser;
+struct SetOperationParser;
 
-impl<'a, I: Iterator<Item = SetExprElement<'a>>> PrattParser<I> for SetExprParser {
+impl<'a, I: Iterator<Item = SetOperationElement<'a>>> PrattParser<I> for SetOperationParser {
     type Error = pratt::NoError;
-    type Input = SetExprElement<'a>;
+    type Input = SetOperationElement<'a>;
     type Output = SetExpr<'a>;
 
     fn query(&mut self, input: &Self::Input) -> pratt::Result<Affix> {
         let affix = match input {
-            SetExprElement::SetOperation { op, .. } => match op {
+            SetOperationElement::SetOperation { op, .. } => match op {
                 SetOperator::Union | SetOperator::Except => {
                     Affix::Infix(Precedence(10), Associativity::Left)
                 }
@@ -430,9 +423,24 @@ impl<'a, I: Iterator<Item = SetExprElement<'a>>> PrattParser<I> for SetExprParse
 
     fn primary(&mut self, input: Self::Input) -> pratt::Result<SetExpr<'a>> {
         let set_expr = match input {
-            SetExprElement::Select(select) => SetExpr::Select(Box::new(select)),
-            SetExprElement::Query(query) => SetExpr::Query(Box::new(query)),
-            SetExprElement::Group(expr) => expr,
+            SetOperationElement::Group(expr) => expr,
+            SetOperationElement::SelectStmt {
+                span,
+                distinct,
+                select_list,
+                from,
+                selection,
+                group_by,
+                having,
+            } => SetExpr::Select(Box::new(SelectStmt {
+                span,
+                distinct,
+                select_list,
+                from,
+                selection,
+                group_by,
+                having,
+            })),
             _ => unreachable!(),
         };
         Ok(set_expr)
@@ -445,7 +453,7 @@ impl<'a, I: Iterator<Item = SetExprElement<'a>>> PrattParser<I> for SetExprParse
         rhs: Self::Output,
     ) -> pratt::Result<SetExpr<'a>> {
         let set_expr = match op {
-            SetExprElement::SetOperation { span, op, all, .. } => {
+            SetOperationElement::SetOperation { span, op, all, .. } => {
                 SetExpr::SetOperation(Box::new(SetOperation {
                     span,
                     op,
@@ -478,7 +486,7 @@ impl<'a, I: Iterator<Item = SetExprElement<'a>>> PrattParser<I> for SetExprParse
 
 fn map_pratt_error<'a>(
     next_token: Input<'a>,
-    err: PrattError<SetExprElement<'a>, pratt::NoError>,
+    err: PrattError<SetOperationElement<'a>, pratt::NoError>,
 ) -> Error<'a> {
     match err {
         PrattError::EmptyInput => Error::from_error_kind(
