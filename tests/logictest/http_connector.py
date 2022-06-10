@@ -98,7 +98,7 @@ class HttpConnector():
         self._port = port
         self._user = user
         self._database = database
-        self._session_max_idle_time = 30 
+        self._session_max_idle_time = 30
         self._session = None
         self._additonal_headers = dict()
         e = environs.Env()
@@ -108,14 +108,12 @@ class HttpConnector():
     def make_headers(self):
         if "Authorization" not in self._additonal_headers:
             return {
-                **headers,
-                "Authorization": "Basic "+ base64.b64encode("{}:{}".format(self._user, "").encode(encoding="utf-8")).decode()
+                **headers, "Authorization":
+                    "Basic " + base64.b64encode("{}:{}".format(
+                        self._user, "").encode(encoding="utf-8")).decode()
             }
         else:
-            return {
-                **headers,
-                **self._additonal_headers
-            }
+            return {**headers, **self._additonal_headers}
 
     def query(self, statement, session=None):
         url = "http://{}:{}/v1/query/".format(self._host, self._port)
@@ -132,16 +130,19 @@ class HttpConnector():
                 return sql  #  do nothing
 
         log.debug("http sql: " + parseSQL(statement))
-        query_sql = {'sql': parseSQL(statement)}
+        query_sql = {'sql': parseSQL(statement), "string_fields": True}
         if session is not None:
             query_sql['session'] = session
         log.debug("http headers {}".format(self.make_headers()))
-        response = requests.post(url, data=json.dumps(query_sql), headers=self.make_headers())
+        response = requests.post(url,
+                                 data=json.dumps(query_sql),
+                                 headers=self.make_headers())
 
         try:
             return json.loads(response.content)
         except Exception as err:
-            log.error("http error, SQL: {}\ncontent: {}\nerror msg:{}".format(statement, response.content, str(err)))
+            log.error("http error, SQL: {}\ncontent: {}\nerror msg:{}".format(
+                statement, response.content, str(err)))
             raise
 
     def set_database(self, database):
@@ -172,12 +173,17 @@ class HttpConnector():
         for i in range(6):
             if response['next_uri'] is not None:
                 try:
-                    resp = requests.get(url="http://{}:{}{}".format(self._host,self._port,response['next_uri']), headers=self.make_headers())
-                    response = json.loads(resp.content)      
-                    log.info("Sql in progress, fetch next_uri content: {}".format(response))
+                    resp = requests.get(url="http://{}:{}{}".format(
+                        self._host, self._port, response['next_uri']),
+                                        headers=self.make_headers())
+                    response = json.loads(resp.content)
+                    log.info(
+                        "Sql in progress, fetch next_uri content: {}".format(
+                            response))
                     response_list.append(response)
                 except Exception as err:
-                    log.warning("Fetch next_uri response with error: {}".format(str(err)))
+                    log.warning("Fetch next_uri response with error: {}".format(
+                        str(err)))
                 time.sleep(1)
                 continue
             break
@@ -191,7 +197,7 @@ class HttpConnector():
 
     def fetch_all(self, statement):
         resp_list = self.query_with_session(statement)
-        if len(resp_list) == 0 :
+        if len(resp_list) == 0:
             log.warning("fetch all with empty results")
             return None
         self._query_option = get_query_options(resp_list[0])  # record schema

@@ -21,7 +21,7 @@ use common_datavalues::DataSchemaRef;
 pub struct AlterViewPlan {
     pub tenant: String,
     pub catalog: String,
-    pub db: String,
+    pub database: String,
     pub viewname: String,
     pub subquery: String,
 }

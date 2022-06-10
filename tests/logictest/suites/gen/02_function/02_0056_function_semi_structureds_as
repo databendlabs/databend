@@ -82,47 +82,35 @@ select '==as_array==';
 ----  
 ==as_array==
 
-statement query T label(mysql,http)
+statement query T
 select as_array(parse_json('[1,2,3]'));
 
-----  mysql
+----
 [1,2,3]
 
-----  http
-[1, 2, 3]
-
-statement query T label(mysql,http)
+statement query T
 select as_array(parse_json('["a","b","c"]'));
 
-----  mysql
+----
 ["a","b","c"]
 
-----  http
-['a', 'b', 'c']
-
-statement query T 
+statement query T
 select '==as_object==';
 
 ----  
 ==as_object==
 
-statement query T label(mysql,http)
+statement query T
 select as_object(parse_json('{"a":"b"}'));
 
-----  mysql
+----
 {"a":"b"}
 
-----  http
-{'a': 'b'}
-
-statement query T label(mysql,http)
+statement query T
 select as_object(parse_json('{"k":123}'));
 
-----  mysql
+----
 {"k":123}
-
-----  http
-{'k': 123}
 
 statement ok
 DROP DATABASE IF EXISTS db1;

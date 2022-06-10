@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AlterClusterKeyPlan;
-use common_planners::DropClusterKeyPlan;
+use common_planners::AlterTableClusterKeyPlan;
+use common_planners::DropTableClusterKeyPlan;
 use common_planners::PlanNode;
 use common_planners::RenameTableEntity;
 use common_planners::RenameTablePlan;
@@ -40,8 +40,8 @@ pub struct DfAlterTable {
 #[derive(Clone, Debug, PartialEq)]
 pub enum AlterTableAction {
     RenameTable(ObjectName),
-    AlterClusterKey(Vec<Expr>),
-    DropClusterKey,
+    AlterTableClusterKey(Vec<Expr>),
+    DropTableClusterKey,
     // TODO AddColumn etc.
 }
 
@@ -72,7 +72,7 @@ impl AnalyzableStatement for DfAlterTable {
                     PlanNode::RenameTable(RenameTablePlan { tenant, entities }),
                 )))
             }
-            AlterTableAction::AlterClusterKey(exprs) => {
+            AlterTableAction::AlterTableClusterKey(exprs) => {
                 let expression_analyzer = ExpressionAnalyzer::create(ctx);
                 let cluster_keys = exprs.iter().try_fold(vec![], |mut acc, k| {
                     let expr = expression_analyzer.analyze_sync(k)?;
@@ -81,7 +81,7 @@ impl AnalyzableStatement for DfAlterTable {
                 })?;
 
                 Ok(AnalyzedResult::SimpleQuery(Box::new(
-                    PlanNode::AlterClusterKey(AlterClusterKeyPlan {
+                    PlanNode::AlterTableClusterKey(AlterTableClusterKeyPlan {
                         tenant,
                         catalog_name,
                         database_name,
@@ -90,8 +90,8 @@ impl AnalyzableStatement for DfAlterTable {
                     }),
                 )))
             }
-            AlterTableAction::DropClusterKey => Ok(AnalyzedResult::SimpleQuery(Box::new(
-                PlanNode::DropClusterKey(DropClusterKeyPlan {
+            AlterTableAction::DropTableClusterKey => Ok(AnalyzedResult::SimpleQuery(Box::new(
+                PlanNode::DropTableClusterKey(DropTableClusterKeyPlan {
                     tenant,
                     catalog_name,
                     database_name,

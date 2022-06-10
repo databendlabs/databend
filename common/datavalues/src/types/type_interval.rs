@@ -22,6 +22,8 @@ use common_exception::Result;
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::DateSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct IntervalType {
@@ -129,8 +131,8 @@ impl DataType for IntervalType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        DateSerializer::<i64>::default().into()
+    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        Ok(DateSerializer::<'a, i64>::try_create(col)?.into())
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {

@@ -12,67 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Write;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use itertools::izip;
 use opensrv_clickhouse::types::column::ArcColumnData;
 use opensrv_clickhouse::types::column::TupleColumnData;
 use serde_json::Value;
 
 use crate::prelude::*;
 
-#[derive(Debug, Clone)]
-pub struct StructSerializer {
-    pub names: Vec<String>,
-    pub inners: Vec<Box<TypeSerializerImpl>>,
-    pub types: Vec<DataTypeImpl>,
+#[derive(Clone)]
+pub struct StructSerializer<'a> {
+    #[allow(unused)]
+    pub(crate) names: Vec<String>,
+    pub(crate) inners: Vec<TypeSerializerImpl<'a>>,
+    pub(crate) column: &'a ColumnRef,
 }
 
-impl TypeSerializer for StructSerializer {
-    fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String> {
-        if let DataValue::Struct(vals) = value {
-            let mut res = String::new();
-            res.push('(');
-            let mut first = true;
+impl<'a> TypeSerializer<'a> for StructSerializer<'a> {
+    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        buf.push(b'(');
+        let mut first = true;
 
-            for (val, inner, typ) in izip!(vals, &self.inners, &self.types) {
-                if !first {
-                    res.push_str(", ");
-                }
-                first = false;
-
-                let s = inner.serialize_value(val, format)?;
-                if typ.data_type_id().is_quoted() {
-                    write!(res, "'{s}'").expect("write to string must succeed");
-                } else {
-                    res.push_str(&s);
-                }
+        for inner in &self.inners {
+            if !first {
+                buf.extend_from_slice(b", ");
             }
-            res.push(')');
-            Ok(res)
-        } else {
-            Err(ErrorCode::BadBytes("Incorrect Struct value"))
+            first = false;
+            inner.write_field_quoted(row_index, buf, format, b'\'');
         }
+        buf.push(b')');
     }
 
-    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>> {
-        let column: &StructColumn = Series::check_get(column)?;
-        let mut result = Vec::with_capacity(column.len());
-        for i in 0..column.len() {
-            let val = column.get(i);
-            let s = self.serialize_value(&val, format)?;
-            result.push(s);
-        }
-        Ok(result)
-    }
-
-    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
-        let column: &StructColumn = Series::check_get(column)?;
-
+    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+        let column = self.column;
         let mut result = Vec::with_capacity(column.len());
         for i in 0..column.len() {
             let val = column.get(i);
@@ -82,20 +56,27 @@ impl TypeSerializer for StructSerializer {
         Ok(result)
     }
 
-    fn serialize_clickhouse_format(
+    fn serialize_clickhouse_const(
         &self,
-        column: &ColumnRef,
         format: &FormatSettings,
+        size: usize,
     ) -> Result<ArcColumnData> {
-        let column: &StructColumn = Series::check_get(column)?;
-        let result = self
-            .inners
-            .iter()
-            .zip(column.values().iter())
-            .map(|(inner, col)| inner.serialize_clickhouse_format(col, format))
-            .collect::<Result<Vec<ArcColumnData>>>()?;
+        let mut inner = vec![];
+        for s in &self.inners {
+            inner.push(s.serialize_clickhouse_const(format, size)?)
+        }
 
-        let data = TupleColumnData { inner: result };
+        let data = TupleColumnData { inner };
+        Ok(Arc::new(data))
+    }
+
+    fn serialize_clickhouse_column(&self, format: &FormatSettings) -> Result<ArcColumnData> {
+        let mut inner = vec![];
+        for s in &self.inners {
+            inner.push(s.serialize_clickhouse_column(format)?)
+        }
+
+        let data = TupleColumnData { inner };
         Ok(Arc::new(data))
     }
 }

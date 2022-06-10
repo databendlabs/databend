@@ -14,9 +14,7 @@
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
@@ -40,31 +38,9 @@ impl<const TSV: bool> TCSVOutputFormat<TSV> {
 impl<const TSV: bool> OutputFormat for TCSVOutputFormat<TSV> {
     fn serialize_block(&mut self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
         let rows_size = block.column(0).len();
-        let columns_size = block.num_columns();
 
         let mut buf = Vec::with_capacity(block.memory_size());
-        let mut col_table = Vec::new();
-        for col_index in 0..columns_size {
-            let column = block.column(col_index);
-            let column = column.convert_full_column();
-            let field = block.schema().field(col_index);
-            let data_type = field.data_type();
-            let serializer = data_type.create_serializer();
-
-            let res = if TSV {
-                serializer.serialize_column(&column, format)
-            } else {
-                serializer.serialize_column_quoted(&column, format)
-            };
-            let res = res.map_err(|e| {
-                ErrorCode::UnexpectedError(format!(
-                    "fail to serialize field {}, error = {}",
-                    field.name(),
-                    e
-                ))
-            })?;
-            col_table.push(res)
-        }
+        let serializers = block.get_serializers()?;
 
         let fd = if TSV {
             FIELD_DELIMITER
@@ -79,17 +55,20 @@ impl<const TSV: bool> OutputFormat for TCSVOutputFormat<TSV> {
         };
 
         for row_index in 0..rows_size {
-            for (i, col) in col_table.iter().enumerate() {
-                if i != 0 {
+            for (col_index, serializer) in serializers.iter().enumerate() {
+                if col_index != 0 {
                     buf.push(fd);
                 }
-                buf.extend_from_slice(col[row_index].as_bytes());
+                if TSV {
+                    serializer.write_field(row_index, &mut buf, format);
+                } else {
+                    serializer.write_field_quoted(row_index, &mut buf, format, b'\"')
+                };
             }
-            buf.push(rd);
+            buf.push(rd)
         }
         Ok(buf)
     }
-
     fn finalize(&mut self) -> Result<Vec<u8>> {
         Ok(vec![])
     }

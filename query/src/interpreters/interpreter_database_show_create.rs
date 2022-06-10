@@ -52,7 +52,9 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
         let calalog = self.ctx.get_catalog(&self.plan.catalog)?;
-        let db = calalog.get_database(tenant.as_str(), &self.plan.db).await?;
+        let db = calalog
+            .get_database(tenant.as_str(), &self.plan.database)
+            .await?;
         let name = db.name();
         let mut info = format!("CREATE DATABASE `{}`", name);
         if !db.engine().is_empty() {

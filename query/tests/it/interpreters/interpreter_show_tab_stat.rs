@@ -56,7 +56,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), "show table status").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowTabStatInterpreter");
+        assert_eq!(executor.name(), "ShowTablesStatusInterpreter");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -74,7 +74,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), "show table status like '%da%'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowTabStatInterpreter");
+        assert_eq!(executor.name(), "ShowTablesStatusInterpreter");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -91,7 +91,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), "show table status where Name != 'data'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowTabStatInterpreter");
+        assert_eq!(executor.name(), "ShowTablesStatusInterpreter");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -108,7 +108,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), "show table status from db1").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowTabStatInterpreter");
+        assert_eq!(executor.name(), "ShowTablesStatusInterpreter");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -126,7 +126,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), "show table status in db1").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowTabStatInterpreter");
+        assert_eq!(executor.name(), "ShowTablesStatusInterpreter");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
 
