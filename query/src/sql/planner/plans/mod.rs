@@ -42,6 +42,7 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
 use common_planners::ListPlan;
+use common_planners::RemoveUserStagePlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
@@ -88,6 +89,7 @@ pub enum Plan {
     DropStage(Box<DropUserStagePlan>),
     DescStage(Box<DescribeUserStagePlan>),
     ListStage(Box<ListPlan>),
+    RemoveStage(Box<RemoveUserStagePlan>),
     ShowStages,
     // TODO
     // RemoveStage(Box<RemoveStagePlan>),

@@ -196,10 +196,11 @@ pub enum Statement<'a> {
         stage_name: String,
     },
     RemoveStage {
-        stage_name: String,
+        location: String,
+        pattern: String,
     },
     ListStage {
-        stage_name: String,
+        location: String,
         pattern: String,
     },
 }
@@ -911,11 +912,8 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " DESC = '{description}'")?;
                 }
             }
-            Statement::ListStage {
-                stage_name,
-                pattern,
-            } => {
-                write!(f, "LIST @{stage_name}")?;
+            Statement::ListStage { location, pattern } => {
+                write!(f, "LIST @{location}")?;
                 if !pattern.is_empty() {
                     write!(f, " PATTERN = '{pattern}'")?;
                 }
@@ -984,8 +982,11 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " COMMENTS = '{}'", stmt.comments)?;
                 }
             }
-            Statement::RemoveStage { stage_name } => {
-                write!(f, "REMOVE STAGE @{stage_name}")?;
+            Statement::RemoveStage { location, pattern } => {
+                write!(f, "REMOVE STAGE @{location}")?;
+                if !pattern.is_empty() {
+                    write!(f, " PATTERN = '{pattern}'")?;
+                }
             }
             Statement::DescStage { stage_name } => {
                 write!(f, "DESC STAGE {stage_name}")?;

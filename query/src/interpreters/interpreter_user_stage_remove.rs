@@ -52,25 +52,21 @@ impl Interpreter for RemoveUserStageInterpreter {
         let plan = self.plan.clone();
         let ctx = self.ctx.clone();
 
-        let mut files: Vec<String> = vec![];
-
-        if !plan.file_name.is_empty() {
-            files.push(plan.file_name);
-        } else if !plan.pattern.is_empty() {
-            files.append(
-                &mut list_files(
-                    ctx.clone(),
-                    plan.stage.clone(),
-                    plan.path.clone(),
-                    plan.pattern,
-                )
-                .await?,
-            );
-        }
+        let (files, path_is_file) = list_files(
+            ctx.clone(),
+            plan.stage.clone(),
+            plan.path.clone(),
+            plan.pattern,
+        )
+        .await?;
 
         let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
         for name in files.into_iter() {
-            let obj = format!("{}/{}", plan.path, name);
+            let obj = if !path_is_file {
+                format!("{}/{}", plan.path, name)
+            } else {
+                format!("{}", plan.path);
+            };
             let _ = op.object(&obj).delete().await;
         }
 
