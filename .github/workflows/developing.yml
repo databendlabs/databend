@@ -170,7 +170,6 @@ jobs:
 
   test_stateful_hive_standalone:
     runs-on: ubuntu-latest
-    needs: check
     steps:
       - uses: actions/checkout@v3
         with:
