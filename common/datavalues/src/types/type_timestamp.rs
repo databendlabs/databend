@@ -21,6 +21,7 @@ use chrono::Utc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::data_type::ARROW_EXTENSION_META;
@@ -116,6 +117,12 @@ impl DataType for TimestampType {
 
     fn default_value(&self) -> DataValue {
         DataValue::Int64(0)
+    }
+
+    fn random_value(&self) -> DataValue {
+        let mut rng = rand::rngs::SmallRng::from_entropy();
+        let ts = rng.gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX);
+        DataValue::Int64(ts)
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
