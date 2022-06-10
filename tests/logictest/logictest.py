@@ -9,22 +9,25 @@ from hamcrest import assert_that, is_, none, is_not
 
 from log import log
 
+supports_labels = ['http', 'mysql', 'clickhouse']
+
 # statement is a statement in sql logic test
 state_regex = r"^\s*statement\s+(?P<statement>((?P<ok>OK)|((?P<error>)ERROR\s*(?P<expectError>.*))|(?P<query>QUERY\s*((" \
               r"ERROR\s+(?P<queryError>.*))|(?P<queryOptions>.*)))))$"
 
 result_regex = r"^----\s*(?P<label>.*)?$"
-
+condition_regex = r"^(skipif\s+(?P<skipDatabase>.*))|(onlyif\s+(?P<onlyDatabase>.*))$"
 
 # return the statement type
 # `None` represent that the current format is not a statement type
 def get_statement_type(line):
     return re.match(state_regex, line, re.MULTILINE | re.IGNORECASE)
 
-
 def get_result_label(line):
     return re.match(result_regex, line, re.MULTILINE | re.IGNORECASE)
 
+def get_statement_condition(line):
+    return re.match(condition_regex, line, re.IGNORECASE) 
 
 # return false if the line is not empty
 def is_empty_line(line):
@@ -156,7 +159,7 @@ class Statement:
 class ParsedStatement(
         collections.namedtuple(
             'ParsedStatement',
-            ["at_line", "s_type", "suite_name", "text", "results"])):
+            ["at_line", "s_type", "suite_name", "text", "results", "runs_on"])):
 
     def get_fields(self):
         return self._fields
@@ -175,27 +178,41 @@ class ParsedStatement(
 
 # return all statements in a file
 def get_statements(suite_path, suite_name):
+    condition_matched = None
     lines = get_lines(suite_path)
     for line_idx, line in lines:
         if is_empty_line(line):
             # empty line or junk lines
             continue
+
         statement_type = get_statement_type(line)
 
         if statement_type is None:
+            if condition_matched is None:
+                condition_matched = get_statement_condition(line)
             continue
 
         s = Statement(statement_type)
         text = get_single_statement(lines)
         results = []
+        runs_on = set(supports_labels)
+        if condition_matched is not None:
+            if condition_matched.group("skipDatabase") is not None:
+                runs_on.remove(condition_matched.group("skipDatabase"))
+            if condition_matched.group("onlyDatabase") is not None:
+                runs_on = {x for x in runs_on if x == condition_matched.group("onlyDatabase")}
+            condition_matched = None
+        log.debug("runs_on: {}".format(runs_on))
         if s.type == "query" and s.query_type is not None:
-            # TODO need a better way to get all results
-            if s.label is None:
+            # Here we use labels to figure out number of results
+            # Must have a default results (without any label)
+            # One more label means an addion results
+            result_count = 1
+            if s.label is not None:
+                result_count = len(s.label) + 1
+            for i in range(result_count):
                 results.append(get_result(lines))
-            else:
-                for i in s.label:
-                    results.append(get_result(lines))
-        yield ParsedStatement(line_idx, s, suite_name, text, results)
+        yield ParsedStatement(line_idx, s, suite_name, text, results, runs_on)
 
 
 def format_value(vals, val_num):
@@ -272,6 +289,9 @@ class SuiteRunner(object):
                     self.execute_statement(state)
 
     def execute_statement(self, statement):
+        if self.kind not in statement.runs_on:
+            log.info("Skip execute statement with {} SuiteRunner, only runs on {}".format(self.kind, statement.runs_on))
+            return
         if self.show_query_on_execution:
             log.info("executing statement, type {}\n{}\n".format(
                 statement.s_type.type, statement.text))
@@ -296,6 +316,7 @@ class SuiteRunner(object):
 
     def assert_query_equal(self, f, resultset, statement):
         # use join after split instead of strip
+        print(resultset)
         compare_f = "".join(f.split())
         compare_result = "".join(resultset[2].split())
         assert compare_f == compare_result, "Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \

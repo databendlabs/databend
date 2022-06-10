@@ -15,6 +15,12 @@ http_config = {
     'database': 'default',
 }
 
+clickhouse_config = {
+    'user': 'root',
+    'host': '127.0.0.1',
+    "port": 8125,
+    'database': 'default',
+}
 
 def config_from_env():
     mysql_host = os.getenv("QUERY_MYSQL_HANDLER_HOST")
