@@ -98,7 +98,7 @@ error:
   --> SQL:1:23
   |
 1 | alter database system x rename to db
-  | -----                 ^ expected `RENAME`
+  | -----                 ^ expected `RENAME` or `.`
   | |                      
   | while parsing `ALTER DATABASE [IF EXISTS] <action>`
 

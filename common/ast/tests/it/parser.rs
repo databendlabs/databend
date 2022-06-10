@@ -117,6 +117,9 @@ fn test_statement() {
         r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
+        r#"ALTER DATABASE IF EXISTS catalog.c RENAME TO a;"#,
+        r#"ALTER DATABASE c RENAME TO a;"#,
+        r#"ALTER DATABASE catalog.c RENAME TO a;"#,
     ];
 
     for case in cases {

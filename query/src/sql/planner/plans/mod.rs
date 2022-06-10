@@ -42,6 +42,7 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
 use common_planners::ListPlan;
+use common_planners::RenameDatabasePlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
@@ -80,9 +81,10 @@ pub enum Plan {
 
     // DDL
     CreateTable(Box<CreateTablePlan>),
-    CreateDatabase(CreateDatabasePlan),
+    CreateDatabase(Box<CreateDatabasePlan>),
     CreateView(Box<CreateViewPlan>),
-    DropDatabase(DropDatabasePlan),
+    DropDatabase(Box<DropDatabasePlan>),
+    RenameDatabase(Box<RenameDatabasePlan>),
 
     CreateStage(Box<CreateUserStagePlan>),
     DropStage(Box<DropUserStagePlan>),

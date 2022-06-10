@@ -51,11 +51,7 @@ pub enum Statement<'a> {
     },
     CreateDatabase(CreateDatabaseStmt<'a>),
     DropDatabase(DropDatabaseStmt<'a>),
-    AlterDatabase {
-        if_exists: bool,
-        database: Identifier<'a>,
-        action: AlterDatabaseAction<'a>,
-    },
+    AlterDatabase(AlterDatabaseStmt<'a>),
     UseDatabase {
         database: Identifier<'a>,
     },
@@ -232,6 +228,14 @@ pub struct DropDatabaseStmt<'a> {
     pub if_exists: bool,
     pub catalog: Option<Identifier<'a>>,
     pub database: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterDatabaseStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+    pub action: AlterDatabaseAction<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -540,16 +544,17 @@ impl<'a> Display for Statement<'a> {
                 }
                 write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
             }
-            Statement::AlterDatabase {
+            Statement::AlterDatabase(AlterDatabaseStmt {
                 if_exists,
+                catalog,
                 database,
                 action,
-            } => {
-                write!(f, "ALTER DATABASE")?;
+            }) => {
+                write!(f, "ALTER DATABASE ")?;
                 if *if_exists {
-                    write!(f, " IF EXISTS")?;
+                    write!(f, "IF EXISTS ")?;
                 }
-                write!(f, " {database}")?;
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
                 match action {
                     AlterDatabaseAction::RenameDatabase { new_db } => {
                         write!(f, " RENAME TO {new_db}")?;

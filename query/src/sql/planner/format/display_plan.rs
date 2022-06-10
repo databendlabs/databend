@@ -41,6 +41,7 @@ impl Plan {
             Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
+            Plan::RenameDatabase(rename_database) => Ok(format!("{:?}", rename_database)),
         }
     }
 }
