@@ -64,6 +64,10 @@ impl<'a> Backtrace<'a> {
     pub fn new() -> Self {
         Self::default()
     }
+
+    pub fn clear(&self) {
+        self.inner.replace(None);
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
