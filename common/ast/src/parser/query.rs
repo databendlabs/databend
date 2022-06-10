@@ -303,7 +303,7 @@ pub fn set_expr_element(i: Input) -> IResult<SetExprElement> {
     dbg!(i.0.clone());
     let select = map(
         consumed(rule! {
-             SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
+             SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
                 ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
                 ~ ( WHERE ~ ^#expr )?
                 ~ ( GROUP ~ ^BY ~ ^#comma_separated_list1(expr) )?
@@ -362,7 +362,7 @@ pub fn set_expr_element(i: Input) -> IResult<SetExprElement> {
     let group = map(
         rule! {
            "("
-           ~ ^#sub_set_expr(0)
+           ~ ^#sub_set_expr()
            ~ ^")"
         },
         |(_, set_expr, _)| SetExprElement::Group(set_expr),
@@ -378,33 +378,20 @@ pub fn set_expr_element(i: Input) -> IResult<SetExprElement> {
             format: query.format,
         })
     });
-    alt((
-        rule!(#set_operator),
-        rule!(#select | #group | #query_in_set_expr ),
-    ))(i)
+    map(
+        rule!(#select | #group | #query_in_set_expr | #set_operator),
+        |elem| elem,
+    )(i)
 }
 
 pub fn set_expr(i: Input) -> IResult<SetExpr> {
-    context("set_expr", sub_set_expr(0))(i)
+    context("set_expr", sub_set_expr())(i)
 }
 
-pub fn sub_set_expr(min_precedence: u32) -> impl FnMut(Input) -> IResult<SetExpr> {
+pub fn sub_set_expr() -> impl FnMut(Input) -> IResult<SetExpr> {
     move |i| {
-        let higher_prec_set_expr_element = |i| {
-            set_expr_element(i).and_then(|(rest, elem)| {
-                match PrattParser::<std::iter::Once<_>>::query(&mut SetExprParser, &elem).unwrap() {
-                    Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Prefix(prec)
-                        if prec <= Precedence(min_precedence) =>
-                    {
-                        Err(nom::Err::Error(Error::from_error_kind(
-                            i,
-                            ErrorKind::Other("expected more tokens for expression"),
-                        )))
-                    }
-                    _ => Ok((rest, elem)),
-                }
-            })
-        };
+        let higher_prec_set_expr_element =
+            |i| set_expr_element(i).and_then(|(rest, elem)| Ok((rest, elem)));
         let (rest, set_expr_elements) = rule!(#higher_prec_set_expr_element+)(i)?;
         let mut iter = set_expr_elements.into_iter();
         let set_expr = SetExprParser
