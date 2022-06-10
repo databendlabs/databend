@@ -19,6 +19,7 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
+use nom::Offset;
 use nom::Slice as _;
 use pratt::Affix;
 use pratt::Associativity;
@@ -125,9 +126,10 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             }
         }
 
-        let mut iter = expr_elements.into_iter();
+        let iter = &mut expr_elements.into_iter();
+        let mut iter = iter.peekable();
         let expr = ExprParser
-            .parse(&mut iter)
+            .parse_input(&mut iter, Precedence(0))
             .map_err(|err| {
                 map_pratt_error(
                     iter.next()
@@ -139,14 +141,13 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             })
             .map_err(nom::Err::Error)?;
 
-        if let Some(elem) = iter.next() {
-            return Err(nom::Err::Error(Error::from_error_kind(
-                elem.span,
-                ErrorKind::Other("unable to parse rest of the expression"),
-            )));
+        if let Some(elem) = iter.peek() {
+            // Rollback parsing footprint on unused expr elements.
+            i.1.clear();
+            Ok((i.slice(i.offset(&elem.span)..), expr))
+        } else {
+            Ok((rest, expr))
         }
-
-        Ok((rest, expr))
     }
 }
 

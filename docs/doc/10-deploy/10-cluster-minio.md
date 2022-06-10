@@ -72,9 +72,9 @@ cluster_id = "cluster1"
 
 [meta]
 // highlight-next-line
-meta_address = "127.0.0.1:9101"
-meta_username = "root"
-meta_password = "root"
+address = "127.0.0.1:9101"
+username = "root"
+password = "root"
 
 
 [storage]

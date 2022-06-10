@@ -154,7 +154,7 @@ fn test_statements_in_legacy_suites() {
         // TODO(andylokandy): support all cases eventually
         // Remove currently unimplemented cases
         let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|OVER).*\n",
+            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|OVER|CHARSET|COLLATION).*\n",
         )
         .unwrap()
         .replace_all(&file_str, "")
@@ -212,7 +212,7 @@ fn test_query() {
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
         r#"select * from customer natural join orders left outer join detail using (id)"#,
-        r#"select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
+        r#"select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
                     select
@@ -246,6 +246,7 @@ fn test_query_error() {
         r#"select * order a"#,
         r#"select * order"#,
         r#"select number + 5 as a, cast(number as float(255))"#,
+        r#"select 1 1"#,
     ];
 
     for case in cases {
@@ -326,7 +327,6 @@ fn test_expr_error() {
         r#"5 * (a and ) 1"#,
         r#"a + +"#,
         r#"CAST(col1 AS foo)"#,
-        // TODO(andylokandy): This is a bug being tracking in https://github.com/segeljakt/pratt/issues/7
         r#"1 a"#,
         r#"CAST(col1)"#,
         r#"G.E.B IS NOT NULL AND
