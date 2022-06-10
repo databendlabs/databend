@@ -131,6 +131,8 @@ impl ValueSource {
                 for deser in desers.iter_mut().take(pop_count) {
                     deser.pop_data_value()?;
                 }
+                // rollback to get full data
+                reader.rollback_to_checkpoint()?;
                 skip_to_next_row(reader, 1)?;
 
                 // Parse from expression and append all columns.
