@@ -27,7 +27,7 @@ impl<'a> Binder {
         stmt: &CreateViewStmt<'a>,
     ) -> Result<Plan> {
         let catalog = self.ctx.get_current_catalog();
-        let db = stmt
+        let database = stmt
             .database
             .as_ref()
             .map(|ident| ident.name.to_lowercase())
@@ -40,7 +40,7 @@ impl<'a> Binder {
             if_not_exists: stmt.if_not_exists,
             tenant: self.ctx.get_tenant(),
             catalog,
-            database: db,
+            database,
             viewname,
             subquery,
         };
@@ -52,7 +52,7 @@ impl<'a> Binder {
         stmt: &AlterViewStmt<'a>,
     ) -> Result<Plan> {
         let catalog = self.ctx.get_current_catalog();
-        let db = stmt
+        let database = stmt
             .database
             .as_ref()
             .map(|ident| ident.name.to_lowercase())
@@ -64,7 +64,7 @@ impl<'a> Binder {
         let plan = AlterViewPlan {
             tenant: self.ctx.get_tenant(),
             catalog,
-            db,
+            database,
             viewname,
             subquery,
         };
