@@ -30,30 +30,46 @@ use poem::Middleware;
 use poem::Request;
 
 use super::v1::HttpQueryContext;
+use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::users::auth::auth_mgr::Credential;
 
 pub struct HTTPSessionMiddleware {
+    pub kind: HttpHandlerKind,
     pub session_manager: Arc<SessionManager>,
 }
 
-fn get_credential(req: &Request) -> Result<Credential> {
+fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
     let auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if auth_headers.len() > 1 {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
         return Err(ErrorCode::AuthenticateFailure(msg));
-    }
-    if auth_headers.is_empty() {
-        return Err(ErrorCode::AuthenticateFailure(
-            "No authorization header detected",
-        ));
     }
     let client_ip = match req.remote_addr().0 {
         Addr::SocketAddr(addr) => Some(addr.ip().to_string()),
         Addr::Custom(..) => Some("127.0.0.1".to_string()),
         _ => None,
     };
+    if auth_headers.is_empty() {
+        if let HttpHandlerKind::Clickhouse = kind {
+            let (user, key) = (
+                req.headers().get("X-CLICKHOUSE-USER"),
+                req.headers().get("X-CLICKHOUSE-KEY"),
+            );
+            if let (Some(name), Some(password)) = (user, key) {
+                let c = Credential::Password {
+                    name: String::from_utf8(name.as_bytes().to_vec()).unwrap(),
+                    password: Some(password.as_bytes().to_vec()),
+                    hostname: client_ip,
+                };
+                return Ok(c);
+            }
+        }
+        return Err(ErrorCode::AuthenticateFailure(
+            "No authorization header detected",
+        ));
+    }
     let value = auth_headers[0];
     if value.as_bytes().starts_with(b"Basic ") {
         match Basic::decode(value) {
@@ -87,6 +103,7 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
     type Output = HTTPSessionEndpoint<E>;
     fn transform(&self, ep: E) -> Self::Output {
         HTTPSessionEndpoint {
+            kind: self.kind,
             ep,
             manager: self.session_manager.clone(),
         }
@@ -94,13 +111,14 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
 }
 
 pub struct HTTPSessionEndpoint<E> {
+    pub kind: HttpHandlerKind,
     ep: E,
     manager: Arc<SessionManager>,
 }
 
 impl<E> HTTPSessionEndpoint<E> {
     async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
-        let credential = get_credential(req)?;
+        let credential = get_credential(req, self.kind)?;
         let session = self.manager.create_session(SessionType::Dummy).await?;
         let (tenant_id, user_info) = session
             .create_query_context()
