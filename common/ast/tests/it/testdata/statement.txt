@@ -2863,7 +2863,7 @@ list @stage_a;
 LIST @stage_a
 ---------- AST ------------
 ListStage {
-    stage_name: "stage_a",
+    location: "stage_a",
     pattern: "",
 }
 

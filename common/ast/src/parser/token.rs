@@ -897,6 +897,7 @@ impl TokenKind {
             // | TokenKind::REFERENCES
             | TokenKind::RIGHT
             | TokenKind::SELECT
+            | TokenKind::STAGE
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
             // | TokenKind::SOME

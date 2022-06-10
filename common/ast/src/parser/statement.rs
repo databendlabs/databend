@@ -516,7 +516,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
 
     let desc_stage = map(
         rule! {
-            DESC ~ STAGE ~ #ident
+            (DESC | DESCRIBE) ~ STAGE ~ #ident
         },
         |(_, _, stage_name)| Statement::DescStage {
             stage_name: stage_name.to_string(),
