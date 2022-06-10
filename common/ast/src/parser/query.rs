@@ -16,8 +16,17 @@ use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
+use nom::error::context;
+use nom::Slice as _;
+use pratt::Affix;
+use pratt::Associativity;
+use pratt::PrattError;
+use pratt::PrattParser;
+use pratt::Precedence;
 
 use crate::ast::*;
+use crate::parser::error::Error;
+use crate::parser::error::ErrorKind;
 use crate::parser::expr::*;
 use crate::parser::token::*;
 use crate::parser::util::*;
@@ -278,8 +287,21 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
     )(i)
 }
 
-pub fn select(i: Input) -> IResult<SetExpr> {
-    map(
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetExprElement<'a> {
+    Select(SelectStmt<'a>),
+    Query(Query<'a>),
+    SetOperation {
+        span: &'a [Token<'a>],
+        op: SetOperator,
+        all: bool,
+    },
+    Group(SetExpr<'a>),
+}
+
+pub fn set_expr_element(i: Input) -> IResult<SetExprElement> {
+    dbg!(i.0.clone());
+    let select = map(
         consumed(rule! {
              SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
                 ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
@@ -299,7 +321,7 @@ pub fn select(i: Input) -> IResult<SetExpr> {
                 opt_having_block,
             ),
         )| {
-            SetExpr::Select(Box::new(SelectStmt {
+            SetExprElement::Select(SelectStmt {
                 span: span.0,
                 distinct: opt_distinct.is_some(),
                 select_list,
@@ -311,97 +333,187 @@ pub fn select(i: Input) -> IResult<SetExpr> {
                     .map(|(_, _, group_by)| group_by)
                     .unwrap_or_default(),
                 having: opt_having_block.map(|(_, having)| having),
-            }))
+            })
         },
-    )(i)
-}
+    );
 
-pub fn parenthesized_select(i: Input) -> IResult<SetExpr> {
-    map(
-        rule! (
-            "(" ~ (#parenthesized_select  | #select ) ~ ")"
-        ),
-        |(_, select, _)| select,
-    )(i)
-}
-
-pub fn select_or_set_expr(i: Input) -> IResult<SetExpr> {
-    map(
-        consumed(
-            rule!((#select | #parenthesized_select) ~ (UNION | EXCEPT | INTERSECT)? ~ ALL? ~ (#select_or_set_expr| #parenthesized_select_or_set_expr)?),
-        ),
-        |(span, (select, set_operator, all_kind, set_expr))| {
-            let all = all_kind.is_some();
-            match set_operator.map(|token| token.kind) {
-                Some(TokenKind::UNION) => SetExpr::SetOperation(Box::new(SetOperation {
-                    span: span.0,
-                    op: SetOperator::Union,
-                    all,
-                    left: Box::new(select),
-                    right: Box::new(set_expr.unwrap()),
-                })),
-                Some(TokenKind::EXCEPT) => SetExpr::SetOperation(Box::new(SetOperation {
-                    span: span.0,
-                    op: SetOperator::Except,
-                    all,
-                    left: Box::new(select),
-                    right: Box::new(set_expr.unwrap()),
-                })),
-                Some(TokenKind::INTERSECT) => SetExpr::SetOperation(Box::new(SetOperation {
-                    span: span.0,
-                    op: SetOperator::Intersect,
-                    all,
-                    left: Box::new(select),
-                    right: Box::new(set_expr.unwrap()),
-                })),
-                None => select,
-                _ => unreachable!(),
-            }
+    let set_operator = map(
+        consumed(rule!((UNION | EXCEPT | INTERSECT) ~ ALL?)),
+        |(span, (op, all))| match op.kind {
+            TokenKind::UNION => SetExprElement::SetOperation {
+                span: span.0,
+                op: SetOperator::Union,
+                all: all.is_some(),
+            },
+            TokenKind::INTERSECT => SetExprElement::SetOperation {
+                span: span.0,
+                op: SetOperator::Intersect,
+                all: all.is_some(),
+            },
+            TokenKind::EXCEPT => SetExprElement::SetOperation {
+                span: span.0,
+                op: SetOperator::Except,
+                all: all.is_some(),
+            },
+            _ => unreachable!(),
         },
-    )(i)
-}
+    );
 
-pub fn parenthesized_select_or_set_expr(i: Input) -> IResult<SetExpr> {
-    map(
-        rule! (
-            "(" ~ (#parenthesized_select_or_set_expr  | #select_or_set_expr ) ~ ")"
-        ),
-        |(_, select_or_set_expr, _)| select_or_set_expr,
-    )(i)
+    let group = map(
+        rule! {
+           "("
+           ~ ^#sub_set_expr(0)
+           ~ ^")"
+        },
+        |(_, set_expr, _)| SetExprElement::Group(set_expr),
+    );
+
+    let query_in_set_expr = map(consumed(rule!(#query)), |(span, query)| {
+        SetExprElement::Query(Query {
+            span: span.0,
+            body: query.body,
+            order_by: query.order_by,
+            limit: query.limit,
+            offset: query.offset,
+            format: query.format,
+        })
+    });
+    alt((
+        rule!(#set_operator),
+        rule!(#select | #group | #query_in_set_expr ),
+    ))(i)
 }
 
 pub fn set_expr(i: Input) -> IResult<SetExpr> {
-    map(
-        consumed(
-            rule!((#select_or_set_expr | #parenthesized_select_or_set_expr) ~ (UNION | EXCEPT | INTERSECT)? ~ ALL? ~ (#select_or_set_expr | #parenthesized_select_or_set_expr)?),
-        ),
-        |(span, (set_expr1, set_operator, all_kind, set_expr2))| {
-            let all = all_kind.is_some();
-            match set_operator.map(|token| token.kind) {
-                Some(TokenKind::UNION) => SetExpr::SetOperation(Box::new(SetOperation {
-                    span: span.0,
-                    op: SetOperator::Union,
+    context("set_expr", sub_set_expr(0))(i)
+}
+
+pub fn sub_set_expr(min_precedence: u32) -> impl FnMut(Input) -> IResult<SetExpr> {
+    move |i| {
+        let higher_prec_set_expr_element = |i| {
+            set_expr_element(i).and_then(|(rest, elem)| {
+                match PrattParser::<std::iter::Once<_>>::query(&mut SetExprParser, &elem).unwrap() {
+                    Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Prefix(prec)
+                        if prec <= Precedence(min_precedence) =>
+                    {
+                        Err(nom::Err::Error(Error::from_error_kind(
+                            i,
+                            ErrorKind::Other("expected more tokens for expression"),
+                        )))
+                    }
+                    _ => Ok((rest, elem)),
+                }
+            })
+        };
+        let (rest, set_expr_elements) = rule!(#higher_prec_set_expr_element+)(i)?;
+        let mut iter = set_expr_elements.into_iter();
+        let set_expr = SetExprParser
+            .parse(&mut iter)
+            .map_err(|err| map_pratt_error(rest.slice(..1), err))
+            .map_err(nom::Err::Error)?;
+        if let Some(_) = iter.next() {
+            return Err(nom::Err::Error(Error::from_error_kind(
+                rest.slice(..1),
+                ErrorKind::Other("unable to parse rest of the expression"),
+            )));
+        }
+        Ok((rest, set_expr))
+    }
+}
+
+struct SetExprParser;
+
+impl<'a, I: Iterator<Item = SetExprElement<'a>>> PrattParser<I> for SetExprParser {
+    type Error = pratt::NoError;
+    type Input = SetExprElement<'a>;
+    type Output = SetExpr<'a>;
+
+    fn query(&mut self, input: &Self::Input) -> pratt::Result<Affix> {
+        let affix = match input {
+            SetExprElement::SetOperation { op, .. } => match op {
+                SetOperator::Union | SetOperator::Except => {
+                    Affix::Infix(Precedence(10), Associativity::Left)
+                }
+                SetOperator::Intersect => Affix::Infix(Precedence(20), Associativity::Left),
+            },
+            _ => Affix::Nilfix,
+        };
+        Ok(affix)
+    }
+
+    fn primary(&mut self, input: Self::Input) -> pratt::Result<SetExpr<'a>> {
+        let set_expr = match input {
+            SetExprElement::Select(select) => SetExpr::Select(Box::new(select)),
+            SetExprElement::Query(query) => SetExpr::Query(Box::new(query)),
+            SetExprElement::Group(expr) => expr,
+            _ => unreachable!(),
+        };
+        Ok(set_expr)
+    }
+
+    fn infix(
+        &mut self,
+        lhs: Self::Output,
+        op: Self::Input,
+        rhs: Self::Output,
+    ) -> pratt::Result<SetExpr<'a>> {
+        let set_expr = match op {
+            SetExprElement::SetOperation { span, op, all, .. } => {
+                SetExpr::SetOperation(Box::new(SetOperation {
+                    span,
+                    op,
                     all,
-                    left: Box::new(set_expr1),
-                    right: Box::new(set_expr2.unwrap()),
-                })),
-                Some(TokenKind::EXCEPT) => SetExpr::SetOperation(Box::new(SetOperation {
-                    span: span.0,
-                    op: SetOperator::Except,
-                    all,
-                    left: Box::new(set_expr1),
-                    right: Box::new(set_expr2.unwrap()),
-                })),
-                Some(TokenKind::INTERSECT) => SetExpr::SetOperation(Box::new(SetOperation {
-                    span: span.0,
-                    op: SetOperator::Intersect,
-                    all,
-                    left: Box::new(set_expr1),
-                    right: Box::new(set_expr2.unwrap()),
-                })),
-                None => set_expr1,
-                _ => unreachable!(),
+                    left: Box::new(lhs),
+                    right: Box::new(rhs),
+                }))
             }
-        },
-    )(i)
+            _ => unreachable!(),
+        };
+        Ok(set_expr)
+    }
+
+    fn prefix(
+        &mut self,
+        _op: Self::Input,
+        _rhs: Self::Output,
+    ) -> Result<Self::Output, Self::Error> {
+        todo!()
+    }
+
+    fn postfix(
+        &mut self,
+        _lhs: Self::Output,
+        _op: Self::Input,
+    ) -> Result<Self::Output, Self::Error> {
+        todo!()
+    }
+}
+
+fn map_pratt_error<'a>(
+    next_token: Input<'a>,
+    err: PrattError<SetExprElement<'a>, pratt::NoError>,
+) -> Error<'a> {
+    match err {
+        PrattError::EmptyInput => Error::from_error_kind(
+            next_token,
+            ErrorKind::Other("expected more tokens for expression"),
+        ),
+        PrattError::UnexpectedNilfix(_) => Error::from_error_kind(
+            next_token,
+            ErrorKind::Other("unable to parse the expression value"),
+        ),
+        PrattError::UnexpectedPrefix(_) => Error::from_error_kind(
+            next_token,
+            ErrorKind::Other("unable to parse the prefix operator"),
+        ),
+        PrattError::UnexpectedInfix(_) => Error::from_error_kind(
+            next_token,
+            ErrorKind::Other("unable to parse the binary operator"),
+        ),
+        PrattError::UnexpectedPostfix(_) => Error::from_error_kind(
+            next_token,
+            ErrorKind::Other("unable to parse the postfix operator"),
+        ),
+        PrattError::UserError(_) => unreachable!(),
+    }
 }

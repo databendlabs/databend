@@ -49,22 +49,6 @@ pub struct SetOperation<'a> {
     pub right: Box<SetExpr<'a>>,
 }
 
-// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
-#[derive(Debug, Clone, PartialEq)]
-pub enum SetExpr<'a> {
-    Select(Box<SelectStmt<'a>>),
-    Query(Box<Query<'a>>),
-    // UNION/EXCEPT/INTERSECT operator
-    SetOperation(Box<SetOperation<'a>>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SetOperator {
-    Union,
-    Except,
-    Intersect,
-}
-
 // A subquery represented with `SELECT` statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStmt<'a> {
@@ -82,6 +66,22 @@ pub struct SelectStmt<'a> {
     pub group_by: Vec<Expr<'a>>,
     // `HAVING` clause
     pub having: Option<Expr<'a>>,
+}
+
+// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetExpr<'a> {
+    Select(Box<SelectStmt<'a>>),
+    Query(Box<Query<'a>>),
+    // UNION/EXCEPT/INTERSECT operator
+    SetOperation(Box<SetOperation<'a>>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetOperator {
+    Union,
+    Except,
+    Intersect,
 }
 
 // `ORDER BY` clause
