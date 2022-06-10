@@ -30,7 +30,6 @@ jobs:
 
   build_macos:
     runs-on: macos-11
-    needs: check
     strategy:
       matrix:
         target:
@@ -48,7 +47,6 @@ jobs:
 
   build_linux:
     runs-on: [self-hosted, x64, Linux]
-    needs: check
     strategy:
       matrix:
         target:
@@ -65,7 +63,6 @@ jobs:
 
   test_unit:
     runs-on: [self-hosted, x64, Linux]
-    needs: check
     steps:
       - uses: actions/checkout@v3
         with:
