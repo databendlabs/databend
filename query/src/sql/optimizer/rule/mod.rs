@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use common_exception::Result;
 
 use crate::sql::optimizer::SExpr;
 
 mod factory;
+mod rewrite;
 mod rule_implement_get;
 mod rule_implement_hash_join;
 mod rule_set;
 mod transform_state;
 
 pub use factory::RuleFactory;
+pub use rule_set::AppliedRules;
 pub use rule_set::RuleSet;
 pub use transform_state::TransformState;
 
@@ -31,32 +36,39 @@ pub type RulePtr = Box<dyn Rule>;
 pub trait Rule {
     fn id(&self) -> RuleID;
 
-    fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()>;
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()>;
 
     fn pattern(&self) -> &SExpr;
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RuleID {
+    PushDownFilterProject,
+    PushDownFilterEvalScalar,
+    EliminateEvalScalar,
+    EliminateFilter,
+    EliminateProject,
+    MergeProject,
+    MergeEvalScalar,
+    MergeFilter,
+
     ImplementGet,
     ImplementHashJoin,
 }
 
-impl RuleID {
-    pub fn name(&self) -> &'static str {
+impl Display for RuleID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            RuleID::ImplementGet => "ImplementGet",
-            RuleID::ImplementHashJoin => "ImplementHashJoin",
-        }
-    }
-
-    /// Unique integral id
-    /// TODO: maybe use a macro like https://docs.rs/iota/0.2.2/iota/ to implement this?
-    #[allow(dead_code)]
-    pub fn uid(&self) -> u32 {
-        match self {
-            RuleID::ImplementGet => 0,
-            RuleID::ImplementHashJoin => 1,
+            RuleID::ImplementGet => write!(f, "ImplementGet"),
+            RuleID::ImplementHashJoin => write!(f, "ImplementHashJoin"),
+            RuleID::PushDownFilterProject => write!(f, "PushDownFilterProject"),
+            RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
+            RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
+            RuleID::EliminateFilter => write!(f, "EliminateFilter"),
+            RuleID::EliminateProject => write!(f, "EliminateProject"),
+            RuleID::MergeProject => write!(f, "MergeProject"),
+            RuleID::MergeEvalScalar => write!(f, "MergeEvalScalar"),
+            RuleID::MergeFilter => write!(f, "MergeFilter"),
         }
     }
 }

@@ -18,7 +18,7 @@ use enum_dispatch::enum_dispatch;
 use super::aggregate::AggregatePlan;
 use super::apply::CrossApply;
 use super::eval_scalar::EvalScalar;
-use super::filter::FilterPlan;
+use super::filter::Filter;
 use super::hash_join::PhysicalHashJoin;
 use super::limit::LimitPlan;
 use super::logical_get::LogicalGet;
@@ -95,7 +95,7 @@ pub enum RelOperator {
 
     Project(Project),
     EvalScalar(EvalScalar),
-    Filter(FilterPlan),
+    Filter(Filter),
     Aggregate(AggregatePlan),
     Sort(SortPlan),
     Limit(LimitPlan),

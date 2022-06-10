@@ -44,7 +44,7 @@ use common_planners::DropUserStagePlan;
 use common_planners::ListPlan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
-pub use filter::FilterPlan;
+pub use filter::Filter;
 pub use hash_join::PhysicalHashJoin;
 pub use limit::LimitPlan;
 pub use logical_get::LogicalGet;
