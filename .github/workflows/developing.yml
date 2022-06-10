@@ -39,6 +39,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   build_macos:
+    name: "build_macos(optional)"
     runs-on: macos-11
     strategy:
       matrix:
@@ -131,6 +132,7 @@ jobs:
       - uses: ./.github/actions/test_stateless_cluster_linux
 
   test_stateless_cluster_macos:
+    name: "test_stateless_cluster_macos(optional)"
     runs-on: macos-11
     needs: build_macos
     steps:
@@ -141,6 +143,7 @@ jobs:
       - uses: ./.github/actions/test_stateless_cluster_macos
 
   test_sqllogic_standalone_macos:
+    name: "test_sqllogic_standalone_macos(optional)"
     runs-on: macos-11
     needs: build_macos
     steps:
