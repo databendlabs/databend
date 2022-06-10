@@ -168,6 +168,21 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/test_stateful_standalone
 
+  build_linux_hive:
+    runs-on: [ self-hosted, x64, Linux ]
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_debug_hive
+        with:
+          target: ${{ matrix.target }}
+
   test_stateful_hive_standalone:
     runs-on: ubuntu-latest
     steps:
