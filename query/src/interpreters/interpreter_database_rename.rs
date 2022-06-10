@@ -54,9 +54,9 @@ impl Interpreter for RenameDatabaseInterpreter {
                     if_exists: entity.if_exists,
                     name_ident: DatabaseNameIdent {
                         tenant,
-                        db_name: entity.db.clone(),
+                        db_name: entity.database.clone(),
                     },
-                    new_db_name: entity.new_db.clone(),
+                    new_db_name: entity.new_database.clone(),
                 })
                 .await?;
         }

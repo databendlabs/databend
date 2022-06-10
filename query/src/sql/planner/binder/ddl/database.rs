@@ -43,7 +43,7 @@ impl<'a> Binder {
         Ok(Plan::DropDatabase(DropDatabasePlan {
             tenant,
             catalog,
-            db,
+            database: db,
             if_exists,
         }))
     }
@@ -67,7 +67,7 @@ impl<'a> Binder {
             tenant,
             if_not_exists,
             catalog,
-            db,
+            database: db,
             meta,
         }))
     }

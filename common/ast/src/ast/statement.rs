@@ -20,6 +20,8 @@ use common_meta_types::AuthType;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 use common_meta_types::UserOptionFlag;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::write_space_seperated_list;
 use super::Expr;
@@ -87,7 +89,7 @@ pub enum Statement<'a> {
         table: Identifier<'a>,
         all: bool,
     },
-    UnDropTable {
+    UndropTable {
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
     },
@@ -326,12 +328,12 @@ pub enum AlterDatabaseAction<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AlterTableAction<'a> {
     RenameTable { new_table: Identifier<'a> },
-    AlterClusterKey { cluster_by: Vec<Expr<'a>> },
-    DropClusterKey,
+    AlterTableClusterKey { cluster_by: Vec<Expr<'a>> },
+    DropTableClusterKey,
     // TODO(wuzhiguo): AddColumn etc
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum OptimizeTableAction {
     All,
     Purge,
@@ -422,6 +424,16 @@ impl<'a> Display for ColumnDefinition<'a> {
             write!(f, " DEFAULT {default_expr}")?;
         }
         Ok(())
+    }
+}
+
+impl Display for OptimizeTableAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OptimizeTableAction::All => write!(f, "ALL"),
+            OptimizeTableAction::Purge => write!(f, "PURGE"),
+            OptimizeTableAction::Compact => write!(f, "COMPACT"),
+        }
     }
 }
 
@@ -649,7 +661,7 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " ALL")?;
                 }
             }
-            Statement::UnDropTable { database, table } => {
+            Statement::UndropTable { database, table } => {
                 write!(f, "UNDROP TABLE ")?;
                 write_period_separated_list(f, database.iter().chain(Some(table)))?;
             }
@@ -668,11 +680,11 @@ impl<'a> Display for Statement<'a> {
                     AlterTableAction::RenameTable { new_table } => {
                         write!(f, " RENAME TO {new_table}")?;
                     }
-                    AlterTableAction::AlterClusterKey { cluster_by } => {
+                    AlterTableAction::AlterTableClusterKey { cluster_by } => {
                         write!(f, " CLUSTER BY ")?;
                         write_comma_separated_list(f, cluster_by)?;
                     }
-                    AlterTableAction::DropClusterKey => {
+                    AlterTableAction::DropTableClusterKey => {
                         write!(f, " DROP CLUSTER KEY")?;
                     }
                 }
@@ -705,11 +717,7 @@ impl<'a> Display for Statement<'a> {
                 write!(f, "OPTIMIZE TABLE ")?;
                 write_period_separated_list(f, database.iter().chain(Some(table)))?;
                 if let Some(action) = action {
-                    match action {
-                        OptimizeTableAction::All => write!(f, " ALL")?,
-                        OptimizeTableAction::Purge => write!(f, " PURGE")?,
-                        OptimizeTableAction::Compact => write!(f, " COMPACT")?,
-                    }
+                    write!(f, " {action}")?;
                 }
             }
             Statement::CreateView(CreateViewStmt {

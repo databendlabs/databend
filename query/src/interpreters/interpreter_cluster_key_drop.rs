@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_planners::DropClusterKeyPlan;
+use common_planners::DropTableClusterKeyPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -25,21 +25,24 @@ use super::Interpreter;
 use super::InterpreterPtr;
 use crate::sessions::QueryContext;
 
-pub struct DropClusterKeyInterpreter {
+pub struct DropTableClusterKeyInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropClusterKeyPlan,
+    plan: DropTableClusterKeyPlan,
 }
 
-impl DropClusterKeyInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropClusterKeyPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropClusterKeyInterpreter { ctx, plan }))
+impl DropTableClusterKeyInterpreter {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        plan: DropTableClusterKeyPlan,
+    ) -> Result<InterpreterPtr> {
+        Ok(Arc::new(DropTableClusterKeyInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropClusterKeyInterpreter {
+impl Interpreter for DropTableClusterKeyInterpreter {
     fn name(&self) -> &str {
-        "DropClusterKeyInterpreter"
+        "DropTableClusterKeyInterpreter"
     }
 
     async fn execute(
@@ -67,7 +70,7 @@ impl Interpreter for DropClusterKeyInterpreter {
             .await?;
 
         table
-            .drop_cluster_keys(self.ctx.clone(), &self.plan.catalog_name)
+            .drop_table_cluster_keys(self.ctx.clone(), &self.plan.catalog_name)
             .await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

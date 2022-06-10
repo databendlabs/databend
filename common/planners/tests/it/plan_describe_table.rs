@@ -27,7 +27,7 @@ fn test_describe_table_plan() -> Result<()> {
 
     let describe = PlanNode::DescribeTable(DescribeTablePlan {
         catalog: "default".to_owned(),
-        db: "foo".into(),
+        database: "foo".into(),
         table: "bar".into(),
         schema,
     });

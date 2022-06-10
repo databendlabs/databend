@@ -18,14 +18,14 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct DropClusterKeyPlan {
+pub struct DropTableClusterKeyPlan {
     pub tenant: String,
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
 }
 
-impl DropClusterKeyPlan {
+impl DropTableClusterKeyPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

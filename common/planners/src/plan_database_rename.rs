@@ -27,8 +27,8 @@ pub struct RenameDatabasePlan {
 pub struct RenameDatabaseEntity {
     pub if_exists: bool,
     pub catalog_name: String,
-    pub db: String,
-    pub new_db: String,
+    pub database: String,
+    pub new_database: String,
 }
 
 impl RenameDatabasePlan {

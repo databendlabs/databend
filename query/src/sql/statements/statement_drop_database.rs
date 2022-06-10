@@ -35,7 +35,7 @@ pub struct DfDropDatabase {
 impl AnalyzableStatement for DfDropDatabase {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog, db) = resolve_database(&ctx, &self.name, "DROP DATABASE")?;
+        let (catalog, database) = resolve_database(&ctx, &self.name, "DROP DATABASE")?;
         let if_exists = self.if_exists;
         let tenant = ctx.get_tenant();
 
@@ -43,7 +43,7 @@ impl AnalyzableStatement for DfDropDatabase {
             PlanNode::DropDatabase(DropDatabasePlan {
                 tenant,
                 catalog,
-                db,
+                database,
                 if_exists,
             }),
         )))

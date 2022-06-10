@@ -246,7 +246,7 @@ impl Table for FuseTable {
         self.cluster_keys.clone()
     }
 
-    async fn alter_cluster_keys(
+    async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<QueryContext>,
         catalog_name: &str,
@@ -286,7 +286,11 @@ impl Table for FuseTable {
         .await
     }
 
-    async fn drop_cluster_keys(&self, ctx: Arc<QueryContext>, catalog_name: &str) -> Result<()> {
+    async fn drop_table_cluster_keys(
+        &self,
+        ctx: Arc<QueryContext>,
+        catalog_name: &str,
+    ) -> Result<()> {
         if self.cluster_key_meta.is_none() {
             return Ok(());
         }

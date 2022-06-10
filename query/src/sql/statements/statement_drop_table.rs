@@ -39,14 +39,14 @@ impl AnalyzableStatement for DfDropTable {
         let if_exists = self.if_exists;
         let all = self.all;
         let tenant = ctx.get_tenant();
-        let (catalog, db, table) = resolve_table(&ctx, &self.name, "DROP TABLE")?;
+        let (catalog, database, table) = resolve_table(&ctx, &self.name, "DROP TABLE")?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropTable(
             DropTablePlan {
                 if_exists,
                 tenant,
                 catalog,
-                db,
+                database,
                 table,
                 all,
             },
