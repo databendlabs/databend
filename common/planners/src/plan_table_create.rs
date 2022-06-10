@@ -29,7 +29,7 @@ pub struct CreateTablePlan {
     pub tenant: String,
     /// The catalog name
     pub catalog: String,
-    pub db: String,
+    pub database: String,
     /// The table name
     pub table: String,
 
@@ -45,7 +45,7 @@ impl From<CreateTablePlan> for CreateTableReq {
             if_not_exists: p.if_not_exists,
             name_ident: TableNameIdent {
                 tenant: p.tenant,
-                db_name: p.db,
+                db_name: p.database,
                 table_name: p.table,
             },
             table_meta: p.table_meta,

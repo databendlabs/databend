@@ -34,11 +34,11 @@ pub struct DfTruncateTable {
 impl AnalyzableStatement for DfTruncateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog, db, table) = super::resolve_table(&ctx, &self.name, "TRUNCATE TABLE")?;
+        let (catalog, database, table) = super::resolve_table(&ctx, &self.name, "TRUNCATE TABLE")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::TruncateTable(TruncateTablePlan {
                 catalog,
-                db,
+                database,
                 table,
                 purge: self.purge,
             }),

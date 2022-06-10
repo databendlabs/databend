@@ -22,7 +22,7 @@ pub struct CreateViewPlan {
     pub if_not_exists: bool,
     pub tenant: String,
     pub catalog: String,
-    pub db: String,
+    pub database: String,
     pub viewname: String,
     pub subquery: String,
 }

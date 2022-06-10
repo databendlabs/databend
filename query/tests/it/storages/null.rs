@@ -75,7 +75,7 @@ async fn test_null_table() -> Result<()> {
     {
         let truncate_plan = TruncateTablePlan {
             catalog: "default".to_string(),
-            db: "default".to_string(),
+            database: "default".to_string(),
             table: "a".to_string(),
             purge: false,
         };

@@ -220,7 +220,7 @@ impl<'a> Binder {
             if_not_exists: stmt.if_not_exists,
             tenant: self.ctx.get_tenant(),
             catalog,
-            db: database,
+            database,
             table,
             table_meta: meta,
             cluster_keys,

@@ -33,7 +33,7 @@ fn test_plan_display_indent() -> Result<()> {
         if_not_exists: true,
         tenant: "tenant1".into(),
         catalog: "default".into(),
-        db: "foo".into(),
+        database: "foo".into(),
         table: "bar".into(),
         table_meta: TableMeta {
             schema,

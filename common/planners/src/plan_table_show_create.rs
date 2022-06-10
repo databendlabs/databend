@@ -19,7 +19,7 @@ pub struct ShowCreateTablePlan {
     /// The catalog name
     pub catalog: String,
     /// The database name
-    pub db: String,
+    pub database: String,
     /// The table name
     pub table: String,
     /// The table schema

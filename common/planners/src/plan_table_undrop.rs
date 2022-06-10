@@ -20,26 +20,26 @@ use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct UnDropTablePlan {
+pub struct UndropTablePlan {
     pub tenant: String,
     pub catalog: String,
-    pub db: String,
+    pub database: String,
     pub table: String,
 }
 
-impl UnDropTablePlan {
+impl UndropTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
 }
 
 /// The table name
-impl From<UnDropTablePlan> for UndropTableReq {
-    fn from(p: UnDropTablePlan) -> Self {
+impl From<UndropTablePlan> for UndropTableReq {
+    fn from(p: UndropTablePlan) -> Self {
         UndropTableReq {
             name_ident: TableNameIdent {
                 tenant: p.tenant,
-                db_name: p.db,
+                db_name: p.database,
                 table_name: p.table,
             },
         }
