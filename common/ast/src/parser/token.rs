@@ -897,7 +897,6 @@ impl TokenKind {
             // | TokenKind::REFERENCES
             | TokenKind::RIGHT
             | TokenKind::SELECT
-            | TokenKind::STAGE
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
             // | TokenKind::SOME
@@ -934,6 +933,7 @@ impl TokenKind {
             | TokenKind::ORDER
             // | TokenKind::OVERLAPS 
             // | TokenKind::RETURNING
+            | TokenKind::STAGE
             | TokenKind::TO
             // | TokenKind::UNION
             | TokenKind::WHERE

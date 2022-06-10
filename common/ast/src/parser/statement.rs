@@ -491,9 +491,9 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             LIST ~ #at_string ~ (PATTERN ~ "=" ~ #literal_string)?
         },
-        |(_, location, pattern_opt)| Statement::ListStage {
+        |(_, location, opt_pattern)| Statement::ListStage {
             location,
-            pattern: pattern_opt.map(|v| v.2).unwrap_or_default(),
+            pattern: opt_pattern.map(|v| v.2).unwrap_or_default(),
         },
     );
 
@@ -501,9 +501,9 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             REMOVE ~ #at_string ~ (PATTERN ~ "=" ~ #literal_string)?
         },
-        |(_, location, pattern_opt)| Statement::RemoveStage {
+        |(_, location, opt_pattern)| Statement::RemoveStage {
             location,
-            pattern: pattern_opt.map(|v| v.2).unwrap_or_default(),
+            pattern: opt_pattern.map(|v| v.2).unwrap_or_default(),
         },
     );
 
