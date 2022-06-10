@@ -228,6 +228,11 @@ fn test_query() {
             group by c_count
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal"#,
+        r#"select * from t1 union select * from t2"#,
+        r#"select * from t1 union select * from t2 union select * from t3"#,
+        r#"select * from t1 union select * from t2 intersect select * from t3"#,
+        r#"(select * from t1 union select * from t2) union select * from t3"#,
+        r#"select * from t1 union (select * from t2 union select * from t3)"#,
     ];
 
     for case in cases {
