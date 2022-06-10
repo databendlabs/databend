@@ -61,14 +61,15 @@ impl Interpreter for RemoveUserStageInterpreter {
         .await?;
 
         let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
-        for name in files.into_iter() {
-            let obj = if !path_is_file {
-                format!("{}/{}", plan.path, name)
-            } else {
-                format!("{}", plan.path);
-            };
-            let _ = op.object(&obj).delete().await;
-        }
+
+        if !path_is_file {
+            for name in files.into_iter() {
+                let obj = format!("{}/{}", plan.path, name);
+                op.object(&obj).delete().await?;
+            }
+        } else {
+            op.object(&plan.path).delete().await?;
+        };
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema(),
