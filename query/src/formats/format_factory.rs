@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -20,16 +21,19 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use once_cell::sync::Lazy;
+use strum::IntoEnumIterator;
 
 use crate::formats::format::InputFormat;
 use crate::formats::format_csv::CsvInputFormat;
 use crate::formats::format_parquet::ParquetInputFormat;
+use crate::formats::output_format::OutputFormatType;
 
 pub type InputFormatFactoryCreator =
     Box<dyn Fn(&str, DataSchemaRef, FormatSettings) -> Result<Box<dyn InputFormat>> + Send + Sync>;
 
 pub struct FormatFactory {
     case_insensitive_desc: HashMap<String, InputFormatFactoryCreator>,
+    outputs: BTreeMap<String, OutputFormatType>,
 }
 
 static FORMAT_FACTORY: Lazy<Arc<FormatFactory>> = Lazy::new(|| {
@@ -38,6 +42,7 @@ static FORMAT_FACTORY: Lazy<Arc<FormatFactory>> = Lazy::new(|| {
     CsvInputFormat::register(&mut format_factory);
     ParquetInputFormat::register(&mut format_factory);
 
+    format_factory.register_outputs();
     Arc::new(format_factory)
 });
 
@@ -45,6 +50,7 @@ impl FormatFactory {
     pub(in crate::formats::format_factory) fn create() -> FormatFactory {
         FormatFactory {
             case_insensitive_desc: Default::default(),
+            outputs: Default::default(),
         }
     }
 
@@ -74,5 +80,37 @@ impl FormatFactory {
             })?;
 
         creator(origin_name, schema, settings)
+    }
+
+    pub fn get_output(&self, name: &str) -> Result<OutputFormatType> {
+        self.outputs
+            .get(&name.to_lowercase())
+            .cloned()
+            .ok_or_else(|| ErrorCode::UnknownFormat(format!("Unsupported formats: {}", name)))
+    }
+
+    fn register_output(&mut self, typ: OutputFormatType) {
+        let base_name = format!("{:?}", typ);
+        let mut names = typ.base_alias();
+        names.push(base_name);
+        for n in &names {
+            self.register_output_by_name(n.clone(), typ);
+            if let Some(t) = typ.with_names() {
+                self.register_output_by_name(n.to_string() + "WithNames", t);
+            }
+            if let Some(t) = typ.with_names_and_types() {
+                self.register_output_by_name(n.to_string() + "WithNamesAndTypes", t);
+            }
+        }
+    }
+
+    fn register_output_by_name(&mut self, name: String, typ: OutputFormatType) {
+        self.outputs.insert(name.to_lowercase(), typ);
+    }
+
+    fn register_outputs(&mut self) {
+        for t in OutputFormatType::iter() {
+            self.register_output(t)
+        }
     }
 }
