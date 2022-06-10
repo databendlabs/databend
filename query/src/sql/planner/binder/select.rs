@@ -37,7 +37,9 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
+use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::Filter;
+use crate::sql::plans::JoinType;
 use crate::sql::plans::Scalar;
 
 // A normalized IR for `SELECT` clause.
