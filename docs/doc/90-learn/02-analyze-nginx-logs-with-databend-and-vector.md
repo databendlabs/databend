@@ -209,7 +209,7 @@ source = """
   table = "access_logs" #Your table
   #Databend ClickHouse REST API: http://{http_handler_host}:{http_handler_port}/clickhouse
   // highlight-next-line
-  endpoint = "http://localhost:8000/clickhouse"
+  endpoint = "http://localhost:8124/"
   compression = "gzip"
 
 

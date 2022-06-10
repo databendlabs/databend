@@ -199,7 +199,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             UNDROP ~ TABLE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, opt_database, table)| Statement::UnDropTable {
+        |(_, _, opt_database, table)| Statement::UndropTable {
             database: opt_database.map(|(database, _)| database),
             table,
         },
@@ -689,24 +689,24 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
     );
 
-    let alter_cluster_key = map(
+    let alter_table_cluster_key = map(
         rule! {
             CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
         },
-        |(_, _, _, cluster_by, _)| AlterTableAction::AlterClusterKey { cluster_by },
+        |(_, _, _, cluster_by, _)| AlterTableAction::AlterTableClusterKey { cluster_by },
     );
 
-    let drop_cluster_key = map(
+    let drop_table_cluster_key = map(
         rule! {
             DROP ~ CLUSTER ~ KEY
         },
-        |(_, _, _)| AlterTableAction::DropClusterKey,
+        |(_, _, _)| AlterTableAction::DropTableClusterKey,
     );
 
     rule!(
         #rename_table
-        | #alter_cluster_key
-        | #drop_cluster_key
+        | #alter_table_cluster_key
+        | #drop_table_cluster_key
     )(i)
 }
 

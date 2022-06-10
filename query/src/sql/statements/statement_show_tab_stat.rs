@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::PlanShowKind;
 use common_planners::ShowPlan;
-use common_planners::ShowTabStatPlan;
+use common_planners::ShowTablesStatusPlan;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
@@ -27,19 +27,19 @@ use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfShowKind;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfShowTabStat {
+pub struct DfShowTablesStatus {
     pub kind: DfShowKind,
     pub fromdb: Option<String>,
 }
 
-impl DfShowTabStat {
-    pub fn create(kind: DfShowKind, fromdb: Option<String>) -> DfShowTabStat {
-        DfShowTabStat { kind, fromdb }
+impl DfShowTablesStatus {
+    pub fn create(kind: DfShowKind, fromdb: Option<String>) -> DfShowTablesStatus {
+        DfShowTablesStatus { kind, fromdb }
     }
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfShowTabStat {
+impl AnalyzableStatement for DfShowTablesStatus {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let mut kind = PlanShowKind::All;
@@ -55,7 +55,7 @@ impl AnalyzableStatement for DfShowTabStat {
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Show(
-            ShowPlan::ShowTabStat(ShowTabStatPlan { kind, fromdb }),
+            ShowPlan::ShowTablesStatus(ShowTablesStatusPlan { kind, fromdb }),
         ))))
     }
 }

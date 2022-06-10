@@ -3056,7 +3056,7 @@ AlterTable {
         quote: None,
         span: Ident(12..13),
     },
-    action: AlterClusterKey {
+    action: AlterTableClusterKey {
         cluster_by: [
             ColumnRef {
                 span: [
@@ -3088,7 +3088,7 @@ AlterTable {
         quote: None,
         span: Ident(12..13),
     },
-    action: DropClusterKey,
+    action: DropTableClusterKey,
 }
 
 

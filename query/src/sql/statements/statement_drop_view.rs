@@ -37,14 +37,14 @@ impl AnalyzableStatement for DfDropView {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let if_exists = self.if_exists;
         let tenant = ctx.get_tenant();
-        let (catalog, db, viewname) = resolve_table(&ctx, &self.name, "DROP VIEW")?;
+        let (catalog, database, viewname) = resolve_table(&ctx, &self.name, "DROP VIEW")?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropView(
             DropViewPlan {
                 if_exists,
                 tenant,
                 catalog,
-                db,
+                database,
                 viewname,
             },
         ))))

@@ -5,12 +5,11 @@
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
-if [ $# -lt 2 ]
-then
-    echo "usage: run-meta-benchmark.sh client number"
-		exit -1
+if [ $# -lt 2 ]; then
+	echo "usage: run-meta-benchmark.sh client number"
+	exit -1
 else
-    echo "run-meta-benchmark.sh client($1) number($2)"
+	echo "run-meta-benchmark.sh client($1) number($2)"
 fi
 
 # Caveat: has to kill query first.
@@ -42,10 +41,10 @@ nohup ./target/release/databend-meta -c scripts/ci/deploy/config/databend-meta-n
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
 
 echo 'Waiting leader election...'
-sleep 5 
+sleep 5
 
 grpc_address_array=("", "127.0.0.1:9191", "127.0.0.1:28202", "127.0.0.1:28302")
-leader_id=`curl -sL http://0.0.0.0:28101/v1/metrics | grep "^metasrv_server_current_leader_id" | awk '{print $2}'`
+leader_id=$(curl -sL http://0.0.0.0:28101/v1/metrics | grep "^metasrv_server_current_leader_id" | awk '{print $2}')
 
 echo "leader id is $leader_id grpc_address is ${grpc_address_array[$leader_id]}"
 

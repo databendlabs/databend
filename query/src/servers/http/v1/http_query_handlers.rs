@@ -203,7 +203,11 @@ async fn query_page_handler(
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             // TODO(veeupup): get query_ctx here to get format_settings
-            let format = FormatSettings::default();
+            let format = FormatSettings {
+                false_bytes: vec![b'f', b'a', b'l', b's', b'e'],
+                true_bytes: vec![b't', b'r', b'u', b'e'],
+                ..Default::default()
+            };
             query.clear_expire_time().await;
             let resp = query
                 .get_response_page(page_no, &format)

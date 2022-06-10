@@ -36,7 +36,7 @@ impl AnalyzableStatement for DfShowCreateDatabase {
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::ShowCreateDatabase(ShowCreateDatabasePlan {
                 catalog,
-                db,
+                database: db,
                 schema: Self::schema(),
             }),
         )))

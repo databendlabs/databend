@@ -76,7 +76,7 @@ impl TestFixture {
             catalog: "default".to_owned(),
             tenant,
             if_not_exists: false,
-            db: db_name,
+            database: db_name,
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -124,7 +124,7 @@ impl TestFixture {
             if_not_exists: false,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
-            db: self.default_db_name(),
+            database: self.default_db_name(),
             table: self.default_table_name(),
             table_meta: TableMeta {
                 schema: TestFixture::default_schema(),

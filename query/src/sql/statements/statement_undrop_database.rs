@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_planners::UnDropDatabasePlan;
+use common_planners::UndropDatabasePlan;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
@@ -26,22 +26,22 @@ use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfUnDropDatabase {
+pub struct DfUndropDatabase {
     pub name: ObjectName,
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfUnDropDatabase {
+impl AnalyzableStatement for DfUndropDatabase {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
-        let (catalog, db) = resolve_database(&ctx, &self.name, "UNDROP DATABASE")?;
+        let (catalog, database) = resolve_database(&ctx, &self.name, "UNDROP DATABASE")?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::UnDropDatabase(UnDropDatabasePlan {
+            PlanNode::UndropDatabase(UndropDatabasePlan {
                 tenant,
                 catalog,
-                db,
+                database,
             }),
         )))
     }
