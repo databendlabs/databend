@@ -15,7 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use common_planners::Optimization;
+use common_ast::ast::OptimizeTableAction;
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
@@ -30,13 +30,13 @@ impl<'a> DfParser<'a> {
         self.expect_token("OPTIMIZE")?;
         self.parser.expect_keyword(Keyword::TABLE)?;
         let object_name = self.parser.parse_object_name()?;
-        let operation = match self.parser.next_token() {
-            Token::EOF => Ok(Optimization::PURGE),
+        let action = match self.parser.next_token() {
+            Token::EOF => Ok(OptimizeTableAction::Purge),
             Token::Word(w) => match w.keyword {
-                Keyword::ALL => Ok(Optimization::ALL),
-                Keyword::PURGE => Ok(Optimization::PURGE),
+                Keyword::ALL => Ok(OptimizeTableAction::All),
+                Keyword::PURGE => Ok(OptimizeTableAction::Purge),
                 Keyword::NoKeyword if w.value.to_uppercase().as_str() == "COMPACT" => {
-                    Ok(Optimization::COMPACT)
+                    Ok(OptimizeTableAction::Compact)
                 }
                 _ => self.expected("one of PURGE, COMPACT, ALL", Token::Word(w)),
             },
@@ -45,7 +45,7 @@ impl<'a> DfParser<'a> {
 
         Ok(DfStatement::OptimizeTable(DfOptimizeTable {
             name: object_name,
-            operation,
+            action,
         }))
     }
 }

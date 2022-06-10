@@ -24,7 +24,7 @@ pub struct DropDatabasePlan {
     pub if_exists: bool,
     pub tenant: String,
     pub catalog: String,
-    pub db: String,
+    pub database: String,
 }
 
 impl DropDatabasePlan {
@@ -39,7 +39,7 @@ impl From<DropDatabasePlan> for DropDatabaseReq {
             if_exists: p.if_exists,
             name_ident: DatabaseNameIdent {
                 tenant: p.tenant,
-                db_name: p.db,
+                db_name: p.database,
             },
         }
     }
@@ -51,7 +51,7 @@ impl From<&DropDatabasePlan> for DropDatabaseReq {
             if_exists: p.if_exists,
             name_ident: DatabaseNameIdent {
                 tenant: p.tenant.clone(),
-                db_name: p.db.clone(),
+                db_name: p.database.clone(),
             },
         }
     }

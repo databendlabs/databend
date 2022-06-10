@@ -20,8 +20,8 @@ use databend_query::sql::statements::DfShowFunctions;
 use databend_query::sql::statements::DfShowKind;
 use databend_query::sql::statements::DfShowSettings;
 use databend_query::sql::statements::DfShowStages;
-use databend_query::sql::statements::DfShowTabStat;
 use databend_query::sql::statements::DfShowTables;
+use databend_query::sql::statements::DfShowTablesStatus;
 use databend_query::sql::*;
 use sqlparser::ast::*;
 
@@ -338,37 +338,37 @@ fn show_engines_test() -> Result<()> {
 fn show_tab_stat_test() -> Result<()> {
     expect_parse_ok(
         "SHOW TABLE STATUS",
-        DfStatement::ShowTabStat(DfShowTabStat::create(DfShowKind::All, None)),
+        DfStatement::ShowTablesStatus(DfShowTablesStatus::create(DfShowKind::All, None)),
     )?;
 
     expect_parse_ok(
         "SHOW TABLE STATUS;",
-        DfStatement::ShowTabStat(DfShowTabStat::create(DfShowKind::All, None)),
+        DfStatement::ShowTablesStatus(DfShowTablesStatus::create(DfShowKind::All, None)),
     )?;
     expect_parse_ok(
         "SHOW TABLE STATUS WHERE table_schema='ss%'",
-        DfStatement::ShowTabStat(DfShowTabStat::create(
+        DfStatement::ShowTablesStatus(DfShowTablesStatus::create(
             DfShowKind::Where(parse_sql_to_expr("table_schema='ss%'")),
             None,
         )),
     )?;
     expect_parse_ok(
         "SHOW TABLE STATUS WHERE table_schema Like 'ss%'",
-        DfStatement::ShowTabStat(DfShowTabStat::create(
+        DfStatement::ShowTablesStatus(DfShowTablesStatus::create(
             DfShowKind::Where(parse_sql_to_expr("table_schema Like 'ss%'")),
             None,
         )),
     )?;
     expect_parse_ok(
         "SHOW TABLE STATUS Like 'ss%'",
-        DfStatement::ShowTabStat(DfShowTabStat::create(
+        DfStatement::ShowTablesStatus(DfShowTablesStatus::create(
             DfShowKind::Like(Ident::with_quote('\'', "ss%")),
             None,
         )),
     )?;
     expect_parse_ok(
         "SHOW TABLE STATUS FROM `ss`",
-        DfStatement::ShowTabStat(DfShowTabStat::create(
+        DfStatement::ShowTablesStatus(DfShowTablesStatus::create(
             DfShowKind::All,
             Some("ss".to_string()),
         )),
@@ -376,7 +376,7 @@ fn show_tab_stat_test() -> Result<()> {
 
     expect_parse_ok(
         "SHOW TABLE STATUS IN `ss`",
-        DfStatement::ShowTabStat(DfShowTabStat::create(
+        DfStatement::ShowTablesStatus(DfShowTablesStatus::create(
             DfShowKind::All,
             Some("ss".to_string()),
         )),

@@ -20,16 +20,16 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_planners::col;
-use common_planners::AlterClusterKeyPlan;
+use common_planners::AlterTableClusterKeyPlan;
 use common_planners::CreateTablePlan;
-use common_planners::DropClusterKeyPlan;
+use common_planners::DropTableClusterKeyPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::TruncateTablePlan;
 use databend_query::catalogs::CATALOG_DEFAULT;
-use databend_query::interpreters::AlterClusterKeyInterpreter;
+use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreter;
-use databend_query::interpreters::DropClusterKeyInterpreter;
+use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
@@ -180,7 +180,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let truncate_plan = TruncateTablePlan {
         catalog: fixture.default_catalog_name(),
-        db: fixture.default_db_name(),
+        database: fixture.default_db_name(),
         table: fixture.default_table_name(),
         purge: false,
     };
@@ -245,7 +245,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
 
     // create test table
     let tbl_name = create_table_plan.table.clone();
-    let db_name = create_table_plan.db.clone();
+    let db_name = create_table_plan.database.clone();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(None).await?;
 
@@ -292,7 +292,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_fuse_alter_cluster_key() -> Result<()> {
+async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
@@ -300,7 +300,7 @@ async fn test_fuse_alter_cluster_key() -> Result<()> {
         if_not_exists: false,
         tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
-        db: fixture.default_db_name(),
+        database: fixture.default_db_name(),
         table: fixture.default_table_name(),
         table_meta: TableMeta {
             schema: TestFixture::default_schema(),
@@ -323,14 +323,15 @@ async fn test_fuse_alter_cluster_key() -> Result<()> {
     interpreter.execute(None).await?;
 
     // add cluster key
-    let alter_cluster_key_plan = AlterClusterKeyPlan {
+    let alter_table_cluster_key_plan = AlterTableClusterKeyPlan {
         tenant: fixture.default_tenant(),
         catalog_name: fixture.default_catalog_name(),
         database_name: fixture.default_db_name(),
         table_name: fixture.default_table_name(),
         cluster_keys: vec![col("id")],
     };
-    let interpreter = AlterClusterKeyInterpreter::try_create(ctx.clone(), alter_cluster_key_plan)?;
+    let interpreter =
+        AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
     interpreter.execute(None).await?;
 
     let table = fixture.latest_default_table().await?;
@@ -349,13 +350,14 @@ async fn test_fuse_alter_cluster_key() -> Result<()> {
     assert_eq!(snapshot.cluster_key_meta, expected);
 
     // drop cluster key
-    let drop_cluster_key_plan = DropClusterKeyPlan {
+    let drop_table_cluster_key_plan = DropTableClusterKeyPlan {
         tenant: fixture.default_tenant(),
         catalog_name: fixture.default_catalog_name(),
         database_name: fixture.default_db_name(),
         table_name: fixture.default_table_name(),
     };
-    let interpreter = DropClusterKeyInterpreter::try_create(ctx.clone(), drop_cluster_key_plan)?;
+    let interpreter =
+        DropTableClusterKeyInterpreter::try_create(ctx.clone(), drop_table_cluster_key_plan)?;
     interpreter.execute(None).await?;
 
     let table = fixture.latest_default_table().await?;

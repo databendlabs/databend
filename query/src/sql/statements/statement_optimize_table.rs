@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::OptimizeTableAction;
 use common_exception::Result;
-use common_planners::Optimization;
 use common_planners::OptimizeTablePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -28,7 +28,7 @@ use crate::sql::statements::AnalyzedResult;
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfOptimizeTable {
     pub name: ObjectName,
-    pub operation: Optimization,
+    pub action: OptimizeTableAction,
 }
 
 #[async_trait::async_trait]
@@ -40,7 +40,7 @@ impl AnalyzableStatement for DfOptimizeTable {
             catalog,
             database,
             table,
-            operation: self.operation,
+            action: self.action,
         };
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::OptimizeTable(plan_node),
