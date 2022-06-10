@@ -23,7 +23,6 @@ use nom::Offset;
 use nom::Slice as _;
 use pratt::Affix;
 use pratt::Associativity;
-use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 

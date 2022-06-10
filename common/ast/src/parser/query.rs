@@ -16,11 +16,9 @@ use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
-use nom::error::context;
-use nom::Slice as _;
+use nom::Slice;
 use pratt::Affix;
 use pratt::Associativity;
-use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
@@ -315,7 +313,7 @@ pub fn set_operation_element(i: Input) -> IResult<SetOperationElement> {
             let op = match op.kind {
                 UNION => SetOperator::Union,
                 INTERSECT => SetOperator::Intersect,
-                Except => SetOperator::Except,
+                EXCEPT => SetOperator::Except,
                 _ => unreachable!(),
             };
             SetOperationElement::SetOperation {
@@ -376,18 +374,19 @@ pub fn set_operation_element(i: Input) -> IResult<SetOperationElement> {
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
     let (rest, set_operation_elements) = rule!(#set_operation_element+)(i)?;
-    let mut iter = set_operation_elements.into_iter();
+    let iter = &mut set_operation_elements.into_iter();
+    let mut iter = iter.peekable();
     let set_expr = SetOperationParser
-        .parse(&mut iter)
+        .parse_input(&mut iter, Precedence(0))
         .map_err(|err| Error::from_error_kind(rest.slice(..1), ErrorKind::from(err)))
         .map_err(nom::Err::Error)?;
-    if let Some(_) = iter.next() {
-        return Err(nom::Err::Error(Error::from_error_kind(
-            rest.slice(..1),
-            ErrorKind::Other("unable to parse rest of the expression"),
-        )));
+    if let Some(_) = iter.peek() {
+        // Rollback parsing footprint on unused expr elements.
+        i.1.clear();
+        Ok((i.slice(1..), set_expr))
+    } else {
+        Ok((rest, set_expr))
     }
-    Ok((rest, set_expr))
 }
 
 struct SetOperationParser;
