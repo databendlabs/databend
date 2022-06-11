@@ -160,7 +160,6 @@ jobs:
       - test_stateless_cluster_linux
       - test_stateful_standalone
       - test_sqllogic_standalone_linux
-      - test_sqllogic_standalone_macos
     strategy:
       matrix:
         config:
