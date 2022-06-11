@@ -16,7 +16,8 @@ use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
-use nom::Slice;
+use nom::Offset;
+use nom::Slice as _;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattParser;
@@ -285,31 +286,35 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
     )(i)
 }
 
+#[derive(Debug, Clone)]
+pub struct SetOperationWithSpan<'a> {
+    span: Input<'a>,
+    elem: SetOperationElement<'a>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum SetOperationElement<'a> {
     SelectStmt {
-        span: &'a [Token<'a>],
         distinct: bool,
-        select_list: Vec<SelectTarget<'a>>,
-        from: Vec<TableReference<'a>>,
+        select_list: Box<Vec<SelectTarget<'a>>>,
+        from: Box<Vec<TableReference<'a>>>,
         selection: Option<Expr<'a>>,
-        group_by: Vec<Expr<'a>>,
+        group_by: Box<Vec<Expr<'a>>>,
         having: Option<Expr<'a>>,
     },
     SetOperation {
-        span: &'a [Token<'a>],
         op: SetOperator,
         all: bool,
     },
     Group(SetExpr<'a>),
 }
 
-pub fn set_operation_element(i: Input) -> IResult<SetOperationElement> {
+pub fn set_operation_element(i: Input) -> IResult<SetOperationWithSpan> {
     let set_operator = map(
-        consumed(rule! {
+        rule! {
             ( UNION | EXCEPT | INTERSECT ) ~ ALL?
-        }),
-        |(span, (op, all))| {
+        },
+        |(op, all)| {
             let op = match op.kind {
                 UNION => SetOperator::Union,
                 INTERSECT => SetOperator::Intersect,
@@ -317,7 +322,6 @@ pub fn set_operation_element(i: Input) -> IResult<SetOperationElement> {
                 _ => unreachable!(),
             };
             SetOperationElement::SetOperation {
-                span: span.0,
                 op,
                 all: all.is_some(),
             }
@@ -325,36 +329,36 @@ pub fn set_operation_element(i: Input) -> IResult<SetOperationElement> {
     );
 
     let select_stmt = map(
-        consumed(rule! {
+        rule! {
              SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
                 ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
                 ~ ( WHERE ~ ^#expr )?
                 ~ ( GROUP ~ ^BY ~ ^#comma_separated_list1(expr) )?
                 ~ ( HAVING ~ ^#expr )?
-        }),
+        },
         |(
-            span,
-            (
-                _select,
-                opt_distinct,
-                select_list,
-                opt_from_block,
-                opt_where_block,
-                opt_group_by_block,
-                opt_having_block,
-            ),
+            _select,
+            opt_distinct,
+            select_list,
+            opt_from_block,
+            opt_where_block,
+            opt_group_by_block,
+            opt_having_block,
         )| {
             SetOperationElement::SelectStmt {
-                span: span.0,
                 distinct: opt_distinct.is_some(),
-                select_list,
-                from: opt_from_block
-                    .map(|(_, table_refs)| table_refs)
-                    .unwrap_or_default(),
+                select_list: Box::new(select_list),
+                from: Box::new(
+                    opt_from_block
+                        .map(|(_, table_refs)| table_refs)
+                        .unwrap_or_default(),
+                ),
                 selection: opt_where_block.map(|(_, selection)| selection),
-                group_by: opt_group_by_block
-                    .map(|(_, _, group_by)| group_by)
-                    .unwrap_or_default(),
+                group_by: Box::new(
+                    opt_group_by_block
+                        .map(|(_, _, group_by)| group_by)
+                        .unwrap_or_default(),
+                ),
                 having: opt_having_block.map(|(_, having)| having),
             }
         },
@@ -369,7 +373,8 @@ pub fn set_operation_element(i: Input) -> IResult<SetOperationElement> {
         |(_, set_expr, _)| SetOperationElement::Group(set_expr),
     );
 
-    rule!( #group | #set_operator | #select_stmt)(i)
+    let (rest, (span, elem)) = consumed(rule!( #group | #set_operator | #select_stmt))(i)?;
+    Ok((rest, SetOperationWithSpan { span, elem }))
 }
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
@@ -378,12 +383,20 @@ pub fn set_operation(i: Input) -> IResult<SetExpr> {
     let mut iter = iter.peekable();
     let set_expr = SetOperationParser
         .parse_input(&mut iter, Precedence(0))
-        .map_err(|err| Error::from_error_kind(rest.slice(..1), ErrorKind::from(err)))
+        .map_err(|err| {
+            Error::from_error_kind(
+                iter.next()
+                    .map(|elem| elem.span)
+                    // It's safe to slice one more token because EOI is always added.
+                    .unwrap_or_else(|| rest.slice(..1)),
+                ErrorKind::from(err),
+            )
+        })
         .map_err(nom::Err::Error)?;
-    if let Some(_) = iter.peek() {
+    if let Some(elem) = iter.peek() {
         // Rollback parsing footprint on unused expr elements.
         i.1.clear();
-        Ok((i.slice(1..), set_expr))
+        Ok((i.slice(i.offset(&elem.span)..), set_expr))
     } else {
         Ok((rest, set_expr))
     }
@@ -391,13 +404,13 @@ pub fn set_operation(i: Input) -> IResult<SetExpr> {
 
 struct SetOperationParser;
 
-impl<'a, I: Iterator<Item = SetOperationElement<'a>>> PrattParser<I> for SetOperationParser {
+impl<'a, I: Iterator<Item = SetOperationWithSpan<'a>>> PrattParser<I> for SetOperationParser {
     type Error = pratt::NoError;
-    type Input = SetOperationElement<'a>;
+    type Input = SetOperationWithSpan<'a>;
     type Output = SetExpr<'a>;
 
     fn query(&mut self, input: &Self::Input) -> pratt::Result<Affix> {
-        let affix = match input {
+        let affix = match &input.elem {
             SetOperationElement::SetOperation { op, .. } => match op {
                 SetOperator::Union | SetOperator::Except => {
                     Affix::Infix(Precedence(10), Associativity::Left)
@@ -410,10 +423,9 @@ impl<'a, I: Iterator<Item = SetOperationElement<'a>>> PrattParser<I> for SetOper
     }
 
     fn primary(&mut self, input: Self::Input) -> pratt::Result<SetExpr<'a>> {
-        let set_expr = match input {
+        let set_expr = match input.elem {
             SetOperationElement::Group(expr) => expr,
             SetOperationElement::SelectStmt {
-                span,
                 distinct,
                 select_list,
                 from,
@@ -421,12 +433,12 @@ impl<'a, I: Iterator<Item = SetOperationElement<'a>>> PrattParser<I> for SetOper
                 group_by,
                 having,
             } => SetExpr::Select(Box::new(SelectStmt {
-                span,
+                span: input.span.0,
                 distinct,
-                select_list,
-                from,
+                select_list: *select_list,
+                from: *from,
                 selection,
-                group_by,
+                group_by: *group_by,
                 having,
             })),
             _ => unreachable!(),
@@ -437,13 +449,13 @@ impl<'a, I: Iterator<Item = SetOperationElement<'a>>> PrattParser<I> for SetOper
     fn infix(
         &mut self,
         lhs: Self::Output,
-        op: Self::Input,
+        input: Self::Input,
         rhs: Self::Output,
     ) -> pratt::Result<SetExpr<'a>> {
-        let set_expr = match op {
-            SetOperationElement::SetOperation { span, op, all, .. } => {
+        let set_expr = match input.elem {
+            SetOperationElement::SetOperation { op, all, .. } => {
                 SetExpr::SetOperation(Box::new(SetOperation {
-                    span,
+                    span: input.span.0,
                     op,
                     all,
                     left: Box::new(lhs),
