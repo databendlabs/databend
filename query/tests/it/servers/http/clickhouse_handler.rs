@@ -127,6 +127,46 @@ async fn test_insert_values() -> PoemResult<()> {
 }
 
 #[tokio::test]
+async fn test_output_formats() -> PoemResult<()> {
+    let server = Server::new();
+    {
+        let (status, body) = server
+            .post("create table t1(a int, b string null)", "")
+            .await;
+        assert_ok!(status, body);
+    }
+
+    {
+        let (status, body) = server
+            .post(
+                "insert into table t1(a, b) format values",
+                "(0, 'a'), (1, 'b')",
+            )
+            .await;
+        assert_ok!(status, body);
+        assert_error!(body, "");
+    }
+
+    let cases = [
+        ("CSV", "0,\"a\"\n1,\"b\"\n"),
+        ("TSV", "0\ta\n1\tb\n"),
+        ("TSVWithNames", "a\tb\n0\ta\n1\tb\n"),
+        (
+            "TSVWithNamesAndTypes",
+            "a\tb\nInt32\tNullable(String)\n0\ta\n1\tb\n",
+        ),
+    ];
+
+    for (fmt, exp) in cases {
+        let sql = format!(r#"select * from t1 order by a format {}"#, fmt);
+        let (status, body) = server.get(&sql).await;
+        assert_ok!(status, body);
+        assert_eq!(&body, exp);
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_insert_format_values() -> PoemResult<()> {
     let server = Server::new();
     {
