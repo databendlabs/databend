@@ -161,6 +161,26 @@ pub async fn list_files_from_meta_api(
     path: &str,
     pattern: &str,
 ) -> Result<Vec<StageFile>> {
+    let tenant = ctx.get_tenant();
+    let user_mgr = ctx.get_user_manager();
+    let prefix = stage.get_prefix();
+
+    if stage.number_of_files == 0 {
+        // try to sync files from dal
+        if let Ok(files) = list_files_from_dal(ctx, stage, &prefix, "").await {
+            for file in files.iter() {
+                let mut file = file.clone();
+                // In internal stage, files with `/stage/<stage_name>/` prefix will be ignored.
+                // TODO: prefix of internal stage should be as root path.
+                file.path = file
+                    .path
+                    .trim_start_matches(&prefix.trim_start_matches('/'))
+                    .to_string();
+                let _ = user_mgr.add_file(&tenant, &stage.stage_name, file).await;
+            }
+        }
+    }
+
     let regex = if !pattern.is_empty() {
         Some(Regex::new(pattern).map_err(|e| {
             ErrorCode::SyntaxException(format!(
@@ -172,9 +192,6 @@ pub async fn list_files_from_meta_api(
         None
     };
 
-    let tenant = ctx.get_tenant();
-    let user_mgr = ctx.get_user_manager();
-    let prefix = stage.get_prefix();
     let files = user_mgr
         .list_files(&tenant, &stage.stage_name)
         .await?

@@ -100,7 +100,7 @@ pub async fn upload_to_stage(
         let obj = format!("{prefix}{file_path}");
         let _ = op
             .object(&obj)
-            .write(bytes.clone())
+            .write(bytes)
             .await
             .map_err(InternalServerError)?;
 

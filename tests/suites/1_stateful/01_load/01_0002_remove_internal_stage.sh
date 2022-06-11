@@ -7,13 +7,14 @@ echo "drop stage if exists s1" | $MYSQL_CLIENT_CONNECT
 
 ## Copy from internal stage
 echo "CREATE STAGE s1;" | $MYSQL_CLIENT_CONNECT
-curl -u root: -XPUT -H "stage_name:s1" -F "upload=@${CURDIR}/../../../data/ontime_200.csv" "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/stage/upload_to_stage" > /dev/null 2>&1
-curl -u root: -XPUT -H "stage_name:s1" -F "upload=@${CURDIR}/../../../data/ontime_200.csv.gz" "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/stage/upload_to_stage" > /dev/null 2>&1
-curl -u root: -XPUT -H "stage_name:s1" -F "upload=@${CURDIR}/../../../data/ontime_200.csv.zst" "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/stage/upload_to_stage" > /dev/null 2>&1
 
-curl -u root: -XPUT -H "stage_name:s1" -H "relative_path:dir" -F "upload=@${CURDIR}/../../../data/ontime_200.csv" "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/stage/upload_to_stage" > /dev/null 2>&1
-curl -u root: -XPUT -H "stage_name:s1" -H "relative_path:dir" -F "upload=@${CURDIR}/../../../data/ontime_200.csv.gz" "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/stage/upload_to_stage" > /dev/null 2>&1
-curl -u root: -XPUT -H "stage_name:s1" -H "relative_path:dir" -F "upload=@${CURDIR}/../../../data/ontime_200.csv.zst" "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/stage/upload_to_stage" > /dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv s3://testbucket/admin/stage/s1/ontime_200.csv >/dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.gz s3://testbucket/admin/stage/s1/ontime_200.csv.gz >/dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.zst s3://testbucket/admin/stage/s1/ontime_200.csv.zst >/dev/null 2>&1
+
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv s3://testbucket/admin/stage/s1/dir/ontime_200.csv >/dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.gz s3://testbucket/admin/stage/s1/dir/ontime_200.csv.gz >/dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.zst s3://testbucket/admin/stage/s1/dir/ontime_200.csv.zst >/dev/null 2>&1
 
 ## List files in internal stage
 echo "=== List files in internal stage ==="
