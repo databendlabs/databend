@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use jwt_simple::reexports::anyhow::Ok;
 
 use crate::sql::plans::Plan;
 
