@@ -91,9 +91,9 @@ async fn execute(
     }
 
     let mut output_format = fmt.create_format(plan.schema());
-    let header = output_format.serialize_prefix(&format_setting);
+    let prefix = Ok(output_format.serialize_prefix(&format_setting)?);
     let stream = stream! {
-        yield header;
+        yield prefix;
         while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
