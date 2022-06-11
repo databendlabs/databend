@@ -2977,7 +2977,7 @@ list @stage_a;
 LIST @stage_a
 ---------- AST ------------
 ListStage {
-    stage_name: "stage_a",
+    location: "stage_a",
     pattern: "",
 }
 
@@ -3090,5 +3090,92 @@ AlterTable {
     },
     action: DropTableClusterKey,
 }
+
+
+---------- Input ----------
+ALTER DATABASE IF EXISTS catalog.c RENAME TO a;
+---------- Output ---------
+ALTER DATABASE IF EXISTS catalog.c RENAME TO a
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: true,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(25..32),
+            },
+        ),
+        database: Identifier {
+            name: "c",
+            quote: None,
+            span: Ident(33..34),
+        },
+        action: RenameDatabase {
+            new_db: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(45..46),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER DATABASE c RENAME TO a;
+---------- Output ---------
+ALTER DATABASE c RENAME TO a
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: false,
+        catalog: None,
+        database: Identifier {
+            name: "c",
+            quote: None,
+            span: Ident(15..16),
+        },
+        action: RenameDatabase {
+            new_db: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(27..28),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER DATABASE catalog.c RENAME TO a;
+---------- Output ---------
+ALTER DATABASE catalog.c RENAME TO a
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: false,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(15..22),
+            },
+        ),
+        database: Identifier {
+            name: "c",
+            quote: None,
+            span: Ident(23..24),
+        },
+        action: RenameDatabase {
+            new_db: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(35..36),
+            },
+        },
+    },
+)
 
 

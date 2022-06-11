@@ -194,7 +194,7 @@ impl ExecuteState {
                 executor: executor.clone(),
                 block_buffer,
             });
-            interpreter.execute(None).await.unwrap();
+            interpreter.execute(None).await?;
 
             Ok(executor)
         } else {

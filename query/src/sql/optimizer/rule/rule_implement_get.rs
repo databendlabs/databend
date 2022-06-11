@@ -29,7 +29,7 @@ pub struct RuleImplementGet {
 }
 
 impl RuleImplementGet {
-    pub fn create() -> Self {
+    pub fn new() -> Self {
         RuleImplementGet {
             id: RuleID::ImplementGet,
             pattern: SExpr::create_leaf(

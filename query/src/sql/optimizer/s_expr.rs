@@ -15,6 +15,8 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::sql::optimizer::rule::AppliedRules;
+use crate::sql::optimizer::rule::RuleID;
 use crate::sql::plans::Operator;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::RelOperator;
@@ -27,6 +29,10 @@ pub struct SExpr {
     children: Vec<SExpr>,
 
     original_group: Option<IndexType>,
+
+    /// A bitmap to record applied rules on current SExpr, to prevent
+    /// redundant transformations.
+    pub(super) applied_rules: AppliedRules,
 }
 
 impl SExpr {
@@ -39,6 +45,8 @@ impl SExpr {
             plan,
             children,
             original_group,
+
+            applied_rules: AppliedRules::default(),
         }
     }
 
@@ -103,11 +111,13 @@ impl SExpr {
         true
     }
 
-    // pub fn compute_relational_prop(&self) -> RelationalProperty {
-    //     if self.plan.is_logical() {
-    //         self.plan.compute_relational_prop(self).unwrap()
-    //     } else {
-    //         RelationalProperty::default()
-    //     }
-    // }
+    /// Record the applied rule id in current SExpr
+    pub(super) fn apply_rule(&mut self, rule_id: &RuleID) {
+        self.applied_rules.set(rule_id, true);
+    }
+
+    /// Check if a rule is applied for current SExpr
+    pub(super) fn applied_rule(&self, rule_id: &RuleID) -> bool {
+        self.applied_rules.get(rule_id)
+    }
 }

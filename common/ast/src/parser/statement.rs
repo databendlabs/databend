@@ -95,12 +95,15 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let alter_database = map(
         rule! {
-            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #ident ~ #alter_database_action
+            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #alter_database_action
         },
-        |(_, _, opt_if_exists, database, action)| Statement::AlterDatabase {
-            if_exists: opt_if_exists.is_some(),
-            database,
-            action,
+        |(_, _, opt_if_exists, opt_catalog, database, action)| {
+            Statement::AlterDatabase(AlterDatabaseStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog: opt_catalog.map(|(catalog, _)| catalog),
+                database,
+                action,
+            })
         },
     );
     let use_database = map(
@@ -490,17 +493,20 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             LIST ~ #at_string ~ (PATTERN ~ "=" ~ #literal_string)?
         },
-        |(_, stage_name, pattern_opt)| Statement::ListStage {
-            stage_name,
-            pattern: pattern_opt.map(|v| v.2).unwrap_or_default(),
+        |(_, location, opt_pattern)| Statement::ListStage {
+            location,
+            pattern: opt_pattern.map(|v| v.2).unwrap_or_default(),
         },
     );
 
-    let _remove_stage = map(
+    let remove_stage = map(
         rule! {
-            REMOVE ~ #at_string
+            REMOVE ~ #at_string ~ (PATTERN ~ "=" ~ #literal_string)?
         },
-        |(_, stage_name)| Statement::RemoveStage { stage_name },
+        |(_, location, opt_pattern)| Statement::RemoveStage {
+            location,
+            pattern: opt_pattern.map(|v| v.2).unwrap_or_default(),
+        },
     );
 
     let drop_stage = map(
@@ -515,7 +521,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
 
     let desc_stage = map(
         rule! {
-            DESC ~ STAGE ~ #ident
+            (DESC | DESCRIBE) ~ STAGE ~ #ident
         },
         |(_, _, stage_name)| Statement::DescStage {
             stage_name: stage_name.to_string(),
@@ -562,13 +568,15 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
-            | #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
+        ),
+        rule!(
+            #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
                 [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
                 [ COPY_OPTIONS = ( copyOptions ) ]
                 [ COMMENT = '<string_literal>' ]`"
             | #desc_stage: "`DESC STAGE <stage_name>`"
-            // | #remove_stage: "`REMOVE @<stage_name>`"
             | #list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
+            | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
         ),
     ))(i)

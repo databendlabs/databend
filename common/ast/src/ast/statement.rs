@@ -51,11 +51,7 @@ pub enum Statement<'a> {
     },
     CreateDatabase(CreateDatabaseStmt<'a>),
     DropDatabase(DropDatabaseStmt<'a>),
-    AlterDatabase {
-        if_exists: bool,
-        database: Identifier<'a>,
-        action: AlterDatabaseAction<'a>,
-    },
+    AlterDatabase(AlterDatabaseStmt<'a>),
     UseDatabase {
         database: Identifier<'a>,
     },
@@ -192,10 +188,11 @@ pub enum Statement<'a> {
         stage_name: String,
     },
     RemoveStage {
-        stage_name: String,
+        location: String,
+        pattern: String,
     },
     ListStage {
-        stage_name: String,
+        location: String,
         pattern: String,
     },
 }
@@ -228,6 +225,14 @@ pub struct DropDatabaseStmt<'a> {
     pub if_exists: bool,
     pub catalog: Option<Identifier<'a>>,
     pub database: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterDatabaseStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+    pub action: AlterDatabaseAction<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -543,16 +548,17 @@ impl<'a> Display for Statement<'a> {
                 }
                 write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
             }
-            Statement::AlterDatabase {
+            Statement::AlterDatabase(AlterDatabaseStmt {
                 if_exists,
+                catalog,
                 database,
                 action,
-            } => {
-                write!(f, "ALTER DATABASE")?;
+            }) => {
+                write!(f, "ALTER DATABASE ")?;
                 if *if_exists {
-                    write!(f, " IF EXISTS")?;
+                    write!(f, "IF EXISTS ")?;
                 }
-                write!(f, " {database}")?;
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
                 match action {
                     AlterDatabaseAction::RenameDatabase { new_db } => {
                         write!(f, " RENAME TO {new_db}")?;
@@ -914,11 +920,8 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " DESC = '{description}'")?;
                 }
             }
-            Statement::ListStage {
-                stage_name,
-                pattern,
-            } => {
-                write!(f, "LIST @{stage_name}")?;
+            Statement::ListStage { location, pattern } => {
+                write!(f, "LIST @{location}")?;
                 if !pattern.is_empty() {
                     write!(f, " PATTERN = '{pattern}'")?;
                 }
@@ -987,8 +990,11 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " COMMENTS = '{}'", stmt.comments)?;
                 }
             }
-            Statement::RemoveStage { stage_name } => {
-                write!(f, "REMOVE STAGE @{stage_name}")?;
+            Statement::RemoveStage { location, pattern } => {
+                write!(f, "REMOVE STAGE @{location}")?;
+                if !pattern.is_empty() {
+                    write!(f, " PATTERN = '{pattern}'")?;
+                }
             }
             Statement::DescStage { stage_name } => {
                 write!(f, "DESC STAGE {stage_name}")?;

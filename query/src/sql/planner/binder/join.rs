@@ -33,7 +33,7 @@ use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::BoundColumnRef;
-use crate::sql::plans::FilterPlan;
+use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::Scalar;
@@ -125,7 +125,7 @@ impl<'a> Binder {
         }?;
 
         if !other_conditions.is_empty() {
-            let filter_plan = FilterPlan {
+            let filter_plan = Filter {
                 predicates: other_conditions,
                 is_having: false,
             };

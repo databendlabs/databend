@@ -22,6 +22,7 @@ use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::CreateUserStagePlan;
 use common_planners::ListPlan;
+use common_planners::RemoveUserStagePlan;
 
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
@@ -32,15 +33,11 @@ use crate::sql::statements::parse_uri_location;
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_list_stage(
         &mut self,
-        name: &str,
+        location: &str,
         pattern: &str,
     ) -> Result<Plan> {
-        if !name.starts_with('@') {
-            return Err(ErrorCode::SyntaxException(
-                "Stage uri must be started with @, for example: '@stage_name[/<path>/]'",
-            ));
-        }
-        let (stage, path) = parse_stage_location(&self.ctx, name).await?;
+        let stage_name = format!("@{location}");
+        let (stage, path) = parse_stage_location(&self.ctx, stage_name.as_str()).await?;
         let plan_node = ListPlan {
             path,
             stage,
@@ -48,6 +45,22 @@ impl<'a> Binder {
         };
 
         Ok(Plan::ListStage(Box::new(plan_node)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_remove_stage(
+        &mut self,
+        location: &str,
+        pattern: &str,
+    ) -> Result<Plan> {
+        let stage_name = format!("@{location}");
+        let (stage, path) = parse_stage_location(&self.ctx, stage_name.as_str()).await?;
+        let plan_node = RemoveUserStagePlan {
+            path,
+            stage,
+            pattern: pattern.to_string(),
+        };
+
+        Ok(Plan::RemoveStage(Box::new(plan_node)))
     }
 
     pub(in crate::sql::planner::binder) async fn bind_create_stage(

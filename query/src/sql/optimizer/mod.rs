@@ -25,6 +25,7 @@ mod s_expr;
 
 use common_exception::Result;
 pub use heuristic::HeuristicOptimizer;
+pub use heuristic::DEFAULT_REWRITE_RULES;
 pub use m_expr::MExpr;
 pub use memo::Memo;
 pub use optimize_context::OptimizeContext;
@@ -34,11 +35,14 @@ pub use property::PhysicalProperty;
 pub use property::RelExpr;
 pub use property::RelationalProperty;
 pub use property::RequiredProperty;
+pub use rule::RuleFactory;
 pub use s_expr::SExpr;
 
 use super::plans::Plan;
-use crate::sql::optimizer::rule::RuleID;
+pub use crate::sql::optimizer::heuristic::RuleList;
+pub use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::RuleSet;
+use crate::sql::MetadataRef;
 
 pub fn optimize(plan: Plan) -> Result<Plan> {
     match plan {
@@ -47,7 +51,7 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
             bind_context,
             metadata,
         } => Ok(Plan::Query {
-            s_expr: optimize_query(s_expr)?,
+            s_expr: optimize_query(s_expr, metadata.clone())?,
             bind_context,
             metadata,
         }),
@@ -69,14 +73,17 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
         | Plan::DropStage(_)
         | Plan::DescStage(_)
         | Plan::ListStage(_)
+        | Plan::RemoveStage(_)
         | Plan::CreateUser(_)
         | Plan::DropUser(_)
-        | Plan::AlterUser(_) => Ok(plan),
+        | Plan::AlterUser(_)
+        | Plan::RenameDatabase(_) => Ok(plan),
     }
 }
 
-pub fn optimize_query(expression: SExpr) -> Result<SExpr> {
-    let mut heuristic = HeuristicOptimizer::create()?;
+pub fn optimize_query(expression: SExpr, _metadata: MetadataRef) -> Result<SExpr> {
+    let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone())?;
+    let mut heuristic = HeuristicOptimizer::new(rules);
     let s_expr = heuristic.optimize(expression)?;
     // TODO: enable cascades optimizer
     // let mut cascades = CascadesOptimizer::create(ctx);

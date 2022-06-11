@@ -39,12 +39,24 @@ impl MySQLFederated {
     // Format:
     // |@@variable|
     // |value|
+    #[allow(dead_code)]
     fn select_variable_block(name: &str, value: &str) -> Option<DataBlock> {
         Some(DataBlock::create(
             DataSchemaRefExt::create(vec![DataField::new(
                 &format!("@@{}", name),
                 StringType::new_impl(),
             )]),
+            vec![Series::from_data(vec![value])],
+        ))
+    }
+
+    // Build block for select function.
+    // Format:
+    // |function_name|
+    // |value|
+    fn select_function_block(name: &str, value: &str) -> Option<DataBlock> {
+        Some(DataBlock::create(
+            DataSchemaRefExt::create(vec![DataField::new(name, StringType::new_impl())]),
             vec![Series::from_data(vec![value])],
         ))
     }
@@ -198,7 +210,7 @@ impl MySQLFederated {
         let rules: Vec<(&str, Option<DataBlock>)> = vec![
             (
                 "(?i)^(SELECT VERSION())",
-                Self::select_variable_block(
+                Self::select_function_block(
                     "version()",
                     format!("{}-{}", self.mysql_version, self.databend_version.clone()).as_str(),
                 ),
@@ -215,6 +227,15 @@ impl MySQLFederated {
             ("(?i)^(SET SQL_LOG_BIN(.*))", None),
             ("(?i)^(SET sql_mode(.*))", None),
             ("(?i)^(SET @@(.*))", None),
+            // Now databend not support charset and collation
+            // https://github.com/datafuselabs/databend/issues/5853
+            ("(?i)^(SHOW COLLATION)", None),
+            ("(?i)^(SHOW CHARSET)", None),
+            (
+                // SELECT TIMEDIFF(NOW(), UTC_TIMESTAMP());
+                "(?i)^(SELECT TIMEDIFF\\(NOW\\(\\), UTC_TIMESTAMP\\(\\)\\))",
+                Self::select_function_block("TIMEDIFF(NOW(), UTC_TIMESTAMP())", "00:00:00"),
+            ),
             // mysqldump.
             ("(?i)^(SET SESSION(.*))", None),
             ("(?i)^(SET SQL_QUOTE_SHOW_CREATE(.*))", None),
