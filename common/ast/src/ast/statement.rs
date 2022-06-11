@@ -113,11 +113,7 @@ pub enum Statement<'a> {
 
     // Views
     CreateView(CreateViewStmt<'a>),
-    AlterView {
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
-        query: Box<Query<'a>>,
-    },
+    AlterView(AlterViewStmt<'a>),
     DropView {
         if_exists: bool,
         database: Option<Identifier<'a>>,
@@ -300,6 +296,13 @@ pub enum DatabaseEngine {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateViewStmt<'a> {
     pub if_not_exists: bool,
+    pub database: Option<Identifier<'a>>,
+    pub view: Identifier<'a>,
+    pub query: Box<Query<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterViewStmt<'a> {
     pub database: Option<Identifier<'a>>,
     pub view: Identifier<'a>,
     pub query: Box<Query<'a>>,
@@ -739,11 +742,11 @@ impl<'a> Display for Statement<'a> {
                 write_period_separated_list(f, database.iter().chain(Some(view)))?;
                 write!(f, " AS {query}")?;
             }
-            Statement::AlterView {
+            Statement::AlterView(AlterViewStmt {
                 database,
                 view,
                 query,
-            } => {
+            }) => {
                 write!(f, "ALTER VIEW ")?;
                 write_period_separated_list(f, database.iter().chain(Some(view)))?;
                 write!(f, " AS {query}")?;

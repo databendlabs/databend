@@ -32,6 +32,7 @@ pub use aggregate::AggregatePlan;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_planners::AlterUserPlan;
+use common_planners::AlterViewPlan;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
@@ -84,6 +85,7 @@ pub enum Plan {
     CreateTable(Box<CreateTablePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
     CreateView(Box<CreateViewPlan>),
+    AlterView(Box<AlterViewPlan>),
     DropDatabase(Box<DropDatabasePlan>),
     RenameDatabase(Box<RenameDatabasePlan>),
 

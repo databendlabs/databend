@@ -811,6 +811,120 @@ CreateView(
 
 
 ---------- Input ----------
+alter view v as select number % 3 as a from numbers(1000);
+---------- Output ---------
+ALTER VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
+---------- AST ------------
+AlterView(
+    AlterViewStmt {
+        database: None,
+        view: Identifier {
+            name: "v",
+            quote: None,
+            span: Ident(11..12),
+        },
+        query: Query {
+            span: [
+                SELECT(16..22),
+                Ident(23..29),
+                Modulo(30..31),
+                LiteralInteger(32..33),
+                AS(34..36),
+                Ident(37..38),
+                FROM(39..43),
+                Ident(44..51),
+                LParen(51..52),
+                LiteralInteger(52..56),
+                RParen(56..57),
+            ],
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(16..22),
+                        Ident(23..29),
+                        Modulo(30..31),
+                        LiteralInteger(32..33),
+                        AS(34..36),
+                        Ident(37..38),
+                        FROM(39..43),
+                        Ident(44..51),
+                        LParen(51..52),
+                        LiteralInteger(52..56),
+                        RParen(56..57),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: BinaryOp {
+                                span: [
+                                    Modulo(30..31),
+                                ],
+                                op: Modulo,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(23..29),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "number",
+                                        quote: None,
+                                        span: Ident(23..29),
+                                    },
+                                },
+                                right: Literal {
+                                    span: [
+                                        LiteralInteger(32..33),
+                                    ],
+                                    lit: Integer(
+                                        3,
+                                    ),
+                                },
+                            },
+                            alias: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(37..38),
+                                },
+                            ),
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            name: Identifier {
+                                name: "numbers",
+                                quote: None,
+                                span: Ident(44..51),
+                            },
+                            params: [
+                                Literal {
+                                    span: [
+                                        LiteralInteger(52..56),
+                                    ],
+                                    lit: Integer(
+                                        1000,
+                                    ),
+                                },
+                            ],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            format: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 truncate table test;
 ---------- Output ---------
 TRUNCATE TABLE test
