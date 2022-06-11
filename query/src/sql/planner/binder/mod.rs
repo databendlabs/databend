@@ -187,7 +187,7 @@ impl<'a> Binder {
                 parameters,
                 definition,
                 description,
-            } => Ok(Plan::CreateUDF(CreateUserUDFPlan {
+            } => Ok(Plan::CreateUserUDF(CreateUserUDFPlan {
                 if_not_exists: *if_not_exists,
                 udf: UserDefinedFunction {
                     name: udf_name.clone(),
