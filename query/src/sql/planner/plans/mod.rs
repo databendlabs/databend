@@ -36,6 +36,7 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
 use common_planners::CreateUserStagePlan;
+use common_planners::CreateUserUDFPlan;
 use common_planners::CreateViewPlan;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropDatabasePlan;
@@ -103,4 +104,7 @@ pub enum Plan {
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
+
+    // UDF
+    CreateUserUDF(Box<CreateUserUDFPlan>),
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use jwt_simple::reexports::anyhow::Ok;
 
 use crate::sql::plans::Plan;
 
@@ -42,6 +43,7 @@ impl Plan {
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
             Plan::RenameDatabase(rename_database) => Ok(format!("{:?}", rename_database)),
+            Plan::CreateUserUDF(create_user_udf) => Ok(format!("{:?}", create_user_udf)),
         }
     }
 }

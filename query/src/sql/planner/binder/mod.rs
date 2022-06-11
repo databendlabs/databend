@@ -22,6 +22,8 @@ use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserDefinedFunction;
+use common_planners::CreateUserUDFPlan;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
@@ -178,6 +180,22 @@ impl<'a> Binder {
                 };
                 Ok(Plan::DropUser(Box::new(plan)))
             }
+
+            Statement::CreateUDF {
+                if_not_exists,
+                udf_name,
+                parameters,
+                definition,
+                description,
+            } => Ok(Plan::CreateUDF(CreateUserUDFPlan {
+                if_not_exists: *if_not_exists,
+                udf: UserDefinedFunction {
+                    name: udf_name.clone(),
+                    parameters: parameters.clone(),
+                    definition: definition.clone(),
+                    description: description.clone(),
+                },
+            })),
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "UnImplemented stmt {stmt} in binder"

@@ -22,6 +22,7 @@ use super::CreateDatabaseInterpreter;
 use super::CreateTableInterpreter;
 use super::CreateUserInterpreter;
 use super::CreateUserStageInterpreter;
+use super::CreateUserUDFInterpreter;
 use super::CreateViewInterpreter;
 use super::DropDatabaseInterpreter;
 use super::ExplainInterpreterV2;
@@ -61,6 +62,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::CreateDatabase(_)
                 | DfStatement::DropDatabase(_)
                 | DfStatement::AlterDatabase(_)
+                | DfStatement::CreateUDF(_)
         )
     }
 
@@ -112,6 +114,9 @@ impl InterpreterFactoryV2 {
                 CreateViewInterpreter::try_create(ctx, *create_view.clone())
             }
             Plan::DropUser(drop_user) => DropUserInterpreter::try_create(ctx, *drop_user.clone()),
+            Plan::CreateUserUDF(create_user_udf) => {
+                CreateUserUDFInterpreter::try_create(ctx, *create_user_udf.clone())
+            }
         }?;
         Ok(inner)
     }
