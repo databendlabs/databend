@@ -29,8 +29,8 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::SyncSource;
 use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
@@ -82,19 +82,55 @@ impl Table for RandomTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
-        let output = OutputPort::create();
-        let schema = self.table_info.schema();
-        pipeline.add_pipe(NewPipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![RandomSource::create(
-                ctx,
-                output,
-                schema,
-                plan.push_downs.clone(),
-            )?],
-        });
+        let settings = ctx.get_settings();
+        let block_size = settings.get_max_block_size()? as usize;
+        let mut output_schema = self.table_info.schema();
+        let push_downs = plan.push_downs.clone();
+        // If extras.push_downs is None or extras.push_down.limit is None,
+        // set limit to `max_block_size`.
+        let limit = match push_downs {
+            Some(push_downs) => {
+                if let Some(projection) = push_downs.projection {
+                    // do projection on schema
+                    output_schema = Arc::new(output_schema.project(projection));
+                }
+                match push_downs.limit {
+                    Some(limit) => limit,
+                    None => block_size,
+                }
+            }
+            None => block_size,
+        };
 
+        let mut builder = SourcePipeBuilder::create();
+
+        let max_threads = settings.get_max_threads()? as usize;
+        // divide the whole limit by `max_threads`.
+        let each_limit = limit / max_threads;
+        let mut remain = limit % max_threads;
+
+        for _index in 0..max_threads {
+            // divide the whole limit by `max_threads`.
+            let limit = if remain > 0 {
+                remain -= 1;
+                each_limit + 1
+            } else {
+                each_limit
+            };
+            let output = OutputPort::create();
+            builder.add_source(
+                output.clone(),
+                RandomSource::create(
+                    ctx.clone(),
+                    output,
+                    output_schema.clone(),
+                    limit,
+                    block_size,
+                )?,
+            );
+        }
+
+        pipeline.add_pipe(builder.finalize());
         Ok(())
     }
 }
@@ -114,27 +150,11 @@ impl RandomSource {
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        extras: Option<Extras>,
+        limit: usize,
+        block_size: usize,
     ) -> Result<ProcessorPtr> {
-        let block_size = ctx.get_settings().get_max_block_size()? as usize;
-        let mut output_schema = schema;
-        // If extras.push_downs is None or extras.push_down.limit is None,
-        // set limit to `max_block_size`.
-        let limit = match extras {
-            Some(push_downs) => {
-                if let Some(projection) = push_downs.projection {
-                    output_schema = Arc::new(output_schema.project(projection));
-                }
-                match push_downs.limit {
-                    Some(limit) => limit,
-                    None => block_size,
-                }
-            }
-            None => block_size,
-        };
-
         SyncSourcer::create(ctx, output, RandomSource {
-            schema: output_schema,
+            schema,
             limit,
             rows: 0,
             block_size,
