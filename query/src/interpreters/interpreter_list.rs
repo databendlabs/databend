@@ -50,7 +50,7 @@ impl Interpreter for ListInterpreter {
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let files = list_files(
+        let (files, _) = list_files(
             self.ctx.clone(),
             self.plan.stage.clone(),
             self.plan.path.clone(),

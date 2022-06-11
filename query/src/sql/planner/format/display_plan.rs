@@ -37,6 +37,7 @@ impl Plan {
             Plan::DropStage(s) => Ok(format!("{:?}", s)),
             Plan::DescStage(s) => Ok(format!("{:?}", s)),
             Plan::ListStage(s) => Ok(format!("{:?}", s)),
+            Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
             Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
             Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),

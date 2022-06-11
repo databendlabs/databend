@@ -131,10 +131,13 @@ impl<'a> Binder {
                     name: stage_name.clone(),
                 })))
             }
-            Statement::ListStage {
-                stage_name,
-                pattern,
-            } => self.bind_list_stage(stage_name, pattern).await,
+            Statement::ListStage { location, pattern } => {
+                self.bind_list_stage(location, pattern).await
+            }
+
+            Statement::RemoveStage { location, pattern } => {
+                self.bind_remove_stage(location, pattern).await
+            }
 
             Statement::CreateDatabase(stmt) => {
                 let plan = self.bind_create_database(stmt).await?;

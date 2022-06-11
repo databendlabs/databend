@@ -73,6 +73,7 @@ pub fn optimize(plan: Plan) -> Result<Plan> {
         | Plan::DropStage(_)
         | Plan::DescStage(_)
         | Plan::ListStage(_)
+        | Plan::RemoveStage(_)
         | Plan::DropUser(_)
         | Plan::AlterUser(_)
         | Plan::RenameDatabase(_) => Ok(plan),

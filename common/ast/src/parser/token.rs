@@ -933,6 +933,7 @@ impl TokenKind {
             | TokenKind::ORDER
             // | TokenKind::OVERLAPS 
             // | TokenKind::RETURNING
+            | TokenKind::STAGE
             | TokenKind::TO
             // | TokenKind::UNION
             | TokenKind::WHERE

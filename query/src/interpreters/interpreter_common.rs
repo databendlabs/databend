@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -68,7 +67,7 @@ pub async fn list_files(
     stage: UserStageInfo,
     path: String,
     pattern: String,
-) -> Result<Vec<String>> {
+) -> Result<(Vec<String>, bool)> {
     let op = StageSource::get_op(&ctx, &stage).await?;
     let path = &path;
     let pattern = &pattern;
@@ -77,20 +76,25 @@ pub async fn list_files(
         stage.stage_name
     );
 
-    let mut files = if path.ends_with('/') {
-        let mut list = vec![];
-        let mut objects = op.object(path).list().await?;
-        while let Some(de) = objects.try_next().await? {
-            list.push(de.name().to_string());
-        }
-        list
-    } else {
-        let o = op.object(path);
-        match o.metadata().await {
-            Ok(_) => vec![o.name().to_string()],
-            Err(e) if e.kind() == io::ErrorKind::NotFound => vec![],
-            Err(e) => return Err(e.into()),
-        }
+    let obj = op.object(path);
+    let mut path_is_file = false;
+    let mut files = match obj.metadata().await {
+        Ok(meta) => match meta.mode() {
+            opendal::ObjectMode::FILE => {
+                path_is_file = true;
+                vec![obj.name().to_string()]
+            }
+            opendal::ObjectMode::DIR => {
+                let mut list = vec![];
+                let mut objects = op.object(path).list().await?;
+                while let Some(de) = objects.try_next().await? {
+                    list.push(de.name().to_string());
+                }
+                list
+            }
+            opendal::ObjectMode::Unknown => todo!(),
+        },
+        Err(e) => return Err(e.into()),
     };
 
     if !pattern.is_empty() {
@@ -108,5 +112,5 @@ pub async fn list_files(
         files = matched_files;
     }
 
-    Ok(files)
+    Ok((files, path_is_file))
 }
