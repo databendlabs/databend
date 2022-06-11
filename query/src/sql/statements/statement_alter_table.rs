@@ -33,7 +33,7 @@ use crate::sql::statements::AnalyzedResult;
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfAlterTable {
     pub if_exists: bool,
-    pub table_name: ObjectName,
+    pub table: ObjectName,
     pub action: AlterTableAction,
 }
 
@@ -50,22 +50,21 @@ impl AnalyzableStatement for DfAlterTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
-        let (catalog_name, database_name, table_name) =
-            super::resolve_table(&ctx, &self.table_name, "ALTER TABLE")?;
+        let (catalog, database, table) = super::resolve_table(&ctx, &self.table, "ALTER TABLE")?;
 
         match &self.action {
             AlterTableAction::RenameTable(o) => {
                 let mut entities = Vec::new();
                 // TODO check catalog and new_catalog, cross catalogs operation not allowed
-                let (_new_catalog, new_database_name, new_table_name) =
+                let (_new_catalog, new_database, new_table) =
                     super::resolve_table(&ctx, o, "ALTER TABLE")?;
                 entities.push(RenameTableEntity {
                     if_exists: self.if_exists,
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    new_database_name,
-                    new_table_name,
+                    catalog,
+                    database,
+                    table,
+                    new_database,
+                    new_table,
                 });
 
                 Ok(AnalyzedResult::SimpleQuery(Box::new(
@@ -83,9 +82,9 @@ impl AnalyzableStatement for DfAlterTable {
                 Ok(AnalyzedResult::SimpleQuery(Box::new(
                     PlanNode::AlterTableClusterKey(AlterTableClusterKeyPlan {
                         tenant,
-                        catalog_name,
-                        database_name,
-                        table_name,
+                        catalog,
+                        database,
+                        table,
                         cluster_keys,
                     }),
                 )))
@@ -93,9 +92,9 @@ impl AnalyzableStatement for DfAlterTable {
             AlterTableAction::DropTableClusterKey => Ok(AnalyzedResult::SimpleQuery(Box::new(
                 PlanNode::DropTableClusterKey(DropTableClusterKeyPlan {
                     tenant,
-                    catalog_name,
-                    database_name,
-                    table_name,
+                    catalog,
+                    database,
+                    table,
                 }),
             ))),
         }

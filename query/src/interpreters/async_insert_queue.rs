@@ -80,7 +80,7 @@ impl Hash for InsertKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let table = format!(
             "{}.{}.{}",
-            self.plan.catalog_name, self.plan.database_name, self.plan.table_name
+            self.plan.catalog, self.plan.database, self.plan.table
         );
         state.write(table.as_bytes());
         let values = self.changed_settings.get_setting_values();

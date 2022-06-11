@@ -14,11 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use common_ast::ast::CreateTableSource;
-use common_ast::ast::CreateTableStmt;
-use common_ast::ast::Engine;
-use common_ast::ast::Expr;
-use common_ast::ast::TableOption;
+use common_ast::ast::*;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -27,14 +23,14 @@ use common_datavalues::TypeFactory;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableMeta;
-use common_planners::CreateTablePlan;
+use common_planners::*;
 
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::is_reserved_opt_key;
 use crate::sql::plans::Plan;
 use crate::sql::BindContext;
-use crate::sql::ColumnBinding;
+use crate::sql::ScalarExpr;
 use crate::sql::OPT_KEY_DATABASE_ID;
 
 impl<'a> Binder {
@@ -69,8 +65,15 @@ impl<'a> Binder {
                 }
                 Ok(DataSchemaRefExt::create(fields))
             }
-            CreateTableSource::Like { database, table } => {
-                let catalog = self.ctx.get_current_catalog();
+            CreateTableSource::Like {
+                catalog,
+                database,
+                table,
+            } => {
+                let catalog = catalog
+                    .as_ref()
+                    .map(|catalog| catalog.name.to_lowercase())
+                    .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let database = database.as_ref().map_or_else(
                     || self.ctx.get_current_catalog(),
                     |ident| ident.name.clone(),
@@ -130,24 +133,38 @@ impl<'a> Binder {
         &mut self,
         stmt: &CreateTableStmt<'a>,
     ) -> Result<Plan> {
-        let catalog = self.ctx.get_current_catalog();
-        let database = stmt
-            .database
+        let CreateTableStmt {
+            if_not_exists,
+            catalog,
+            database,
+            table,
+            source,
+            table_options,
+            cluster_by,
+            as_query,
+            comment: _,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
             .as_ref()
             .map(|ident| ident.name.to_lowercase())
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = stmt.table.name.to_lowercase();
+        let table = table.name.to_lowercase();
 
         // Take FUSE engine as default engine
         let mut engine = Engine::Fuse;
-        let mut table_options: BTreeMap<String, String> = BTreeMap::new();
-        for table_option in stmt.table_options.iter() {
+        let mut options: BTreeMap<String, String> = BTreeMap::new();
+        for table_option in table_options.iter() {
             match table_option {
                 TableOption::Engine(table_engine) => {
                     engine = table_engine.clone();
                 }
                 TableOption::Comment(comment) => self.insert_table_option_with_validation(
-                    &mut table_options,
+                    &mut options,
                     "COMMENT".to_string(),
                     comment.clone(),
                 )?,
@@ -155,7 +172,7 @@ impl<'a> Binder {
         }
 
         // Build table schema
-        let schema = match (&stmt.source, &stmt.as_query) {
+        let schema = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
                 self.analyze_create_table_schema(source).await?
@@ -180,10 +197,10 @@ impl<'a> Binder {
             _ => Err(ErrorCode::UnImplement("Unsupported CREATE TABLE statement"))?,
         };
 
-        let mut meta = TableMeta {
+        let mut table_meta = TableMeta {
             schema: schema.clone(),
             engine: engine.to_string(),
-            options: table_options.clone(),
+            options: options.clone(),
             ..Default::default()
         };
 
@@ -201,7 +218,8 @@ impl<'a> Binder {
                 .get_database(self.ctx.get_tenant().as_str(), database.as_str())
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
-            meta.options
+            table_meta
+                .options
                 .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
         }
 
@@ -217,14 +235,14 @@ impl<'a> Binder {
         }
 
         let plan = CreateTablePlan {
-            if_not_exists: stmt.if_not_exists,
+            if_not_exists: *if_not_exists,
             tenant: self.ctx.get_tenant(),
             catalog,
             database,
             table,
-            table_meta: meta,
+            table_meta,
             cluster_keys,
-            as_select: if stmt.as_query.is_some() {
+            as_select: if as_query.is_some() {
                 Err(ErrorCode::UnImplement(
                     "Unsupported CREATE TABLE ... AS ...",
                 ))?

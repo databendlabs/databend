@@ -86,6 +86,7 @@ fn test_statement() {
         r#"create table c(a DateTime null, b DateTime(3));"#,
         r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"alter view v as select number % 3 as a from numbers(1000);"#,
+        r#"rename table d.t to e.s;"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
         r#"DROP table table1;"#,
