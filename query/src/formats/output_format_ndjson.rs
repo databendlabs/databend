@@ -21,15 +21,15 @@ use common_io::prelude::FormatSettings;
 use crate::formats::output_format::OutputFormat;
 
 #[derive(Default)]
-pub struct NDJsonOutputFormat {}
+pub struct JsonEachRowOutputFormat {}
 
-impl NDJsonOutputFormat {
+impl JsonEachRowOutputFormat {
     pub fn create(_schema: DataSchemaRef) -> Self {
         Self {}
     }
 }
 
-impl OutputFormat for NDJsonOutputFormat {
+impl OutputFormat for JsonEachRowOutputFormat {
     fn serialize_block(&mut self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
         let rows_size = block.column(0).len();
 
