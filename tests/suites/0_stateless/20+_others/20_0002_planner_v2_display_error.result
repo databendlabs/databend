@@ -12,3 +12,10 @@ ERROR 1105 (HY000) at line 5: Code: 1065, displayText = error:
   | ^^^^^^^^ SELECT * with no tables specified is not valid
 
 .
+ERROR 1105 (HY000) at line 7: Code: 1065, displayText = error: 
+  --> SQL:1:40
+  |
+1 | select a as b from t1 intersect select b from t1 order by a
+  |                                        ^ column doesn't exist
+
+.

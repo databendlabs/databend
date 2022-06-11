@@ -16,16 +16,12 @@ use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
-use nom::Offset;
-use nom::Slice as _;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::*;
-use crate::parser::error::Error;
-use crate::parser::error::ErrorKind;
 use crate::parser::expr::*;
 use crate::parser::token::*;
 use crate::parser::util::*;
@@ -286,21 +282,15 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
     )(i)
 }
 
-#[derive(Debug, Clone)]
-pub struct SetOperationWithSpan<'a> {
-    span: Input<'a>,
-    elem: SetOperationElement<'a>,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum SetOperationElement<'a> {
     SelectStmt {
         distinct: bool,
         select_list: Box<Vec<SelectTarget<'a>>>,
         from: Box<Vec<TableReference<'a>>>,
-        selection: Option<Expr<'a>>,
+        selection: Box<Option<Expr<'a>>>,
         group_by: Box<Vec<Expr<'a>>>,
-        having: Option<Expr<'a>>,
+        having: Box<Option<Expr<'a>>>,
     },
     SetOperation {
         op: SetOperator,
@@ -309,7 +299,7 @@ pub enum SetOperationElement<'a> {
     Group(SetExpr<'a>),
 }
 
-pub fn set_operation_element(i: Input) -> IResult<SetOperationWithSpan> {
+pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
     let set_operator = map(
         rule! {
             ( UNION | EXCEPT | INTERSECT ) ~ ALL?
@@ -353,13 +343,13 @@ pub fn set_operation_element(i: Input) -> IResult<SetOperationWithSpan> {
                         .map(|(_, table_refs)| table_refs)
                         .unwrap_or_default(),
                 ),
-                selection: opt_where_block.map(|(_, selection)| selection),
+                selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
                 group_by: Box::new(
                     opt_group_by_block
                         .map(|(_, _, group_by)| group_by)
                         .unwrap_or_default(),
                 ),
-                having: opt_having_block.map(|(_, having)| having),
+                having: Box::new(opt_having_block.map(|(_, having)| having)),
             }
         },
     );
@@ -374,39 +364,22 @@ pub fn set_operation_element(i: Input) -> IResult<SetOperationWithSpan> {
     );
 
     let (rest, (span, elem)) = consumed(rule!( #group | #set_operator | #select_stmt))(i)?;
-    Ok((rest, SetOperationWithSpan { span, elem }))
+    Ok((rest, WithSpan { span, elem }))
 }
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
     let (rest, set_operation_elements) = rule!(#set_operation_element+)(i)?;
     let iter = &mut set_operation_elements.into_iter();
-    let mut iter = iter.peekable();
-    let set_expr = SetOperationParser
-        .parse_input(&mut iter, Precedence(0))
-        .map_err(|err| {
-            Error::from_error_kind(
-                iter.next()
-                    .map(|elem| elem.span)
-                    // It's safe to slice one more token because EOI is always added.
-                    .unwrap_or_else(|| rest.slice(..1)),
-                ErrorKind::from(err),
-            )
-        })
-        .map_err(nom::Err::Error)?;
-    if let Some(elem) = iter.peek() {
-        // Rollback parsing footprint on unused expr elements.
-        i.1.clear();
-        Ok((i.slice(i.offset(&elem.span)..), set_expr))
-    } else {
-        Ok((rest, set_expr))
-    }
+    run_pratt_parser(SetOperationParser, iter, rest, i)
 }
 
 struct SetOperationParser;
 
-impl<'a, I: Iterator<Item = SetOperationWithSpan<'a>>> PrattParser<I> for SetOperationParser {
+impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement<'a>>>> PrattParser<I>
+    for SetOperationParser
+{
     type Error = pratt::NoError;
-    type Input = SetOperationWithSpan<'a>;
+    type Input = WithSpan<'a, SetOperationElement<'a>>;
     type Output = SetExpr<'a>;
 
     fn query(&mut self, input: &Self::Input) -> pratt::Result<Affix> {
@@ -437,9 +410,9 @@ impl<'a, I: Iterator<Item = SetOperationWithSpan<'a>>> PrattParser<I> for SetOpe
                 distinct,
                 select_list: *select_list,
                 from: *from,
-                selection,
+                selection: *selection,
                 group_by: *group_by,
-                having,
+                having: *having,
             })),
             _ => unreachable!(),
         };

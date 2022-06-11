@@ -19,8 +19,6 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
-use nom::Offset;
-use nom::Slice as _;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattParser;
@@ -124,36 +122,9 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                 }
             }
         }
-
         let iter = &mut expr_elements.into_iter();
-        let mut iter = iter.peekable();
-        let expr = ExprParser
-            .parse_input(&mut iter, Precedence(0))
-            .map_err(|err| {
-                Error::from_error_kind(
-                    iter.next()
-                        .map(|elem| elem.span)
-                        // It's safe to slice one more token because EOI is always added.
-                        .unwrap_or_else(|| rest.slice(..1)),
-                    ErrorKind::from(err),
-                )
-            })
-            .map_err(nom::Err::Error)?;
-
-        if let Some(elem) = iter.peek() {
-            // Rollback parsing footprint on unused expr elements.
-            i.1.clear();
-            Ok((i.slice(i.offset(&elem.span)..), expr))
-        } else {
-            Ok((rest, expr))
-        }
+        run_pratt_parser(ExprParser, iter, rest, i)
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct WithSpan<'a> {
-    span: Input<'a>,
-    elem: ExprElement<'a>,
 }
 
 /// A 'flattened' AST of expressions.
@@ -300,12 +271,12 @@ pub enum ExprElement<'a> {
 
 struct ExprParser;
 
-impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
+impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for ExprParser {
     type Error = pratt::NoError;
-    type Input = WithSpan<'a>;
+    type Input = WithSpan<'a, ExprElement<'a>>;
     type Output = Expr<'a>;
 
-    fn query(&mut self, elem: &WithSpan) -> pratt::Result<Affix> {
+    fn query(&mut self, elem: &WithSpan<ExprElement>) -> pratt::Result<Affix> {
         let affix = match &elem.elem {
             ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(10)),
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
@@ -357,7 +328,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(affix)
     }
 
-    fn primary(&mut self, elem: WithSpan<'a>) -> pratt::Result<Expr<'a>> {
+    fn primary(&mut self, elem: WithSpan<'a, ExprElement<'a>>) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::ColumnRef {
                 database,
@@ -482,7 +453,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     fn infix(
         &mut self,
         lhs: Expr<'a>,
-        elem: WithSpan<'a>,
+        elem: WithSpan<'a, ExprElement>,
         rhs: Expr<'a>,
     ) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
@@ -497,7 +468,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn prefix(&mut self, elem: WithSpan<'a>, rhs: Expr<'a>) -> pratt::Result<Expr<'a>> {
+    fn prefix(
+        &mut self,
+        elem: WithSpan<'a, ExprElement>,
+        rhs: Expr<'a>,
+    ) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 span: elem.span.0,
@@ -509,7 +484,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn postfix(&mut self, lhs: Expr<'a>, elem: WithSpan<'a>) -> pratt::Result<Expr<'a>> {
+    fn postfix(
+        &mut self,
+        lhs: Expr<'a>,
+        elem: WithSpan<'a, ExprElement<'a>>,
+    ) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::MapAccess { accessor } => Expr::MapAccess {
                 span: elem.span.0,
@@ -552,7 +531,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     }
 }
 
-pub fn expr_element(i: Input) -> IResult<WithSpan> {
+pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(
         rule! {
             #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?

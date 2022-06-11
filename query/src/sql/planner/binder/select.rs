@@ -26,9 +26,7 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
-use common_datavalues::remove_nullable;
-use common_datavalues::type_coercion::numerical_coercion;
-use common_datavalues::DataType;
+use common_datavalues::type_coercion::merge_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -240,13 +238,8 @@ impl<'a> Binder {
                 .iter_mut()
                 .zip(right_bind_context.columns.iter_mut())
             {
-                let left_data_type = remove_nullable(&left_col.data_type);
-                let right_data_type = remove_nullable(&right_col.data_type);
-                let left_id = left_data_type.data_type_id();
-                let right_id = right_data_type.data_type_id();
-                if left_id.is_numeric() && right_id.is_numeric() {
-                    let coercion_type =
-                        numerical_coercion(&left_data_type, &right_data_type, false)?;
+                if left_col.data_type != right_col.data_type {
+                    let coercion_type = merge_types(&left_col.data_type, &right_col.data_type)?;
                     left_col.data_type = coercion_type.clone();
                     right_col.data_type = coercion_type;
                 }
