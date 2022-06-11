@@ -30,7 +30,7 @@ use crate::sql::binder::Binder;
 use crate::sql::is_reserved_opt_key;
 use crate::sql::plans::Plan;
 use crate::sql::BindContext;
-use crate::sql::ScalarExpr;
+use crate::sql::ColumnBinding;
 use crate::sql::OPT_KEY_DATABASE_ID;
 
 impl<'a> Binder {
@@ -224,14 +224,14 @@ impl<'a> Binder {
         }
 
         // Validate cluster keys and build the `cluster_keys` of `TableMeta`
-        let mut cluster_keys = Vec::with_capacity(stmt.cluster_by.len());
-        for cluster_key in stmt.cluster_by.iter() {
+        let mut cluster_keys = Vec::with_capacity(cluster_by.len());
+        for cluster_key in cluster_by.iter() {
             self.validate_expr(schema.clone(), cluster_key).await?;
             cluster_keys.push(cluster_key.to_string());
         }
         if !cluster_keys.is_empty() {
             let cluster_keys_sql = format!("({})", cluster_keys.join(", "));
-            meta = meta.push_cluster_key(cluster_keys_sql);
+            table_meta = table_meta.push_cluster_key(cluster_keys_sql);
         }
 
         let plan = CreateTablePlan {

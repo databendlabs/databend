@@ -79,7 +79,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
             validate_clustering(expr)?;
         }
 
-        let cluster_key_vec: Vec<String> = cluster_keys.iter().map(|e| e.column()).collect();
+        let cluster_key_vec: Vec<String> = cluster_keys.iter().map(|e| e.column_name()).collect();
         let cluster_key_str = format!("({})", cluster_key_vec.join(", "));
 
         table

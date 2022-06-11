@@ -95,7 +95,7 @@ impl<'a> Binder {
         stage_info.stage_name = stage_name.clone();
 
         if !file_format_options.is_empty() {
-            stage_info.file_format_options = parse_copy_file_format_options(&file_format_options)?;
+            stage_info.file_format_options = parse_copy_file_format_options(file_format_options)?;
         }
         // Copy options.
         {
