@@ -12,5 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod random_parts;
 mod random_table;
+
+pub use random_parts::RandomPartInfo;
 pub use random_table::RandomTable;

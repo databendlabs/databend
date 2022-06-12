@@ -25,6 +25,7 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 
+use super::RandomPartInfo;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::SyncSource;
@@ -52,6 +53,27 @@ impl RandomTable {
             ..Default::default()
         }
     }
+
+    pub fn generate_random_parts(workers: usize, total: usize) -> Partitions {
+        let part_size = total / workers;
+        let mut part_remain = total % workers;
+
+        let mut partitions = Vec::with_capacity(workers);
+        if part_size == 0 {
+            partitions.push(RandomPartInfo::create(total));
+        } else {
+            for _ in 0..workers {
+                let rows = if part_remain > 0 {
+                    part_remain -= 1;
+                    part_size + 1
+                } else {
+                    part_size
+                };
+                partitions.push(RandomPartInfo::create(rows));
+            }
+        }
+        partitions
+    }
 }
 
 #[async_trait::async_trait]
@@ -66,10 +88,49 @@ impl Table for RandomTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
-        _push_downs: Option<Extras>,
+        ctx: Arc<QueryContext>,
+        push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![]))
+        let settings = ctx.get_settings();
+        let block_size = settings.get_max_block_size()? as usize;
+        // If extras.push_downs is None or extras.push_down.limit is None,
+        // set limit to `max_block_size`.
+        let (schema, total_rows) = match push_downs {
+            Some(push_downs) => {
+                let mut schema = self.schema();
+                if let Some(projection) = push_downs.projection {
+                    // do projection on schema
+                    schema = Arc::new(schema.project(projection));
+                }
+                let limit = match push_downs.limit {
+                    Some(limit) => limit,
+                    None => block_size,
+                };
+                (schema, limit)
+            }
+            None => (self.schema(), block_size),
+        };
+
+        // generate one row to estimate the bytes size.
+        let one_row_bytes = schema
+            .fields()
+            .iter()
+            .map(|f| f.data_type().create_random_column(1))
+            .collect::<Vec<_>>()
+            .iter()
+            .map(|col| col.memory_size())
+            .sum::<usize>();
+        let read_bytes = total_rows * one_row_bytes;
+        let parts_num = (total_rows / block_size) + 1;
+        let statistics = Statistics::new_exact(total_rows, read_bytes, parts_num, parts_num);
+
+        let mut worker_num = settings.get_max_threads()? as usize;
+        if worker_num > parts_num {
+            worker_num = parts_num;
+        }
+        let parts = Self::generate_random_parts(worker_num, total_rows);
+
+        Ok((statistics, parts))
     }
 
     fn benefit_column_prune(&self) -> bool {
@@ -82,51 +143,24 @@ impl Table for RandomTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
-        let settings = ctx.get_settings();
-        let block_size = settings.get_max_block_size()? as usize;
         let mut output_schema = self.table_info.schema();
         let push_downs = plan.push_downs.clone();
-        // If extras.push_downs is None or extras.push_down.limit is None,
-        // set limit to `max_block_size`.
-        let limit = match push_downs {
-            Some(push_downs) => {
-                if let Some(projection) = push_downs.projection {
-                    // do projection on schema
-                    output_schema = Arc::new(output_schema.project(projection));
-                }
-                match push_downs.limit {
-                    Some(limit) => limit,
-                    None => block_size,
-                }
+
+        if let Some(extras) = push_downs {
+            if let Some(projection) = extras.projection {
+                // do projection on schema
+                output_schema = Arc::new(output_schema.project(projection));
             }
-            None => block_size,
-        };
+        }
 
         let mut builder = SourcePipeBuilder::create();
 
-        let max_threads = settings.get_max_threads()? as usize;
-        // divide the whole limit by `max_threads`.
-        let each_limit = limit / max_threads;
-        let mut remain = limit % max_threads;
-
-        for _index in 0..max_threads {
-            // divide the whole limit by `max_threads`.
-            let limit = if remain > 0 {
-                remain -= 1;
-                each_limit + 1
-            } else {
-                each_limit
-            };
+        for index in 0..plan.parts.len() {
             let output = OutputPort::create();
+            let parts = RandomPartInfo::from_part(&plan.parts[index])?;
             builder.add_source(
                 output.clone(),
-                RandomSource::create(
-                    ctx.clone(),
-                    output,
-                    output_schema.clone(),
-                    limit,
-                    block_size,
-                )?,
+                RandomSource::create(ctx.clone(), output, output_schema.clone(), parts.rows)?,
             );
         }
 
@@ -137,12 +171,8 @@ impl Table for RandomTable {
 
 struct RandomSource {
     schema: DataSchemaRef,
-    /// The number of rows needed to generate.
-    limit: usize,
-    /// record rows count.
+    /// how many rows are needed to generate
     rows: usize,
-    /// The max number of rows can one `generate` generate.
-    block_size: usize,
 }
 
 impl RandomSource {
@@ -150,15 +180,9 @@ impl RandomSource {
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        limit: usize,
-        block_size: usize,
+        rows: usize,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, RandomSource {
-            schema,
-            limit,
-            rows: 0,
-            block_size,
-        })
+        SyncSourcer::create(ctx, output, RandomSource { schema, rows })
     }
 }
 
@@ -166,24 +190,21 @@ impl SyncSource for RandomSource {
     const NAME: &'static str = "RandomTable";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.rows == self.limit {
+        if self.rows == 0 {
+            // No more row is needed to generate.
             return Ok(None);
         }
-
-        let rows = if self.limit - self.rows <= self.block_size {
-            self.limit - self.rows
-        } else {
-            self.block_size
-        };
 
         let columns = self
             .schema
             .fields()
             .iter()
-            .map(|f| f.data_type().create_random_column(rows))
+            .map(|f| f.data_type().create_random_column(self.rows))
             .collect();
 
-        self.rows += rows;
+        // The partition garantees the number of rows is less than or equal to `max_block_size`.
+        // And we generate all the `self.rows` at once.
+        self.rows = 0;
 
         Ok(Some(DataBlock::create(self.schema.clone(), columns)))
     }
