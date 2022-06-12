@@ -93,13 +93,8 @@ pub enum Statement<'a> {
 
     // Views
     CreateView(CreateViewStmt<'a>),
-    DropView {
-        if_exists: bool,
-        catalog: Option<Identifier<'a>>,
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
-    },
     AlterView(AlterViewStmt<'a>),
+    DropView(DropViewStmt<'a>),
 
     // User
     CreateUser(CreateUserStmt),
@@ -358,6 +353,14 @@ pub struct AlterViewStmt<'a> {
     pub database: Option<Identifier<'a>>,
     pub view: Identifier<'a>,
     pub query: Box<Query<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropViewStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub view: Identifier<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -899,12 +902,12 @@ impl<'a> Display for Statement<'a> {
                 write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
                 write!(f, " AS {query}")?;
             }
-            Statement::DropView {
+            Statement::DropView(DropViewStmt {
                 if_exists,
                 catalog,
                 database,
                 view,
-            } => {
+            }) => {
                 write!(f, "DROP VIEW ")?;
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;

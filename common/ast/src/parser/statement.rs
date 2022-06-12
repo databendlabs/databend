@@ -350,11 +350,13 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             DROP ~ VIEW ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_3
         },
-        |(_, _, opt_if_exists, (catalog, database, view))| Statement::DropView {
-            if_exists: opt_if_exists.is_some(),
-            catalog,
-            database,
-            view,
+        |(_, _, opt_if_exists, (catalog, database, view))| {
+            Statement::DropView(DropViewStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                view,
+            })
         },
     );
     let alter_view = map(

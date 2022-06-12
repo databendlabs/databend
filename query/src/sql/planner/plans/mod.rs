@@ -83,6 +83,7 @@ pub enum Plan {
     // Views
     CreateView(Box<CreateViewPlan>),
     AlterView(Box<AlterViewPlan>),
+    DropView(Box<DropViewPlan>),
 
     // DCL
     AlterUser(Box<AlterUserPlan>),

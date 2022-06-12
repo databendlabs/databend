@@ -42,6 +42,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::CreateTable(_)
                 | DfStatement::CreateView(_)
                 | DfStatement::AlterView(_)
+                | DfStatement::DropView(_)
                 | DfStatement::ShowMetrics(_)
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
@@ -94,6 +95,7 @@ impl InterpreterFactoryV2 {
             Plan::AlterView(alter_view) => {
                 AlterViewInterpreter::try_create(ctx, *alter_view.clone())
             }
+            Plan::DropView(drop_view) => DropViewInterpreter::try_create(ctx, *drop_view.clone()),
 
             // Users
             Plan::CreateUser(create_user) => {

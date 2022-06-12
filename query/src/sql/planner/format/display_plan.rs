@@ -42,6 +42,7 @@ impl Plan {
             // Views
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
             Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),
+            Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
 
             // Users
             Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),

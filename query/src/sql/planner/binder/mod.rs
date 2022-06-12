@@ -140,6 +140,10 @@ impl<'a> Binder {
                 let plan = self.bind_alter_view(stmt).await?;
                 Ok(plan)
             }
+            Statement::DropView(stmt) => {
+                let plan = self.bind_drop_view(stmt).await?;
+                Ok(plan)
+            }
 
             // Users
             Statement::CreateUser(stmt) => {

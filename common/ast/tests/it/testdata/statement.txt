@@ -957,6 +957,25 @@ AlterView(
 
 
 ---------- Input ----------
+drop view v;
+---------- Output ---------
+DROP VIEW v
+---------- AST ------------
+DropView(
+    DropViewStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v",
+            quote: None,
+            span: Ident(10..11),
+        },
+    },
+)
+
+
+---------- Input ----------
 rename table d.t to e.s;
 ---------- Output ---------
 RENAME TABLE d.t TO e.s
