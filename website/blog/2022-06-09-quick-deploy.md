@@ -1,6 +1,7 @@
 ---
 title: Deploying Databend on Your Laptop in Minutes
 description: A quick Databend deployment guide
+slug: deploy-databend-on-laptop
 authors:
 - name: Eric
   url: https://github.com/soyeric128
