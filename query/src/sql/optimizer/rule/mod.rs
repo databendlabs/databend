@@ -45,6 +45,7 @@ pub trait Rule {
 pub enum RuleID {
     PushDownFilterProject,
     PushDownFilterEvalScalar,
+    PushDownFilterJoin,
     EliminateEvalScalar,
     EliminateFilter,
     EliminateProject,
@@ -63,6 +64,7 @@ impl Display for RuleID {
             RuleID::ImplementHashJoin => write!(f, "ImplementHashJoin"),
             RuleID::PushDownFilterProject => write!(f, "PushDownFilterProject"),
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
+            RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
             RuleID::EliminateProject => write!(f, "EliminateProject"),

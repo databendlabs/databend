@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
+pub use scalar_common::*;
 
 use self::subquery::SubqueryRewriter;
 use super::plans::Plan;
