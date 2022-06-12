@@ -106,3 +106,20 @@ fn test_if_function() -> Result<()> {
 
     test_scalar_functions("if", &tests)
 }
+
+#[test]
+fn test_coalese_function() -> Result<()>  {
+    let tests = vec![
+        ScalarFunctionTest {
+            name: "coalesce_all_null",
+            columns: vec![
+                Arc::new(NullColumn::new(4)),
+                Arc::new(NullColumn::new(4)),
+                Arc::new(NullColumn::new(4)),
+            ],
+            expect: Arc::new(NullColumn::new(4)),
+            error: "",
+        },
+    ];
+    test_scalar_functions("coalesce", &tests)
+}
