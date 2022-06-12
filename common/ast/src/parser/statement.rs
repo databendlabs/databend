@@ -774,6 +774,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Fuse, rule! { FUSE }),
         value(Engine::Github, rule! { GITHUB }),
         value(Engine::View, rule! { VIEW }),
+        value(Engine::Random, rule! { RANDOM }),
     ));
 
     map(

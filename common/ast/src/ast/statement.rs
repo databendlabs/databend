@@ -285,6 +285,7 @@ pub enum Engine {
     Fuse,
     Github,
     View,
+    Random,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -472,6 +473,7 @@ impl Display for Engine {
             Engine::Fuse => write!(f, "FUSE"),
             Engine::Github => write!(f, "GITHUB"),
             Engine::View => write!(f, "VIEW"),
+            Engine::Random => write!(f, "RANDOM"),
         }
     }
 }
