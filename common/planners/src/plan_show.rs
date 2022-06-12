@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-use crate::plan_show_tab_stat::ShowTablesStatusPlan;
+use crate::plan_show_tables_status::ShowTablesStatusPlan;
 use crate::ShowDatabasesPlan;
 use crate::ShowEnginesPlan;
 use crate::ShowFunctionsPlan;

@@ -26,19 +26,29 @@ impl<'a> Binder {
         &mut self,
         stmt: &CreateViewStmt<'a>,
     ) -> Result<Plan> {
-        let catalog = self.ctx.get_current_catalog();
-        let database = stmt
-            .database
+        let CreateViewStmt {
+            if_not_exists,
+            catalog,
+            database,
+            view,
+            query,
+        } = stmt;
+
+        let tenant = self.ctx.get_tenant();
+        let catalog = catalog
+            .as_ref()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
             .as_ref()
             .map(|ident| ident.name.to_lowercase())
             .unwrap_or_else(|| self.ctx.get_current_database());
-
-        let viewname = stmt.view.name.to_lowercase();
-        let subquery = format!("{}", stmt.query);
+        let viewname = view.name.to_lowercase();
+        let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
-            if_not_exists: stmt.if_not_exists,
-            tenant: self.ctx.get_tenant(),
+            if_not_exists: *if_not_exists,
+            tenant,
             catalog,
             database,
             viewname,
@@ -51,18 +61,27 @@ impl<'a> Binder {
         &mut self,
         stmt: &AlterViewStmt<'a>,
     ) -> Result<Plan> {
-        let catalog = self.ctx.get_current_catalog();
-        let database = stmt
-            .database
+        let AlterViewStmt {
+            catalog,
+            database,
+            view,
+            query,
+        } = stmt;
+
+        let tenant = self.ctx.get_tenant();
+        let catalog = catalog
+            .as_ref()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
             .as_ref()
             .map(|ident| ident.name.to_lowercase())
             .unwrap_or_else(|| self.ctx.get_current_database());
-
-        let viewname = stmt.view.name.to_lowercase();
-        let subquery = format!("{}", stmt.query);
+        let viewname = view.name.to_lowercase();
+        let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
-            tenant: self.ctx.get_tenant(),
+            tenant,
             catalog,
             database,
             viewname,

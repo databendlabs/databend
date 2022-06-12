@@ -36,88 +36,19 @@ use crate::parser::token::Token;
 // SQL statement
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement<'a> {
+    Query(Box<Query<'a>>),
     Explain {
         kind: ExplainKind,
         query: Box<Statement<'a>>,
     },
-    Query(Box<Query<'a>>),
 
-    // Databases
-    ShowDatabases {
-        limit: Option<ShowLimit<'a>>,
-    },
-    ShowCreateDatabase {
-        database: Identifier<'a>,
-    },
-    CreateDatabase(CreateDatabaseStmt<'a>),
-    DropDatabase(DropDatabaseStmt<'a>),
-    AlterDatabase(AlterDatabaseStmt<'a>),
-    UseDatabase {
-        database: Identifier<'a>,
-    },
-
-    // Tables
-    ShowTables {
-        database: Option<Identifier<'a>>,
-        full: bool,
-        limit: Option<ShowLimit<'a>>,
-        with_history: bool,
-    },
-    ShowCreateTable {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-    },
-    ShowTablesStatus {
-        database: Option<Identifier<'a>>,
-        limit: Option<ShowLimit<'a>>,
-    },
-    CreateTable(CreateTableStmt<'a>),
-    // Describe schema of a table
-    // Like `SHOW CREATE TABLE`
-    Describe {
+    Insert {
         catalog: Option<Identifier<'a>>,
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
-    },
-    DropTable {
-        if_exists: bool,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        all: bool,
-    },
-    UndropTable {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-    },
-    AlterTable {
-        if_exists: bool,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        action: AlterTableAction<'a>,
-    },
-    RenameTable {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        new_table: Identifier<'a>,
-    },
-    TruncateTable {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        purge: bool,
-    },
-    OptimizeTable {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        action: Option<OptimizeTableAction>,
-    },
-
-    // Views
-    CreateView(CreateViewStmt<'a>),
-    AlterView(AlterViewStmt<'a>),
-    DropView {
-        if_exists: bool,
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
+        columns: Vec<Identifier<'a>>,
+        source: InsertSource<'a>,
+        overwrite: bool,
     },
 
     ShowSettings,
@@ -137,13 +68,38 @@ pub enum Statement<'a> {
         value: Literal,
     },
 
-    Insert {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        columns: Vec<Identifier<'a>>,
-        source: InsertSource<'a>,
-        overwrite: bool,
+    // Databases
+    ShowDatabases(ShowDatabasesStmt<'a>),
+    ShowCreateDatabase(ShowCreateDatabaseStmt<'a>),
+    CreateDatabase(CreateDatabaseStmt<'a>),
+    DropDatabase(DropDatabaseStmt<'a>),
+    AlterDatabase(AlterDatabaseStmt<'a>),
+    UseDatabase {
+        database: Identifier<'a>,
     },
+
+    // Tables
+    ShowTables(ShowTablesStmt<'a>),
+    ShowCreateTable(ShowCreateTableStmt<'a>),
+    DescribeTable(DescribeTableStmt<'a>),
+    ShowTablesStatus(ShowTablesStatusStmt<'a>),
+    CreateTable(CreateTableStmt<'a>),
+    DropTable(DropTableStmt<'a>),
+    UndropTable(UndropTableStmt<'a>),
+    AlterTable(AlterTableStmt<'a>),
+    RenameTable(RenameTableStmt<'a>),
+    TruncateTable(TruncateTableStmt<'a>),
+    OptimizeTable(OptimizeTableStmt<'a>),
+
+    // Views
+    CreateView(CreateViewStmt<'a>),
+    DropView {
+        if_exists: bool,
+        catalog: Option<Identifier<'a>>,
+        database: Option<Identifier<'a>>,
+        view: Identifier<'a>,
+    },
+    AlterView(AlterViewStmt<'a>),
 
     // User
     CreateUser(CreateUserStmt),
@@ -177,14 +133,15 @@ pub enum Statement<'a> {
         definition: Box<Expr<'a>>,
         description: Option<String>,
     },
-    // stages
+
+    // Stages
     CreateStage(CreateStageStmt),
     ShowStages,
     DropStage {
         if_exists: bool,
         stage_name: String,
     },
-    DescStage {
+    DescribeStage {
         stage_name: String,
     },
     RemoveStage {
@@ -204,11 +161,36 @@ pub enum ExplainKind {
     Pipeline,
 }
 
+#[derive(Debug, Clone, PartialEq)] // Databases
+pub struct ShowDatabasesStmt<'a> {
+    pub limit: Option<ShowLimit<'a>>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum InsertSource<'a> {
-    Streaming { format: String },
-    Values { values_tokens: &'a [Token<'a>] },
-    Select { query: Box<Query<'a>> },
+pub struct ShowCreateDatabaseStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)] // Tables
+pub struct ShowTablesStmt<'a> {
+    pub database: Option<Identifier<'a>>,
+    pub full: bool,
+    pub limit: Option<ShowLimit<'a>>,
+    pub with_history: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowCreateTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowTablesStatusStmt<'a> {
+    pub database: Option<Identifier<'a>>,
+    pub limit: Option<ShowLimit<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -238,6 +220,7 @@ pub struct AlterDatabaseStmt<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStmt<'a> {
     pub if_not_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub table: Identifier<'a>,
     pub source: Option<CreateTableSource<'a>>,
@@ -248,12 +231,79 @@ pub struct CreateTableStmt<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DescribeTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum CreateTableSource<'a> {
     Columns(Vec<ColumnDefinition<'a>>),
     Like {
+        catalog: Option<Identifier<'a>>,
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTableStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub all: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UndropTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTableStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub action: AlterTableAction<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenameTableStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub new_catalog: Option<Identifier<'a>>,
+    pub new_database: Option<Identifier<'a>>,
+    pub new_table: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TruncateTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub purge: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptimizeTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub action: Option<OptimizeTableAction>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum OptimizeTableAction {
+    All,
+    Purge,
+    Compact,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -296,6 +346,7 @@ pub enum DatabaseEngine {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateViewStmt<'a> {
     pub if_not_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub view: Identifier<'a>,
     pub query: Box<Query<'a>>,
@@ -303,6 +354,7 @@ pub struct CreateViewStmt<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlterViewStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub view: Identifier<'a>,
     pub query: Box<Query<'a>>,
@@ -338,14 +390,6 @@ pub enum AlterTableAction<'a> {
     RenameTable { new_table: Identifier<'a> },
     AlterTableClusterKey { cluster_by: Vec<Expr<'a>> },
     DropTableClusterKey,
-    // TODO(wuzhiguo): AddColumn etc
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum OptimizeTableAction {
-    All,
-    Purge,
-    Compact,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -368,6 +412,13 @@ pub struct CreateStageStmt {
 pub enum KillTarget {
     Query,
     Connection,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InsertSource<'a> {
+    Streaming { format: String },
+    Values { values_tokens: &'a [Token<'a>] },
+    Select { query: Box<Query<'a>> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -511,14 +562,75 @@ impl<'a> Display for Statement<'a> {
             Statement::Query(query) => {
                 write!(f, "{query}")?;
             }
-            Statement::ShowDatabases { limit } => {
+            Statement::Insert {
+                catalog,
+                database,
+                table,
+                columns,
+                source,
+                overwrite,
+            } => {
+                write!(f, "INSERT ")?;
+                if *overwrite {
+                    write!(f, "OVERWRITE ")?;
+                } else {
+                    write!(f, "INTO ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if !columns.is_empty() {
+                    write!(f, " (")?;
+                    write_comma_separated_list(f, columns)?;
+                    write!(f, ")")?;
+                }
+                match source {
+                    InsertSource::Streaming { format } => write!(f, " FORMAT {format}")?,
+                    InsertSource::Values { values_tokens } => write!(
+                        f,
+                        " VALUES {}",
+                        &values_tokens[0].source[values_tokens.first().unwrap().span.start
+                            ..values_tokens.last().unwrap().span.end]
+                    )?,
+                    InsertSource::Select { query } => write!(f, " {query}")?,
+                }
+            }
+            Statement::ShowSettings => {
+                write!(f, "SHOW SETTINGS")?;
+            }
+            Statement::ShowProcessList => {
+                write!(f, "SHOW PROCESSLIST")?;
+            }
+            Statement::ShowMetrics => {
+                write!(f, "SHOW METRICS")?;
+            }
+            Statement::ShowFunctions { limit } => {
+                write!(f, "SHOW FUNCTIONS")?;
+                if let Some(limit) = limit {
+                    write!(f, " {limit}")?;
+                }
+            }
+            Statement::KillStmt {
+                kill_target,
+                object_id,
+            } => {
+                write!(f, "KILL")?;
+                match *kill_target {
+                    KillTarget::Query => write!(f, " QUERY")?,
+                    KillTarget::Connection => write!(f, " CONNECTION")?,
+                }
+                write!(f, " {object_id}")?;
+            }
+            Statement::SetVariable { variable, value } => {
+                write!(f, "SET {variable} = {value}")?;
+            }
+            Statement::ShowDatabases(ShowDatabasesStmt { limit }) => {
                 write!(f, "SHOW DATABASES")?;
                 if let Some(limit) = limit {
                     write!(f, " {limit}")?;
                 }
             }
-            Statement::ShowCreateDatabase { database } => {
-                write!(f, "SHOW CREATE DATABASE {database}")?;
+            Statement::ShowCreateDatabase(ShowCreateDatabaseStmt { catalog, database }) => {
+                write!(f, "SHOW CREATE DATABASE ")?;
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
             }
             Statement::CreateDatabase(CreateDatabaseStmt {
                 if_not_exists,
@@ -568,12 +680,12 @@ impl<'a> Display for Statement<'a> {
             Statement::UseDatabase { database } => {
                 write!(f, "USE {database}")?;
             }
-            Statement::ShowTables {
+            Statement::ShowTables(ShowTablesStmt {
                 database,
                 full,
                 limit,
                 with_history,
-            } => {
+            }) => {
                 write!(f, "SHOW")?;
                 if *full {
                     write!(f, " FULL")?;
@@ -589,11 +701,26 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " {limit}")?;
                 }
             }
-            Statement::ShowCreateTable { database, table } => {
+            Statement::ShowCreateTable(ShowCreateTableStmt {
+                catalog,
+                database,
+                table,
+            }) => {
                 write!(f, "SHOW CREATE TABLE ")?;
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
             }
-            Statement::ShowTablesStatus { database, limit } => {
+            Statement::DescribeTable(DescribeTableStmt {
+                catalog,
+                database,
+                table,
+            }) => {
+                write!(f, "DESCRIBE ")?;
+                write_period_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter().chain(Some(table))),
+                )?;
+            }
+            Statement::ShowTablesStatus(ShowTablesStatusStmt { database, limit }) => {
                 write!(f, "SHOW TABLE STATUS")?;
                 if let Some(database) = database {
                     write!(f, " FROM {database}")?;
@@ -604,6 +731,7 @@ impl<'a> Display for Statement<'a> {
             }
             Statement::CreateTable(CreateTableStmt {
                 if_not_exists,
+                catalog,
                 database,
                 table,
                 source,
@@ -616,16 +744,23 @@ impl<'a> Display for Statement<'a> {
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
                 match source {
                     Some(CreateTableSource::Columns(columns)) => {
                         write!(f, " (")?;
                         write_comma_separated_list(f, columns)?;
                         write!(f, ")")?;
                     }
-                    Some(CreateTableSource::Like { database, table }) => {
+                    Some(CreateTableSource::Like {
+                        catalog,
+                        database,
+                        table,
+                    }) => {
                         write!(f, " LIKE ")?;
-                        write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                        write_period_separated_list(
+                            f,
+                            catalog.iter().chain(database).chain(Some(table)),
+                        )?;
                     }
                     None => (),
                 }
@@ -644,47 +779,42 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " AS {as_query}")?;
                 }
             }
-            Statement::Describe {
+            Statement::DropTable(DropTableStmt {
+                if_exists,
                 catalog,
                 database,
                 table,
-            } => {
-                write!(f, "DESCRIBE ")?;
-                write_period_separated_list(
-                    f,
-                    catalog.iter().chain(database.iter().chain(Some(table))),
-                )?;
-            }
-            Statement::DropTable {
-                if_exists,
-                database,
-                table,
                 all,
-            } => {
+            }) => {
                 write!(f, "DROP TABLE ")?;
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;
                 }
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
                 if *all {
                     write!(f, " ALL")?;
                 }
             }
-            Statement::UndropTable { database, table } => {
+            Statement::UndropTable(UndropTableStmt {
+                catalog,
+                database,
+                table,
+            }) => {
                 write!(f, "UNDROP TABLE ")?;
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
             }
-            Statement::AlterTable {
+            Statement::AlterTable(AlterTableStmt {
                 if_exists,
+                catalog,
                 database,
                 table,
                 action,
-            } => {
+            }) => {
                 write!(f, "ALTER TABLE ")?;
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;
                 }
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
                 match action {
                     AlterTableAction::RenameTable { new_table } => {
                         write!(f, " RENAME TO {new_table}")?;
@@ -698,39 +828,56 @@ impl<'a> Display for Statement<'a> {
                     }
                 }
             }
-            Statement::RenameTable {
+            Statement::RenameTable(RenameTableStmt {
+                if_exists,
+                catalog,
                 database,
                 table,
+                new_catalog,
+                new_database,
                 new_table,
-            } => {
+            }) => {
                 write!(f, "RENAME TABLE ")?;
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
-                write!(f, " TO {new_table}")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                write!(f, " TO ")?;
+                write_period_separated_list(
+                    f,
+                    new_catalog
+                        .iter()
+                        .chain(new_database)
+                        .chain(Some(new_table)),
+                )?;
             }
-            Statement::TruncateTable {
+            Statement::TruncateTable(TruncateTableStmt {
+                catalog,
                 database,
                 table,
                 purge,
-            } => {
+            }) => {
                 write!(f, "TRUNCATE TABLE ")?;
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
                 if *purge {
                     write!(f, " PURGE")?;
                 }
             }
-            Statement::OptimizeTable {
+            Statement::OptimizeTable(OptimizeTableStmt {
+                catalog,
                 database,
                 table,
                 action,
-            } => {
+            }) => {
                 write!(f, "OPTIMIZE TABLE ")?;
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
                 if let Some(action) = action {
                     write!(f, " {action}")?;
                 }
             }
             Statement::CreateView(CreateViewStmt {
                 if_not_exists,
+                catalog,
                 database,
                 view,
                 query,
@@ -739,20 +886,22 @@ impl<'a> Display for Statement<'a> {
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
-                write_period_separated_list(f, database.iter().chain(Some(view)))?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
                 write!(f, " AS {query}")?;
             }
             Statement::AlterView(AlterViewStmt {
+                catalog,
                 database,
                 view,
                 query,
             }) => {
                 write!(f, "ALTER VIEW ")?;
-                write_period_separated_list(f, database.iter().chain(Some(view)))?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
                 write!(f, " AS {query}")?;
             }
             Statement::DropView {
                 if_exists,
+                catalog,
                 database,
                 view,
             } => {
@@ -760,66 +909,7 @@ impl<'a> Display for Statement<'a> {
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;
                 }
-                write_period_separated_list(f, database.iter().chain(Some(view)))?;
-            }
-            Statement::ShowSettings => {
-                write!(f, "SHOW SETTINGS")?;
-            }
-            Statement::ShowProcessList => {
-                write!(f, "SHOW PROCESSLIST")?;
-            }
-            Statement::ShowMetrics => {
-                write!(f, "SHOW METRICS")?;
-            }
-            Statement::ShowFunctions { limit } => {
-                write!(f, "SHOW FUNCTIONS")?;
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
-                }
-            }
-            Statement::KillStmt {
-                kill_target,
-                object_id,
-            } => {
-                write!(f, "KILL")?;
-                match *kill_target {
-                    KillTarget::Query => write!(f, " QUERY")?,
-                    KillTarget::Connection => write!(f, " CONNECTION")?,
-                }
-                write!(f, " {object_id}")?;
-            }
-            Statement::SetVariable { variable, value } => {
-                write!(f, "SET {variable} = {value}")?;
-            }
-            Statement::Insert {
-                database,
-                table,
-                columns,
-                source,
-                overwrite,
-            } => {
-                write!(f, "INSERT ")?;
-                if *overwrite {
-                    write!(f, "OVERWRITE ")?;
-                } else {
-                    write!(f, "INTO ")?;
-                }
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
-                if !columns.is_empty() {
-                    write!(f, " (")?;
-                    write_comma_separated_list(f, columns)?;
-                    write!(f, ")")?;
-                }
-                match source {
-                    InsertSource::Streaming { format } => write!(f, " FORMAT {format}")?,
-                    InsertSource::Values { values_tokens } => write!(
-                        f,
-                        " VALUES {}",
-                        &values_tokens[0].source[values_tokens.first().unwrap().span.start
-                            ..values_tokens.last().unwrap().span.end]
-                    )?,
-                    InsertSource::Select { query } => write!(f, " {query}")?,
-                }
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
             }
             Statement::CreateUser(CreateUserStmt {
                 if_not_exists,
@@ -996,7 +1086,7 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " PATTERN = '{pattern}'")?;
                 }
             }
-            Statement::DescStage { stage_name } => {
+            Statement::DescribeStage { stage_name } => {
                 write!(f, "DESC STAGE {stage_name}")?;
             }
         }

@@ -67,40 +67,49 @@ impl<'a> Binder {
         &mut self,
         stmt: &CreateStageStmt,
     ) -> Result<Plan> {
-        let mut stage_info = match stmt.location.is_empty() {
+        let CreateStageStmt {
+            if_not_exists,
+            stage_name,
+            location,
+            credential_options,
+            encryption_options,
+            file_format_options,
+            on_error,
+            size_limit,
+            validation_mode: _,
+            comments: _,
+        } = stmt;
+
+        let mut stage_info = match location.is_empty() {
             true => UserStageInfo {
                 stage_type: StageType::Internal,
                 ..Default::default()
             },
             false => {
-                let (stage_storage, _) = parse_uri_location(
-                    &stmt.location,
-                    &stmt.credential_options,
-                    &stmt.encryption_options,
-                )?;
+                let (stage_storage, _) =
+                    parse_uri_location(location, credential_options, encryption_options)?;
 
                 stage_storage
             }
         };
-        stage_info.stage_name = stmt.stage_name.clone();
+        stage_info.stage_name = stage_name.clone();
 
-        if !stmt.file_format_options.is_empty() {
-            stage_info.file_format_options =
-                parse_copy_file_format_options(&stmt.file_format_options)?;
+        if !file_format_options.is_empty() {
+            stage_info.file_format_options = parse_copy_file_format_options(file_format_options)?;
         }
         // Copy options.
         {
             // on_error.
-            if !stmt.on_error.is_empty() {
+            if !on_error.is_empty() {
                 stage_info.copy_options.on_error =
-                    OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
+                    OnErrorMode::from_str(on_error).map_err(ErrorCode::SyntaxException)?;
             }
 
-            stage_info.copy_options.size_limit = stmt.size_limit;
+            stage_info.copy_options.size_limit = *size_limit;
         }
 
         Ok(Plan::CreateStage(Box::new(CreateUserStagePlan {
-            if_not_exists: stmt.if_not_exists,
+            if_not_exists: *if_not_exists,
             tenant: self.ctx.get_tenant(),
             user_stage_info: stage_info,
         })))

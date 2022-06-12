@@ -51,10 +51,10 @@ error:
 truncate table a.b.c.d
 ---------- Output ---------
 error: 
-  --> SQL:1:19
+  --> SQL:1:21
   |
 1 | truncate table a.b.c.d
-  |                   ^ expected `PURGE` or `;`
+  |                     ^ expected `PURGE` or `;`
 
 
 ---------- Input ----------
