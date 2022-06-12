@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
@@ -66,6 +67,12 @@ impl DataType for DateType {
 
     fn default_value(&self) -> DataValue {
         DataValue::Int64(0)
+    }
+
+    fn random_value(&self) -> DataValue {
+        let mut rng = rand::rngs::SmallRng::from_entropy();
+        let date = rng.gen_range(DATE_MIN..=DATE_MAX) as i64;
+        DataValue::Int64(date)
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
