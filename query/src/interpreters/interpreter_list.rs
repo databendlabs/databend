@@ -50,16 +50,35 @@ impl Interpreter for ListInterpreter {
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let files = list_files(
-            self.ctx.clone(),
-            self.plan.stage.clone(),
-            self.plan.path.clone(),
-            self.plan.pattern.clone(),
-        )
-        .await?;
-        tracing::info!("list file list:{:?}, pattern:{}", &files, self.plan.pattern);
+        let plan = &self.plan;
+        let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
 
-        let block = DataBlock::create(self.plan.schema(), vec![Series::from_data(files)]);
+        let names: Vec<String> = files.iter().map(|file| file.path.clone()).collect();
+        let sizes: Vec<u64> = files.iter().map(|file| file.size).collect();
+        let md5s: Vec<Option<Vec<u8>>> = files
+            .iter()
+            .map(|file| file.md5.as_ref().map(|f| f.to_string().into_bytes()))
+            .collect();
+        let last_modifieds: Vec<String> = files
+            .iter()
+            .map(|file| {
+                file.last_modified
+                    .format("%Y-%m-%d %H:%M:%S.%3f %z")
+                    .to_string()
+            })
+            .collect();
+        let creators: Vec<Option<Vec<u8>>> = files
+            .iter()
+            .map(|file| file.creator.as_ref().map(|c| c.to_string().into_bytes()))
+            .collect();
+
+        let block = DataBlock::create(self.plan.schema(), vec![
+            Series::from_data(names),
+            Series::from_data(sizes),
+            Series::from_data(md5s),
+            Series::from_data(last_modifieds),
+            Series::from_data(creators),
+        ]);
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

@@ -1,0 +1,30 @@
+select * from numbers(1)
+----
+Project: [number]
+    PhysicalScan: default.system.numbers
+
+
+select * from (select * from numbers(1)) as t1 where number = 1
+----
+Project: [number]
+    Filter: [number = 1]
+        PhysicalScan: default.system.numbers
+
+
+# `b = 1` can not be pushed down
+select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1 and b = 1
+----
+Project: [number,b]
+    Filter: [a = 1, b = 1]
+        EvalScalar: [+(number, 1)]
+            PhysicalScan: default.system.numbers
+
+
+select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1
+----
+Project: [number,b]
+    EvalScalar: [+(number, 1)]
+        Filter: [a = 1]
+            PhysicalScan: default.system.numbers
+
+

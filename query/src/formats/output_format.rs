@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::str::FromStr;
 
 use common_datablocks::DataBlock;
@@ -19,12 +20,18 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
+use strum_macros::EnumIter;
 
-use super::output_format_ndjson::NDJsonOutputFormat;
+use super::output_format_ndjson::JsonEachRowOutputFormat;
 use super::output_format_parquet::ParquetOutputFormat;
 use super::output_format_values::ValuesOutputFormat;
 use crate::formats::output_format_csv::CSVOutputFormat;
+use crate::formats::output_format_csv::CSVWithNamesAndTypesOutputFormat;
+use crate::formats::output_format_csv::CSVWithNamesOutputFormat;
 use crate::formats::output_format_csv::TSVOutputFormat;
+use crate::formats::output_format_csv::TSVWithNamesAndTypesOutputFormat;
+use crate::formats::output_format_csv::TSVWithNamesOutputFormat;
+use crate::formats::FormatFactory;
 pub trait OutputFormat: Send {
     fn serialize_block(
         &mut self,
@@ -34,25 +41,88 @@ pub trait OutputFormat: Send {
         unimplemented!()
     }
 
+    fn serialize_prefix(&self, _format: &FormatSettings) -> Result<Vec<u8>> {
+        Ok(vec![])
+    }
+
     fn finalize(&mut self) -> Result<Vec<u8>>;
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
+pub struct HeaderConfig {
+    pub with_name: bool,
+    pub with_type: bool,
+}
+
+impl HeaderConfig {
+    pub fn new(with_name: bool, with_type: bool) -> Self {
+        Self {
+            with_name,
+            with_type,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
 pub enum OutputFormatType {
-    Tsv,
-    Csv,
+    CSV,
+    CSVWithNames,
+    CSVWithNamesAndTypes,
+    TSV,
+    TSVWithNames,
+    TSVWithNamesAndTypes,
     Parquet,
-    NDJson,
+    JsonEachRow,
     Values,
+}
+
+impl fmt::Display for OutputFormatType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl OutputFormatType {
+    pub fn with_names(&self) -> Option<OutputFormatType> {
+        match self {
+            OutputFormatType::CSV => Some(OutputFormatType::CSVWithNames),
+            OutputFormatType::TSV => Some(OutputFormatType::TSVWithNames),
+            _ => None,
+        }
+    }
+
+    pub fn with_names_and_types(&self) -> Option<OutputFormatType> {
+        match self {
+            OutputFormatType::CSV => Some(OutputFormatType::CSVWithNamesAndTypes),
+            OutputFormatType::TSV => Some(OutputFormatType::TSVWithNamesAndTypes),
+            _ => None,
+        }
+    }
+
+    pub fn base_alias(&self) -> Vec<String> {
+        match self {
+            OutputFormatType::TSV => vec!["TabSeparated".to_string()],
+            OutputFormatType::JsonEachRow => vec!["NDJson".to_string()],
+            _ => vec![],
+        }
+    }
 }
 
 impl OutputFormatType {
     pub fn create_format(&self, schema: DataSchemaRef) -> Box<dyn OutputFormat> {
         match self {
-            OutputFormatType::Tsv => Box::new(TSVOutputFormat::create(schema)),
-            OutputFormatType::Csv => Box::new(CSVOutputFormat::create(schema)),
+            OutputFormatType::TSV => Box::new(TSVOutputFormat::create(schema)),
+            OutputFormatType::TSVWithNames => Box::new(TSVWithNamesOutputFormat::create(schema)),
+            OutputFormatType::TSVWithNamesAndTypes => {
+                Box::new(TSVWithNamesAndTypesOutputFormat::create(schema))
+            }
+            OutputFormatType::CSV => Box::new(CSVOutputFormat::create(schema)),
+            OutputFormatType::CSVWithNames => Box::new(CSVWithNamesOutputFormat::create(schema)),
+            OutputFormatType::CSVWithNamesAndTypes => {
+                Box::new(CSVWithNamesAndTypesOutputFormat::create(schema))
+            }
             OutputFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema)),
-            OutputFormatType::NDJson => Box::new(NDJsonOutputFormat::create(schema)),
+            OutputFormatType::JsonEachRow => Box::new(JsonEachRowOutputFormat::create(schema)),
             OutputFormatType::Values => Box::new(ValuesOutputFormat::create(schema)),
         }
     }
@@ -60,22 +130,13 @@ impl OutputFormatType {
 
 impl Default for OutputFormatType {
     fn default() -> Self {
-        Self::Tsv
+        Self::TSV
     }
 }
 
 impl FromStr for OutputFormatType {
     type Err = ErrorCode;
     fn from_str(s: &str) -> std::result::Result<Self, ErrorCode> {
-        match s.to_uppercase().as_str() {
-            "TSV" => Ok(OutputFormatType::Tsv),
-            "CSV" => Ok(OutputFormatType::Csv),
-            "NDJSON" | "JSONEACHROW" => Ok(OutputFormatType::NDJson),
-            "PARQUET" => Ok(OutputFormatType::Parquet),
-            "VALUES" => Ok(OutputFormatType::Values),
-            _ => Err(ErrorCode::StrParseError(
-                "Unknown file format type, must be one of { TSV, CSV, PARQUET, Values, NDJSON | JSONEACHROW }".to_string(),
-            )),
-        }
+        FormatFactory::instance().get_output(s)
     }
 }

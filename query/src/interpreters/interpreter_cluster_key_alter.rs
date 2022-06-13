@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
+use common_planners::validate_clustering;
 use common_planners::validate_expression;
 use common_planners::AlterTableClusterKeyPlan;
 use common_streams::DataBlockStream;
@@ -55,34 +56,34 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
             .get_current_session()
             .validate_privilege(
                 &GrantObject::Table(
-                    plan.catalog_name.clone(),
-                    plan.database_name.clone(),
-                    plan.table_name.clone(),
+                    plan.catalog.clone(),
+                    plan.database.clone(),
+                    plan.table.clone(),
                 ),
                 UserPrivilegeType::Alter,
             )
             .await?;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(&plan.catalog_name)?;
+        let catalog = self.ctx.get_catalog(&plan.catalog)?;
 
         let table = catalog
-            .get_table(tenant.as_str(), &plan.database_name, &plan.table_name)
+            .get_table(tenant.as_str(), &plan.database, &plan.table)
             .await?;
 
         let schema = table.schema();
         let cluster_keys = plan.cluster_keys.clone();
         // Let's validate the expressions firstly.
-        // TODO(zhyass): Not all expressions are valid for cluster key.
         for expr in cluster_keys.iter() {
             validate_expression(expr, &schema)?;
+            validate_clustering(expr)?;
         }
 
         let cluster_key_vec: Vec<String> = cluster_keys.iter().map(|e| e.column_name()).collect();
         let cluster_key_str = format!("({})", cluster_key_vec.join(", "));
 
         table
-            .alter_table_cluster_keys(self.ctx.clone(), &self.plan.catalog_name, cluster_key_str)
+            .alter_table_cluster_keys(self.ctx.clone(), &self.plan.catalog, cluster_key_str)
             .await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

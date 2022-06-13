@@ -22,6 +22,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableMeta;
+use common_planners::validate_clustering;
 use common_planners::validate_expression;
 use common_planners::CreateTablePlan;
 use common_planners::PlanNode;
@@ -99,8 +100,8 @@ impl AnalyzableStatement for DfCreateTable {
         let mut cluster_keys = vec![];
         for k in self.cluster_keys.iter() {
             let expr = expression_analyzer.analyze_sync(k)?;
-            // TODO(zhyass): Not all expressions are valid for cluster key.
             validate_expression(&expr, &table_meta.schema)?;
+            validate_clustering(&expr)?;
             cluster_keys.push(expr);
         }
 

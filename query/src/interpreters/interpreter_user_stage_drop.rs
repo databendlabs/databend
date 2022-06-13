@@ -54,7 +54,12 @@ impl Interpreter for DropUserStageInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
 
-        if let Ok(stage) = user_mgr.get_stage(&tenant, plan.name.as_str()).await {
+        let stage = user_mgr.get_stage(&tenant, &plan.name).await;
+        user_mgr
+            .drop_stage(&tenant, &plan.name, plan.if_exists)
+            .await?;
+
+        if let Ok(stage) = stage {
             if matches!(&stage.stage_type, StageType::Internal) {
                 let op = StageSource::get_op(&self.ctx, &stage).await?;
                 let absolute_path = format!("/stage/{}/", stage.stage_name);
@@ -64,11 +69,8 @@ impl Interpreter for DropUserStageInterpreter {
                     stage.stage_name
                 );
             }
-        }
+        };
 
-        user_mgr
-            .drop_stage(&tenant, plan.name.as_str(), plan.if_exists)
-            .await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

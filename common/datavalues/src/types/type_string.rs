@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
+use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
@@ -56,6 +57,17 @@ impl DataType for StringType {
 
     fn default_value(&self) -> DataValue {
         DataValue::String(vec![])
+    }
+
+    fn random_value(&self) -> DataValue {
+        let rng = rand::rngs::SmallRng::from_entropy();
+        // randomly generate 5 characters.
+        let v = rng
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(5)
+            .map(u8::from)
+            .collect::<Vec<_>>();
+        DataValue::String(v)
     }
 
     fn create_constant_column(

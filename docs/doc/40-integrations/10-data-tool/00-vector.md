@@ -49,7 +49,7 @@ database = "mydatabase" #Your database
 // highlight-next-line
 table = "mytable" #Your table.
 // highlight-next-line
-endpoint = "http://localhost:8000/clickhouse" #Databend ClickHouse REST API: http://{http_handler_host}:{http_handler_port}/clickhouse
+endpoint = "http://localhost:8124/" #Databend ClickHouse REST API: http://{clickhouse_http_handler_host}:{clickhouse_http_handler_port}/
 compression = "gzip"
 ```
 

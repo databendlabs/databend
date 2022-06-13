@@ -77,7 +77,7 @@ impl InsertInterpreter {
         let settings = self.ctx.get_settings();
         let table = self
             .ctx
-            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
+            .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
         let mut pipeline = self.create_new_pipeline()?;
@@ -182,7 +182,7 @@ impl InsertInterpreter {
         drop(executor);
 
         let overwrite = self.plan.overwrite;
-        let catalog_name = self.plan.catalog_name.clone();
+        let catalog_name = self.plan.catalog.clone();
         let context = self.ctx.clone();
         let append_entries = self.ctx.consume_precommit_blocks();
 
@@ -249,9 +249,9 @@ impl Interpreter for InsertInterpreter {
             .get_current_session()
             .validate_privilege(
                 &GrantObject::Table(
-                    plan.catalog_name.clone(),
-                    plan.database_name.clone(),
-                    plan.table_name.clone(),
+                    plan.catalog.clone(),
+                    plan.database.clone(),
+                    plan.table.clone(),
                 ),
                 UserPrivilegeType::Insert,
             )
@@ -259,7 +259,7 @@ impl Interpreter for InsertInterpreter {
 
         let table = self
             .ctx
-            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
+            .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
         let cluster_keys = table.cluster_keys();
@@ -268,12 +268,8 @@ impl Interpreter for InsertInterpreter {
 
         let append_logs = match &self.plan.source {
             InsertInputSource::SelectPlan(plan_node) => {
-                let with_plan = InsertWithPlan::new(
-                    &self.ctx,
-                    &self.plan.schema,
-                    plan_node,
-                    &plan.catalog_name,
-                );
+                let with_plan =
+                    InsertWithPlan::new(&self.ctx, &self.plan.schema, plan_node, &plan.catalog);
                 with_plan.execute(table.as_ref()).await
             }
 
@@ -321,7 +317,7 @@ impl Interpreter for InsertInterpreter {
         table
             .commit_insertion(
                 self.ctx.clone(),
-                &self.plan.catalog_name,
+                &self.plan.catalog,
                 append_logs.try_collect().await?,
                 self.plan.overwrite,
             )

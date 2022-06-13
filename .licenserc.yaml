@@ -34,5 +34,6 @@ header:
     - "**/*.toml"
     - "**/*.lock"
     - "**/*.yapf"
+    - "**/*.test"
 
   comment: on-failure

@@ -128,6 +128,41 @@ fn non_reserved_keyword(
     }
 }
 
+/// Parse one two two idents seperated by a peroid, fulfilling from the right.
+///
+/// Example: `table.column`
+pub fn peroid_separated_idents_1_to_2<'a>(
+    i: Input<'a>,
+) -> IResult<'a, (Option<Identifier>, Identifier)> {
+    map(
+        rule! {
+           #ident ~ ("." ~ #ident)?
+        },
+        |res| match res {
+            (ident1, None) => (None, ident1),
+            (ident0, Some((_, ident1))) => (Some(ident0), ident1),
+        },
+    )(i)
+}
+
+/// Parse one two three idents seperated by a peroid, fulfilling from the right.
+///
+/// Example: `db.table.column`
+pub fn peroid_separated_idents_1_to_3<'a>(
+    i: Input<'a>,
+) -> IResult<'a, (Option<Identifier>, Option<Identifier>, Identifier)> {
+    map(
+        rule! {
+            #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
+        },
+        |res| match res {
+            (ident2, None) => (None, None, ident2),
+            (ident1, Some((_, ident2, None))) => (None, Some(ident1), ident2),
+            (ident0, Some((_, ident1, Some((_, ident2))))) => (Some(ident0), Some(ident1), ident2),
+        },
+    )(i)
+}
+
 pub fn comma_separated_list0<'a, T>(
     item: impl FnMut(Input<'a>) -> IResult<'a, T>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {

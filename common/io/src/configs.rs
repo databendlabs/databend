@@ -20,6 +20,8 @@ use serde::Serialize;
 
 use super::utils::mask_string;
 
+pub static AWS_S3_ENDPOINT: &str = "https://s3.amazonaws.com";
+
 /// Config for storage backend.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct StorageConfig {
@@ -112,7 +114,7 @@ pub struct StorageS3Config {
 impl Default for StorageS3Config {
     fn default() -> Self {
         StorageS3Config {
-            endpoint_url: "https://s3.amazonaws.com".to_string(),
+            endpoint_url: AWS_S3_ENDPOINT.to_string(),
             region: "".to_string(),
             bucket: "".to_string(),
             access_key_id: "".to_string(),
