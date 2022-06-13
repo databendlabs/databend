@@ -48,7 +48,7 @@ impl<'a> DfParser<'a> {
                     Some(source) => match source.body {
                         SetExpr::Select(_) => Ok(InsertSource::Select(source)),
                         SetExpr::Streams(stream) => Ok(InsertSource::StreamFormat(
-                            Self::get_stream_format_str(&self, &stream)?,
+                            self.get_stream_format_str(&stream)?,
                         )),
                         _ => Err(ParserError::ParserError(
                             "Insert must be have values or select source.".to_string(),

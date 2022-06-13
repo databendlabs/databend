@@ -16,19 +16,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_stream::stream;
-
 use common_exception::Result;
-
-
-
-
 use common_planners::PlanNode;
-
 use common_streams::SendableDataBlockStream;
-
 use common_tracing::tracing;
 use futures::StreamExt;
-
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -48,7 +40,6 @@ use crate::pipelines::new::SourcePipeBuilder;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
-
 use crate::sql::PlanParser;
 
 #[derive(Deserialize)]
@@ -148,7 +139,7 @@ pub async fn clickhouse_handler_post(
 
     let mut sql = params.query.unwrap_or_default();
     sql.push_str(body.into_string().await?.as_str());
-    
+
     let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
         .await
         .map_err(BadRequest)?;
@@ -158,7 +149,6 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(InternalServerError)
 }
-
 
 pub fn clickhouse_router() -> impl Endpoint {
     Route::new()

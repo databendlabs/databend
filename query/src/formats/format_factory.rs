@@ -23,6 +23,7 @@ use common_io::prelude::FormatSettings;
 use once_cell::sync::Lazy;
 use strum::IntoEnumIterator;
 
+use super::format_tsv::TsvInputFormat;
 use crate::formats::format::InputFormat;
 use crate::formats::format_csv::CsvInputFormat;
 use crate::formats::format_parquet::ParquetInputFormat;
@@ -40,6 +41,7 @@ static FORMAT_FACTORY: Lazy<Arc<FormatFactory>> = Lazy::new(|| {
     let mut format_factory = FormatFactory::create();
 
     CsvInputFormat::register(&mut format_factory);
+    TsvInputFormat::register(&mut format_factory);
     ParquetInputFormat::register(&mut format_factory);
 
     format_factory.register_outputs();

@@ -49,14 +49,8 @@ impl PlanParser {
         let (statements, _) = DfParser::parse_sql(query, ctx.get_current_session().get_type())?;
         let mut format = None;
         if !statements.is_empty() {
-            match &statements[0] {
-                DfStatement::Query(q) => {
-                    format = q.format.clone();
-                }
-                DfStatement::InsertQuery(q) => {
-                    format = q.format.clone();
-                }
-                _ => {}
+            if let DfStatement::Query(q) = &statements[0] {
+                format = q.format.clone();
             }
         };
         let plan = PlanParser::build_plan(statements, ctx).await?;

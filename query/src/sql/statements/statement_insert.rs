@@ -93,8 +93,13 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
         let input_source = match &self.source {
             InsertSource::Empty => self.analyze_insert_without_source().await,
             InsertSource::StreamFormat(stream_format) => {
-                self.analyze_stream_format(ctx.clone(), *stream_format, &schema, self.format.clone())
-                    .await
+                self.analyze_stream_format(
+                    ctx.clone(),
+                    *stream_format,
+                    &schema,
+                    self.format.clone(),
+                )
+                .await
             }
             InsertSource::Select(select) => self.analyze_insert_select(ctx.clone(), select).await,
         }?;
@@ -167,49 +172,41 @@ impl<'a> DfInsertStatement<'a> {
         let settings = ctx.get_format_settings()?;
         // TODO migrate format into format factory
         let format = format.map(|v| v.to_uppercase());
-        match format.as_ref().map(|v| v.as_str()) {
-            Some("VALUES") | None =>  {
-                    let bytes = stream_str.as_bytes();
-                    let cursor = Cursor::new(bytes);
-                    let mut reader = CheckpointReader::new(BufferReader::new(cursor));
-                    let source = ValueSource::new(ctx.clone(), schema.clone());
-                    let block = source.read(&mut reader).await?;
-                    Ok(InsertInputSource::Values(InsertValueBlock { block }))
-            },
+        match format.as_deref() {
+            Some("VALUES") | None => {
+                let bytes = stream_str.as_bytes();
+                let cursor = Cursor::new(bytes);
+                let mut reader = CheckpointReader::new(BufferReader::new(cursor));
+                let source = ValueSource::new(ctx.clone(), schema.clone());
+                let block = source.read(&mut reader).await?;
+                Ok(InsertInputSource::Values(InsertValueBlock { block }))
+            }
             Some("JSONEACHROW") => {
                 let builder = NDJsonSourceBuilder::create(schema.clone(), settings);
-                let cursor = futures::io::Cursor::new(
-                    stream_str.as_bytes()
-                );
+                let cursor = futures::io::Cursor::new(stream_str.as_bytes());
                 let mut source = builder.build(cursor)?;
                 let mut blocks = Vec::new();
-                loop {
-                    match source.read().await? {
-                        Some(v) => blocks.push(v),
-                        None => break,
-                    }
+                while let Some(v) = source.read().await? {
+                    blocks.push(v);
                 }
                 let block = DataBlock::concat_blocks(&blocks)?;
                 Ok(InsertInputSource::Values(InsertValueBlock { block }))
-            },
-            
+            }
+
             // format factory
             Some(name) => {
                 let input_format =
                     FormatFactory::instance().get_input(name, schema.clone(), settings)?;
-                
+
                 let data_slice = stream_str.as_bytes();
                 let mut input_state = input_format.create_state();
-                let skip_size = input_format
-                        .skip_header(data_slice, &mut input_state)?;
-                        
-                let _ = input_format
-                        .read_buf(&data_slice[skip_size..], &mut input_state)?;
+                let skip_size = input_format.skip_header(data_slice, &mut input_state)?;
+
+                let _ = input_format.read_buf(&data_slice[skip_size..], &mut input_state)?;
                 let blocks = input_format.deserialize_data(&mut input_state)?;
                 let block = DataBlock::concat_blocks(&blocks)?;
                 Ok(InsertInputSource::Values(InsertValueBlock { block }))
             }
-            
         }
     }
 
