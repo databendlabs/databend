@@ -54,7 +54,6 @@ impl Planner {
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef)> {
         // Step 1: parse SQL text into AST
         let tokens = tokenize_sql(sql)?;
-
         let backtrace = Backtrace::new();
         let stmts = parse_sql(&tokens, &backtrace)?;
         if stmts.len() > 1 {

@@ -137,7 +137,7 @@ impl<'a> DfParser<'a> {
 
                     let rename = DfAlterTable {
                         if_exists,
-                        table_name,
+                        table: table_name,
                         action: AlterTableAction::RenameTable(new_table_name),
                     };
 
@@ -152,7 +152,7 @@ impl<'a> DfParser<'a> {
 
                     let cluster_by = DfAlterTable {
                         if_exists,
-                        table_name,
+                        table: table_name,
                         action: AlterTableAction::AlterTableClusterKey(cluster_keys),
                     };
 
@@ -165,7 +165,7 @@ impl<'a> DfParser<'a> {
                     {
                         Ok(DfStatement::AlterTable(DfAlterTable {
                             if_exists,
-                            table_name,
+                            table: table_name,
                             action: AlterTableAction::DropTableClusterKey,
                         }))
                     } else {

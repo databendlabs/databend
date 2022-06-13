@@ -22,9 +22,12 @@ use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::CreateRolePlan;
 use common_planners::DescribeUserStagePlan;
+use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
+pub use scalar_common::*;
 
 use self::subquery::SubqueryRewriter;
 use super::plans::Plan;
@@ -107,38 +110,11 @@ impl<'a> Binder {
                 })
             }
 
-            Statement::CreateTable(stmt) => {
-                let plan = self.bind_create_table(stmt).await?;
-                Ok(plan)
-            }
+            Statement::ShowMetrics => Ok(Plan::ShowMetrics),
+            Statement::ShowProcessList => Ok(Plan::ShowProcessList),
+            Statement::ShowSettings => Ok(Plan::ShowSettings),
 
-            Statement::CreateStage(stmt) => {
-                let plan = self.bind_create_stage(stmt).await?;
-                Ok(plan)
-            }
-
-            Statement::ShowStages => Ok(Plan::ShowStages),
-
-            Statement::DropStage {
-                stage_name,
-                if_exists,
-            } => Ok(Plan::DropStage(Box::new(DropUserStagePlan {
-                if_exists: *if_exists,
-                name: stage_name.clone(),
-            }))),
-            Statement::DescStage { stage_name } => {
-                Ok(Plan::DescStage(Box::new(DescribeUserStagePlan {
-                    name: stage_name.clone(),
-                })))
-            }
-            Statement::ListStage { location, pattern } => {
-                self.bind_list_stage(location, pattern).await
-            }
-
-            Statement::RemoveStage { location, pattern } => {
-                self.bind_remove_stage(location, pattern).await
-            }
-
+            // Databases
             Statement::CreateDatabase(stmt) => {
                 let plan = self.bind_create_database(stmt).await?;
                 Ok(plan)
@@ -152,19 +128,27 @@ impl<'a> Binder {
                 Ok(plan)
             }
 
-            Statement::ShowMetrics => Ok(Plan::ShowMetrics),
-            Statement::ShowProcessList => Ok(Plan::ShowProcessList),
-            Statement::ShowSettings => Ok(Plan::ShowSettings),
-            Statement::AlterUser {
-                user,
-                auth_option,
-                role_options,
-            } => {
-                let plan = self
-                    .bind_alter_user(user, auth_option, role_options)
-                    .await?;
+            // Tables
+            Statement::CreateTable(stmt) => {
+                let plan = self.bind_create_table(stmt).await?;
                 Ok(plan)
             }
+
+            // Views
+            Statement::CreateView(stmt) => {
+                let plan = self.bind_create_view(stmt).await?;
+                Ok(plan)
+            }
+            Statement::AlterView(stmt) => {
+                let plan = self.bind_alter_view(stmt).await?;
+                Ok(plan)
+            }
+            Statement::DropView(stmt) => {
+                let plan = self.bind_drop_view(stmt).await?;
+                Ok(plan)
+            }
+
+            // Users
             Statement::CreateUser(stmt) => {
                 let plan = self.bind_create_user(stmt).await?;
                 Ok(plan)
@@ -176,13 +160,62 @@ impl<'a> Binder {
                 };
                 Ok(Plan::DropUser(Box::new(plan)))
             }
-            Statement::CreateView(stmt) => {
-                let plan = self.bind_create_view(stmt).await?;
+            Statement::AlterUser {
+                user,
+                auth_option,
+                role_options,
+            } => {
+                let plan = self
+                    .bind_alter_user(user, auth_option, role_options)
+                    .await?;
                 Ok(plan)
             }
-            Statement::AlterView(stmt) => {
-                let plan = self.bind_alter_view(stmt).await?;
+
+            // Roles
+            Statement::CreateRole {
+                if_not_exists,
+                role_name,
+            } => {
+                let plan = CreateRolePlan {
+                    if_not_exists: *if_not_exists,
+                    role_name: role_name.to_string(),
+                };
+                Ok(Plan::CreateRole(Box::new(plan)))
+            }
+            Statement::DropRole {
+                if_exists,
+                role_name,
+            } => {
+                let plan = DropRolePlan {
+                    if_exists: *if_exists,
+                    role_name: role_name.to_string(),
+                };
+                Ok(Plan::DropRole(Box::new(plan)))
+            }
+
+            // Stages
+            Statement::ShowStages => Ok(Plan::ShowStages),
+            Statement::ListStage { location, pattern } => {
+                self.bind_list_stage(location, pattern).await
+            }
+            Statement::DescribeStage { stage_name } => {
+                Ok(Plan::DescribeStage(Box::new(DescribeUserStagePlan {
+                    name: stage_name.clone(),
+                })))
+            }
+            Statement::CreateStage(stmt) => {
+                let plan = self.bind_create_stage(stmt).await?;
                 Ok(plan)
+            }
+            Statement::DropStage {
+                stage_name,
+                if_exists,
+            } => Ok(Plan::DropStage(Box::new(DropUserStagePlan {
+                if_exists: *if_exists,
+                name: stage_name.clone(),
+            }))),
+            Statement::RemoveStage { location, pattern } => {
+                self.bind_remove_stage(location, pattern).await
             }
 
             _ => Err(ErrorCode::UnImplement(format!(

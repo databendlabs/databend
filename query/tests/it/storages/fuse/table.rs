@@ -325,9 +325,9 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     // add cluster key
     let alter_table_cluster_key_plan = AlterTableClusterKeyPlan {
         tenant: fixture.default_tenant(),
-        catalog_name: fixture.default_catalog_name(),
-        database_name: fixture.default_db_name(),
-        table_name: fixture.default_table_name(),
+        catalog: fixture.default_catalog_name(),
+        database: fixture.default_db_name(),
+        table: fixture.default_table_name(),
         cluster_keys: vec![col("id")],
     };
     let interpreter =
@@ -352,9 +352,9 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     // drop cluster key
     let drop_table_cluster_key_plan = DropTableClusterKeyPlan {
         tenant: fixture.default_tenant(),
-        catalog_name: fixture.default_catalog_name(),
-        database_name: fixture.default_db_name(),
-        table_name: fixture.default_table_name(),
+        catalog: fixture.default_catalog_name(),
+        database: fixture.default_db_name(),
+        table: fixture.default_table_name(),
     };
     let interpreter =
         DropTableClusterKeyInterpreter::try_create(ctx.clone(), drop_table_cluster_key_plan)?;

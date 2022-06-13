@@ -26,6 +26,7 @@ use crate::sql::optimizer::SExpr;
 
 lazy_static! {
     pub static ref DEFAULT_REWRITE_RULES: Vec<RuleID> = vec![
+        RuleID::NormalizeScalarFilter,
         RuleID::EliminateFilter,
         RuleID::EliminateEvalScalar,
         RuleID::EliminateProject,
@@ -34,6 +35,7 @@ lazy_static! {
         RuleID::MergeProject,
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterProject,
+        RuleID::PushDownFilterJoin,
     ];
 }
 

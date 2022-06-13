@@ -19,6 +19,7 @@ use common_ast::ast::AlterDatabaseStmt;
 use common_ast::ast::CreateDatabaseStmt;
 use common_ast::ast::DatabaseEngine;
 use common_ast::ast::DropDatabaseStmt;
+use common_ast::ast::SQLProperty;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_planners::CreateDatabasePlan;
@@ -34,22 +35,26 @@ impl<'a> Binder {
         &self,
         stmt: &AlterDatabaseStmt<'a>,
     ) -> Result<Plan> {
-        let catalog = stmt
-            .catalog
-            .as_ref()
-            .map(|catalog| catalog.name.clone())
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let AlterDatabaseStmt {
+            if_exists,
+            catalog,
+            database,
+            action,
+        } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let database = stmt.database.name.clone();
-        let if_exists = stmt.if_exists;
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database.name.to_lowercase();
 
-        match &stmt.action {
+        match &action {
             AlterDatabaseAction::RenameDatabase { new_db } => {
                 let new_database = new_db.name.clone();
                 let entry = RenameDatabaseEntity {
-                    if_exists,
-                    catalog_name: catalog,
+                    if_exists: *if_exists,
+                    catalog,
                     database,
                     new_database,
                 };
@@ -66,21 +71,24 @@ impl<'a> Binder {
         &self,
         stmt: &DropDatabaseStmt<'a>,
     ) -> Result<Plan> {
-        let catalog = stmt
-            .catalog
-            .as_ref()
-            .map(|catalog| catalog.name.clone())
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let DropDatabaseStmt {
+            if_exists,
+            catalog,
+            database,
+        } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let database = stmt.database.name.clone();
-        let if_exists = stmt.if_exists;
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database.name.to_lowercase();
 
         Ok(Plan::DropDatabase(Box::new(DropDatabasePlan {
+            if_exists: *if_exists,
             tenant,
             catalog,
             database,
-            if_exists,
         })))
     }
 
@@ -88,34 +96,42 @@ impl<'a> Binder {
         &self,
         stmt: &CreateDatabaseStmt<'a>,
     ) -> Result<Plan> {
-        let catalog = stmt
-            .catalog
-            .as_ref()
-            .map(|catalog| catalog.name.clone())
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let CreateDatabaseStmt {
+            if_not_exists,
+            catalog,
+            database,
+            engine,
+            options,
+        } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let if_not_exists = stmt.if_not_exists;
-        let database = stmt.database.name.clone();
-        let meta = self.database_meta(stmt)?;
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database.name.to_lowercase();
+        let meta = self.database_meta(engine, options)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
+            if_not_exists: *if_not_exists,
             tenant,
-            if_not_exists,
             catalog,
             database,
             meta,
         })))
     }
 
-    fn database_meta(&self, stmt: &CreateDatabaseStmt<'a>) -> Result<DatabaseMeta> {
-        let options = stmt
-            .options
+    fn database_meta(
+        &self,
+        engine: &Option<DatabaseEngine>,
+        options: &[SQLProperty],
+    ) -> Result<DatabaseMeta> {
+        let options = options
             .iter()
             .map(|property| (property.name.clone(), property.value.clone()))
             .collect::<BTreeMap<String, String>>();
 
-        let database_engine = stmt.engine.as_ref().unwrap_or(&DatabaseEngine::Default);
+        let database_engine = engine.as_ref().unwrap_or(&DatabaseEngine::Default);
         let (engine, engine_options) = match database_engine {
             DatabaseEngine::Github(token) => {
                 let engine_options =

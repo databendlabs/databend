@@ -113,6 +113,7 @@ message TxnOp {
     TxnGetRequest get = 1;
     TxnPutRequest put = 2;
     TxnDeleteRequest delete = 3;
+    TxnDeleteByPrefixRequest delete_by_prefix = 4;
   }
 }
 
@@ -121,6 +122,7 @@ message TxnOpResponse {
     TxnGetResponse get = 1;
     TxnPutResponse put = 2;
     TxnDeleteResponse delete = 3;
+    TxnDeleteByPrefixResponse delete_by_prefix = 4;
   }
 }
 

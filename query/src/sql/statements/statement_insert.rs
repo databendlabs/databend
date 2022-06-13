@@ -83,10 +83,8 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         self.is_supported()?;
 
-        let (catalog_name, database_name, table_name) = self.resolve_table(&ctx)?;
-        let write_table = ctx
-            .get_table(&catalog_name, &database_name, &table_name)
-            .await?;
+        let (catalog, database, table) = self.resolve_table(&ctx)?;
+        let write_table = ctx.get_table(&catalog, &database, &table).await?;
         let table_id = write_table.get_id();
         let schema = self.insert_schema(write_table)?;
 
@@ -106,9 +104,9 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Insert(
             InsertPlan {
-                catalog_name,
-                database_name,
-                table_name,
+                catalog,
+                database,
+                table,
                 table_id,
                 schema,
                 overwrite: self.overwrite,

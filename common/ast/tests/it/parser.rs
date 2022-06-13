@@ -86,6 +86,8 @@ fn test_statement() {
         r#"create table c(a DateTime null, b DateTime(3));"#,
         r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"alter view v as select number % 3 as a from numbers(1000);"#,
+        r#"drop view v;"#,
+        r#"rename table d.t to e.s;"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
         r#"DROP table table1;"#,
@@ -116,6 +118,8 @@ fn test_statement() {
         r#"create user 'test-e'@'localhost' identified by 'password';"#,
         r#"drop user if exists 'test-j'@'localhost';"#,
         r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
+        r#"create role 'test'"#,
+        r#"drop role if exists 'test'"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
         r#"ALTER DATABASE IF EXISTS catalog.c RENAME TO a;"#,
@@ -188,6 +192,8 @@ fn test_statement_error() {
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
         r#"drop usar if exists 'test-j'@'localhost';"#,
         r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
+        r#"create role 'test'@'localhost';"#,
+        r#"drop role 'test'@'localhost';"#,
     ];
 
     for case in cases {
@@ -229,6 +235,11 @@ fn test_query() {
             group by c_count
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal"#,
+        r#"select * from t1 union select * from t2"#,
+        r#"select * from t1 union select * from t2 union select * from t3"#,
+        r#"select * from t1 union select * from t2 intersect select * from t3"#,
+        r#"(select * from t1 union select * from t2) union select * from t3"#,
+        r#"select * from t1 union (select * from t2 union select * from t3)"#,
     ];
 
     for case in cases {

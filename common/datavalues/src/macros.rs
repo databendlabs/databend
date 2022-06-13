@@ -30,6 +30,7 @@ macro_rules! for_all_scalar_types {
             { bool },
             { Vu8 },
             { ArrayValue },
+            { StructValue },
             { VariantValue }
         }
     };
@@ -178,6 +179,7 @@ macro_rules! with_match_scalar_type {
             PhysicalTypeID::Boolean => __with_ty__! { bool },
             PhysicalTypeID::String => __with_ty__! { C },
             PhysicalTypeID::Array => __with_ty__! { ArrayValue },
+            PhysicalTypeID::Struct => __with_ty__! { StructValue },
             PhysicalTypeID::Variant => __with_ty__! { VariantValue },
 
             PhysicalTypeID::Int8 => __with_ty__! { i8 },
@@ -207,6 +209,7 @@ macro_rules! with_match_scalar_types_error {(
         PhysicalTypeID::Boolean => __with_ty__! { bool },
         PhysicalTypeID::String => __with_ty__! { C },
         PhysicalTypeID::Array => __with_ty__! { ArrayValue },
+        PhysicalTypeID::Struct => __with_ty__! { StructValue },
         PhysicalTypeID::Variant => __with_ty__! { VariantValue },
 
         PhysicalTypeID::Int8 => __with_ty__! { i8 },

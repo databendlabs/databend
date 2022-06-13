@@ -51,17 +51,17 @@ impl Interpreter for RenameTableInterpreter {
         // and CREATE and INSERT privileges for the new table.
         for entity in &self.plan.entities {
             let tenant = self.plan.tenant.clone();
-            let catalog = self.ctx.get_catalog(&entity.catalog_name)?;
+            let catalog = self.ctx.get_catalog(&entity.catalog)?;
             catalog
                 .rename_table(RenameTableReq {
                     if_exists: entity.if_exists,
                     name_ident: TableNameIdent {
                         tenant,
-                        db_name: entity.database_name.clone(),
-                        table_name: entity.table_name.clone(),
+                        db_name: entity.database.clone(),
+                        table_name: entity.table.clone(),
                     },
-                    new_db_name: entity.new_database_name.clone(),
-                    new_table_name: entity.new_table_name.clone(),
+                    new_db_name: entity.new_database.clone(),
+                    new_table_name: entity.new_table.clone(),
                 })
                 .await?;
         }

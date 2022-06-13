@@ -102,5 +102,11 @@ pub trait ScalarColumnBuilder: MutableColumn {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ColumnMeta {
     Simple,
-    Array { inner_type: DataTypeImpl },
+    Array {
+        inner_type: DataTypeImpl,
+    },
+    Struct {
+        inner_names: Vec<String>,
+        inner_types: Vec<DataTypeImpl>,
+    },
 }

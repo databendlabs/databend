@@ -45,8 +45,13 @@ jobs:
         run: |
           brew install gnu-tar
           sudo /usr/sbin/purge
-          gtar -C ./target/${{ steps.target.outputs.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz databend-query databend-meta
-          gtar -C ./target/${{ steps.target.outputs.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz databend-metactl
+          mkdir -p release/${{ steps.target.outputs.target }}/{bin,configs}
+          cp ./target/${{ steps.target.outputs.target }}/release/databend-* release/${{ steps.target.outputs.target }}/bin/
+          rm -f release/${{ steps.target.outputs.target }}/bin/*.d
+          cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-query.toml
+          cp ./scripts/ci/deploy/config/databend-meta-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-meta.toml
+          cp ./.github/actions/publish_binary/databend-release-readme.txt release/${{ steps.target.outputs.target }}/readme.txt
+          gtar -C ./release/${{ steps.target.outputs.target }} -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz bin configs readme.txt
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         with:
@@ -101,8 +106,13 @@ jobs:
           build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ steps.target.outputs.target }}/release/databend-metactl
       - name: Pack binaries
         run: |
-          tar -C ./target/${{ steps.target.outputs.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz databend-query databend-meta
-          tar -C ./target/${{ steps.target.outputs.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz databend-metactl
+          mkdir -p release/${{ steps.target.outputs.target }}/{bin,configs}
+          cp ./target/${{ steps.target.outputs.target }}/release/databend-* release/${{ steps.target.outputs.target }}/bin/
+          rm -f release/${{ steps.target.outputs.target }}/bin/*.d
+          cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-query.toml
+          cp ./scripts/ci/deploy/config/databend-meta-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-meta.toml
+          cp ./.github/actions/publish_binary/databend-release-readme.txt release/${{ steps.target.outputs.target }}/readme.txt
+          tar -C ./release/${{ steps.target.outputs.target }} -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz bin configs readme.txt
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         with:
@@ -142,7 +152,7 @@ jobs:
         run: |
           mkdir -p ./target/release
           wget -q https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
-          tar xC ./target/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar xC ./target/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz bin/*
 
       - name: Build and push
         id: docker_build
@@ -201,7 +211,7 @@ jobs:
               target=${platform_targets[$platform]}
               wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
               mkdir -p ./target/${target}/release
-              tar xC ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz
+              tar xC ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz bin/*
               mkdir -p ./distro/linux/${platform}
               cp ./target/${target}/release/databend-${{ matrix.service }} ./distro/linux/${platform}
           done

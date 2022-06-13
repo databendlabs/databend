@@ -12,10 +12,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
-env:
-  CARGO_TERM_COLOR: always
-  PROTOC: protoc
-
 jobs:
   check:
     runs-on: [self-hosted, x64, Linux]

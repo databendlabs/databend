@@ -19,6 +19,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
@@ -73,6 +74,17 @@ impl DataType for NullableType {
 
     fn default_value(&self) -> DataValue {
         DataValue::Null
+    }
+
+    fn random_value(&self) -> DataValue {
+        let mut rng = rand::rngs::SmallRng::from_entropy();
+        let p = rng.gen_bool(0.5);
+        // half possibility to be null
+        if p {
+            self.inner.random_value()
+        } else {
+            DataValue::Null
+        }
     }
 
     fn arrow_type(&self) -> ArrowType {
