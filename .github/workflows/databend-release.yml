@@ -45,7 +45,7 @@ jobs:
         run: |
           brew install gnu-tar
           sudo /usr/sbin/purge
-          mkdir release/${{ steps.target.outputs.target }} release/${{ steps.target.outputs.target }}/bin release/${{ steps.target.outputs.target }}/configs
+          mkdir -p release/${{ steps.target.outputs.target }}/{bin,configs}
           cp ./target/${{ steps.target.outputs.target }}/release/databend-* release/${{ steps.target.outputs.target }}/bin/
           rm -f release/${{ steps.target.outputs.target }}/bin/*.d
           cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-query.toml
