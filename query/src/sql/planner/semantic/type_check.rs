@@ -104,9 +104,10 @@ impl<'a> TypeChecker<'a> {
         data_type: &DataTypeImpl,
     ) -> Result<(Scalar, DataTypeImpl)> {
         // Try constant folding
-        let evaluator = ScalarEvaluator::try_create(scalar)?;
-        let func_ctx = self.ctx.try_get_function_context()?;
-        if let Ok((value, value_type)) = evaluator.try_eval_const(&func_ctx) {
+        if let Ok((value, value_type)) = ScalarEvaluator::try_create(scalar).and_then(|evaluator| {
+            let func_ctx = self.ctx.try_get_function_context()?;
+            evaluator.try_eval_const(&func_ctx)
+        }) {
             Ok((
                 ConstantExpr {
                     value,
