@@ -49,13 +49,12 @@ impl<'a> Binder {
     ) -> Result<(SExpr, BindContext)> {
         let (left_child, left_context) =
             self.bind_table_reference(bind_context, &join.left).await?;
-        let (right_child, right_context) = self
-            .bind_table_reference(&left_context, &join.right)
-            .await?;
+        let (right_child, right_context) =
+            self.bind_table_reference(bind_context, &join.right).await?;
 
         check_duplicate_join_tables(&left_context, &right_context)?;
 
-        let mut bind_context = BindContext::new();
+        let mut bind_context = bind_context.replace();
         for column in left_context.all_column_bindings() {
             bind_context.add_column_binding(column.clone());
         }
@@ -69,12 +68,12 @@ impl<'a> Binder {
             {
                 return Err(ErrorCode::SemanticError(
                     "outer join should contain join conditions".to_string(),
-                ))
+                ));
             }
             JoinOperator::CrossJoin if join.condition != JoinCondition::None => {
                 return Err(ErrorCode::SemanticError(
                     "cross join should not contain join conditions".to_string(),
-                ))
+                ));
             }
             _ => (),
         };
