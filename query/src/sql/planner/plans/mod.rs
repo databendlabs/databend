@@ -89,6 +89,8 @@ pub enum Plan {
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
+    CreateRole(Box<CreateRolePlan>),
+    DropRole(Box<DropRolePlan>),
 
     // Stages
     ShowStages,
