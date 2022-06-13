@@ -51,6 +51,13 @@ pub enum Statement<'a> {
         overwrite: bool,
     },
 
+    Delete {
+        catalog: Option<Identifier<'a>>,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+        selection: Option<Expr<'a>>,
+    },
+
     ShowSettings,
     ShowProcessList,
     ShowMetrics,
@@ -593,6 +600,18 @@ impl<'a> Display for Statement<'a> {
                             ..values_tokens.last().unwrap().span.end]
                     )?,
                     InsertSource::Select { query } => write!(f, " {query}")?,
+                }
+            }
+            Statement::Delete {
+                catalog,
+                database,
+                table,
+                selection,
+            } => {
+                write!(f, "DELETE FROM ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if let Some(conditions) = selection {
+                    write!(f, "WHERE {conditions} ")?;
                 }
             }
             Statement::ShowSettings => {

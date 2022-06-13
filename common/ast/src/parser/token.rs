@@ -317,6 +317,8 @@ pub enum TokenKind {
     DECADE,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
+    #[token("DELETE", ignore(ascii_case))]
+    DELETE,
     #[token("DESC", ignore(ascii_case))]
     DESC,
     #[token("DESCRIBE", ignore(ascii_case))]

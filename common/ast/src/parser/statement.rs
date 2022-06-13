@@ -73,6 +73,19 @@ pub fn statement(i: Input) -> IResult<Statement> {
             overwrite: overwrite.kind == OVERWRITE,
         },
     );
+
+    let delete = map(
+        rule! {
+            DELETE ~ FROM ~ #peroid_separated_idents_1_to_3
+            ~ ( WHERE ~ ^#expr )?
+        },
+        |(_, _, (catalog, database, table), opt_where_block)| Statement::Delete {
+            catalog,
+            database,
+            table,
+            selection: opt_where_block.map(|(_, selection)| selection),
+        },
+    );
     let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
     let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
@@ -576,6 +589,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS`"
             | #show_stages : "`SHOW STAGES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
