@@ -85,13 +85,15 @@ async fn execute(
         };
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
-    let mut fmt = OutputFormatType::Tsv;
+    let mut fmt = OutputFormatType::TSV;
     if let Some(format) = format {
         fmt = OutputFormatType::from_str(format.as_str())?;
     }
 
     let mut output_format = fmt.create_format(plan.schema());
+    let prefix = Ok(output_format.serialize_prefix(&format_setting)?);
     let stream = stream! {
+        yield prefix;
         while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
@@ -100,9 +102,7 @@ async fn execute(
                 Err(err) => yield(Err(err)),
             };
         }
-
         yield output_format.finalize();
-
         let _ = interpreter
             .finish()
             .await
@@ -155,6 +155,7 @@ pub async fn clickhouse_handler_post(
 
     let (plan, format, input_stream) = if sql.is_empty() {
         sql = body.into_string().await?;
+        tracing::debug!("receive clickhouse post, body= {:?},", sql);
         let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
             .await
             .map_err(BadRequest)?;

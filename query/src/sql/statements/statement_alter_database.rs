@@ -51,7 +51,7 @@ impl AnalyzableStatement for DfAlterDatabase {
                 let (_new_catalog, new_database) = resolve_database(&ctx, o, "ALTER DATABASE")?;
                 entities.push(RenameDatabaseEntity {
                     if_exists: self.if_exists,
-                    catalog_name: catalog,
+                    catalog,
                     database,
                     new_database,
                 });

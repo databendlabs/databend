@@ -333,7 +333,7 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_desc_table(),
-                Keyword::STAGE => self.parse_desc_stage(),
+                Keyword::STAGE => self.parse_describe_stage(),
 
                 _ => {
                     self.parser.prev_token();

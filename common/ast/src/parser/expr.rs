@@ -533,25 +533,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
 
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(
-        rule! {
-            #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
-        },
-        |res| match res {
-            (column, None) => ExprElement::ColumnRef {
-                database: None,
-                table: None,
-                column,
-            },
-            (table, Some((_, column, None))) => ExprElement::ColumnRef {
-                database: None,
-                table: Some(table),
-                column,
-            },
-            (database, Some((_, table, Some((_, column))))) => ExprElement::ColumnRef {
-                database: Some(database),
-                table: Some(table),
-                column,
-            },
+        peroid_separated_idents_1_to_3,
+        |(database, table, column)| ExprElement::ColumnRef {
+            database,
+            table,
+            column,
         },
     );
     let is_null = map(

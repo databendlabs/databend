@@ -645,6 +645,8 @@ pub enum TokenKind {
     YEAR,
     #[token("NULLIF", ignore(ascii_case))]
     NULLIF,
+    #[token("RANDOM", ignore(ascii_case))]
+    RANDOM,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -939,6 +941,7 @@ impl TokenKind {
             | TokenKind::ORDER
             // | TokenKind::OVERLAPS 
             // | TokenKind::RETURNING
+            | TokenKind::STAGE
             | TokenKind::TO
             | TokenKind::UNION
             | TokenKind::WHERE

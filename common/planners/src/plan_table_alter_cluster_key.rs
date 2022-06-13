@@ -22,9 +22,9 @@ use crate::Expression;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AlterTableClusterKeyPlan {
     pub tenant: String,
-    pub catalog_name: String,
-    pub database_name: String,
-    pub table_name: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
     pub cluster_keys: Vec<Expression>,
 }
 
