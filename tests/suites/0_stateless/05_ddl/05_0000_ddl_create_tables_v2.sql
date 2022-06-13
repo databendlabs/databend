@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS t;
 DROP TABLE IF EXISTS t2;
 DROP TABLE IF EXISTS t3;
 DROP TABLE IF EXISTS t4;
+DROP TABLE IF EXISTS column_comment_test;
 
 CREATE TABLE t(c1 int) ENGINE = Null;
 
@@ -83,3 +84,8 @@ DROP DATABASE db1;
 DROP DATABASE db2;
 
 CREATE TABLE system.test; -- {ErrorCode 1002}
+
+-- create table with column comment
+-- SELECT '====CREATE TABLE WITH COLUMN COMMENT====';
+-- CREATE TABLE column_comment_test (a INT COMMENT 'comment for a', b FLOAT NULL DEFAULT 0 COMMENT 'comment for b');
+-- DROP TABLE column_comment_test;
