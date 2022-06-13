@@ -14,6 +14,7 @@
 
 mod join;
 mod select;
+mod subquery;
 
 use std::io::Write;
 use std::sync::Arc;
