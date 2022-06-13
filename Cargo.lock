@@ -2043,6 +2043,7 @@ dependencies = [
  "futures",
  "goldenfile",
  "headers",
+ "hex",
  "http",
  "itertools",
  "jwt-simple",
