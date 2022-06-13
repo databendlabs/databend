@@ -15,6 +15,7 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
@@ -25,6 +26,8 @@ use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
 use common_planners::InsertValueBlock;
 use common_planners::PlanNode;
+use common_streams::NDJsonSourceBuilder;
+use common_streams::Source;
 use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
@@ -33,6 +36,7 @@ use sqlparser::ast::OnInsert;
 use sqlparser::ast::Query;
 use sqlparser::ast::SqliteOnConflict;
 
+use crate::formats::FormatFactory;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -70,7 +74,7 @@ pub enum InsertSource<'a> {
     /// for insert format
     Empty,
     Select(Box<Query>),
-    Values(&'a str),
+    StreamFormat(&'a str),
 }
 
 #[async_trait::async_trait]
@@ -88,8 +92,8 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
 
         let input_source = match &self.source {
             InsertSource::Empty => self.analyze_insert_without_source().await,
-            InsertSource::Values(values_str) => {
-                self.analyze_insert_values(ctx.clone(), *values_str, &schema)
+            InsertSource::StreamFormat(stream_format) => {
+                self.analyze_stream_format(ctx.clone(), *stream_format, &schema, self.format.clone())
                     .await
             }
             InsertSource::Select(select) => self.analyze_insert_select(ctx.clone(), select).await,
@@ -151,20 +155,62 @@ impl<'a> DfInsertStatement<'a> {
         Ok(())
     }
 
-    async fn analyze_insert_values(
+    async fn analyze_stream_format(
         &self,
         ctx: Arc<QueryContext>,
-        values_str: &'a str,
+        stream_str: &'a str,
         schema: &DataSchemaRef,
+        format: Option<String>,
     ) -> Result<InsertInputSource> {
-        tracing::debug!("{:?}", values_str);
-
-        let bytes = values_str.as_bytes();
-        let cursor = Cursor::new(bytes);
-        let mut reader = CheckpointReader::new(BufferReader::new(cursor));
-        let source = ValueSource::new(ctx.clone(), schema.clone());
-        let block = source.read(&mut reader).await?;
-        Ok(InsertInputSource::Values(InsertValueBlock { block }))
+        let stream_str = stream_str.trim_start();
+        tracing::debug!("{:?}", stream_str);
+        let settings = ctx.get_format_settings()?;
+        // TODO migrate format into format factory
+        let format = format.map(|v| v.to_uppercase());
+        match format.as_ref().map(|v| v.as_str()) {
+            Some("VALUES") | None =>  {
+                    let bytes = stream_str.as_bytes();
+                    let cursor = Cursor::new(bytes);
+                    let mut reader = CheckpointReader::new(BufferReader::new(cursor));
+                    let source = ValueSource::new(ctx.clone(), schema.clone());
+                    let block = source.read(&mut reader).await?;
+                    Ok(InsertInputSource::Values(InsertValueBlock { block }))
+            },
+            Some("JSONEACHROW") => {
+                let builder = NDJsonSourceBuilder::create(schema.clone(), settings);
+                let cursor = futures::io::Cursor::new(
+                    stream_str.as_bytes()
+                );
+                let mut source = builder.build(cursor)?;
+                let mut blocks = Vec::new();
+                loop {
+                    match source.read().await? {
+                        Some(v) => blocks.push(v),
+                        None => break,
+                    }
+                }
+                let block = DataBlock::concat_blocks(&blocks)?;
+                Ok(InsertInputSource::Values(InsertValueBlock { block }))
+            },
+            
+            // format factory
+            Some(name) => {
+                let input_format =
+                    FormatFactory::instance().get_input(name, schema.clone(), settings)?;
+                
+                let data_slice = stream_str.as_bytes();
+                let mut input_state = input_format.create_state();
+                let skip_size = input_format
+                        .skip_header(data_slice, &mut input_state)?;
+                        
+                let _ = input_format
+                        .read_buf(&data_slice[skip_size..], &mut input_state)?;
+                let blocks = input_format.deserialize_data(&mut input_state)?;
+                let block = DataBlock::concat_blocks(&blocks)?;
+                Ok(InsertInputSource::Values(InsertValueBlock { block }))
+            }
+            
+        }
     }
 
     async fn analyze_insert_without_source(&self) -> Result<InsertInputSource> {

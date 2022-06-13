@@ -16,19 +16,19 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_stream::stream;
-use common_exception::ErrorCode;
+
 use common_exception::Result;
-use common_exception::ToErrorCode;
-use common_io::prelude::BufferReader;
-use common_io::prelude::CheckpointReader;
-use common_io::prelude::FormatSettings;
+
+
+
+
 use common_planners::PlanNode;
-use common_streams::NDJsonSourceBuilder;
+
 use common_streams::SendableDataBlockStream;
-use common_streams::SourceStream;
+
 use common_tracing::tracing;
 use futures::StreamExt;
-use nom::AsBytes;
+
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -48,7 +48,7 @@ use crate::pipelines::new::SourcePipeBuilder;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
-use crate::sql::statements::ValueSource;
+
 use crate::sql::PlanParser;
 
 #[derive(Deserialize)]
@@ -128,11 +128,6 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(BadRequest)?;
 
-    if matches!(plan, PlanNode::Insert(_)) {
-        return Err(BadRequest(ErrorCode::SyntaxException(
-            "not allow insert in GET",
-        )));
-    }
     context.attach_query_str(&sql);
     execute(context, plan, format, None)
         .await
@@ -152,72 +147,18 @@ pub async fn clickhouse_handler_post(
         .map_err(InternalServerError)?;
 
     let mut sql = params.query.unwrap_or_default();
-
-    let (plan, format, input_stream) = if sql.is_empty() {
-        sql = body.into_string().await?;
-        tracing::debug!("receive clickhouse post, body= {:?},", sql);
-        let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
-            .await
-            .map_err(BadRequest)?;
-
-        (plan, format, None)
-    } else {
-        let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
-            .await
-            .map_err(BadRequest)?;
-
-        let mut input_stream = None;
-        if let PlanNode::Insert(_) = &plan {
-            if let Some(format) = &format {
-                if format.eq_ignore_ascii_case("JSONEachRow") {
-                    input_stream =
-                        Some(build_ndjson_stream(&plan, body).await.map_err(BadRequest)?);
-                } else if format.eq_ignore_ascii_case("Values") {
-                    input_stream = Some(
-                        build_values_stream(ctx.clone(), &plan, body)
-                            .await
-                            .map_err(BadRequest)?,
-                    );
-                }
-                // TODO more formats
-            }
-        }
-        (plan, format, input_stream)
-    };
+    sql.push_str(body.into_string().await?.as_str());
+    
+    let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
+        .await
+        .map_err(BadRequest)?;
 
     ctx.attach_query_str(&sql);
-    execute(ctx, plan, format, input_stream)
+    execute(ctx, plan, format, None)
         .await
         .map_err(InternalServerError)
 }
 
-// TODO: use format pipeline
-async fn build_ndjson_stream(plan: &PlanNode, body: Body) -> Result<SendableDataBlockStream> {
-    let builder = NDJsonSourceBuilder::create(plan.schema(), FormatSettings::default());
-    let cursor = futures::io::Cursor::new(
-        body.into_vec()
-            .await
-            .map_err_to_code(ErrorCode::BadBytes, || "fail to read body")?,
-    );
-    let source = builder.build(cursor)?;
-    SourceStream::new(Box::new(source)).execute().await
-}
-
-async fn build_values_stream(
-    ctx: Arc<QueryContext>,
-    plan: &PlanNode,
-    body: Body,
-) -> Result<SendableDataBlockStream> {
-    let value_source = ValueSource::new(ctx, plan.schema());
-    let value = body
-        .into_vec()
-        .await
-        .map_err_to_code(ErrorCode::BadBytes, || "fail to read body")?;
-    let reader = BufferReader::new(value.as_bytes());
-    let mut reader = CheckpointReader::new(reader);
-    let block = value_source.read(&mut reader).await?;
-    Ok(Box::pin(futures::stream::iter(vec![Ok(block)])))
-}
 
 pub fn clickhouse_router() -> impl Endpoint {
     Route::new()
