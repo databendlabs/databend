@@ -5,7 +5,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a.b (c integer not null 1, b float(10))
-  | ------                               ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, or `,`
+  | ------                               ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, `COMMENT`, or `,`
   | |                                     
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -17,7 +17,7 @@ error:
   --> SQL:1:24
   |
 1 | create table a (c float(10))
-  | ------                 ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, or `,`
+  | ------                 ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, `COMMENT`, or `,`
   | |                       
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -33,7 +33,7 @@ error:
   | |               | |
   | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 25 more ...
   | |               | while parsing type name
-  | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`
+  | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 

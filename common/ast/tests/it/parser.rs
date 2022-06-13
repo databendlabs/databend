@@ -125,6 +125,7 @@ fn test_statement() {
         r#"ALTER DATABASE IF EXISTS catalog.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE catalog.c RENAME TO a;"#,
+        r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
     ];
 
     for case in cases {
