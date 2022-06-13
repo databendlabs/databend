@@ -560,7 +560,7 @@ impl<'a> TypeChecker<'a> {
                     ],
                     None,
                 )
-                .await
+                .await?
             }
 
             _ => Err(ErrorCode::UnImplement(format!(
