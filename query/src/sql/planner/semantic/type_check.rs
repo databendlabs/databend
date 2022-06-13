@@ -545,7 +545,9 @@ impl<'a> TypeChecker<'a> {
                 .await?
             }
 
-            Expr::IfNull { span,expr1, expr2, .. } => {
+            Expr::IfNull {
+                span, expr1, expr2, ..
+            } => {
                 // Rewrite IFNULL(expr1, expr2) to IF(ISNULL(expr1), expr2, expr1)
                 self.resolve_function(
                     "if",
