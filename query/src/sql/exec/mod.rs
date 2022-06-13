@@ -82,7 +82,7 @@ use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
-use crate::sql::plans::FilterPlan;
+use crate::sql::plans::Filter;
 use crate::sql::plans::LimitPlan;
 use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
@@ -315,7 +315,7 @@ impl PipelineBuilder {
     fn build_filter(
         &mut self,
         ctx: Arc<QueryContext>,
-        filter: &FilterPlan,
+        filter: &Filter,
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {

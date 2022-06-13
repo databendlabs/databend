@@ -78,7 +78,7 @@ pub trait Table: Sync + Send {
         vec![]
     }
 
-    async fn alter_cluster_keys(
+    async fn alter_table_cluster_keys(
         &self,
         _ctx: Arc<QueryContext>,
         _catalog_name: &str,
@@ -90,7 +90,11 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn drop_cluster_keys(&self, _ctx: Arc<QueryContext>, _catalog_name: &str) -> Result<()> {
+    async fn drop_table_cluster_keys(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _catalog_name: &str,
+    ) -> Result<()> {
         Err(ErrorCode::UnsupportedEngineParams(format!(
             "Unsupported clustering keys for engine: {}",
             self.engine()

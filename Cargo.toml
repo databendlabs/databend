@@ -37,6 +37,7 @@ members = [
 
     # Tools
     "tools/fuzz",
+    "tools/metabench",
     "tools/metactl",
 ]
 

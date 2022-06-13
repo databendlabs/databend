@@ -57,7 +57,7 @@ impl Interpreter for CreateTableInterpreter {
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Database(self.plan.catalog.clone(), self.plan.db.clone()),
+                &GrantObject::Database(self.plan.catalog.clone(), self.plan.database.clone()),
                 UserPrivilegeType::Create,
             )
             .await?;
@@ -71,7 +71,7 @@ impl Interpreter for CreateTableInterpreter {
         let engine = self.plan.engine();
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
         let tables = catalog
-            .list_tables(&*self.plan.tenant, &*self.plan.db)
+            .list_tables(&*self.plan.tenant, &*self.plan.database)
             .await?;
         if quota.max_tables_per_database != 0
             && tables.len() >= quota.max_tables_per_database as usize
@@ -134,7 +134,7 @@ impl CreateTableInterpreter {
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
         catalog.create_table(self.plan.clone().into()).await?;
         let table = catalog
-            .get_table(tenant.as_str(), &self.plan.db, &self.plan.table)
+            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
@@ -156,9 +156,9 @@ impl CreateTableInterpreter {
             .collect();
         let schema = DataSchemaRefExt::create(select_fields);
         let insert_plan = InsertPlan {
-            catalog_name: self.plan.catalog.clone(),
-            database_name: self.plan.db.clone(),
-            table_name: self.plan.table.clone(),
+            catalog: self.plan.catalog.clone(),
+            database: self.plan.database.clone(),
+            table: self.plan.table.clone(),
             table_id: table.get_id(),
             schema,
             overwrite: false,

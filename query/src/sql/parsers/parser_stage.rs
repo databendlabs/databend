@@ -25,6 +25,7 @@ use crate::sql::statements::DfCreateUserStage;
 use crate::sql::statements::DfDescribeUserStage;
 use crate::sql::statements::DfDropUserStage;
 use crate::sql::statements::DfList;
+use crate::sql::statements::DfRemoveStage;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -132,7 +133,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Desc stage.
-    pub(crate) fn parse_desc_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
+    pub(crate) fn parse_describe_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let table_name = self.parser.parse_object_name()?;
         let desc = DfDescribeUserStage { name: table_name };
         Ok(DfStatement::DescribeStage(desc))
@@ -152,5 +153,25 @@ impl<'a> DfParser<'a> {
             pattern = self.parse_value_or_ident()?;
         }
         Ok(DfStatement::List(DfList { location, pattern }))
+    }
+
+    // remove stage
+    pub(crate) fn parse_remove_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let location = match self.parser.next_token() {
+            Token::AtString(s) => Ok(format!("@{}", s)),
+            unexpected => self.expected("@string_literal", unexpected),
+        }?;
+
+        // PATTERN = '<regex_pattern>'
+        let mut pattern = "".to_string();
+        if self.consume_token("PATTERN") {
+            self.expect_token("=")?;
+            pattern = self.parse_value_or_ident()?
+        }
+
+        Ok(DfStatement::RemoveStage(DfRemoveStage {
+            location,
+            pattern,
+        }))
     }
 }

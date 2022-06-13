@@ -20,7 +20,7 @@ use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
-async fn test_alter_cluster_key_interpreter() -> Result<()> {
+async fn test_alter_table_cluster_key_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
 
     // Create table.
@@ -40,7 +40,7 @@ async fn test_alter_cluster_key_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), "Alter TABLE a CLUSTER BY(a, b)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "AlterClusterKeyInterpreter");
+        assert_eq!(executor.name(), "AlterTableClusterKeyInterpreter");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec!["++", "++"];

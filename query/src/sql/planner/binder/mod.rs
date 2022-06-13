@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
+pub use scalar_common::*;
 
 use self::subquery::SubqueryRewriter;
 use super::plans::Plan;
@@ -107,35 +108,11 @@ impl<'a> Binder {
                 })
             }
 
-            Statement::CreateTable(stmt) => {
-                let plan = self.bind_create_table(stmt).await?;
-                Ok(plan)
-            }
+            Statement::ShowMetrics => Ok(Plan::ShowMetrics),
+            Statement::ShowProcessList => Ok(Plan::ShowProcessList),
+            Statement::ShowSettings => Ok(Plan::ShowSettings),
 
-            Statement::CreateStage(stmt) => {
-                let plan = self.bind_create_stage(stmt).await?;
-                Ok(plan)
-            }
-
-            Statement::ShowStages => Ok(Plan::ShowStages),
-
-            Statement::DropStage {
-                stage_name,
-                if_exists,
-            } => Ok(Plan::DropStage(Box::new(DropUserStagePlan {
-                if_exists: *if_exists,
-                name: stage_name.clone(),
-            }))),
-            Statement::DescStage { stage_name } => {
-                Ok(Plan::DescStage(Box::new(DescribeUserStagePlan {
-                    name: stage_name.clone(),
-                })))
-            }
-            Statement::ListStage {
-                stage_name,
-                pattern,
-            } => self.bind_list_stage(stage_name, pattern).await,
-
+            // Databases
             Statement::CreateDatabase(stmt) => {
                 let plan = self.bind_create_database(stmt).await?;
                 Ok(plan)
@@ -144,10 +121,39 @@ impl<'a> Binder {
                 let plan = self.bind_drop_database(stmt).await?;
                 Ok(plan)
             }
+            Statement::AlterDatabase(stmt) => {
+                let plan = self.bind_alter_database(stmt).await?;
+                Ok(plan)
+            }
 
-            Statement::ShowMetrics => Ok(Plan::ShowMetrics),
-            Statement::ShowProcessList => Ok(Plan::ShowProcessList),
-            Statement::ShowSettings => Ok(Plan::ShowSettings),
+            // Tables
+            Statement::CreateTable(stmt) => {
+                let plan = self.bind_create_table(stmt).await?;
+                Ok(plan)
+            }
+
+            // Views
+            Statement::CreateView(stmt) => {
+                let plan = self.bind_create_view(stmt).await?;
+                Ok(plan)
+            }
+            Statement::AlterView(stmt) => {
+                let plan = self.bind_alter_view(stmt).await?;
+                Ok(plan)
+            }
+
+            // Users
+            Statement::CreateUser(stmt) => {
+                let plan = self.bind_create_user(stmt).await?;
+                Ok(plan)
+            }
+            Statement::DropUser { if_exists, user } => {
+                let plan = DropUserPlan {
+                    if_exists: *if_exists,
+                    user: user.clone(),
+                };
+                Ok(Plan::DropUser(Box::new(plan)))
+            }
             Statement::AlterUser {
                 user,
                 auth_option,
@@ -158,21 +164,30 @@ impl<'a> Binder {
                     .await?;
                 Ok(plan)
             }
-            Statement::CreateUser(stmt) => {
-                let plan = self.bind_create_user(stmt).await?;
-                Ok(plan)
-            }
-            Statement::CreateView(stmt) => {
-                let plan = self.bind_create_view(stmt).await?;
-                Ok(plan)
-            }
 
-            Statement::DropUser { if_exists, user } => {
-                let plan = DropUserPlan {
-                    if_exists: *if_exists,
-                    user: user.clone(),
-                };
-                Ok(Plan::DropUser(Box::new(plan)))
+            // Stages
+            Statement::ShowStages => Ok(Plan::ShowStages),
+            Statement::ListStage { location, pattern } => {
+                self.bind_list_stage(location, pattern).await
+            }
+            Statement::DescribeStage { stage_name } => {
+                Ok(Plan::DescribeStage(Box::new(DescribeUserStagePlan {
+                    name: stage_name.clone(),
+                })))
+            }
+            Statement::CreateStage(stmt) => {
+                let plan = self.bind_create_stage(stmt).await?;
+                Ok(plan)
+            }
+            Statement::DropStage {
+                stage_name,
+                if_exists,
+            } => Ok(Plan::DropStage(Box::new(DropUserStagePlan {
+                if_exists: *if_exists,
+                name: stage_name.clone(),
+            }))),
+            Statement::RemoveStage { location, pattern } => {
+                self.bind_remove_stage(location, pattern).await
             }
 
             _ => Err(ErrorCode::UnImplement(format!(

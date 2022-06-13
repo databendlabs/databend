@@ -22,6 +22,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableMeta;
+use common_planners::validate_clustering;
 use common_planners::validate_expression;
 use common_planners::CreateTablePlan;
 use common_planners::PlanNode;
@@ -64,9 +65,9 @@ pub struct DfCreateTable {
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog, db, table) = resolve_table(&ctx, &self.name, "CREATE TABLE")?;
+        let (catalog, database, table) = resolve_table(&ctx, &self.name, "CREATE TABLE")?;
         let mut table_meta = self
-            .table_meta(ctx.clone(), catalog.as_str(), db.as_str())
+            .table_meta(ctx.clone(), catalog.as_str(), database.as_str())
             .await?;
         let if_not_exists = self.if_not_exists;
         let tenant = ctx.get_tenant();
@@ -99,8 +100,8 @@ impl AnalyzableStatement for DfCreateTable {
         let mut cluster_keys = vec![];
         for k in self.cluster_keys.iter() {
             let expr = expression_analyzer.analyze_sync(k)?;
-            // TODO(zhyass): Not all expressions are valid for cluster key.
             validate_expression(&expr, &table_meta.schema)?;
+            validate_clustering(&expr)?;
             cluster_keys.push(expr);
         }
 
@@ -115,7 +116,7 @@ impl AnalyzableStatement for DfCreateTable {
                 if_not_exists,
                 tenant,
                 catalog,
-                db,
+                database,
                 table,
                 table_meta,
                 cluster_keys: self.cluster_keys.iter().map(ToString::to_string).collect(),

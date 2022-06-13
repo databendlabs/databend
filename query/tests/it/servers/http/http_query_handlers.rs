@@ -464,7 +464,10 @@ async fn test_result_timeout() -> Result<()> {
         .unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let sql = "select sleep(0.1)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -489,7 +492,10 @@ async fn test_system_tables() -> Result<()> {
     let session_manager = SessionManagerBuilder::create().build().unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let sql = "select name from system.tables where database='system' order by name";
 
@@ -558,7 +564,10 @@ async fn test_query_log() -> Result<()> {
     let session_manager = SessionManagerBuilder::create().build().unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let sql = "create table t1(a int)";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
@@ -611,7 +620,10 @@ async fn test_query_log() -> Result<()> {
     let session_manager = SessionManagerBuilder::create().build().unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let sql = "select sleep(2)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -695,7 +707,10 @@ pub fn create_endpoint() -> EndpointType {
     let session_manager = SessionManagerBuilder::create().build().unwrap();
     Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager })
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        })
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
@@ -776,7 +791,10 @@ async fn test_auth_jwt() -> Result<()> {
         .unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let now = Some(Clock::now_since_epoch());
     let claims = JWTClaims {
@@ -868,7 +886,10 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let now = Some(Clock::now_since_epoch());
     let claims = JWTClaims {
@@ -1200,7 +1221,10 @@ async fn test_no_download_in_management_mode() -> Result<()> {
     let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
     let sql = "select 1";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);

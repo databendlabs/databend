@@ -14,63 +14,51 @@
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use common_exception::*;
+use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
 
-use crate::prelude::*;
+use crate::ColumnRef;
+use crate::DateConverter;
+use crate::PrimitiveColumn;
+use crate::Series;
+use crate::TypeSerializer;
 
-#[derive(Debug, Clone, Default)]
-pub struct TimestampSerializer;
+const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
-impl TimestampSerializer {
+#[derive(Debug, Clone)]
+pub struct TimestampSerializer<'a> {
+    pub(crate) values: &'a [i64],
+}
+
+impl<'a> TimestampSerializer<'a> {
+    pub fn try_create(col: &'a ColumnRef) -> Result<Self> {
+        let col: &PrimitiveColumn<i64> = Series::check_get(col)?;
+        Ok(Self {
+            values: col.values(),
+        })
+    }
     pub fn to_timestamp(&self, value: &i64, tz: &Tz) -> DateTime<Tz> {
         value.to_timestamp(tz)
     }
 }
 
-const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
-
-impl TypeSerializer for TimestampSerializer {
-    fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String> {
-        let value = DFTryFrom::try_from(value.clone())?;
-        let dt = self.to_timestamp(&value, &format.timezone);
-        Ok(dt.format(TIME_FMT).to_string())
+impl<'a> TypeSerializer<'a> for TimestampSerializer<'a> {
+    fn need_quote(&self) -> bool {
+        true
     }
 
-    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>> {
-        let column: &PrimitiveColumn<i64> = Series::check_get(column)?;
-        let result: Vec<String> = column
-            .iter()
-            .map(|v| {
-                let dt = self.to_timestamp(v, &format.timezone);
-                dt.format(TIME_FMT).to_string()
-            })
-            .collect();
-        Ok(result)
+    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        let dt = self.to_timestamp(&self.values[row_index], &format.timezone);
+        let s = dt.format(TIME_FMT).to_string();
+        buf.extend_from_slice(s.as_bytes())
     }
 
-    fn serialize_column_quoted(
-        &self,
-        column: &ColumnRef,
-        format: &FormatSettings,
-    ) -> Result<Vec<String>> {
-        let column: &PrimitiveColumn<i64> = Series::check_get(column)?;
-        let result: Vec<String> = column
-            .iter()
-            .map(|v| {
-                let dt = self.to_timestamp(v, &format.timezone);
-                format!("\"{}\"", dt.format(TIME_FMT))
-            })
-            .collect();
-        Ok(result)
-    }
-
-    fn serialize_json(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<Value>> {
-        let array: &PrimitiveColumn<i64> = Series::check_get(column)?;
-        let result: Vec<Value> = array
+    fn serialize_json(&self, format: &FormatSettings) -> Result<Vec<Value>> {
+        let result: Vec<Value> = self
+            .values
             .iter()
             .map(|v| {
                 let dt = self.to_timestamp(v, &format.timezone);
@@ -80,13 +68,31 @@ impl TypeSerializer for TimestampSerializer {
         Ok(result)
     }
 
-    fn serialize_clickhouse_format(
+    fn serialize_clickhouse_const(
         &self,
-        column: &ColumnRef,
+        format: &FormatSettings,
+        size: usize,
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
+        let times: Vec<DateTime<Tz>> = self
+            .values
+            .iter()
+            .map(|v| self.to_timestamp(v, &format.timezone))
+            .collect();
+        let mut values: Vec<DateTime<Tz>> = Vec::with_capacity(self.values.len() * size);
+        for _ in 0..size {
+            for v in times.iter() {
+                values.push(*v)
+            }
+        }
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
+    }
+
+    fn serialize_clickhouse_column(
+        &self,
         format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let array: &PrimitiveColumn<i64> = Series::check_get(column)?;
-        let values: Vec<DateTime<Tz>> = array
+        let values: Vec<DateTime<Tz>> = self
+            .values
             .iter()
             .map(|v| self.to_timestamp(v, &format.timezone))
             .collect();

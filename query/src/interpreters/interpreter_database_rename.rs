@@ -47,16 +47,16 @@ impl Interpreter for RenameDatabaseInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         for entity in &self.plan.entities {
-            let catalog = self.ctx.get_catalog(&entity.catalog_name)?;
+            let catalog = self.ctx.get_catalog(&entity.catalog)?;
             let tenant = self.plan.tenant.clone();
             catalog
                 .rename_database(RenameDatabaseReq {
                     if_exists: entity.if_exists,
                     name_ident: DatabaseNameIdent {
                         tenant,
-                        db_name: entity.db.clone(),
+                        db_name: entity.database.clone(),
                     },
-                    new_db_name: entity.new_db.clone(),
+                    new_db_name: entity.new_database.clone(),
                 })
                 .await?;
         }

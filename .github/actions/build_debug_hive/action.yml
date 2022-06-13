@@ -1,0 +1,51 @@
+name: "Build Debug"
+description: "Build with debug profile"
+inputs:
+  github_token:
+    description: "Github Token"
+    required: true
+  target:
+    description: ""
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
+    - uses: arduino/setup-protoc@v1
+      if: "contains(inputs.target, 'apple')"
+      with:
+        version: "3.x"
+        repo-token: ${{ inputs.github_token }}
+
+    - shell: bash
+      if: "contains(inputs.target, 'apple')"
+      run: rustup target add ${{ inputs.target }}
+
+    - shell: bash
+      if: "contains(inputs.target, 'apple')"
+      run: brew install thrift
+
+    - name: Setup Build Tool
+      if: "contains(inputs.target, 'linux')"
+      uses: ./.github/actions/setup_build_tool
+      with:
+        image: ${{ inputs.target }}
+
+    - shell: bash
+      run: cargo build --target ${{ inputs.target }} --bin databend-query --features hive
+
+    - shell: bash
+      if: "contains(inputs.target, 'linux')"
+      run: readelf -p .comment ./target/${{ inputs.target }}/debug/databend-query
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: debug-${{ github.sha }}-${{ inputs.target }}-hive
+        path: ./target/${{ inputs.target }}/debug/databend-*
+
+    # for cache
+    - shell: bash
+      run: cargo metadata --all-features --format-version 1 > ./target/metadata.json

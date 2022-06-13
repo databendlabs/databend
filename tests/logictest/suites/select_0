@@ -17,10 +17,10 @@ statement query FFTB label(http,mysql)
 select a,b,c,d from t4;
 
 ----  http
-     1.0 10.223999977111816 xxdsfs false
+     1.0 10.224 xxdsfs false
 
 ----  mysql
-     1.0 10.223999977111816 xxdsfs 0
+     1.0 10.224 xxdsfs 0
 
 statment ok
 drop table t4;

@@ -24,7 +24,7 @@ pub struct DropTablePlan {
     pub if_exists: bool,
     pub tenant: String,
     pub catalog: String,
-    pub db: String,
+    pub database: String,
     /// The table name
     pub table: String,
     pub all: bool,
@@ -42,7 +42,7 @@ impl From<DropTablePlan> for DropTableReq {
             if_exists: p.if_exists,
             name_ident: TableNameIdent {
                 tenant: p.tenant,
-                db_name: p.db,
+                db_name: p.database,
                 table_name: p.table,
             },
         }

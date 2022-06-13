@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::plan_table_undrop::UnDropTablePlan;
+use crate::plan_table_undrop::UndropTablePlan;
 use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
-use crate::AlterClusterKeyPlan;
+use crate::AlterTableClusterKeyPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::AlterViewPlan;
@@ -37,9 +37,9 @@ use crate::CreateViewPlan;
 use crate::DeletePlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
-use crate::DropClusterKeyPlan;
 use crate::DropDatabasePlan;
 use crate::DropRolePlan;
+use crate::DropTableClusterKeyPlan;
 use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
@@ -61,6 +61,7 @@ use crate::OptimizeTablePlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RemoveUserStagePlan;
 use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
@@ -75,7 +76,7 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::SubQueriesSetPlan;
 use crate::TruncateTablePlan;
-use crate::UnDropDatabasePlan;
+use crate::UndropDatabasePlan;
 use crate::UseDatabasePlan;
 
 #[allow(clippy::large_enum_variant)]
@@ -122,8 +123,8 @@ pub enum PlanNode {
     List(ListPlan),
 
     // Cluster key.
-    AlterClusterKey(AlterClusterKeyPlan),
-    DropClusterKey(DropClusterKeyPlan),
+    AlterTableClusterKey(AlterTableClusterKeyPlan),
+    DropTableClusterKey(DropTableClusterKeyPlan),
 
     // Show.
     Show(ShowPlan),
@@ -131,14 +132,14 @@ pub enum PlanNode {
     // Database.
     CreateDatabase(CreateDatabasePlan),
     DropDatabase(DropDatabasePlan),
-    UnDropDatabase(UnDropDatabasePlan),
+    UndropDatabase(UndropDatabasePlan),
     RenameDatabase(RenameDatabasePlan),
     ShowCreateDatabase(ShowCreateDatabasePlan),
 
     // Table.
     CreateTable(CreateTablePlan),
     DropTable(DropTablePlan),
-    UnDropTable(UnDropTablePlan),
+    UndropTable(UndropTablePlan),
     RenameTable(RenameTablePlan),
     TruncateTable(TruncateTablePlan),
     OptimizeTable(OptimizeTablePlan),
@@ -171,6 +172,7 @@ pub enum PlanNode {
     CreateUserStage(CreateUserStagePlan),
     DropUserStage(DropUserStagePlan),
     DescribeUserStage(DescribeUserStagePlan),
+    RemoveUserStage(RemoveUserStagePlan),
 
     // UDF.
     CreateUserUDF(CreateUserUDFPlan),
@@ -236,12 +238,12 @@ impl PlanNode {
             PlanNode::DropDatabase(v) => v.schema(),
             PlanNode::ShowCreateDatabase(v) => v.schema(),
             PlanNode::RenameDatabase(v) => v.schema(),
-            PlanNode::UnDropDatabase(v) => v.schema(),
+            PlanNode::UndropDatabase(v) => v.schema(),
 
             // Table.
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
-            PlanNode::UnDropTable(v) => v.schema(),
+            PlanNode::UndropTable(v) => v.schema(),
             PlanNode::RenameTable(v) => v.schema(),
             PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::OptimizeTable(v) => v.schema(),
@@ -274,6 +276,7 @@ impl PlanNode {
             PlanNode::CreateUserStage(v) => v.schema(),
             PlanNode::DropUserStage(v) => v.schema(),
             PlanNode::DescribeUserStage(v) => v.schema(),
+            PlanNode::RemoveUserStage(v) => v.schema(),
 
             // List
             PlanNode::List(v) => v.schema(),
@@ -293,8 +296,8 @@ impl PlanNode {
             PlanNode::Kill(v) => v.schema(),
 
             // Cluster key.
-            PlanNode::AlterClusterKey(v) => v.schema(),
-            PlanNode::DropClusterKey(v) => v.schema(),
+            PlanNode::AlterTableClusterKey(v) => v.schema(),
+            PlanNode::DropTableClusterKey(v) => v.schema(),
         }
     }
 
@@ -345,12 +348,12 @@ impl PlanNode {
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
             PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
             PlanNode::RenameDatabase(_) => "RenameDatabase",
-            PlanNode::UnDropDatabase(_) => "UnDropDatabase",
+            PlanNode::UndropDatabase(_) => "UndropDatabase",
 
             // Table.
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
-            PlanNode::UnDropTable(_) => "UndropTablePlan",
+            PlanNode::UndropTable(_) => "UndropTablePlan",
             PlanNode::RenameTable(_) => "RenameTablePlan",
             PlanNode::TruncateTable(_) => "TruncateTablePlan",
             PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
@@ -383,6 +386,7 @@ impl PlanNode {
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",
             PlanNode::DropUserStage(_) => "DropUserStagePlan",
             PlanNode::DescribeUserStage(_) => "DescribeUserStagePlan",
+            PlanNode::RemoveUserStage(_) => "RemoveUserStagePlan",
 
             // List
             PlanNode::List(_) => "ListPlan",
@@ -402,8 +406,8 @@ impl PlanNode {
             PlanNode::Kill(_) => "KillQuery",
 
             // Cluster key.
-            PlanNode::AlterClusterKey(_) => "AlterClusterKeyPlan",
-            PlanNode::DropClusterKey(_) => "DropClusterKeyPlan",
+            PlanNode::AlterTableClusterKey(_) => "AlterTableClusterKeyPlan",
+            PlanNode::DropTableClusterKey(_) => "DropTableClusterKeyPlan",
         }
     }
 

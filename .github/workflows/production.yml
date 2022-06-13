@@ -30,7 +30,6 @@ jobs:
 
   build_macos:
     runs-on: macos-11
-    needs: check
     strategy:
       matrix:
         target:
@@ -47,8 +46,7 @@ jobs:
           target: ${{ matrix.target }}
 
   build_linux:
-    runs-on: ubuntu-latest
-    needs: check
+    runs-on: [self-hosted, x64, Linux]
     strategy:
       matrix:
         target:
@@ -65,7 +63,6 @@ jobs:
 
   test_unit:
     runs-on: [self-hosted, x64, Linux]
-    needs: check
     steps:
       - uses: actions/checkout@v3
         with:
@@ -163,7 +160,6 @@ jobs:
       - test_stateless_cluster_linux
       - test_stateful_standalone
       - test_sqllogic_standalone_linux
-      - test_sqllogic_standalone_macos
     strategy:
       matrix:
         config:

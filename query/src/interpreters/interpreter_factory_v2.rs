@@ -16,24 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
-use super::interpreter_user_stage_drop::DropUserStageInterpreter;
-use super::CreateDatabaseInterpreter;
-use super::CreateTableInterpreter;
-use super::CreateUserInterpreter;
-use super::CreateUserStageInterpreter;
-use super::CreateViewInterpreter;
-use super::DropDatabaseInterpreter;
-use super::ExplainInterpreterV2;
-use super::InterpreterPtr;
-use super::ListInterpreter;
-use super::SelectInterpreterV2;
-use super::ShowMetricsInterpreter;
-use super::ShowProcessListInterpreter;
-use super::ShowSettingsInterpreter;
-use super::ShowStagesInterpreter;
-use crate::interpreters::AlterUserInterpreter;
-use crate::interpreters::DropUserInterpreter;
+use super::*;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -52,13 +35,19 @@ impl InterpreterFactoryV2 {
                 | DfStatement::Explain(_)
                 | DfStatement::CreateStage(_)
                 | DfStatement::ShowStages(_)
+                | DfStatement::DescribeStage(_)
+                | DfStatement::List(_)
+                | DfStatement::DropStage(_)
+                | DfStatement::RemoveStage(_)
                 | DfStatement::CreateTable(_)
                 | DfStatement::CreateView(_)
+                | DfStatement::AlterView(_)
                 | DfStatement::ShowMetrics(_)
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
                 | DfStatement::CreateDatabase(_)
                 | DfStatement::DropDatabase(_)
+                | DfStatement::AlterDatabase(_)
         )
     }
 
@@ -77,36 +66,53 @@ impl InterpreterFactoryV2 {
             Plan::Explain { kind, plan } => {
                 ExplainInterpreterV2::try_create(ctx, *plan.clone(), kind.clone())
             }
-            Plan::CreateTable(create_table) => {
-                CreateTableInterpreter::try_create(ctx, *create_table.clone())
-            }
-            Plan::CreateStage(create_stage) => {
-                CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())
-            }
-            Plan::ShowStages => ShowStagesInterpreter::try_create(ctx),
-            Plan::DropStage(s) => DropUserStageInterpreter::try_create(ctx, *s.clone()),
-            Plan::DescStage(s) => DescribeUserStageInterpreter::try_create(ctx, *s.clone()),
-            Plan::ListStage(s) => ListInterpreter::try_create(ctx, *s.clone()),
 
-            Plan::CreateDatabase(create_database) => {
-                CreateDatabaseInterpreter::try_create(ctx, create_database.clone())
-            }
-            Plan::DropDatabase(drop_database) => {
-                DropDatabaseInterpreter::try_create(ctx, drop_database.clone())
-            }
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
             Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
-            Plan::AlterUser(alter_user) => {
-                AlterUserInterpreter::try_create(ctx, *alter_user.clone())
+
+            // Databases
+            Plan::CreateDatabase(create_database) => {
+                CreateDatabaseInterpreter::try_create(ctx, *create_database.clone())
             }
-            Plan::CreateUser(create_user) => {
-                CreateUserInterpreter::try_create(ctx, *create_user.clone())
+            Plan::DropDatabase(drop_database) => {
+                DropDatabaseInterpreter::try_create(ctx, *drop_database.clone())
             }
+            Plan::RenameDatabase(rename_database) => {
+                RenameDatabaseInterpreter::try_create(ctx, *rename_database.clone())
+            }
+
+            // Tables
+            Plan::CreateTable(create_table) => {
+                CreateTableInterpreter::try_create(ctx, *create_table.clone())
+            }
+
+            // Views
             Plan::CreateView(create_view) => {
                 CreateViewInterpreter::try_create(ctx, *create_view.clone())
             }
+            Plan::AlterView(alter_view) => {
+                AlterViewInterpreter::try_create(ctx, *alter_view.clone())
+            }
+
+            // Users
+            Plan::CreateUser(create_user) => {
+                CreateUserInterpreter::try_create(ctx, *create_user.clone())
+            }
             Plan::DropUser(drop_user) => DropUserInterpreter::try_create(ctx, *drop_user.clone()),
+            Plan::AlterUser(alter_user) => {
+                AlterUserInterpreter::try_create(ctx, *alter_user.clone())
+            }
+
+            // Stages
+            Plan::ShowStages => ShowStagesInterpreter::try_create(ctx),
+            Plan::ListStage(s) => ListInterpreter::try_create(ctx, *s.clone()),
+            Plan::DescribeStage(s) => DescribeUserStageInterpreter::try_create(ctx, *s.clone()),
+            Plan::CreateStage(create_stage) => {
+                CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())
+            }
+            Plan::DropStage(s) => DropUserStageInterpreter::try_create(ctx, *s.clone()),
+            Plan::RemoveStage(s) => RemoveUserStageInterpreter::try_create(ctx, *s.clone()),
         }?;
         Ok(inner)
     }

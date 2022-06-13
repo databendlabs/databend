@@ -1019,32 +1019,25 @@ select '===Array Literal===';
 ----  
 ===Array Literal===
 
-statement query I label(mysql,http)
+statement query I
 select [1, 2, 3];
 
-----  mysql
+----
 [1, 2, 3]
 
-----  http
-{'Array': [{'UInt64': 1}, {'UInt64': 2}, {'UInt64': 3}]}
 
-statement query T label(mysql,http)
+statement query T
 select [];
 
-----  mysql
+----
 []
 
-----  http
-{'Array': []}
 
-statement query T label(mysql,http)
+statement query T
 select [[1, 2, 3],[1, 2, 3]];
 
-----  mysql
+----
 [[1, 2, 3], [1, 2, 3]]
-
-----  http
-{'Array': [{'Array': [{'UInt64': 1}, {'UInt64': 2}, {'UInt64': 3}]}, {'Array': [{'UInt64': 1}, {'UInt64': 2}, {'UInt64': 3}]}]}
 
 statement query T 
 select '====Correlated Subquery====';
@@ -1091,9 +1084,8 @@ explain select t1.a from t1 where a > 0;
 
 ----  mysql
 Project: [a]
-    EvalScalar: []
-        Filter: [a > 0]
-            PhysicalScan: default.default.t1
+    Filter: [a > 0]
+        PhysicalScan: default.default.t1
 
 
 ----  http

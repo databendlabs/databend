@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::StageFile;
 use common_meta_types::UserStageInfo;
 
 use crate::users::UserApiProvider;
@@ -54,7 +55,7 @@ impl UserApiProvider {
         let get_stages = stage_api_provider.get_stages();
 
         match get_stages.await {
-            Err(e) => Err(e.add_message_back("(while get stages).")),
+            Err(e) => Err(e.add_message_back(" (while get stages)")),
             Ok(seq_stages_info) => Ok(seq_stages_info),
         }
     }
@@ -62,16 +63,45 @@ impl UserApiProvider {
     // Drop a stage by name.
     pub async fn drop_stage(&self, tenant: &str, name: &str, if_exists: bool) -> Result<()> {
         let stage_api_provider = self.get_stage_api_client(tenant)?;
-        let drop_stage = stage_api_provider.drop_stage(name, None);
+        let drop_stage = stage_api_provider.drop_stage(name);
         match drop_stage.await {
             Ok(res) => Ok(res),
             Err(e) => {
                 if if_exists && e.code() == ErrorCode::unknown_stage_code() {
                     Ok(())
                 } else {
-                    Err(e.add_message_back("(while drop stage)"))
+                    Err(e.add_message_back(" (while drop stage)"))
                 }
             }
+        }
+    }
+
+    // List files in a stage.
+    pub async fn list_files(&self, tenant: &str, name: &str) -> Result<Vec<StageFile>> {
+        let stage_api_provider = self.get_stage_api_client(tenant)?;
+        let list_files = stage_api_provider.list_files(name).await;
+        match list_files {
+            Ok(res) => Ok(res),
+            Err(e) => Err(e.add_message_back(" (while list files)")),
+        }
+    }
+
+    // Add file to a stage.
+    pub async fn add_file(&self, tenant: &str, name: &str, file: StageFile) -> Result<u64> {
+        let stage_api_provider = self.get_stage_api_client(tenant)?;
+        let add_file = stage_api_provider.add_file(name, file).await;
+        match add_file {
+            Ok(res) => Ok(res),
+            Err(e) => Err(e.add_message_back(" (while add file)")),
+        }
+    }
+
+    pub async fn remove_files(&self, tenant: &str, name: &str, files: Vec<String>) -> Result<()> {
+        let stage_api_provider = self.get_stage_api_client(tenant)?;
+        let remove_files = stage_api_provider.remove_files(name, files).await;
+        match remove_files {
+            Ok(res) => Ok(res),
+            Err(e) => Err(e.add_message_back(" (while remove files)")),
         }
     }
 }

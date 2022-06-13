@@ -50,7 +50,7 @@ impl Interpreter for DropTableInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.db.as_str();
+        let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
         let tbl = self
             .ctx
@@ -70,7 +70,7 @@ impl Interpreter for DropTableInterpreter {
             if table.get_table_info().engine() == VIEW_ENGINE {
                 return Err(ErrorCode::UnexpectedError(format!(
                     "{}.{} is VIEW, please use `DROP VIEW {}.{}`",
-                    &self.plan.db, &self.plan.table, &self.plan.db, &self.plan.table
+                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
                 )));
             }
         };
@@ -85,7 +85,7 @@ impl Interpreter for DropTableInterpreter {
                 let _ = tbl
                     .truncate(self.ctx.clone(), TruncateTablePlan {
                         catalog: self.plan.catalog.clone(),
-                        db: self.plan.db.clone(),
+                        database: self.plan.database.clone(),
                         table: self.plan.table.clone(),
                         purge: true,
                     })

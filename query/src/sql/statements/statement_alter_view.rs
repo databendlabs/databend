@@ -44,12 +44,12 @@ impl AnalyzableStatement for DfAlterView {
         let _ = self.query.analyze(ctx.clone()).await?;
         let subquery = self.subquery.clone();
         let tenant = ctx.get_tenant();
-        let (catalog, db, viewname) = resolve_table(&ctx, &self.name, "ALTER VIEW")?;
+        let (catalog, database, viewname) = resolve_table(&ctx, &self.name, "ALTER VIEW")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::AlterView(
             AlterViewPlan {
                 tenant,
                 catalog,
-                db,
+                database,
                 viewname,
                 subquery,
             },

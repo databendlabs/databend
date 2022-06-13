@@ -73,7 +73,7 @@ async fn test_block_pruner() -> Result<()> {
         catalog: "default".to_owned(),
         if_not_exists: false,
         tenant: fixture.default_tenant(),
-        db: fixture.default_db_name(),
+        database: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
         table_meta: TableMeta {
             schema: test_schema.clone(),
@@ -213,7 +213,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         catalog: "default".to_owned(),
         if_not_exists: false,
         tenant: fixture.default_tenant(),
-        db: fixture.default_db_name(),
+        database: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
         table_meta: TableMeta {
             schema: test_schema.clone(),

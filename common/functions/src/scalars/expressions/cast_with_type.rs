@@ -234,9 +234,9 @@ pub fn cast_to_variant(
     }
     let mut builder = ColumnBuilder::<VariantValue>::with_capacity(size);
     if from_type.data_type_id().is_numeric() || from_type.data_type_id() == TypeID::Boolean {
-        let serializer = from_type.create_serializer();
+        let serializer = from_type.create_serializer(&column)?;
         let format = FormatSettings::default();
-        match serializer.serialize_json_object(&column, None, &format) {
+        match serializer.serialize_json_object(None, &format) {
             Ok(values) => {
                 for v in values {
                     builder.append(&VariantValue::from(v));

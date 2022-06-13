@@ -289,9 +289,8 @@ impl<'a> TypeChecker<'a> {
                         .map(|literal| self.resolve_literal(literal, None).map(|(value, _)| value))
                         .collect::<Result<Vec<DataValue>>>()?;
 
-                    let mut arguments = vec![];
-
                     self.in_aggregate_function = true;
+                    let mut arguments = vec![];
                     for arg in args.iter() {
                         arguments.push(self.resolve(arg, None).await?);
                     }

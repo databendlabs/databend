@@ -225,7 +225,7 @@ fn alter_table() -> Result<()> {
         let new_table_name = ObjectName(vec![Ident::new("t2")]);
         let expected = DfStatement::AlterTable(DfAlterTable {
             if_exists: false,
-            table_name,
+            table: table_name,
             action: AlterTableAction::RenameTable(new_table_name),
         });
         expect_parse_ok(sql, expected)?;
@@ -306,13 +306,13 @@ fn truncate_table() -> Result<()> {
 }
 
 #[test]
-fn alter_cluster_key() -> Result<()> {
+fn alter_table_cluster_key() -> Result<()> {
     {
         let sql = "ALTER TABLE t1 CLUSTER BY (a, b)";
         let expected = DfStatement::AlterTable(DfAlterTable {
             if_exists: false,
-            table_name: ObjectName(vec![Ident::new("t1")]),
-            action: AlterTableAction::AlterClusterKey(vec![
+            table: ObjectName(vec![Ident::new("t1")]),
+            action: AlterTableAction::AlterTableClusterKey(vec![
                 Expr::Identifier(Ident::new("a")),
                 Expr::Identifier(Ident::new("b")),
             ]),
@@ -323,13 +323,13 @@ fn alter_cluster_key() -> Result<()> {
 }
 
 #[test]
-fn drop_cluster_key() -> Result<()> {
+fn drop_table_cluster_key() -> Result<()> {
     {
         let sql = "ALTER TABLE t1 DROP CLUSTER KEY";
         let expected = DfStatement::AlterTable(DfAlterTable {
             if_exists: false,
-            table_name: ObjectName(vec![Ident::new("t1")]),
-            action: AlterTableAction::DropClusterKey,
+            table: ObjectName(vec![Ident::new("t1")]),
+            action: AlterTableAction::DropTableClusterKey,
         });
         expect_parse_ok(sql, expected)?;
     }

@@ -1,0 +1,45 @@
+name: Test Tool Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  release_logic_test_docker_image:
+    name: release logic test docker image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+
+      - uses: ./.github/actions/setup_docker
+        id: login
+        with:
+          repo: sqllogictest
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          tags: |
+            ${{ steps.login.outputs.dockerhub_repo }}:latest
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ steps.get_version.outputs.VERSION }}
+            ${{ steps.login.outputs.ecr_repo }}:latest
+            ${{ steps.login.outputs.ecr_repo }}:${{ steps.get_version.outputs.VERSION }}
+          platforms: linux/amd64
+          context: ./tests/logictest/
+          file: ./tests/logictest/Dockerfile
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
