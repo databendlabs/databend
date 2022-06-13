@@ -169,8 +169,8 @@ impl Rule for RulePushDownFilterJoin {
                     // a super type. If the coercion is failed, we cannot push the
                     // predicate into join.
                     if let Ok(join_key_type) = join_key_type {
-                        if join.join_type == JoinType::CrossJoin {
-                            join.join_type = JoinType::InnerJoin;
+                        if join.join_type == JoinType::Cross {
+                            join.join_type = JoinType::Inner;
                         }
                         let left = wrap_cast_if_needed(left.clone(), &join_key_type);
                         let right = wrap_cast_if_needed(right.clone(), &join_key_type);

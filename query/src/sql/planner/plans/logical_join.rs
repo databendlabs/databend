@@ -26,15 +26,43 @@ use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum JoinType {
-    InnerJoin,
-    LeftJoin,
-    RightJoin,
-    FullJoin,
-    SemiJoin,
-    AntiJoin,
-    CrossJoin,
+    Inner,
+    Left,
+    Right,
+    Full,
+    Semi,
+    Anti,
+    Cross,
+}
+
+impl Display for JoinType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JoinType::Inner => {
+                write!(f, "INNER")
+            }
+            JoinType::Left => {
+                write!(f, "LEFT OUTER")
+            }
+            JoinType::Right => {
+                write!(f, "RIGHT OUTER")
+            }
+            JoinType::Full => {
+                write!(f, "FULL OUTER")
+            }
+            JoinType::Semi => {
+                write!(f, "SEMI")
+            }
+            JoinType::Anti => {
+                write!(f, "ANTI")
+            }
+            JoinType::Cross => {
+                write!(f, "CROSS")
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -99,19 +127,5 @@ impl LogicalPlan for LogicalInnerJoin {
             output_columns,
             outer_columns,
         })
-    }
-}
-
-impl Display for JoinType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            JoinType::InnerJoin => write!(f, "InnerJoin"),
-            JoinType::LeftJoin => write!(f, "LeftJoin"),
-            JoinType::RightJoin => write!(f, "RightJoin"),
-            JoinType::FullJoin => write!(f, "FullJoin"),
-            JoinType::SemiJoin => write!(f, "SemiJoin"),
-            JoinType::AntiJoin => write!(f, "AntiJoin"),
-            JoinType::CrossJoin => write!(f, "CrossJoin"),
-        }
     }
 }

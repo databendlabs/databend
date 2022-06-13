@@ -140,7 +140,7 @@ fn test_format() {
                 },
             }
             .into()],
-            join_type: JoinType::InnerJoin,
+            join_type: JoinType::Inner,
         }
         .into(),
         SExpr::create_unary(
