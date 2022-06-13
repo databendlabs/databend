@@ -35,6 +35,7 @@ use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::ConditionResult;
+use common_meta_types::DeleteByPrefixReply;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
@@ -215,6 +216,22 @@ impl StateMachine {
         Ok((snap, last_applied, snapshot_id))
     }
 
+    fn scan_prefix_if_needed(
+        &self,
+        entry: &Entry<LogEntry>,
+    ) -> Result<Option<Vec<(String, SeqV)>>, MetaStorageError> {
+        match entry.payload {
+            EntryPayload::Normal(ref data) => match &data.cmd {
+                Cmd::DeleteByPrefix(req) => {
+                    let kvs = self.kvs();
+                    Ok(Some(kvs.scan_prefix(&req.prefix)?))
+                }
+                _ => Ok(None),
+            },
+            _ => Ok(None),
+        }
+    }
+
     /// Apply an log entry to state machine.
     ///
     /// If a duplicated log entry is detected by checking data.txid, no update
@@ -228,6 +245,8 @@ impl StateMachine {
         let log_id = &entry.log_id;
 
         tracing::debug!("sled tx start: {:?}", entry);
+
+        let kv_pairs = self.scan_prefix_if_needed(entry)?;
 
         let result = self.sm_tree.txn(true, move |txn_tree| {
             let txn_sm_meta = txn_tree.key_space::<StateMachineMeta>();
@@ -244,7 +263,7 @@ impl StateMachine {
                         }
                     }
 
-                    let res = self.apply_cmd(&data.cmd, &txn_tree);
+                    let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref());
                     let applied_state = res?;
 
                     if let Some(ref txid) = data.txid {
@@ -638,6 +657,33 @@ impl StateMachine {
         Ok(AppliedState::TxnReply(resp))
     }
 
+    //#[tracing::instrument(level = "debug", skip(self, txn_tree, req))]
+    pub fn apply_delete_by_prefix_cmd(
+        &self,
+        kv_pairs: Option<&Vec<(String, SeqV)>>,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let mut count: i32 = 0;
+        if let Some(kv_pairs) = kv_pairs {
+            let sub_tree = txn_tree.key_space::<GenericKV>();
+            for (key, _seq) in kv_pairs.iter() {
+                let ret = self.txn_sub_tree_upsert(
+                    &sub_tree,
+                    key,
+                    &MatchSeq::Any,
+                    Operation::Delete,
+                    None,
+                );
+                if ret.is_ok() {
+                    count += 1;
+                }
+            }
+        }
+        Ok(AppliedState::DeleteByPrefixReply(DeleteByPrefixReply {
+            count,
+        }))
+    }
+
     /// Apply a `Cmd` to state machine.
     ///
     /// Already applied log should be filtered out before passing into this function.
@@ -648,6 +694,7 @@ impl StateMachine {
         &self,
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
+        kv_pairs: Option<&Vec<(String, SeqV)>>,
     ) -> Result<AppliedState, MetaStorageError> {
         tracing::debug!("apply_cmd: {:?}", cmd);
 
@@ -678,6 +725,7 @@ impl StateMachine {
             } => self.apply_update_kv_cmd(key, seq, value_op, value_meta, txn_tree),
 
             Cmd::Transaction(txn) => self.apply_txn_cmd(txn, txn_tree),
+            Cmd::DeleteByPrefix(_req) => self.apply_delete_by_prefix_cmd(kv_pairs, txn_tree),
         }
     }
 

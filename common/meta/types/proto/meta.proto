@@ -145,6 +145,10 @@ message TxnReply {
   string error = 3;
 }
 
+message DeleteByPrefixRequest { string prefix = 1; }
+
+message DeleteByPrefixReply { int32 count = 1; }
+
 service RaftService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}

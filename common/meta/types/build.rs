@@ -108,6 +108,14 @@ fn build_proto() {
             "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
         )
         .type_attribute(
+            "DeleteByPrefixRequest",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "DeleteByPrefixReply",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
             "WatchRequest",
             "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
         )

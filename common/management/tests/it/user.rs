@@ -21,6 +21,8 @@ use common_exception::ErrorCode;
 use common_management::*;
 use common_meta_api::KVApi;
 use common_meta_types::AuthInfo;
+use common_meta_types::DeleteByPrefixReply;
+use common_meta_types::DeleteByPrefixRequest;
 use common_meta_types::GetKVReply;
 use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
@@ -58,6 +60,10 @@ mock! {
 
         async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError>;
 
+        async fn delete_by_prefix(
+            &self,
+            req: DeleteByPrefixRequest,
+        ) -> Result<DeleteByPrefixReply, MetaError>;
         }
 }
 

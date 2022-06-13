@@ -15,6 +15,8 @@
 use common_meta_api::KVApi;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
+use common_meta_types::DeleteByPrefixReply;
+use common_meta_types::DeleteByPrefixRequest;
 use common_meta_types::GetKVReply;
 use common_meta_types::MGetKVReply;
 use common_meta_types::MetaError;
@@ -38,7 +40,7 @@ impl KVApi for StateMachine {
         };
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t).unwrap();
+            let r = self.apply_cmd(&cmd, &t, None).unwrap();
             Ok(r)
         })?;
 
@@ -54,7 +56,7 @@ impl KVApi for StateMachine {
         let cmd = Cmd::Transaction(txn);
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t).unwrap();
+            let r = self.apply_cmd(&cmd, &t, None).unwrap();
             Ok(r)
         })?;
 
@@ -107,5 +109,26 @@ impl KVApi for StateMachine {
         let x = x.map(|(k, v)| (k, v.unwrap()));
 
         Ok(x.collect())
+    }
+
+    async fn delete_by_prefix(
+        &self,
+        req: DeleteByPrefixRequest,
+    ) -> Result<DeleteByPrefixReply, MetaError> {
+        let kvs = self.kvs();
+        let kv_pairs = kvs.scan_prefix(&req.prefix)?;
+        let res = self.sm_tree.txn(true, |t| {
+            let r = self
+                .apply_delete_by_prefix_cmd(Some(&kv_pairs), &t)
+                .unwrap();
+            Ok(r)
+        })?;
+
+        match res {
+            AppliedState::DeleteByPrefixReply(x) => Ok(x),
+            _ => {
+                panic!("expect AppliedState::KV");
+            }
+        }
     }
 }

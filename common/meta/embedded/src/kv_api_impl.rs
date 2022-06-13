@@ -15,6 +15,8 @@
 use async_trait::async_trait;
 use common_meta_api::KVApi;
 pub use common_meta_sled_store::init_temp_sled_db;
+use common_meta_types::DeleteByPrefixReply;
+use common_meta_types::DeleteByPrefixRequest;
 use common_meta_types::GetKVReply;
 use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
@@ -51,5 +53,13 @@ impl KVApi for MetaEmbedded {
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
         let sm = self.inner.lock().await;
         sm.transaction(txn).await
+    }
+
+    async fn delete_by_prefix(
+        &self,
+        req: DeleteByPrefixRequest,
+    ) -> Result<DeleteByPrefixReply, MetaError> {
+        let sm = self.inner.lock().await;
+        sm.delete_by_prefix(req).await
     }
 }

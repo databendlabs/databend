@@ -16,6 +16,8 @@ use async_trait::async_trait;
 use common_meta_api::KVApi;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
+use common_meta_types::DeleteByPrefixReply;
+use common_meta_types::DeleteByPrefixRequest;
 use common_meta_types::GetKVReply;
 use common_meta_types::GetKVReq;
 use common_meta_types::ListKVReply;
@@ -107,6 +109,28 @@ impl KVApi for MetaNode {
             AppliedState::TxnReply(x) => Ok(x),
             _ => Err(MetaError::MetaResultError(MetaResultError::InvalidType {
                 expect: "AppliedState::transaction".to_string(),
+                got: "other".to_string(),
+            })),
+        }
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, req))]
+    async fn delete_by_prefix(
+        &self,
+        req: DeleteByPrefixRequest,
+    ) -> Result<DeleteByPrefixReply, MetaError> {
+        //tracing::debug!(req = display(&req), "MetaNode::delete_by_prefix()");
+
+        let ent = LogEntry {
+            txid: None,
+            cmd: Cmd::DeleteByPrefix(req),
+        };
+        let rst = self.write(ent).await?;
+
+        match rst {
+            AppliedState::DeleteByPrefixReply(x) => Ok(x),
+            _ => Err(MetaError::MetaResultError(MetaResultError::InvalidType {
+                expect: "AppliedState::DeleteByPrefixReply".to_string(),
                 got: "other".to_string(),
             })),
         }

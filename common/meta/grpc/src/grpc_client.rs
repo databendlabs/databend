@@ -313,6 +313,10 @@ impl MetaGrpcClient {
                     let resp = self.make_client().await;
                     resp.map(message::Response::MakeClient)
                 }
+                message::Request::DeleteByPrefix(req) => {
+                    let resp = self.delete_by_prefix(req).await;
+                    resp.map(message::Response::DeleteByPrefix)
+                }
             };
 
             tracing::debug!(

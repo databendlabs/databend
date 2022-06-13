@@ -29,6 +29,12 @@ async fn test_kv_delete() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn test_kv_delete_by_prefix() -> anyhow::Result<()> {
+    let kv = MetaEmbedded::new_temp().await?;
+    KVApiTestSuite {}.kv_delete_by_prefix(&kv).await
+}
+
+#[tokio::test]
 async fn test_kv_update() -> anyhow::Result<()> {
     let kv = MetaEmbedded::new_temp().await?;
     KVApiTestSuite {}.kv_update(&kv).await

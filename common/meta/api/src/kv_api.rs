@@ -16,6 +16,8 @@
 use std::ops::Deref;
 
 use async_trait::async_trait;
+use common_meta_types::DeleteByPrefixReply;
+use common_meta_types::DeleteByPrefixRequest;
 use common_meta_types::GetKVReply;
 use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
@@ -48,6 +50,12 @@ pub trait KVApi: Send + Sync {
     async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
 
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError>;
+
+    // remove keys with prefix
+    async fn delete_by_prefix(
+        &self,
+        req: DeleteByPrefixRequest,
+    ) -> Result<DeleteByPrefixReply, MetaError>;
 }
 
 #[async_trait]
@@ -70,5 +78,12 @@ impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
 
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
         self.deref().transaction(txn).await
+    }
+
+    async fn delete_by_prefix(
+        &self,
+        req: DeleteByPrefixRequest,
+    ) -> Result<DeleteByPrefixReply, MetaError> {
+        self.deref().delete_by_prefix(req).await
     }
 }

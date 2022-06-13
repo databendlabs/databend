@@ -20,6 +20,7 @@ use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
 use common_meta_types::txn_op_response;
 use common_meta_types::ConditionResult;
+use common_meta_types::DeleteByPrefixRequest;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
@@ -60,6 +61,7 @@ impl KVApiTestSuite {
         self.kv_mget(&builder.build().await).await?;
         self.kv_txn_absent_seq_0(&builder.build().await).await?;
         self.kv_transaction(&builder.build().await).await?;
+        self.kv_delete_by_prefix(&builder.build().await).await?;
 
         // Run cross node test on every 2 adjacent nodes
         let mut i = 0;
@@ -220,6 +222,51 @@ impl KVApiTestSuite {
             (res.prev, res.result)
         );
 
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "info", skip(self, kv))]
+    pub async fn kv_delete_by_prefix<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        tracing::info!("--- KVApiTestSuite::kv_delete_by_prefix() start");
+        let test_prefix = "test";
+
+        let match_keys = vec![
+            format!("{}_key1", test_prefix),
+            format!("{}/key2", test_prefix),
+            format!("{}key3", test_prefix),
+        ];
+
+        let unmatch_keys = vec!["teskey4".to_string()];
+
+        for key in [match_keys.clone(), unmatch_keys.clone()].concat().iter() {
+            kv.upsert_kv(UpsertKVReq::new(
+                key,
+                MatchSeq::Any,
+                Operation::Update(b"v1".to_vec()),
+                None,
+            ))
+            .await?;
+
+            let current = kv.get_kv(key).await?;
+            assert!(current.is_some());
+        }
+
+        let resp = kv
+            .delete_by_prefix(DeleteByPrefixRequest {
+                prefix: test_prefix.to_string(),
+            })
+            .await?;
+
+        assert_eq!(resp.count as usize, match_keys.len());
+
+        for key in match_keys.iter() {
+            let current = kv.get_kv(key).await?;
+            assert!(current.is_none());
+        }
+        for key in unmatch_keys.iter() {
+            let current = kv.get_kv(key).await?;
+            assert!(current.is_some());
+        }
         Ok(())
     }
 

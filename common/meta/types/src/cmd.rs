@@ -18,6 +18,7 @@ use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::DeleteByPrefixRequest;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
@@ -74,6 +75,8 @@ pub enum Cmd {
     },
 
     Transaction(TxnRequest),
+
+    DeleteByPrefix(DeleteByPrefixRequest),
 }
 
 impl fmt::Display for Cmd {
@@ -111,6 +114,9 @@ impl fmt::Display for Cmd {
             }
             Cmd::Transaction(txn) => {
                 write!(f, "txn:{:?}", txn)
+            }
+            Cmd::DeleteByPrefix(req) => {
+                write!(f, "DeleteByPrefix:{:?}", req)
             }
         }
     }

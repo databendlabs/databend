@@ -20,6 +20,7 @@ use serde::Serialize;
 
 use crate::AddResult;
 use crate::Change;
+use crate::DeleteByPrefixReply;
 use crate::MetaError;
 use crate::Node;
 use crate::TxnReply;
@@ -46,6 +47,8 @@ pub enum AppliedState {
     },
 
     KV(Change<Vec<u8>>),
+
+    DeleteByPrefixReply(DeleteByPrefixReply),
 
     TxnReply(TxnReply),
 
@@ -114,6 +117,7 @@ impl AppliedState {
             AppliedState::KV(ref ch) => ch.changed(),
             AppliedState::None => false,
             AppliedState::TxnReply(txn) => txn.success,
+            AppliedState::DeleteByPrefixReply(reply) => reply.count > 0,
         }
     }
 
@@ -141,6 +145,7 @@ impl AppliedState {
             AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::None => true,
             AppliedState::TxnReply(_txn) => true,
+            AppliedState::DeleteByPrefixReply(_r) => true,
         }
     }
 
@@ -152,6 +157,7 @@ impl AppliedState {
             AppliedState::KV(Change { ref result, .. }) => result.is_none(),
             AppliedState::None => true,
             AppliedState::TxnReply(txn) => !txn.success,
+            AppliedState::DeleteByPrefixReply(r) => r.count == 0,
         }
     }
 }

@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_meta_api::KVApi;
+use common_meta_types::DeleteByPrefixReply;
+use common_meta_types::DeleteByPrefixRequest;
 use common_meta_types::GetKVReply;
 use common_meta_types::GetKVReq;
 use common_meta_types::ListKVReply;
@@ -63,6 +65,14 @@ impl KVApi for MetaGrpcClient {
         let reply = self.transaction(txn).await?;
         Ok(reply)
     }
+
+    async fn delete_by_prefix(
+        &self,
+        req: DeleteByPrefixRequest,
+    ) -> Result<DeleteByPrefixReply, MetaError> {
+        let reply = self.do_write(req).await?;
+        Ok(reply)
+    }
 }
 
 #[tonic::async_trait]
@@ -98,6 +108,14 @@ impl KVApi for ClientHandle {
 
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
         let reply = self.request(txn).await?;
+        Ok(reply)
+    }
+
+    async fn delete_by_prefix(
+        &self,
+        req: DeleteByPrefixRequest,
+    ) -> Result<DeleteByPrefixReply, MetaError> {
+        let reply = self.request(req).await?;
         Ok(reply)
     }
 }

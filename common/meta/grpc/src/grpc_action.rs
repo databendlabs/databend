@@ -22,6 +22,8 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::CreateShareReply;
 use common_meta_types::CreateShareReq;
+use common_meta_types::DeleteByPrefixReply;
+use common_meta_types::DeleteByPrefixRequest;
 use common_meta_types::DropShareReply;
 use common_meta_types::DropShareReq;
 use common_meta_types::GetKVReply;
@@ -54,6 +56,7 @@ pub trait RequestFor {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaGrpcWriteReq {
     UpsertKV(UpsertKVReq),
+    DeleteByPrefix(DeleteByPrefixRequest),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
@@ -158,6 +161,10 @@ impl RequestFor for ExportReq {
 
 impl RequestFor for MakeClient {
     type Reply = MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>;
+}
+
+impl RequestFor for DeleteByPrefixRequest {
+    type Reply = DeleteByPrefixReply;
 }
 
 // -- share

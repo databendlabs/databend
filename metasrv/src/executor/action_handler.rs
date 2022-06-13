@@ -50,6 +50,10 @@ impl ActionHandler {
                 let r = self.meta_node.upsert_kv(a).await;
                 RaftReply::from(r)
             }
+            MetaGrpcWriteReq::DeleteByPrefix(a) => {
+                let r = self.meta_node.delete_by_prefix(a).await;
+                RaftReply::from(r)
+            }
         }
     }
 

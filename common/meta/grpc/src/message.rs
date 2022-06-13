@@ -17,6 +17,8 @@ use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
+use common_meta_types::DeleteByPrefixReply;
+use common_meta_types::DeleteByPrefixRequest;
 use common_meta_types::GetKVReply;
 use common_meta_types::GetKVReq;
 use common_meta_types::ListKVReply;
@@ -69,6 +71,9 @@ pub enum Request {
 
     /// Get a initialized grpc-client
     MakeClient(MakeClient),
+
+    /// Delete key with given prefix in transaction
+    DeleteByPrefix(DeleteByPrefixRequest),
 }
 
 /// Meta-client worker-to-handle response body
@@ -79,6 +84,7 @@ pub enum Response {
     PrefixList(ListKVReply),
     Upsert(UpsertKVReply),
     Txn(TxnReply),
+    DeleteByPrefix(DeleteByPrefixReply),
     Watch(tonic::codec::Streaming<WatchResponse>),
     Export(tonic::codec::Streaming<ExportedChunk>),
     MakeClient(MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>),

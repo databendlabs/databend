@@ -21,6 +21,8 @@ use common_meta_api::KVApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::ClientHandle;
 use common_meta_grpc::MetaGrpcClient;
+use common_meta_types::DeleteByPrefixReply;
+use common_meta_types::DeleteByPrefixRequest;
 use common_meta_types::GetKVReply;
 use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
@@ -90,6 +92,16 @@ impl KVApi for MetaStore {
         match self {
             MetaStore::L(x) => x.transaction(txn).await,
             MetaStore::R(x) => x.transaction(txn).await,
+        }
+    }
+
+    async fn delete_by_prefix(
+        &self,
+        req: DeleteByPrefixRequest,
+    ) -> std::result::Result<DeleteByPrefixReply, MetaError> {
+        match self {
+            MetaStore::L(x) => x.delete_by_prefix(req).await,
+            MetaStore::R(x) => x.delete_by_prefix(req).await,
         }
     }
 }
