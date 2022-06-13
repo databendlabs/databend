@@ -135,6 +135,8 @@ pub use protobuf::txn_condition::ConditionResult;
 pub use protobuf::txn_op;
 pub use protobuf::txn_op_response;
 pub use protobuf::TxnCondition;
+pub use protobuf::TxnDeleteByPrefixRequest;
+pub use protobuf::TxnDeleteByPrefixResponse;
 pub use protobuf::TxnDeleteRequest;
 pub use protobuf::TxnDeleteResponse;
 pub use protobuf::TxnGetRequest;
