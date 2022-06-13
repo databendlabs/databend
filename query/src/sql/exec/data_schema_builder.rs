@@ -94,7 +94,6 @@ impl DataSchemaBuilder {
         for field in right.fields().iter() {
             fields.push(field.clone());
         }
-
         DataSchemaRefExt::create(fields)
     }
 

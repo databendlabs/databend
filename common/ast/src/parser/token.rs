@@ -335,6 +335,8 @@ pub enum TokenKind {
     DOY,
     #[token("DROP", ignore(ascii_case))]
     DROP,
+    #[token("EXCEPT", ignore(ascii_case))]
+    EXCEPT,
     #[token("ELSE", ignore(ascii_case))]
     ELSE,
     #[token("END", ignore(ascii_case))]
@@ -393,6 +395,8 @@ pub enum TokenKind {
     HISTORY,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
+    #[token("INTERSECT", ignore(ascii_case))]
+    INTERSECT,
     #[token("IDENTIFIED", ignore(ascii_case))]
     IDENTIFIED,
     #[token("IF", ignore(ascii_case))]
@@ -595,6 +599,8 @@ pub enum TokenKind {
     TRY_CAST,
     #[token("TYPE", ignore(ascii_case))]
     TYPE,
+    #[token("UNION", ignore(ascii_case))]
+    UNION,
     #[token("UINT16", ignore(ascii_case))]
     UINT16,
     #[token("UINT32", ignore(ascii_case))]
@@ -812,14 +818,14 @@ impl TokenKind {
             // | TokenKind::CHAR
             // | TokenKind::CHARACTER
             | TokenKind::CREATE
-            // | TokenKind::EXCEPT
+            | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FOR
             | TokenKind::FROM
             // | TokenKind::GRANT
             | TokenKind::GROUP
             | TokenKind::HAVING
-            // | TokenKind::INTERSECT
+            | TokenKind::INTERSECT
             | TokenKind::INTO
             | TokenKind::LIMIT
             | TokenKind::OFFSET
@@ -828,7 +834,7 @@ impl TokenKind {
             // | TokenKind::PRECISION
             // | TokenKind::RETURNING
             | TokenKind::TO
-            // | TokenKind::UNION
+            | TokenKind::UNION
             | TokenKind::WHERE
             // | TokenKind::WINDOW
             | TokenKind::WITH
@@ -917,14 +923,14 @@ impl TokenKind {
             | TokenKind::ARRAY
             | TokenKind::AS
             | TokenKind::CREATE
-            // | TokenKind::EXCEPT
+            | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FOR
             | TokenKind::FROM
             // | TokenKind::GRANT
             | TokenKind::GROUP
             | TokenKind::HAVING
-            // | TokenKind::INTERSECT
+            | TokenKind::INTERSECT
             | TokenKind::INTO
             // | TokenKind::ISNULL
             | TokenKind::LIMIT
@@ -937,7 +943,7 @@ impl TokenKind {
             // | TokenKind::RETURNING
             | TokenKind::STAGE
             | TokenKind::TO
-            // | TokenKind::UNION
+            | TokenKind::UNION
             | TokenKind::WHERE
             // | TokenKind::WINDOW
             | TokenKind::WITH

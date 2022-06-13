@@ -135,7 +135,7 @@ impl<'a> Binder {
         Ok((s_expr, bind_context))
     }
 
-    fn bind_join_with_type(
+    pub fn bind_join_with_type(
         &mut self,
         join_type: JoinType,
         left_conditions: Vec<Scalar>,
