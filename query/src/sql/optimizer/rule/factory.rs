@@ -15,6 +15,7 @@
 use common_exception::Result;
 
 use super::rewrite::RuleEliminateEvalScalar;
+use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
 use super::rewrite::RulePushDownFilterProject;
@@ -48,6 +49,7 @@ impl RuleFactory {
             RuleID::MergeProject => Ok(Box::new(RuleMergeProject::new())),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
+            RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
         }
     }
 }

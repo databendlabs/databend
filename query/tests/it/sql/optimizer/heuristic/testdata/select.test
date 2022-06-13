@@ -28,3 +28,38 @@ Project: [number,b]
             PhysicalScan: default.system.numbers
 
 
+select * from numbers(1) where number = pow(1, 1 + 1)
+----
+Project: [number]
+    Filter: [number = 1]
+        PhysicalScan: default.system.numbers
+
+
+select * from numbers(1) where TRUE and 1 = 1
+----
+Project: [number]
+    PhysicalScan: default.system.numbers
+
+
+select * from numbers(1) where number = 0 and false
+----
+Project: [number]
+    Filter: [false]
+        PhysicalScan: default.system.numbers
+
+
+select * from numbers(1) where number = 0 and null
+----
+Project: [number]
+    Filter: [false]
+        PhysicalScan: default.system.numbers
+
+
+# If there is only one conjunction and the value is null, then we won't rewrite it
+select * from numbers(1) where null
+----
+Project: [number]
+    Filter: [NULL]
+        PhysicalScan: default.system.numbers
+
+
