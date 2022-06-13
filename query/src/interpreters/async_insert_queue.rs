@@ -404,7 +404,7 @@ impl AsyncInsertQueue {
     }
 
     fn busy_check(self: Arc<Self>) -> Duration {
-        let mut keys = Vec::new(); 
+        let mut keys = Vec::new();
         let mut queue = self.queue.write();
 
         let mut timeout = self.busy_timeout;
