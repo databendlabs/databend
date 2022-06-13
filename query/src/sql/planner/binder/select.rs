@@ -172,9 +172,23 @@ impl<'a> Binder {
         bind_context: &BindContext,
         query: &Query<'_>,
     ) -> Result<(SExpr, BindContext)> {
-        let (mut s_expr, bind_context) = self
-            .bind_set_expr(bind_context, &query.body, &query.order_by)
-            .await?;
+        let (mut s_expr, bind_context) = match query.body {
+            SetExpr::Select(_) | SetExpr::Query(_) => {
+                self.bind_set_expr(bind_context, &query.body, &query.order_by)
+                    .await?
+            }
+            SetExpr::SetOperation(_) => {
+                let (mut s_expr, bind_context) =
+                    self.bind_set_expr(bind_context, &query.body, &[]).await?;
+                if !query.order_by.is_empty() {
+                    s_expr = self
+                        .bind_order_by_for_set_operation(&bind_context, s_expr, &query.order_by)
+                        .await?;
+                }
+                (s_expr, bind_context)
+            }
+        };
+
         if !query.limit.is_empty() {
             if query.limit.len() == 1 {
                 s_expr = self

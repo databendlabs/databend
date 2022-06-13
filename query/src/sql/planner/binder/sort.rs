@@ -21,10 +21,12 @@ use common_ast::parser::error::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::GroupingChecker;
+use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
@@ -156,5 +158,48 @@ impl<'a> Binder {
         };
         new_expr = SExpr::create_unary(sort_plan.into(), new_expr);
         Ok(new_expr)
+    }
+
+    pub(crate) async fn bind_order_by_for_set_operation(
+        &mut self,
+        bind_context: &BindContext,
+        child: SExpr,
+        order_by: &[OrderByExpr<'_>],
+    ) -> Result<SExpr> {
+        let mut scalar_binder =
+            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
+        let mut order_by_items = Vec::with_capacity(order_by.len());
+        for order in order_by.iter() {
+            match order.expr {
+                Expr::ColumnRef { .. } => {
+                    let scalar = scalar_binder.bind(&order.expr).await?.0;
+                    match scalar {
+                        Scalar::BoundColumnRef(BoundColumnRef { column }) => {
+                            let order_by_item = SortItem {
+                                index: column.index,
+                                asc: order.asc,
+                                nulls_first: order.nulls_first,
+                            };
+                            order_by_items.push(order_by_item);
+                        }
+                        _ => {
+                            return Err(ErrorCode::LogicalError("scalar should be BoundColumnRef"));
+                        }
+                    }
+                }
+                _ => {
+                    return Err(ErrorCode::SemanticError(
+                        order
+                            .expr
+                            .span()
+                            .display_error("can only order by column".to_string()),
+                    ));
+                }
+            }
+        }
+        let sort_plan = SortPlan {
+            items: order_by_items,
+        };
+        Ok(SExpr::create_unary(sort_plan.into(), child))
     }
 }
