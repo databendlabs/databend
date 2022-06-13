@@ -109,6 +109,14 @@ pub enum Statement<'a> {
         if_exists: bool,
         user: UserIdentity,
     },
+    CreateRole {
+        if_not_exists: bool,
+        role_name: String,
+    },
+    DropRole {
+        if_exists: bool,
+        role_name: String,
+    },
 
     // UDF
     CreateUDF {
@@ -973,6 +981,26 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " IF EXISTS")?;
                 }
                 write!(f, " {user}")?;
+            }
+            Statement::CreateRole {
+                if_not_exists,
+                role_name: role,
+            } => {
+                write!(f, "CREATE ROLE")?;
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {role}")?;
+            }
+            Statement::DropRole {
+                if_exists,
+                role_name: role,
+            } => {
+                write!(f, "DROP ROLE")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {role}")?;
             }
             Statement::CreateUDF {
                 if_not_exists,

@@ -118,6 +118,8 @@ fn test_statement() {
         r#"create user 'test-e'@'localhost' identified by 'password';"#,
         r#"drop user if exists 'test-j'@'localhost';"#,
         r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
+        r#"create role 'test'"#,
+        r#"drop role if exists 'test'"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
         r#"ALTER DATABASE IF EXISTS catalog.c RENAME TO a;"#,
@@ -190,6 +192,8 @@ fn test_statement_error() {
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
         r#"drop usar if exists 'test-j'@'localhost';"#,
         r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
+        r#"create role 'test'@'localhost';"#,
+        r#"drop role 'test'@'localhost';"#,
     ];
 
     for case in cases {

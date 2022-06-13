@@ -106,6 +106,12 @@ impl InterpreterFactoryV2 {
                 AlterUserInterpreter::try_create(ctx, *alter_user.clone())
             }
 
+            // Roles
+            Plan::CreateRole(create_role) => {
+                CreateRoleInterpreter::try_create(ctx, *create_role.clone())
+            }
+            Plan::DropRole(drop_role) => DropRoleInterpreter::try_create(ctx, *drop_role.clone()),
+
             // Stages
             Plan::ShowStages => ShowStagesInterpreter::try_create(ctx),
             Plan::ListStage(s) => ListInterpreter::try_create(ctx, *s.clone()),
