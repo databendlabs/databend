@@ -119,7 +119,7 @@ impl KVApi for MetaNode {
         &self,
         req: DeleteByPrefixRequest,
     ) -> Result<DeleteByPrefixReply, MetaError> {
-        //tracing::debug!(req = display(&req), "MetaNode::delete_by_prefix()");
+        tracing::debug!("MetaNode::delete_by_prefix:{:?}", req);
 
         let ent = LogEntry {
             txid: None,
