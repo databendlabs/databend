@@ -254,8 +254,7 @@ async fn execute(
     plan: Arc<PlanNode>,
 ) -> Result<()> {
     let data_stream: Result<SendableDataBlockStream> =
-        if ctx.clone().get_config().query.enable_async_insert
-            && ctx.get_settings().get_client_enable_async_insert()? == 1
+        if ctx.get_settings().get_enable_async_insert()? != 0
             && matches!(&*plan, PlanNode::Insert(_))
         {
             match &*plan {

@@ -153,7 +153,7 @@ impl Settings {
             },
             SettingValue {
                 default_value: DataValue::UInt64(0),
-                user_setting: UserSetting::create("client_enable_async_insert", DataValue::UInt64(0)),
+                user_setting: UserSetting::create("enable_async_insert", DataValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "Whether the client open async insert mode, default value: 0",
             },
@@ -284,13 +284,13 @@ impl Settings {
         self.try_set_u64(key, val, false)
     }
 
-    pub fn get_client_enable_async_insert(&self) -> Result<u64> {
-        let key = "client_enable_async_insert";
+    pub fn get_enable_async_insert(&self) -> Result<u64> {
+        let key = "enable_async_insert";
         self.try_get_u64(key)
     }
 
-    pub fn set_client_enable_async_insert(&self, val: u64) -> Result<()> {
-        let key = "client_enable_async_insert";
+    pub fn set_enable_async_insert(&self, val: u64) -> Result<()> {
+        let key = "enable_async_insert";
         self.try_set_u64(key, val, false)
     }
 
