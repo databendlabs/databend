@@ -241,4 +241,7 @@ message DataField {
 
   // Column data type
   DataType data_type = 3;
+
+  // The comment of this field
+  optional string comment = 4;
 }

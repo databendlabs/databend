@@ -73,12 +73,20 @@ impl Interpreter for ShowCreateTableInterpreter {
                     }
                     None => "".to_string(),
                 };
+                let comment = match field.comment() {
+                    Some(comment) => {
+                        format!(" COMMENT '{}'", comment)
+                    }
+                    None => "".to_string(),
+                };
                 let column = format!(
-                    "  `{}` {}{}",
+                    "  `{}` {}{}{}",
                     field.name(),
                     format_data_type_sql(field.data_type()),
-                    default_expr
+                    default_expr,
+                    comment
                 );
+
                 columns.push(column);
             }
             // Format is:

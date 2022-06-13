@@ -69,7 +69,8 @@ impl FromToProto<pb::DataField> for dv::DataField {
                 reason: "DataField.data_type can not be None".to_string(),
             })?)?,
         )
-        .with_default_expr(p.default_expr);
+        .with_default_expr(p.default_expr)
+        .with_comment(p.comment);
         Ok(v)
     }
 
@@ -80,6 +81,7 @@ impl FromToProto<pb::DataField> for dv::DataField {
             name: self.name().clone(),
             default_expr: self.default_expr().cloned(),
             data_type: Some(self.data_type().to_pb()?),
+            comment: self.comment().cloned(),
         };
         Ok(p)
     }
