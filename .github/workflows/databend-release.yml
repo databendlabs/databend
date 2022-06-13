@@ -106,7 +106,7 @@ jobs:
           build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ steps.target.outputs.target }}/release/databend-metactl
       - name: Pack binaries
         run: |
-          mkdir release/${{ steps.target.outputs.target }} release/${{ steps.target.outputs.target }}/bin release/${{ steps.target.outputs.target }}/configs
+          mkdir -p release/${{ steps.target.outputs.target }}/{bin,configs}
           cp ./target/${{ steps.target.outputs.target }}/release/databend-* release/${{ steps.target.outputs.target }}/bin/
           rm -f release/${{ steps.target.outputs.target }}/bin/*.d
           cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-query.toml
