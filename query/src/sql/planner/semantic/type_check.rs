@@ -45,6 +45,7 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 
+use crate::common::ScalarEvaluator;
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::RelExpr;
@@ -97,6 +98,28 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    fn post_resolve(
+        &mut self,
+        scalar: &Scalar,
+        data_type: &DataTypeImpl,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        // Try constant folding
+        let evaluator = ScalarEvaluator::try_create(scalar)?;
+        let func_ctx = self.ctx.try_get_function_context()?;
+        if let Ok((value, value_type)) = evaluator.try_eval_const(&func_ctx) {
+            Ok((
+                ConstantExpr {
+                    value,
+                    data_type: value_type,
+                }
+                .into(),
+                data_type.clone(),
+            ))
+        } else {
+            Ok((scalar.clone(), data_type.clone()))
+        }
+    }
+
     /// Resolve types of `expr` with given `required_type`.
     /// If `required_type` is None, then there is no requirement of return type.
     ///
@@ -107,7 +130,7 @@ impl<'a> TypeChecker<'a> {
         expr: &Expr<'_>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        match expr {
+        let (scalar, data_type) = match expr {
             Expr::ColumnRef {
                 database: _,
                 table,
@@ -119,7 +142,7 @@ impl<'a> TypeChecker<'a> {
                     .resolve_column(table.clone().map(|ident| ident.name), column)?;
                 let data_type = column.data_type.clone();
 
-                Ok((BoundColumnRef { column }.into(), data_type))
+                (BoundColumnRef { column }.into(), data_type)
             }
 
             Expr::IsNull { expr, not, .. } => {
@@ -130,7 +153,7 @@ impl<'a> TypeChecker<'a> {
                 };
 
                 self.resolve_function(func_name.as_str(), &[&**expr], required_type)
-                    .await
+                    .await?
             }
 
             Expr::InList {
@@ -147,7 +170,7 @@ impl<'a> TypeChecker<'a> {
                     args.push(expr);
                 }
                 self.resolve_function(func_name.as_str(), &args, required_type)
-                    .await
+                    .await?
             }
 
             Expr::Between {
@@ -166,14 +189,14 @@ impl<'a> TypeChecker<'a> {
                     let (le_func, _) = self
                         .resolve_function("<=", &[&**expr, &**high], Some(BooleanType::new_impl()))
                         .await?;
-                    Ok((
+                    (
                         AndExpr {
                             left: Box::new(ge_func),
                             right: Box::new(le_func),
                         }
                         .into(),
                         BooleanType::new_impl(),
-                    ))
+                    )
                 } else {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
@@ -183,14 +206,14 @@ impl<'a> TypeChecker<'a> {
                     let (gt_func, _) = self
                         .resolve_function(">", &[&**expr, &**high], Some(BooleanType::new_impl()))
                         .await?;
-                    Ok((
+                    (
                         OrExpr {
                             left: Box::new(lt_func),
                             right: Box::new(gt_func),
                         }
                         .into(),
                         BooleanType::new_impl(),
-                    ))
+                    )
                 }
             }
 
@@ -198,11 +221,11 @@ impl<'a> TypeChecker<'a> {
                 op, left, right, ..
             } => {
                 self.resolve_binary_op(op, &**left, &**right, required_type)
-                    .await
+                    .await?
             }
 
             Expr::UnaryOp { op, expr, .. } => {
-                self.resolve_unary_op(op, &**expr, required_type).await
+                self.resolve_unary_op(op, &**expr, required_type).await?
             }
 
             Expr::Cast {
@@ -211,7 +234,7 @@ impl<'a> TypeChecker<'a> {
                 let (scalar, data_type) = self.resolve(expr, required_type).await?;
                 let cast_func =
                     CastFunction::create("", target_type.to_string().as_str(), data_type.clone())?;
-                Ok((
+                (
                     CastExpr {
                         argument: Box::new(scalar),
                         from_type: data_type,
@@ -219,7 +242,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     .into(),
                     cast_func.return_type(),
-                ))
+                )
             }
 
             Expr::Substring {
@@ -241,19 +264,19 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 self.resolve_function("substring", &arguments, required_type)
-                    .await
+                    .await?
             }
 
             Expr::Literal { lit, .. } => {
                 let (value, data_type) = self.resolve_literal(lit, required_type)?;
-                Ok((
+                (
                     ConstantExpr {
                         value,
                         data_type: data_type.clone(),
                     }
                     .into(),
                     data_type,
-                ))
+                )
             }
 
             Expr::FunctionCall {
@@ -315,7 +338,7 @@ impl<'a> TypeChecker<'a> {
                         data_fields,
                     )?;
 
-                    Ok((
+                    (
                         AggregateFunction {
                             display_name: format!("{:#}", expr),
                             func_name: func_name.to_string(),
@@ -334,17 +357,18 @@ impl<'a> TypeChecker<'a> {
                         }
                         .into(),
                         agg_func.return_type()?,
-                    ))
+                    )
                 } else {
                     // Scalar function
-                    self.resolve_function(func_name, &args, required_type).await
+                    self.resolve_function(func_name, &args, required_type)
+                        .await?
                 }
             }
 
             Expr::CountAll { .. } => {
                 let agg_func = AggregateFunctionFactory::instance().get("count", vec![], vec![])?;
 
-                Ok((
+                (
                     AggregateFunction {
                         display_name: format!("{:#}", expr),
                         func_name: "count".to_string(),
@@ -355,17 +379,17 @@ impl<'a> TypeChecker<'a> {
                     }
                     .into(),
                     agg_func.return_type()?,
-                ))
+                )
             }
 
             Expr::Exists { subquery, .. } => {
                 self.resolve_subquery(SubqueryType::Exists, subquery, true, None)
-                    .await
+                    .await?
             }
 
             Expr::Subquery { subquery, .. } => {
                 self.resolve_subquery(SubqueryType::Scalar, subquery, false, None)
-                    .await
+                    .await?
             }
 
             Expr::MapAccess {
@@ -384,7 +408,7 @@ impl<'a> TypeChecker<'a> {
                     },
                 };
 
-                Ok(self.resolve_function("get", &[&**expr, &arg], None).await?)
+                self.resolve_function("get", &[&**expr, &arg], None).await?
             }
 
             Expr::TryCast {
@@ -396,7 +420,7 @@ impl<'a> TypeChecker<'a> {
                     target_type.to_string().as_str(),
                     data_type.clone(),
                 )?;
-                Ok((
+                (
                     CastExpr {
                         argument: Box::new(scalar),
                         from_type: data_type,
@@ -404,15 +428,15 @@ impl<'a> TypeChecker<'a> {
                     }
                     .into(),
                     cast_func.return_type(),
-                ))
+                )
             }
 
             Expr::Extract { kind, expr, .. } => {
-                self.resolve_extract_expr(kind, expr, required_type).await
+                self.resolve_extract_expr(kind, expr, required_type).await?
             }
 
             Expr::Interval { expr, unit, .. } => {
-                self.resolve_interval(expr, unit, required_type).await
+                self.resolve_interval(expr, unit, required_type).await?
             }
 
             Expr::DateAdd {
@@ -422,13 +446,13 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 self.resolve_date_add(date, interval, unit, required_type)
-                    .await
+                    .await?
             }
             Expr::Trim {
                 expr, trim_where, ..
-            } => self.try_resolve_trim_function(expr, trim_where).await,
+            } => self.try_resolve_trim_function(expr, trim_where).await?,
 
-            Expr::Array { exprs, .. } => self.resolve_array(exprs).await,
+            Expr::Array { exprs, .. } => self.resolve_array(exprs).await?,
 
             Expr::Position {
                 substr_expr,
@@ -436,10 +460,10 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 self.resolve_function("locate", &[substr_expr.as_ref(), str_expr.as_ref()], None)
-                    .await
+                    .await?
             }
 
-            Expr::Tuple { exprs, .. } => self.resolve_tuple(exprs).await,
+            Expr::Tuple { exprs, .. } => self.resolve_tuple(exprs).await?,
 
             Expr::NullIf { span, expr1, expr2 } => {
                 // Rewrite NULLIF(expr1, expr2) to IF(expr1 = expr2, NULL, expr1)
@@ -460,14 +484,16 @@ impl<'a> TypeChecker<'a> {
                     ],
                     None,
                 )
-                .await
+                .await?
             }
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr
-            ))),
-        }
+            )))?,
+        };
+
+        self.post_resolve(&scalar, &data_type)
     }
 
     /// Resolve function call.

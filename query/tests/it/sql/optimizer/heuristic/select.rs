@@ -49,6 +49,31 @@ pub async fn test_optimizer_select() -> Result<()> {
             query: "select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1".to_string(),
             rules: DEFAULT_REWRITE_RULES.clone(),
         },
+        Suite {
+            comment: "".to_string(),
+            query: "select * from numbers(1) where number = pow(1, 1 + 1)".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "".to_string(),
+            query: "select * from numbers(1) where TRUE and 1 = 1".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "".to_string(),
+            query: "select * from numbers(1) where number = 0 and false".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "".to_string(),
+            query: "select * from numbers(1) where number = 0 and null".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "# If there is only one conjunction and the value is null, then we won't rewrite it".to_string(),
+            query: "select * from numbers(1) where null".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
     ];
 
     run_suites(ctx, &mut file, &suites).await
