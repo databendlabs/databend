@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageType;
 use common_planners::CreateUserStagePlan;
@@ -51,6 +52,15 @@ impl Interpreter for CreateUserStageInterpreter {
         let plan = self.plan.clone();
         let user_mgr = self.ctx.get_user_manager();
         let user_stage = plan.user_stage_info;
+        let quota_api = user_mgr.get_tenant_quota_api_client(&plan.tenant)?;
+        let quota = quota_api.get_quota(None).await?.data;
+        let stages = user_mgr.get_stages(&plan.tenant).await?;
+        if quota.max_stages != 0 && stages.len() >= quota.max_stages as usize {
+            return Err(ErrorCode::TenantQuotaExceeded(format!(
+                "Max stages quota exceeded {}",
+                quota.max_stages
+            )));
+        };
 
         if user_stage.stage_type == StageType::Internal {
             let prefix = format!("stage/{}/", user_stage.stage_name);
@@ -58,6 +68,8 @@ impl Interpreter for CreateUserStageInterpreter {
             op.object(&prefix).create().await?
         }
 
+        let mut user_stage = user_stage;
+        user_stage.creator = Some(self.ctx.get_current_user()?.identity());
         let _create_stage = user_mgr
             .add_stage(&plan.tenant, user_stage, plan.if_not_exists)
             .await?;

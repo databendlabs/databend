@@ -173,12 +173,19 @@ pub enum Expr<'a> {
         interval: Box<Expr<'a>>,
         unit: IntervalKind,
     },
+    /// NULLIF(<expr>, <expr>)
+    NullIf {
+        span: &'a [Token<'a>],
+        expr1: Box<Expr<'a>>,
+        expr2: Box<Expr<'a>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
-    // Numeric literal value
-    Number(String),
+    Integer(u64),
+    Float(f64),
+    BigInt { lit: String, is_hex: bool },
     // Quoted string literal value
     String(String),
     Boolean(bool),
@@ -293,6 +300,7 @@ impl<'a> Expr<'a> {
             Expr::Array { span, .. } => span,
             Expr::Interval { span, .. } => span,
             Expr::DateAdd { span, .. } => span,
+            Expr::NullIf { span, .. } => span,
         }
     }
 }
@@ -476,8 +484,17 @@ impl Display for TrimWhere {
 impl Display for Literal {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Literal::Number(val) => {
+            Literal::Integer(val) => {
                 write!(f, "{val}")
+            }
+            Literal::Float(val) => {
+                write!(f, "{val}")
+            }
+            Literal::BigInt { lit, is_hex } => {
+                if *is_hex {
+                    write!(f, "0x")?;
+                }
+                write!(f, "{lit}")
             }
             Literal::String(val) => {
                 write!(f, "\'{val}\'")
@@ -703,6 +720,9 @@ impl<'a> Display for Expr<'a> {
                 ..
             } => {
                 write!(f, "DATE_ADD({date}, INTERVAL {interval} {unit})")?;
+            }
+            Expr::NullIf { expr1, expr2, .. } => {
+                write!(f, "NULLIF({expr1}, {expr2})")?;
             }
         }
 

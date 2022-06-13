@@ -21,6 +21,7 @@ use common_cache::Cache;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
@@ -31,6 +32,7 @@ use crate::pipelines::new::processors::TransformCompact;
 use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
+use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
@@ -40,6 +42,7 @@ use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;
 use crate::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use crate::storages::index::ClusterKeyInfo;
 
 pub type AppendOperationLogEntryStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<AppendOperationLogEntry>> + Send>>;
@@ -58,12 +61,21 @@ impl FuseTable {
 
         let da = ctx.get_storage_operator()?;
 
+        let cluster_key_info = self.cluster_key_meta.clone().map(|(id, _)| ClusterKeyInfo {
+            cluster_key_id: id,
+            cluster_key_index: vec![],
+            exprs: self.cluster_keys.clone(),
+            expression_executor: None,
+            data_schema: self.table_info.schema(),
+        });
+
         let mut segment_stream = BlockStreamWriter::write_block_stream(
-            da.clone(),
+            ctx.clone(),
             stream,
             rows_per_block,
             block_per_seg,
             self.meta_location_generator().clone(),
+            cluster_key_info,
         )
         .await;
 
@@ -113,12 +125,13 @@ impl FuseTable {
             )
         })?;
 
-        let mut cluster_keys_index = Vec::with_capacity(self.order_keys.len());
-        if !self.order_keys.is_empty() {
+        let mut cluster_key_info = None;
+        if !self.cluster_keys.is_empty() {
             let input_schema = self.table_info.schema();
             let mut merged = input_schema.fields().clone();
 
-            for expr in &self.order_keys {
+            let mut cluster_key_index = Vec::with_capacity(self.cluster_keys.len());
+            for expr in &self.cluster_keys {
                 let cname = expr.column_name();
                 let index = match merged.iter().position(|x| x.name() == &cname) {
                     None => {
@@ -127,11 +140,12 @@ impl FuseTable {
                     }
                     Some(idx) => idx,
                 };
-                cluster_keys_index.push(index);
+                cluster_key_index.push(index);
             }
 
             let output_schema = DataSchemaRefExt::create(merged);
 
+            let mut expression_executor = None;
             if output_schema != input_schema {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
                     ExpressionTransform::try_create(
@@ -139,15 +153,32 @@ impl FuseTable {
                         transform_output_port,
                         input_schema.clone(),
                         output_schema.clone(),
-                        self.order_keys.clone(),
+                        self.cluster_keys.clone(),
                         ctx.clone(),
                     )
                 })?;
+
+                let exprs: Vec<Expression> = output_schema
+                    .fields()
+                    .iter()
+                    .map(|f| Expression::Column(f.name().to_owned()))
+                    .collect();
+
+                let executor = ExpressionExecutor::try_create(
+                    ctx.clone(),
+                    "remove unused columns",
+                    output_schema.clone(),
+                    input_schema.clone(),
+                    exprs,
+                    true,
+                )?;
+                executor.validate()?;
+                expression_executor = Some(executor);
             }
 
             // sort
             let sort_descs: Vec<SortColumnDescription> = self
-                .order_keys
+                .cluster_keys
                 .iter()
                 .map(|expr| SortColumnDescription {
                     column_name: expr.column_name(),
@@ -164,6 +195,14 @@ impl FuseTable {
                     sort_descs.clone(),
                 )
             })?;
+
+            cluster_key_info = Some(ClusterKeyInfo {
+                cluster_key_id: self.cluster_key_meta.as_ref().unwrap().0,
+                cluster_key_index,
+                exprs: self.cluster_keys.clone(),
+                expression_executor,
+                data_schema: input_schema.clone(),
+            });
         }
 
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
@@ -176,9 +215,8 @@ impl FuseTable {
                     ctx.clone(),
                     block_per_seg,
                     da.clone(),
-                    self.table_info.schema().clone(),
                     self.meta_location_generator().clone(),
-                    cluster_keys_index.clone(),
+                    cluster_key_info.clone(),
                 )?,
             );
         }

@@ -46,8 +46,42 @@ pub trait BufferReadExt: BufferRead {
 
     fn read_quoted_text(&mut self, buf: &mut Vec<u8>, quota: u8) -> Result<()> {
         self.must_ignore_byte(quota)?;
-        self.keep_read(buf, |b| b != quota)?;
-        self.must_ignore_byte(quota)
+
+        loop {
+            self.keep_read(buf, |b| b != quota && b != b'\\')?;
+            if self.ignore_byte(quota)? {
+                return Ok(());
+            } else if self.ignore_byte(b'\\')? {
+                let b = self.fill_buf()?;
+                if b.is_empty() {
+                    return Err(std::io::Error::new(
+                        ErrorKind::InvalidData,
+                        "Expected to have terminated string literal.".to_string(),
+                    ));
+                }
+                let c = b[0];
+                self.ignore_byte(c)?;
+                match c {
+                    b'n' => buf.push(b'\n'),
+                    b't' => buf.push(b'\t'),
+                    b'r' => buf.push(b'\r'),
+                    b'0' => buf.push(b'\0'),
+                    b'\'' => buf.push(b'\''),
+                    b'\\' => buf.push(b'\\'),
+                    b'\"' => buf.push(b'\"'),
+                    _ => {
+                        buf.push(b'\\');
+                        buf.push(c);
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        Err(std::io::Error::new(
+            ErrorKind::InvalidData,
+            "Expected to have terminated string literal.".to_string(),
+        ))
     }
 
     fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>) -> Result<()> {
@@ -128,23 +162,37 @@ where R: BufferRead
 {
     fn ignores(&mut self, f: impl Fn(u8) -> bool) -> Result<usize> {
         let mut bytes = 0;
+
         loop {
-            let available = self.fill_buf()?;
-            if available.is_empty() || !f(available[0]) {
-                break;
-            }
-            bytes += 1;
-            self.consume(1);
+            let len = {
+                let available = self.fill_buf()?;
+
+                if available.is_empty() {
+                    return Ok(bytes);
+                }
+
+                for (index, byt) in available.iter().enumerate() {
+                    if !f(*byt) {
+                        self.consume(index);
+                        return Ok(bytes + index);
+                    }
+                }
+
+                available.len()
+            };
+
+            bytes += len;
+            self.consume(len);
         }
-        Ok(bytes)
     }
 
+    #[inline]
     fn ignore(&mut self, f: impl Fn(u8) -> bool) -> Result<bool> {
         let available = self.fill_buf()?;
+
         if available.is_empty() {
-            return Ok(false);
-        }
-        if f(available[0]) {
+            Ok(false)
+        } else if f(available[0]) {
             self.consume(1);
             Ok(true)
         } else {
@@ -153,39 +201,67 @@ where R: BufferRead
     }
 
     fn ignore_byte(&mut self, b: u8) -> Result<bool> {
-        let f = |c: u8| c == b;
-        self.ignore(f)
+        self.ignore(|c| c == b)
     }
 
     fn ignore_bytes(&mut self, bs: &[u8]) -> Result<bool> {
-        for b in bs {
+        let mut bs = bs;
+
+        while !bs.is_empty() {
             let available = self.fill_buf()?;
-            if available.is_empty() || *b != available[0] {
+
+            if available.is_empty() {
                 return Ok(false);
             }
-            self.consume(1);
+
+            let min_size = std::cmp::min(available.len(), bs.len());
+
+            if let Some(position) = available[..min_size]
+                .iter()
+                .zip(&bs[..min_size])
+                .position(|(x, y)| x != y)
+            {
+                self.consume(position);
+                return Ok(false);
+            }
+
+            bs = &bs[min_size..];
+            self.consume(min_size);
         }
+
         Ok(true)
     }
 
     fn ignore_insensitive_bytes(&mut self, bs: &[u8]) -> Result<bool> {
-        for b in bs {
+        let mut bs = bs;
+
+        while !bs.is_empty() {
             let available = self.fill_buf()?;
-            if available.is_empty() || !b.eq_ignore_ascii_case(&available[0]) {
+
+            if available.is_empty() {
                 return Ok(false);
             }
-            self.consume(1);
+
+            let min_size = std::cmp::min(available.len(), bs.len());
+
+            if let Some(position) = available[..min_size]
+                .iter()
+                .zip(&bs[..min_size])
+                .position(|(x, y)| !x.eq_ignore_ascii_case(y))
+            {
+                self.consume(position);
+                return Ok(false);
+            }
+
+            bs = &bs[min_size..];
+            self.consume(min_size);
         }
+
         Ok(true)
     }
 
     fn ignore_white_spaces(&mut self) -> Result<bool> {
-        let mut cnt = 0;
-        let f = |c: u8| c.is_ascii_whitespace();
-        while self.ignore(f)? {
-            cnt += 1;
-        }
-        Ok(cnt > 0)
+        Ok(self.ignores(|c| c.is_ascii_whitespace())? > 0)
     }
 
     fn ignore_white_spaces_and_byte(&mut self, b: u8) -> Result<bool> {

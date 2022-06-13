@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::DropTablePlan;
+use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -49,7 +50,7 @@ impl Interpreter for DropTableInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.db.as_str();
+        let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
         let tbl = self
             .ctx
@@ -69,7 +70,7 @@ impl Interpreter for DropTableInterpreter {
             if table.get_table_info().engine() == VIEW_ENGINE {
                 return Err(ErrorCode::UnexpectedError(format!(
                     "{}.{} is VIEW, please use `DROP VIEW {}.{}`",
-                    &self.plan.db, &self.plan.table, &self.plan.db, &self.plan.table
+                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
                 )));
             }
         };
@@ -77,11 +78,19 @@ impl Interpreter for DropTableInterpreter {
         let catalog = self.ctx.get_catalog(catalog_name)?;
         catalog.drop_table(self.plan.clone().into()).await?;
 
-        // `drop_table` throws several types of exceptions
-        // thus `optimize` operation is executed after it.
         if let Some(tbl) = tbl {
-            let keep_last_snapshot = false;
-            tbl.optimize(self.ctx.clone(), keep_last_snapshot).await?;
+            // if `plan.all`, truncate, then purge the historical data
+            if self.plan.all {
+                // errors of truncation are ignored
+                let _ = tbl
+                    .truncate(self.ctx.clone(), TruncateTablePlan {
+                        catalog: self.plan.catalog.clone(),
+                        database: self.plan.database.clone(),
+                        table: self.plan.table.clone(),
+                        purge: true,
+                    })
+                    .await;
+            }
         }
 
         Ok(Box::pin(DataBlockStream::create(

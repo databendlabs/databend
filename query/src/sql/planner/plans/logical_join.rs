@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use common_exception::Result;
 
 use super::ScalarExpr;
@@ -20,18 +23,30 @@ use crate::sql::optimizer::RelationalProperty;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum JoinType {
+    InnerJoin,
+    LeftJoin,
+    RightJoin,
+    FullJoin,
+    SemiJoin,
+    AntiJoin,
+    CrossJoin,
+}
 
 #[derive(Clone, Debug)]
 pub struct LogicalInnerJoin {
     pub left_conditions: Vec<Scalar>,
     pub right_conditions: Vec<Scalar>,
+    pub join_type: JoinType,
 }
 
 impl Operator for LogicalInnerJoin {
-    fn plan_type(&self) -> PlanType {
-        PlanType::LogicalInnerJoin
+    fn plan_type(&self) -> RelOp {
+        RelOp::LogicalInnerJoin
     }
 
     fn is_physical(&self) -> bool {
@@ -84,5 +99,19 @@ impl LogicalPlan for LogicalInnerJoin {
             output_columns,
             outer_columns,
         })
+    }
+}
+
+impl Display for JoinType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JoinType::InnerJoin => write!(f, "InnerJoin"),
+            JoinType::LeftJoin => write!(f, "LeftJoin"),
+            JoinType::RightJoin => write!(f, "RightJoin"),
+            JoinType::FullJoin => write!(f, "FullJoin"),
+            JoinType::SemiJoin => write!(f, "SemiJoin"),
+            JoinType::AntiJoin => write!(f, "AntiJoin"),
+            JoinType::CrossJoin => write!(f, "CrossJoin"),
+        }
     }
 }

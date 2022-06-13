@@ -29,6 +29,7 @@ use crate::sql::statements::AnalyzedResult;
 pub struct DfDropTable {
     pub if_exists: bool,
     pub name: ObjectName,
+    pub all: bool,
 }
 
 #[async_trait::async_trait]
@@ -36,16 +37,18 @@ impl AnalyzableStatement for DfDropTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let if_exists = self.if_exists;
+        let all = self.all;
         let tenant = ctx.get_tenant();
-        let (catalog, db, table) = resolve_table(&ctx, &self.name, "DROP TABLE")?;
+        let (catalog, database, table) = resolve_table(&ctx, &self.name, "DROP TABLE")?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropTable(
             DropTablePlan {
                 if_exists,
                 tenant,
                 catalog,
-                db,
+                database,
                 table,
+                all,
             },
         ))))
     }

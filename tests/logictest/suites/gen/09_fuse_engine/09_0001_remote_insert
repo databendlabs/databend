@@ -13,8 +13,17 @@ CREATE TABLE IF NOT EXISTS t1(a UInt32, b UInt64, c String) Engine = fuse;
 statement ok
 INSERT INTO t1 (a,b,c) values ( 1.00, 1, '1' ), (2, 2.000, '"2"-"2"');
 
-statement ok
+statement query IIT label(mysql,http)
 SELECT * FROM t1;
+
+---- mysql
+1 1 1
+2 2 "2"-"2"
+
+---- http
+1 1 1
+2 2 "2"-"2"
+
 
 statement ok
 CREATE TABLE IF NOT EXISTS t2(a Boolean, b Timestamp, c Date) Engine = fuse;

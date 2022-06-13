@@ -2,5 +2,5 @@ statement query TTTTIIII
 SELECT * from system.tables where name = 'tables';
 
 ----  
-system tables SystemTables 1970-01-01 00:00:00.000 +0000 None None None None
+system tables SystemTables 1970-01-01 00:00:00.000 +0000 NULL NULL NULL NULL
 

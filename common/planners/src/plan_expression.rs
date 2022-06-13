@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::window::WindowFrame;
 use once_cell::sync::Lazy;
 
 use crate::plan_expression_common::ExpressionDataTypeVisitor;
@@ -28,7 +29,7 @@ use crate::ExpressionVisitor;
 use crate::PlanNode;
 
 static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    ["database", "version", "current_user"]
+    ["database", "version", "current_user", "user"]
         .iter()
         .copied()
         .collect()
@@ -92,6 +93,22 @@ pub enum Expression {
         distinct: bool,
         params: Vec<DataValue>,
         args: Vec<Expression>,
+    },
+
+    /// WindowFunction
+    WindowFunction {
+        /// operation performed
+        op: String,
+        /// params
+        params: Vec<DataValue>,
+        /// arguments
+        args: Vec<Expression>,
+        /// partition by
+        partition_by: Vec<Expression>,
+        /// order by
+        order_by: Vec<Expression>,
+        /// window frame
+        window_frame: Option<WindowFrame>,
     },
 
     /// A sort expression, that can be used to sort values.
@@ -418,6 +435,53 @@ impl fmt::Debug for Expression {
                     true => write!(f, "(distinct {})", args_column_name.join(", "))?,
                     false => write!(f, "({})", args_column_name.join(", "))?,
                 }
+                Ok(())
+            }
+
+            Expression::WindowFunction {
+                op,
+                params,
+                args,
+                partition_by,
+                order_by,
+                window_frame,
+            } => {
+                let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
+                let params_name = params
+                    .iter()
+                    .map(|v| DataValue::custom_display(v, true))
+                    .collect::<Vec<_>>();
+
+                if params.is_empty() {
+                    write!(f, "{}", op)?;
+                } else {
+                    write!(f, "{}({})", op, params_name.join(", "))?;
+                }
+
+                write!(f, "({})", args_column_name.join(","))?;
+
+                write!(f, " OVER(")?;
+                if !partition_by.is_empty() {
+                    write!(f, "PARTITION BY {:?}", partition_by)?;
+                }
+                if !order_by.is_empty() {
+                    if !partition_by.is_empty() {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "ORDER BY {:?}", order_by)?;
+                }
+                if let Some(window_frame) = window_frame {
+                    if !partition_by.is_empty() || !order_by.is_empty() {
+                        write!(f, " ")?;
+                    }
+                    write!(
+                        f,
+                        "{} BETWEEN {} AND {}",
+                        window_frame.units, window_frame.start_bound, window_frame.end_bound
+                    )?;
+                }
+                write!(f, ")")?;
+
                 Ok(())
             }
 

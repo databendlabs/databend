@@ -92,6 +92,15 @@ INSERT INTO t10 (id, arr) VALUES(1, [1.1,1.2,1.3]), (2, [-1.1,-1.2,-1.3]);
 select * from t10;
 select arr[0], arr[1] from t10;
 
+select '==Array(Boolean)==';
+
+CREATE TABLE IF NOT EXISTS t11(id Int, arr Array(Bool)) Engine = Fuse;
+
+INSERT INTO t11 (id, arr) VALUES(1, [true, true]), (2, [false, false]), (3, [true, false]), (4, [false, true]);
+
+select * from t11;
+select arr[0], arr[1] from t11;
+
 select '==Array(Date)==';
 
 CREATE TABLE IF NOT EXISTS t12(id Int, arr Array(Date)) Engine = Fuse;
@@ -112,9 +121,27 @@ INSERT INTO t13 (id, arr) VALUES(3, ['1000000-01-01 01:01:01', '2000000-01-01 01
 select * from t13;
 select arr[0], arr[1] from t13;
 
+select '==Array(String)==';
+
+CREATE TABLE IF NOT EXISTS t14(id Int, arr Array(String)) Engine = Fuse;
+
+INSERT INTO t14 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']);
+
+select * from t14;
+select arr[0], arr[1] from t14;
+
+select '==Array(String) Nullable==';
+
+CREATE TABLE IF NOT EXISTS t15(id Int, arr Array(String) Null) Engine = Fuse;
+
+INSERT INTO t15 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']), (3, null), (4, ['ee', 'ff']);
+
+select * from t15;
+select arr[0], arr[1] from t15;
+
 select '==Array(Int64) Nullable==';
 
-CREATE TABLE IF NOT EXISTS t16(id Int, arr Array(Int64) Null) Engine = fuse;
+CREATE TABLE IF NOT EXISTS t16(id Int, arr Array(Int64) Null) Engine = Fuse;
 
 INSERT INTO t16 (id, arr) VALUES(1, [1,2,3,4]), (2, [5,6,7,8]), (3, null);
 

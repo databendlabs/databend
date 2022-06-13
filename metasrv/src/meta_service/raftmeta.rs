@@ -15,6 +15,7 @@
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::net::Ipv4Addr;
+use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
 use common_base::base::tokio;
@@ -60,7 +61,7 @@ use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::incr_meta_metrics_leader_change;
 use crate::metrics::incr_meta_metrics_read_failed;
-use crate::metrics::set_meta_metrics_has_leader;
+use crate::metrics::set_meta_metrics_current_leader;
 use crate::metrics::set_meta_metrics_is_leader;
 use crate::metrics::set_meta_metrics_proposals_applied;
 use crate::network::Network;
@@ -80,6 +81,7 @@ pub struct MetaNode {
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<MetaResult<()>>>>,
+    pub joined_tasks: AtomicI32,
 }
 
 impl Opened for MetaNode {
@@ -132,6 +134,7 @@ impl MetaNodeBuilder {
             running_tx: tx,
             running_rx: rx,
             join_handles: Mutex::new(Vec::new()),
+            joined_tasks: AtomicI32::new(1),
         });
 
         if self.monitor_metrics {
@@ -191,12 +194,10 @@ impl MetaNode {
     }
 
     pub fn new_raft_config(config: &RaftConfig) -> Config {
-        // TODO(xp): configure cluster name.
-
         let hb = config.heartbeat_interval;
 
         Config {
-            cluster_name: "foo_cluster".to_string(),
+            cluster_name: config.cluster_name.clone(),
             heartbeat_interval: hb,
             election_timeout_min: hb * 8,
             election_timeout_max: hb * 12,
@@ -275,15 +276,12 @@ impl MetaNode {
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    /// 3. If `init_cluster` is `Some` and it is just created, try to initialize a single-node cluster.
-    ///
-    /// TODO(xp): `init_cluster`: pass in a Map<id, address> to initialize the cluster.
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open_create_boot(
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-        init_cluster: Option<Vec<String>>,
+        is_initialize: bool,
     ) -> MetaResult<Arc<MetaNode>> {
         let mut config = config.clone();
 
@@ -312,20 +310,16 @@ impl MetaNode {
 
         tracing::info!("MetaNode started: {:?}", config);
 
-        // init_cluster with advertise_host other than listen_host
-        if !is_open {
-            if let Some(_addrs) = init_cluster {
-                mn.init_cluster(config.raft_api_advertise_host_endpoint())
-                    .await?;
-            }
+        // initialize with advertise_host other than listen_host
+        if !is_open && is_initialize {
+            mn.init_cluster(config.raft_api_advertise_host_endpoint())
+                .await?;
         }
         Ok(mn)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn stop(&self) -> MetaResult<i32> {
-        // TODO(xp): need to be reentrant.
-
         let mut rx = self.raft.metrics();
 
         self.raft
@@ -345,29 +339,28 @@ impl MetaNode {
         }
         tracing::info!("shutdown raft");
 
-        // raft counts 1
-        let mut joined = 1;
         for j in self.join_handles.lock().await.iter_mut() {
             let _rst = j
                 .await
                 .map_error_to_meta_error(MetaError::MetaServiceError, || "fail to join")?;
-            joined += 1;
+            // TODO(luhuanbing): Add joined node information to enrich debugging information
+            self.joined_tasks
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
 
         tracing::info!("shutdown: id={}", self.sto.id);
+        let joined = self.joined_tasks.load(std::sync::atomic::Ordering::Relaxed);
         Ok(joined)
     }
 
     // spawn a monitor to watch raft state changes such as leader changes,
     // and manually add non-voter to cluster so that non-voter receives raft logs.
     pub async fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
-        //TODO: return a handle for join
-        // TODO: every state change triggers add_non_voter!!!
+        // TODO(luhuanbing): every state change triggers add_non_voter is not very reasonable
         let mut running_rx = mn.running_rx.clone();
         let mut jh = mn.join_handles.lock().await;
         let mut current_leader: Option<u64> = None;
 
-        // TODO: reduce dependency: it does not need all of the fields in MetaNode
         let mn = mn.clone();
 
         let span = tracing::span!(tracing::Level::INFO, "watch-metrics");
@@ -399,7 +392,6 @@ impl MetaNode {
                                 }
 
                                 if cur == mn.sto.id {
-                                    // TODO: check result
                                     let _rst = mn.add_configured_non_voters().await;
 
                                     if _rst.is_err() {
@@ -413,9 +405,9 @@ impl MetaNode {
                                 } else {
                                     set_meta_metrics_is_leader(false);
                                 }
-                                set_meta_metrics_has_leader(true);
+                                set_meta_metrics_current_leader(cur);
                             } else {
-                                set_meta_metrics_has_leader(false);
+                                set_meta_metrics_current_leader(0);
                                 set_meta_metrics_is_leader(false);
                             }
                             if let Some(last_applied) = mm.last_applied {
@@ -513,13 +505,13 @@ impl MetaNode {
 
     async fn do_start(conf: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {
         if conf.single {
-            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), Some(vec![])).await?;
+            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), true).await?;
             return Ok(mn);
         }
 
         if !conf.join.is_empty() {
             // Bring up a new node, join it into a cluster
-            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), None).await?;
+            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), false).await?;
 
             if mn.is_opened() {
                 return Ok(mn);
@@ -527,7 +519,7 @@ impl MetaNode {
             return Ok(mn);
         }
         // open mode
-        let mn = MetaNode::open_create_boot(conf, Some(()), None, None).await?;
+        let mn = MetaNode::open_create_boot(conf, Some(()), None, false).await?;
         Ok(mn)
     }
 
@@ -539,7 +531,7 @@ impl MetaNode {
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
         // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
 
-        let mn = Self::open_create_boot(config, None, Some(()), Some(vec![])).await?;
+        let mn = Self::open_create_boot(config, None, Some(()), true).await?;
 
         Ok(mn)
     }
@@ -571,7 +563,6 @@ impl MetaNode {
     /// This fn should be called once a node found it becomes leader.
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn add_configured_non_voters(&self) -> MetaResult<()> {
-        // TODO after leader established, add non-voter through apis
         let node_ids = self.sto.list_non_voters().await;
         for i in node_ids.iter() {
             let x = self.raft.add_learner(*i, true).await;
@@ -722,7 +713,6 @@ impl MetaNode {
         node_id: NodeId,
         endpoint: Endpoint,
     ) -> Result<AppliedState, MetaError> {
-        // TODO: use txid?
         let resp = self
             .write(LogEntry {
                 txid: None,
@@ -741,7 +731,6 @@ impl MetaNode {
     /// Remove a node from this cluster.
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn remove_node(&self, node_id: NodeId) -> Result<AppliedState, MetaError> {
-        // TODO: use txid?
         let resp = self
             .write(LogEntry {
                 txid: None,

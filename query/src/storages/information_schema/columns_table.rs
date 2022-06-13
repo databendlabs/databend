@@ -15,9 +15,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 
 use crate::storages::view::view_table::QUERY;
 use crate::storages::view::ViewTable;
@@ -35,7 +35,7 @@ impl ColumnsTable {
             1 AS ordinal_position,
             NULL AS column_default,
             is_nullable AS is_nullable,
-            data_type AS data_type,
+            type AS data_type,
             NULL AS character_maximum_length,
             NULL AS character_octet_length,
             NULL AS numeric_precision,
@@ -58,7 +58,7 @@ impl ColumnsTable {
             1 AS ORDINAL_POSITION,
             NULL AS COLUMN_DEFAULT,
             is_nullable AS IS_NULLABLE,
-            data_type AS DATA_TYPE,
+            type AS DATA_TYPE,
             NULL AS CHARACTER_MAXIMUM_LENGTH,
             NULL AS CHARACTER_OCTET_LENGTH,
             NULL AS NUMERIC_PRECISION,

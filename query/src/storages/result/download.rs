@@ -51,7 +51,9 @@ impl ResultTable {
         let fmt_setting = ctx.get_format_settings()?;
         let mut output_format = fmt.create_format(self.schema());
 
+        let prefix = Ok(output_format.serialize_prefix(&fmt_setting)?);
         let stream = stream! {
+            yield prefix;
             while let Some(block) = block_stream.next().await {
                 match block{
                     Ok(block) => {

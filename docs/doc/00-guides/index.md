@@ -1,5 +1,5 @@
 ---
-title: How-to Guides
+title: Guides
 ---
 
 ## Deployment
@@ -44,10 +44,9 @@ title: How-to Guides
 
 * [How to Create a Database](../30-reference/30-sql/00-ddl/10-database/ddl-create-database.md)
 * [How to Drop a Database](../30-reference/30-sql/00-ddl/10-database/ddl-drop-database.md)
-* [How to Create a Table](../30-reference/30-sql/00-ddl/20-table/ddl-create-table.md)
-* [How to Drop a Table](../30-reference/30-sql/00-ddl/20-table/ddl-drop-table.md)
-* [How to Rename a Table](../30-reference/30-sql/00-ddl/20-table/ddl-rename-table.md)
-* [How to Truncate a Table](../30-reference/30-sql/00-ddl/20-table/ddl-truncate-table.md)
+* [How to Create a Table](../30-reference/30-sql/00-ddl/20-table/10-ddl-create-table.md)
+* [How to Rename a Table](../30-reference/30-sql/00-ddl/20-table/30-ddl-rename-table.md)
+* [How to Truncate a Table](../30-reference/30-sql/00-ddl/20-table/40-ddl-truncate-table.md)
 
 
 ## Views
@@ -55,6 +54,13 @@ title: How-to Guides
 * [How to Create a View](../30-reference/30-sql/00-ddl/60-view/ddl-create-view.md)
 * [How to Drop a View](../30-reference/30-sql/00-ddl/60-view/ddl-drop-view.md)
 * [How to Alter a View](../30-reference/30-sql/00-ddl/60-view/ddl-alter-view.md)
+
+
+## User-Defined Functions
+
+* [How to Create a User-Defined Function](../30-reference/30-sql/00-ddl/50-udf/ddl-create-function.md)
+* [How to Drop a User-Defined Function](../30-reference/30-sql/00-ddl/50-udf/ddl-drop-function.md)
+* [How to Alter a User-Defined Function](../30-reference/30-sql/00-ddl/50-udf/ddl-alter-function.md)
 
 ## Load Data
 

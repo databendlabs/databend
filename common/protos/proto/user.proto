@@ -21,6 +21,7 @@ import "config.proto";
 
 message AuthInfo {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   message None {}
   message Password {
@@ -43,6 +44,7 @@ message AuthInfo {
 
 message GrantObject {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   message GrantGlobalObject {}
 
@@ -66,18 +68,24 @@ message GrantObject {
 
 message GrantEntry {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
+
   GrantObject object = 1;
   uint64 privileges = 2;
 }
 
 message UserGrantSet {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
+
   repeated GrantEntry entries = 1;
   map<string, bool> roles = 2;
 }
 
 message UserQuota {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
+
   uint64 max_cpu = 1;
   uint64 max_memory_in_bytes = 2;
   uint64 max_storage_in_bytes = 3;
@@ -85,11 +93,14 @@ message UserQuota {
 
 message UserOption {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
+
   uint64 flags = 1;
 }
 
 message UserInfo {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   string name = 1;
   string hostname = 2;
@@ -99,8 +110,17 @@ message UserInfo {
   UserOption option = 6;
 }
 
+message UserIdentity {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  string username = 1;
+  string hostname = 2;
+}
+
 message UserStageInfo {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   enum StageType {
     Interval = 0;
@@ -140,6 +160,7 @@ message UserStageInfo {
 
   message FileFormatOptions {
     uint64 ver = 100;
+    uint64 min_compatible = 101;
 
     StageFileFormatType format = 1;
     // Number of lines at the start of the file to skip.
@@ -178,4 +199,19 @@ message UserStageInfo {
   CopyOptions copy_options = 5;
 
   string comment = 6;
+
+  uint64 number_of_files = 7;
+
+  optional UserIdentity creator = 8;
+}
+
+message StageFile {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  string path = 1;
+  uint64 size = 2;
+  optional string md5 = 3;
+  string last_modified = 4;
+  optional UserIdentity creator = 5;
 }

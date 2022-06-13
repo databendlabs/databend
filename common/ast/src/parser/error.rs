@@ -20,6 +20,8 @@ use std::num::ParseIntError;
 
 use itertools::Itertools;
 use logos::Span;
+use pratt::NoError;
+use pratt::PrattError;
 
 use crate::parser::token::*;
 use crate::parser::util::Input;
@@ -63,6 +65,10 @@ pub struct Backtrace<'a> {
 impl<'a> Backtrace<'a> {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn clear(&self) {
+        self.inner.replace(None);
     }
 }
 
@@ -145,14 +151,20 @@ impl<'a> Error<'a> {
     }
 }
 
+impl From<fast_float::Error> for ErrorKind {
+    fn from(_: fast_float::Error) -> Self {
+        ErrorKind::Other("unable to parse float number")
+    }
+}
+
 impl From<ParseIntError> for ErrorKind {
     fn from(err: ParseIntError) -> Self {
         let msg = match err.kind() {
             IntErrorKind::InvalidDigit => {
                 "unable to parse number because it contains invalid characters"
             }
-            IntErrorKind::PosOverflow => "unable to parse number because it positive overflowed",
-            IntErrorKind::NegOverflow => "unable to parse number because it negative overflowed",
+            IntErrorKind::PosOverflow => "unable to parse number because it positively overflowed",
+            IntErrorKind::NegOverflow => "unable to parse number because it negatively overflowed",
             _ => "unable to parse number",
         };
         ErrorKind::Other(msg)
@@ -294,4 +306,25 @@ fn pretty_print_error(source: &str, lables: Vec<(Span, String)>) -> String {
     std::str::from_utf8(&writer.into_inner())
         .unwrap()
         .to_string()
+}
+
+impl<T: std::fmt::Debug> From<PrattError<T, pratt::NoError>> for ErrorKind {
+    fn from(err: PrattError<T, NoError>) -> Self {
+        match err {
+            PrattError::EmptyInput => ErrorKind::Other("expected more tokens for expression"),
+            PrattError::UnexpectedNilfix(_) => {
+                ErrorKind::Other("unable to parse the expression value")
+            }
+            PrattError::UnexpectedPrefix(_) => {
+                ErrorKind::Other("unable to parse the prefix operator")
+            }
+            PrattError::UnexpectedInfix(_) => {
+                ErrorKind::Other("unable to parse the binary operator")
+            }
+            PrattError::UnexpectedPostfix(_) => {
+                ErrorKind::Other("unable to parse the postfix operator")
+            }
+            PrattError::UserError(_) => unreachable!(),
+        }
+    }
 }

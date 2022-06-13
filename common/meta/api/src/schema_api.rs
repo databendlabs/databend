@@ -15,32 +15,40 @@
 
 use std::sync::Arc;
 
-use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateTableReply;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DatabaseInfo;
-use common_meta_types::DropDatabaseReply;
-use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropTableReply;
-use common_meta_types::DropTableReq;
-use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetTableReq;
-use common_meta_types::ListDatabaseReq;
-use common_meta_types::ListTableReq;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateDatabaseReply;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateTableReply;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DropDatabaseReply;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListTableReq;
+use common_meta_app::schema::RenameDatabaseReply;
+use common_meta_app::schema::RenameDatabaseReq;
+use common_meta_app::schema::RenameTableReply;
+use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
+use common_meta_app::schema::UndropTableReply;
+use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateTableMetaReply;
+use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableOptionReply;
+use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_types::GCDroppedDataReply;
+use common_meta_types::GCDroppedDataReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
-use common_meta_types::RenameDatabaseReply;
-use common_meta_types::RenameDatabaseReq;
-use common_meta_types::RenameTableReply;
-use common_meta_types::RenameTableReq;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
-use common_meta_types::UpdateTableMetaReply;
-use common_meta_types::UpdateTableMetaReq;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
 
 /// SchemaApi defines APIs that provides schema storage, such as database, table.
 #[async_trait::async_trait]
@@ -54,6 +62,11 @@ pub trait SchemaApi: Send + Sync {
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError>;
 
+    async fn undrop_database(
+        &self,
+        req: UndropDatabaseReq,
+    ) -> Result<UndropDatabaseReply, MetaError>;
+
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError>;
 
     async fn list_databases(
@@ -66,15 +79,24 @@ pub trait SchemaApi: Send + Sync {
         req: RenameDatabaseReq,
     ) -> Result<RenameDatabaseReply, MetaError>;
 
+    async fn get_database_history(
+        &self,
+        req: ListDatabaseReq,
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError>;
+
     // table
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError>;
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError>;
 
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, MetaError>;
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError>;
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError>;
+
+    async fn get_table_history(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError>;
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError>;
 
@@ -92,6 +114,12 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, MetaError>;
+
+    // gc dropped {table|db} which out of retention time.
+    async fn gc_dropped_data(&self, req: GCDroppedDataReq)
+        -> Result<GCDroppedDataReply, MetaError>;
+
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, MetaError>;
 
     // TODO: Disabled temporarily: Consider move them to another trait such as `ShareApi` or else.
     //       Since `share` has nothing really to do with database or table.

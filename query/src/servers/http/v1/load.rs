@@ -152,7 +152,7 @@ pub async fn streaming_load(
     let settings = context.get_settings();
     for (key, value) in req.headers().iter() {
         if settings.has_setting(key.as_str()) {
-            let value = value.to_str().unwrap();
+            let value = value.to_str().map_err(InternalServerError)?;
             let value = value.trim_matches(|p| p == '"' || p == '\'');
             let value = parse_escape_string(value.as_bytes());
             settings
@@ -177,7 +177,7 @@ pub async fn streaming_load(
     if context
         .get_settings()
         .get_enable_new_processor_framework()
-        .unwrap()
+        .map_err(InternalServerError)?
         != 0
         && context.get_cluster().is_empty()
     {
@@ -189,10 +189,7 @@ pub async fn streaming_load(
                     {
                         return match new_processor_format(&context, &plan, multipart).await {
                             Ok(res) => Ok(res),
-                            Err(cause) => {
-                                println!("catch error {:?}", cause);
-                                Err(InternalServerError(cause))
-                            }
+                            Err(cause) => Err(InternalServerError(cause)),
                         };
                     }
 
@@ -406,23 +403,14 @@ fn format_source_pipe_builder(
     schema: DataSchemaRef,
     multipart: Multipart,
     format_settings: &FormatSettings,
-) -> Result<(MultipartWorker, SourcePipeBuilder)> {
-    let ports = vec![OutputPort::create()];
-    let mut source_pipe_builder = SourcePipeBuilder::create();
-    let (worker, sources) = MultipartFormat::input_sources(
+) -> Result<(Box<dyn MultipartWorker>, SourcePipeBuilder)> {
+    MultipartFormat::input_sources(
         format,
         context.clone(),
         multipart,
         schema,
         format_settings.clone(),
-        ports.clone(),
-    )?;
-
-    for (index, source) in sources.into_iter().enumerate() {
-        source_pipe_builder.add_source(ports[index].clone(), source);
-    }
-
-    Ok((worker, source_pipe_builder))
+    )
 }
 
 async fn ndjson_source_pipe_builder(
@@ -437,13 +425,13 @@ async fn ndjson_source_pipe_builder(
             .bytes()
             .await
             .map_err_to_code(ErrorCode::BadBytes, || "Read part to field bytes error")
-            .unwrap();
+            .map_err(InternalServerError)?;
         let cursor = Cursor::new(bytes);
-        let ndjson_source = builder.build(cursor).unwrap();
+        let ndjson_source = builder.build(cursor).map_err(InternalServerError)?;
         let output_port = OutputPort::create();
         let source =
             StreamSourceV2::create(ctx.clone(), Box::new(ndjson_source), output_port.clone())
-                .unwrap();
+                .map_err(InternalServerError)?;
         source_pipe_builder.add_source(output_port, source);
     }
     Ok(source_pipe_builder)

@@ -33,13 +33,6 @@ fn convert_test() {
 }
 
 #[test]
-fn path_test() {
-    assert_eq!(get_abs_path("ab/c", "d"), "ab/c/d".to_string());
-    assert_eq!(get_abs_path("/ab/c", "d"), "/ab/c/d".to_string());
-    assert_eq!(get_abs_path("/ab/c", "/d/e"), "/ab/c/d/e".to_string());
-}
-
-#[test]
 fn parse_escape() {
     let cases = vec![
         vec!["a", "a"],

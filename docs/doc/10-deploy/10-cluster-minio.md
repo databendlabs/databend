@@ -57,6 +57,10 @@ mysql_handler_port = 3308
 clickhouse_handler_host = "127.0.0.1"
 clickhouse_handler_port = 9002
 
+# Query ClickHouse HTTP Handler.
+clickhouse_http_handler_host = "127.0.0.1"
+clickhouse_http_handler_port = 8125
+
 # Query HTTP Handler.
 http_handler_host = "127.0.0.1"
 http_handler_port = 8082
@@ -68,9 +72,9 @@ cluster_id = "cluster1"
 
 [meta]
 // highlight-next-line
-meta_address = "127.0.0.1:9101"
-meta_username = "root"
-meta_password = "root"
+address = "127.0.0.1:9101"
+username = "root"
+password = "root"
 
 
 [storage]

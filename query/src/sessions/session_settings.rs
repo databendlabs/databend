@@ -134,6 +134,12 @@ impl Settings {
                 desc: "Whether to skip the input header, default value: 0",
             },
             SettingValue {
+                default_value: DataValue::String("None".as_bytes().to_vec()),
+                user_setting: UserSetting::create("compression", DataValue::String("None".as_bytes().to_vec())),
+                level: ScopeLevel::Session,
+                desc: "Format compression, default value: None",
+            },
+            SettingValue {
                 default_value: DataValue::String("UTC".as_bytes().to_vec()),
                 user_setting: UserSetting::create("timezone", DataValue::String("UTC".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
@@ -145,6 +151,24 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "The threshold of keys to open two-level aggregation, default value: 10000",
             },
+            SettingValue {
+                default_value: DataValue::UInt64(0),
+                user_setting: UserSetting::create("enable_async_insert", DataValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "Whether the client open async insert mode, default value: 0",
+            },
+            SettingValue {
+                default_value: DataValue::UInt64(1),
+                user_setting: UserSetting::create("wait_for_async_insert", DataValue::UInt64(1)),
+                level: ScopeLevel::Session,
+                desc: "Whether the client wait for the reply of async insert, default value: 1"
+            },
+            SettingValue {
+                default_value: DataValue::UInt64(100),
+                user_setting: UserSetting::create("wait_for_async_insert_timeout", DataValue::UInt64(100)),
+                level: ScopeLevel::Session,
+                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100"
+            }
         ];
 
         let settings = Arc::new(RwLock::new(HashMap::default()));
@@ -226,6 +250,12 @@ impl Settings {
             .and_then(|v| v.user_setting.value.as_string())
     }
 
+    pub fn get_compression(&self) -> Result<Vec<u8>> {
+        let key = "compression";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
     pub fn get_empty_as_default(&self) -> Result<u64> {
         let key = "empty_as_default";
         self.try_get_u64(key)
@@ -251,6 +281,36 @@ impl Settings {
     // Set group by two level threshold
     pub fn set_group_by_two_level_threshold(&self, val: u64) -> Result<()> {
         let key = "group_by_two_level_threshold";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_enable_async_insert(&self) -> Result<u64> {
+        let key = "enable_async_insert";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_enable_async_insert(&self, val: u64) -> Result<()> {
+        let key = "enable_async_insert";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_wait_for_async_insert(&self) -> Result<u64> {
+        let key = "wait_for_async_insert";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_wait_for_async_insert(&self, val: u64) -> Result<()> {
+        let key = "wait_for_async_insert";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_wait_for_async_insert_timeout(&self) -> Result<u64> {
+        let key = "wait_for_async_insert_timeout";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_wait_for_async_insert_timeout(&self, val: u64) -> Result<()> {
+        let key = "wait_for_async_insert_timeout";
         self.try_set_u64(key, val, false)
     }
 
@@ -314,6 +374,42 @@ impl Settings {
             result.push(res);
         }
         result
+    }
+
+    pub fn get_changed_settings(&self) -> Settings {
+        let settings = self.settings.read();
+        let mut values = vec![];
+        for (_k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
+            if v.user_setting.value != v.default_value {
+                values.push(v.clone());
+            }
+        }
+        let new_settings = Arc::new(RwLock::new(HashMap::default()));
+        {
+            let mut new_settings_mut = new_settings.write();
+            for value in values {
+                let name = value.user_setting.name.clone();
+                new_settings_mut.insert(name, value.clone());
+            }
+        }
+        Settings {
+            settings: new_settings,
+        }
+    }
+
+    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        let mut settings = self.settings.write();
+        let values = changed_settings.get_setting_values();
+        for value in values.into_iter() {
+            if let DataValue::Struct(vals) = value {
+                let key = vals[0].to_string();
+                let mut val = settings.get_mut(&key).ok_or_else(|| {
+                    ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key))
+                })?;
+                val.user_setting.value = vals[2].clone();
+            }
+        }
+        Ok(())
     }
 
     pub fn get_setting_values_short(&self) -> BTreeMap<String, DataValue> {

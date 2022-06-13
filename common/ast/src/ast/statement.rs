@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_meta_types::AuthType;
 use common_meta_types::UserIdentity;
+use common_meta_types::UserOption;
+use common_meta_types::UserOptionFlag;
+use serde::Deserialize;
+use serde::Serialize;
 
+use super::write_space_seperated_list;
 use super::Expr;
 use crate::ast::expr::Literal;
 use crate::ast::expr::TypeName;
@@ -30,112 +36,19 @@ use crate::parser::token::Token;
 // SQL statement
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement<'a> {
+    Query(Box<Query<'a>>),
     Explain {
         kind: ExplainKind,
         query: Box<Statement<'a>>,
     },
-    Query(Box<Query<'a>>),
 
-    // Databases
-    ShowDatabases {
-        limit: Option<ShowLimit<'a>>,
-    },
-    ShowCreateDatabase {
-        database: Identifier<'a>,
-    },
-    CreateDatabase {
-        if_not_exists: bool,
-        database: Identifier<'a>,
-        engine: Engine,
-        options: Vec<SQLProperty>,
-    },
-    DropDatabase {
-        if_exists: bool,
-        database: Identifier<'a>,
-    },
-    AlterDatabase {
-        if_exists: bool,
-        database: Identifier<'a>,
-        action: AlterDatabaseAction<'a>,
-    },
-    UseDatabase {
-        database: Identifier<'a>,
-    },
-
-    // Tables
-    ShowTables {
-        database: Option<Identifier<'a>>,
-        full: bool,
-        limit: Option<ShowLimit<'a>>,
-    },
-    ShowCreateTable {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-    },
-    ShowTablesStatus {
-        database: Option<Identifier<'a>>,
-        limit: Option<ShowLimit<'a>>,
-    },
-    CreateTable {
-        if_not_exists: bool,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        source: Option<CreateTableSource<'a>>,
-        engine: Engine,
-        cluster_by: Vec<Expr<'a>>,
-        as_query: Option<Box<Query<'a>>>,
-        comment: Option<String>,
-    },
-    // Describe schema of a table
-    // Like `SHOW CREATE TABLE`
-    Describe {
+    Insert {
         catalog: Option<Identifier<'a>>,
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
-    },
-    DropTable {
-        if_exists: bool,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-    },
-    AlterTable {
-        if_exists: bool,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        action: AlterTableAction<'a>,
-    },
-    RenameTable {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        new_table: Identifier<'a>,
-    },
-    TruncateTable {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        purge: bool,
-    },
-    OptimizeTable {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        action: Option<OptimizeTableAction>,
-    },
-
-    // Views
-    CreateView {
-        if_not_exists: bool,
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
-        query: Box<Query<'a>>,
-    },
-    AlterView {
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
-        query: Box<Query<'a>>,
-    },
-    DropView {
-        if_exists: bool,
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
+        columns: Vec<Identifier<'a>>,
+        source: InsertSource<'a>,
+        overwrite: bool,
     },
 
     ShowSettings,
@@ -155,21 +68,36 @@ pub enum Statement<'a> {
         value: Literal,
     },
 
-    Insert {
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        columns: Vec<Identifier<'a>>,
-        source: InsertSource<'a>,
-        overwrite: bool,
+    // Databases
+    ShowDatabases(ShowDatabasesStmt<'a>),
+    ShowCreateDatabase(ShowCreateDatabaseStmt<'a>),
+    CreateDatabase(CreateDatabaseStmt<'a>),
+    DropDatabase(DropDatabaseStmt<'a>),
+    AlterDatabase(AlterDatabaseStmt<'a>),
+    UseDatabase {
+        database: Identifier<'a>,
     },
 
+    // Tables
+    ShowTables(ShowTablesStmt<'a>),
+    ShowCreateTable(ShowCreateTableStmt<'a>),
+    DescribeTable(DescribeTableStmt<'a>),
+    ShowTablesStatus(ShowTablesStatusStmt<'a>),
+    CreateTable(CreateTableStmt<'a>),
+    DropTable(DropTableStmt<'a>),
+    UndropTable(UndropTableStmt<'a>),
+    AlterTable(AlterTableStmt<'a>),
+    RenameTable(RenameTableStmt<'a>),
+    TruncateTable(TruncateTableStmt<'a>),
+    OptimizeTable(OptimizeTableStmt<'a>),
+
+    // Views
+    CreateView(CreateViewStmt<'a>),
+    AlterView(AlterViewStmt<'a>),
+    DropView(DropViewStmt<'a>),
+
     // User
-    CreateUser {
-        if_not_exists: bool,
-        user: UserIdentity,
-        auth_option: AuthOption,
-        role_options: Vec<RoleOption>,
-    },
+    CreateUser(CreateUserStmt),
     AlterUser {
         // None means current user
         user: Option<UserIdentity>,
@@ -180,6 +108,14 @@ pub enum Statement<'a> {
     DropUser {
         if_exists: bool,
         user: UserIdentity,
+    },
+    CreateRole {
+        if_not_exists: bool,
+        role_name: String,
+    },
+    DropRole {
+        if_exists: bool,
+        role_name: String,
     },
 
     // UDF
@@ -200,6 +136,25 @@ pub enum Statement<'a> {
         definition: Box<Expr<'a>>,
         description: Option<String>,
     },
+
+    // Stages
+    CreateStage(CreateStageStmt),
+    ShowStages,
+    DropStage {
+        if_exists: bool,
+        stage_name: String,
+    },
+    DescribeStage {
+        stage_name: String,
+    },
+    RemoveStage {
+        location: String,
+        pattern: String,
+    },
+    ListStage {
+        location: String,
+        pattern: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -209,20 +164,171 @@ pub enum ExplainKind {
     Pipeline,
 }
 
+#[derive(Debug, Clone, PartialEq)] // Databases
+pub struct ShowDatabasesStmt<'a> {
+    pub limit: Option<ShowLimit<'a>>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum InsertSource<'a> {
-    Streaming { format: String },
-    Values { values_tokens: &'a [Token<'a>] },
-    Select { query: Box<Query<'a>> },
+pub struct ShowCreateDatabaseStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)] // Tables
+pub struct ShowTablesStmt<'a> {
+    pub database: Option<Identifier<'a>>,
+    pub full: bool,
+    pub limit: Option<ShowLimit<'a>>,
+    pub with_history: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowCreateTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowTablesStatusStmt<'a> {
+    pub database: Option<Identifier<'a>>,
+    pub limit: Option<ShowLimit<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateDatabaseStmt<'a> {
+    pub if_not_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+    pub engine: Option<DatabaseEngine>,
+    pub options: Vec<SQLProperty>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropDatabaseStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterDatabaseStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+    pub action: AlterDatabaseAction<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTableStmt<'a> {
+    pub if_not_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub source: Option<CreateTableSource<'a>>,
+    pub table_options: Vec<TableOption>,
+    pub cluster_by: Vec<Expr<'a>>,
+    pub as_query: Option<Box<Query<'a>>>,
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DescribeTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CreateTableSource<'a> {
     Columns(Vec<ColumnDefinition<'a>>),
     Like {
+        catalog: Option<Identifier<'a>>,
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTableStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub all: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UndropTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTableStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub action: AlterTableAction<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenameTableStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub new_catalog: Option<Identifier<'a>>,
+    pub new_database: Option<Identifier<'a>>,
+    pub new_table: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TruncateTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub purge: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptimizeTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub action: Option<OptimizeTableAction>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum OptimizeTableAction {
+    All,
+    Purge,
+    Compact,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TableOption {
+    Engine(Engine),
+    Comment(String),
+}
+
+impl TableOption {
+    pub fn option_key(&self) -> String {
+        match self {
+            TableOption::Engine(_) => "ENGINE".to_string(),
+            TableOption::Comment(_) => "COMMENT".to_string(),
+        }
+    }
+
+    pub fn option_value(&self) -> String {
+        match self {
+            TableOption::Engine(engine) => engine.to_string(),
+            TableOption::Comment(comment) => comment.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -232,6 +338,38 @@ pub enum Engine {
     Fuse,
     Github,
     View,
+    Random,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DatabaseEngine {
+    Default,
+    Github(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateViewStmt<'a> {
+    pub if_not_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub view: Identifier<'a>,
+    pub query: Box<Query<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterViewStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub view: Identifier<'a>,
+    pub query: Box<Query<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropViewStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub view: Identifier<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -262,20 +400,45 @@ pub enum AlterDatabaseAction<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AlterTableAction<'a> {
     RenameTable { new_table: Identifier<'a> },
-    // TODO(wuzhiguo): AddColumn etc
+    AlterTableClusterKey { cluster_by: Vec<Expr<'a>> },
+    DropTableClusterKey,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum OptimizeTableAction {
-    All,
-    Purge,
-    Compact,
+pub struct CreateStageStmt {
+    pub if_not_exists: bool,
+    pub stage_name: String,
+
+    pub location: String,
+    pub credential_options: BTreeMap<String, String>,
+    pub encryption_options: BTreeMap<String, String>,
+
+    pub file_format_options: BTreeMap<String, String>,
+    pub on_error: String,
+    pub size_limit: usize,
+    pub validation_mode: String,
+    pub comments: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum KillTarget {
     Query,
     Connection,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InsertSource<'a> {
+    Streaming { format: String },
+    Values { values_tokens: &'a [Token<'a>] },
+    Select { query: Box<Query<'a>> },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateUserStmt {
+    pub if_not_exists: bool,
+    pub user: UserIdentity,
+    pub auth_option: AuthOption,
+    pub role_options: Vec<RoleOption>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -290,6 +453,25 @@ pub enum RoleOption {
     NoTenantSetting,
     ConfigReload,
     NoConfigReload,
+}
+
+impl RoleOption {
+    pub fn apply(&self, option: &mut UserOption) {
+        match self {
+            Self::TenantSetting => {
+                option.set_option_flag(UserOptionFlag::TenantSetting);
+            }
+            Self::NoTenantSetting => {
+                option.unset_option_flag(UserOptionFlag::TenantSetting);
+            }
+            Self::ConfigReload => {
+                option.set_option_flag(UserOptionFlag::ConfigReload);
+            }
+            Self::NoConfigReload => {
+                option.unset_option_flag(UserOptionFlag::ConfigReload);
+            }
+        }
+    }
 }
 
 impl<'a> Display for ShowLimit<'a> {
@@ -316,6 +498,35 @@ impl<'a> Display for ColumnDefinition<'a> {
     }
 }
 
+impl Display for OptimizeTableAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OptimizeTableAction::All => write!(f, "ALL"),
+            OptimizeTableAction::Purge => write!(f, "PURGE"),
+            OptimizeTableAction::Compact => write!(f, "COMPACT"),
+        }
+    }
+}
+
+impl Display for TableOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TableOption::Engine(engine) => write!(f, "ENGINE = {engine}"),
+            TableOption::Comment(comment) => write!(f, "COMMENT = {comment}"),
+        }
+    }
+}
+
+impl Display for DatabaseEngine {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let DatabaseEngine::Github(token) = self {
+            write!(f, "GITHUB(token=\'{token}\')")
+        } else {
+            write!(f, "DEFAULT")
+        }
+    }
+}
+
 impl Display for Engine {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -324,6 +535,7 @@ impl Display for Engine {
             Engine::Fuse => write!(f, "FUSE"),
             Engine::Github => write!(f, "GITHUB"),
             Engine::View => write!(f, "VIEW"),
+            Engine::Random => write!(f, "RANDOM"),
         }
     }
 }
@@ -363,237 +575,36 @@ impl<'a> Display for Statement<'a> {
             Statement::Query(query) => {
                 write!(f, "{query}")?;
             }
-            Statement::ShowDatabases { limit } => {
-                write!(f, "SHOW DATABASES")?;
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
-                }
-            }
-            Statement::ShowCreateDatabase { database } => {
-                write!(f, "SHOW CREATE DATABASE {database}")?;
-            }
-            Statement::CreateDatabase {
-                if_not_exists,
-                database,
-                engine,
-                ..
-            } => {
-                write!(f, "CREATE DATABASE")?;
-                if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
-                }
-                write!(f, " {database}")?;
-                if *engine != Engine::Null {
-                    write!(f, " ENGINE = {engine}")?;
-                }
-                // TODO(leiysky): display rest information
-            }
-            Statement::DropDatabase {
-                database,
-                if_exists,
-            } => {
-                write!(f, "DROP DATABASE")?;
-                if *if_exists {
-                    write!(f, " IF EXISTS")?;
-                }
-                write!(f, " {database}")?;
-            }
-            Statement::AlterDatabase {
-                if_exists,
-                database,
-                action,
-            } => {
-                write!(f, "ALTER DATABASE")?;
-                if *if_exists {
-                    write!(f, " IF EXISTS")?;
-                }
-                write!(f, " {database}")?;
-                match action {
-                    AlterDatabaseAction::RenameDatabase { new_db } => {
-                        write!(f, " RENAME TO {new_db}")?;
-                    }
-                }
-            }
-            Statement::UseDatabase { database } => {
-                write!(f, "USE {database}")?;
-            }
-            Statement::ShowTables {
-                database,
-                full,
-                limit,
-            } => {
-                write!(f, "SHOW")?;
-                if *full {
-                    write!(f, " FULL")?;
-                }
-                write!(f, " TABLES")?;
-                if let Some(database) = database {
-                    write!(f, " FROM {database}")?;
-                }
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
-                }
-            }
-            Statement::ShowCreateTable { database, table } => {
-                write!(f, "SHOW CREATE TABLE ")?;
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
-            }
-            Statement::ShowTablesStatus { database, limit } => {
-                write!(f, "SHOW TABLE STATUS")?;
-                if let Some(database) = database {
-                    write!(f, " FROM {database}")?;
-                }
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
-                }
-            }
-            Statement::CreateTable {
-                if_not_exists,
-                database,
-                table,
-                source,
-                engine,
-                comment,
-                cluster_by,
-                as_query,
-            } => {
-                write!(f, "CREATE TABLE ")?;
-                if *if_not_exists {
-                    write!(f, "IF NOT EXISTS ")?;
-                }
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
-                match source {
-                    Some(CreateTableSource::Columns(columns)) => {
-                        write!(f, " (")?;
-                        write_comma_separated_list(f, columns)?;
-                        write!(f, ")")?;
-                    }
-                    Some(CreateTableSource::Like { database, table }) => {
-                        write!(f, " LIKE ")?;
-                        write_period_separated_list(f, database.iter().chain(Some(table)))?;
-                    }
-                    None => (),
-                }
-                if *engine != Engine::Null {
-                    write!(f, " ENGINE = {engine}")?;
-                }
-                if let Some(comment) = comment {
-                    write!(f, " COMMENT = {comment}")?;
-                }
-                if !cluster_by.is_empty() {
-                    write!(f, " CLUSTER BY ")?;
-                    write_comma_separated_list(f, cluster_by)?;
-                }
-                if let Some(as_query) = as_query {
-                    write!(f, " AS {as_query}")?;
-                }
-            }
-            Statement::Describe {
+            Statement::Insert {
                 catalog,
                 database,
                 table,
+                columns,
+                source,
+                overwrite,
             } => {
-                write!(f, "DESCRIBE ")?;
-                write_period_separated_list(
-                    f,
-                    catalog.iter().chain(database.iter().chain(Some(table))),
-                )?;
-            }
-            Statement::DropTable {
-                if_exists,
-                database,
-                table,
-            } => {
-                write!(f, "DROP TABLE ")?;
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
+                write!(f, "INSERT ")?;
+                if *overwrite {
+                    write!(f, "OVERWRITE ")?;
+                } else {
+                    write!(f, "INTO ")?;
                 }
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
-            }
-            Statement::AlterTable {
-                if_exists,
-                database,
-                table,
-                action,
-            } => {
-                write!(f, "ALTER TABLE ")?;
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if !columns.is_empty() {
+                    write!(f, " (")?;
+                    write_comma_separated_list(f, columns)?;
+                    write!(f, ")")?;
                 }
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
-                match action {
-                    AlterTableAction::RenameTable { new_table } => {
-                        write!(f, " RENAME TO {new_table}")?;
-                    }
+                match source {
+                    InsertSource::Streaming { format } => write!(f, " FORMAT {format}")?,
+                    InsertSource::Values { values_tokens } => write!(
+                        f,
+                        " VALUES {}",
+                        &values_tokens[0].source[values_tokens.first().unwrap().span.start
+                            ..values_tokens.last().unwrap().span.end]
+                    )?,
+                    InsertSource::Select { query } => write!(f, " {query}")?,
                 }
-            }
-            Statement::RenameTable {
-                database,
-                table,
-                new_table,
-            } => {
-                write!(f, "RENAME TABLE ")?;
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
-                write!(f, " TO {new_table}")?;
-            }
-            Statement::TruncateTable {
-                database,
-                table,
-                purge,
-            } => {
-                write!(f, "TRUNCATE TABLE ")?;
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
-                if *purge {
-                    write!(f, " PURGE")?;
-                }
-            }
-            Statement::OptimizeTable {
-                database,
-                table,
-                action,
-            } => {
-                write!(f, "OPTIMIZE TABLE ")?;
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
-                if let Some(action) = action {
-                    match action {
-                        OptimizeTableAction::All => write!(f, " ALL")?,
-                        OptimizeTableAction::Purge => write!(f, " PURGE")?,
-                        OptimizeTableAction::Compact => write!(f, " COMPACT")?,
-                    }
-                }
-            }
-            Statement::CreateView {
-                if_not_exists,
-                database,
-                view,
-                query,
-            } => {
-                write!(f, "CREATE VIEW ")?;
-                if *if_not_exists {
-                    write!(f, "IF NOT EXISTS ")?;
-                }
-                write_period_separated_list(f, database.iter().chain(Some(view)))?;
-                write!(f, " AS {query}")?;
-            }
-            Statement::AlterView {
-                database,
-                view,
-                query,
-            } => {
-                write!(f, "ALTER VIEW ")?;
-                write_period_separated_list(f, database.iter().chain(Some(view)))?;
-                write!(f, " AS {query}")?;
-            }
-            Statement::DropView {
-                if_exists,
-                database,
-                view,
-            } => {
-                write!(f, "DROP VIEW ")?;
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
-                }
-                write_period_separated_list(f, database.iter().chain(Some(view)))?;
             }
             Statement::ShowSettings => {
                 write!(f, "SHOW SETTINGS")?;
@@ -624,42 +635,301 @@ impl<'a> Display for Statement<'a> {
             Statement::SetVariable { variable, value } => {
                 write!(f, "SET {variable} = {value}")?;
             }
-            Statement::Insert {
-                database,
-                table,
-                columns,
-                source,
-                overwrite,
-            } => {
-                write!(f, "INSERT ")?;
-                if *overwrite {
-                    write!(f, "OVERWRITE ")?;
-                } else {
-                    write!(f, "INTO ")?;
-                }
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
-                if !columns.is_empty() {
-                    write!(f, " (")?;
-                    write_comma_separated_list(f, columns)?;
-                    write!(f, ")")?;
-                }
-                match source {
-                    InsertSource::Streaming { format } => write!(f, " FORMAT {format}")?,
-                    InsertSource::Values { values_tokens } => write!(
-                        f,
-                        " VALUES {}",
-                        &values_tokens[0].source[values_tokens.first().unwrap().span.start
-                            ..values_tokens.last().unwrap().span.end]
-                    )?,
-                    InsertSource::Select { query } => write!(f, " {query}")?,
+            Statement::ShowDatabases(ShowDatabasesStmt { limit }) => {
+                write!(f, "SHOW DATABASES")?;
+                if let Some(limit) = limit {
+                    write!(f, " {limit}")?;
                 }
             }
-            Statement::CreateUser {
+            Statement::ShowCreateDatabase(ShowCreateDatabaseStmt { catalog, database }) => {
+                write!(f, "SHOW CREATE DATABASE ")?;
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
+            }
+            Statement::CreateDatabase(CreateDatabaseStmt {
+                if_not_exists,
+                catalog,
+                database,
+                engine,
+                ..
+            }) => {
+                write!(f, "CREATE DATABASE ")?;
+                if *if_not_exists {
+                    write!(f, "IF NOT EXISTS ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
+                if let Some(engine) = engine {
+                    write!(f, " ENGINE = {engine}")?;
+                }
+                // TODO(leiysky): display rest information
+            }
+            Statement::DropDatabase(DropDatabaseStmt {
+                if_exists,
+                catalog,
+                database,
+            }) => {
+                write!(f, "DROP DATABASE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
+            }
+            Statement::AlterDatabase(AlterDatabaseStmt {
+                if_exists,
+                catalog,
+                database,
+                action,
+            }) => {
+                write!(f, "ALTER DATABASE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
+                match action {
+                    AlterDatabaseAction::RenameDatabase { new_db } => {
+                        write!(f, " RENAME TO {new_db}")?;
+                    }
+                }
+            }
+            Statement::UseDatabase { database } => {
+                write!(f, "USE {database}")?;
+            }
+            Statement::ShowTables(ShowTablesStmt {
+                database,
+                full,
+                limit,
+                with_history,
+            }) => {
+                write!(f, "SHOW")?;
+                if *full {
+                    write!(f, " FULL")?;
+                }
+                write!(f, " TABLES")?;
+                if *with_history {
+                    write!(f, " HISTORY")?;
+                }
+                if let Some(database) = database {
+                    write!(f, " FROM {database}")?;
+                }
+                if let Some(limit) = limit {
+                    write!(f, " {limit}")?;
+                }
+            }
+            Statement::ShowCreateTable(ShowCreateTableStmt {
+                catalog,
+                database,
+                table,
+            }) => {
+                write!(f, "SHOW CREATE TABLE ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+            }
+            Statement::DescribeTable(DescribeTableStmt {
+                catalog,
+                database,
+                table,
+            }) => {
+                write!(f, "DESCRIBE ")?;
+                write_period_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter().chain(Some(table))),
+                )?;
+            }
+            Statement::ShowTablesStatus(ShowTablesStatusStmt { database, limit }) => {
+                write!(f, "SHOW TABLE STATUS")?;
+                if let Some(database) = database {
+                    write!(f, " FROM {database}")?;
+                }
+                if let Some(limit) = limit {
+                    write!(f, " {limit}")?;
+                }
+            }
+            Statement::CreateTable(CreateTableStmt {
+                if_not_exists,
+                catalog,
+                database,
+                table,
+                source,
+                table_options,
+                comment,
+                cluster_by,
+                as_query,
+            }) => {
+                write!(f, "CREATE TABLE ")?;
+                if *if_not_exists {
+                    write!(f, "IF NOT EXISTS ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                match source {
+                    Some(CreateTableSource::Columns(columns)) => {
+                        write!(f, " (")?;
+                        write_comma_separated_list(f, columns)?;
+                        write!(f, ")")?;
+                    }
+                    Some(CreateTableSource::Like {
+                        catalog,
+                        database,
+                        table,
+                    }) => {
+                        write!(f, " LIKE ")?;
+                        write_period_separated_list(
+                            f,
+                            catalog.iter().chain(database).chain(Some(table)),
+                        )?;
+                    }
+                    None => (),
+                }
+
+                // Format table options
+                write_space_seperated_list(f, table_options.iter())?;
+
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT = {comment}")?;
+                }
+                if !cluster_by.is_empty() {
+                    write!(f, " CLUSTER BY ")?;
+                    write_comma_separated_list(f, cluster_by)?;
+                }
+                if let Some(as_query) = as_query {
+                    write!(f, " AS {as_query}")?;
+                }
+            }
+            Statement::DropTable(DropTableStmt {
+                if_exists,
+                catalog,
+                database,
+                table,
+                all,
+            }) => {
+                write!(f, "DROP TABLE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if *all {
+                    write!(f, " ALL")?;
+                }
+            }
+            Statement::UndropTable(UndropTableStmt {
+                catalog,
+                database,
+                table,
+            }) => {
+                write!(f, "UNDROP TABLE ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+            }
+            Statement::AlterTable(AlterTableStmt {
+                if_exists,
+                catalog,
+                database,
+                table,
+                action,
+            }) => {
+                write!(f, "ALTER TABLE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                match action {
+                    AlterTableAction::RenameTable { new_table } => {
+                        write!(f, " RENAME TO {new_table}")?;
+                    }
+                    AlterTableAction::AlterTableClusterKey { cluster_by } => {
+                        write!(f, " CLUSTER BY ")?;
+                        write_comma_separated_list(f, cluster_by)?;
+                    }
+                    AlterTableAction::DropTableClusterKey => {
+                        write!(f, " DROP CLUSTER KEY")?;
+                    }
+                }
+            }
+            Statement::RenameTable(RenameTableStmt {
+                if_exists,
+                catalog,
+                database,
+                table,
+                new_catalog,
+                new_database,
+                new_table,
+            }) => {
+                write!(f, "RENAME TABLE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                write!(f, " TO ")?;
+                write_period_separated_list(
+                    f,
+                    new_catalog
+                        .iter()
+                        .chain(new_database)
+                        .chain(Some(new_table)),
+                )?;
+            }
+            Statement::TruncateTable(TruncateTableStmt {
+                catalog,
+                database,
+                table,
+                purge,
+            }) => {
+                write!(f, "TRUNCATE TABLE ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if *purge {
+                    write!(f, " PURGE")?;
+                }
+            }
+            Statement::OptimizeTable(OptimizeTableStmt {
+                catalog,
+                database,
+                table,
+                action,
+            }) => {
+                write!(f, "OPTIMIZE TABLE ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if let Some(action) = action {
+                    write!(f, " {action}")?;
+                }
+            }
+            Statement::CreateView(CreateViewStmt {
+                if_not_exists,
+                catalog,
+                database,
+                view,
+                query,
+            }) => {
+                write!(f, "CREATE VIEW ")?;
+                if *if_not_exists {
+                    write!(f, "IF NOT EXISTS ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
+                write!(f, " AS {query}")?;
+            }
+            Statement::AlterView(AlterViewStmt {
+                catalog,
+                database,
+                view,
+                query,
+            }) => {
+                write!(f, "ALTER VIEW ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
+                write!(f, " AS {query}")?;
+            }
+            Statement::DropView(DropViewStmt {
+                if_exists,
+                catalog,
+                database,
+                view,
+            }) => {
+                write!(f, "DROP VIEW ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
+            }
+            Statement::CreateUser(CreateUserStmt {
                 if_not_exists,
                 user,
                 auth_option,
                 role_options,
-            } => {
+            }) => {
                 write!(f, "CREATE USER")?;
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
@@ -712,6 +982,26 @@ impl<'a> Display for Statement<'a> {
                 }
                 write!(f, " {user}")?;
             }
+            Statement::CreateRole {
+                if_not_exists,
+                role_name: role,
+            } => {
+                write!(f, "CREATE ROLE")?;
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {role}")?;
+            }
+            Statement::DropRole {
+                if_exists,
+                role_name: role,
+            } => {
+                write!(f, "DROP ROLE")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {role}")?;
+            }
             Statement::CreateUDF {
                 if_not_exists,
                 udf_name,
@@ -752,6 +1042,85 @@ impl<'a> Display for Statement<'a> {
                 if let Some(description) = description {
                     write!(f, " DESC = '{description}'")?;
                 }
+            }
+            Statement::ListStage { location, pattern } => {
+                write!(f, "LIST @{location}")?;
+                if !pattern.is_empty() {
+                    write!(f, " PATTERN = '{pattern}'")?;
+                }
+            }
+            Statement::ShowStages => {
+                write!(f, "SHOW STAGES")?;
+            }
+            Statement::DropStage {
+                if_exists,
+                stage_name,
+            } => {
+                write!(f, "DROP STAGES")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {stage_name}")?;
+            }
+            Statement::CreateStage(stmt) => {
+                write!(f, "CREATE STAGE")?;
+                if stmt.if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {}", stmt.stage_name)?;
+
+                if !stmt.location.is_empty() {
+                    write!(f, " URL = '{}'", stmt.location)?;
+
+                    if !stmt.credential_options.is_empty() {
+                        write!(f, " CREDENTIALS = (")?;
+                        for (k, v) in stmt.credential_options.iter() {
+                            write!(f, " {} = '{}'", k, v)?;
+                        }
+                        write!(f, " )")?;
+                    }
+
+                    if !stmt.encryption_options.is_empty() {
+                        write!(f, " ENCRYPTION = (")?;
+                        for (k, v) in stmt.encryption_options.iter() {
+                            write!(f, " {} = '{}'", k, v)?;
+                        }
+                        write!(f, " )")?;
+                    }
+                }
+
+                if !stmt.file_format_options.is_empty() {
+                    write!(f, " FILE_FORMAT = (")?;
+                    for (k, v) in stmt.file_format_options.iter() {
+                        write!(f, " {} = '{}'", k, v)?;
+                    }
+                    write!(f, " )")?;
+                }
+
+                if !stmt.on_error.is_empty() {
+                    write!(f, " ON_ERROR = {}", stmt.on_error)?;
+                }
+
+                if stmt.size_limit != 0 {
+                    write!(f, " SIZE_LIMIT = {}", stmt.size_limit)?;
+                }
+
+                if !stmt.validation_mode.is_empty() {
+                    write!(f, " VALIDATION_MODE = {}", stmt.validation_mode)?;
+                }
+
+                if !stmt.comments.is_empty() {
+                    write!(f, " COMMENTS = '{}'", stmt.comments)?;
+                }
+            }
+            Statement::RemoveStage { location, pattern } => {
+                write!(f, "REMOVE STAGE @{location}")?;
+                if !pattern.is_empty() {
+                    write!(f, " PATTERN = '{pattern}'")?;
+                }
+            }
+            Statement::DescribeStage { stage_name } => {
+                write!(f, "DESC STAGE {stage_name}")?;
             }
         }
         Ok(())

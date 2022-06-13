@@ -16,24 +16,30 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropTableReply;
-use common_meta_types::DropTableReq;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateDatabaseReply;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::RenameDatabaseReply;
+use common_meta_app::schema::RenameDatabaseReq;
+use common_meta_app::schema::RenameTableReply;
+use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
+use common_meta_app::schema::UndropTableReply;
+use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateTableMetaReply;
+use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableOptionReply;
+use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
-use common_meta_types::RenameDatabaseReply;
-use common_meta_types::RenameDatabaseReq;
-use common_meta_types::RenameTableReply;
-use common_meta_types::RenameTableReq;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
-use common_meta_types::UpdateTableMetaReply;
-use common_meta_types::UpdateTableMetaReq;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::InMemoryMetas;
@@ -137,6 +143,14 @@ impl Catalog for ImmutableCatalog {
         self.sys_db_meta.get_all_tables(db_name)
     }
 
+    async fn list_tables_history(
+        &self,
+        tenant: &str,
+        db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        self.list_tables(tenant, db_name).await
+    }
+
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "Cannot create table in system database",
@@ -149,9 +163,27 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot undrop table in system database",
+        ))
+    }
+
+    async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot undrop database in system database",
+        ))
+    }
+
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         Err(ErrorCode::UnImplement(
             "Cannot rename table in system database",
+        ))
+    }
+
+    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot count tables in system database",
         ))
     }
 

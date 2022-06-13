@@ -53,7 +53,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
 
         let table = catalog
-            .get_table(tenant.as_str(), &self.plan.db, &self.plan.table)
+            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
 
         let name = table.name();
@@ -94,8 +94,8 @@ impl Interpreter for ShowCreateTableInterpreter {
         table_create_sql.push_str(table_engine.as_str());
 
         let table_info = table.get_table_info();
-        if let Some(order_keys_str) = &table_info.meta.order_keys {
-            table_create_sql.push_str(format!(" CLUSTER BY {}", order_keys_str).as_str());
+        if let Some((_, cluster_keys_str)) = table_info.meta.cluster_key() {
+            table_create_sql.push_str(format!(" CLUSTER BY {}", cluster_keys_str).as_str());
         }
 
         table_create_sql.push_str({

@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_io::prelude::get_abs_path;
-use common_io::prelude::StorageParams;
+use chrono::DateTime;
+use chrono::TimeZone;
+use common_datavalues::chrono::Utc;
+use common_meta_types::StageFile;
 use common_meta_types::StageType;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -26,6 +28,7 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use crate::sessions::SessionType;
+use crate::storages::stage::StageSource;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {
@@ -49,11 +52,6 @@ pub async fn upload_to_stage(
 
     let user_mgr = context.get_user_manager();
 
-    let op = context
-        .get_storage_operator()
-        .map_err(InternalServerError)?;
-    let mut files = vec![];
-
     let stage_name = req
         .headers()
         .get("stage_name")
@@ -69,42 +67,63 @@ pub async fn upload_to_stage(
         .await
         .map_err(InternalServerError)?;
 
+    let op = StageSource::get_op(&context, &stage)
+        .await
+        .map_err(InternalServerError)?;
+
     let relative_path = req
         .headers()
         .get("relative_path")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
-        .trim_matches(|c| c == '/');
+        .trim_matches('/')
+        .to_string();
 
-    let final_related_path: String;
-    match stage.stage_type {
-        // It's internal, so we already have an op which has the root path
-        // need to inject a tenant path
-        StageType::Internal => {
-            let prefix = format!("stage/{}", stage.stage_name);
-            final_related_path = get_abs_path(prefix.as_str(), relative_path);
-        }
-        // It's  external, so we need to join the root path
-        StageType::External => match stage.stage_params.storage {
-            StorageParams::S3(ref s3) => {
-                final_related_path = get_abs_path(s3.root.as_str(), relative_path);
-            }
-            _ => todo!("other stage is not supported"),
-        },
-    }
+    let prefix = stage.get_prefix();
 
+    let tenant = context.get_tenant();
+    let user = context
+        .get_current_user()
+        .map_err(InternalServerError)?
+        .identity();
+
+    let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = match field.file_name() {
             Some(name) => name.to_string(),
             None => uuid::Uuid::new_v4().to_string(),
         };
         let bytes = field.bytes().await.map_err(InternalServerError)?;
-        let obj = format!("{}/{}", final_related_path, name);
+        let file_path = format!("{relative_path}/{name}")
+            .trim_start_matches('/')
+            .to_string();
+        let obj = format!("{prefix}{file_path}");
         let _ = op
             .object(&obj)
             .write(bytes)
             .await
             .map_err(InternalServerError)?;
+
+        if stage.stage_type == StageType::Internal {
+            let meta = op
+                .object(&obj)
+                .metadata()
+                .await
+                .map_err(InternalServerError)?;
+            let file = StageFile {
+                path: file_path,
+                size: meta.content_length(),
+                md5: meta.content_md5(),
+                last_modified: meta.last_modified().map_or(DateTime::default(), |t| {
+                    Utc.timestamp(t.unix_timestamp(), 0)
+                }),
+                creator: Some(user.clone()),
+            };
+            user_mgr
+                .add_file(&tenant, &stage.stage_name, file)
+                .await
+                .map_err(InternalServerError)?;
+        }
         files.push(name.clone());
     }
 

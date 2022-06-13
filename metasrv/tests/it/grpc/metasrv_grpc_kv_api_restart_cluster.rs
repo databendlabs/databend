@@ -20,10 +20,11 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_meta_api::KVApi;
+use common_meta_grpc::ClientHandle;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 
 use crate::init_meta_ut;
@@ -35,11 +36,8 @@ use crate::tests::start_metasrv_with_context;
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test upsert kv and read on different nodes.
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
         format!("t-restart-cluster-{}-{}-{}", x.config_id, x.id, k)
@@ -56,7 +54,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 
             let k = make_key(tc, key_suffix);
             let res = client
-                .upsert_kv(UpsertKVAction {
+                .upsert_kv(UpsertKVReq {
                     key: k.clone(),
                     seq: MatchSeq::Any,
                     value: Operation::Update(k.clone().into_bytes()),
@@ -130,11 +128,8 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test read kv using same grpc client.
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
         format!("t-restart-cluster-{}-{}-{}", x.config_id, x.id, k)
@@ -142,7 +137,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
 
     async fn test_write_read_on_every_node(
         tcs: &[MetaSrvTestContext],
-        client: &MetaGrpcClient,
+        client: &ClientHandle,
         key_suffix: &str,
     ) -> anyhow::Result<()> {
         tracing::info!("--- test write on every node: {}", key_suffix);
@@ -151,7 +146,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
             let k = make_key(tc, key_suffix);
             if i == 0 {
                 let res = client
-                    .upsert_kv(UpsertKVAction {
+                    .upsert_kv(UpsertKVReq {
                         key: k.clone(),
                         seq: MatchSeq::Any,
                         value: Operation::Update(k.clone().into_bytes()),
@@ -162,7 +157,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
             } else {
                 let client = tc.grpc_client().await.unwrap();
                 let res = client
-                    .upsert_kv(UpsertKVAction {
+                    .upsert_kv(UpsertKVReq {
                         key: k.clone(),
                         seq: MatchSeq::Any,
                         value: Operation::Update(k.clone().into_bytes()),
@@ -188,8 +183,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         "xxx",
         None,
         None,
-    )
-    .await?;
+    )?;
 
     tracing::info!("--- test write on a fresh cluster");
     let key_suffix = "1st";

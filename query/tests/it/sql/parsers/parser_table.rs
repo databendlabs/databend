@@ -41,7 +41,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
-        order_keys: vec![],
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -54,7 +54,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
-        order_keys: vec![],
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -67,7 +67,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
-        order_keys: vec![],
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -89,7 +89,7 @@ fn create_table() -> Result<()> {
         },
         like: None,
         query: None,
-        order_keys: vec![],
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -104,7 +104,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "batcave".into()},
         like: Some(ObjectName(vec![Ident::new("db2"), Ident::new("test2")])),
         query: None,
-        order_keys: vec![],
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -129,6 +129,7 @@ fn create_table() -> Result<()> {
                     alias: None,
                     args: vec![],
                     with_hints: vec![],
+                    instant: None,
                 },
                 joins: vec![],
             }],
@@ -141,7 +142,7 @@ fn create_table() -> Result<()> {
             offset: None,
             format: None,
         })),
-        order_keys: vec![],
+        cluster_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
     Ok(())
@@ -159,7 +160,7 @@ fn create_table_select() -> Result<()> {
             options: maplit::btreemap! {},
             like: None,
             query: Some(verified_query("SELECT a, b FROM bar")?),
-            order_keys: vec![],
+            cluster_keys: vec![],
         }),
     )?;
 
@@ -173,7 +174,7 @@ fn create_table_select() -> Result<()> {
             options: maplit::btreemap! {},
             like: None,
             query: Some(verified_query("SELECT a, b FROM bar")?),
-            order_keys: vec![],
+            cluster_keys: vec![],
         }),
     )?;
 
@@ -187,6 +188,7 @@ fn drop_table() -> Result<()> {
         let expected = DfStatement::DropTable(DfDropTable {
             if_exists: false,
             name: ObjectName(vec![Ident::new("t1")]),
+            all: false,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -196,6 +198,17 @@ fn drop_table() -> Result<()> {
         let expected = DfStatement::DropTable(DfDropTable {
             if_exists: true,
             name: ObjectName(vec![Ident::new("t1")]),
+            all: false,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "DROP TABLE t1 all";
+        let expected = DfStatement::DropTable(DfDropTable {
+            if_exists: false,
+            name: ObjectName(vec![Ident::new("t1")]),
+            all: true,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -212,7 +225,7 @@ fn alter_table() -> Result<()> {
         let new_table_name = ObjectName(vec![Ident::new("t2")]);
         let expected = DfStatement::AlterTable(DfAlterTable {
             if_exists: false,
-            table_name,
+            table: table_name,
             action: AlterTableAction::RenameTable(new_table_name),
         });
         expect_parse_ok(sql, expected)?;
@@ -289,5 +302,36 @@ fn truncate_table() -> Result<()> {
         expect_parse_ok(sql, expected)?;
     }
 
+    Ok(())
+}
+
+#[test]
+fn alter_table_cluster_key() -> Result<()> {
+    {
+        let sql = "ALTER TABLE t1 CLUSTER BY (a, b)";
+        let expected = DfStatement::AlterTable(DfAlterTable {
+            if_exists: false,
+            table: ObjectName(vec![Ident::new("t1")]),
+            action: AlterTableAction::AlterTableClusterKey(vec![
+                Expr::Identifier(Ident::new("a")),
+                Expr::Identifier(Ident::new("b")),
+            ]),
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn drop_table_cluster_key() -> Result<()> {
+    {
+        let sql = "ALTER TABLE t1 DROP CLUSTER KEY";
+        let expected = DfStatement::AlterTable(DfAlterTable {
+            if_exists: false,
+            table: ObjectName(vec![Ident::new("t1")]),
+            action: AlterTableAction::DropTableClusterKey,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
     Ok(())
 }

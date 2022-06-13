@@ -289,6 +289,119 @@ impl GroupHash for StringColumn {
     }
 }
 
-// TODO(b41sh): implement GroupHash for VariantColumn
-impl GroupHash for VariantColumn {}
-impl GroupHash for ArrayColumn {}
+impl GroupHash for VariantColumn {
+    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
+        assert_eq!(vec.len(), self.len());
+
+        match nulls {
+            Some(bitmap) => {
+                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec) {
+                    BinaryWrite::write_scalar(vec, &valid)?;
+                    if valid {
+                        BinaryWrite::write_binary(vec, value.to_string().as_bytes())?;
+                    }
+                }
+            }
+            None => {
+                for (value, vec) in self.iter().zip(vec) {
+                    BinaryWrite::write_binary(vec, value.to_string().as_bytes())?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl GroupHash for ArrayColumn {
+    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
+        assert_eq!(vec.len(), self.len());
+
+        let offsets = self.offsets();
+        if offsets.len() <= 1 {
+            return Ok(());
+        }
+        let inner_column = self.values();
+        let inner_length = *offsets.last().unwrap() as usize;
+        let mut inner_keys = Vec::with_capacity(inner_length);
+        for _i in 0..inner_length {
+            inner_keys.push(SmallVu8::new());
+        }
+        Series::serialize(inner_column, &mut inner_keys, None)?;
+
+        match nulls {
+            Some(bitmap) => {
+                let mut offset = 0;
+                for i in 0..self.len() {
+                    let valid = bitmap.get(i).unwrap();
+                    let v = vec.get_mut(i).unwrap();
+                    BinaryWrite::write_scalar(v, &valid)?;
+                    if valid {
+                        let length = self.size_at_index(i);
+                        BinaryWrite::write_uvarint(v, length as u64)?;
+                        for j in offset..offset + length {
+                            BinaryWrite::write_raw(v, inner_keys.get(j).unwrap())?;
+                        }
+                        offset += length;
+                    }
+                }
+            }
+            None => {
+                let mut offset = 0;
+                for i in 0..self.len() {
+                    let v = vec.get_mut(i).unwrap();
+                    let length = self.size_at_index(i);
+                    BinaryWrite::write_uvarint(v, length as u64)?;
+                    for j in offset..offset + length {
+                        BinaryWrite::write_raw(v, inner_keys.get(j).unwrap())?;
+                    }
+                    offset += length;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl GroupHash for StructColumn {
+    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
+        assert_eq!(vec.len(), self.len());
+
+        let inner_columns = self.values();
+        let mut keys = Vec::with_capacity(inner_columns.len());
+        for inner_column in inner_columns {
+            let mut inner_keys = Vec::with_capacity(inner_column.len());
+            for _i in 0..inner_column.len() {
+                inner_keys.push(SmallVu8::new());
+            }
+            Series::serialize(inner_column, &mut inner_keys, None)?;
+            keys.push(inner_keys);
+        }
+
+        match nulls {
+            Some(bitmap) => {
+                for i in 0..self.len() {
+                    let valid = bitmap.get(i).unwrap();
+                    let v = vec.get_mut(i).unwrap();
+                    BinaryWrite::write_scalar(v, &valid)?;
+                    if valid {
+                        for key in &keys {
+                            BinaryWrite::write_raw(v, key.get(i).unwrap())?;
+                        }
+                    }
+                }
+            }
+            None => {
+                for i in 0..self.len() {
+                    let v = vec.get_mut(i).unwrap();
+                    for key in &keys {
+                        BinaryWrite::write_raw(v, key.get(i).unwrap())?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}

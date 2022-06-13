@@ -55,6 +55,8 @@ pub struct QueryAnalyzeState {
     pub group_by_expressions: Vec<Expression>,
     pub aggregate_expressions: Vec<Expression>,
 
+    pub window_expressions: Vec<Expression>,
+
     // rebase on projection expressions without aliases, aggregate and group by expressions
     pub distinct_expressions: Vec<Expression>,
 
@@ -104,6 +106,10 @@ impl Debug for QueryAnalyzeState {
             debug_struct.field("aggregate", &self.aggregate_expressions);
         }
 
+        if !self.window_expressions.is_empty() {
+            debug_struct.field("window_func", &self.window_expressions);
+        }
+
         if !self.expressions.is_empty() {
             match self.order_by_expressions.is_empty() {
                 true => debug_struct.field("before_projection", &self.expressions),
@@ -146,10 +152,12 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::ShowCreateDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateDatabase(v) => v.analyze(ctx).await,
             DfStatement::DropDatabase(v) => v.analyze(ctx).await,
+            DfStatement::UndropDatabase(v) => v.analyze(ctx).await,
             DfStatement::AlterDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateTable(v) => v.analyze(ctx).await,
             DfStatement::DescribeTable(v) => v.analyze(ctx).await,
             DfStatement::DropTable(v) => v.analyze(ctx).await,
+            DfStatement::UndropTable(v) => v.analyze(ctx).await,
             DfStatement::AlterTable(v) => v.analyze(ctx).await,
             DfStatement::RenameTable(v) => v.analyze(ctx).await,
             DfStatement::TruncateTable(v) => v.analyze(ctx).await,
@@ -189,7 +197,9 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::CreateView(v) => v.analyze(ctx).await,
             DfStatement::AlterView(v) => v.analyze(ctx).await,
             DfStatement::DropView(v) => v.analyze(ctx).await,
-            DfStatement::ShowTabStat(v) => v.analyze(ctx).await,
+            DfStatement::ShowTablesStatus(v) => v.analyze(ctx).await,
+            DfStatement::ShowStages(v) => v.analyze(ctx).await,
+            DfStatement::RemoveStage(v) => v.analyze(ctx).await,
         }
     }
 }

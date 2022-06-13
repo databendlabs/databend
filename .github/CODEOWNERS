@@ -1,6 +1,3 @@
-# Global rule
-*    @BohuTANG
-
 # Query
 /common/arrow/         @datafuselabs/databend-query-reviewer
 /common/arrow/         @datafuselabs/databend-query-reviewer

@@ -32,13 +32,13 @@ statement query T
 SELECT TRY_INET_ATON(NULL);
 
 ----  
-None
+NULL
 
 statement query I 
 SELECT TRY_INET_ATON('hello');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT '=== INET_ATON ===';
@@ -56,7 +56,7 @@ statement query T
 SELECT INET_ATON(NULL);
 
 ----  
-None
+NULL
 
 statement error 1060
 SELECT INET_ATON('hello');
@@ -80,7 +80,7 @@ statement query T
 SELECT TRY_INET_NTOA(NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT '=== INET_NTOA ===';
@@ -101,5 +101,5 @@ statement query T
 SELECT INET_NTOA(NULL);
 
 ----  
-None
+NULL
 

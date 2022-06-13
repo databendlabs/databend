@@ -1,0 +1,47 @@
+name: "Test old metasrv is compatible with new query"
+description: "Download old binaries and current binaries, run stateless test with old `meta` and latest `query`"
+inputs:
+  profile:
+    description: ""
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
+        path: ./bins/current/
+
+    - name: Test compatibility
+      shell: bash
+      run: |
+        chmod +x ./tests/compat/test-compat.sh
+        build-tool bash ./tests/compat/test-compat.sh
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: test-compat
+        path: |
+          _local_fs/
+          _logs*/
+          _meta*/
+          metasrv/_logs*/
+          query/_logs*/
+          store/_logs*/
+          .databend/
+          query.log
+          metasrv.log
+          nohup.out

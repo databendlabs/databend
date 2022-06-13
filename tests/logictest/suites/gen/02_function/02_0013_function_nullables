@@ -11,13 +11,13 @@ statement query IBIB label(mysql,http)
 SELECT a, is_null(a), b, is_not_null(b) FROM nullable_test ORDER BY a, b ASC;
 
 ----  mysql
-None 1 2 1
-1 0 None 0
+NULL 1 2 1
+1 0 NULL 0
 3 0 3 1
 
 ----  http
-None true 2 true
-1 false None false
+NULL true 2 true
+1 false NULL false
 3 false 3 true
 
 statement query I 

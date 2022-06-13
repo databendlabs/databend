@@ -192,7 +192,11 @@ impl ExpressionChain {
                     "Action must be a non-aggregated function.",
                 ));
             }
+
+            Expression::WindowFunction { .. } => {}
+
             Expression::Wildcard | Expression::Sort { .. } => {}
+
             Expression::Cast {
                 expr: sub_expr,
                 data_type,

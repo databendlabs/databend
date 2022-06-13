@@ -24,14 +24,14 @@ use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
 use crate::AppliedState;
 use crate::Endpoint;
-use crate::GetKVActionReply;
+use crate::GetKVReply;
 use crate::GetKVReq;
+use crate::ListKVReply;
 use crate::ListKVReq;
 use crate::LogEntry;
-use crate::MGetKVActionReply;
+use crate::MGetKVReply;
 use crate::MGetKVReq;
 use crate::NodeId;
-use crate::PrefixListReply;
 use crate::TxnOpResponse;
 use crate::TxnReply;
 
@@ -90,9 +90,9 @@ pub enum ForwardResponse {
     Leave(()),
     AppliedState(AppliedState),
 
-    GetKV(GetKVActionReply),
-    MGetKV(MGetKVActionReply),
-    ListKV(PrefixListReply),
+    GetKV(GetKVReply),
+    MGetKV(MGetKVReply),
+    ListKV(ListKVReply),
 }
 
 impl tonic::IntoRequest<RaftRequest> for ForwardRequest {

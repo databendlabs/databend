@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod mutable;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-pub use mutable::MutableStructColumn;
 
 use crate::prelude::*;
+
+mod iterator;
+mod mutable;
+
+pub use iterator::*;
+pub use mutable::*;
 
 #[derive(Clone)]
 pub struct StructColumn {
@@ -157,12 +161,27 @@ impl Column for StructColumn {
     }
 }
 
+impl ScalarColumn for StructColumn {
+    type Builder = MutableStructColumn;
+    type OwnedItem = StructValue;
+    type RefItem<'a> = <StructValue as Scalar>::RefType<'a>;
+    type Iterator<'a> = StructValueIter<'a>;
+
+    #[inline]
+    fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
+        StructValueRef::Indexed { column: self, idx }
+    }
+
+    fn scalar_iter(&self) -> Self::Iterator<'_> {
+        StructValueIter::new(self)
+    }
+}
+
 impl std::fmt::Debug for StructColumn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut data = Vec::new();
+        let mut data = Vec::with_capacity(self.len());
         for idx in 0..self.len() {
-            let x = self.get(idx);
-            data.push(format!("{:?}", x));
+            data.push(format!("{:?}", self.get(idx)));
         }
         let head = "StructColumn";
         let iter = data.iter();

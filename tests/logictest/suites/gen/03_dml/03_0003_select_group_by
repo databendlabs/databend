@@ -71,7 +71,7 @@ statement query II
 SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1,ct;
 
 ----  
-None 3
+NULL 3
 0 4
 2 3
 
@@ -79,7 +79,7 @@ statement query III
 SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1, a2;
 
 ----  
-None None 3
+NULL NULL 3
 0 0 2
 0 2 2
 1 0 2
@@ -89,7 +89,7 @@ statement query III
 SELECT a%2 as a1, to_uint64(c % 3) as c, count(0) as ct FROM t GROUP BY a1, c ORDER BY a1, c, ct;
 
 ----  
-None 2 3
+NULL 2 3
 0 0 2
 0 1 2
 1 0 1
@@ -99,7 +99,7 @@ statement query III
 SELECT to_uint64(c % 3) as c, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c ORDER BY a1, c, ct;
 
 ----  
-2 None 3
+2 NULL 3
 0 0 2
 1 0 2
 0 1 1

@@ -70,3 +70,16 @@ fn write_comma_separated_list(
     }
     Ok(())
 }
+
+fn write_space_seperated_list(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = impl Display>,
+) -> std::fmt::Result {
+    for (i, item) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, " ")?;
+        }
+        write!(f, "{}", item)?;
+    }
+    Ok(())
+}

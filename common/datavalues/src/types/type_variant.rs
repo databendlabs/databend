@@ -22,6 +22,8 @@ use super::data_type::DataType;
 use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::TypeSerializerImpl;
+use crate::serializations::VariantSerializer;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct VariantType {}
@@ -79,8 +81,8 @@ impl DataType for VariantType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        VariantSerializer {}.into()
+    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        Ok(VariantSerializer::try_create(col)?.into())
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {

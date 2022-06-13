@@ -1,0 +1,18 @@
+statement ok
+CREATE TABLE IF NOT EXISTS objects_test1(id TINYINT, obj OBJECT, var VARIANT) Engine=Memory;
+
+statement ok
+insert into objects_test1 values (1, parse_json('{"a": 1, "b": [1,2,3]}'), parse_json('{"1": 2}'));
+
+statement ok
+select id, object_keys(obj), object_keys(var) from objects_test1;
+
+statement ok
+drop table objects_test1;
+
+statement error 1010
+select object_keys(parse_json('[1,2,3]')); 
+
+statement error 1010
+select object_keys(1); 
+

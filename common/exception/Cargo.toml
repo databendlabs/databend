@@ -16,13 +16,13 @@ common-arrow = { path = "../arrow" }
 anyhow = "1.0.56"
 octocrab = "0.15.4"
 paste = "1.0.7"
-prost = "=0.9.0"
+prost = "=0.10.1"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 thiserror = "1.0.30"
 time = "0.3.9"
-tonic = "=0.6.2"
+tonic = "=0.7.2"
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "45ead90" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "13d3176" }

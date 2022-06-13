@@ -39,6 +39,7 @@ use super::inner::Config as InnerConfig;
 use super::inner::HiveCatalogConfig as InnerHiveCatalogConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
+use crate::DATABEND_COMMIT_VERSION;
 
 /// Outer config for `query`.
 ///
@@ -52,9 +53,13 @@ use super::inner::QueryConfig as InnerQueryConfig;
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
-#[clap(about, version, author)]
+#[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
+    /// Run a command and quit
+    #[clap(long, default_value_t)]
+    pub cmd: String,
+
     #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
 
@@ -123,6 +128,7 @@ impl Config {
 impl From<InnerConfig> for Config {
     fn from(inner: InnerConfig) -> Self {
         Self {
+            cmd: inner.cmd,
             config_file: inner.config_file,
             query: inner.query.into(),
             log: inner.log.into(),
@@ -138,6 +144,7 @@ impl TryInto<InnerConfig> for Config {
 
     fn try_into(self) -> Result<InnerConfig> {
         Ok(InnerConfig {
+            cmd: self.cmd,
             config_file: self.config_file,
             query: self.query.try_into()?,
             log: self.log.try_into()?,
@@ -359,6 +366,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             secret_access_key: self.secret_access_key,
             master_key: self.master_key,
             root: self.root,
+            disable_credential_loader: false,
         })
     }
 }
@@ -509,6 +517,12 @@ pub struct QueryConfig {
     pub clickhouse_handler_port: u16,
 
     #[clap(long, default_value = "127.0.0.1")]
+    pub clickhouse_http_handler_host: String,
+
+    #[clap(long, default_value = "8124")]
+    pub clickhouse_http_handler_port: u16,
+
+    #[clap(long, default_value = "127.0.0.1")]
     pub http_handler_host: String,
 
     #[clap(long, default_value = "8000")]
@@ -607,6 +621,18 @@ pub struct QueryConfig {
 
     #[clap(long, default_value_t)]
     pub jwt_key_file: String,
+
+    /// The maximum memory size of the buffered data collected per insert before being inserted.
+    #[clap(long, default_value = "10000")]
+    pub async_insert_max_data_size: u64,
+
+    /// The maximum timeout in milliseconds since the first insert before inserting collected data.
+    #[clap(long, default_value = "200")]
+    pub async_insert_busy_timeout: u64,
+
+    /// The maximum timeout in milliseconds since the last insert before inserting collected data.
+    #[clap(long, default_value = "0")]
+    pub async_insert_stale_timeout: u64,
 }
 
 impl Default for QueryConfig {
@@ -628,6 +654,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             max_active_sessions: self.max_active_sessions,
             clickhouse_handler_host: self.clickhouse_handler_host,
             clickhouse_handler_port: self.clickhouse_handler_port,
+            clickhouse_http_handler_host: self.clickhouse_http_handler_host,
+            clickhouse_http_handler_port: self.clickhouse_http_handler_port,
             http_handler_host: self.http_handler_host,
             http_handler_port: self.http_handler_port,
             http_handler_result_timeout_millis: self.http_handler_result_timeout_millis,
@@ -657,6 +685,9 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_disk_cache_mb_size: self.table_disk_cache_mb_size,
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
+            async_insert_max_data_size: self.async_insert_max_data_size,
+            async_insert_busy_timeout: self.async_insert_busy_timeout,
+            async_insert_stale_timeout: self.async_insert_stale_timeout,
         })
     }
 }
@@ -672,6 +703,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             max_active_sessions: inner.max_active_sessions,
             clickhouse_handler_host: inner.clickhouse_handler_host,
             clickhouse_handler_port: inner.clickhouse_handler_port,
+            clickhouse_http_handler_host: inner.clickhouse_http_handler_host,
+            clickhouse_http_handler_port: inner.clickhouse_http_handler_port,
             http_handler_host: inner.http_handler_host,
             http_handler_port: inner.http_handler_port,
             http_handler_result_timeout_millis: inner.http_handler_result_timeout_millis,
@@ -701,6 +734,9 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_disk_cache_mb_size: inner.table_disk_cache_mb_size,
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
+            async_insert_max_data_size: inner.async_insert_max_data_size,
+            async_insert_busy_timeout: inner.async_insert_busy_timeout,
+            async_insert_stale_timeout: inner.async_insert_stale_timeout,
         }
     }
 }

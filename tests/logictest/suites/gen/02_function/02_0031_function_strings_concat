@@ -8,7 +8,7 @@ statement query T
 SELECT CONCAT('My', NULL, 'QL');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT CONCAT('14.3');
@@ -34,8 +34,8 @@ statement query T
 SELECT CONCAT(to_varchar(number), NULL) from numbers(4);
 
 ----  
-None
-None
-None
-None
+NULL
+NULL
+NULL
+NULL
 

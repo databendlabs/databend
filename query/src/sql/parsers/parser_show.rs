@@ -23,8 +23,9 @@ use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowKind;
-use crate::sql::statements::DfShowTabStat;
+use crate::sql::statements::DfShowStages;
 use crate::sql::statements::DfShowTables;
+use crate::sql::statements::DfShowTablesStatus;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -32,31 +33,15 @@ impl<'a> DfParser<'a> {
     // parse show tables.
     pub(crate) fn parse_show_tables(&mut self, full: bool) -> Result<DfStatement<'a>, ParserError> {
         let mut fromdb = None;
+        let history = self.consume_token("HISTORY");
+
         if self.consume_token("FROM") | self.consume_token("IN") {
             fromdb = Some(self.parser.parse_object_name()?.0[0].value.clone());
         }
-        let tok = self.parser.next_token();
-        match &tok {
-            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTables(DfShowTables::create(
-                DfShowKind::All,
-                full,
-                fromdb,
-            ))),
-            Token::Word(w) => match w.keyword {
-                Keyword::LIKE => Ok(DfStatement::ShowTables(DfShowTables::create(
-                    DfShowKind::Like(self.parser.parse_identifier()?),
-                    full,
-                    fromdb,
-                ))),
-                Keyword::WHERE => Ok(DfStatement::ShowTables(DfShowTables::create(
-                    DfShowKind::Where(self.parser.parse_expr()?),
-                    full,
-                    fromdb,
-                ))),
-                _ => self.expected("like or where", tok),
-            },
-            _ => self.expected("like or where", tok),
-        }
+        let kind = self.parse_show_kind()?;
+        Ok(DfStatement::ShowTables(DfShowTables::create(
+            kind, full, fromdb, history,
+        )))
     }
 
     //parse show table status
@@ -65,61 +50,36 @@ impl<'a> DfParser<'a> {
         if self.consume_token("FROM") | self.consume_token("IN") {
             fromdb = Some(self.parser.parse_object_name()?.0[0].value.clone());
         }
-        let tok = self.parser.next_token();
-        match &tok {
-            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTabStat(DfShowTabStat::create(
-                DfShowKind::All,
-                fromdb,
-            ))),
-            Token::Word(w) => match w.keyword {
-                Keyword::LIKE => Ok(DfStatement::ShowTabStat(DfShowTabStat::create(
-                    DfShowKind::Like(self.parser.parse_identifier()?),
-                    fromdb,
-                ))),
-                Keyword::WHERE => Ok(DfStatement::ShowTabStat(DfShowTabStat::create(
-                    DfShowKind::Where(self.parser.parse_expr()?),
-                    fromdb,
-                ))),
-                _ => self.expected("like or where", tok),
-            },
-            _ => self.expected("like or where", tok),
-        }
+        let kind = self.parse_show_kind()?;
+        Ok(DfStatement::ShowTablesStatus(DfShowTablesStatus::create(
+            kind, fromdb,
+        )))
     }
 
     // parse show databases where database = xxx or where database
     pub(crate) fn parse_show_databases(&mut self) -> Result<DfStatement<'a>, ParserError> {
-        let tok = self.parser.next_token();
-        match &tok {
-            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowDatabases(
-                DfShowDatabases::create(DfShowKind::All),
-            )),
-            Token::Word(w) => match w.keyword {
-                Keyword::LIKE => Ok(DfStatement::ShowDatabases(DfShowDatabases::create(
-                    DfShowKind::Like(self.parser.parse_identifier()?),
-                ))),
-                Keyword::WHERE => Ok(DfStatement::ShowDatabases(DfShowDatabases::create(
-                    DfShowKind::Where(self.parser.parse_expr()?),
-                ))),
-                _ => self.expected("like or where", tok),
-            },
-            _ => self.expected("like or where", tok),
-        }
+        let kind = self.parse_show_kind()?;
+        Ok(DfStatement::ShowDatabases(DfShowDatabases::create(kind)))
     }
 
     // parse show functions statement
     pub(crate) fn parse_show_functions(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let kind = self.parse_show_kind()?;
+        Ok(DfStatement::ShowFunctions(DfShowFunctions::create(kind)))
+    }
+
+    pub(crate) fn parse_show_stages(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let kind = self.parse_show_kind()?;
+        Ok(DfStatement::ShowStages(DfShowStages::create(kind)))
+    }
+
+    pub(crate) fn parse_show_kind(&mut self) -> Result<DfShowKind, ParserError> {
         let tok = self.parser.next_token();
         match &tok {
-            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowFunctions(
-                DfShowFunctions::create(DfShowKind::All),
-            )),
+            Token::EOF | Token::SemiColon => Ok(DfShowKind::All),
             Token::Word(w) => match w.keyword {
-                Keyword::LIKE => Ok(DfStatement::ShowFunctions(DfShowFunctions::create(
-                    DfShowKind::Like(self.parser.parse_identifier()?),
-                ))),
-                Keyword::WHERE => Ok(DfStatement::ShowFunctions(DfShowFunctions::create(
-                    DfShowKind::Where(self.parser.parse_expr()?),
-                ))),
+                Keyword::LIKE => Ok(DfShowKind::Like(self.parser.parse_identifier()?)),
+                Keyword::WHERE => Ok(DfShowKind::Where(self.parser.parse_expr()?)),
                 _ => self.expected("like or where", tok),
             },
             _ => self.expected("like or where", tok),

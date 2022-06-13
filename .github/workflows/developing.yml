@@ -22,53 +22,59 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
-env:
-  CARGO_TERM_COLOR: always
-  PROTOC: protoc
-
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/check
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   build_macos:
+    name: "build_macos(optional)"
     runs-on: macos-11
-    needs: check
     strategy:
       matrix:
         target:
           - x86_64-apple-darwin
           - aarch64-apple-darwin
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/build_debug
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ matrix.target }}
 
   build_linux:
-    runs-on: ubuntu-latest
-    needs: check
+    runs-on: [self-hosted, x64, Linux]
     strategy:
       matrix:
         target:
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/build_debug
         with:
           target: ${{ matrix.target }}
 
   test_unit:
-    runs-on: ubuntu-latest
-    needs: check
+    runs-on: [self-hosted, x64, Linux]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_unit
         with:
           codecov_token: ${{ secrets.CODECOV_TOKEN }}
@@ -77,48 +83,111 @@ jobs:
     runs-on: ubuntu-latest
     needs: build_linux
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_metactl
+
+  test_compat:
+    runs-on: ubuntu-latest
+    needs: build_linux
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/test_compat
 
   test_stateless_standalone_linux:
     runs-on: ubuntu-latest
     needs: build_linux
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_standalone_linux
 
   # https://github.com/datafuselabs/databend/issues/5287
-  #test_stateless_standalone_macos:
+  # test_stateless_standalone_macos:
   #  runs-on: macos-11
   #  needs: build_macos
   #  steps:
-  #    - uses: actions/checkout@v2
+  #    - uses: actions/checkout@v3
   #    - uses: ./.github/actions/test_stateless_standalone_macos
 
   test_stateless_cluster_linux:
     runs-on: ubuntu-latest
     needs: build_linux
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_cluster_linux
 
   test_stateless_cluster_macos:
+    name: "test_stateless_cluster_macos(optional)"
+    runs-on: macos-11
+    needs: build_macos
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/test_stateless_cluster_macos
+
+  test_sqllogic_standalone_macos:
+    name: "test_sqllogic_standalone_macos(optional)"
     runs-on: macos-11
     needs: build_macos
     steps:
       - uses: actions/checkout@v2
-      - uses: ./.github/actions/test_stateless_cluster_macos
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/test_sqllogic_standalone_macos
+
+  test_sqllogic_standalone_linux:
+    runs-on: ubuntu-latest
+    needs: build_linux
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/test_sqllogic_standalone_linux
 
   test_stateful_standalone:
     runs-on: ubuntu-latest
     needs: build_linux
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateful_standalone
+
+  build_linux_hive:
+    runs-on: [ self-hosted, x64, Linux ]
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_debug_hive
+        with:
+          target: ${{ matrix.target }}
 
   test_stateful_hive_standalone:
     runs-on: ubuntu-latest
-    needs: check
+    needs: build_linux_hive
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/test_stateful_hive_standalone

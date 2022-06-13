@@ -64,7 +64,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let claims = Claims::create(Duration::from_hours(2));
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr.auth(&Credential::Jwt { token }).await;
+        let res = auth_mgr
+            .auth(&Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await;
         assert!(res.is_err());
         assert_eq!(
             "Code: 1051, displayText = missing field `subject` in jwt.",
@@ -77,7 +82,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let claims = Claims::create(Duration::from_hours(2)).with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr.auth(&Credential::Jwt { token }).await;
+        let res = auth_mgr
+            .auth(&Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await;
         assert!(res.is_err());
         assert_eq!(
             "Code: 2201, displayText = unknown user 'test'@'%'.",
@@ -92,7 +102,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr.auth(&Credential::Jwt { token }).await;
+        let res = auth_mgr
+            .auth(&Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await;
         assert!(res.is_err());
         assert_eq!(
             "Code: 2201, displayText = unknown user 'test'@'%'.",
@@ -110,7 +125,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let (currnet_tenant, user_info) = auth_mgr.auth(&Credential::Jwt { token }).await?;
+        let (currnet_tenant, user_info) = auth_mgr
+            .auth(&Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await?;
         assert!(currnet_tenant.is_some());
         assert_eq!(currnet_tenant.unwrap(), tenant.to_string());
         assert_eq!(user_info.grants.roles().len(), 0);
@@ -123,7 +143,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let (_, user_info) = auth_mgr.auth(&Credential::Jwt { token }).await?;
+        let (_, user_info) = auth_mgr
+            .auth(&Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await?;
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
@@ -136,7 +161,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let (_, user_info) = auth_mgr.auth(&Credential::Jwt { token }).await?;
+        let (_, user_info) = auth_mgr
+            .auth(&Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await?;
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
@@ -151,7 +181,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr.auth(&Credential::Jwt { token }).await;
+        let res = auth_mgr
+            .auth(&Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await;
         assert!(res.is_ok());
 
         let user_info = user_mgr
@@ -161,5 +196,38 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         assert_eq!(user_info.grants.roles()[0], role_name.to_string());
     }
 
+    // root auth from localhost
+    {
+        let user_name = "root";
+
+        let claims = Claims::create(Duration::from_hours(2)).with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        let res = auth_mgr
+            .auth(&Credential::Jwt {
+                token,
+                hostname: Some("localhost".to_string()),
+            })
+            .await;
+        assert!(res.is_ok());
+    }
+
+    // root auth outside localhost
+    {
+        let claims = Claims::create(Duration::from_hours(2)).with_subject("root".to_string());
+        let token = key_pair.sign(claims)?;
+
+        let res = auth_mgr
+            .auth(&Credential::Jwt {
+                token,
+                hostname: Some("10.0.0.1".to_string()),
+            })
+            .await;
+        assert!(res.is_err());
+        assert_eq!(
+            "Code: 2201, displayText = only accept root from localhost, current: 'root'@'%'.",
+            res.err().unwrap().to_string()
+        );
+    }
     Ok(())
 }

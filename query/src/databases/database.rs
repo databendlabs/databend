@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use common_exception::Result;
-use common_meta_types::DatabaseInfo;
+use common_meta_app::schema::DatabaseInfo;
 use dyn_clone::DynClone;
 
 #[async_trait::async_trait]

@@ -28,6 +28,7 @@ use common_streams::SendableDataBlockStream;
 use common_streams::SourceStream;
 use common_tracing::tracing;
 use futures::StreamExt;
+use naive_cityhash::cityhash128;
 use nom::AsBytes;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
@@ -54,6 +55,17 @@ use crate::sql::PlanParser;
 #[derive(Deserialize)]
 pub struct StatementHandlerParams {
     query: Option<String>,
+    compress: Option<u8>,
+}
+
+impl StatementHandlerParams {
+    pub fn compress(&self) -> bool {
+        self.compress.unwrap_or(0u8) == 1u8
+    }
+
+    pub fn query(&self) -> String {
+        self.query.clone().unwrap_or_default()
+    }
 }
 
 async fn execute(
@@ -61,6 +73,7 @@ async fn execute(
     plan: PlanNode,
     format: Option<String>,
     input_stream: Option<SendableDataBlockStream>,
+    compress: bool,
 ) -> Result<Body> {
     let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
     let _ = interpreter
@@ -85,24 +98,35 @@ async fn execute(
         };
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
-    let mut fmt = OutputFormatType::Tsv;
+    let mut fmt = OutputFormatType::TSV;
     if let Some(format) = format {
         fmt = OutputFormatType::from_str(format.as_str())?;
     }
 
     let mut output_format = fmt.create_format(plan.schema());
+    let prefix = Ok(output_format.serialize_prefix(&format_setting)?);
+
+    let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
+        if compress {
+            match rb {
+                Ok(b) => compress_block(b),
+                Err(e) => Err(e),
+            }
+        } else {
+            rb
+        }
+    };
     let stream = stream! {
+        yield compress_fn(prefix);
         while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
-                    yield output_format.serialize_block(&block, &format_setting);
+                    yield compress_fn(output_format.serialize_block(&block, &format_setting));
                 },
                 Err(err) => yield(Err(err)),
             };
         }
-
-        yield output_format.finalize();
-
+        yield compress_fn(output_format.finalize());
         let _ = interpreter
             .finish()
             .await
@@ -123,7 +147,7 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(InternalServerError)?;
 
-    let sql = params.query.unwrap_or_default();
+    let sql = params.query();
     let (plan, format) = PlanParser::parse_with_format(context.clone(), &sql)
         .await
         .map_err(BadRequest)?;
@@ -134,7 +158,7 @@ pub async fn clickhouse_handler_get(
         )));
     }
     context.attach_query_str(&sql);
-    execute(context, plan, format, None)
+    execute(context, plan, format, None, params.compress())
         .await
         .map_err(InternalServerError)
 }
@@ -151,10 +175,11 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(InternalServerError)?;
 
-    let mut sql = params.query.unwrap_or_default();
+    let mut sql = params.query();
 
     let (plan, format, input_stream) = if sql.is_empty() {
         sql = body.into_string().await?;
+        tracing::debug!("receive clickhouse post, body= {:?},", sql);
         let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
             .await
             .map_err(BadRequest)?;
@@ -185,7 +210,7 @@ pub async fn clickhouse_handler_post(
     };
 
     ctx.attach_query_str(&sql);
-    execute(ctx, plan, format, input_stream)
+    execute(ctx, plan, format, input_stream, params.compress())
         .await
         .map_err(InternalServerError)
 }
@@ -225,4 +250,36 @@ pub fn clickhouse_router() -> impl Endpoint {
             post(clickhouse_handler_post).get(clickhouse_handler_get),
         )
         .with(poem::middleware::Compression)
+}
+
+// default codec is always lz4
+fn compress_block(input: Vec<u8>) -> Result<Vec<u8>> {
+    if input.is_empty() {
+        Ok(vec![])
+    } else {
+        // TODO(youngsofun): optimize buffer usages
+        let uncompressed_size = input.len();
+        let compressed =
+            lz4::block::compress(&input, Some(lz4::block::CompressionMode::FAST(1)), false)
+                .map_err_to_code(ErrorCode::BadBytes, || "lz4 compress error")?;
+
+        // 9 bytes header: 1 byte for method, 4 bytes for compressed size, 4 bytes for uncompressed size
+        let header_size = 9;
+        let method_byte_lz4 = 0x82u8;
+        let mut compressed_with_header = Vec::with_capacity(compressed.len() + header_size);
+        compressed_with_header.push(method_byte_lz4);
+        let compressed_size = (compressed.len() + header_size) as u32;
+        let uncompressed_size = uncompressed_size as u32;
+        compressed_with_header.extend_from_slice(&compressed_size.to_le_bytes());
+        compressed_with_header.extend_from_slice(&uncompressed_size.to_le_bytes());
+        compressed_with_header.extend_from_slice(&compressed);
+
+        // 16 bytes checksum
+        let mut output = Vec::with_capacity(compressed_with_header.len() + 16);
+        let checksum = cityhash128(&compressed_with_header);
+        output.extend_from_slice(&checksum.lo.to_le_bytes());
+        output.extend_from_slice(&checksum.hi.to_le_bytes());
+        output.extend_from_slice(&compressed_with_header);
+        Ok(output)
+    }
 }

@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use common_base::base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_io::prelude::FormatSettings;
 use common_tracing::tracing;
+use poem::error::BadRequest;
 use poem::error::Error as PoemError;
 use poem::error::InternalServerError;
 use poem::error::NotFound;
@@ -26,6 +29,7 @@ use poem::http::StatusCode;
 use poem::post;
 use poem::web::Json;
 use poem::web::Path;
+use poem::web::Query;
 use poem::Body;
 use poem::IntoResponse;
 use poem::Route;
@@ -199,7 +203,11 @@ async fn query_page_handler(
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             // TODO(veeupup): get query_ctx here to get format_settings
-            let format = FormatSettings::default();
+            let format = FormatSettings {
+                false_bytes: vec![b'f', b'a', b'l', b's', b'e'],
+                true_bytes: vec![b't', b'r', b'u', b'e'],
+                ..Default::default()
+            };
             query.clear_expire_time().await;
             let resp = query
                 .get_response_page(page_no, &format)
@@ -222,7 +230,11 @@ pub(crate) async fn query_handler(
     let query = http_query_manager.try_create_query(ctx, req).await;
 
     // TODO(veeupup): get global query_ctx's format_settings, because we cann't set session settings now
-    let format = FormatSettings::default();
+    let format = FormatSettings {
+        false_bytes: vec![b'f', b'a', b'l', b's', b'e'],
+        true_bytes: vec![b't', b'r', b'u', b'e'],
+        ..Default::default()
+    };
     match query {
         Ok(query) => {
             let resp = query
@@ -266,12 +278,21 @@ fn query_id_not_found(query_id: String) -> PoemError {
     )
 }
 
+#[derive(Deserialize)]
+struct DownloadHandlerParams {
+    pub format: Option<String>,
+}
+
 #[poem::handler]
 async fn result_download_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
+    Query(params): Query<DownloadHandlerParams>,
 ) -> PoemResult<Body> {
+    let default_format = "csv".to_string();
     let session = ctx.get_session(SessionType::HTTPQuery);
+    let format =
+        OutputFormatType::from_str(&params.format.unwrap_or(default_format)).map_err(BadRequest)?;
 
     let ctx = session
         .create_query_context()
@@ -289,7 +310,7 @@ async fn result_download_handler(
         })?;
 
     let stream = result_table
-        .download(ctx, OutputFormatType::Tsv)
+        .download(ctx, format)
         .await
         .map_err(InternalServerError)?;
 

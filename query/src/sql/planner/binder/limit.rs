@@ -50,7 +50,7 @@ impl<'a> Binder {
         let offset_cnt = if let Some(Expr::Literal { span: _, lit: x }) = offset {
             let (value, data_type) = type_checker.resolve_literal(x, None)?;
             if !data_type.data_type_id().is_integer() {
-                return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
+                return Err(ErrorCode::IllegalDataType("Unsupported offset type"));
             }
             value.as_u64()? as usize
         } else {

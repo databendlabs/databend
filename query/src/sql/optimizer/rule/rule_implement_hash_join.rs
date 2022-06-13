@@ -21,7 +21,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::PhysicalHashJoin;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 
 pub struct RuleImplementHashJoin {
     id: RuleID,
@@ -29,23 +29,23 @@ pub struct RuleImplementHashJoin {
 }
 
 impl RuleImplementHashJoin {
-    pub fn create() -> Self {
+    pub fn new() -> Self {
         RuleImplementHashJoin {
             id: RuleID::ImplementHashJoin,
             pattern: SExpr::create_binary(
                 PatternPlan {
-                    plan_type: PlanType::LogicalInnerJoin,
+                    plan_type: RelOp::LogicalInnerJoin,
                 }
                 .into(),
                 SExpr::create_leaf(
                     PatternPlan {
-                        plan_type: PlanType::Pattern,
+                        plan_type: RelOp::Pattern,
                     }
                     .into(),
                 ),
                 SExpr::create_leaf(
                     PatternPlan {
-                        plan_type: PlanType::Pattern,
+                        plan_type: RelOp::Pattern,
                     }
                     .into(),
                 ),
@@ -61,12 +61,13 @@ impl Rule for RuleImplementHashJoin {
 
     fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()> {
         let plan = expression.plan().clone();
-        let logical_inner_join: LogicalInnerJoin = plan.try_into()?;
+        let logical_join: LogicalInnerJoin = plan.try_into()?;
 
         let result = SExpr::create(
             PhysicalHashJoin {
-                build_keys: logical_inner_join.right_conditions,
-                probe_keys: logical_inner_join.left_conditions,
+                build_keys: logical_join.right_conditions,
+                probe_keys: logical_join.left_conditions,
+                join_type: logical_join.join_type,
             }
             .into(),
             expression.children().to_vec(),

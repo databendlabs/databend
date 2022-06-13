@@ -19,6 +19,7 @@ use common_datavalues::prelude::*;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRefExt;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
@@ -43,33 +44,48 @@ impl Procedure for TenantQuotaProcedure {
 
     fn features(&self) -> ProcedureFeatures {
         ProcedureFeatures::default()
-            .variadic_arguments(1, 3)
+            .variadic_arguments(0, 5)
             .management_mode_required(true)
-            .user_option_flag(UserOptionFlag::TenantSetting)
     }
 
+    /// args:
+    /// tenant_id: string
+    /// max_databases: u32
+    /// max_tables_per_database: u32
+    /// max_stages: u32
+    /// max_files_per_stage: u32
     async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
-        let tenant = args[0].clone();
+        let mut tenant = ctx.get_tenant();
+        if !args.is_empty() {
+            let user_info = ctx.get_current_user()?;
+            if !user_info.has_option_flag(UserOptionFlag::TenantSetting) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Access denied: '{}' requires user {} option flag",
+                    self.name(),
+                    UserOptionFlag::TenantSetting
+                )));
+            }
+            tenant = args[0].clone();
+        }
         let quota_api = ctx
             .get_user_manager()
             .get_tenant_quota_api_client(&tenant)?;
         let res = quota_api.get_quota(None).await?;
         let mut quota = res.data;
 
-        if args.len() == 1 {
+        if args.len() <= 1 {
             return self.to_block(&quota);
         };
 
-        let max_databases = args[1].clone();
-        let max_tables = if args.len() > 2 {
-            Some(args[2].clone())
-        } else {
-            None
-        };
-
-        quota.max_databases = max_databases.parse::<u32>()?;
-        if let Some(max_tables) = max_tables {
+        quota.max_databases = args[1].parse::<u32>()?;
+        if let Some(max_tables) = args.get(2) {
             quota.max_tables_per_database = max_tables.parse::<u32>()?;
+        };
+        if let Some(max_stages) = args.get(3) {
+            quota.max_stages = max_stages.parse::<u32>()?;
+        };
+        if let Some(max_files_per_stage) = args.get(4) {
+            quota.max_files_per_stage = max_files_per_stage.parse::<u32>()?
         };
 
         quota_api.set_quota(&quota, Some(res.seq)).await?;
@@ -81,6 +97,8 @@ impl Procedure for TenantQuotaProcedure {
         DataSchemaRefExt::create(vec![
             DataField::new("max_databases", u32::to_data_type()),
             DataField::new("max_tables_per_database", u32::to_data_type()),
+            DataField::new("max_stages", u32::to_data_type()),
+            DataField::new("max_files_per_stage", u32::to_data_type()),
         ])
     }
 }
@@ -90,6 +108,8 @@ impl TenantQuotaProcedure {
         Ok(DataBlock::create(self.schema(), vec![
             Series::from_data(vec![quota.max_databases]),
             Series::from_data(vec![quota.max_tables_per_database]),
+            Series::from_data(vec![quota.max_stages]),
+            Series::from_data(vec![quota.max_files_per_stage]),
         ]))
     }
 }

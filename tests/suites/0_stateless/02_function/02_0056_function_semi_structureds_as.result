@@ -1,0 +1,25 @@
+==as_boolean==
+1
+0
+==as_integer==
+123
+456
+==as_float==
+12.34
+56.78
+==as_string==
+abc
+xyz
+==as_array==
+[1,2,3]
+["a","b","c"]
+==as_object==
+{"a":"b"}
+{"k":123}
+==as from table==
+1	true	1	NULL	NULL	NULL	NULL	NULL
+2	123	NULL	123	123.0	NULL	NULL	NULL
+3	45.67	NULL	NULL	45.67	NULL	NULL	NULL
+4	"abc"	NULL	NULL	NULL	abc	NULL	NULL
+5	[1,2,3]	NULL	NULL	NULL	NULL	[1,2,3]	NULL
+6	{"a":"b"}	NULL	NULL	NULL	NULL	NULL	{"a":"b"}

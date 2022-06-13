@@ -15,15 +15,18 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_exception::Result;
 
 use super::data_type::DataType;
 use crate::prelude::*;
+use crate::serializations::NullSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullType {}
 
 impl NullType {
-    pub fn arc() -> DataTypeImpl {
+    pub fn new_impl() -> DataTypeImpl {
         DataTypeImpl::Null(Self {})
     }
 }
@@ -64,8 +67,8 @@ impl DataType for NullType {
         ArrowType::Null
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        NullSerializer::default().into()
+    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        Ok(NullSerializer { size: col.len() }.into())
     }
 
     fn create_deserializer(&self, _capacity: usize) -> TypeDeserializerImpl {

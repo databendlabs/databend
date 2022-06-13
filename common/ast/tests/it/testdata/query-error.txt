@@ -5,7 +5,7 @@ error:
   --> SQL:1:29
   |
 1 | select * from customer join where a = b
-  |                             ^^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedString>
+  |                             ^^^^^ expected `(`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, <Ident>, or 1 more ...
 
 
 ---------- Input ----------
@@ -15,19 +15,9 @@ error:
   --> SQL:1:15
   |
 1 | select * from join customer
-  | ------        ^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedString>
+  | ------        ^^^^ expected `(`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, <Ident>, or 1 more ...
   | |              
   | while parsing `SELECT ...`
-
-
----------- Input ----------
-select * from t inner join t1
----------- Output ---------
-error: 
-  --> SQL:1:30
-  |
-1 | select * from t inner join t1
-  |                              ^ expected `(`, `.`, <Ident>, <QuotedString>, `AS`, `ON`, or 1 more ...
 
 
 ---------- Input ----------
@@ -37,7 +27,7 @@ error:
   --> SQL:1:50
   |
 1 | select * from customer natural inner join orders on a = b
-  |                                                  ^^ expected `(`, `.`, <Ident>, <QuotedString>, `AS`, `INNER`, or 13 more ...
+  |                                                  ^^ expected `(`, `.`, `AT`, <Ident>, <QuotedString>, `AS`, or 19 more ...
 
 
 ---------- Input ----------
@@ -76,5 +66,15 @@ error:
   | |                       while parsing `CAST(... AS ...)`
   | |                       while parsing expression
   | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select 1 1
+---------- Output ---------
+error: 
+  --> SQL:1:10
+  |
+1 | select 1 1
+  |          ^ expected <Ident>, <QuotedString>, `AS`, `,`, `FROM`, `WHERE`, or 11 more ...
 
 

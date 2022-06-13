@@ -14,8 +14,8 @@ ARG_MIN(arg, val)
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| arg | Argument |
-| val | Value |
+| arg | Argument of [any data type that Databend supports](../../10-data-types/index.md)|
+| val | Value of [any data type that Databend supports](../../10-data-types/index.md)|
 
 ## Return Type
 

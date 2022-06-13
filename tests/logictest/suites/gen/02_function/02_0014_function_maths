@@ -44,7 +44,7 @@ statement query T
 SELECT abs(NULL);
 
 ----  
-None
+NULL
 
 statement query I 
 SELECT abs(value) FROM math_sample_numbers;
@@ -78,25 +78,25 @@ statement query T
 SELECT log(NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT log(NULL, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT log(1, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT log(NULL, 1);
 
 ----  
-None
+NULL
 
 statement query F 
 SELECT log(10, 100);
@@ -108,22 +108,19 @@ statement query T
 SELECT ln(NULL);
 
 ----  
-None
+NULL
 
-statement query F label(mysql,http)
+statement query F
 SELECT ln(1, 2);
 
-----  mysql
+----
 inf
-
-----  http
-None
 
 statement query T 
 SELECT log10(NULL);
 
 ----  
-None
+NULL
 
 statement query F 
 SELECT log10(100);
@@ -142,8 +139,8 @@ SELECT log(a, b) FROM math_log_numbers;
 
 ----  
 10.0
-None
-None
+NULL
+NULL
 
 statement ok
 DROP TABLE math_log_numbers;
@@ -182,7 +179,7 @@ statement query T
 SELECT exp(NULL);
 
 ----  
-None
+NULL
 
 statement query F 
 SELECT exp(2);
@@ -223,14 +220,11 @@ SELECT tan(pi()/4);
 ----  
 0.9999999999999999
 
-statement query F label(mysql,http)
+statement query F
 SELECT cot(0);
 
-----  mysql
+----
 inf
-
-----  http
-None
 
 statement query F 
 SELECT cot(pi()/4);
@@ -251,7 +245,7 @@ SELECT asin(1.1);
 nan
 
 ----  http
-None
+NaN
 
 statement query F 
 SELECT acos(1);
@@ -266,7 +260,7 @@ SELECT acos(1.0001);
 nan
 
 ----  http
-None
+NaN
 
 statement query F 
 SELECT atan(1);
@@ -302,33 +296,33 @@ statement query T
 SELECT atan2(-2, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT atan2(NULL, 2);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT atan2(NULL, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT atan2(NULL, number) from numbers(2);
 
 ----  
-None
-None
+NULL
+NULL
 
 statement query T 
 SELECT atan2(number, NULL) from numbers(2);
 
 ----  
-None
-None
+NULL
+NULL
 
 statement query T 
 SELECT '===sqrt===';
@@ -355,7 +349,7 @@ SELECT sqrt(-4);
 nan
 
 ----  http
-None
+NaN
 
 statement error 1007
 SELECT sqrt('a'); 
@@ -388,27 +382,27 @@ statement query T
 SELECT pow(NULL, 2);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT pow(2, NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT pow(NULL, number) from numbers(2);
 
 ----  
-None
-None
+NULL
+NULL
 
 statement query T 
 SELECT pow(number, NULL) from numbers(2);
 
 ----  
-None
-None
+NULL
+NULL
 
 statement error 1007
 SELECT pow('a', 2); 

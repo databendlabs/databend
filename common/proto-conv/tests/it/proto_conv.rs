@@ -18,9 +18,9 @@ use std::sync::Arc;
 use common_datavalues as dv;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
-use common_meta_types as mt;
-use common_meta_types::DatabaseIdent;
-use common_meta_types::DatabaseNameIdent;
+use common_meta_app::schema as mt;
+use common_meta_app::schema::DatabaseIdent;
+use common_meta_app::schema::DatabaseNameIdent;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_protos::pb;
@@ -44,6 +44,7 @@ fn new_db_info() -> mt::DatabaseInfo {
             created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
             updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
             comment: "foo bar".to_string(),
+            drop_on: None,
         },
     }
 }
@@ -107,10 +108,13 @@ fn new_table_info() -> mt::TableInfo {
             engine: "44".to_string(),
             engine_options: btreemap! {s("abc") => s("def")},
             options: btreemap! {s("xyz") => s("foo")},
-            order_keys: Some("(a + 2, b)".to_string()),
+            cluster_key: Some("(a + 2, b)".to_string()),
+            cluster_keys: vec!["(a + 2, b)".to_string()],
+            default_cluster_key_id: Some(0),
             created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
             updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
             comment: s("table_comment"),
+            drop_on: None,
             statistics: Default::default(),
         },
     }
@@ -136,11 +140,25 @@ fn test_incompatible() -> anyhow::Result<()> {
     let db_info = new_db_info();
     let mut p = db_info.to_pb()?;
     p.ver = 2;
+    p.min_compatible = 2;
 
     let res = mt::DatabaseInfo::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("ver=2 is not compatible with [1, 1]")
+            reason: s("executable ver=1 is smaller than the message min compatible ver: 2")
+        },
+        res.unwrap_err()
+    );
+
+    let db_info = new_db_info();
+    let mut p = db_info.to_pb()?;
+    p.ver = 0;
+    p.min_compatible = 0;
+
+    let res = mt::DatabaseInfo::from_pb(p);
+    assert_eq!(
+        Incompatible {
+            reason: s("message ver=0 is smaller than executable min compatible ver: 1")
         },
         res.unwrap_err()
     );
@@ -209,6 +227,7 @@ fn test_load_old() -> anyhow::Result<()> {
                 created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
                 updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
                 comment: "foo bar".to_string(),
+                drop_on: None,
             },
         };
         assert_eq!(want, got);
@@ -312,10 +331,13 @@ fn test_load_old() -> anyhow::Result<()> {
                 engine: "44".to_string(),
                 engine_options: btreemap! {s("abc") => s("def")},
                 options: btreemap! {s("xyz") => s("foo")},
-                order_keys: Some("(a + 2, b)".to_string()),
+                cluster_key: Some("(a + 2, b)".to_string()),
+                cluster_keys: vec![],
+                default_cluster_key_id: None,
                 created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
                 updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
                 comment: s("table_comment"),
+                drop_on: None,
                 statistics: Default::default(),
             },
         };

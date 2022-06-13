@@ -35,6 +35,7 @@ use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
+use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::sql::SQLCommon;
 use crate::storages::Table;
@@ -76,7 +77,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
-    pub(in crate::sessions) role_cache_manager: Arc<RoleCacheMgr>,
 }
 
 impl QueryContextShared {
@@ -85,7 +85,9 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         let conf = session.get_config();
-        let user_manager = UserApiProvider::create_global(conf.clone()).await?;
+
+        let user_manager = session.session_mgr.get_user_api_provider();
+
         Ok(Arc::new(QueryContextShared {
             session,
             cluster_cache,
@@ -105,7 +107,6 @@ impl QueryContextShared {
             dal_ctx: Arc::new(Default::default()),
             user_manager: user_manager.clone(),
             auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
-            role_cache_manager: Arc::new(RoleCacheMgr::new(user_manager)),
         }))
     }
 
@@ -123,11 +124,6 @@ impl QueryContextShared {
 
         while let Some(source_abort_handle) = sources_abort_handle.pop() {
             source_abort_handle.abort();
-        }
-
-        let http_query = self.http_query.read();
-        if let Some(handle) = &*http_query {
-            handle.abort();
         }
 
         // TODO: Wait for the query to be processed (write out the last error)
@@ -170,11 +166,19 @@ impl QueryContextShared {
     }
 
     pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
-        self.role_cache_manager.clone()
+        self.session.get_role_cache_manager()
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
+    }
+
+    pub fn get_changed_settings(&self) -> Arc<Settings> {
+        self.session.get_changed_settings()
+    }
+
+    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        self.session.apply_changed_settings(changed_settings)
     }
 
     pub fn get_catalogs(&self) -> Arc<CatalogManager> {
@@ -245,6 +249,9 @@ impl QueryContextShared {
         let mut http_query = self.http_query.write();
         *http_query = Some(handle);
     }
+    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
+        self.http_query.read().clone()
+    }
 
     pub fn attach_query_str(&self, query: &str) {
         let mut running_query = self.running_query.write();
@@ -273,17 +280,27 @@ impl QueryContextShared {
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
         let settings = self.get_settings();
         let mut format = FormatSettings::default();
+        if let SessionType::HTTPQuery = self.session.get_type() {
+            format.false_bytes = vec![b'f', b'a', b'l', b's', b'e'];
+            format.true_bytes = vec![b't', b'r', b'u', b'e'];
+        }
         {
             format.record_delimiter = settings.get_record_delimiter()?;
             format.field_delimiter = settings.get_field_delimiter()?;
             format.empty_as_default = settings.get_empty_as_default()? > 0;
             format.skip_header = settings.get_skip_header()? > 0;
+
             let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
                 ErrorCode::LogicalError("Timezone has been checked and should be valid.")
             })?;
             format.timezone = tz.parse::<Tz>().map_err(|_| {
                 ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
             })?;
+
+            let compress = String::from_utf8(settings.get_compression()?).map_err(|_| {
+                ErrorCode::UnknownCompressionType("Compress type must be valid utf-8")
+            })?;
+            format.compression = compress.parse()?
         }
         Ok(format)
     }

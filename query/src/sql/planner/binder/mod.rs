@@ -18,18 +18,28 @@ pub use aggregate::AggregateInfo;
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
+use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::CreateRolePlan;
+use common_planners::DescribeUserStagePlan;
+use common_planners::DropRolePlan;
+use common_planners::DropUserPlan;
+use common_planners::DropUserStagePlan;
+pub use scalar_common::*;
 
 use self::subquery::SubqueryRewriter;
+use super::plans::Plan;
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
-use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::MetadataRef;
+use crate::storages::NavigationPoint;
 use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod ddl;
 mod distinct;
 mod join;
 mod limit;
@@ -68,22 +78,149 @@ impl<'a> Binder {
         }
     }
 
-    pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
+    pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<Plan> {
         let init_bind_context = BindContext::new();
-        let (mut s_expr, bind_context) = self.bind_statement(&init_bind_context, stmt).await?;
-        let mut rewriter = SubqueryRewriter::new();
-        s_expr = rewriter.rewrite(&s_expr)?;
-        Ok(BindResult::create(s_expr, bind_context))
+        let plan = self.bind_statement(&init_bind_context, stmt).await?;
+        Ok(plan)
     }
 
+    #[async_recursion::async_recursion]
     async fn bind_statement(
         &mut self,
         bind_context: &BindContext,
         stmt: &Statement<'a>,
-    ) -> Result<(SExpr, BindContext)> {
+    ) -> Result<Plan> {
         match stmt {
-            Statement::Query(query) => self.bind_query(bind_context, query).await,
-            _ => todo!(),
+            Statement::Query(query) => {
+                let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
+                s_expr = rewriter.rewrite(&s_expr)?;
+                Ok(Plan::Query {
+                    s_expr,
+                    metadata: self.metadata.clone(),
+                    bind_context: Box::new(bind_context),
+                })
+            }
+
+            Statement::Explain { query, kind } => {
+                let plan = self.bind_statement(bind_context, query).await?;
+                Ok(Plan::Explain {
+                    kind: kind.clone(),
+                    plan: Box::new(plan),
+                })
+            }
+
+            Statement::ShowMetrics => Ok(Plan::ShowMetrics),
+            Statement::ShowProcessList => Ok(Plan::ShowProcessList),
+            Statement::ShowSettings => Ok(Plan::ShowSettings),
+
+            // Databases
+            Statement::CreateDatabase(stmt) => {
+                let plan = self.bind_create_database(stmt).await?;
+                Ok(plan)
+            }
+            Statement::DropDatabase(stmt) => {
+                let plan = self.bind_drop_database(stmt).await?;
+                Ok(plan)
+            }
+            Statement::AlterDatabase(stmt) => {
+                let plan = self.bind_alter_database(stmt).await?;
+                Ok(plan)
+            }
+
+            // Tables
+            Statement::CreateTable(stmt) => {
+                let plan = self.bind_create_table(stmt).await?;
+                Ok(plan)
+            }
+
+            // Views
+            Statement::CreateView(stmt) => {
+                let plan = self.bind_create_view(stmt).await?;
+                Ok(plan)
+            }
+            Statement::AlterView(stmt) => {
+                let plan = self.bind_alter_view(stmt).await?;
+                Ok(plan)
+            }
+            Statement::DropView(stmt) => {
+                let plan = self.bind_drop_view(stmt).await?;
+                Ok(plan)
+            }
+
+            // Users
+            Statement::CreateUser(stmt) => {
+                let plan = self.bind_create_user(stmt).await?;
+                Ok(plan)
+            }
+            Statement::DropUser { if_exists, user } => {
+                let plan = DropUserPlan {
+                    if_exists: *if_exists,
+                    user: user.clone(),
+                };
+                Ok(Plan::DropUser(Box::new(plan)))
+            }
+            Statement::AlterUser {
+                user,
+                auth_option,
+                role_options,
+            } => {
+                let plan = self
+                    .bind_alter_user(user, auth_option, role_options)
+                    .await?;
+                Ok(plan)
+            }
+
+            // Roles
+            Statement::CreateRole {
+                if_not_exists,
+                role_name,
+            } => {
+                let plan = CreateRolePlan {
+                    if_not_exists: *if_not_exists,
+                    role_name: role_name.to_string(),
+                };
+                Ok(Plan::CreateRole(Box::new(plan)))
+            }
+            Statement::DropRole {
+                if_exists,
+                role_name,
+            } => {
+                let plan = DropRolePlan {
+                    if_exists: *if_exists,
+                    role_name: role_name.to_string(),
+                };
+                Ok(Plan::DropRole(Box::new(plan)))
+            }
+
+            // Stages
+            Statement::ShowStages => Ok(Plan::ShowStages),
+            Statement::ListStage { location, pattern } => {
+                self.bind_list_stage(location, pattern).await
+            }
+            Statement::DescribeStage { stage_name } => {
+                Ok(Plan::DescribeStage(Box::new(DescribeUserStagePlan {
+                    name: stage_name.clone(),
+                })))
+            }
+            Statement::CreateStage(stmt) => {
+                let plan = self.bind_create_stage(stmt).await?;
+                Ok(plan)
+            }
+            Statement::DropStage {
+                stage_name,
+                if_exists,
+            } => Ok(Plan::DropStage(Box::new(DropUserStagePlan {
+                if_exists: *if_exists,
+                name: stage_name.clone(),
+            }))),
+            Statement::RemoveStage { location, pattern } => {
+                self.bind_remove_stage(location, pattern).await
+            }
+
+            _ => Err(ErrorCode::UnImplement(format!(
+                "UnImplemented stmt {stmt} in binder"
+            ))),
         }
     }
 
@@ -93,10 +230,16 @@ impl<'a> Binder {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
+        travel_point: &Option<TimeTravelPoint>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
         let catalog = self.catalogs.get_catalog(catalog_name)?;
-        let table_meta = catalog.get_table(tenant, database_name, table_name).await?;
+        let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
+        if let Some(TimeTravelPoint::Snapshot(s)) = travel_point {
+            table_meta = table_meta
+                .navigate_to(self.ctx.clone(), &NavigationPoint::SnapshotID(s.to_owned()))
+                .await?;
+        }
         Ok(table_meta)
     }
 
@@ -117,20 +260,6 @@ impl<'a> Binder {
             index,
             data_type,
             visible_in_unqualified_wildcard: true,
-        }
-    }
-}
-
-pub struct BindResult {
-    pub s_expr: SExpr,
-    pub bind_context: BindContext,
-}
-
-impl BindResult {
-    pub fn create(s_expr: SExpr, bind_context: BindContext) -> Self {
-        BindResult {
-            s_expr,
-            bind_context,
         }
     }
 }

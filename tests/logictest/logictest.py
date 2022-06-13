@@ -225,7 +225,7 @@ def safe_execute(method, *info):
 @six.add_metaclass(abc.ABCMeta)
 class SuiteRunner(object):
 
-    def __init__(self, kind):
+    def __init__(self, kind, pattern):
         self.label = None
         self.retry_time = 3
         self.driver = None
@@ -234,20 +234,31 @@ class SuiteRunner(object):
         self.kind = kind
         self.show_query_on_execution = True
         self.on_error_return = False
+        self.pattern = pattern
 
     # return all files under the path
     # format: a list of file absolute path and name(relative path)
     def fetch_files(self):
+        skip_files = os.getenv("SKIP_TEST_FILES")
+        skip_tests = skip_files.split(",") if skip_files is not None else []
+        log.debug("Skip test file list {}".format(skip_tests))
         for filename in glob.iglob('{}/**'.format(self.path), recursive=True):
             if os.path.isfile(filename):
-                self.statement_files.append(
-                    (filename, os.path.relpath(filename, self.path)))
+                if os.path.basename(filename) in skip_tests:
+                    log.info("Skip test file {}".format(filename))
+                    continue
+                if re.match(self.pattern, filename):
+                    self.statement_files.append(
+                        (filename, os.path.relpath(filename, self.path)))
+        self.statement_files.sort()
 
     def execute(self):
         # batch execute use single session
         if callable(getattr(self, "batch_execute")):
             # case batch
             for (file_path, suite_name) in self.statement_files:
+                log.info("Batch execute, suite name:{} in file {}".format(
+                    suite_name, file_path))
                 statement_list = list()
                 for state in get_statements(file_path, suite_name):
                     statement_list.append(state)
@@ -255,12 +266,14 @@ class SuiteRunner(object):
         else:
             # case one by one
             for (file_path, suite_name) in self.statement_files:
+                log.info("One by one execute, suite name:{} in file {}".format(
+                    suite_name, file_path))
                 for state in get_statements(file_path, suite_name):
                     self.execute_statement(state)
 
     def execute_statement(self, statement):
         if self.show_query_on_execution:
-            log.info("excuting statement, type {}\n{}\n".format(
+            log.info("executing statement, type {}\n{}\n".format(
                 statement.s_type.type, statement.text))
         if statement.s_type.type == "query":
             self.assert_execute_query(statement)
@@ -286,14 +299,19 @@ class SuiteRunner(object):
         compare_f = "".join(f.split())
         compare_result = "".join(resultset[2].split())
         assert compare_f == compare_result, "Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
-                                                  "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
-                                                                                      f.rstrip(),
-                                                                                      str(statement), resultset[1],
-                                                                                      resultset[0].group("label"))
+                                            "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
+                                                                                f.rstrip(),
+                                                                                str(statement), resultset[1],
+                                                                                resultset[0].group("label"))
 
     def assert_execute_query(self, statement):
         actual = safe_execute(lambda: self.execute_query(statement), statement)
-        f = format_value(actual, len(statement.s_type.query_type))
+        try:
+            f = format_value(actual, len(statement.s_type.query_type))
+        except Exception:
+            log.warning("{} statement type is query but return nothing".format(
+                statement))
+            raise
         assert statement.results is not None and len(
             statement.results) > 0, "No result found {}".format(statement)
         hasResult = False

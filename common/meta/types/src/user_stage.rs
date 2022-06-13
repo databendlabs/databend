@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::str::FromStr;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 use common_io::prelude::StorageParams;
+
+use crate::UserIdentity;
 
 /*
 -- Internal stage
@@ -53,6 +56,16 @@ pub enum StageType {
     External,
 }
 
+impl fmt::Display for StageType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            StageType::Internal => "Internal",
+            StageType::External => "External",
+        };
+        write!(f, "{}", name)
+    }
+}
+
 impl Default for StageType {
     fn default() -> Self {
         Self::External
@@ -76,6 +89,26 @@ pub enum StageFileCompression {
 impl Default for StageFileCompression {
     fn default() -> Self {
         Self::None
+    }
+}
+
+impl FromStr for StageFileCompression {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "auto" => Ok(StageFileCompression::Auto),
+            "gzip" => Ok(StageFileCompression::Gzip),
+            "bz2" => Ok(StageFileCompression::Bz2),
+            "brotli" => Ok(StageFileCompression::Brotli),
+            "zstd" => Ok(StageFileCompression::Zstd),
+            "deflate" => Ok(StageFileCompression::Deflate),
+            "rawdeflate" | "raw_deflate" => Ok(StageFileCompression::RawDeflate),
+            "lzo" => Ok(StageFileCompression::Lzo),
+            "snappy" => Ok(StageFileCompression::Snappy),
+            "none" => Ok(StageFileCompression::None),
+            _ => Err("Unknown file compression type, must one of { auto | gzip | bz2 | brotli | zstd | deflate | raw_deflate | lzo | snappy | none }"
+                         .to_string()),
+        }
     }
 }
 
@@ -196,18 +229,27 @@ pub struct UserStageInfo {
     pub file_format_options: FileFormatOptions,
     pub copy_options: CopyOptions,
     pub comment: String,
+    pub number_of_files: u64,
+    pub creator: Option<UserIdentity>,
 }
 
-impl TryFrom<Vec<u8>> for UserStageInfo {
-    type Error = ErrorCode;
-
-    fn try_from(value: Vec<u8>) -> Result<Self> {
-        match serde_json::from_slice(&value) {
-            Ok(info) => Ok(info),
-            Err(serialize_error) => Err(ErrorCode::IllegalUserStageFormat(format!(
-                "Cannot deserialize stage from bytes. cause {}",
-                serialize_error
-            ))),
+impl UserStageInfo {
+    pub fn get_prefix(&self) -> String {
+        match self.stage_type {
+            StageType::External => "/".to_string(),
+            StageType::Internal => {
+                // It's internal, so we should prefix with stage name.
+                format!("/stage/{}/", self.stage_name)
+            }
         }
     }
+}
+
+#[derive(Default, Clone)]
+pub struct StageFile {
+    pub path: String,
+    pub size: u64,
+    pub md5: Option<String>,
+    pub last_modified: DateTime<Utc>,
+    pub creator: Option<UserIdentity>,
 }

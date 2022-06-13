@@ -12,6 +12,7 @@ header:
     - "tools"
     # Ignore hidden files
     - ".cargo"
+    - ".databend"
     - ".devcontainer"
     - ".github"
     - ".dockerignore"
@@ -33,5 +34,6 @@ header:
     - "**/*.toml"
     - "**/*.lock"
     - "**/*.yapf"
+    - "**/*.test"
 
   comment: on-failure

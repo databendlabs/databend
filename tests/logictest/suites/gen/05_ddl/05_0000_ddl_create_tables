@@ -13,11 +13,11 @@ DROP TABLE IF EXISTS t4;
 statement ok
 CREATE TABLE t(c1 int) ENGINE = Null;
 
-statement query I 
-SELECT COUNT(1) from system.tables where name = 't' and database = 'default';
+-- statement query I 
+-- SELECT COUNT(1) from system.tables where name = 't' and database = 'default';
 
 ----  
-1
+-- 1
 
 statement ok
 CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null;
@@ -156,9 +156,9 @@ statement query T
 SELECT a FROM db2.test5;
 
 ----  
-None
-None
-None
+NULL
+NULL
+NULL
 
 statement query T 
 SELECT '====END TEST CREATE TABLE AS SELECT STATEMENT====';

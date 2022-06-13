@@ -21,9 +21,8 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::StorageFsConfig;
 use common_io::prelude::StorageParams;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::TableMeta;
-use common_planners::col;
+use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::TableMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::Expression;
@@ -77,7 +76,7 @@ impl TestFixture {
             catalog: "default".to_owned(),
             tenant,
             if_not_exists: false,
-            db: db_name,
+            database: db_name,
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -125,7 +124,7 @@ impl TestFixture {
             if_not_exists: false,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
-            db: self.default_db_name(),
+            database: self.default_db_name(),
             table: self.default_table_name(),
             table_meta: TableMeta {
                 schema: TestFixture::default_schema(),
@@ -135,11 +134,13 @@ impl TestFixture {
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
                 .into(),
-                order_keys: Some("(id)".to_string()),
+                cluster_key: Some("(id)".to_string()),
+                cluster_keys: vec!["(id)".to_string()],
+                default_cluster_key_id: Some(0),
                 ..Default::default()
             },
             as_select: None,
-            order_keys: vec![col("id")],
+            cluster_keys: vec!["id".to_string()],
         }
     }
 
@@ -163,7 +164,7 @@ impl TestFixture {
             .into_iter()
             .map(|idx| {
                 let schema =
-                    DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
+                    DataSchemaRefExt::create(vec![DataField::new("id", i32::to_data_type())]);
                 Ok(DataBlock::create(schema, vec![Series::from_data(
                     std::iter::repeat_with(|| idx as i32 + start)
                         .take(rows_perf_block)
@@ -341,7 +342,6 @@ pub async fn check_data_dir(
     let mut ss_count = 0;
     let mut sg_count = 0;
     let mut b_count = 0;
-    // avoid ugly line wrapping
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;

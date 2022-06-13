@@ -25,8 +25,8 @@ use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
 
 use crate::servers::http::v1::json_block::block_to_json_value;
-use crate::servers::http::v1::query::block_buffer::BlockBuffer;
 use crate::servers::http::v1::JsonBlock;
+use crate::storages::result::block_buffer::BlockBuffer;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Wait {
@@ -55,10 +55,15 @@ pub struct PageManager {
     last_page: Option<Page>,
     page_buffer: VecDeque<Vec<Vec<JsonValue>>>,
     block_buffer: Arc<BlockBuffer>,
+    string_fields: bool,
 }
 
 impl PageManager {
-    pub fn new(max_rows_per_page: usize, block_buffer: Arc<BlockBuffer>) -> PageManager {
+    pub fn new(
+        max_rows_per_page: usize,
+        block_buffer: Arc<BlockBuffer>,
+        string_fields: bool,
+    ) -> PageManager {
         PageManager {
             total_rows: 0,
             last_page: None,
@@ -69,6 +74,7 @@ impl PageManager {
             schema: Arc::new(DataSchema::empty()),
             block_buffer,
             max_rows_per_page,
+            string_fields,
         }
     }
 
@@ -132,7 +138,9 @@ impl PageManager {
                     if self.schema.fields().is_empty() {
                         self.schema = block.schema().clone();
                     }
-                    let mut iter = block_to_json_value(&block, format)?.into_iter().peekable();
+                    let mut iter = block_to_json_value(&block, format, self.string_fields)?
+                        .into_iter()
+                        .peekable();
                     if res.is_empty() {
                         let mut chunk = iter.by_ref().take(self.max_rows_per_page).collect();
                         res.append(&mut chunk);

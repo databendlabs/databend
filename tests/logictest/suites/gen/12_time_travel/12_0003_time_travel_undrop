@@ -1,0 +1,111 @@
+statement ok
+DROP DATABASE IF EXISTS db_12_0003;
+
+statement ok
+CREATE DATABASE db_12_0003;
+
+statement ok
+USE db_12_0003;
+
+statement ok
+CREATE TABLE t(c1 int);
+
+statement ok
+DROP TABLE t;
+
+statement query T 
+select "show tables should give empty list, if all the tables droppped";
+
+----  
+show tables should give empty list, if all the tables droppped
+
+statement ok
+SHOW TABLES;
+
+statement query T 
+select "after undrop, table should appear";
+
+----  
+after undrop, table should appear
+
+statement ok
+UNDROP TABLE t;
+
+statement query T label(mysql,http)
+SHOW TABLES;
+
+----  mysql
+t
+
+----  http
+t
+
+statement query T 
+select "after undrop, data should appear";
+
+----  
+after undrop, data should appear
+
+statement ok
+insert into t values(1), (2);
+
+statement ok
+DROP TABLE t;
+
+statement ok
+UNDROP TABLE t;
+
+statement ok
+select * from t;
+
+statement query T 
+select "Tables of same name";
+
+----  
+Tables of same name
+
+statement ok
+DROP TABLE t;
+
+statement ok
+CREATE TABLE t(c1 int, c2 int);
+
+statement ok
+INSERT INTO t VALUES(1, 2);
+
+statement ok
+DROP TABLE t;
+
+statement ok
+UNDROP TABLE t;
+
+statement query T 
+select "-- the latest t should be recovered, which has 1 row";
+
+----  
+-- the latest t should be recovered, which has 1 row
+
+statement ok
+SELECT count(1) FROM t;
+
+statement ok
+ALTER TABLE t RENAME TO t1;
+
+statement ok
+UNDROP TABLE t;
+
+statement query T 
+select "-- the first t should be recovered, which has 2 row";
+
+----  
+-- the first t should be recovered, which has 2 row
+
+statement ok
+SELECT count(1) FROM t;
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP database db_12_0003;
+

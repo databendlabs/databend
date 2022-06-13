@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_base::base::RuntimeTracker;
 use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_global_tracing;
 use common_tracing::set_panic_hook;
@@ -26,15 +28,21 @@ use databend_query::api::RpcService;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::HttpHandler;
+use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
 use databend_query::Config;
+use databend_query::QUERY_SEMVER;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     let conf: Config = Config::load()?;
+
+    if run_cmd(&conf) {
+        return Ok(());
+    }
 
     if conf.meta.address.is_empty() {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
@@ -92,18 +100,36 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
             listening.port(),
         );
     }
+
     // HTTP handler.
     {
         let hostname = conf.query.http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
 
-        let mut srv = HttpHandler::create(session_manager.clone());
+        let mut srv = HttpHandler::create(session_manager.clone(), HttpHandlerKind::Query);
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
-        let http_handler_usage = HttpHandler::usage(listening);
+        let http_handler_usage = HttpHandlerKind::Query.usage(listening);
         tracing::info!(
             "Http handler listening on {} {}",
+            listening,
+            http_handler_usage
+        );
+    }
+
+    // clickhouse HTTP handler.
+    {
+        let hostname = conf.query.clickhouse_http_handler_host.clone();
+        let listening = format!("{}:{}", hostname, conf.query.clickhouse_http_handler_port);
+
+        let mut srv = HttpHandler::create(session_manager.clone(), HttpHandlerKind::Clickhouse);
+        let listening = srv.start(listening.parse()?).await?;
+        shutdown_handle.add_service(srv);
+
+        let http_handler_usage = HttpHandlerKind::Clickhouse.usage(listening);
+        tracing::info!(
+            "clickhouse Http handler listening on {} {}",
             listening,
             http_handler_usage
         );
@@ -148,8 +174,45 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         );
     }
 
+    // Async Insert Queue
+    {
+        let async_insert_queue = session_manager
+            .clone()
+            .get_async_insert_queue()
+            .read()
+            .clone()
+            .unwrap();
+        {
+            let mut queue = async_insert_queue.session_mgr.write();
+            *queue = Some(session_manager.clone());
+        }
+        async_insert_queue.clone().start().await;
+        tracing::info!("Databend async insert has been enabled.")
+    }
+
     tracing::info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;
     tracing::info!("Shutdown server.");
     Ok(())
+}
+
+fn run_cmd(conf: &Config) -> bool {
+    if conf.cmd.is_empty() {
+        return false;
+    }
+
+    match conf.cmd.as_str() {
+        "ver" => {
+            println!("version: {}", QUERY_SEMVER.deref());
+            println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
+        }
+        _ => {
+            eprintln!("Invalid cmd: {}", conf.cmd);
+            eprintln!("Available cmds:");
+            eprintln!("  --cmd ver");
+            eprintln!("    Print version and the min compatible databend-meta version");
+        }
+    }
+
+    true
 }

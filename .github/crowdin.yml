@@ -1,0 +1,17 @@
+project_id: "2"
+api_token_env: CROWDIN_PERSONAL_TOKEN
+preserve_hierarchy: true
+
+# See docs from https://docusaurus.io/docs/i18n/crowdin
+files:
+  # JSON translation files
+  - source: /website/i18n/en-US/**/*
+    translation: /website/i18n/%locale%/**/%original_file_name%
+  # Blog Markdown files
+  - source: /website/blog/**/*
+    translation: /website/i18n/%locale%/docusaurus-plugin-content-blog/**/%original_file_name%
+  # Docs Markdown files
+  - source: /docs/doc/**/*
+    translation: /website/i18n/%locale%/docusaurus-plugin-content-docs/current/**/%original_file_name%
+  - source: /docs/dev/**/*
+    translation: /website/i18n/%locale%/docusaurus-plugin-content-docs-dev/current/**/%original_file_name%

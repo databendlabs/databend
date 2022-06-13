@@ -40,7 +40,7 @@ use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
     #[inline]
-    pub async fn do_read(
+    pub fn do_read(
         &self,
         ctx: Arc<QueryContext>,
         push_downs: &Option<Extras>,

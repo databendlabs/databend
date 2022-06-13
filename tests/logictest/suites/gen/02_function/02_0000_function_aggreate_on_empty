@@ -165,7 +165,8 @@ select avg(number) from numbers_mt (10) where 1 = 2;
 nan
 
 ----  http
-None
+NaN
+
 
 statement query F label(mysql,http)
 select avg(1) from numbers_mt (10) where 1=2;
@@ -174,7 +175,7 @@ select avg(1) from numbers_mt (10) where 1=2;
 nan
 
 ----  http
-None
+NaN
 
 statement ok
 select avg(number) from numbers_mt (10) where 1 = 2 group by number % 2;

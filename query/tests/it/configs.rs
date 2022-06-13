@@ -25,7 +25,8 @@ use pretty_assertions::assert_eq;
 fn test_default_config() -> Result<()> {
     let actual = Config::default();
 
-    let tom_expect = r#"config_file = ""
+    let tom_expect = r#"cmd = ""
+config_file = ""
 
 [query]
 tenant_id = "admin"
@@ -36,6 +37,8 @@ mysql_handler_port = 3307
 max_active_sessions = 256
 clickhouse_handler_host = "127.0.0.1"
 clickhouse_handler_port = 9000
+clickhouse_http_handler_host = "127.0.0.1"
+clickhouse_http_handler_port = 8124
 http_handler_host = "127.0.0.1"
 http_handler_port = 8000
 http_handler_result_timeout_millis = 10000
@@ -65,6 +68,9 @@ table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
 management_mode = false
 jwt_key_file = ""
+async_insert_max_data_size = 10000
+async_insert_busy_timeout = 200
+async_insert_stale_timeout = 0
 
 [log]
 level = "INFO"
@@ -131,6 +137,8 @@ fn test_env_config_s3() -> Result<()> {
             ("QUERY_MAX_ACTIVE_SESSIONS", Some("255")),
             ("QUERY_CLICKHOUSE_HANDLER_HOST", Some("1.2.3.4")),
             ("QUERY_CLICKHOUSE_HANDLER_PORT", Some("9000")),
+            ("QUERY_CLICKHOUSE_HTTP_HANDLER_HOST", Some("1.2.3.4")),
+            ("QUERY_CLICKHOUSE_HTTP_HANDLER_PORT", Some("8124")),
             ("QUERY_HTTP_HANDLER_HOST", Some("1.2.3.4")),
             ("QUERY_HTTP_HANDLER_PORT", Some("8001")),
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
@@ -164,6 +172,8 @@ fn test_env_config_s3() -> Result<()> {
             assert_eq!(255, configured.query.max_active_sessions);
             assert_eq!("1.2.3.4", configured.query.clickhouse_handler_host);
             assert_eq!(9000, configured.query.clickhouse_handler_port);
+            assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
+            assert_eq!(8124, configured.query.clickhouse_http_handler_port);
             assert_eq!("1.2.3.4", configured.query.http_handler_host);
             assert_eq!(8001, configured.query.http_handler_port);
 
@@ -209,6 +219,8 @@ fn test_env_config_fs() -> Result<()> {
             ("QUERY_MAX_ACTIVE_SESSIONS", Some("255")),
             ("QUERY_CLICKHOUSE_HANDLER_HOST", Some("1.2.3.4")),
             ("QUERY_CLICKHOUSE_HANDLER_PORT", Some("9000")),
+            ("QUERY_CLICKHOUSE_HTTP_HANDLER_HOST", Some("1.2.3.4")),
+            ("QUERY_CLICKHOUSE_HTTP_HANDLER_PORT", Some("8124")),
             ("QUERY_HTTP_HANDLER_HOST", Some("1.2.3.4")),
             ("QUERY_HTTP_HANDLER_PORT", Some("8001")),
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
@@ -242,6 +254,8 @@ fn test_env_config_fs() -> Result<()> {
             assert_eq!(255, configured.query.max_active_sessions);
             assert_eq!("1.2.3.4", configured.query.clickhouse_handler_host);
             assert_eq!(9000, configured.query.clickhouse_handler_port);
+            assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
+            assert_eq!(8124, configured.query.clickhouse_http_handler_port);
             assert_eq!("1.2.3.4", configured.query.http_handler_host);
             assert_eq!(8001, configured.query.http_handler_port);
 
@@ -292,6 +306,8 @@ mysql_handler_port = 3307
 max_active_sessions = 256
 clickhouse_handler_host = "127.0.0.1"
 clickhouse_handler_port = 9000
+clickhouse_http_handler_host = "127.0.0.1"
+clickhouse_http_handler_port = 8124
 http_handler_host = "127.0.0.1"
 http_handler_port = 8000
 http_handler_result_timeout_millis = 10000
@@ -321,6 +337,9 @@ table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
 management_mode = false
 jwt_key_file = ""
+async_insert_max_data_size = 10000
+async_insert_busy_timeout = 200
+async_insert_stale_timeout = 0
 
 [log]
 level = "INFO"

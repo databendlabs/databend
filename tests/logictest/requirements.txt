@@ -1,0 +1,7 @@
+# TODO: specify version of dependencies
+mysql-connector
+six
+PyHamcrest
+requests
+environs
+fire

@@ -20,7 +20,7 @@ statement query T
 SELECT CONCAT_WS(NULL, 'data', 'fuse', 'labs');
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT CONCAT_WS(',', to_varchar(number), 'data', to_varchar(number+1)) from numbers(3) order by number;
@@ -34,9 +34,9 @@ statement query T
 SELECT CONCAT_WS(NULL, to_varchar(number), 'data') from numbers(3);
 
 ----  
-None
-None
-None
+NULL
+NULL
+NULL
 
 statement query T 
 SELECT CONCAT_WS(',', NULL); -- is emtpy, not NULL

@@ -22,7 +22,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::IndexType;
@@ -40,8 +40,8 @@ pub struct ScalarItem {
 }
 
 impl Operator for EvalScalar {
-    fn plan_type(&self) -> PlanType {
-        PlanType::EvalScalar
+    fn plan_type(&self) -> RelOp {
+        RelOp::EvalScalar
     }
 
     fn is_physical(&self) -> bool {
@@ -57,7 +57,7 @@ impl Operator for EvalScalar {
     }
 
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
-        todo!()
+        Some(self)
     }
 }
 
@@ -69,7 +69,7 @@ impl PhysicalPlan for EvalScalar {
 
 impl LogicalPlan for EvalScalar {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
-        let input_prop = rel_expr.derive_relational_prop()?;
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
         let mut output_columns = input_prop.output_columns;

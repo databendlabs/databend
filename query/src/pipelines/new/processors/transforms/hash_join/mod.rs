@@ -14,7 +14,16 @@
 
 mod chaining_hash_table;
 mod hash_table;
-mod row;
+pub(crate) mod row;
 
 pub use chaining_hash_table::ChainingHashTable;
+pub use chaining_hash_table::HashTable;
+pub use chaining_hash_table::KeyU128HashTable;
+pub use chaining_hash_table::KeyU16HashTable;
+pub use chaining_hash_table::KeyU256HashTable;
+pub use chaining_hash_table::KeyU32HashTable;
+pub use chaining_hash_table::KeyU512HashTable;
+pub use chaining_hash_table::KeyU64HashTable;
+pub use chaining_hash_table::KeyU8HashTable;
+pub use chaining_hash_table::SerializerHashTable;
 pub use hash_table::HashJoinState;

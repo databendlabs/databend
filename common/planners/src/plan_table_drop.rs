@@ -16,17 +16,18 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::DropTableReq;
-use common_meta_types::TableNameIdent;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::TableNameIdent;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTablePlan {
     pub if_exists: bool,
     pub tenant: String,
     pub catalog: String,
-    pub db: String,
+    pub database: String,
     /// The table name
     pub table: String,
+    pub all: bool,
 }
 
 impl DropTablePlan {
@@ -41,7 +42,7 @@ impl From<DropTablePlan> for DropTableReq {
             if_exists: p.if_exists,
             name_ident: TableNameIdent {
                 tenant: p.tenant,
-                db_name: p.db,
+                db_name: p.database,
                 table_name: p.table,
             },
         }

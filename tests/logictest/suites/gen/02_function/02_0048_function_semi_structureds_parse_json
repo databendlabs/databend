@@ -8,7 +8,7 @@ statement query T
 select parse_json(null);
 
 ----  
-None
+NULL
 
 statement query T 
 select parse_json(true);
@@ -28,14 +28,11 @@ select parse_json(12.34);
 ----  
 12.34
 
-statement query T label(mysql,http)
+statement query T
 select parse_json('null');
 
-----  mysql
+----
 null
-
-----  http
-None
 
 statement query T 
 select parse_json('true');
@@ -61,32 +58,23 @@ select parse_json('1.912e2');
 ----  
 191.2
 
-statement query T label(mysql,http)
+statement query T label
 select parse_json('"Om ara pa ca na dhih"  ');
 
-----  mysql
+----
 "Om ara pa ca na dhih"
 
-----  http
-Om ara pa ca na dhih
-
-statement query T label(mysql,http)
+statement query T
 select parse_json('[-1, 12, 289, 2188, false]');
 
-----  mysql
+----
 [-1,12,289,2188,false]
 
-----  http
-[-1, 12, 289, 2188, False]
-
-statement query T label(mysql,http)
+statement query T
 select parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 
-----  mysql
+----
 {"x":"abc","y":false,"z":10}
-
-----  http
-{'x': 'abc', 'y': False, 'z': 10}
 
 statement error 1010
 select parse_json('[1,'); 
@@ -100,6 +88,7 @@ select parse_json(parse_json('123'));
 ----  
 123
 
+-- http handler could not parse
 statement ok
 select parse_json(parse_json('"\\\"abc\\\""'));
 
@@ -128,7 +117,7 @@ statement query T
 select try_parse_json(null);
 
 ----  
-None
+NULL
 
 statement query T 
 select try_parse_json(true);
@@ -148,16 +137,13 @@ select try_parse_json(12.34);
 ----  
 12.34
 
-statement query T label(mysql,http)
+statement query T
 select try_parse_json('null');
 
-----  mysql
+----
 null
 
-----  http
-None
-
-statement query T 
+statement query T
 select try_parse_json('true');
 
 ----  
@@ -181,44 +167,35 @@ select try_parse_json('1.912e2');
 ----  
 191.2
 
-statement query T label(mysql,http)
+statement query T
 select try_parse_json('"Om ara pa ca na dhih"  ');
 
-----  mysql
+----
 "Om ara pa ca na dhih"
 
-----  http
-Om ara pa ca na dhih
-
-statement query T label(mysql,http)
+statement query T
 select try_parse_json('[-1, 12, 289, 2188, false]');
 
-----  mysql
+----
 [-1,12,289,2188,false]
 
-----  http
-[-1, 12, 289, 2188, False]
-
-statement query T label(mysql,http)
+statement query T
 select try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 
-----  mysql
+----
 {"x":"abc","y":false,"z":10}
 
-----  http
-{'x': 'abc', 'y': False, 'z': 10}
-
-statement query T 
+statement query T
 select try_parse_json('[1,');
 
 ----  
-None
+NULL
 
 statement query T 
 select try_parse_json('"ab');
 
 ----  
-None
+NULL
 
 statement query T 
 select try_parse_json(parse_json('123'));
@@ -233,13 +210,13 @@ statement query T
 select try_parse_json(parse_json('"abc"'));
 
 ----  
-None
+NULL
 
 statement query T 
 select try_parse_json(to_date('2022-01-01'));
 
 ----  
-None
+NULL
 
 statement ok
 DROP DATABASE IF EXISTS db1;

@@ -18,8 +18,9 @@ use std::sync::Arc;
 use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 
+use super::random::RandomTable;
 use crate::storages::fuse::FuseTable;
 use crate::storages::github::GithubTable;
 use crate::storages::memory::MemoryTable;
@@ -47,7 +48,7 @@ where
 pub struct StorageDescription {
     pub engine_name: String,
     pub comment: String,
-    pub support_order_key: bool,
+    pub support_cluster_key: bool,
 }
 
 pub trait StorageDescriptor: Send + Sync {
@@ -110,6 +111,12 @@ impl StorageFactory {
         creators.insert("VIEW".to_string(), Storage {
             creator: Arc::new(ViewTable::try_create),
             descriptor: Arc::new(ViewTable::description),
+        });
+
+        // Register RANDOM table engine
+        creators.insert("RANDOM".to_string(), Storage {
+            creator: Arc::new(RandomTable::try_create),
+            descriptor: Arc::new(RandomTable::description),
         });
 
         StorageFactory {

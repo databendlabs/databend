@@ -36,6 +36,7 @@ use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRenameTable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUndropTable;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -62,10 +63,10 @@ impl<'a> DfParser<'a> {
         let engine = self.parse_table_engine()?;
 
         // parse cluster key
-        let mut order_keys = vec![];
+        let mut cluster_keys = vec![];
         if self.parser.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
             self.parser.expect_token(&Token::LParen)?;
-            order_keys = self.parser.parse_comma_separated(Parser::parse_expr)?;
+            cluster_keys = self.parser.parse_comma_separated(Parser::parse_expr)?;
             self.parser.expect_token(&Token::RParen)?;
         }
 
@@ -90,7 +91,7 @@ impl<'a> DfParser<'a> {
             name: table_name,
             columns,
             engine,
-            order_keys,
+            cluster_keys,
             options,
             like: table_like,
             query,
@@ -104,12 +105,23 @@ impl<'a> DfParser<'a> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
 
+        let all = self.parser.parse_keyword(Keyword::ALL);
+
         let drop = DfDropTable {
             if_exists,
             name: table_name,
+            all,
         };
 
         Ok(DfStatement::DropTable(drop))
+    }
+
+    // Drop table.
+    pub(crate) fn parse_undrop_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let table_name = self.parser.parse_object_name()?;
+        let drop = DfUndropTable { name: table_name };
+
+        Ok(DfStatement::UndropTable(drop))
     }
 
     // Alter table
@@ -117,20 +129,56 @@ impl<'a> DfParser<'a> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
 
-        if self.parser.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
-            let new_table_name = self.parser.parse_object_name()?;
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::RENAME => {
+                    self.parser.expect_keyword(Keyword::TO)?;
+                    let new_table_name = self.parser.parse_object_name()?;
 
-            let rename = DfAlterTable {
-                if_exists,
-                table_name,
-                action: AlterTableAction::RenameTable(new_table_name),
-            };
+                    let rename = DfAlterTable {
+                        if_exists,
+                        table: table_name,
+                        action: AlterTableAction::RenameTable(new_table_name),
+                    };
 
-            Ok(DfStatement::AlterTable(rename))
-        } else {
-            Err(ParserError::ParserError(String::from(
-                "Alter table only support rename for now!",
-            )))
+                    Ok(DfStatement::AlterTable(rename))
+                }
+                Keyword::CLUSTER => {
+                    self.parser.expect_keyword(Keyword::BY)?;
+
+                    self.parser.expect_token(&Token::LParen)?;
+                    let cluster_keys = self.parser.parse_comma_separated(Parser::parse_expr)?;
+                    self.parser.expect_token(&Token::RParen)?;
+
+                    let cluster_by = DfAlterTable {
+                        if_exists,
+                        table: table_name,
+                        action: AlterTableAction::AlterTableClusterKey(cluster_keys),
+                    };
+
+                    Ok(DfStatement::AlterTable(cluster_by))
+                }
+                Keyword::DROP => {
+                    if self
+                        .parser
+                        .parse_keywords(&[Keyword::CLUSTER, Keyword::KEY])
+                    {
+                        Ok(DfStatement::AlterTable(DfAlterTable {
+                            if_exists,
+                            table: table_name,
+                            action: AlterTableAction::DropTableClusterKey,
+                        }))
+                    } else {
+                        Err(ParserError::ParserError(String::from(
+                            "Unsupported alter table statement!",
+                        )))
+                    }
+                }
+                _ => Err(ParserError::ParserError(String::from(
+                    "Unsupported alter table statement!",
+                ))),
+            },
+            unexpected => self.expected("alter table statement", unexpected),
         }
     }
 

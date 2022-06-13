@@ -140,6 +140,10 @@ mysql_handler_port = 3307
 clickhouse_handler_host = "127.0.0.1"
 clickhouse_handler_port = 9001
 
+# Query ClickHouse HTTP Handler.
+clickhouse_http_handler_host = "127.0.0.1"
+clickhouse_http_handler_port = 8125
+
 # Query HTTP Handler.
 http_handler_host = "127.0.0.1"
 http_handler_port = 8081

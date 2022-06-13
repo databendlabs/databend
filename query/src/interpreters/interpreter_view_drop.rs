@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::DropTableReq;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::TableNameIdent;
 use common_meta_types::GrantObject;
-use common_meta_types::TableNameIdent;
 use common_meta_types::UserPrivilegeType;
 use common_planners::DropViewPlan;
 use common_streams::DataBlockStream;
@@ -51,7 +51,7 @@ impl Interpreter for DropViewInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let catalog_name = self.plan.catalog.clone();
-        let db_name = self.plan.db.clone();
+        let db_name = self.plan.database.clone();
         let viewname = self.plan.viewname.clone();
         let tbl = self
             .ctx
@@ -71,7 +71,10 @@ impl Interpreter for DropViewInterpreter {
             if table.get_table_info().engine() != VIEW_ENGINE {
                 return Err(ErrorCode::UnexpectedError(format!(
                     "{}.{} is not VIEW, please use `DROP TABLE {}.{}`",
-                    &self.plan.db, &self.plan.viewname, &self.plan.db, &self.plan.viewname
+                    &self.plan.database,
+                    &self.plan.viewname,
+                    &self.plan.database,
+                    &self.plan.viewname
                 )));
             }
         };

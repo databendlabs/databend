@@ -19,7 +19,7 @@ use crate::sessions::SessionRef;
 
 #[derive(PartialEq)]
 pub enum ExpiringState {
-    InUse,
+    InUse(String),
     // return Duration, so user can choose to use Systime or Instance
     Idle { idle_time: Duration },
     Aborted { need_cleanup: bool },
@@ -36,13 +36,16 @@ impl Expirable for SessionRef {
             ExpiringState::Aborted {
                 need_cleanup: false,
             }
-        } else if !self.query_context_shared_is_none() {
-            ExpiringState::InUse
         } else {
-            let status = self.get_status();
-            let status = status.read();
-            ExpiringState::Idle {
-                idle_time: Instant::now() - status.last_access(),
+            match self.get_current_query_id() {
+                None => {
+                    let status = self.get_status();
+                    let status = status.read();
+                    ExpiringState::Idle {
+                        idle_time: Instant::now() - status.last_access(),
+                    }
+                }
+                Some(query_id) => ExpiringState::InUse(query_id),
             }
         }
     }

@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
@@ -45,7 +45,10 @@ impl AsyncSystemTable for ColumnsTable {
         let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut databases: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut data_types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
+        let mut default_kinds: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
+        let mut default_exprs: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut is_nullables: Vec<bool> = Vec::with_capacity(rows.len());
+        let mut comments: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         for (database_name, table_name, field) in rows.into_iter() {
             names.push(field.name().clone().into_bytes());
             tables.push(table_name.into_bytes());
@@ -54,7 +57,17 @@ impl AsyncSystemTable for ColumnsTable {
             let non_null_type = remove_nullable(field.data_type());
             let data_type = format_data_type_sql(&non_null_type);
             data_types.push(data_type.into_bytes());
+
+            let mut default_kind = "".to_string();
+            let mut default_expr = "".to_string();
+            if let Some(expr) = field.default_expr() {
+                default_kind = "DEFAULT".to_string();
+                default_expr = expr.to_string();
+            }
+            default_kinds.push(default_kind.into_bytes());
+            default_exprs.push(default_expr.into_bytes());
             is_nullables.push(field.is_nullable());
+            comments.push("".to_string().into_bytes());
         }
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
@@ -62,7 +75,10 @@ impl AsyncSystemTable for ColumnsTable {
             Series::from_data(databases),
             Series::from_data(tables),
             Series::from_data(data_types),
+            Series::from_data(default_kinds),
+            Series::from_data(default_exprs),
             Series::from_data(is_nullables),
+            Series::from_data(comments),
         ]))
     }
 }
@@ -73,8 +89,11 @@ impl ColumnsTable {
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("database", Vu8::to_data_type()),
             DataField::new("table", Vu8::to_data_type()),
-            DataField::new("data_type", Vu8::to_data_type()),
+            DataField::new("type", Vu8::to_data_type()),
+            DataField::new("default_kind", Vu8::to_data_type()),
+            DataField::new("default_expression", Vu8::to_data_type()),
             DataField::new("is_nullable", bool::to_data_type()),
+            DataField::new("comment", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {

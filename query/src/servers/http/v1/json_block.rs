@@ -46,8 +46,8 @@ pub fn block_to_json_value_columns(
         let column = column.convert_full_column();
         let field = block.schema().field(col_index);
         let data_type = field.data_type();
-        let serializer = data_type.create_serializer();
-        col_table.push(serializer.serialize_json(&column, format).map_err(|e| {
+        let serializer = data_type.create_serializer(&column)?;
+        col_table.push(serializer.serialize_json(format).map_err(|e| {
             ErrorCode::UnexpectedError(format!(
                 "fail to serialize filed {}, error = {}",
                 field.name(),
@@ -61,9 +61,42 @@ pub fn block_to_json_value_columns(
 pub fn block_to_json_value(
     block: &DataBlock,
     format: &FormatSettings,
+    string_fields: bool,
+) -> Result<Vec<Vec<JsonValue>>> {
+    if string_fields {
+        block_to_json_value_string_fields(block, format)
+    } else {
+        block_to_json_value_ast(block, format)
+    }
+}
+
+fn block_to_json_value_ast(
+    block: &DataBlock,
+    format: &FormatSettings,
 ) -> Result<Vec<Vec<JsonValue>>> {
     let cols = block_to_json_value_columns(block, format)?;
     Ok(transpose(cols))
+}
+
+fn block_to_json_value_string_fields(
+    block: &DataBlock,
+    format: &FormatSettings,
+) -> Result<Vec<Vec<JsonValue>>> {
+    if block.is_empty() {
+        return Ok(vec![]);
+    }
+    let rows_size = block.column(0).len();
+    let mut res = Vec::new();
+    let serializers = block.get_serializers()?;
+    for row_index in 0..rows_size {
+        let mut row: Vec<JsonValue> = Vec::with_capacity(block.num_columns());
+        for serializer in serializers.iter() {
+            let s = serializer.serialize_field(row_index, format)?;
+            row.push(serde_json::to_value(s)?)
+        }
+        res.push(row)
+    }
+    Ok(res)
 }
 
 impl JsonBlock {
@@ -74,9 +107,9 @@ impl JsonBlock {
         }
     }
 
-    pub fn new(block: &DataBlock, format: &FormatSettings) -> Result<Self> {
+    pub fn new(block: &DataBlock, format: &FormatSettings, string_fields: bool) -> Result<Self> {
         Ok(JsonBlock {
-            data: block_to_json_value(block, format)?,
+            data: block_to_json_value(block, format, string_fields)?,
             schema: block.schema().clone(),
         })
     }

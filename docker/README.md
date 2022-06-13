@@ -1,4 +1,4 @@
-# Multi-archtecture Docker image support
+# Multi-architecture Docker image support
 
 Support cross platform docker image build
 
@@ -29,7 +29,7 @@ docker run --privileged --rm tonistiigi/binfmt --install all
 
 ## Build and push container for supported platforms
 
-### initilize host networking
+### initialize host networking
 
 ```bash
 docker buildx create --name host --use --buildkitd-flags '--allow-insecure-entitlement network.host'

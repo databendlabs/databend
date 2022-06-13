@@ -1,6 +1,5 @@
 from abc import ABC
 from datetime import datetime, date
-from types import NoneType
 
 import mysql.connector
 
@@ -10,8 +9,8 @@ from log import log
 
 class TestMySQL(logictest.SuiteRunner, ABC):
 
-    def __init__(self, kind):
-        super().__init__(kind)
+    def __init__(self, kind, pattern):
+        super().__init__(kind, pattern)
         self._connection = None
 
     def reset_connection(self):
@@ -51,9 +50,10 @@ class TestMySQL(logictest.SuiteRunner, ABC):
         vals = []
         for (ri, row) in enumerate(r):
             for (i, v) in enumerate(row):
-                if isinstance(v, NoneType):
-                    vals.append("None")
+                if isinstance(v, type(None)):
+                    vals.append("NULL")
                     continue
+
                 if query_type[i] == 'I':
                     if not isinstance(v, int):
                         log.error(

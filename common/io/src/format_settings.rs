@@ -28,6 +28,8 @@ pub struct FormatSettings {
     pub skip_header: bool,
     pub compression: Compression,
     pub timezone: Tz,
+    pub true_bytes: Vec<u8>,
+    pub false_bytes: Vec<u8>,
 }
 
 impl Default for FormatSettings {
@@ -39,19 +41,24 @@ impl Default for FormatSettings {
             skip_header: false,
             compression: Compression::None,
             timezone: "UTC".parse::<Tz>().unwrap(),
+            true_bytes: vec![b'1'],
+            false_bytes: vec![b'0'],
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Compression {
     None,
     Auto,
+    /// Deflate with gzip headers.
     Gzip,
     Bz2,
     Brotli,
     Zstd,
+    /// Deflate with zlib headers
     Deflate,
+    /// Raw default stream without any headers.
     RawDeflate,
     Lzo,
     Snappy,
@@ -67,20 +74,19 @@ impl FromStr for Compression {
     type Err = ErrorCode;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s.to_ascii_lowercase().as_str() {
+        match s.to_lowercase().as_str() {
             "auto" => Ok(Compression::Auto),
             "gzip" => Ok(Compression::Gzip),
             "bz2" => Ok(Compression::Bz2),
             "brotli" => Ok(Compression::Brotli),
             "zstd" => Ok(Compression::Zstd),
             "deflate" => Ok(Compression::Deflate),
-            "rawdeflate" => Ok(Compression::RawDeflate),
+            "rawdeflate" | "raw_deflate" => Ok(Compression::RawDeflate),
             "lzo" => Ok(Compression::Lzo),
             "snappy" => Ok(Compression::Snappy),
             "none" => Ok(Compression::None),
-            _ => Err(ErrorCode::IllegalUserSettingFormat(format!(
-                "Unknown compression: {}",
-                s
+            _ => Err(ErrorCode::UnknownCompressionType(format!(
+                "Unknown compression: {s}"
             ))),
         }
     }

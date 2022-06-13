@@ -17,39 +17,43 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_api::SchemaApi;
-use common_meta_embedded::MetaEmbedded;
-use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DatabaseIdent;
-use common_meta_types::DatabaseInfo;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::DatabaseNameIdent;
-use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropTableReply;
-use common_meta_types::DropTableReq;
-use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetTableReq;
-use common_meta_types::ListDatabaseReq;
-use common_meta_types::ListTableReq;
+use common_meta_app::schema::CountTablesReply;
+use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateDatabaseReply;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DatabaseIdent;
+use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListTableReq;
+use common_meta_app::schema::RenameDatabaseReply;
+use common_meta_app::schema::RenameDatabaseReq;
+use common_meta_app::schema::RenameTableReply;
+use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::UndropDatabaseReply;
+use common_meta_app::schema::UndropDatabaseReq;
+use common_meta_app::schema::UndropTableReply;
+use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateTableMetaReply;
+use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableOptionReply;
+use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
-use common_meta_types::RenameDatabaseReply;
-use common_meta_types::RenameDatabaseReq;
-use common_meta_types::RenameTableReply;
-use common_meta_types::RenameTableReq;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
-use common_meta_types::UpdateTableMetaReply;
-use common_meta_types::UpdateTableMetaReq;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use super::backends::MetaBackend;
 use super::catalog_context::CatalogContext;
 use crate::catalogs::catalog::Catalog;
-use crate::common::MetaClientProvider;
+use crate::common::MetaStoreProvider;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
@@ -84,27 +88,10 @@ impl MutableCatalog {
     /// MetaEmbedded
     /// ```
     pub async fn try_create_with_config(conf: Config) -> Result<Self> {
-        // - `address` is an old config that accept only one address.
-        // - `endpoints` accepts multiple endpoint candidates.
-        //
-        // If either of these two is configured(non-empty), use remote metasrv.
-        // Otherwise, use a local embedded meta
-        let local_mode = conf.meta.address.is_empty() && conf.meta.endpoints.is_empty();
-
-        let meta: Arc<dyn SchemaApi> = if local_mode {
-            tracing::info!("use embedded meta");
-            // TODO(xp): This can only be used for test: data will be removed when program quit.
-
-            let meta_embedded = MetaEmbedded::get_meta().await?;
-            meta_embedded
-        } else {
-            tracing::info!("use remote meta");
-
-            let meta_client_provider = Arc::new(MetaClientProvider::new(
-                conf.meta.to_meta_grpc_client_conf(),
-            ));
-            let meta_backend = MetaBackend::create(meta_client_provider);
-            Arc::new(meta_backend)
+        let meta = {
+            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
+            let meta_backend = provider.try_get_meta_store().await?;
+            meta_backend
         };
 
         let tenant = conf.query.tenant_id.clone();
@@ -140,10 +127,18 @@ impl MutableCatalog {
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let ctx = DatabaseContext {
-            meta: self.ctx.meta.clone(),
+            meta: self.ctx.meta.clone().arc(),
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
         self.ctx.database_factory.get_database(ctx, db_info)
+    }
+
+    fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
+        table_infos.iter().try_fold(vec![], |mut acc, item| {
+            let tbl = self.get_table_by_info(item.as_ref())?;
+            acc.push(tbl);
+            Ok(acc)
+        })
     }
 }
 
@@ -210,7 +205,7 @@ impl Catalog for MutableCatalog {
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
         let ctx = StorageContext {
-            meta: self.ctx.meta.clone(),
+            meta: self.ctx.meta.clone().arc(),
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
         storage.get_table(ctx, table_info)
@@ -245,11 +240,35 @@ impl Catalog for MutableCatalog {
             .list_tables(ListTableReq::new(tenant, db_name))
             .await?;
 
-        table_infos.iter().try_fold(vec![], |mut acc, item| {
-            let tbl = self.get_table_by_info(item.as_ref())?;
-            acc.push(tbl);
-            Ok(acc)
-        })
+        self.load_tables(table_infos)
+    }
+
+    async fn list_tables_history(
+        &self,
+        tenant: &str,
+        db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        // `get_table_history` will not fetch the tables that created before the
+        // "metasrv time travel functions" is added.
+        // thus, only the table-infos of dropped tables are used.
+        let mut dropped = self
+            .ctx
+            .meta
+            .get_table_history(ListTableReq::new(tenant, db_name))
+            .await?
+            .into_iter()
+            .filter(|i| i.meta.drop_on.is_some())
+            .collect::<Vec<_>>();
+
+        let mut table_infos = self
+            .ctx
+            .meta
+            .list_tables(ListTableReq::new(tenant, db_name))
+            .await?;
+
+        table_infos.append(&mut dropped);
+
+        self.load_tables(table_infos)
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
@@ -259,6 +278,16 @@ impl Catalog for MutableCatalog {
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
         let res = self.ctx.meta.drop_table(req).await?;
+        Ok(res)
+    }
+
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+        let res = self.ctx.meta.undrop_table(req).await?;
+        Ok(res)
+    }
+
+    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        let res = self.ctx.meta.undrop_database(req).await?;
         Ok(res)
     }
 
@@ -277,6 +306,11 @@ impl Catalog for MutableCatalog {
 
     async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         let res = self.ctx.meta.update_table_meta(req).await?;
+        Ok(res)
+    }
+
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
+        let res = self.ctx.meta.count_tables(req).await?;
         Ok(res)
     }
 

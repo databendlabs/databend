@@ -21,7 +21,7 @@ use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::parser::token::Token;
 
-// Root node of a query tree
+/// Root node of a query tree
 #[derive(Debug, Clone, PartialEq)]
 pub struct Query<'a> {
     pub span: &'a [Token<'a>],
@@ -40,28 +40,16 @@ pub struct Query<'a> {
     pub format: Option<String>,
 }
 
-// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
 #[derive(Debug, Clone, PartialEq)]
-pub enum SetExpr<'a> {
-    Select(Box<SelectStmt<'a>>),
-    Query(Box<Query<'a>>),
-    // UNION/EXCEPT/INTERSECT operator
-    SetOperation {
-        op: SetOperator,
-        all: bool,
-        left: Box<SetExpr<'a>>,
-        right: Box<SetExpr<'a>>,
-    },
+pub struct SetOperation<'a> {
+    pub span: &'a [Token<'a>],
+    pub op: SetOperator,
+    pub all: bool,
+    pub left: Box<SetExpr<'a>>,
+    pub right: Box<SetExpr<'a>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum SetOperator {
-    Union,
-    Except,
-    Intersect,
-}
-
-// A subquery represented with `SELECT` statement
+/// A subquery represented with `SELECT` statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStmt<'a> {
     pub span: &'a [Token<'a>],
@@ -71,7 +59,7 @@ pub struct SelectStmt<'a> {
     // `FROM` clause, a list of table references.
     // The table references split by `,` will be joined with cross join,
     // and the result set is union of the joined tables by default.
-    pub from: Option<TableReference<'a>>,
+    pub from: Vec<TableReference<'a>>,
     // `WHERE` clause
     pub selection: Option<Expr<'a>>,
     // `GROUP BY` clause
@@ -80,7 +68,23 @@ pub struct SelectStmt<'a> {
     pub having: Option<Expr<'a>>,
 }
 
-// `ORDER BY` clause
+/// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetExpr<'a> {
+    Select(Box<SelectStmt<'a>>),
+    Query(Box<Query<'a>>),
+    // UNION/EXCEPT/INTERSECT operator
+    SetOperation(Box<SetOperation<'a>>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetOperator {
+    Union,
+    Except,
+    Intersect,
+}
+
+/// `ORDER BY` clause
 #[derive(Debug, Clone, PartialEq)]
 pub struct OrderByExpr<'a> {
     pub expr: Expr<'a>,
@@ -90,7 +94,7 @@ pub struct OrderByExpr<'a> {
     pub nulls_first: Option<bool>,
 }
 
-// One item of the comma-separated list following `SELECT`
+/// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelectTarget<'a> {
     // Expression with alias, e.g. `SELECT b AS a, a+1 AS b FROM t`
@@ -106,8 +110,8 @@ pub enum SelectTarget<'a> {
 
 pub type QualifiedName<'a> = Vec<Indirection<'a>>;
 
-// Indirection of a select result, like a part of `db.table.column`.
-// Can be a database name, table name, field name or wildcard star(`*`).
+/// Indirection of a select result, like a part of `db.table.column`.
+/// Can be a database name, table name, field name or wildcard star(`*`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Indirection<'a> {
     // Field name
@@ -116,7 +120,13 @@ pub enum Indirection<'a> {
     Star,
 }
 
-// A table name or a parenthesized subquery with an optional alias
+/// Time Travel specification
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimeTravelPoint {
+    Snapshot(String),
+}
+
+/// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableReference<'a> {
     // Table name
@@ -125,6 +135,7 @@ pub enum TableReference<'a> {
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
         alias: Option<TableAlias<'a>>,
+        travel_point: Option<TimeTravelPoint>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
@@ -214,11 +225,17 @@ impl<'a> Display for TableReference<'a> {
                 database,
                 table,
                 alias,
+                travel_point,
             } => {
                 write_period_separated_list(
                     f,
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
+
+                if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
+                    write!(f, " AT (SNAPSHOT => {sid})")?;
+                }
+
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
@@ -322,8 +339,9 @@ impl<'a> Display for SelectStmt<'a> {
         write_comma_separated_list(f, &self.select_list)?;
 
         // FROM clause
-        if let Some(from) = &self.from {
-            write!(f, " FROM {from}")?;
+        if !self.from.is_empty() {
+            write!(f, " FROM ")?;
+            write_comma_separated_list(f, &self.from)?;
         }
 
         // WHERE clause
@@ -355,14 +373,9 @@ impl<'a> Display for SetExpr<'a> {
             SetExpr::Query(query) => {
                 write!(f, "({query})")?;
             }
-            SetExpr::SetOperation {
-                op,
-                all,
-                left,
-                right,
-            } => {
-                write!(f, "{left}")?;
-                match op {
+            SetExpr::SetOperation(set_operation) => {
+                write!(f, "{}", set_operation.left)?;
+                match set_operation.op {
                     SetOperator::Union => {
                         write!(f, " UNION ")?;
                     }
@@ -373,10 +386,10 @@ impl<'a> Display for SetExpr<'a> {
                         write!(f, " INTERSECT")?;
                     }
                 }
-                if *all {
+                if set_operation.all {
                     write!(f, " ALL")?;
                 }
-                write!(f, "{right}")?;
+                write!(f, "{}", set_operation.right)?;
             }
         }
         Ok(())

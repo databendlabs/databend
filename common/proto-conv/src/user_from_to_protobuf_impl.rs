@@ -19,6 +19,8 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 use common_io::prelude::*;
 use common_meta_types as mt;
 use common_protos::pb;
@@ -28,12 +30,13 @@ use num::FromPrimitive;
 use crate::check_ver;
 use crate::FromToProto;
 use crate::Incompatible;
+use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
 impl FromToProto<pb::AuthInfo> for mt::AuthInfo {
     fn from_pb(p: pb::AuthInfo) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         match p.info {
             Some(pb::auth_info::Info::None(pb::auth_info::None {})) => Ok(mt::AuthInfo::None),
@@ -65,14 +68,18 @@ impl FromToProto<pb::AuthInfo> for mt::AuthInfo {
                 hash_method: *hash_method as i32,
             })),
         };
-        Ok(pb::AuthInfo { ver: VER, info })
+        Ok(pb::AuthInfo {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            info,
+        })
     }
 }
 
 impl FromToProto<pb::UserOption> for mt::UserOption {
     fn from_pb(p: pb::UserOption) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let flags = BitFlags::<mt::UserOptionFlag, u64>::from_bits(p.flags);
         match flags {
@@ -88,6 +95,7 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
     fn to_pb(&self) -> Result<pb::UserOption, Incompatible> {
         Ok(pb::UserOption {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             flags: self.flags().bits(),
         })
     }
@@ -96,7 +104,7 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
 impl FromToProto<pb::UserQuota> for mt::UserQuota {
     fn from_pb(p: pb::UserQuota) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         Ok(Self {
             max_cpu: p.max_cpu,
@@ -108,6 +116,7 @@ impl FromToProto<pb::UserQuota> for mt::UserQuota {
     fn to_pb(&self) -> Result<pb::UserQuota, Incompatible> {
         Ok(pb::UserQuota {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             max_cpu: self.max_cpu,
             max_memory_in_bytes: self.max_memory_in_bytes,
             max_storage_in_bytes: self.max_storage_in_bytes,
@@ -118,7 +127,7 @@ impl FromToProto<pb::UserQuota> for mt::UserQuota {
 impl FromToProto<pb::GrantObject> for mt::GrantObject {
     fn from_pb(p: pb::GrantObject) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         match p.object {
             Some(pb::grant_object::Object::Global(pb::grant_object::GrantGlobalObject {})) => {
@@ -158,14 +167,18 @@ impl FromToProto<pb::GrantObject> for mt::GrantObject {
                 },
             )),
         };
-        Ok(pb::GrantObject { ver: VER, object })
+        Ok(pb::GrantObject {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            object,
+        })
     }
 }
 
 impl FromToProto<pb::GrantEntry> for mt::GrantEntry {
     fn from_pb(p: pb::GrantEntry) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let privileges = BitFlags::<mt::UserPrivilegeType, u64>::from_bits(p.privileges);
         match privileges {
@@ -186,6 +199,7 @@ impl FromToProto<pb::GrantEntry> for mt::GrantEntry {
     fn to_pb(&self) -> Result<pb::GrantEntry, Incompatible> {
         Ok(pb::GrantEntry {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             object: Some(self.object().to_pb()?),
             privileges: self.privileges().bits(),
         })
@@ -195,7 +209,7 @@ impl FromToProto<pb::GrantEntry> for mt::GrantEntry {
 impl FromToProto<pb::UserGrantSet> for mt::UserGrantSet {
     fn from_pb(p: pb::UserGrantSet) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let mut entries = Vec::new();
         for entry in p.entries.iter() {
@@ -221,6 +235,7 @@ impl FromToProto<pb::UserGrantSet> for mt::UserGrantSet {
 
         Ok(pb::UserGrantSet {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             entries,
             roles,
         })
@@ -230,7 +245,7 @@ impl FromToProto<pb::UserGrantSet> for mt::UserGrantSet {
 impl FromToProto<pb::UserInfo> for mt::UserInfo {
     fn from_pb(p: pb::UserInfo) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         Ok(mt::UserInfo {
             name: p.name.clone(),
@@ -253,12 +268,34 @@ impl FromToProto<pb::UserInfo> for mt::UserInfo {
     fn to_pb(&self) -> Result<pb::UserInfo, Incompatible> {
         Ok(pb::UserInfo {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             name: self.name.clone(),
             hostname: self.hostname.clone(),
             auth_info: Some(mt::AuthInfo::to_pb(&self.auth_info)?),
             grants: Some(mt::UserGrantSet::to_pb(&self.grants)?),
             quota: Some(mt::UserQuota::to_pb(&self.quota)?),
             option: Some(mt::UserOption::to_pb(&self.option)?),
+        })
+    }
+}
+
+impl FromToProto<pb::UserIdentity> for mt::UserIdentity {
+    fn from_pb(p: pb::UserIdentity) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.ver, p.min_compatible)?;
+
+        Ok(mt::UserIdentity {
+            username: p.username.clone(),
+            hostname: p.hostname,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::UserIdentity, Incompatible> {
+        Ok(pb::UserIdentity {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            username: self.username.clone(),
+            hostname: self.hostname.clone(),
         })
     }
 }
@@ -411,7 +448,7 @@ impl FromToProto<pb::user_stage_info::StageParams> for mt::StageParams {
 impl FromToProto<pb::user_stage_info::FileFormatOptions> for mt::FileFormatOptions {
     fn from_pb(p: pb::user_stage_info::FileFormatOptions) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
 
         let format = mt::StageFileFormatType::from_pb(
             FromPrimitive::from_i32(p.format).ok_or_else(|| Incompatible {
@@ -439,6 +476,7 @@ impl FromToProto<pb::user_stage_info::FileFormatOptions> for mt::FileFormatOptio
         let compression = mt::StageFileCompression::to_pb(&self.compression)? as i32;
         Ok(pb::user_stage_info::FileFormatOptions {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             format,
             skip_header: self.skip_header,
             field_delimiter: self.field_delimiter.clone(),
@@ -528,7 +566,7 @@ impl FromToProto<pb::user_stage_info::CopyOptions> for mt::CopyOptions {
 impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
     fn from_pb(p: pb::UserStageInfo) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, p.min_compatible)?;
         Ok(mt::UserStageInfo {
             stage_name: p.stage_name.clone(),
             stage_type: mt::StageType::from_pb(FromPrimitive::from_i32(p.stage_type).ok_or_else(
@@ -552,18 +590,61 @@ impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
                 }
             })?)?,
             comment: p.comment,
+            number_of_files: p.number_of_files,
+            creator: match p.creator {
+                Some(c) => Some(mt::UserIdentity::from_pb(c)?),
+                None => None,
+            },
         })
     }
 
     fn to_pb(&self) -> Result<pb::UserStageInfo, Incompatible> {
         Ok(pb::UserStageInfo {
             ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
             stage_name: self.stage_name.clone(),
             stage_type: mt::StageType::to_pb(&self.stage_type)? as i32,
             stage_params: Some(mt::StageParams::to_pb(&self.stage_params)?),
             file_format_options: Some(mt::FileFormatOptions::to_pb(&self.file_format_options)?),
             copy_options: Some(mt::CopyOptions::to_pb(&self.copy_options)?),
             comment: self.comment.clone(),
+            number_of_files: self.number_of_files,
+            creator: match &self.creator {
+                Some(c) => Some(mt::UserIdentity::to_pb(c)?),
+                None => None,
+            },
+        })
+    }
+}
+
+impl FromToProto<pb::StageFile> for mt::StageFile {
+    fn from_pb(p: pb::StageFile) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.ver, p.min_compatible)?;
+        Ok(mt::StageFile {
+            path: p.path.clone(),
+            size: p.size,
+            md5: p.md5.clone(),
+            last_modified: DateTime::<Utc>::from_pb(p.last_modified)?,
+            creator: match p.creator {
+                Some(c) => Some(mt::UserIdentity::from_pb(c)?),
+                None => None,
+            },
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::StageFile, Incompatible> {
+        Ok(pb::StageFile {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            path: self.path.clone(),
+            size: self.size,
+            md5: self.md5.clone(),
+            last_modified: self.last_modified.to_pb()?,
+            creator: match &self.creator {
+                Some(c) => Some(mt::UserIdentity::to_pb(c)?),
+                None => None,
+            },
         })
     }
 }

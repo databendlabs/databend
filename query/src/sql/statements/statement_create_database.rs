@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::DatabaseMeta;
+use common_meta_app::schema::DatabaseMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -41,7 +41,7 @@ impl AnalyzableStatement for DfCreateDatabase {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
-        let (catalog, db) = resolve_database(&ctx, &self.name, "CREATE DATABASE")?;
+        let (catalog, database) = resolve_database(&ctx, &self.name, "CREATE DATABASE")?;
         let if_not_exists = self.if_not_exists;
         let meta = self.database_meta()?;
 
@@ -50,7 +50,7 @@ impl AnalyzableStatement for DfCreateDatabase {
                 tenant,
                 if_not_exists,
                 catalog,
-                db,
+                database,
                 meta,
             }),
         )))

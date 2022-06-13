@@ -15,10 +15,10 @@
 
 use std::sync::Arc;
 
-use common_meta_types::DatabaseIdent;
-use common_meta_types::DatabaseInfo;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::DatabaseNameIdent;
+use common_meta_app::schema::DatabaseIdent;
+use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::DatabaseNameIdent;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
@@ -54,6 +54,7 @@ impl SystemDatabase {
             )),
             system::EnginesTable::create(sys_db_meta.next_table_id()),
             system::RolesTable::create(sys_db_meta.next_table_id()),
+            system::StagesTable::create(sys_db_meta.next_table_id()),
         ];
 
         for tbl in table_list.into_iter() {

@@ -17,6 +17,9 @@ select count(*) > 0 from system.query_log;
 true
 
 statement ok
+drop table if exists tbl_01_0002 all;
+
+statement ok
 create table tbl_01_0002(a int);
 
 statement ok

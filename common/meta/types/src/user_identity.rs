@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct UserIdentity {
     pub username: String,
     pub hostname: String,
@@ -30,6 +30,10 @@ impl UserIdentity {
 
     pub fn is_localhost(&self) -> bool {
         &self.hostname.to_lowercase() == "localhost" || &self.hostname == "127.0.0.1"
+    }
+
+    pub fn is_root(&self) -> bool {
+        self.username.eq("root") || self.username.eq("default")
     }
 }
 

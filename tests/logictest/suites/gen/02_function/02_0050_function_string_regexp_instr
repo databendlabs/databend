@@ -38,13 +38,13 @@ statement query I
 SELECT REGEXP_INSTR('dog cat dog', NULL);
 
 ----  
-None
+NULL
 
 statement query I 
 SELECT REGEXP_INSTR('dog cat dog', 'dog', NULL);
 
 ----  
-None
+NULL
 
 statement query I 
 SELECT REGEXP_INSTR('🍣🍣b', 'b', 2);

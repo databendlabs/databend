@@ -13,7 +13,11 @@
 // limitations under the License.
 
 mod access;
+
+mod async_insert_queue;
 mod interpreter_call;
+mod interpreter_cluster_key_alter;
+mod interpreter_cluster_key_drop;
 mod interpreter_database_create;
 mod interpreter_database_drop;
 mod interpreter_database_rename;
@@ -22,6 +26,7 @@ mod interpreter_empty;
 mod interpreter_explain;
 mod interpreter_factory_interceptor;
 mod interpreter_insert;
+mod interpreter_list;
 mod interpreter_privilege_grant;
 mod interpreter_privilege_revoke;
 mod interpreter_role_grant;
@@ -36,6 +41,7 @@ mod interpreter_show_metrics;
 mod interpreter_show_processlist;
 mod interpreter_show_roles;
 mod interpreter_show_settings;
+mod interpreter_show_stages;
 mod interpreter_show_tab_stat;
 mod interpreter_show_tables;
 mod interpreter_show_users;

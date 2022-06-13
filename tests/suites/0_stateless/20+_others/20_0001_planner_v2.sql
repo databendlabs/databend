@@ -106,6 +106,10 @@ select avg(number > 314) from numbers(1000);
 
 drop table t;
 
+select '====Having alias====';
+select number as a from numbers(1) group by a having a = 0;
+select number+1 as a from numbers(1) group by a having a = 1;
+
 -- Inner join
 select '====INNER_JOIN====';
 create table t(a int);
@@ -125,6 +129,8 @@ select * from t2 inner join t on t.a = t2.c + 1;
 select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c;
 select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
 
+select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5;
+
 -- order by
 select '====ORDER_BY====';
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc;
@@ -143,7 +149,6 @@ select '====SELECT_WITHOUT_FROM====';
 select 1 + 1;
 select to_int(8);
 select 'new_planner';
-select *; -- {ErrorCode 1065}
 
 -- limit
 select '=== Test limit ===';
@@ -151,7 +156,7 @@ select number from numbers(100) order by number asc limit 10;
 select '==================';
 select number*2 as number from numbers(100) order by number limit 10;
 select '=== Test limit n, m ===';
-select number from numbers(100) order by number asc limit 10, 10;
+select number from numbers(100) order by number asc limit 9, 11;
 select '==================';
 select number-2 as number from numbers(100) order by number asc limit 10, 10;
 select '=== Test limit with offset ===';
@@ -212,6 +217,93 @@ insert into t1 values(1, 2), (1, 3), (2, 4);
 create table t2(c int, d int);
 insert into t2 values(1, 2), (2, 6);
 select * from t2 inner join t1 on t1.a = t2.c;
+drop table t1;
+drop table t2;
+
+-- trim function
+select '===Trim Function===';
+select trim(leading ' ' from '      abc');
+select trim(leading ' ' from '');
+select trim(leading 'ab' from 'abab');
+select trim(leading 'ab' from 'abc');
+select trim(trailing ' ' from 'abc    ');
+select trim(trailing ' ' from '');
+select trim(trailing 'ab' from 'abab');
+select trim(trailing 'ab' from 'cab');
+select trim(both 'ab' from 'abab');
+select trim(both 'ab' from 'abcab');
+select trim(' abc ');
+
+-- Select Array Literal
+select '===Array Literal===';
+select [1, 2, 3];
+select [];
+select [[1, 2, 3],[1, 2, 3]];
+
+select '====Correlated Subquery====';
+select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
+select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;
+
+-- explain
+select '===Explain===';
+create table t1(a int, b int);
+create table t2(a int, b int);
+explain select t1.a from t1 where a > 0;
+select '===Explain Pipeline===';
+explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
+drop table t1;
+drop table t2;
+-- position function
+select '===Position Function===';
+SELECT POSITION('bar' IN 'foobarbar');
+SELECT POSITION('xbar' IN 'foobar');
+drop table if exists t;
+create table t (a varchar);
+insert into t values ('foo');
+select POSITION('o' IN t.a) from t;
+drop table t;
+
+select '====Tuple====';
+select ('field', number) from numbers(5);
+
+select '====View====';
+drop view if exists temp;
+create view temp as select number from numbers(1);
+select number from temp;
+drop view temp;
+
+-- cross join
+select '====Cross Join====';
+create table t1(a int, b int);
+create table t2(c int, d int);
+insert into t1 values(1, 2), (2, 3), (3 ,4);
+insert into t2 values(2,2), (3, 5), (7 ,8);
+select * from t1, t2;
+drop table t1;
+drop table t2;
+
+-- test error code hint
+
+select 3 as a, 4 as a; -- {ErrorCode 1002 }
+-- udf
+select '====UDF====';
+CREATE FUNCTION a_plus_3 AS (a) -> a+3;
+SELECT a_plus_3(2);
+CREATE FUNCTION cal1 AS (a,b,c,d,e) -> a + c * (e / b) - d;
+SELECT cal1(1, 2, 3, 4, 6);
+CREATE FUNCTION notnull1 AS (p) -> not(is_null(p));
+SELECT notnull1(null);
+SELECT notnull1('null');
+
+--set operator
+select '====Intersect Distinct===';
+create table t1(a int, b int);
+create table t2(c int, d int);
+insert into t1 values(1, 2), (2, 3), (3 ,4), (2, 3);
+insert into t2 values(2,2), (3, 5), (7 ,8), (2, 3), (3, 4);
+select * from t1 intersect select * from t2;
+select '====Except Distinct===';
+select * from t1 except select * from t2;
 drop table t1;
 drop table t2;
 

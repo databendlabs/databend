@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
-use common_meta_types::TableInfo;
+use common_meta_app::schema::TableInfo;
 use common_streams::CastStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -120,6 +120,7 @@ impl Processor for SinkTransform {
         if self.input_schema != output_schema {
             input_stream = Box::pin(AddOnStream::try_create(
                 input_stream,
+                tbl.cluster_keys(),
                 input_schema,
                 output_schema,
                 self.ctx.clone(),

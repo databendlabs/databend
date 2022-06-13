@@ -2,7 +2,7 @@ statement query T
 SELECT SOUNDEX(NULL);
 
 ----  
-None
+NULL
 
 statement query T 
 SELECT SOUNDEX('Hello');

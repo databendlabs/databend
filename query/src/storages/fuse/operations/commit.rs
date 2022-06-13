@@ -24,17 +24,18 @@ use common_cache::Cache;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableStatistics;
+use common_meta_app::schema::UpdateTableMetaReply;
+use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_meta_types::TableInfo;
-use common_meta_types::TableStatistics;
-use common_meta_types::UpdateTableMetaReply;
-use common_meta_types::UpdateTableMetaReq;
 use common_tracing::tracing;
 use uuid::Uuid;
 
 use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
+use crate::storages::fuse::meta::ClusterKey;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
@@ -146,6 +147,7 @@ impl FuseTable {
     ) -> Result<()> {
         let prev = self.read_table_snapshot(ctx).await?;
         let prev_version = self.snapshot_format_version();
+        let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(operation_log)?;
 
@@ -162,10 +164,12 @@ impl FuseTable {
         let new_snapshot = if overwrite {
             TableSnapshot::new(
                 Uuid::new_v4(),
+                &prev_timestamp,
                 prev.as_ref().map(|v| (v.snapshot_id, prev_version)),
                 schema,
                 summary,
                 segments,
+                self.cluster_key_meta.clone(),
             )
         } else {
             Self::merge_table_operations(
@@ -174,6 +178,7 @@ impl FuseTable {
                 prev_version,
                 segments,
                 summary,
+                self.cluster_key_meta.clone(),
             )?
         };
 
@@ -219,6 +224,7 @@ impl FuseTable {
         prev_version: u64,
         mut new_segments: Vec<Location>,
         statistics: Statistics,
+        cluster_key_meta: Option<ClusterKey>,
     ) -> Result<TableSnapshot> {
         // 1. merge stats with previous snapshot, if any
         let stats = if let Some(snapshot) = &previous {
@@ -228,6 +234,7 @@ impl FuseTable {
             statistics
         };
         let prev_snapshot_id = previous.as_ref().map(|v| (v.snapshot_id, prev_version));
+        let prev_snapshot_timestamp = previous.as_ref().and_then(|v| v.timestamp);
 
         // 2. merge segment locations with previous snapshot, if any
         if let Some(snapshot) = &previous {
@@ -237,10 +244,12 @@ impl FuseTable {
 
         let new_snapshot = TableSnapshot::new(
             Uuid::new_v4(),
+            &prev_snapshot_timestamp,
             prev_snapshot_id,
             schema.clone(),
             stats,
             new_segments,
+            cluster_key_meta,
         );
         Ok(new_snapshot)
     }
@@ -281,7 +290,6 @@ impl FuseTable {
             new_table_meta,
         };
 
-        //catalog.upsert_table_option(req).await
         catalog.update_table_meta(req).await
     }
 
@@ -300,16 +308,10 @@ impl FuseTable {
                 acc.block_count += stats.block_count;
                 acc.uncompressed_byte_size += stats.uncompressed_byte_size;
                 acc.compressed_byte_size += stats.compressed_byte_size;
-                (acc.col_stats, acc.cluster_stats) = if acc.col_stats.is_empty() {
-                    (stats.col_stats.clone(), stats.cluster_stats.clone())
+                acc.col_stats = if acc.col_stats.is_empty() {
+                    stats.col_stats.clone()
                 } else {
-                    (
-                        statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats])?,
-                        statistics::reduce_cluster_stats(&[
-                            &acc.cluster_stats,
-                            &stats.cluster_stats,
-                        ]),
-                    )
+                    statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats])?
                 };
                 seg_acc.push(loc.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))

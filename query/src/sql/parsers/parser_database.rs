@@ -26,6 +26,7 @@ use crate::sql::statements::DfAlterDatabase;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfShowCreateDatabase;
+use crate::sql::statements::DfUndropDatabase;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -107,5 +108,13 @@ impl<'a> DfParser<'a> {
                 "Alter database only support rename for now!",
             )))
         }
+    }
+
+    // Undrop database.
+    pub(crate) fn parse_undrop_database(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let table_name = self.parser.parse_object_name()?;
+        let drop = DfUndropDatabase { name: table_name };
+
+        Ok(DfStatement::UndropDatabase(drop))
     }
 }

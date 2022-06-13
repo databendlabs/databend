@@ -28,6 +28,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::FuseTable;
+use crate::storages::Table;
 
 pub struct ClusteringInformation<'a> {
     pub ctx: Arc<QueryContext>,
@@ -92,6 +93,12 @@ impl<'a> ClusteringInformation<'a> {
     fn get_min_max_stats(&self, block: &BlockMeta) -> Result<(Vec<DataValue>, Vec<DataValue>)> {
         if self.table.cluster_keys() != self.cluster_keys || block.cluster_stats.is_none() {
             // Todo(zhyass): support manually specifying the cluster key.
+            return Err(ErrorCode::UnImplement("Unimplement error"));
+        }
+
+        let cluster_key_id = block.cluster_stats.clone().unwrap().cluster_key_id;
+        let default_cluster_key_id = self.table.cluster_key_meta.clone().unwrap().0;
+        if cluster_key_id != default_cluster_key_id {
             return Err(ErrorCode::UnImplement("Unimplement error"));
         }
 

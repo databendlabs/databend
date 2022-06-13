@@ -22,17 +22,18 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
-use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOp;
 
 /// Cartesian apply join operator.
 #[derive(Debug, Clone)]
 pub struct CrossApply {
+    pub subquery_output: ColumnSet,
     pub correlated_columns: ColumnSet,
 }
 
 impl Operator for CrossApply {
-    fn plan_type(&self) -> PlanType {
-        PlanType::CrossApply
+    fn plan_type(&self) -> RelOp {
+        RelOp::CrossApply
     }
 
     fn is_physical(&self) -> bool {

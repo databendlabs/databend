@@ -32,7 +32,7 @@ pub struct ConcatWsFunction {
 impl ConcatWsFunction {
     pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let result_type = if args[0].is_null() {
-            NullType::arc()
+            NullType::new_impl()
         } else {
             for arg in args {
                 let arg = remove_nullable(*arg);

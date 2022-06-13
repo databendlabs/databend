@@ -27,7 +27,7 @@ use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
 
-macro_rules! test_parse {
+macro_rules! run_parser {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
         let tokens = Tokenizer::new($source).collect::<Result<Vec<_>>>().unwrap();
         let backtrace = Backtrace::new();
@@ -78,7 +78,16 @@ fn test_statement() {
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
         r#"create database if not exists a;"#,
+        r#"create database catalog.t engine = Default;"#,
+        r#"create database t engine = Github(token='123456');"#,
+        r#"create database t engine = Default;"#,
+        r#"drop database catalog.t;"#,
+        r#"drop database if exists t;"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,
+        r#"create view v as select number % 3 as a from numbers(1000);"#,
+        r#"alter view v as select number % 3 as a from numbers(1000);"#,
+        r#"drop view v;"#,
+        r#"rename table d.t to e.s;"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
         r#"DROP table table1;"#,
@@ -104,6 +113,18 @@ fn test_statement() {
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')"#,
+        r#"list @stage_a;"#,
+        r#"create user 'test-e'@'localhost' identified by 'password';"#,
+        r#"drop user if exists 'test-j'@'localhost';"#,
+        r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
+        r#"create role 'test'"#,
+        r#"drop role if exists 'test'"#,
+        r#"ALTER TABLE t CLUSTER BY(c1);"#,
+        r#"ALTER TABLE t DROP CLUSTER KEY;"#,
+        r#"ALTER DATABASE IF EXISTS catalog.c RENAME TO a;"#,
+        r#"ALTER DATABASE c RENAME TO a;"#,
+        r#"ALTER DATABASE catalog.c RENAME TO a;"#,
     ];
 
     for case in cases {
@@ -138,7 +159,7 @@ fn test_statements_in_legacy_suites() {
         // TODO(andylokandy): support all cases eventually
         // Remove currently unimplemented cases
         let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES).*\n",
+            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|OVER|CHARSET|COLLATION).*\n",
         )
         .unwrap()
         .replace_all(&file_str, "")
@@ -168,6 +189,11 @@ fn test_statement_error() {
         r#"drop a"#,
         r#"insert into t format"#,
         r#"alter database system x rename to db"#,
+        r#"create user 'test-e'@'localhost' identified bi 'password';"#,
+        r#"drop usar if exists 'test-j'@'localhost';"#,
+        r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
+        r#"create role 'test'@'localhost';"#,
+        r#"drop role 'test'@'localhost';"#,
     ];
 
     for case in cases {
@@ -187,11 +213,13 @@ fn test_query() {
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
         r#"select * from a limit 3 offset 4 format csv"#,
+        r#"select * from customer inner join orders"#,
+        r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on a = b limit 1"#,
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
         r#"select * from customer natural join orders left outer join detail using (id)"#,
-        r#"select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
+        r#"select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
                     select
@@ -207,10 +235,15 @@ fn test_query() {
             group by c_count
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal"#,
+        r#"select * from t1 union select * from t2"#,
+        r#"select * from t1 union select * from t2 union select * from t3"#,
+        r#"select * from t1 union select * from t2 intersect select * from t3"#,
+        r#"(select * from t1 union select * from t2) union select * from t3"#,
+        r#"select * from t1 union (select * from t2 union select * from t3)"#,
     ];
 
     for case in cases {
-        test_parse!(file, query, case);
+        run_parser!(file, query, case);
     }
 }
 
@@ -221,15 +254,15 @@ fn test_query_error() {
     let cases = &[
         r#"select * from customer join where a = b"#,
         r#"select * from join customer"#,
-        r#"select * from t inner join t1"#,
         r#"select * from customer natural inner join orders on a = b"#,
         r#"select * order a"#,
         r#"select * order"#,
         r#"select number + 5 as a, cast(number as float(255))"#,
+        r#"select 1 1"#,
     ];
 
     for case in cases {
-        test_parse!(file, query, case);
+        run_parser!(file, query, case);
     }
 }
 
@@ -240,12 +273,26 @@ fn test_expr() {
 
     let cases = &[
         r#"a"#,
+        r#"'I''m who I\'m.'"#,
+        r#"'\776 \n \t \u0053 \xaa'"#,
+        r#"char(0xD0, 0xBF, 0xD1)"#,
+        r#"[42, 3.5, 4., .001, 5e2, 1.925e-3, .38e+7, 1.e-01, 0xfff, x'deedbeef']"#,
+        r#"123456789012345678901234567890"#,
+        r#"x'123456789012345678901234567890'"#,
+        r#"1e100000000000000"#,
         r#"-1"#,
         r#"(1,)"#,
         r#"(1,2)"#,
         r#"(1,2,)"#,
+        r#"[1]"#,
+        r#"[1,]"#,
+        r#"[[1]]"#,
+        r#"[[1],[2]]"#,
+        r#"[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]"#,
         r#"typeof(1 + 2)"#,
         r#"- - + + - 1 + + - 2"#,
+        r#"0XFF + 0xff + 0xa + x'ffff'"#,
+        r#"1 - -(- - -1)"#,
         r#"1 + a * c.d"#,
         r#"number % 2"#,
         r#"`t`:k1.k2"#,
@@ -274,10 +321,12 @@ fn test_expr() {
             AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
+        r#"nullif(1, 1)"#,
+        r#"nullif(a, b)"#,
     ];
 
     for case in cases {
-        test_parse!(file, expr, case);
+        run_parser!(file, expr, case);
     }
 }
 
@@ -290,6 +339,7 @@ fn test_expr_error() {
         r#"5 * (a and ) 1"#,
         r#"a + +"#,
         r#"CAST(col1 AS foo)"#,
+        r#"1 a"#,
         r#"CAST(col1)"#,
         r#"G.E.B IS NOT NULL AND
             col1 NOT BETWEEN col2 AND
@@ -297,6 +347,6 @@ fn test_expr_error() {
     ];
 
     for case in cases {
-        test_parse!(file, expr, case);
+        run_parser!(file, expr, case);
     }
 }

@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DropTableReq;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableNameIdent;
 use common_meta_types::GrantObject;
-use common_meta_types::TableMeta;
-use common_meta_types::TableNameIdent;
 use common_meta_types::UserPrivilegeType;
 use common_planners::AlterViewPlan;
 use common_streams::DataBlockStream;
@@ -54,7 +54,7 @@ impl Interpreter for AlterViewInterpreter {
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Database(self.plan.catalog.clone(), self.plan.db.clone()),
+                &GrantObject::Database(self.plan.catalog.clone(), self.plan.database.clone()),
                 UserPrivilegeType::Create,
             )
             .await?;
@@ -63,7 +63,7 @@ impl Interpreter for AlterViewInterpreter {
         if !self
             .ctx
             .get_catalog(&self.plan.catalog)?
-            .list_tables(&self.plan.tenant, &self.plan.db)
+            .list_tables(&self.plan.tenant, &self.plan.database)
             .await?
             .iter()
             .any(|table| {
@@ -73,7 +73,7 @@ impl Interpreter for AlterViewInterpreter {
         {
             return Err(ErrorCode::ViewAlreadyExists(format!(
                 "{}.{} view is not existed",
-                self.plan.db, self.plan.viewname
+                self.plan.database, self.plan.viewname
             )));
         }
 
@@ -90,7 +90,7 @@ impl AlterViewInterpreter {
 
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.clone(),
-                db_name: self.plan.db.clone(),
+                db_name: self.plan.database.clone(),
                 table_name: self.plan.viewname.clone(),
             },
         };
@@ -103,7 +103,7 @@ impl AlterViewInterpreter {
             if_not_exists: true,
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.clone(),
-                db_name: self.plan.db.clone(),
+                db_name: self.plan.database.clone(),
                 table_name: self.plan.viewname.clone(),
             },
             table_meta: TableMeta {

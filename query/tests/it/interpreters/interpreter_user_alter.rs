@@ -34,7 +34,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
     let password = "test";
     let auth_info = AuthInfo::Password {
         hash_value: Vec::from(password),
-        hash_method: PasswordHashMethod::PlainText,
+        hash_method: PasswordHashMethod::Sha256,
     };
 
     let user_info = UserInfo::new(name, hostname, auth_info);
@@ -61,8 +61,8 @@ async fn test_alter_user_interpreter() -> Result<()> {
         while let Some(_block) = stream.next().await {}
         let new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(
-            new_user.auth_info.get_password(),
-            Some(Vec::from(new_password))
+            new_user.auth_info.get_password_type(),
+            Some(PasswordHashMethod::Sha256)
         );
     }
 
@@ -79,8 +79,8 @@ async fn test_alter_user_interpreter() -> Result<()> {
         let user_info = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert!(user_info.has_option_flag(UserOptionFlag::TenantSetting));
         assert_eq!(
-            user_info.auth_info.get_password(),
-            Some(Vec::from(new_password))
+            user_info.auth_info.get_password_type(),
+            Some(PasswordHashMethod::Sha256)
         );
     }
 

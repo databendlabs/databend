@@ -69,7 +69,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         block
     };
     let format = FormatSettings::default();
-    let json_block = JsonBlock::new(&block, &format)?;
+    let json_block = JsonBlock::new(&block, &format, false)?;
     let expect = vec![
         vec![
             val(1_i32),
@@ -112,7 +112,7 @@ fn test_data_block_not_nullable() -> Result<()> {
 fn test_empty_block() -> Result<()> {
     let block = DataBlock::empty();
     let format = FormatSettings::default();
-    let json_block = JsonBlock::new(&block, &format)?;
+    let json_block = JsonBlock::new(&block, &format, false)?;
     assert!(json_block.is_empty());
     Ok(())
 }

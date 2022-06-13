@@ -1,6 +1,10 @@
 name: "Setup Build Tool Binaries"
 description: "Setup Build Tool Binaries"
 inputs:
+  registry:
+    description: "Build Tool Docker Registry"
+    required: false
+    default: datafuselabs
   image:
     description: "Build Tool Docker Image to use"
     required: true
@@ -15,8 +19,8 @@ runs:
     - name: clean the existing toolchain
       shell: bash
       run: |
-        rm -rf /home/runner/.cargo
-        rm -rf /home/runner/.rustup
+        rm -rf $HOME/.cargo
+        rm -rf $HOME/.rustup
 
     - name: setup build-tool binary
       shell: bash
@@ -28,8 +32,10 @@ runs:
         cat <<EOF >$BIN_LOCAL/build-tool
         #!/bin/bash
         script_name=\$(basename "\$0")
-        export IMAGE=datafuselabs/build-tool:${{ inputs.image }}
-        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }}
+        export IMAGE=${{ inputs.registry }}/build-tool:${{ inputs.image }}
+        export CARGO_INCREMENTAL=0
+        export CARGO_TERM_COLOR=always
+        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR
         if [[ \${script_name} == "build-tool" ]]; then
           scripts/setup/run_build_tool.sh \$@
         else
@@ -40,7 +46,13 @@ runs:
         ln -s build-tool $BIN_LOCAL/rustc
         ln -s build-tool $BIN_LOCAL/cargo
         ln -s build-tool $BIN_LOCAL/rustup
+        ln -s build-tool $BIN_LOCAL/make
+        ln -s build-tool $BIN_LOCAL/taplo
 
     - name: check cargo version
       shell: bash
       run: rustup show
+
+    - name: check disk space
+      shell: bash
+      run: df -h

@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
 
+permissions:
+  id-token: write
+  contents: write
+
 jobs:
   publish_macos:
     name: macos assets
@@ -17,7 +21,7 @@ jobs:
           - aarch64
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: Get the version
@@ -41,8 +45,13 @@ jobs:
         run: |
           brew install gnu-tar
           sudo /usr/sbin/purge
-          gtar -C ./target/${{ steps.target.outputs.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz databend-query databend-meta
-          gtar -C ./target/${{ steps.target.outputs.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz databend-metactl
+          mkdir -p release/${{ steps.target.outputs.target }}/{bin,configs}
+          cp ./target/${{ steps.target.outputs.target }}/release/databend-* release/${{ steps.target.outputs.target }}/bin/
+          rm -f release/${{ steps.target.outputs.target }}/bin/*.d
+          cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-query.toml
+          cp ./scripts/ci/deploy/config/databend-meta-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-meta.toml
+          cp ./.github/actions/publish_binary/databend-release-readme.txt release/${{ steps.target.outputs.target }}/readme.txt
+          gtar -C ./release/${{ steps.target.outputs.target }} -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz bin configs readme.txt
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         with:
@@ -68,7 +77,7 @@ jobs:
           - musl
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: Get the version
@@ -97,8 +106,13 @@ jobs:
           build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ steps.target.outputs.target }}/release/databend-metactl
       - name: Pack binaries
         run: |
-          tar -C ./target/${{ steps.target.outputs.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz databend-query databend-meta
-          tar -C ./target/${{ steps.target.outputs.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz databend-metactl
+          mkdir -p release/${{ steps.target.outputs.target }}/{bin,configs}
+          cp ./target/${{ steps.target.outputs.target }}/release/databend-* release/${{ steps.target.outputs.target }}/bin/
+          rm -f release/${{ steps.target.outputs.target }}/bin/*.d
+          cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-query.toml
+          cp ./scripts/ci/deploy/config/databend-meta-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-meta.toml
+          cp ./.github/actions/publish_binary/databend-release-readme.txt release/${{ steps.target.outputs.target }}/readme.txt
+          tar -C ./release/${{ steps.target.outputs.target }} -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz bin configs readme.txt
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         with:
@@ -116,42 +130,47 @@ jobs:
     needs: publish_linux
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+
       - name: Get the version
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v1
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
+      - uses: ./.github/actions/setup_docker
+        id: login
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repo: databend
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Download binaries for usage
         id: download_binaries
         run: |
           mkdir -p ./target/release
           wget -q https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
-          tar xC ./target/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar xC ./target/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz bin/*
 
       - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v3
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend:${{ steps.get_version.outputs.VERSION }}
+          tags: |
+            ${{ steps.login.outputs.dockerhub_repo }}:latest
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ steps.get_version.outputs.VERSION }}
+            ${{ steps.login.outputs.ecr_repo }}:latest
+            ${{ steps.login.outputs.ecr_repo }}:${{ steps.get_version.outputs.VERSION }}
           platforms: linux/amd64
           context: .
           file: ./docker/Dockerfile
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
 
   release_docker_separate:
-    name: docker image seperated for k8s service
+    name: docker image seperated
     runs-on: ubuntu-latest
     needs: publish_linux
     strategy:
@@ -165,21 +184,22 @@ jobs:
           - distroless
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+
       - name: Get the version
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v1
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
+      - uses: ./.github/actions/setup_docker
+        id: login
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repo: databend-${{ matrix.service }}
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Download binaries for usage
         id: download_binaries
@@ -191,7 +211,7 @@ jobs:
               target=${platform_targets[$platform]}
               wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
               mkdir -p ./target/${target}/release
-              tar xC ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz
+              tar xC ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz bin/*
               mkdir -p ./distro/linux/${platform}
               cp ./target/${target}/release/databend-${{ matrix.service }} ./distro/linux/${platform}
           done
@@ -200,10 +220,11 @@ jobs:
         id: get_image_tags
         shell: bash
         run: |
-          _base=${{ secrets.DOCKERHUB_NAMESPACE }}/databend-${{ matrix.service }}:${{ steps.get_version.outputs.VERSION }}
-          _tags=${_base}-${{ matrix.distro }}
+          dockerhub_base=${{ steps.login.outputs.dockerhub_repo }}:${{ steps.get_version.outputs.VERSION }}
+          ecr_base=${{ steps.login.outputs.ecr_repo }}:${{ steps.get_version.outputs.VERSION }}
+          _tags="${dockerhub_base}-${{ matrix.distro }},${ecr_base}-${{ matrix.distro }}"
           if [[ "${{ matrix.distro }}" == "debian" ]]; then
-            _tags="${_tags}, ${_base}"
+            _tags="${_tags},${dockerhub_base},${ecr_base}"
           fi
           echo ::set-output name=IMAGE_TAGS::${_tags}
 

@@ -21,6 +21,7 @@ import "datatype.proto";
 // Complete database info.
 message DatabaseInfo {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   DatabaseIdent ident = 1;
   DatabaseNameIdent name_ident = 2;
@@ -32,6 +33,7 @@ message DatabaseInfo {
 // same instance.
 message DatabaseNameIdent {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // The user this db belongs to
   string tenant = 1;
@@ -46,6 +48,7 @@ message DatabaseNameIdent {
 // I.e., the tuple `(db_id, seq)` always identifies the same instance.
 message DatabaseIdent {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   uint64 db_id = 1;
 
@@ -56,6 +59,7 @@ message DatabaseIdent {
 // DatabaseMeta is a container of all non-identity information.
 message DatabaseMeta {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // Database engine, like github engine.
   string engine = 5;
@@ -74,11 +78,23 @@ message DatabaseMeta {
 
   // Comment about this database.
   string comment = 22;
+
+  // The time table droped.
+  optional string drop_on = 23;
+}
+
+// Save db name id list history.
+message DbIdList {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  repeated uint64 ids = 1;
 }
 
 // Complete table info.
 message TableInfo {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   TableIdent ident = 1;
 
@@ -104,6 +120,7 @@ message TableInfo {
 // instance.
 message TableNameIdent {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // The user this table belongs to.
   string tenant = 1;
@@ -121,6 +138,7 @@ message TableNameIdent {
 // I.e., the tuple `(db_id, seq)` always identifies the same instance.
 message TableIdent {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   uint64 table_id = 1;
 
@@ -131,6 +149,7 @@ message TableIdent {
 // TableMeta is a container of all non-identity information.
 message TableMeta {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // Table schema, i.e., columns definition.
   DataSchema schema = 1;
@@ -145,7 +164,13 @@ message TableMeta {
   map<string, string> options = 5;
 
   // Keys to sort rows in table.
-  optional string order_keys = 9;
+   optional string cluster_key = 9;
+
+  // The vector of cluster keys.
+  repeated string cluster_keys = 4;
+
+  // The default cluster keys id.
+  optional uint32 default_cluster_key_id = 8;
 
   // The time table created.
   string created_on = 20;
@@ -158,11 +183,23 @@ message TableMeta {
 
   // Statistics of this table.
   optional TableStatistics statistics = 23;
+
+  // The time table droped.
+  optional string drop_on = 24;
+}
+
+// Save table name id list history.
+message TableIdList {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  repeated uint64 ids = 1;
 }
 
 // The schema of a table, such as column data types and other meta info.
 message DataSchema {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // Fields in the table
   repeated DataField fields = 1;
@@ -171,11 +208,11 @@ message DataSchema {
   map<string, string> metadata = 2;
 }
 
-
 // The statistics of a table
 message TableStatistics {
 
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // Number of rows
   uint64 number_of_rows = 1;
@@ -188,17 +225,18 @@ message TableStatistics {
 
   // Size of index data in bytes
   uint64 index_data_bytes = 4;
-
 }
 
 // One field, AKA column
 message DataField {
   uint64 ver = 100;
+  uint64 min_compatible = 101;
 
   // The name of this column.
   string name = 1;
 
-  // A SQL style expression to define the default value for this field, represent as raw sql
+  // A SQL style expression to define the default value for this field,
+  // represent as raw sql
   optional string default_expr = 2;
 
   // Column data type

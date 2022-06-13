@@ -35,11 +35,12 @@ impl AnalyzableStatement for DfShowCreateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let schema = Self::schema();
-        let (catalog, db, table) = super::resolve_table(&ctx, &self.name, "SHOW CREATE TABLE")?;
+        let (catalog, database, table) =
+            super::resolve_table(&ctx, &self.name, "SHOW CREATE TABLE")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::ShowCreateTable(ShowCreateTablePlan {
                 catalog,
-                db,
+                database,
                 table,
                 schema,
             }),
