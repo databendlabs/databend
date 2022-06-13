@@ -34,6 +34,7 @@ lazy_static! {
         RuleID::MergeProject,
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterProject,
+        RuleID::PushDownFilterJoin,
     ];
 }
 

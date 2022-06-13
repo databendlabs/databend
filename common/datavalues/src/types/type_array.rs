@@ -65,6 +65,15 @@ impl DataType for ArrayType {
         DataValue::Array(vec![])
     }
 
+    fn random_value(&self) -> DataValue {
+        // randomly generate an array with 3 elements.
+        DataValue::Array(vec![
+            self.inner.random_value(),
+            self.inner.random_value(),
+            self.inner.random_value(),
+        ])
+    }
+
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         if let DataValue::Array(value) = data {
             let inner_column = self.inner.create_column(value)?;

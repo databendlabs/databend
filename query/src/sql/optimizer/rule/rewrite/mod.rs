@@ -19,6 +19,7 @@ mod rule_merge_eval_scalar;
 mod rule_merge_filter;
 mod rule_merge_project;
 mod rule_push_down_filter_eval_scalar;
+mod rule_push_down_filter_join;
 mod rule_push_down_filter_project;
 
 pub use rule_eliminate_eval_scalar::RuleEliminateEvalScalar;
@@ -28,4 +29,5 @@ pub use rule_merge_eval_scalar::RuleMergeEvalScalar;
 pub use rule_merge_filter::RuleMergeFilter;
 pub use rule_merge_project::RuleMergeProject;
 pub use rule_push_down_filter_eval_scalar::RulePushDownFilterEvalScalar;
+pub use rule_push_down_filter_join::RulePushDownFilterJoin;
 pub use rule_push_down_filter_project::RulePushDownFilterProject;

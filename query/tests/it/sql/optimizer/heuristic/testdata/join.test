@@ -1,0 +1,59 @@
+# Transform cross join into inner join
+select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number
+----
+Project: [number]
+    PhysicalHashJoin: build keys: [number], probe keys: [number]
+        PhysicalScan: default.system.numbers
+        PhysicalScan: default.system.numbers
+
+
+select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number and t.number = t1.number + 1
+----
+Project: [number]
+    PhysicalHashJoin: build keys: [number, +(number, 1)], probe keys: [number, number]
+        PhysicalScan: default.system.numbers
+        PhysicalScan: default.system.numbers
+
+
+# Push predicates down through join
+select t.number from numbers(1) as t, numbers(1) as t1 where t.number > 1 and 1 < t1.number
+----
+Project: [number]
+    PhysicalHashJoin: build keys: [], probe keys: []
+        Filter: [number > 1]
+            PhysicalScan: default.system.numbers
+        Filter: [1 < number]
+            PhysicalScan: default.system.numbers
+
+
+select t.number from numbers(1) as t, numbers(1) as t1 where t.number + t1.number = 1
+----
+Project: [number]
+    Filter: [+(number, number) = 1]
+        PhysicalHashJoin: build keys: [], probe keys: []
+            PhysicalScan: default.system.numbers
+            PhysicalScan: default.system.numbers
+
+
+# Incompatible join keys, cannot push into join
+select t.number from numbers(1) as t, numbers(1) as t1 where t.number = cast(t1.number as string)
+----
+Project: [number]
+    Filter: [number = CAST(number AS VARCHAR)]
+        PhysicalHashJoin: build keys: [], probe keys: []
+            PhysicalScan: default.system.numbers
+            PhysicalScan: default.system.numbers
+
+
+# Join multiple tables
+select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2 where t1.number = t2.number and t.number = 1
+----
+Project: [number]
+    PhysicalHashJoin: build keys: [number], probe keys: [number]
+        PhysicalHashJoin: build keys: [], probe keys: []
+            Filter: [number = 1]
+                PhysicalScan: default.system.numbers
+            PhysicalScan: default.system.numbers
+        PhysicalScan: default.system.numbers
+
+
