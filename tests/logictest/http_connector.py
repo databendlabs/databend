@@ -170,7 +170,7 @@ class HttpConnector():
         response = self.query(statement, current_session)
         log.info("response content: {}".format(response))
         response_list.append(response)
-        for i in range(6):
+        for i in range(12):
             if response['next_uri'] is not None:
                 try:
                     resp = requests.get(url="http://{}:{}{}".format(
@@ -184,11 +184,12 @@ class HttpConnector():
                 except Exception as err:
                     log.warning("Fetch next_uri response with error: {}".format(
                         str(err)))
-                time.sleep(1)
                 continue
             break
         if response['next_uri'] is not None:
-            log.warning("Retry out of times, next_uri stil not none!")
+            log.warning(
+                "after waited for 12 secs, query still not finished (next url not none)!"
+            )
 
         if self._session is None:
             if response is not None and "session_id" in response:

@@ -18,7 +18,7 @@ aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontim
 
 ## Copy from internal stage
 echo "CREATE STAGE s1;" | $MYSQL_CLIENT_CONNECT
-echo "list @s1 PATTERN = 'ontime.*'" | $MYSQL_CLIENT_CONNECT
+echo "list @s1 PATTERN = 'ontime.*'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' | sort
 
 copy_from_stage_cases=(
   # copy parquet
@@ -41,7 +41,7 @@ done
 
 ## Copy from named external stage
 echo "CREATE STAGE named_external_stage url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');" | $MYSQL_CLIENT_CONNECT
-echo "list @named_external_stage PATTERN = 'ontime.*parquet$'" | $MYSQL_CLIENT_CONNECT
+echo "list @named_external_stage PATTERN = 'ontime.*parquet$'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' | sort
 
 copy_from_named_external_stage_cases=(
   # copy parquet

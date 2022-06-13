@@ -20,9 +20,9 @@ use common_datavalues::DataSchemaRef;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTableClusterKeyPlan {
     pub tenant: String,
-    pub catalog_name: String,
-    pub database_name: String,
-    pub table_name: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
 }
 
 impl DropTableClusterKeyPlan {

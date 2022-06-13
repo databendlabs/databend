@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -38,10 +39,7 @@ impl RuleSet {
         let mut rule_set = Self::create();
         for id in ids {
             if rule_set.contains(&id) {
-                return Err(ErrorCode::LogicalError(format!(
-                    "Duplicated Rule: {}",
-                    id.name()
-                )));
+                return Err(ErrorCode::LogicalError(format!("Duplicated Rule: {id}",)));
             }
             rule_set.insert(factory.create_rule(id)?);
         }
@@ -59,5 +57,25 @@ impl RuleSet {
 
     pub fn iter(&self) -> impl Iterator<Item = &RulePtr> {
         self.rules.values()
+    }
+}
+
+/// A bitmap to store information about applied rules
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub struct AppliedRules {
+    rules: HashSet<RuleID>,
+}
+
+impl AppliedRules {
+    pub fn set(&mut self, id: &RuleID, v: bool) {
+        if v {
+            self.rules.insert(*id);
+        } else {
+            self.rules.remove(id);
+        }
+    }
+
+    pub fn get(&self, id: &RuleID) -> bool {
+        self.rules.contains(id)
     }
 }

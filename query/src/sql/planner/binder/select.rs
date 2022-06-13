@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use async_recursion::async_recursion;
 use common_ast::ast::Expr;
 use common_ast::ast::Join;
@@ -22,7 +24,9 @@ use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
+use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
+use common_datavalues::type_coercion::merge_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -31,7 +35,9 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
-use crate::sql::plans::FilterPlan;
+use crate::sql::plans::BoundColumnRef;
+use crate::sql::plans::Filter;
+use crate::sql::plans::JoinType;
 use crate::sql::plans::Scalar;
 
 // A normalized IR for `SELECT` clause.
@@ -139,19 +145,49 @@ impl<'a> Binder {
     }
 
     #[async_recursion]
+    pub(crate) async fn bind_set_expr(
+        &mut self,
+        bind_context: &BindContext,
+        set_expr: &SetExpr,
+        order_by: &[OrderByExpr],
+    ) -> Result<(SExpr, BindContext)> {
+        match set_expr {
+            SetExpr::Select(stmt) => self.bind_select_stmt(bind_context, stmt, order_by).await,
+            SetExpr::Query(stmt) => self.bind_query(bind_context, stmt).await,
+            SetExpr::SetOperation(set_operation) => {
+                self.bind_set_operator(
+                    bind_context,
+                    &set_operation.left,
+                    &set_operation.right,
+                    &set_operation.op,
+                    &set_operation.all,
+                )
+                .await
+            }
+        }
+    }
+
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &BindContext,
-        query: &Query,
+        query: &Query<'_>,
     ) -> Result<(SExpr, BindContext)> {
-        let (mut s_expr, bind_context) = match &query.body {
-            SetExpr::Select(stmt) => {
-                self.bind_select_stmt(bind_context, stmt, &query.order_by)
-                    .await
+        let (mut s_expr, bind_context) = match query.body {
+            SetExpr::Select(_) | SetExpr::Query(_) => {
+                self.bind_set_expr(bind_context, &query.body, &query.order_by)
+                    .await?
             }
-            SetExpr::Query(stmt) => self.bind_query(bind_context, stmt).await,
-            _ => Err(ErrorCode::UnImplement("Unsupported query type")),
-        }?;
+            SetExpr::SetOperation(_) => {
+                let (mut s_expr, bind_context) =
+                    self.bind_set_expr(bind_context, &query.body, &[]).await?;
+                if !query.order_by.is_empty() {
+                    s_expr = self
+                        .bind_order_by_for_set_operation(&bind_context, s_expr, &query.order_by)
+                        .await?;
+                }
+                (s_expr, bind_context)
+            }
+        };
 
         if !query.limit.is_empty() {
             if query.limit.len() == 1 {
@@ -186,11 +222,135 @@ impl<'a> Binder {
         let mut scalar_binder =
             ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
         let (scalar, _) = scalar_binder.bind(expr).await?;
-        let filter_plan = FilterPlan {
+        let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
             is_having: false,
         };
         let new_expr = SExpr::create_unary(filter_plan.into(), child);
         Ok(new_expr)
+    }
+
+    pub(super) async fn bind_set_operator(
+        &mut self,
+        bind_context: &BindContext,
+        left: &SetExpr<'_>,
+        right: &SetExpr<'_>,
+        op: &SetOperator,
+        all: &bool,
+    ) -> Result<(SExpr, BindContext)> {
+        let (left_expr, mut left_bind_context) =
+            self.bind_set_expr(bind_context, &*left, &[]).await?;
+        let (right_expr, mut right_bind_context) =
+            self.bind_set_expr(bind_context, &*right, &[]).await?;
+        if left_bind_context.columns.len() != right_bind_context.columns.len() {
+            return Err(ErrorCode::SemanticError(
+                "SetOperation must have the same number of columns",
+            ));
+        } else {
+            for (left_col, right_col) in left_bind_context
+                .columns
+                .iter_mut()
+                .zip(right_bind_context.columns.iter_mut())
+            {
+                if left_col.data_type != right_col.data_type {
+                    let coercion_type = merge_types(&left_col.data_type, &right_col.data_type)?;
+                    left_col.data_type = coercion_type.clone();
+                    right_col.data_type = coercion_type;
+                }
+                if left_col.data_type != right_col.data_type {
+                    return Err(ErrorCode::SemanticError(
+                        "SetOperation's types cannot be matched",
+                    ));
+                }
+            }
+        }
+        match (op, all) {
+            (SetOperator::Intersect, false) => {
+                // Transfer Intersect to Semi join
+                self.bind_intersect(left_bind_context, right_bind_context, left_expr, right_expr)
+            }
+            (SetOperator::Except, false) => {
+                // Transfer Except to Anti join
+                self.bind_except(left_bind_context, right_bind_context, left_expr, right_expr)
+            }
+            _ => Err(ErrorCode::UnImplement("Unsupported query type, currently, databend only support intersect distinct and except distinct")),
+        }
+    }
+
+    fn bind_intersect(
+        &mut self,
+        left_context: BindContext,
+        right_context: BindContext,
+        left_expr: SExpr,
+        right_expr: SExpr,
+    ) -> Result<(SExpr, BindContext)> {
+        self.bind_intersect_or_except(
+            left_context,
+            right_context,
+            left_expr,
+            right_expr,
+            JoinType::SemiJoin,
+        )
+    }
+
+    fn bind_except(
+        &mut self,
+        left_context: BindContext,
+        right_context: BindContext,
+        left_expr: SExpr,
+        right_expr: SExpr,
+    ) -> Result<(SExpr, BindContext)> {
+        self.bind_intersect_or_except(
+            left_context,
+            right_context,
+            left_expr,
+            right_expr,
+            JoinType::AntiJoin,
+        )
+    }
+
+    fn bind_intersect_or_except(
+        &mut self,
+        left_context: BindContext,
+        right_context: BindContext,
+        left_expr: SExpr,
+        right_expr: SExpr,
+        join_type: JoinType,
+    ) -> Result<(SExpr, BindContext)> {
+        let left_expr = self.bind_distinct(
+            &left_context,
+            left_context.all_column_bindings(),
+            &mut HashMap::new(),
+            left_expr,
+        )?;
+        let mut left_conditions = Vec::with_capacity(left_context.columns.len());
+        let mut right_conditions = Vec::with_capacity(right_context.columns.len());
+        assert_eq!(left_context.columns.len(), right_context.columns.len());
+        for (left_column, right_column) in left_context
+            .columns
+            .iter()
+            .zip(right_context.columns.iter())
+        {
+            left_conditions.push(
+                BoundColumnRef {
+                    column: left_column.clone(),
+                }
+                .into(),
+            );
+            right_conditions.push(
+                BoundColumnRef {
+                    column: right_column.clone(),
+                }
+                .into(),
+            );
+        }
+        let s_expr = self.bind_join_with_type(
+            join_type,
+            left_conditions,
+            right_conditions,
+            left_expr,
+            right_expr,
+        )?;
+        Ok((s_expr, left_context))
     }
 }

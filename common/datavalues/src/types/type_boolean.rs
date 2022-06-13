@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
+use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
@@ -52,6 +53,11 @@ impl DataType for BooleanType {
 
     fn default_value(&self) -> DataValue {
         DataValue::Boolean(false)
+    }
+
+    fn random_value(&self) -> DataValue {
+        let mut rng = rand::rngs::SmallRng::from_entropy();
+        DataValue::Boolean(rng.gen())
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {

@@ -38,7 +38,7 @@ use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::EvalScalar;
-use crate::sql::plans::FilterPlan;
+use crate::sql::plans::Filter;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
@@ -315,7 +315,7 @@ impl<'a> Binder {
 
         let predicates = split_conjunctions(&scalar);
 
-        let filter = FilterPlan {
+        let filter = Filter {
             predicates,
             is_having: true,
         };

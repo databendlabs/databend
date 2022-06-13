@@ -168,8 +168,10 @@ impl Table for StageTable {
             }
         }
 
+        let prefix = output_format.serialize_prefix(&format_settings)?;
         let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
-        let mut bytes = Vec::with_capacity(written_bytes);
+        let mut bytes = Vec::with_capacity(written_bytes + prefix.len());
+        bytes.extend_from_slice(&prefix);
         for block in operations {
             let bs = output_format.serialize_block(&block, &format_settings)?;
             bytes.extend_from_slice(bs.as_slice());

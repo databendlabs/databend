@@ -16,11 +16,28 @@ mod implement;
 mod rule_list;
 
 use common_exception::Result;
+use lazy_static::lazy_static;
 
+use super::rule::RuleID;
 use crate::sql::optimizer::heuristic::implement::HeuristicImplementor;
-use crate::sql::optimizer::heuristic::rule_list::RuleList;
+pub use crate::sql::optimizer::heuristic::rule_list::RuleList;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
+
+lazy_static! {
+    pub static ref DEFAULT_REWRITE_RULES: Vec<RuleID> = vec![
+        RuleID::NormalizeScalarFilter,
+        RuleID::EliminateFilter,
+        RuleID::EliminateEvalScalar,
+        RuleID::EliminateProject,
+        RuleID::MergeFilter,
+        RuleID::MergeEvalScalar,
+        RuleID::MergeProject,
+        RuleID::PushDownFilterEvalScalar,
+        RuleID::PushDownFilterProject,
+        RuleID::PushDownFilterJoin,
+    ];
+}
 
 /// A heuristic query optimizer. It will apply specific transformation rules in order and
 /// implement the logical plans with default implementation rules.
@@ -30,15 +47,16 @@ pub struct HeuristicOptimizer {
 }
 
 impl HeuristicOptimizer {
-    pub fn create() -> Result<Self> {
-        Ok(HeuristicOptimizer {
-            rules: RuleList::create(vec![])?,
+    pub fn new(rules: RuleList) -> Self {
+        HeuristicOptimizer {
+            rules,
             implementor: HeuristicImplementor::new(),
-        })
+        }
     }
 
     pub fn optimize(&mut self, expression: SExpr) -> Result<SExpr> {
-        let result = self.optimize_expression(&expression)?;
+        let optimized = self.optimize_expression(&expression)?;
+        let result = self.implement_expression(&optimized)?;
         Ok(result)
     }
 
@@ -53,24 +71,41 @@ impl HeuristicOptimizer {
         Ok(result)
     }
 
-    fn apply_transform_rules(&self, s_expr: &SExpr, rule_list: &RuleList) -> Result<SExpr> {
-        let mut result = s_expr.clone();
+    fn implement_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
+        let mut implemented_children = Vec::with_capacity(s_expr.arity());
+        for expr in s_expr.children() {
+            implemented_children.push(self.implement_expression(expr)?);
+        }
+        let implemented_expr = SExpr::create(s_expr.plan().clone(), implemented_children, None);
+        // Implement expression with Implementor
+        let mut state = TransformState::new();
+        self.implementor.implement(&implemented_expr, &mut state)?;
+        let result = if !state.results().is_empty() {
+            state.results()[0].clone()
+        } else {
+            implemented_expr
+        };
+        Ok(result)
+    }
 
+    // Return `None` if no rules matched
+    fn apply_transform_rules(&self, s_expr: &SExpr, rule_list: &RuleList) -> Result<SExpr> {
+        let mut s_expr = s_expr.clone();
         for rule in rule_list.iter() {
             let mut state = TransformState::new();
-            rule.apply(&result, &mut state)?;
-            if !state.results().is_empty() {
-                result = state.results()[0].clone();
+            if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
+                rule.apply(&s_expr, &mut state)?;
+                s_expr.apply_rule(&rule.id());
+                if !state.results().is_empty() {
+                    // Recursive optimize the result
+                    let result = &state.results()[0];
+                    let optimized_result = self.optimize_expression(result)?;
+
+                    return Ok(optimized_result);
+                }
             }
         }
 
-        // Implement expression with Implementor
-        let mut state = TransformState::new();
-        self.implementor.implement(s_expr, &mut state)?;
-        if !state.results().is_empty() {
-            result = state.results()[0].clone();
-        }
-
-        Ok(result)
+        Ok(s_expr.clone())
     }
 }

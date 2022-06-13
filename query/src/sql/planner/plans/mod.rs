@@ -31,20 +31,10 @@ mod sort;
 pub use aggregate::AggregatePlan;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
-use common_planners::AlterUserPlan;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::CreateUserPlan;
-use common_planners::CreateUserStagePlan;
-use common_planners::CreateViewPlan;
-use common_planners::DescribeUserStagePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropUserPlan;
-use common_planners::DropUserStagePlan;
-use common_planners::ListPlan;
+use common_planners::*;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
-pub use filter::FilterPlan;
+pub use filter::Filter;
 pub use hash_join::PhysicalHashJoin;
 pub use limit::LimitPlan;
 pub use logical_get::LogicalGet;
@@ -65,40 +55,46 @@ use crate::sql::optimizer::SExpr;
 
 #[derive(Clone)]
 pub enum Plan {
-    // Query statement, `SELECT`
+    // `SELECT` statement
     Query {
         s_expr: SExpr,
         metadata: MetadataRef,
         bind_context: Box<BindContext>,
     },
 
-    // Explain query statement, `EXPLAIN`
     Explain {
         kind: ExplainKind,
         plan: Box<Plan>,
     },
-
-    // DDL
-    CreateTable(Box<CreateTablePlan>),
-    CreateDatabase(CreateDatabasePlan),
-    CreateView(Box<CreateViewPlan>),
-    DropDatabase(DropDatabasePlan),
-
-    CreateStage(Box<CreateUserStagePlan>),
-    DropStage(Box<DropUserStagePlan>),
-    DescStage(Box<DescribeUserStagePlan>),
-    ListStage(Box<ListPlan>),
-    ShowStages,
-    // TODO
-    // RemoveStage(Box<RemoveStagePlan>),
 
     // System
     ShowMetrics,
     ShowProcessList,
     ShowSettings,
 
+    // Databases
+    CreateDatabase(Box<CreateDatabasePlan>),
+    DropDatabase(Box<DropDatabasePlan>),
+    RenameDatabase(Box<RenameDatabasePlan>),
+
+    // Tables
+    CreateTable(Box<CreateTablePlan>),
+
+    // Views
+    CreateView(Box<CreateViewPlan>),
+    AlterView(Box<AlterViewPlan>),
+    DropView(Box<DropViewPlan>),
+
     // DCL
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
+
+    // Stages
+    ShowStages,
+    ListStage(Box<ListPlan>),
+    DescribeStage(Box<DescribeUserStagePlan>),
+    CreateStage(Box<CreateUserStagePlan>),
+    DropStage(Box<DropUserStagePlan>),
+    RemoveStage(Box<RemoveUserStagePlan>),
 }

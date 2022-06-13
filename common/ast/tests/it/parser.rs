@@ -85,6 +85,9 @@ fn test_statement() {
         r#"drop database if exists t;"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,
         r#"create view v as select number % 3 as a from numbers(1000);"#,
+        r#"alter view v as select number % 3 as a from numbers(1000);"#,
+        r#"drop view v;"#,
+        r#"rename table d.t to e.s;"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
         r#"DROP table table1;"#,
@@ -117,6 +120,9 @@ fn test_statement() {
         r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
+        r#"ALTER DATABASE IF EXISTS catalog.c RENAME TO a;"#,
+        r#"ALTER DATABASE c RENAME TO a;"#,
+        r#"ALTER DATABASE catalog.c RENAME TO a;"#,
     ];
 
     for case in cases {
@@ -151,7 +157,7 @@ fn test_statements_in_legacy_suites() {
         // TODO(andylokandy): support all cases eventually
         // Remove currently unimplemented cases
         let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|OVER).*\n",
+            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|OVER|CHARSET|COLLATION).*\n",
         )
         .unwrap()
         .replace_all(&file_str, "")
@@ -209,7 +215,7 @@ fn test_query() {
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
         r#"select * from customer natural join orders left outer join detail using (id)"#,
-        r#"select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
+        r#"select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
                     select
@@ -225,6 +231,11 @@ fn test_query() {
             group by c_count
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal"#,
+        r#"select * from t1 union select * from t2"#,
+        r#"select * from t1 union select * from t2 union select * from t3"#,
+        r#"select * from t1 union select * from t2 intersect select * from t3"#,
+        r#"(select * from t1 union select * from t2) union select * from t3"#,
+        r#"select * from t1 union (select * from t2 union select * from t3)"#,
     ];
 
     for case in cases {
@@ -243,6 +254,7 @@ fn test_query_error() {
         r#"select * order a"#,
         r#"select * order"#,
         r#"select number + 5 as a, cast(number as float(255))"#,
+        r#"select 1 1"#,
     ];
 
     for case in cases {
@@ -323,7 +335,6 @@ fn test_expr_error() {
         r#"5 * (a and ) 1"#,
         r#"a + +"#,
         r#"CAST(col1 AS foo)"#,
-        // TODO(andylokandy): This is a bug being tracking in https://github.com/segeljakt/pratt/issues/7
         r#"1 a"#,
         r#"CAST(col1)"#,
         r#"G.E.B IS NOT NULL AND

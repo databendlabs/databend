@@ -28,7 +28,7 @@ pub fn check_physical(expression: &SExpr) -> bool {
     }
 
     for child in expression.children() {
-        if !child.plan().is_physical() {
+        if !check_physical(child) {
             return false;
         }
     }

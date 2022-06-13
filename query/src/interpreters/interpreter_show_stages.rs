@@ -36,7 +36,7 @@ impl ShowStagesInterpreter {
     }
 
     fn build_query(&self) -> Result<String> {
-        Ok("SELECT name, stage_type, comment FROM system.stages ORDER BY name".to_string())
+        Ok("SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name".to_string())
     }
 }
 

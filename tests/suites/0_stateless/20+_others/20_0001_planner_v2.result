@@ -309,14 +309,13 @@ abc
 8
 9
 ===Explain===
-Project: [a]\n    EvalScalar: []\n        Filter: [a > 0]\n            PhysicalScan: default.default.t1\n
+Project: [a]\n    Filter: [a > 0]\n        PhysicalScan: default.default.t1\n
 ===Explain Pipeline===
 ProjectionTransform × 1 processor
   ProjectionTransform × 1 processor
-    ProjectionTransform × 1 processor
-      TransformHashJoin × 1 processor
-        ProjectionTransform × 1 processor
-          FuseEngineSource × 1 processor
+    TransformHashJoin × 1 processor
+      ProjectionTransform × 1 processor
+        FuseEngineSource × 1 processor
 
 BuildHashTable × 1 processor
   ProjectionTransform × 1 processor
@@ -348,3 +347,8 @@ BuildHashTable × 1 processor
 6.0
 0
 1
+====Intersect Distinct===
+3	4
+2	3
+====Except Distinct===
+1	2

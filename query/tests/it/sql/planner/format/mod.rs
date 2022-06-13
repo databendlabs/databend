@@ -28,7 +28,7 @@ use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
-use databend_query::sql::plans::FilterPlan;
+use databend_query::sql::plans::Filter;
 use databend_query::sql::plans::FunctionCall;
 use databend_query::sql::plans::PhysicalHashJoin;
 use databend_query::sql::plans::PhysicalScan;
@@ -144,7 +144,7 @@ fn test_format() {
         }
         .into(),
         SExpr::create_unary(
-            FilterPlan {
+            Filter {
                 predicates: vec![ConstantExpr {
                     value: DataValue::Boolean(true),
                     data_type: BooleanType::new_impl(),

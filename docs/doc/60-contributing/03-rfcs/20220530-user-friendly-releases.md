@@ -3,6 +3,9 @@ title: User-friendly Releases
 description: RFC for user-friendly releases
 ---
 
+- RFC PR: [datafuselabs/databend#5665](https://github.com/datafuselabs/databend/pull/5665)
+- Tracking Issue: [datafuselabs/databend#5681](https://github.com/datafuselabs/databend/issues/5681)
+
 # Summary
 
 A simple user-friendly release solution.

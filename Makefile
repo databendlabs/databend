@@ -85,10 +85,6 @@ sqllogic-test: build-debug
 	rm -rf ./_meta*/
 	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh
 
-management-test: build-debug
-	rm -rf ./_meta*/
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-management-mode.sh
-
 stateless-cluster-test: build-debug
 	rm -rf ./_meta*/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh

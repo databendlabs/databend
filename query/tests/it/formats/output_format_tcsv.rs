@@ -64,32 +64,51 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     let mut format_setting = FormatSettings::default();
 
     {
-        let fmt = OutputFormatType::Tsv;
-        let mut formater = fmt.create_format(schema.clone());
-        let buffer = formater.serialize_block(&block, &format_setting)?;
+        let fmt = OutputFormatType::TSV;
+        let mut formatter = fmt.create_format(schema.clone());
+        let buffer = formatter.serialize_block(&block, &format_setting)?;
 
-        let csv_block = String::from_utf8(buffer)?;
+        let tsv_block = String::from_utf8(buffer)?;
         let expect = "1\ta\t1\t1.1\t1970-01-02\n\
                             2\tb\t1\t2.2\t1970-01-03\n\
                             3\tc\t0\t3.3\t1970-01-04\n";
-        assert_eq!(&csv_block, expect);
+        assert_eq!(&tsv_block, expect);
+
+        let fmt = OutputFormatType::TSVWithNames;
+        let formatter = fmt.create_format(schema.clone());
+        let buffer = formatter.serialize_prefix(&format_setting)?;
+        let tsv_block = String::from_utf8(buffer)?;
+        let names = "c1\tc2\tc3\tc4\tc5\n".to_string();
+        assert_eq!(tsv_block, names);
+
+        let fmt = OutputFormatType::TSVWithNamesAndTypes;
+        let formatter = fmt.create_format(schema.clone());
+        let buffer = formatter.serialize_prefix(&format_setting)?;
+        let tsv_block = String::from_utf8(buffer)?;
+
+        let types = if is_nullable {
+            "Nullable(Int32)\tNullable(String)\tNullable(Boolean)\tNullable(Float64)\tNullable(Date)\n"
+                .to_string()
+        } else {
+            "Int32\tString\tBoolean\tFloat64\tDate\n".to_string()
+        };
+        assert_eq!(tsv_block, names + &types);
     }
 
     {
         format_setting.record_delimiter = vec![b'%'];
         format_setting.field_delimiter = vec![b'$'];
 
-        let fmt = OutputFormatType::Csv;
-        let mut formater = fmt.create_format(schema);
-        let buffer = formater.serialize_block(&block, &format_setting)?;
+        let fmt = OutputFormatType::CSV;
+        let mut formatter = fmt.create_format(schema);
+        let buffer = formatter.serialize_block(&block, &format_setting)?;
 
-        let json_block = String::from_utf8(buffer)?;
+        let csv_block = String::from_utf8(buffer)?;
         let expect = "1$\"a\"$1$1.1$\"1970-01-02\"%\
                             2$\"b\"$1$2.2$\"1970-01-03\"%\
                             3$\"c\"$0$3.3$\"1970-01-04\"%";
-        assert_eq!(&json_block, expect);
+        assert_eq!(&csv_block, expect);
     }
-
     Ok(())
 }
 
