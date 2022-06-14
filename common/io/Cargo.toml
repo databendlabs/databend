@@ -21,6 +21,7 @@ common-exception = { path = "../exception" }
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
+micromarshal = { git = "https://github.com/psiace/opensrv", rev = "2f3f08c", package = "micromarshal" }
 
 # Crates.io dependencies
 bytes = "1.1.0"
