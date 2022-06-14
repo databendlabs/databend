@@ -118,21 +118,15 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         match convert_schema(block.schema()) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
-                dbg!(columns.clone());
                 let mut row_writer = dataset_writer.start(&columns)?;
-                dbg!(0);
 
                 for block in &blocks {
-                    dbg!(1);
                     let serializers = block.get_serializers()?;
-                    dbg!(2);
                     let rows_size = block.column(0).len();
                     for row_index in 0..rows_size {
                         for (col_index, serializer) in serializers.iter().enumerate() {
-                            dbg!(3);
                             let val = block.column(col_index).get_checked(row_index)?;
                             if val.is_null() {
-                                dbg!(val.clone());
                                 row_writer.write_col(None::<u8>)?;
                                 continue;
                             }
@@ -171,10 +165,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     .write_col(serializer.serialize_field(row_index, format)?)?,
                                 (TypeID::VariantObject, DataValue::Variant(_)) => row_writer
                                     .write_col(serializer.serialize_field(row_index, format)?)?,
-                                (_, DataValue::Int64(v)) => {
-                                    dbg!(v);
-                                    row_writer.write_col(v)?
-                                }
+                                (_, DataValue::Int64(v)) => row_writer.write_col(v)?,
 
                                 (_, DataValue::UInt64(v)) => row_writer.write_col(v)?,
 

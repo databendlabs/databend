@@ -352,3 +352,10 @@ BuildHashTable × 1 processor
 2	3
 ====Except Distinct===
 1	2
+====Outer Join====
+1	2	1	4
+NULL	NULL	2	3
+NULL	NULL	6	8
+1	2	1	4
+3	4	NULL	NULL
+7	8	NULL	NULL
