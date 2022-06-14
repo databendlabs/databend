@@ -81,6 +81,7 @@ const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 const META_GRPC_CLIENT_REQUEST_DURATION_MILLIS: &str = "meta_grpc_client_request_duration_millis";
 const META_GRPC_CLIENT_REQUEST_SUCCESS: &str = "meta_grpc_client_request_success";
 const META_GRPC_CLIENT_REQUEST_FAILED: &str = "meta_grpc_client_request_fail";
+const META_GRPC_MAKE_CLIENT_FAILED: &str = "meta_grpc_make_client_fail";
 const LABEL_ENDPOINT: &str = "endpoint";
 
 #[derive(Debug)]
@@ -397,6 +398,11 @@ impl MetaGrpcClient {
                                 "grpc_client create channel with {} faild, err: {:?}",
                                 addr,
                                 e
+                            );
+                            label_counter_with_val_and_labels(
+                                META_GRPC_MAKE_CLIENT_FAILED,
+                                vec![(LABEL_ENDPOINT, addr.to_string())],
+                                1,
                             );
                             if start == end - 1 {
                                 // reach to last addr
