@@ -20,7 +20,8 @@ common-macros = { path = "../macros" }
 primitive-types = "0.6.1"
 
 # Github dependencies
-opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "15786d3", package = "opensrv-clickhouse" }
+opensrv-clickhouse = { git = "https://github.com/psiace/opensrv", rev = "2f3f08c", package = "opensrv-clickhouse" }
+micromarshal = { git = "https://github.com/psiace/opensrv", rev = "2f3f08c", package = "micromarshal" }
 
 # Crates.io dependencies
 chrono = "0.4.19"
