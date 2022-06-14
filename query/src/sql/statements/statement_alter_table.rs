@@ -75,7 +75,7 @@ impl AnalyzableStatement for DfAlterTable {
                 let expression_analyzer = ExpressionAnalyzer::create(ctx);
                 let cluster_keys = exprs.iter().try_fold(vec![], |mut acc, k| {
                     let expr = expression_analyzer.analyze_sync(k)?;
-                    acc.push(expr);
+                    acc.push(expr.column_name());
                     Ok::<_, ErrorCode>(acc)
                 })?;
 

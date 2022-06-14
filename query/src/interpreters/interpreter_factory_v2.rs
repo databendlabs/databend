@@ -39,15 +39,29 @@ impl InterpreterFactoryV2 {
                 | DfStatement::List(_)
                 | DfStatement::DropStage(_)
                 | DfStatement::RemoveStage(_)
+                // TODO (andylokandy)
+                // | DfStatement::ShowDatabases(_)
+                // | DfStatement::ShowCreateDatabase(_)
+                // | DfStatement::ShowTables(_)
+                // | DfStatement::ShowCreateTable(_)
+                // | DfStatement::DescribeTable(_)
+                // | DfStatement::ShowTablesStatus(_)
                 | DfStatement::CreateTable(_)
                 | DfStatement::CreateView(_)
                 | DfStatement::AlterView(_)
+                | DfStatement::DropTable(_)
+                | DfStatement::UndropTable(_)
+                | DfStatement::AlterTable(_)
+                | DfStatement::RenameTable(_)
+                | DfStatement::TruncateTable(_)
+                | DfStatement::OptimizeTable(_)
                 | DfStatement::DropView(_)
                 | DfStatement::ShowMetrics(_)
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
                 | DfStatement::CreateDatabase(_)
                 | DfStatement::DropDatabase(_)
+                | DfStatement::CreateUser(_)
                 | DfStatement::AlterDatabase(_)
         )
     }
@@ -73,6 +87,12 @@ impl InterpreterFactoryV2 {
             Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
 
             // Databases
+            Plan::ShowDatabases(show_databases) => {
+                ShowDatabasesInterpreter::try_create(ctx, *show_databases.clone())
+            }
+            Plan::ShowCreateDatabase(show_create_database) => {
+                ShowCreateDatabaseInterpreter::try_create(ctx, *show_create_database.clone())
+            }
             Plan::CreateDatabase(create_database) => {
                 CreateDatabaseInterpreter::try_create(ctx, *create_database.clone())
             }
@@ -84,8 +104,41 @@ impl InterpreterFactoryV2 {
             }
 
             // Tables
+            Plan::ShowTables(show_tables) => {
+                ShowTablesInterpreter::try_create(ctx, *show_tables.clone())
+            }
+            Plan::ShowCreateTable(show_create_table) => {
+                ShowCreateTableInterpreter::try_create(ctx, *show_create_table.clone())
+            }
+            Plan::DescribeTable(describe_table) => {
+                DescribeTableInterpreter::try_create(ctx, *describe_table.clone())
+            }
+            Plan::ShowTablesStatus(show_tables_status) => {
+                ShowTablesStatusInterpreter::try_create(ctx, *show_tables_status.clone())
+            }
             Plan::CreateTable(create_table) => {
                 CreateTableInterpreter::try_create(ctx, *create_table.clone())
+            }
+            Plan::DropTable(drop_table) => {
+                DropTableInterpreter::try_create(ctx, *drop_table.clone())
+            }
+            Plan::UndropTable(undrop_table) => {
+                UndropTableInterpreter::try_create(ctx, *undrop_table.clone())
+            }
+            Plan::RenameTable(rename_table) => {
+                RenameTableInterpreter::try_create(ctx, *rename_table.clone())
+            }
+            Plan::AlterTableClusterKey(alter_table_cluster_key) => {
+                AlterTableClusterKeyInterpreter::try_create(ctx, *alter_table_cluster_key.clone())
+            }
+            Plan::DropTableClusterKey(drop_table_cluster_key) => {
+                DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())
+            }
+            Plan::TruncateTable(truncate_table) => {
+                TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())
+            }
+            Plan::OptimizeTable(optimize_table) => {
+                OptimizeTableInterpreter::try_create(ctx, *optimize_table.clone())
             }
 
             // Views

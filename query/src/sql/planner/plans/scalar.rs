@@ -18,6 +18,7 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionFactory;
 use enum_dispatch::enum_dispatch;
 
 use crate::sql::binder::ColumnBinding;
@@ -30,6 +31,8 @@ pub trait ScalarExpr {
     fn data_type(&self) -> DataTypeImpl;
 
     fn used_columns(&self) -> ColumnSet;
+
+    fn is_deterministic(&self) -> bool;
 
     // TODO: implement this in the future
     // fn outer_columns(&self) -> ColumnSet;
@@ -68,6 +71,10 @@ impl ScalarExpr for BoundColumnRef {
     fn used_columns(&self) -> ColumnSet {
         ColumnSet::from([self.column.index])
     }
+
+    fn is_deterministic(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -84,6 +91,10 @@ impl ScalarExpr for ConstantExpr {
 
     fn used_columns(&self) -> ColumnSet {
         ColumnSet::new()
+    }
+
+    fn is_deterministic(&self) -> bool {
+        true
     }
 }
 
@@ -103,6 +114,10 @@ impl ScalarExpr for AndExpr {
         let right: ColumnSet = self.right.used_columns();
         left.union(&right).cloned().collect()
     }
+
+    fn is_deterministic(&self) -> bool {
+        self.left.is_deterministic() && self.right.is_deterministic()
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -120,6 +135,10 @@ impl ScalarExpr for OrExpr {
         let left: ColumnSet = self.left.used_columns();
         let right: ColumnSet = self.right.used_columns();
         left.union(&right).cloned().collect()
+    }
+
+    fn is_deterministic(&self) -> bool {
+        self.left.is_deterministic() && self.right.is_deterministic()
     }
 }
 
@@ -191,6 +210,15 @@ impl ScalarExpr for ComparisonExpr {
         let right: ColumnSet = self.right.used_columns();
         left.union(&right).cloned().collect()
     }
+
+    fn is_deterministic(&self) -> bool {
+        FunctionFactory::instance()
+            .get_features(self.op.to_func_name())
+            .unwrap()
+            .is_deterministic
+            && self.left.is_deterministic()
+            && self.right.is_deterministic()
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -216,6 +244,10 @@ impl ScalarExpr for AggregateFunction {
         }
         result
     }
+
+    fn is_deterministic(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -239,6 +271,14 @@ impl ScalarExpr for FunctionCall {
         }
         result
     }
+
+    fn is_deterministic(&self) -> bool {
+        FunctionFactory::instance()
+            .get_features(&self.func_name)
+            .map(|feature| feature.is_deterministic)
+            .unwrap_or(false)
+            && self.arguments.iter().all(|arg| arg.is_deterministic())
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -255,6 +295,10 @@ impl ScalarExpr for CastExpr {
 
     fn used_columns(&self) -> ColumnSet {
         self.argument.used_columns()
+    }
+
+    fn is_deterministic(&self) -> bool {
+        true
     }
 }
 
@@ -290,6 +334,10 @@ impl ScalarExpr for SubqueryExpr {
 
     fn used_columns(&self) -> ColumnSet {
         self.outer_columns.clone()
+    }
+
+    fn is_deterministic(&self) -> bool {
+        false
     }
 }
 

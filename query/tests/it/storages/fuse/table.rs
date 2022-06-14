@@ -328,7 +328,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
-        cluster_keys: vec![col("id")],
+        cluster_keys: vec!["id".to_string()],
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
