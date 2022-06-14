@@ -89,6 +89,7 @@ impl FuseTable {
             .with_max_elapsed_time(Some(max_elapsed))
             .build();
 
+        let transient = self.transient();
         let catalog_name = catalog_name.as_ref();
         loop {
             match tbl
@@ -97,7 +98,7 @@ impl FuseTable {
             {
                 Ok(_) => {
                     break {
-                        if self.transient() {
+                        if transient {
                             // Removes historical data, if table is transient
                             tracing::warn!(
                                 "transient table detected, purging historical data. ({})",
@@ -118,7 +119,9 @@ impl FuseTable {
                         Ok(())
                     };
                 }
-                Err(e) if self::utils::is_error_recoverable(&e) => match backoff.next_backoff() {
+                Err(e) if self::utils::is_error_recoverable(&e, transient) => match backoff
+                    .next_backoff()
+                {
                     Some(d) => {
                         let name = tbl.table_info.name.clone();
                         tracing::warn!(
@@ -373,8 +376,10 @@ mod utils {
     }
 
     #[inline]
-    pub fn is_error_recoverable(e: &ErrorCode) -> bool {
-        e.code() == ErrorCode::table_version_mismatched_code()
+    pub fn is_error_recoverable(e: &ErrorCode, is_table_transient: bool) -> bool {
+        let code = e.code();
+        code == ErrorCode::table_version_mismatched_code()
+            || (is_table_transient && code == ErrorCode::storage_not_found_code())
     }
 
     // check if there are any fuse table legacy options
