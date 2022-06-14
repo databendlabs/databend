@@ -297,6 +297,8 @@ impl BlockStatistics {
             let col = block.column(*key);
 
             let mut left = col.get_checked(0)?;
+            // To avoid high cardinality, for the string column,
+            // cluster statistics uses only the first 5 bytes.
             if let DataValue::String(v) = &left {
                 let l = v.len() as usize;
                 let e = if l < 5 { l } else { 5 };
