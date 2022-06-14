@@ -11,13 +11,13 @@ a
 a
 NULL
 ==ifnull_non_nullable_columns==
-0\t0\t0
-0\t1\t0
-1\t0\t1
-1\t1\t1
+0	0	0
+0	1	0
+1	0	1
+1	1	1
 ==ifnull_nullable_columns==
-0\tNULL\t0
-1\tNULL\t1
-NULL\t0\t0
-NULL\t1\t1
-NULL\tNULL\tNULL
+0	NULL	0
+1	NULL	1
+NULL	0	0
+NULL	1	1
+NULL	NULL	NULL
