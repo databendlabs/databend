@@ -211,8 +211,7 @@ impl DataBlock {
         let mut serializers = vec![];
         for col_index in 0..columns_size {
             let column = self.column(col_index);
-            let field = self.schema().field(col_index);
-            let data_type = field.data_type();
+            let data_type = column.data_type();
             let serializer = data_type.create_serializer(column)?;
             serializers.push(serializer);
         }

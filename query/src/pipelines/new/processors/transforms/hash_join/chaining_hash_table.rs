@@ -220,7 +220,6 @@ impl ChainingHashTable {
                     }
                     let build_block =
                         DataBlock::create(DataSchemaRefExt::create(nullable_data_schema), columns);
-                    dbg!(build_block.schema());
                     let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
                     results.push(self.merge_block(&build_block, &probe_block)?);
                 }

@@ -118,6 +118,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         match convert_schema(block.schema()) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
+                dbg!(columns.clone());
                 let mut row_writer = dataset_writer.start(&columns)?;
                 dbg!(0);
 
@@ -173,7 +174,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 (_, DataValue::Int64(v)) => {
                                     dbg!(v);
                                     row_writer.write_col(v)?
-                                },
+                                }
 
                                 (_, DataValue::UInt64(v)) => row_writer.write_col(v)?,
 
