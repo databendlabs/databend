@@ -25,12 +25,12 @@ mysql -h127.0.0.1 -uroot -P3307
 ```
 
 Create a user:
-```
+```sql
 CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 Create a Database:
-```
+```sql
 CREATE DATABASE nginx;
 ```
 
