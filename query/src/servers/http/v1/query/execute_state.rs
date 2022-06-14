@@ -255,6 +255,8 @@ async fn execute(
 ) -> Result<()> {
     let data_stream: Result<SendableDataBlockStream> =
         if ctx.get_settings().get_enable_async_insert()? != 0
+            && ctx.get_settings().get_enable_new_processor_framework()? != 0
+            && ctx.get_cluster().is_empty()
             && matches!(&*plan, PlanNode::Insert(_))
         {
             match &*plan {
