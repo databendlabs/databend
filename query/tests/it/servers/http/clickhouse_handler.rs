@@ -48,43 +48,43 @@ async fn test_select() -> PoemResult<()> {
     let server = Server::new();
 
     {
-        let (status, body) = server.get("bad sql").await;
+        let (status, body) = server.get("bad sql", None).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_error!(body, "sql parser error");
     }
 
     {
-        let (status, body) = server.post("sel", "ect 1").await;
+        let (status, body) = server.post("sel", None, "ect 1").await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_error!(body, "sql parser error");
     }
 
     {
-        let (status, body) = server.post("", "bad sql").await;
+        let (status, body) = server.post("", None, "bad sql").await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_error!(body, "sql parser error");
     }
 
     {
-        let (status, body) = server.get("").await;
+        let (status, body) = server.get("", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "");
     }
 
     {
-        let (status, body) = server.get("select 1").await;
+        let (status, body) = server.get("select 1", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "1\n");
     }
 
     {
-        let (status, body) = server.post("", "select 1").await;
+        let (status, body) = server.post("", None, "select 1").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "1\n");
     }
 
     {
-        let (status, body) = server.post("select 1", "").await;
+        let (status, body) = server.post("select 1", None, "").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "1\n");
     }
@@ -92,7 +92,10 @@ async fn test_select() -> PoemResult<()> {
     {
         // basic tsv format
         let (status, body) = server
-            .get(r#"select number, 'a' from numbers(2) order by number"#)
+            .get(
+                r#"select number, 'a' from numbers(2) order by number"#,
+                None,
+            )
             .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "0\ta\n1\ta\n");
@@ -104,14 +107,16 @@ async fn test_select() -> PoemResult<()> {
 async fn test_insert_values() -> PoemResult<()> {
     let server = Server::new();
     {
-        let (status, body) = server.post("create table t1(a int, b string)", "").await;
+        let (status, body) = server
+            .post("create table t1(a int, b string)", None, "")
+            .await;
         assert_eq!(status, StatusCode::OK);
         assert_error!(body, "");
     }
 
     {
         let (status, body) = server
-            .post("insert into table t1 values (0, 'a'), (1, 'b')", "")
+            .post("insert into table t1 values (0, 'a'), (1, 'b')", None, "")
             .await;
         assert_eq!(status, StatusCode::OK);
         assert_error!(body, "");
@@ -119,7 +124,7 @@ async fn test_insert_values() -> PoemResult<()> {
 
     {
         // basic tsv format
-        let (status, body) = server.get(r#"select * from t1"#).await;
+        let (status, body) = server.get(r#"select * from t1"#, None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "0\ta\n1\tb\n");
     }
@@ -131,7 +136,7 @@ async fn test_output_formats() -> PoemResult<()> {
     let server = Server::new();
     {
         let (status, body) = server
-            .post("create table t1(a int, b string null)", "")
+            .post("create table t1(a int, b string null)", None, "")
             .await;
         assert_ok!(status, body);
     }
@@ -140,6 +145,7 @@ async fn test_output_formats() -> PoemResult<()> {
         let (status, body) = server
             .post(
                 "insert into table t1(a, b) format values",
+                None,
                 "(0, 'a'), (1, 'b')",
             )
             .await;
@@ -159,7 +165,7 @@ async fn test_output_formats() -> PoemResult<()> {
 
     for (fmt, exp) in cases {
         let sql = format!(r#"select * from t1 order by a format {}"#, fmt);
-        let (status, body) = server.get(&sql).await;
+        let (status, body) = server.get(&sql, None).await;
         assert_ok!(status, body);
         assert_eq!(&body, exp);
     }
@@ -170,14 +176,20 @@ async fn test_output_formats() -> PoemResult<()> {
 async fn test_insert_format_values() -> PoemResult<()> {
     let server = Server::new();
     {
-        let (status, body) = server.post("create table t1(a int, b string)", "").await;
+        let (status, body) = server
+            .post("create table t1(a int, b string)", None, "")
+            .await;
         assert_eq!(status, StatusCode::OK);
         assert_error!(body, "");
     }
 
     {
         let (status, body) = server
-            .post("insert into table t1 format values", "(0, 'a'), (1, 'b')")
+            .post(
+                "insert into table t1 format values",
+                None,
+                "(0, 'a'), (1, 'b')",
+            )
             .await;
         assert_ok!(status, body);
         assert_error!(body, "");
@@ -185,7 +197,7 @@ async fn test_insert_format_values() -> PoemResult<()> {
 
     {
         // basic tsv format
-        let (status, body) = server.get(r#"select * from t1"#).await;
+        let (status, body) = server.get(r#"select * from t1"#, None).await;
         assert_eq!(status, StatusCode::OK, "{} {}", status, body);
         assert_eq!(&body, "0\ta\n1\tb\n");
     }
@@ -197,7 +209,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
     let server = Server::new();
     {
         let (status, body) = server
-            .post("create table t1(a int, b string null)", "")
+            .post("create table t1(a int, b string null)", None, "")
             .await;
         assert_ok!(status, body);
     }
@@ -206,13 +218,13 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
         let jsons = vec![r#"{"a": 0, "b": "a"}"#, r#"{"a": 1, "b": "b"}"#];
         let body = jsons.join("\n");
         let (status, body) = server
-            .post("insert into table t1 format JSONEachRow", &body)
+            .post("insert into table t1 format JSONEachRow", None, &body)
             .await;
         assert_ok!(status, body);
     }
 
     {
-        let (status, body) = server.get(r#"select * from t1 order by a"#).await;
+        let (status, body) = server.get(r#"select * from t1 order by a"#, None).await;
         assert_ok!(status, body);
         assert_eq!(&body, "0\ta\n1\tb\n");
     }
@@ -221,13 +233,13 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
         let jsons = vec![r#"{"a": 2}"#];
         let body = jsons.join("\n");
         let (status, body) = server
-            .post("insert into table t1 format JSONEachRow", &body)
+            .post("insert into table t1 format JSONEachRow", None, &body)
             .await;
         assert_ok!(status, body);
     }
 
     {
-        let (status, body) = server.get(r#"select * from t1 order by a"#).await;
+        let (status, body) = server.get(r#"select * from t1 order by a"#, None).await;
         assert_ok!(status, body);
         assert_eq!(&body, "0\ta\n1\tb\n2\tNULL\n");
     }
@@ -236,7 +248,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
         let jsons = vec![r#"{"b": 0}"#];
         let body = jsons.join("\n");
         let (status, body) = server
-            .post("insert into table t1 format JSONEachRow", &body)
+            .post("insert into table t1 format JSONEachRow", None, &body)
             .await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_error!(body, "column a");
@@ -244,15 +256,53 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_settings() -> PoemResult<()> {
+    let server = Server::new();
+
+    {
+        let (status, _body) = server
+            .post(
+                "select value from system.settings where name = 'max_block_size'",
+                Some("a:1".to_string()),
+                "",
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    {
+        let (status, body) = server
+            .post(
+                "select value from system.settings where name = 'max_block_size'",
+                Some(" max_block_size : 1000 ".to_string()),
+                "",
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(&body, "1000\n");
+    }
+
+    {
+        let (status, body) = server.post("select value from system.settings where name = 'max_block_size' or name = 'enable_async_insert' order by value", Some(" max_block_size : 1000 , enable_async_insert:1".to_string()), "").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(&body, "1\n1000\n");
+    }
+
+    Ok(())
+}
+
 struct QueryBuilder {
     sql: String,
+    settings: Option<String>,
     body: Option<Body>,
 }
 
 impl QueryBuilder {
-    pub fn new(sql: &str) -> Self {
+    pub fn new(sql: &str, settings: Option<String>) -> Self {
         QueryBuilder {
             sql: sql.to_string(),
+            settings: settings,
             body: None,
         }
     }
@@ -265,9 +315,15 @@ impl QueryBuilder {
     }
 
     pub fn build(self) -> Request {
-        let uri = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("query", &self.sql)
-            .finish();
+        let uri = match self.settings {
+            Some(settings) => url::form_urlencoded::Serializer::new(String::new())
+                .append_pair("query", &self.sql)
+                .append_pair("settings", &settings)
+                .finish(),
+            None => url::form_urlencoded::Serializer::new(String::new())
+                .append_pair("query", &self.sql)
+                .finish(),
+        };
         let uri = "/?".to_string() + &uri;
         let uri = uri.parse::<Uri>().unwrap();
         let (method, body) = match self.body {
@@ -307,12 +363,22 @@ impl Server {
         (status, body)
     }
 
-    pub async fn get(&self, sql: &str) -> (StatusCode, String) {
-        self.get_response(QueryBuilder::new(sql).build()).await
+    pub async fn get(&self, sql: &str, settings: Option<String>) -> (StatusCode, String) {
+        self.get_response(QueryBuilder::new(sql, settings).build())
+            .await
     }
 
-    pub async fn post(&self, sql: &str, body: &str) -> (StatusCode, String) {
-        self.get_response(QueryBuilder::new(sql).body(body.to_string()).build())
-            .await
+    pub async fn post(
+        &self,
+        sql: &str,
+        settings: Option<String>,
+        body: &str,
+    ) -> (StatusCode, String) {
+        self.get_response(
+            QueryBuilder::new(sql, settings)
+                .body(body.to_string())
+                .build(),
+        )
+        .await
     }
 }

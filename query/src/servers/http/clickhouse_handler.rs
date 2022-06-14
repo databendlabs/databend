@@ -125,10 +125,13 @@ pub async fn clickhouse_handler_get(
         .map_err(InternalServerError)?;
 
     if let Some(settings) = params.settings {
-        let session_settings: Vec<&str> = settings.split_terminator(',').collect();
+        let session_settings: Vec<&str> = settings.trim().split_terminator(',').collect();
         for session_setting in session_settings.into_iter() {
-            let s: Vec<&str> = session_setting.split('=').collect();
-            session.get_settings().set_settings(s[0].to_string(), s[1].to_string(), false).map_err(BadRequest)?;
+            let s: Vec<&str> = session_setting.split(':').collect();
+            session
+                .get_settings()
+                .set_settings(s[0].trim().to_string(), s[1].trim().to_string(), false)
+                .map_err(BadRequest)?;
         }
     }
 
@@ -159,6 +162,17 @@ pub async fn clickhouse_handler_post(
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
+
+    if let Some(settings) = params.settings {
+        let session_settings: Vec<&str> = settings.trim().split_terminator(',').collect();
+        for session_setting in session_settings.into_iter() {
+            let s: Vec<&str> = session_setting.split(':').collect();
+            session
+                .get_settings()
+                .set_settings(s[0].trim().to_string(), s[1].trim().to_string(), false)
+                .map_err(BadRequest)?;
+        }
+    }
 
     let mut sql = params.query.unwrap_or_default();
 
