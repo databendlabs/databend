@@ -8,6 +8,15 @@ A *join* allows you to combine columns from two or more tables into a single res
 * Natural Join
 * Cross Join
 
+:::tip
+
+To use JOIN, you must enable the new Databend planner first. To do so, perform the following command in the SQL client:
+
+```sql
+> set enable_planner_v2=1;
+```
+:::
+
 ## Inner Join
 
 An *inner join* returns the rows that meet the join conditions in the result set.
@@ -39,27 +48,37 @@ FROM table_a
 
 ### Examples
 
-```sql    
-create table t(a int);
-insert into t values(1),(2),(3);
-create table t1(a float);
-insert into t1 values(1.0),(2.0),(3.0);
-create table t2(c smallint unsigned null);
-insert into t2 values(1),(2),(null);
+Imagine we have the following tables:
 
-select * from t inner join t2 on t.a = t2.c;
-select * from t inner join t1 using (a);
+Table "vip_info": This table stores the VIP client information.
+
+| Client_ID 	| Region    	|
+|-------------	|-----------	|
+| 101         	| Toronto   	|
+| 102         	| Quebec    	|
+| 103         	| Vancouver 	|
+
+Table "purchase_records": This table lists the purchase records for all the clients.
+
+| Client_ID 	| Item      	| QTY 	|
+|-------------	|-----------	|-----	|
+| 100         	| Croissant 	| 2,000   	|
+| 102         	| Donut     	| 3,000   	|
+| 103         	| Coffee    	| 6,000   	|
+| 106         	| Soda      	| 4,000   	|
+
+The following command returns the purchase records of the VIP clients:
+
+```sql    
+select * from vip_info inner join purchase_records on vip_info.Client_ID = purchase_records.Client_ID;
 ```
+
 Output:
 
 ```sql
-1|1
-2|2
-1
-2
-3
+102|Quebec|102|Donut|3000
+103|Vancouver|103|Coffee|6000
 ```
-
 
 ## Natural Join
 
@@ -76,20 +95,36 @@ FROM table_a
 
 ### Examples
 
-```sql    
-create table t1(a int, b int);
-insert into t1 values(7, 8), (3, 4), (5, 6);
-drop table if exists t2;
-create table t2(a int, d int);
-insert into t2 values(1, 2), (3, 4), (5, 6);
+Imagine we have the following tables:
 
-select * from t1 natural join t2;
+Table "vip_info": This table stores the VIP client information.
+
+| Client_ID 	| Region    	|
+|-------------	|-----------	|
+| 101         	| Toronto   	|
+| 102         	| Quebec    	|
+| 103         	| Vancouver 	|
+
+Table "purchase_records": This table lists the purchase records for all the clients.
+
+| Client_ID 	| Item      	| QTY 	|
+|-------------	|-----------	|-----	|
+| 100         	| Croissant 	| 2,000   	|
+| 102         	| Donut     	| 3,000   	|
+| 103         	| Coffee    	| 6,000   	|
+| 106         	| Soda      	| 4,000   	|
+
+The following command returns the purchase records of the VIP clients:
+
+```sql    
+select * from vip_info natural join purchase_records;
 ```
+
 Output:
 
 ```sql
-3|4|4
-5|6|6
+102|Quebec|Donut|3,000
+103|Vancouver|Coffee|6,000
 ```
 
 ## Cross Join
@@ -106,24 +141,44 @@ FROM table_a
 
 ### Examples
 
-```sql    
-create table t1(a int, b int);
-create table t2(c int, d int);
-insert into t1 values(1, 2), (2, 3), (3 ,4);
-insert into t2 values(2,2), (3, 5), (7 ,8);
+Imagine we have the following tables:
 
-select * from t1 cross join t2
+Table "vip_info": This table stores the VIP client information.
+
+| Client_ID 	| Region    	|
+|-------------	|-----------	|
+| 101         	| Toronto   	|
+| 102         	| Quebec    	|
+| 103         	| Vancouver 	|
+
+Table "gift": This table lists the gift options for the VIP clients.
+
+| Gift      	|
+|-----------	|
+| Croissant 	|
+| Donut     	|
+| Coffee    	|
+| Soda      	|
+
+The following command returns a result set that assigns each gift option to each VIP client:
+
+```sql    
+select * from vip_info natural join gift;
 ```
+
 Output:
 
 ```sql
-1|2|2|2
-1|2|3|5
-1|2|7|8
-2|3|2|2
-2|3|3|5
-2|3|7|8
-3|4|2|2
-3|4|3|5
-3|4|7|8
+101|Toronto|Croissant
+101|Toronto|Donut
+101|Toronto|Coffee
+101|Toronto|Soda
+102|Quebec|Croissant
+102|Quebec|Donut
+102|Quebec|Coffee
+102|Quebec|Soda
+103|Vancouver|Croissant
+103|Vancouver|Donut
+103|Vancouver|Coffee
+103|Vancouver|Soda
 ```
