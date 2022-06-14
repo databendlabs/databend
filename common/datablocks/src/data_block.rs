@@ -34,6 +34,9 @@ pub struct DataBlock {
 impl DataBlock {
     #[inline]
     pub fn create(schema: DataSchemaRef, columns: Vec<ColumnRef>) -> Self {
+        debug_assert!(
+           schema.fields().iter().zip(columns.iter()).all( |(f, c) | f.data_type() == &c.data_type() );
+        );
         DataBlock { schema, columns }
     }
 
