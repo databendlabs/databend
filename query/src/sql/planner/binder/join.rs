@@ -54,6 +54,22 @@ impl<'a> Binder {
 
         check_duplicate_join_tables(&left_context, &right_context)?;
 
+        match &join.op {
+            JoinOperator::LeftOuter => {
+                for column in right_context.all_column_bindings().iter() {
+                    //column.data_type = wrap_nullable(&column.data_type);
+                    self.metadata.write().nullable_data_type(column.index);
+                }
+            }
+            JoinOperator::RightOuter => {
+                for column in left_context.all_column_bindings().iter() {
+                    //column.data_type = wrap_nullable(&column.data_type);
+                    self.metadata.write().nullable_data_type(column.index);
+                }
+            }
+            _ => {}
+        }
+
         let mut bind_context = bind_context.replace();
         for column in left_context.all_column_bindings() {
             bind_context.add_column_binding(column.clone());

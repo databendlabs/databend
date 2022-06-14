@@ -57,7 +57,7 @@ impl TableEntry {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ColumnEntry {
     pub column_index: IndexType,
     pub name: String,
@@ -136,6 +136,12 @@ impl Metadata {
         let column_entry = ColumnEntry::new(name, data_type, column_index, table_index);
         self.columns.push(column_entry);
         column_index
+    }
+
+    pub fn nullable_data_type(&mut self, index: IndexType) {
+        if let Some(col) = self.columns.get_mut(index) {
+            col.data_type = wrap_nullable(&col.data_type);
+        }
     }
 
     pub fn add_table(

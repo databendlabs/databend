@@ -18,6 +18,7 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
@@ -30,6 +31,7 @@ use common_datavalues::ConstColumn;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_datavalues::NullableColumn;
 use common_exception::Result;
 use common_planners::Expression;
 use primitive_types::U256;
@@ -184,21 +186,30 @@ impl ChainingHashTable {
                 for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
                     let probe_result_ptr = hash_table.find_key(key);
                     let data_schema_fields = self.row_space.data_schema.fields();
-                    let build_block = if let Some(probe_result_ptr) = probe_result_ptr {
+                    let mut columns = Vec::with_capacity(data_schema_fields.len());
+                    if let Some(probe_result_ptr) = probe_result_ptr {
                         let probe_result_ptrs = probe_result_ptr.get_value();
-                        self.row_space.gather(probe_result_ptrs)?
+                        let block = self.row_space.gather(probe_result_ptrs)?;
+                        for column in block.columns().iter() {
+                            let mut validity = MutableBitmap::new();
+                            validity.extend_constant(column.len(), true);
+                            columns.push(NullableColumn::wrap_inner(
+                                column.clone(),
+                                Some(validity.into()),
+                            ));
+                        }
                     } else {
                         // No matched row for current probe row
                         // Create a NULL block for right side
-                        let mut columns = Vec::with_capacity(data_schema_fields.len());
                         for field in data_schema_fields.iter() {
                             let nullable_data_type = wrap_nullable(field.data_type());
                             columns.push(
                                 nullable_data_type.create_constant_column(&DataValue::Null, 1)?,
                             );
                         }
-                        DataBlock::create(self.row_space.data_schema.clone(), columns)
                     };
+                    let build_block =
+                        DataBlock::create(self.row_space.data_schema.clone(), columns);
                     let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
                     results.push(self.merge_block(&build_block, &probe_block)?);
                 }
@@ -314,13 +325,21 @@ impl ChainingHashTable {
                             let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
                             let probe_result_ptr = table.hash_table.find_key(&keys_ref);
                             let data_schema_fields = self.row_space.data_schema.fields();
-                            let build_block = if let Some(probe_result_ptr) = probe_result_ptr {
+                            let mut columns = Vec::with_capacity(data_schema_fields.len());
+                            if let Some(probe_result_ptr) = probe_result_ptr {
                                 let probe_result_ptrs = probe_result_ptr.get_value();
-                                self.row_space.gather(probe_result_ptrs)?
+                                let block = self.row_space.gather(probe_result_ptrs)?;
+                                for column in block.columns().iter() {
+                                    let mut validity = MutableBitmap::new();
+                                    validity.extend_constant(column.len(), true);
+                                    columns.push(NullableColumn::wrap_inner(
+                                        column.clone(),
+                                        Some(validity.into()),
+                                    ));
+                                }
                             } else {
                                 // No matched row for current probe row
                                 // Create a NULL block for right side
-                                let mut columns = Vec::with_capacity(data_schema_fields.len());
                                 for field in data_schema_fields.iter() {
                                     let nullable_data_type = wrap_nullable(field.data_type());
                                     columns.push(
@@ -328,8 +347,9 @@ impl ChainingHashTable {
                                             .create_constant_column(&DataValue::Null, 1)?,
                                     );
                                 }
-                                DataBlock::create(self.row_space.data_schema.clone(), columns)
                             };
+                            let build_block =
+                                DataBlock::create(self.row_space.data_schema.clone(), columns);
                             let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
                             results.push(self.merge_block(&build_block, &probe_block)?);
                         }

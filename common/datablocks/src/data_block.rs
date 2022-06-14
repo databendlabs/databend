@@ -211,12 +211,8 @@ impl DataBlock {
         let mut serializers = vec![];
         for col_index in 0..columns_size {
             let column = self.column(col_index);
-            let logical_data_type = self.schema.fields()[col_index].data_type().clone();
-            let data_type = if let DataTypeImpl::Nullable(_) = column.data_type() {
-                wrap_nullable(&logical_data_type)
-            } else {
-                logical_data_type
-            };
+            let field = self.schema().field(col_index);
+            let data_type = field.data_type();
             let serializer = data_type.create_serializer(column)?;
             serializers.push(serializer);
         }
