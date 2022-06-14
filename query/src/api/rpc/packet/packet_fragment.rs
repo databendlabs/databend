@@ -6,12 +6,12 @@ use crate::interpreters::QueryFragmentAction;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct FragmentPacket {
     pub node: PlanNode,
-    pub fragment_id: String,
+    pub fragment_id: usize,
     pub data_exchange: DataExchange,
 }
 
 impl FragmentPacket {
-    pub fn create(fragment_id: String, node: PlanNode, data_exchange: DataExchange) -> FragmentPacket {
+    pub fn create(fragment_id: usize, node: PlanNode, data_exchange: DataExchange) -> FragmentPacket {
         FragmentPacket {
             node,
             fragment_id,

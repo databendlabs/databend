@@ -11,7 +11,7 @@ use crate::interpreters::fragments::query_fragment_actions::{QueryFragmentAction
 use crate::sessions::QueryContext;
 
 pub struct StageQueryFragment {
-    id: String,
+    id: usize,
     stage: StagePlan,
     ctx: Arc<QueryContext>,
     input: Box<dyn QueryFragment>,
@@ -19,7 +19,8 @@ pub struct StageQueryFragment {
 
 impl StageQueryFragment {
     pub fn create(ctx: Arc<QueryContext>, node: &StagePlan, input: Box<dyn QueryFragment>) -> Result<Box<dyn QueryFragment>> {
-        Ok(Box::new(StageQueryFragment { id: GlobalUniqName::unique(), stage: node.clone(), ctx, input }))
+        let id = ctx.get_fragment_id();
+        Ok(Box::new(StageQueryFragment { id, stage: node.clone(), ctx, input }))
     }
 }
 
@@ -35,7 +36,7 @@ impl QueryFragment for StageQueryFragment {
     fn finalize(&self, actions: &mut QueryFragmentsActions) -> Result<()> {
         self.input.finalize(actions)?;
         let input_actions = actions.get_root_actions()?;
-        let mut fragment_actions = QueryFragmentActions::create(true);
+        let mut fragment_actions = QueryFragmentActions::create(true, self.id);
 
         if self.input.get_out_partition()? == PartitionState::NotPartition {
             if input_actions.get_actions().is_empty() {
@@ -76,19 +77,18 @@ impl QueryFragment for StageQueryFragment {
 
     fn rewrite_remote_plan(&self, node: &PlanNode, _: &PlanNode) -> Result<PlanNode> {
         let query_id = self.ctx.get_id();
-        let fragment_id = self.id.clone();
-        let mut stage_rewrite = StageRewrite::create(query_id, fragment_id);
+        let mut stage_rewrite = StageRewrite::create(query_id, self.id);
         stage_rewrite.rewrite_plan_node(node)
     }
 }
 
 struct StageRewrite {
     query_id: String,
-    fragment_id: String,
+    fragment_id: usize,
 }
 
 impl StageRewrite {
-    pub fn create(query_id: String, fragment_id: String) -> StageRewrite {
+    pub fn create(query_id: String, fragment_id: usize) -> StageRewrite {
         StageRewrite { query_id, fragment_id }
     }
 }
@@ -113,7 +113,7 @@ impl PlanRewriter for StageRewrite {
         Ok(PlanNode::Remote(RemotePlan::create_v2(
             stage.schema(),
             self.query_id.to_owned(),
-            self.fragment_id.to_owned(),
+            self.fragment_id,
         )))
     }
 }

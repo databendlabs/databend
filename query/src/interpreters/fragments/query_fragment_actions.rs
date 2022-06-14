@@ -2,6 +2,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use common_base::base::GlobalUniqName;
 use common_datavalues::DataSchemaRef;
 use common_exception::{ErrorCode, Result};
 use common_meta_types::NodeInfo;
@@ -25,15 +26,15 @@ impl QueryFragmentAction {
 
 #[derive(Debug)]
 pub struct QueryFragmentActions {
+    pub fragment_id: usize,
     pub exchange_actions: bool,
-    pub fragment_id: String,
     pub data_exchange: Option<DataExchange>,
     fragment_actions: Vec<QueryFragmentAction>,
 }
 
 impl QueryFragmentActions {
-    pub fn create(force_exchange: bool) -> QueryFragmentActions {
-        QueryFragmentActions { exchange_actions: force_exchange, fragment_id: "".to_string(), data_exchange: None, fragment_actions: vec![] }
+    pub fn create(exchange_actions: bool, fragment_id: usize) -> QueryFragmentActions {
+        QueryFragmentActions { exchange_actions, fragment_id, data_exchange: None, fragment_actions: vec![] }
     }
 
     pub fn get_actions(&self) -> &[QueryFragmentAction] {
@@ -178,7 +179,7 @@ impl QueryFragmentsActions {
         for fragment_actions in &self.fragments_actions {
             for fragment_action in &fragment_actions.fragment_actions {
                 let fragment_packet = FragmentPacket::create(
-                    fragment_actions.fragment_id.to_owned(),
+                    fragment_actions.fragment_id,
                     fragment_action.node.clone(),
                     fragment_actions.data_exchange.clone().unwrap(),
                 );
@@ -209,7 +210,7 @@ impl Debug for QueryFragmentsActions {
 impl Debug for QueryFragmentAction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("QueryFragmentAction")
-            .field("node", &self.node.name())
+            .field("node", &self.node)
             .finish()
     }
 }

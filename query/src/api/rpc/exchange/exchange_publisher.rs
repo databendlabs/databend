@@ -48,6 +48,7 @@ impl ExchangePublisher {
                     let input = InputPort::create();
                     sink_builder.add_sink(input.clone(), ExchangeMergeSink::try_create(
                         ctx.clone(),
+                        params.fragment_id,
                         input.clone(),
                         params.clone(),
                     )?);
@@ -60,6 +61,7 @@ impl ExchangePublisher {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
                     ExchangePublisherSink::<false>::try_create(
                         ctx.clone(),
+                        params.fragment_id,
                         transform_input_port,
                         transform_output_port,
                         params.clone(),
@@ -76,6 +78,7 @@ impl ExchangePublisher {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
                     ExchangePublisherSink::<true>::try_create(
                         ctx.clone(),
+                        params.fragment_id,
                         transform_input_port,
                         transform_output_port,
                         params.clone(),

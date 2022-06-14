@@ -75,7 +75,7 @@ impl Interpreter for SelectInterpreter {
         let settings = self.ctx.get_settings();
 
         if settings.get_enable_new_processor_framework()? != 0 {
-            let query_pipeline = match self.ctx.get_cluster().is_empty() {
+            let mut query_pipeline = match self.ctx.get_cluster().is_empty() {
                 true => self.create_new_pipeline()?,
                 false => {
                     let optimized_plan = self.rewrite_plan()?;
@@ -83,7 +83,9 @@ impl Interpreter for SelectInterpreter {
                 }
             };
 
+            let settings = self.ctx.get_settings();
             let async_runtime = self.ctx.get_storage_runtime();
+            query_pipeline.set_max_threads(settings.get_max_threads()? as usize);
             let executor = PipelinePullingExecutor::try_create(async_runtime, query_pipeline)?;
             let (handler, stream) = ProcessorExecutorStream::create(executor)?;
             self.ctx.add_source_abort_handle(handler);
@@ -97,12 +99,7 @@ impl Interpreter for SelectInterpreter {
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a NewPipeline
     fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        let settings = self.ctx.get_settings();
         let builder = QueryPipelineBuilder::create(self.ctx.clone());
-
-        let optimized_plan = self.rewrite_plan()?;
-        let mut new_pipeline = builder.finalize(&optimized_plan)?;
-        new_pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        Ok(new_pipeline)
+        Ok(builder.finalize(&self.rewrite_plan()?)?)
     }
 }

@@ -58,7 +58,8 @@ impl QueryFragment for ReadDatasourceQueryFragment {
     }
 
     fn finalize(&self, actions: &mut QueryFragmentsActions) -> Result<()> {
-        let mut fragment_actions = QueryFragmentActions::create(false);
+        let fragment_id = self.ctx.get_fragment_id();
+        let mut fragment_actions = QueryFragmentActions::create(false, fragment_id);
 
         match self.get_out_partition()? {
             PartitionState::NotPartition => {

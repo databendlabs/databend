@@ -15,7 +15,7 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
@@ -76,6 +76,7 @@ pub struct QueryContext {
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
+    fragment_id: Arc<AtomicUsize>,
 }
 
 impl QueryContext {
@@ -94,6 +95,7 @@ impl QueryContext {
             version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
             shared,
             precommit_blocks: Arc::new(RwLock::new(Vec::new())),
+            fragment_id: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -237,6 +239,10 @@ impl QueryContext {
 
     pub fn get_cluster(&self) -> Arc<Cluster> {
         self.shared.get_cluster()
+    }
+
+    pub fn get_fragment_id(&self) -> usize {
+        self.fragment_id.fetch_add(1, Ordering::Release)
     }
 
     pub fn get_catalogs(&self) -> Arc<CatalogManager> {

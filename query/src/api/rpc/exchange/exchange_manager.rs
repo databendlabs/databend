@@ -2,9 +2,10 @@ use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::{Thread, tokio};
+use common_base::base::{Runtime, Thread, tokio, TrySpawn};
 use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use common_exception::{ErrorCode, Result};
@@ -19,17 +20,17 @@ use common_datavalues::DataSchemaRef;
 use common_grpc::ConnectionFactory;
 use common_meta_types::NodeInfo;
 use common_planners::PlanNode;
-use async_channel::Sender;
+use async_channel::{RecvError, Sender, TrySendError};
 use async_channel::Receiver;
 use futures::{Stream, StreamExt};
-use tonic::Streaming;
+use tonic::{Status, Streaming};
 use crate::api::rpc::exchange::exchange_params::{ShuffleExchangeParams, MergeExchangeParams, ExchangeParams};
 use crate::api::rpc::exchange::exchange_publisher::ExchangePublisher;
 use crate::api::rpc::exchange::exchange_subscriber::ExchangeSubscriber;
 use crate::api::rpc::flight_actions::{PreparePipeline, PreparePublisher};
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
-use crate::api::rpc::packet::ExecutePacket;
+use crate::api::rpc::packet::{DataPacket, ExecutePacket};
 use crate::Config;
 use crate::pipelines::new::processors::port::InputPort;
 
@@ -43,6 +44,7 @@ impl DataExchangeManager {
         Arc::new(DataExchangeManager { config, queries_coordinator: ReentrantMutex::new(HashMap::new()) })
     }
 
+    // Create connections for cluster all nodes. We will push data through this connection.
     pub fn handle_prepare_publisher(&self, prepare: &PreparePublisher) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
@@ -53,6 +55,7 @@ impl DataExchangeManager {
         }
     }
 
+    // Execute query in background
     pub fn handle_execute_pipeline(&self, query_id: &str) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
@@ -62,15 +65,18 @@ impl DataExchangeManager {
         }
     }
 
-    pub async fn handle_do_put(&self, mut stream: Streaming<FlightData>) -> Result<()> {
-        // TODO: send data
-        while let Some(flight_data) = stream.next().await {
-            println!("Receive flight data");
+    // Receive data by cluster other nodes.
+    pub async fn handle_do_put(&self, id: &str, stream: Streaming<FlightData>) -> Result<()> {
+        let mut queries_coordinator = self.queries_coordinator.lock();
+
+        println!("handle_do_put query_id {:?}", id);
+        match queries_coordinator.get_mut(id) {
+            None => Err(ErrorCode::LogicalError(format!("Query {} not found in cluster.", id))),
+            Some(coordinator) => coordinator.receive_data(stream)
         }
-        // self.get_fragment_source()
-        Ok(())
     }
 
+    // Create a pipeline based on query plan
     pub fn handle_prepare_executor(&self, ctx: &Arc<QueryContext>, prepare: &PreparePipeline) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
@@ -79,7 +85,7 @@ impl DataExchangeManager {
         match queries_coordinator.entry(executor_packet.query_id.to_owned()) {
             Entry::Occupied(_) => Err(ErrorCode::LogicalError(format!("Already exists query id {:?}", executor_packet.query_id))),
             Entry::Vacant(entry) => {
-                let query_coordinator = QueryCoordinator::create(ctx, executor_packet);
+                let query_coordinator = QueryCoordinator::create(ctx, executor_packet)?;
                 entry.insert(query_coordinator).prepare_pipeline()
             }
         }
@@ -174,13 +180,13 @@ impl DataExchangeManager {
         Ok(root_pipeline)
     }
 
-    fn build_root_pipeline(&self, query_id: String, fragment_id: String, schema: DataSchemaRef) -> Result<NewPipeline> {
+    fn build_root_pipeline(&self, query_id: String, fragment_id: usize, schema: DataSchemaRef) -> Result<NewPipeline> {
         let mut pipeline = NewPipeline::create();
         self.get_fragment_source(query_id, fragment_id, schema, &mut pipeline)?;
         Ok(pipeline)
     }
 
-    pub fn get_fragment_sink(&self, query_id: &str, endpoint: &str) -> Result<Sender<FlightData>> {
+    pub fn get_fragment_sink(&self, query_id: &str, endpoint: &str) -> Result<Sender<DataPacket>> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
         match queries_coordinator.get(query_id) {
@@ -189,7 +195,7 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn get_fragment_source(&self, query_id: String, fragment_id: String, schema: DataSchemaRef, pipeline: &mut NewPipeline) -> Result<()> {
+    pub fn get_fragment_source(&self, query_id: String, fragment_id: usize, schema: DataSchemaRef, pipeline: &mut NewPipeline) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
         match queries_coordinator.get_mut(&query_id) {
@@ -203,13 +209,15 @@ struct QueryCoordinator {
     ctx: Arc<QueryContext>,
     query_id: String,
     executor_id: String,
-    publish_fragments: HashMap<String, Sender<FlightData>>,
-    subscribe_fragments: HashMap<String, Sender<FlightData>>,
-    fragments_coordinator: HashMap<String, FragmentCoordinator>,
+    runtime: Arc<Runtime>,
+    finished: Arc<AtomicBool>,
+    publish_fragments: HashMap<String, Sender<DataPacket>>,
+    subscribe_fragments: HashMap<usize, Sender<Result<FlightData>>>,
+    fragments_coordinator: HashMap<usize, FragmentCoordinator>,
 }
 
 impl QueryCoordinator {
-    pub fn create(ctx: &Arc<QueryContext>, executor: &ExecutorPacket) -> QueryCoordinator {
+    pub fn create(ctx: &Arc<QueryContext>, executor: &ExecutorPacket) -> Result<QueryCoordinator> {
         let mut fragments_coordinator = HashMap::with_capacity(executor.fragments.len());
 
         for fragment in &executor.fragments {
@@ -219,27 +227,54 @@ impl QueryCoordinator {
             );
         }
 
-        QueryCoordinator { query_id: executor.query_id.to_owned(), ctx: ctx.clone(), publish_fragments: Default::default(), subscribe_fragments: Default::default(), fragments_coordinator, executor_id: executor.executor.to_owned() }
+        Ok(QueryCoordinator {
+            ctx: ctx.clone(),
+            fragments_coordinator,
+            publish_fragments: Default::default(),
+            query_id: executor.query_id.to_owned(),
+            subscribe_fragments: Default::default(),
+            executor_id: executor.executor.to_owned(),
+            finished: Arc::new(AtomicBool::new(false)),
+            runtime: Arc::new(Runtime::with_worker_threads(2, Some(String::from("Cluster-Pub-Sub")))?),
+        })
     }
 
     pub fn prepare_pipeline(&mut self) -> Result<()> {
-        let mut params = Vec::with_capacity(self.fragments_coordinator.len());
-        for (_, coordinator) in &self.fragments_coordinator {
-            params.push(coordinator.create_exchange_params(self)?);
-        }
-
-        for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
-            coordinator.prepare_pipeline(&self.ctx, &params)?;
+        for (_, coordinator) in self.fragments_coordinator.iter_mut() {
+            coordinator.prepare_pipeline(&self.ctx)?;
         }
 
         Ok(())
     }
 
     pub fn execute_pipeline(&mut self) -> Result<()> {
+        if self.fragments_coordinator.is_empty() {
+            // Empty fragments if it is a request server, because the pipelines may have been linked.
+            return Ok(());
+        }
+
+        let max_threads = self.ctx.get_settings().get_max_threads()?;
         let mut pipelines = Vec::with_capacity(self.fragments_coordinator.len());
 
-        for (_, coordinator) in self.fragments_coordinator.iter_mut() {
-            if let Some(pipeline) = coordinator.pipeline.take() {
+        let mut params = Vec::with_capacity(self.fragments_coordinator.len());
+        for (_, coordinator) in &self.fragments_coordinator {
+            params.push(coordinator.create_exchange_params(self)?);
+        }
+
+        for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
+            if let Some(mut pipeline) = coordinator.pipeline.take() {
+                pipeline.set_max_threads(max_threads as usize);
+
+                if !pipeline.is_pulling_pipeline()? {
+                    return Err(ErrorCode::LogicalError("Logical error, It's a bug"));
+                }
+
+                // Add exchange data publisher.
+                ExchangePublisher::publisher_sink(&self.ctx, &params, &mut pipeline)?;
+
+                if !pipeline.is_complete_pipeline()? {
+                    return Err(ErrorCode::LogicalError("Logical error, It's a bug"));
+                }
                 pipelines.push(pipeline);
             }
         }
@@ -247,8 +282,16 @@ impl QueryCoordinator {
         let async_runtime = self.ctx.get_storage_runtime();
         let complete_executor = PipelineCompleteExecutor::from_pipelines(async_runtime, pipelines)?;
 
+        let fragments_tx = self.publish_fragments.clone();
         Thread::named_spawn(Some(String::from("Executor")), move || {
-            complete_executor.execute().unwrap();
+            if let Err(cause) = complete_executor.execute() {
+                // TODO: send error code to request server.
+            }
+
+            // TODO: close pub channel
+            for (_index, fragment_tx) in &fragments_tx {
+                fragment_tx.close();
+            }
         });
 
         Ok(())
@@ -256,22 +299,58 @@ impl QueryCoordinator {
 
     pub fn init_publisher(&mut self, config: Config, packet: &PublisherPacket) -> Result<()> {
         for (executor, info) in &packet.data_endpoints {
-            if executor == &packet.request_server {
-                // Send log, metric, trace, (progress?)
+            // if executor == &packet.request_server {
+            //     // Send log, metric, trace, (progress?)
+            // }
+
+            // let ctx = self.ctx.clone();
+            // if executor != &packet.executor {
+            if self.publish_fragments.contains_key(executor) {
+                return Err(ErrorCode::LogicalError("Publisher id already exists"));
             }
 
-            if executor != &packet.executor {
-                match self.publish_fragments.entry(executor.to_string()) {
-                    Entry::Occupied(_) => Err(ErrorCode::LogicalError("Publisher id already exists")),
-                    Entry::Vacant(entry) => {
-                        let (tx, rx) = async_channel::bounded(2);
-                        Self::spawn_publish_worker(config.clone(), rx, info.clone());
-                        entry.insert(tx);
-                        Ok(())
-                    }
-                }?;
-            }
+            let config = config.clone();
+            let address = info.flight_address.to_string();
+            let tx = self.spawn_pub_worker(config, address)?;
+            self.publish_fragments.insert(executor.to_string(), tx);
+            // }
         }
+
+        Ok(())
+    }
+
+    pub fn receive_data(&mut self, mut stream: Streaming<FlightData>) -> Result<()> {
+        let finished = self.finished.clone();
+        // TODO: convert hashmap into vec.
+        let subscribe_fragments = self.subscribe_fragments.clone();
+
+        self.runtime.spawn(async move {
+            while let Some(flight_data) = stream.next().await {
+                if !finished.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                match flight_data {
+                    Ok(flight_data) => match DataPacket::from_flight(flight_data) {
+                        Ok(DataPacket::Data(fragment_id, data)) => {
+                            subscribe_fragments[&fragment_id].send(Ok(data)).await;
+                        }
+                        Ok(DataPacket::Progress(values)) => {}
+                        Ok(DataPacket::ErrorCode(error_code)) => {}
+                        Err(status) => {}
+                    }
+                    Err(status) => {
+                        // TODO: put error into request server.
+                        // Network error, shutdown execute.
+                        println!("Receive flight status handle_do_put");
+                    }
+                }
+            }
+
+            for (_index, fragment_tx) in &subscribe_fragments {
+                fragment_tx.close();
+            }
+        });
 
         Ok(())
     }
@@ -295,30 +374,60 @@ impl QueryCoordinator {
         };
     }
 
-    fn spawn_publish_worker(config: Config, rx: Receiver<FlightData>, info: Arc<NodeInfo>) {
-        tokio::spawn(async move {
-            let mut connection = Self::create_client(config, &info.flight_address).await.unwrap();
-            let tx = connection.pushed_stream(rx).await.unwrap();
+    fn spawn_pub_worker(&mut self, config: Config, address: String) -> Result<Sender<DataPacket>> {
+        let ctx = self.ctx.clone();
+        let query_id = self.query_id.clone();
+        let finished = self.finished.clone();
+        let (tx, rx) = async_channel::bounded(2);
 
-            // TODO: rx.finished if error.
-            // TODO: we push log, metric and trace to request server if timeout.
-            // while let Ok(flight_data) = rx.recv().await {
-            //     if let Err(cause) = tx.send(flight_data).await {
-            //         // TODO: remote cannot send, get remote exception or finished.
-            //         continue;
-            //     }
-            // }
+        self.runtime.spawn(async move {
+            let mut connection = Self::create_client(config, &address).await.unwrap();
+
+            if let Err(status) = connection.do_put(&query_id, rx).await {
+                // Shutdown all publisher worker.
+                finished.store(true, Ordering::Release);
+
+                println!("Do put failure. status: {:?}", status);
+                // TODO:
+                // Shutdown all query fragments executor and report error to request server.
+                let exchange_manager = ctx.get_exchange_manager();
+                // exchange_manager.shutdown_query(query_id, status);
+            }
         });
+
+        // let sender = tx.clone();
+        // let finished = self.finished.clone();
+        // self.runtime.spawn(async move {
+        //     while let Ok(flight_data) = rx.recv().await {
+        //         if finished.load(Ordering::Relaxed) {
+        //             break;
+        //         }
+        //
+        //         if let Err(TrySendError::Full(data)) = sender.try_send(flight_data) {
+        //             if let Err(_) = sender.send(data).await {
+        //                 common_tracing::tracing::warn!("Publisher channel is closed.");
+        //                 break;
+        //             }
+        //         }
+        //
+        //         if finished.load(Ordering::Relaxed) {
+        //             break;
+        //         }
+        //     }
+        // });
+
+        Ok(tx)
     }
 
-    pub fn get_fragment_sink(&self, endpoint: &str) -> Result<Sender<FlightData>> {
+    pub fn get_fragment_sink(&self, endpoint: &str) -> Result<Sender<DataPacket>> {
+        // lazy get in runtime.
         match self.publish_fragments.get(endpoint) {
             None => Err(ErrorCode::LogicalError(format!("Not found node {} in cluster", endpoint))),
             Some(publisher) => Ok(publisher.clone())
         }
     }
 
-    pub fn subscribe_fragment(&mut self, fragment_id: String, schema: DataSchemaRef, pipeline: &mut NewPipeline) -> Result<()> {
+    pub fn subscribe_fragment(&mut self, fragment_id: usize, schema: DataSchemaRef, pipeline: &mut NewPipeline) -> Result<()> {
         let (tx, rx) = async_channel::bounded(1);
 
         // Register subscriber for data exchange.
@@ -326,8 +435,7 @@ impl QueryCoordinator {
 
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
-            let params = fragment_coordinator.create_exchange_params(self)?;
-            fragment_coordinator.prepare_pipeline(&self.ctx, &params)?;
+            fragment_coordinator.prepare_pipeline(&self.ctx)?;
 
             if fragment_coordinator.pipeline.is_none() {
                 return Err(ErrorCode::LogicalError("Pipeline is none, maybe query fragment circular dependency."));
@@ -349,9 +457,9 @@ impl QueryCoordinator {
 }
 
 struct FragmentCoordinator {
-    fragment_id: String,
     node: PlanNode,
     initialized: bool,
+    fragment_id: usize,
     data_exchange: DataExchange,
     pipeline: Option<NewPipeline>,
     executor: Option<Arc<PipelineCompleteExecutor>>,
@@ -359,10 +467,11 @@ struct FragmentCoordinator {
 
 impl FragmentCoordinator {
     pub fn create(packet: &FragmentPacket) -> FragmentCoordinator {
+        // println!("create")
         FragmentCoordinator {
             initialized: false,
             node: packet.node.clone(),
-            fragment_id: packet.fragment_id.to_owned(),
+            fragment_id: packet.fragment_id,
             data_exchange: packet.data_exchange.clone(),
             pipeline: None,
             executor: None,
@@ -374,16 +483,16 @@ impl FragmentCoordinator {
             DataExchange::Merge(exchange) => Ok(ExchangeParams::MergeExchange(
                 MergeExchangeParams {
                     schema: self.node.schema(),
+                    fragment_id: self.fragment_id,
                     query_id: query.query_id.to_string(),
-                    fragment_id: self.fragment_id.to_owned(),
                     destination_id: exchange.destination_id.clone(),
                 }
             )),
             DataExchange::HashDataExchange(exchange) => Ok(ExchangeParams::ShuffleExchange(
                 ShuffleExchangeParams {
                     schema: self.node.schema(),
+                    fragment_id: self.fragment_id,
                     query_id: query.query_id.to_string(),
-                    fragment_id: self.fragment_id.to_string(),
                     executor_id: query.executor_id.to_string(),
                     destination_ids: exchange.destination_ids.to_owned(),
                     shuffle_scatter: Arc::new(Box::new(HashFlightScatter::try_create(
@@ -397,27 +506,13 @@ impl FragmentCoordinator {
         }
     }
 
-    pub fn prepare_pipeline(&mut self, ctx: &Arc<QueryContext>, exchange_params: &ExchangeParams) -> Result<()> {
-        if self.initialized {
-            return Ok(());
+    pub fn prepare_pipeline(&mut self, ctx: &Arc<QueryContext>) -> Result<()> {
+        if !self.initialized {
+            self.initialized = true;
+            let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
+            self.pipeline = Some(pipeline_builder.finalize(&self.node)?);
         }
 
-        self.initialized = true;
-        let query_pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
-        let mut fragment_pipeline = query_pipeline_builder.finalize(&self.node)?;
-
-        if !fragment_pipeline.is_pulling_pipeline()? {
-            return Err(ErrorCode::LogicalError("Logical error, It's a bug"));
-        }
-
-        // Add exchange data publisher.
-        ExchangePublisher::publisher_sink(&ctx, &exchange_params, &mut fragment_pipeline)?;
-
-        if !fragment_pipeline.is_complete_pipeline()? {
-            return Err(ErrorCode::LogicalError("Logical error, It's a bug"));
-        }
-
-        self.pipeline = Some(fragment_pipeline);
         Ok(())
     }
 }

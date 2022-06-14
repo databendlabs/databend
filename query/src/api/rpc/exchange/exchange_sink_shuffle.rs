@@ -10,14 +10,17 @@ use crate::pipelines::new::processors::port::{InputPort, OutputPort};
 use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use crate::sessions::QueryContext;
+use common_exception::Result;
+use crate::api::rpc::packet::DataPacket;
 
 struct OutputData {
     pub data_block: Option<DataBlock>,
-    pub serialized_blocks: Vec<Option<FlightData>>,
+    pub serialized_blocks: Vec<Option<DataPacket>>,
 }
 
 pub struct ExchangePublisherSink<const HAS_OUTPUT: bool> {
     ctx: Arc<QueryContext>,
+    fragment_id: usize,
 
     serialize_params: SerializeParams,
     shuffle_exchange_params: ShuffleExchangeParams,
@@ -26,16 +29,17 @@ pub struct ExchangePublisherSink<const HAS_OUTPUT: bool> {
     output: Arc<OutputPort>,
     input_data: Option<DataBlock>,
     output_data: Option<OutputData>,
-    peer_endpoint_publisher: Vec<Sender<FlightData>>,
+    peer_endpoint_publisher: Vec<Sender<DataPacket>>,
 }
 
 impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
-    pub fn try_create(ctx: Arc<QueryContext>, input: Arc<InputPort>, output: Arc<OutputPort>, shuffle_exchange_params: ShuffleExchangeParams) -> common_exception::Result<ProcessorPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, fragment_id: usize, input: Arc<InputPort>, output: Arc<OutputPort>, shuffle_exchange_params: ShuffleExchangeParams) -> Result<ProcessorPtr> {
         let serialize_params = shuffle_exchange_params.create_serialize_params()?;
         Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink::<HAS_OUTPUT> {
             ctx,
             input,
             output,
+            fragment_id,
             serialize_params,
             shuffle_exchange_params,
             input_data: None,
@@ -44,13 +48,14 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
         })))
     }
 
-    fn get_peer_endpoint_publisher(&self) -> common_exception::Result<Vec<Sender<FlightData>>> {
+    fn get_peer_endpoint_publisher(&self) -> Result<Vec<Sender<DataPacket>>> {
         let destination_ids = &self.shuffle_exchange_params.destination_ids;
         let mut res = Vec::with_capacity(destination_ids.len());
         let exchange_manager = self.ctx.get_exchange_manager();
 
         for destination_id in destination_ids {
             let query_id = &self.shuffle_exchange_params.query_id;
+            // self.shuffle_exchange_params.fragment_id
             res.push(exchange_manager.get_fragment_sink(query_id, destination_id)?);
         }
 
@@ -64,7 +69,7 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
         "HashExchangePublisher"
     }
 
-    fn event(&mut self) -> common_exception::Result<Event> {
+    fn event(&mut self) -> Result<Event> {
         if HAS_OUTPUT {
             if self.output.is_finished() {
                 self.input.finish();
@@ -137,7 +142,7 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
         Ok(Event::NeedData)
     }
 
-    fn process(&mut self) -> common_exception::Result<()> {
+    fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             let scatter = &self.shuffle_exchange_params.shuffle_scatter;
 
@@ -163,7 +168,7 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
                         return Err(ErrorCode::UnImplement("DatabendQuery does not implement dicts."));
                     }
 
-                    output_data.serialized_blocks.push(Some(values));
+                    output_data.serialized_blocks.push(Some(DataPacket::Data(self.fragment_id, values)));
                 }
             }
 
@@ -173,10 +178,11 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
         Ok(())
     }
 
-    async fn async_process(&mut self) -> common_exception::Result<()> {
+    async fn async_process(&mut self) -> Result<()> {
         if let Some(mut output_data) = self.output_data.take() {
             for (index, publisher) in self.peer_endpoint_publisher.iter().enumerate() {
                 if let Some(flight_data) = output_data.serialized_blocks[index].take() {
+                    println!("Send flight data");
                     if let Err(_) = publisher.send(flight_data).await {
                         return Err(ErrorCode::TokioError(
                             "Cannot send flight data to endpoint, because sender is closed."

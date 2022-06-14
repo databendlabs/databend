@@ -39,6 +39,7 @@ pub struct PipelineExecutor {
 impl PipelineExecutor {
     pub fn create(async_rt: Arc<Runtime>, pipeline: NewPipeline) -> Result<Arc<PipelineExecutor>> {
         let threads_num = pipeline.get_max_threads();
+        assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(async_rt, RunningGraph::create(pipeline)?, threads_num)
     }
 
@@ -50,6 +51,7 @@ impl PipelineExecutor {
         let threads_num = pipelines.iter().map(|x| x.get_max_threads()).max()
             .unwrap_or(0);
 
+        assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(async_rt, RunningGraph::from_pipelines(pipelines)?, threads_num)
     }
 

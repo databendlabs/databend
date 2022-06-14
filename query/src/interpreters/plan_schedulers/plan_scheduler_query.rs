@@ -65,13 +65,14 @@ pub async fn schedule_query(
 
 pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
-    let root_query_fragments = RootQueryFragment::create(query_fragments, plan)?;
+    let root_query_fragments = RootQueryFragment::create(query_fragments, ctx.clone(), plan)?;
 
     info!("QueryFragments: {:?}", root_query_fragments);
     let exchange_manager = ctx.get_exchange_manager();
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_query_fragments.finalize(&mut fragments_actions)?;
     info!("QueryFragments actions: {:?}", fragments_actions);
+    println!("QueryFragments actions: {:?}", fragments_actions);
     exchange_manager.submit_query_actions(ctx, fragments_actions).await
 }
 

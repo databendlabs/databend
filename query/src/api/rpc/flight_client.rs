@@ -17,6 +17,7 @@ use std::pin::Pin;
 use std::sync::mpsc::{channel};
 use std::task::{Context, Poll};
 use futures::Stream;
+use tonic::metadata::{Ascii, MetadataKey, MetadataValue};
 
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
@@ -32,11 +33,14 @@ use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Streaming;
 use common_base::base::tokio;
-use common_base::base::tokio::sync::mpsc::{Receiver, Sender};
+use common_base::base::tokio::sync::mpsc::{Sender};
+use async_channel::Receiver;
+use tonic::metadata::errors::InvalidMetadataValue;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_client_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
+use crate::api::rpc::packet::{DataPacket, DataPacketStream};
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
@@ -64,10 +68,18 @@ impl FlightClient {
         Ok(())
     }
 
-    pub async fn pushed_stream(&mut self, rx: async_channel::Receiver<FlightData>) -> Result<()> {
-        let request = Request::new(rx);
-        let response = self.inner.do_put(request).await?;
-        Ok(())
+    pub async fn do_put(&mut self, query_id: &str, rx: Receiver<DataPacket>) -> Result<()> {
+        let mut request = Request::new(Box::pin(DataPacketStream::create(rx)));
+
+        match MetadataValue::try_from(query_id) {
+            Ok(metadata_value) => {
+                let key = MetadataKey::from_static("x-query-id");
+                request.metadata_mut().insert(key, metadata_value);
+                self.inner.do_put(request).await?;
+                Ok(())
+            }
+            Err(cause) => Err(ErrorCode::BadBytes(format!("Cannot parse query id to MetadataValue, {:?}", cause))),
+        }
     }
 
     // Execute do_get.
@@ -100,17 +112,3 @@ impl FlightClient {
         }
     }
 }
-
-struct PushedStream {
-    rx: Receiver<FlightData>,
-}
-
-impl Stream for PushedStream {
-    type Item = FlightData;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        todo!()
-    }
-}
-
-

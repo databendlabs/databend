@@ -28,7 +28,7 @@ pub struct V1RemotePlan {
 pub struct V2RemotePlan {
     schema: DataSchemaRef,
     pub receive_query_id: String,
-    pub receive_fragment_id: String,
+    pub receive_fragment_id: usize,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
@@ -48,7 +48,7 @@ impl RemotePlan {
         RemotePlan::V1(V1RemotePlan { schema, query_id, stage_id, stream_id, fetch_nodes })
     }
 
-    pub fn create_v2(schema: DataSchemaRef, query_id: String, fragment: String) -> RemotePlan {
+    pub fn create_v2(schema: DataSchemaRef, query_id: String, fragment: usize) -> RemotePlan {
         RemotePlan::V2(V2RemotePlan {
             schema,
             receive_query_id: query_id,

@@ -1,19 +1,22 @@
+use std::sync::Arc;
 use crate::interpreters::fragments::query_fragment::QueryFragment;
 use common_exception::Result;
 use common_planners::{PlanNode, V1RemotePlan, StageKind, StagePlan};
 use crate::api::{DataExchange, MergeExchange};
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment_actions::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
+use crate::sessions::QueryContext;
 
 #[derive(Debug)]
 pub struct RootQueryFragment {
+    ctx: Arc<QueryContext>,
     node: PlanNode,
     input: Box<dyn QueryFragment>,
 }
 
 impl RootQueryFragment {
-    pub fn create(input: Box<dyn QueryFragment>, node: &PlanNode) -> Result<Box<dyn QueryFragment>> {
-        Ok(Box::new(RootQueryFragment { input, node: node.clone() }))
+    pub fn create(input: Box<dyn QueryFragment>, ctx: Arc<QueryContext>, node: &PlanNode) -> Result<Box<dyn QueryFragment>> {
+        Ok(Box::new(RootQueryFragment { input, ctx, node: node.clone() }))
     }
 }
 
@@ -25,7 +28,8 @@ impl QueryFragment for RootQueryFragment {
     fn finalize(&self, actions: &mut QueryFragmentsActions) -> Result<()> {
         self.input.finalize(actions)?;
         let input_actions = actions.get_root_actions()?;
-        let mut fragment_actions = QueryFragmentActions::create(false);
+        let fragment_id = self.ctx.get_fragment_id();
+        let mut fragment_actions = QueryFragmentActions::create(false, fragment_id);
 
         // This is an implicit stage. We run remaining plans on the current hosts
         for action in input_actions.get_actions() {

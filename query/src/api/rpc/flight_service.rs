@@ -34,6 +34,8 @@ use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_tracing::tracing;
 use tokio_stream::Stream;
+use tonic::metadata::{Ascii, MetadataValue};
+use tonic::metadata::errors::ToStrError;
 use tonic::Request;
 use tonic::Response as RawResponse;
 use tonic::Status;
@@ -44,6 +46,7 @@ use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
 use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcherRef;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
+use crate::api::rpc::packet::DataPacket::ErrorCode;
 use crate::sessions::{SessionManager, SessionType};
 
 pub type FlightStream<T> =
@@ -125,10 +128,20 @@ impl FlightService for DatabendQueryFlightService {
     type DoPutStream = FlightStream<PutResult>;
 
     async fn do_put(&self, req: StreamReq<FlightData>) -> Response<Self::DoPutStream> {
-        // TODO: receive data into
+        // TODO: panic hook.
+        println!("data flight do_put");
+        let query_id = match req.metadata().get("x-query-id") {
+            None => Err(Status::invalid_argument("Must be send X-Query-ID metadata.")),
+            Some(metadata_value) => match metadata_value.to_str() {
+                Ok(query_id) if !query_id.is_empty() => Ok(query_id.to_string()),
+                Ok(_query_id) => Err(Status::invalid_argument("x-query-id metadata is empty.")),
+                Err(cause) => Err(Status::invalid_argument(format!("Cannot parse X-Query-ID metadata value, cause: {:?}", cause))),
+            },
+        }?;
+
         let stream = req.into_inner();
         let exchange_manager = self.sessions.get_data_exchange_manager();
-        exchange_manager.handle_do_put(stream).await?;
+        exchange_manager.handle_do_put(&query_id, stream).await?;
         Ok(RawResponse::new(Box::pin(tokio_stream::once(Ok(
             PutResult {
                 app_metadata: vec![]

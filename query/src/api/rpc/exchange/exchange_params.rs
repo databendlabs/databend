@@ -19,7 +19,7 @@ pub struct SerializeParams {
 pub struct ShuffleExchangeParams {
     pub query_id: String,
     pub executor_id: String,
-    pub fragment_id: String,
+    pub fragment_id: usize,
     pub schema: DataSchemaRef,
     pub destination_ids: Vec<String>,
     pub shuffle_scatter: Arc<Box<dyn FlightScatter>>,
@@ -28,7 +28,7 @@ pub struct ShuffleExchangeParams {
 #[derive(Clone)]
 pub struct MergeExchangeParams {
     pub query_id: String,
-    pub fragment_id: String,
+    pub fragment_id: usize,
     pub destination_id: String,
     pub schema: DataSchemaRef,
 }

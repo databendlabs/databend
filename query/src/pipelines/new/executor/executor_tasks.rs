@@ -121,8 +121,9 @@ impl ExecutorTasksQueue {
     }
 
     pub fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
-        let mut worker_id = 0;
         let mut workers_tasks = self.workers_tasks.lock();
+
+        let mut worker_id = 0;
         while let Some(task) = tasks.pop_front() {
             workers_tasks.push_task(worker_id, task);
 
@@ -298,7 +299,7 @@ impl ExecutorTasks {
 
     pub fn push_task(&mut self, worker_id: usize, task: ExecutorTask) {
         self.tasks_size += 1;
-        debug_assert!(worker_id < self.workers_sync_tasks.len(), "out of index");
+        debug_assert!(worker_id < self.workers_sync_tasks.len(), "out of index, {}, {}", worker_id, self.workers_sync_tasks.len());
         let sync_queue = &mut self.workers_sync_tasks[worker_id];
         debug_assert!(worker_id < self.workers_async_tasks.len(), "out of index");
         let async_queue = &mut self.workers_async_tasks[worker_id];
