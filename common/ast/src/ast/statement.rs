@@ -231,6 +231,7 @@ pub struct CreateTableStmt<'a> {
     pub cluster_by: Vec<Expr<'a>>,
     pub as_query: Option<Box<Query<'a>>>,
     pub comment: Option<String>,
+    pub transient: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -752,8 +753,13 @@ impl<'a> Display for Statement<'a> {
                 comment,
                 cluster_by,
                 as_query,
+                transient,
             }) => {
-                write!(f, "CREATE TABLE ")?;
+                write!(f, "CREATE ")?;
+                if *transient {
+                    write!(f, "TRANSIENT ")?;
+                }
+                write!(f, "TABLE ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }

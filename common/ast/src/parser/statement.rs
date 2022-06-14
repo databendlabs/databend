@@ -207,7 +207,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let create_table = map(
         rule! {
-            CREATE ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ #peroid_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #table_option )*
@@ -217,6 +217,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
         |(
             _,
+            opt_transient,
             _,
             opt_if_not_exists,
             (catalog, database, table),
@@ -238,6 +239,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
                     .map(|(_, _, _, exprs, _)| exprs)
                     .unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
+                transient: opt_transient.is_some(),
             })
         },
     );

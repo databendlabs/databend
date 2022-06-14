@@ -143,6 +143,7 @@ impl<'a> Binder {
             cluster_by,
             as_query,
             comment: _,
+            transient,
         } = stmt;
 
         let catalog = catalog
@@ -169,6 +170,11 @@ impl<'a> Binder {
                     comment.clone(),
                 )?,
             }
+        }
+
+        // If table is TRANSIENT, set a flag in table option
+        if *transient {
+            options.insert("TRANSIENT".to_owned(), "T".to_owned());
         }
 
         // Build table schema
