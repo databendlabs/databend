@@ -144,7 +144,7 @@ impl Entry {
         match self.is_finished() {
             true => Ok(()),
             false => match self.is_timeout() {
-                true => Err(ErrorCode::AsyncInsertTimeoutError("Async insert timeout.")),
+                true => Err(ErrorCode::AsyncInsertTimeoutError("Async insert timeout")),
                 false => Err((*self.error.read()).clone()),
             },
         }
@@ -237,7 +237,8 @@ impl AsyncInsertQueue {
                 let mut intv = interval(stale_timeout);
                 loop {
                     intv.tick().await;
-                    self.clone().stale_check();
+                    let timeout = self.clone().stale_check();
+                    intv = interval(timeout)
                 }
             });
         }
@@ -429,9 +430,11 @@ impl AsyncInsertQueue {
         timeout
     }
 
-    fn stale_check(self: Arc<Self>) {
+    fn stale_check(self: Arc<Self>) -> Duration {
         let mut keys = Vec::new();
         let mut queue = self.queue.write();
+
+        let mut timeout = self.busy_timeout;
 
         for (key, value) in queue.iter() {
             if value.data_size == 0 {
@@ -441,11 +444,15 @@ impl AsyncInsertQueue {
             if time_lag.cmp(&self.clone().stale_timeout) == Ordering::Greater {
                 self.clone().schedule(key.clone(), value.clone());
                 keys.push(key.clone());
+            } else {
+                timeout = timeout.min(self.stale_timeout - time_lag);
             }
         }
 
         for key in keys.iter() {
             queue.remove(key);
         }
+
+        timeout
     }
 }
