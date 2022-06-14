@@ -40,7 +40,6 @@ OPTIMIZE TABLE [database.]table_name [ PUREGE | COMPACT | ALL]
 ## Examples
 
 ```sql
-
 mysql> use default;
 mysql> create table t as select * from numbers(10000000);
 mysql> select snapshot_id, segment_count, block_count, row_count from fuse_snapshot('default', 't');
