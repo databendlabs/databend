@@ -30,6 +30,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use common_tracing::tracing;
+use common_tracing::tracing::info;
+use common_tracing::tracing::warn;
 use uuid::Uuid;
 
 use crate::sessions::QueryContext;
@@ -95,7 +97,21 @@ impl FuseTable {
                 .try_commit(ctx.as_ref(), catalog_name, &operation_log, overwrite)
                 .await
             {
-                Ok(_) => break Ok(()),
+                Ok(_) => {
+                    break {
+                        if self.transient() {
+                            let keep_last_snapshot = true;
+                            // Removes history, if table is transient
+                            // Errors of GC, if any, are ignored,
+                            if let Err(e) = self.do_gc(&ctx, true).await {
+                                warn!("GC for transient table not success (this is not a permanent error, GC task can be picked up later");
+                            } else {
+                                info!("GC for transient table done");
+                            }
+                        }
+                        Ok(())
+                    };
+                }
                 Err(e) if self::utils::is_error_recoverable(&e) => match backoff.next_backoff() {
                     Some(d) => {
                         let name = tbl.table_info.name.clone();
