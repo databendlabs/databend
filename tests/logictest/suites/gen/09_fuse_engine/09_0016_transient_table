@@ -20,17 +20,15 @@ statement ok
 INSERT INTO t09_0016 VALUES(3);
 
 statement query I
-select * from t09_0016 order by a;
+select count(*) from t09_0016;
 
---
-1
-2
+----
 3
 
 statement query I
 select count(*) from fuse_snapshot('db1', 't09_0016');
 
---
+----
 1
 
 statement ok
