@@ -29,6 +29,11 @@ Create a user:
 CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
+Create a Database:
+```
+CREATE DATABASE nginx;
+```
+
 Grant insert privileges for the user:
 ```sql
 GRANT INSERT ON nginx.* TO user1;
@@ -62,6 +67,7 @@ user = "user1" #Databend username
 password = "abc123" #Databend password
 ```
 
+To learn more, please refer to the following documents.
 ## Tutorial
 
 [How to Analyze Nginx Access Logs With Databend](../../90-learn/02-analyze-nginx-logs-with-databend-and-vector.md)
