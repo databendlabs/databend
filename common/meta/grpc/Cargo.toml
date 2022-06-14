@@ -24,6 +24,7 @@ common-meta-types = { path = "../types" }
 common-proto-conv = { path = "../../proto-conv" }
 common-protos = { path = "../../protos" }
 common-tracing = { path = "../../tracing" }
+common-metrics = { path = "../../metrics" }
 
 derive_more = "0.99.17"
 futures = "0.3.21"

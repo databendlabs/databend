@@ -27,4 +27,6 @@ pub use metrics_exporter_prometheus::PrometheusHandle;
 pub use recorder::init_default_metrics_recorder;
 pub use recorder::label_counter;
 pub use recorder::label_counter_with_val;
+pub use recorder::label_counter_with_val_and_labels;
+pub use recorder::label_histogram_with_val;
 pub use recorder::try_handle;

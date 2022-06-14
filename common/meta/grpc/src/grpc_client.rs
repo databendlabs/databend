@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_base::base::tokio::sync::mpsc;
@@ -49,6 +50,8 @@ use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResultError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use common_metrics::label_counter_with_val_and_labels;
+use common_metrics::label_histogram_with_val;
 use common_tracing::tracing;
 use futures::stream::StreamExt;
 use prost::Message;
@@ -75,6 +78,10 @@ use crate::METACLI_COMMIT_SEMVER;
 use crate::MIN_METASRV_SEMVER;
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
+const META_GRPC_CLIENT_REQUEST_DURATION_MILLIS: &str = "meta_grpc_client_request_duration_millis";
+const META_GRPC_CLIENT_REQUEST_SUCCESS: &str = "meta_grpc_client_request_success";
+const META_GRPC_CLIENT_REQUEST_FAILED: &str = "meta_grpc_client_request_fail";
+const LABEL_ENDPOINT: &str = "endpoint";
 
 #[derive(Debug)]
 struct MetaChannelManager {
@@ -127,6 +134,7 @@ pub struct MetaGrpcClient {
     username: String,
     password: String,
     token: RwLock<Option<Vec<u8>>>,
+    current_endpoint: RwLock<Option<String>>,
 
     /// Dedicated runtime to support meta client background tasks.
     ///
@@ -241,6 +249,7 @@ impl MetaGrpcClient {
         let worker = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
             endpoints: RwLock::new(endpoints),
+            current_endpoint: RwLock::new(None),
             username: username.to_string(),
             password: password.to_string(),
             token: RwLock::new(None),
@@ -258,6 +267,7 @@ impl MetaGrpcClient {
         tracing::info!("MetaGrpcClient::worker spawned");
 
         loop {
+            let start = Instant::now();
             let t = req_rx.recv().await;
             let req = match t {
                 None => {
@@ -321,11 +331,36 @@ impl MetaGrpcClient {
             );
 
             let res = resp_tx.send(resp);
+            let mut success = true;
             if let Err(err) = res {
                 tracing::warn!(
                     err = debug(err),
                     "MetaGrpcClient failed to send response to the handle. recv-end closed"
                 );
+                success = false;
+            }
+
+            let current_endpoint = self.current_endpoint.read().await;
+
+            if let Some(current_endpoint) = &*current_endpoint {
+                label_histogram_with_val(
+                    META_GRPC_CLIENT_REQUEST_DURATION_MILLIS,
+                    vec![(LABEL_ENDPOINT, current_endpoint.to_string())],
+                    Instant::now().duration_since(start).as_millis() as f64,
+                );
+                if success {
+                    label_counter_with_val_and_labels(
+                        META_GRPC_CLIENT_REQUEST_SUCCESS,
+                        vec![(LABEL_ENDPOINT, current_endpoint.to_string())],
+                        1,
+                    );
+                } else {
+                    label_counter_with_val_and_labels(
+                        META_GRPC_CLIENT_REQUEST_FAILED,
+                        vec![(LABEL_ENDPOINT, current_endpoint.to_string())],
+                        1,
+                    );
+                }
             }
         }
     }
@@ -337,6 +372,8 @@ impl MetaGrpcClient {
         MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>,
         MetaError,
     > {
+        let mut current_endpoint = self.current_endpoint.write().await;
+        *current_endpoint = None;
         let channel = {
             let eps = self.endpoints.read().await;
             debug_assert!(!eps.is_empty());
@@ -352,6 +389,7 @@ impl MetaGrpcClient {
                     let ch = self.conn_pool.get(addr).await;
                     match ch {
                         Ok(c) => {
+                            *current_endpoint = Some(addr.clone());
                             break Ok(c);
                         }
                         Err(e) => {
