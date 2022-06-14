@@ -149,8 +149,7 @@ pub async fn clickhouse_handler_get(
         .map_err(InternalServerError)?;
 
     if let Some(settings) = params.settings.clone() {
-        let session_settings: Vec<&str> = settings.trim().split_terminator(',').collect();
-        for session_setting in session_settings.into_iter() {
+        for session_setting in settings.trim().split_terminator(',') {
             let s: Vec<&str> = session_setting.split(':').collect();
             session
                 .get_settings()
@@ -189,8 +188,7 @@ pub async fn clickhouse_handler_post(
         .map_err(InternalServerError)?;
 
     if let Some(settings) = params.settings.clone() {
-        let session_settings: Vec<&str> = settings.trim().split_terminator(',').collect();
-        for session_setting in session_settings.into_iter() {
+        for session_setting in settings.trim().split_terminator(',') {
             let s: Vec<&str> = session_setting.split(':').collect();
             session
                 .get_settings()

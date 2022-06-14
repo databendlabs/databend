@@ -28,7 +28,6 @@ import time
 # Binary data as:		Hexadecimal
 # --------------
 
-
 CURDIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(CURDIR, '../../../helpers'))
 
