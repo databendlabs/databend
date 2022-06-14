@@ -55,7 +55,7 @@ async fn test_select() -> PoemResult<()> {
 
     {
         let (status, body) = server.post("sel", "ect 1").await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(status, StatusCode::OK);
         assert_error!(body, "sql parser error");
     }
 
@@ -257,7 +257,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
         let (status, body) = server
             .post("insert into table t1 format JSONEachRow", &body)
             .await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_error!(body, "column a");
     }
     Ok(())
