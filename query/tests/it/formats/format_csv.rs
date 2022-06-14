@@ -46,6 +46,7 @@ fn test_accepted_multi_lines() -> Result<()> {
         "csv",
         Arc::new(DataSchema::empty()),
         FormatSettings::default(),
+        0,
         2,
         10 * 1024 * 1024,
     )?;
@@ -88,6 +89,7 @@ fn test_deserialize_multi_lines() -> Result<()> {
             DataField::new("b", DataTypeImpl::String(StringType::default())),
         ])),
         FormatSettings::default(),
+        0,
         1,
         10 * 1024 * 1024,
     )?;
@@ -113,6 +115,7 @@ fn test_deserialize_multi_lines() -> Result<()> {
             DataField::new("b", DataTypeImpl::String(StringType::default())),
         ])),
         FormatSettings::default(),
+        0,
         2,
         10 * 1024 * 1024,
     )?;
@@ -138,6 +141,7 @@ fn assert_complete_line(content: &str) -> Result<()> {
         "csv",
         Arc::new(DataSchema::empty()),
         FormatSettings::default(),
+        0,
         1,
         10 * 1024 * 1024,
     )?;
@@ -165,6 +169,7 @@ fn assert_broken_line(content: &str, assert_size: usize) -> Result<()> {
         "csv",
         Arc::new(DataSchema::empty()),
         FormatSettings::default(),
+        0,
         1,
         10 * 1024 * 1024,
     )?;

@@ -47,9 +47,14 @@ impl<'a> DfParser<'a> {
                     None => Ok(InsertSource::Empty),
                     Some(source) => match source.body {
                         SetExpr::Select(_) => Ok(InsertSource::Select(source)),
-                        SetExpr::Streams(stream) => Ok(InsertSource::StreamFormat(
-                            self.get_stream_format_str(&stream)?,
-                        )),
+                        SetExpr::Streams(stream) => {
+                            let str = self.get_stream_format_str(&stream)?;
+                            if str.is_empty() {
+                                Ok(InsertSource::Empty)
+                            } else {
+                                Ok(InsertSource::StreamFormat(str))
+                            }
+                        }
                         _ => Err(ParserError::ParserError(
                             "Insert must be have values or select source.".to_string(),
                         )),
@@ -86,6 +91,7 @@ impl<'a> DfParser<'a> {
                 Ok(&sql[start..end])
             }
             (QueryOffset::Normal(start), QueryOffset::EOF) => Ok(&sql[*start as usize..]),
+            (QueryOffset::EOF, QueryOffset::EOF) => Ok(&sql[sql.len()..]),
             _ => parser_err!(format!(
                 "Unexpected values position info, start:{}, end:{}",
                 start, end,

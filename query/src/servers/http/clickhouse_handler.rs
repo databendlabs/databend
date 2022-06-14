@@ -165,7 +165,8 @@ pub async fn clickhouse_handler_post(
 
     let mut sql = params.query();
     sql.push_str(body.into_string().await?.as_str());
-    let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql).await
+    let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
+        .await
         .map_err(BadRequest)?;
 
     ctx.attach_query_str(&sql);

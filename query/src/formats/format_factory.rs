@@ -65,6 +65,12 @@ impl FormatFactory {
         case_insensitive_desc.insert(name.to_lowercase(), creator);
     }
 
+    pub fn has_input(&self, name: impl AsRef<str>) -> bool {
+        let origin_name = name.as_ref();
+        let lowercase_name = origin_name.to_lowercase();
+        self.case_insensitive_desc.contains_key(&lowercase_name)
+    }
+
     pub fn get_input(
         &self,
         name: impl AsRef<str>,
