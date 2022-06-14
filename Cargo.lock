@@ -3906,7 +3906,8 @@ dependencies = [
 [[package]]
 name = "micromarshal"
 version = "0.1.0"
-source = "git+https://github.com/psiace/opensrv?rev=2f3f08c#2f3f08c686767d15e37b3a203cc78042cca0504d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77420bc592a921d9897e6c67bcc65f8264c9f0a60d8e01c76c73c2252e20b362"
 
 [[package]]
 name = "mime"
@@ -4506,7 +4507,8 @@ dependencies = [
 [[package]]
 name = "opensrv-clickhouse"
 version = "0.1.0"
-source = "git+https://github.com/psiace/opensrv?rev=2f3f08c#2f3f08c686767d15e37b3a203cc78042cca0504d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f6456cb429428f239e2014cba8fffccc79049764917dc9ee0c6cf2180f412f0"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -4514,10 +4516,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "combine",
- "futures",
- "futures-core",
- "futures-sink",
- "futures-util",
  "hostname",
  "lz4",
  "micromarshal",
@@ -4534,7 +4532,8 @@ dependencies = [
 [[package]]
 name = "opensrv-mysql"
 version = "0.1.0"
-source = "git+https://github.com/psiace/opensrv?rev=2f3f08c#2f3f08c686767d15e37b3a203cc78042cca0504d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bcb5fc2fda7e5e5f8478cd637285bbdd6196a9601e32293d0897e469a7dd020"
 dependencies = [
  "async-trait",
  "byteorder",
