@@ -33,6 +33,8 @@ use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::FunctionCall;
+use crate::sql::plans::JoinType;
+use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::Max1Row;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Project;
@@ -119,12 +121,23 @@ impl SubqueryRewriter {
         match subquery.typ {
             SubqueryType::Scalar => {
                 let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                let apply = CrossApply {
-                    subquery_output: rel_expr.derive_relational_prop()?.output_columns,
-                    correlated_columns: subquery.outer_columns.clone(),
+                let prop = rel_expr.derive_relational_prop()?;
+                let result: RelOperator = if prop.outer_columns.is_empty() {
+                    LogicalInnerJoin {
+                        left_conditions: vec![],
+                        right_conditions: vec![],
+                        join_type: JoinType::Cross,
+                    }
+                    .into()
+                } else {
+                    CrossApply {
+                        subquery_output: prop.output_columns.clone(),
+                        correlated_columns: subquery.outer_columns.clone(),
+                    }
+                    .into()
                 };
                 Ok(SExpr::create_binary(
-                    apply.into(),
+                    result,
                     left.clone(),
                     SExpr::create_unary(Max1Row.into(), subquery.subquery.clone()),
                 ))
@@ -209,13 +222,24 @@ impl SubqueryRewriter {
 
                 let rel_expr = RelExpr::with_s_expr(&rewritten_subquery);
                 let prop = rel_expr.derive_relational_prop()?;
-                let apply = CrossApply {
-                    subquery_output: prop.output_columns,
-                    correlated_columns: prop.outer_columns,
+
+                let result: RelOperator = if prop.outer_columns.is_empty() {
+                    LogicalInnerJoin {
+                        left_conditions: vec![],
+                        right_conditions: vec![],
+                        join_type: JoinType::Cross,
+                    }
+                    .into()
+                } else {
+                    CrossApply {
+                        subquery_output: prop.output_columns.clone(),
+                        correlated_columns: subquery.outer_columns.clone(),
+                    }
+                    .into()
                 };
 
                 Ok(SExpr::create_binary(
-                    apply.into(),
+                    result,
                     left.clone(),
                     rewritten_subquery,
                 ))
