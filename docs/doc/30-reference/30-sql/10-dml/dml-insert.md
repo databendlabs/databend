@@ -24,7 +24,7 @@ Remote engine is `remote`, will be stored in the remote DatabendStore cluster.
 
 Example:
 ```sql
-CREATE TABLE test(a INT UNSIGNED, b Varchar) Engine = Memory;
+CREATE TABLE test(a INT UNSIGNED, b Varchar) Engine = Fuse;
 
 INSERT INTO test(a,b) values(888, 'stars');
 INSERT INTO test values(1024, 'stars');

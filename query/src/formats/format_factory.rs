@@ -23,6 +23,7 @@ use common_io::prelude::FormatSettings;
 use once_cell::sync::Lazy;
 use strum::IntoEnumIterator;
 
+use super::format_tsv::TsvInputFormat;
 use crate::formats::format::InputFormat;
 use crate::formats::format_csv::CsvInputFormat;
 use crate::formats::format_parquet::ParquetInputFormat;
@@ -40,6 +41,7 @@ static FORMAT_FACTORY: Lazy<Arc<FormatFactory>> = Lazy::new(|| {
     let mut format_factory = FormatFactory::create();
 
     CsvInputFormat::register(&mut format_factory);
+    TsvInputFormat::register(&mut format_factory);
     ParquetInputFormat::register(&mut format_factory);
 
     format_factory.register_outputs();
@@ -61,6 +63,12 @@ impl FormatFactory {
     pub fn register_input(&mut self, name: &str, creator: InputFormatFactoryCreator) {
         let case_insensitive_desc = &mut self.case_insensitive_desc;
         case_insensitive_desc.insert(name.to_lowercase(), creator);
+    }
+
+    pub fn has_input(&self, name: impl AsRef<str>) -> bool {
+        let origin_name = name.as_ref();
+        let lowercase_name = origin_name.to_lowercase();
+        self.case_insensitive_desc.contains_key(&lowercase_name)
     }
 
     pub fn get_input(

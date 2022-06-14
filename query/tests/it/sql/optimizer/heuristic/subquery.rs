@@ -33,6 +33,18 @@ pub async fn test_optimizer_subquery() -> Result<()> {
             query: "select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)"
                 .to_string(),
             rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "# Uncorrelated subquery".to_string(),
+            query: "select t.number from numbers(1) as t where exists (select * from numbers(1) where number = 0)"
+                .to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "# Uncorrelated subquery".to_string(),
+            query: "select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)"
+                .to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
         }
     ];
 

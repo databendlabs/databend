@@ -16,6 +16,7 @@ pub mod format;
 pub mod format_csv;
 mod format_factory;
 mod format_parquet;
+pub mod format_tsv;
 pub mod output_format;
 pub mod output_format_csv;
 mod output_format_ndjson;

@@ -4,16 +4,43 @@ select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select 
 Project: [number]
     Filter: [number = subquery_4]
         CrossApply
-            PhysicalHashJoin: build keys: [], probe keys: []
-                PhysicalScan: default.system.numbers
-                PhysicalScan: default.system.numbers
+            CrossJoin
+                Scan: default.system.numbers
+                Scan: default.system.numbers
             Max1Row
                 Project: [COUNT(*)]
                     EvalScalar: [COUNT(*)]
                         Aggregate: group items: [], aggregate functions: [COUNT(*)]
                             Filter: [number = number]
-                                PhysicalHashJoin: build keys: [], probe keys: []
-                                    PhysicalScan: default.system.numbers
-                                    PhysicalScan: default.system.numbers
+                                CrossJoin
+                                    Scan: default.system.numbers
+                                    Scan: default.system.numbers
+
+
+# Uncorrelated subquery
+select t.number from numbers(1) as t where exists (select * from numbers(1) where number = 0)
+----
+Project: [number]
+    CrossJoin
+        Scan: default.system.numbers
+        Project: [exists]
+            Filter: [subquery_3]
+                EvalScalar: [count(*) > 0]
+                    Aggregate: group items: [], aggregate functions: [count(*)]
+                        Project: [number]
+                            Filter: [number = 0]
+                                Scan: default.system.numbers
+
+
+# Uncorrelated subquery
+select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
+----
+Project: [number]
+    HashJoin: INNER, build keys: [subquery_1], probe keys: [number]
+        Scan: default.system.numbers
+        Max1Row
+            Project: [number]
+                Filter: [number = 0]
+                    Scan: default.system.numbers
 
 

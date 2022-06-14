@@ -99,7 +99,7 @@ impl<'a> Binder {
 
         let mut s_expr = match &join.op {
             JoinOperator::Inner => self.bind_join_with_type(
-                JoinType::InnerJoin,
+                JoinType::Inner,
                 left_join_conditions,
                 right_join_conditions,
                 left_child,
@@ -115,7 +115,7 @@ impl<'a> Binder {
                 "Unsupported join type: FULL OUTER JOIN",
             )),
             JoinOperator::CrossJoin => self.bind_join_with_type(
-                JoinType::CrossJoin,
+                JoinType::Cross,
                 left_join_conditions,
                 right_join_conditions,
                 left_child,
@@ -142,7 +142,7 @@ impl<'a> Binder {
         left_child: SExpr,
         right_child: SExpr,
     ) -> Result<SExpr> {
-        if join_type == JoinType::CrossJoin
+        if join_type == JoinType::Cross
             && (!left_conditions.is_empty() || !right_conditions.is_empty())
         {
             return Err(ErrorCode::SemanticError(

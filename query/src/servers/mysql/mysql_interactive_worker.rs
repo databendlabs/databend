@@ -84,7 +84,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         "mysql_native_password"
     }
 
-    fn auth_plugin_for_username(&self, _user: &[u8]) -> &str {
+    async fn auth_plugin_for_username(&self, _user: &[u8]) -> &str {
         "mysql_native_password"
     }
 

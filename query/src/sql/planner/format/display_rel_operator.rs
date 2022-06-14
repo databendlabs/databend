@@ -26,6 +26,7 @@ use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Filter;
+use crate::sql::plans::JoinType;
 use crate::sql::plans::LimitPlan;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::LogicalInnerJoin;
@@ -180,11 +181,18 @@ pub fn format_hash_join(
         .map(|scalar| format_scalar(metadata, scalar))
         .collect::<Vec<String>>()
         .join(", ");
-    write!(
-        f,
-        "PhysicalHashJoin: build keys: [{}], probe keys: [{}]",
-        build_keys, probe_keys
-    )
+    match op.join_type {
+        JoinType::Cross => {
+            write!(f, "CrossJoin")
+        }
+        _ => {
+            write!(
+                f,
+                "HashJoin: {}, build keys: [{}], probe keys: [{}]",
+                &op.join_type, build_keys, probe_keys
+            )
+        }
+    }
 }
 
 pub fn format_physical_scan(
@@ -195,7 +203,7 @@ pub fn format_physical_scan(
     let table = metadata.read().table(op.table_index).clone();
     write!(
         f,
-        "PhysicalScan: {}.{}.{}",
+        "Scan: {}.{}.{}",
         &table.catalog, &table.database, &table.name
     )
 }

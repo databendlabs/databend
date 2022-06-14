@@ -14,7 +14,6 @@
 
 use std::str::FromStr;
 
-use common_base::base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_io::prelude::FormatSettings;
@@ -41,6 +40,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::formats::output_format::OutputFormatType;
+use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::SessionType;
@@ -79,7 +79,8 @@ impl QueryError {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct QueryStats {
-    pub scan_progress: Option<ProgressValues>,
+    #[serde(flatten)]
+    pub progresses: Progresses,
     pub running_time_ms: f64,
 }
 
@@ -112,7 +113,7 @@ impl QueryResponse {
         let schema = data.schema().clone();
         let session_id = r.session_id.clone();
         let stats = QueryStats {
-            scan_progress: state.scan_progress.clone(),
+            progresses: state.progresses.clone(),
             running_time_ms: state.running_time_ms,
         };
         QueryResponse {

@@ -1085,7 +1085,7 @@ explain select t1.a from t1 where a > 0;
 ----  mysql
 Project: [a]
     Filter: [a > 0]
-        PhysicalScan: default.default.t1
+        Scan: default.default.t1
 
 
 ----  http
