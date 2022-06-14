@@ -61,8 +61,6 @@ impl FuseTable {
         operation_log: TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
-        let tid = self.table_info.ident.table_id;
-
         let mut tbl = self;
         let mut latest: Arc<dyn Table>;
 
@@ -100,13 +98,21 @@ impl FuseTable {
                 Ok(_) => {
                     break {
                         if self.transient() {
+                            // Removes historical data, if table is transient
+                            tracing::warn!(
+                                "transient table detected, purging historical data. ({})",
+                                tbl.table_info.ident
+                            );
+
+                            let latest = tbl.latest(&ctx, catalog_name).await?;
+                            tbl = FuseTable::try_from_table(latest.as_ref())?;
+
                             let keep_last_snapshot = true;
-                            // Removes history, if table is transient
-                            // Errors of GC, if any, are ignored,
-                            if let Err(e) = self.do_gc(&ctx, keep_last_snapshot).await {
-                                warn!("GC for transient table not success (this is not a permanent error, GC task can be picked up later. the error : {}", e);
+                            if let Err(e) = tbl.do_gc(&ctx, keep_last_snapshot).await {
+                                // Errors of GC, if any, are ignored, since GC task can be picked up
+                                warn!("GC of transient table not success (this is not a permanent error). the error : {}", e);
                             } else {
-                                info!("GC for transient table done");
+                                info!("GC of transient table done");
                             }
                         }
                         Ok(())
@@ -122,16 +128,7 @@ impl FuseTable {
                                 tbl.table_info.ident
                             );
                         common_base::base::tokio::time::sleep(d).await;
-
-                        let catalog = ctx.get_catalog(catalog_name)?;
-                        let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
-                        let table_info: TableInfo = TableInfo {
-                            ident,
-                            desc: "".to_owned(),
-                            name,
-                            meta: meta.as_ref().clone(),
-                        };
-                        latest = catalog.get_table_by_info(&table_info)?;
+                        latest = tbl.latest(&ctx, catalog_name).await?;
                         tbl = FuseTable::try_from_table(latest.as_ref())?;
                         retry_times += 1;
                         continue;
@@ -335,6 +332,20 @@ impl FuseTable {
         )?;
 
         Ok((seg_locs, s))
+    }
+
+    async fn latest(&self, ctx: &QueryContext, catalog_name: &str) -> Result<Arc<dyn Table>> {
+        let name = self.table_info.name.clone();
+        let tid = self.table_info.ident.table_id;
+        let catalog = ctx.get_catalog(catalog_name)?;
+        let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
+        let table_info: TableInfo = TableInfo {
+            ident,
+            desc: "".to_owned(),
+            name,
+            meta: meta.as_ref().clone(),
+        };
+        catalog.get_table_by_info(&table_info)
     }
 }
 
