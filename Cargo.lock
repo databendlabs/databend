@@ -1095,6 +1095,7 @@ dependencies = [
  "enum_dispatch",
  "itertools",
  "lexical-core",
+ "micromarshal",
  "num",
  "once_cell",
  "opensrv-clickhouse",
@@ -1206,6 +1207,7 @@ dependencies = [
  "common-exception",
  "futures",
  "lexical-core",
+ "micromarshal",
  "opendal",
  "rand 0.8.5",
  "serde",
@@ -3902,6 +3904,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "micromarshal"
+version = "0.1.0"
+source = "git+https://github.com/psiace/opensrv?rev=2f3f08c#2f3f08c686767d15e37b3a203cc78042cca0504d"
+
+[[package]]
 name = "mime"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4499,7 +4506,7 @@ dependencies = [
 [[package]]
 name = "opensrv-clickhouse"
 version = "0.1.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=15786d3#15786d3aee58ee1b2430b748f4b958a437a22718"
+source = "git+https://github.com/psiace/opensrv?rev=2f3f08c#2f3f08c686767d15e37b3a203cc78042cca0504d"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -4513,6 +4520,7 @@ dependencies = [
  "futures-util",
  "hostname",
  "lz4",
+ "micromarshal",
  "naive-cityhash",
  "once_cell",
  "thiserror",
@@ -4520,13 +4528,13 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
- "uuid 0.8.2",
+ "uuid 1.1.2",
 ]
 
 [[package]]
 name = "opensrv-mysql"
 version = "0.1.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=93de58a#93de58adcf3a78805dfcf2c4e5f47e3c41c69362"
+source = "git+https://github.com/psiace/opensrv?rev=2f3f08c#2f3f08c686767d15e37b3a203cc78042cca0504d"
 dependencies = [
  "async-trait",
  "byteorder",
