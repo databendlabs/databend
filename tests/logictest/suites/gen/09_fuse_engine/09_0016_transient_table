@@ -20,7 +20,7 @@ statement ok
 INSERT INTO t09_0016 VALUES(3);
 
 statement query I
-select *  from t09_0015 order a;
+select *  from t09_0016 order by a;
 
 --
 1
