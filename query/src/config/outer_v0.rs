@@ -315,6 +315,9 @@ pub struct S3StorageConfig {
     // TODO(xuanwo): We should support both AWS SSE and CSE in the future.
     #[clap(long = "storage-s3-master-key", default_value_t)]
     pub master_key: String,
+
+    #[clap(long = "storage-s3-enable-virtual-host-style")]
+    pub enable_virtual_host_style: bool,
 }
 
 impl Default for S3StorageConfig {
@@ -330,6 +333,7 @@ impl fmt::Debug for S3StorageConfig {
             .field("region", &self.region)
             .field("bucket", &self.bucket)
             .field("root", &self.root)
+            .field("enable_virtual_host_style", &self.enable_virtual_host_style)
             .field("access_key_id", &mask_string(&self.access_key_id, 3))
             .field(
                 "secret_access_key",
@@ -350,6 +354,7 @@ impl From<InnerStorageS3Config> for S3StorageConfig {
             bucket: inner.bucket,
             root: inner.root,
             master_key: inner.master_key,
+            enable_virtual_host_style: inner.enable_virtual_host_style,
         }
     }
 }
@@ -367,6 +372,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             master_key: self.master_key,
             root: self.root,
             disable_credential_loader: false,
+            enable_virtual_host_style: self.enable_virtual_host_style,
         })
     }
 }
