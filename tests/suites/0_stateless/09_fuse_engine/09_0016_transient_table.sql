@@ -1,40 +1,22 @@
-statement ok
 DROP DATABASE IF EXISTS db1;
 
-statement ok
 CREATE DATABASE db1;
 
-statement ok
 USE db1;
 
-statement ok
+select '-- create transient table';
 CREATE TRANSIENT TABLE IF NOT EXISTS t09_0016(a int);
 
-statement ok
+select '-- 3 insertions';
 INSERT INTO t09_0016 VALUES(1);
-
-statement ok
 INSERT INTO t09_0016 VALUES(2);
-
-statement ok
 INSERT INTO t09_0016 VALUES(3);
 
-statement query I
+select '-- check ingestion';
 select * from t09_0016 order by a;
 
---
-1
-2
-3
+select '-- check history count, there should be only one snapshot left';
+select count(*)=1 from fuse_snapshot('db1', 't09_0016');
 
-statement query I
-select count(*) from fuse_snapshot('db1', 't09_0016');
-
---
-1
-
-statement ok
 DROP TABLE t09_0016;
-
-statement ok
 DROP DATABASE db1;
