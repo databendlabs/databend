@@ -54,6 +54,7 @@ use crate::sql::PlanParser;
 #[derive(Deserialize)]
 pub struct StatementHandlerParams {
     query: Option<String>,
+    settings: Option<String>,
 }
 
 async fn execute(
@@ -122,6 +123,14 @@ pub async fn clickhouse_handler_get(
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
+
+    if let Some(settings) = params.settings {
+        let session_settings: Vec<&str> = settings.split_terminator(',').collect();
+        for session_setting in session_settings.into_iter() {
+            let s: Vec<&str> = session_setting.split('=').collect();
+            session.get_settings().set_settings(s[0].to_string(), s[1].to_string(), false).map_err(BadRequest)?;
+        }
+    }
 
     let sql = params.query.unwrap_or_default();
     let (plan, format) = PlanParser::parse_with_format(context.clone(), &sql)
