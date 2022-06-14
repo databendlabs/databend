@@ -1,0 +1,19 @@
+# Correlated subquery with joins
+select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
+----
+Project: [number]
+    Filter: [number = subquery_4]
+        CrossApply
+            CrossJoin
+                Scan: default.system.numbers
+                Scan: default.system.numbers
+            Max1Row
+                Project: [COUNT(*)]
+                    EvalScalar: [COUNT(*)]
+                        Aggregate: group items: [], aggregate functions: [COUNT(*)]
+                            Filter: [number = number]
+                                CrossJoin
+                                    Scan: default.system.numbers
+                                    Scan: default.system.numbers
+
+

@@ -68,6 +68,13 @@ impl BindContext {
         }
     }
 
+    /// Create a new BindContext with self's parent as its parent
+    pub fn replace(&self) -> Self {
+        let mut bind_context = BindContext::new();
+        bind_context.parent = self.parent.clone();
+        bind_context
+    }
+
     /// Generate a new BindContext and take current BindContext as its parent.
     pub fn push(self) -> Self {
         Self::with_parent(Box::new(self))

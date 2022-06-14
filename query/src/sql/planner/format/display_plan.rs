@@ -49,6 +49,10 @@ impl Plan {
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
             Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
 
+            // Roles
+            Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
+            Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
+
             // Stages
             Plan::ShowStages => Ok("SHOW STAGES".to_string()),
             Plan::ListStage(s) => Ok(format!("{:?}", s)),

@@ -173,6 +173,25 @@ async fn test_output_formats() -> PoemResult<()> {
 }
 
 #[tokio::test]
+async fn test_output_format_compress() -> PoemResult<()> {
+    let server = Server::new();
+    let sql = "select 1 format TabSeparated";
+    let (status, body) = server
+        .get_response_bytes(
+            QueryBuilder::new("", None)
+                .compress(true)
+                .body(sql.to_string())
+                .build(),
+        )
+        .await;
+    let body = hex::encode_upper(body);
+    assert_ok!(status, body);
+    let exp = "DE79CF087FB635049DB816DF195B016B820C0000000200000020310A";
+    assert_eq!(&body, exp);
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_insert_format_values() -> PoemResult<()> {
     let server = Server::new();
     {
@@ -296,6 +315,7 @@ struct QueryBuilder {
     sql: String,
     settings: Option<String>,
     body: Option<Body>,
+    compress: bool,
 }
 
 impl QueryBuilder {
@@ -304,6 +324,7 @@ impl QueryBuilder {
             sql: sql.to_string(),
             settings: settings,
             body: None,
+            compress: false,
         }
     }
 
@@ -314,16 +335,21 @@ impl QueryBuilder {
         }
     }
 
+    pub fn compress(self, compress: bool) -> Self {
+        Self { compress, ..self }
+    }
+
     pub fn build(self) -> Request {
-        let uri = match self.settings {
-            Some(settings) => url::form_urlencoded::Serializer::new(String::new())
-                .append_pair("query", &self.sql)
-                .append_pair("settings", &settings)
-                .finish(),
-            None => url::form_urlencoded::Serializer::new(String::new())
-                .append_pair("query", &self.sql)
-                .finish(),
-        };
+        let mut uri = url::form_urlencoded::Serializer::new(String::new());
+        uri.append_pair("query", &self.sql);
+        if let Some(settings) = self.settings {
+            uri.append_pair("settings", &settings);
+        }
+        if self.compress {
+            uri.append_pair("compress", "1");
+        }
+        let uri = uri.finish();
+
         let uri = "/?".to_string() + &uri;
         let uri = uri.parse::<Uri>().unwrap();
         let (method, body) = match self.body {
@@ -354,6 +380,13 @@ impl Server {
                 session_manager,
             });
         Server { endpoint }
+    }
+
+    pub async fn get_response_bytes(&self, req: Request) -> (StatusCode, Vec<u8>) {
+        let response = self.endpoint.get_response(req).await;
+        let status = response.status();
+        let body = response.into_body().into_vec().await.unwrap();
+        (status, body)
     }
 
     pub async fn get_response(&self, req: Request) -> (StatusCode, String) {

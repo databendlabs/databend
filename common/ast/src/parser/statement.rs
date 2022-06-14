@@ -421,6 +421,24 @@ pub fn statement(i: Input) -> IResult<Statement> {
             user,
         },
     );
+    let create_role = map(
+        rule! {
+            CREATE ~ ROLE ~ ( IF ~ NOT ~ EXISTS )? ~ #literal_string
+        },
+        |(_, _, opt_if_not_exists, role_name)| Statement::CreateRole {
+            if_not_exists: opt_if_not_exists.is_some(),
+            role_name,
+        },
+    );
+    let drop_role = map(
+        rule! {
+            DROP ~ ROLE ~ ( IF ~ EXISTS )? ~ #literal_string
+        },
+        |(_, _, opt_if_exists, role_name)| Statement::DropRole {
+            if_exists: opt_if_exists.is_some(),
+            role_name,
+        },
+    );
     let create_udf = map(
         rule! {
             CREATE ~ FUNCTION ~ ( IF ~ NOT ~ EXISTS )?
@@ -612,6 +630,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
             #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <role_option> ...]`"
             | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <role_option> ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
+            | #create_role : "`CREATE ROLE [IF NOT EXISTS] '<role_name>']`"
+            | #drop_role : "`DROP ROLE [IF EXISTS] '<role_name>'`"
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
