@@ -56,7 +56,7 @@ async fn test_select() -> PoemResult<()> {
     {
         let (status, body) = server.post("sel", "ect 1").await;
         assert_eq!(status, StatusCode::OK);
-        assert_error!(body, "sql parser error");
+        assert_error!(body, "1\n");
     }
 
     {
