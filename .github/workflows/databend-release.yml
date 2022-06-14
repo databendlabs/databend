@@ -152,7 +152,7 @@ jobs:
         run: |
           mkdir -p ./target/release
           wget -q https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
-          tar xC ./target/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz bin/*
+          tar x -C ./target/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz --strip-components 1 bin/
 
       - name: Build and push
         id: docker_build
@@ -211,7 +211,7 @@ jobs:
               target=${platform_targets[$platform]}
               wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
               mkdir -p ./target/${target}/release
-              tar xC ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz bin/*
+              tar x -C ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               mkdir -p ./distro/linux/${platform}
               cp ./target/${target}/release/databend-${{ matrix.service }} ./distro/linux/${platform}
           done

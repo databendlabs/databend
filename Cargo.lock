@@ -523,10 +523,22 @@ version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5237f00a8c86130a0cc317830e558b966dd7850d48a953d998c813f01a41b527"
 dependencies = [
- "funty",
+ "funty 1.2.0",
  "radium 0.6.2",
  "tap",
- "wyz",
+ "wyz 0.4.0",
+]
+
+[[package]]
+name = "bitvec"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1489fcb93a5bb47da0462ca93ad252ad6af2145cce58d10d46a83931ba9f016b"
+dependencies = [
+ "funty 2.0.0",
+ "radium 0.7.0",
+ "tap",
+ "wyz 0.5.0",
 ]
 
 [[package]]
@@ -888,7 +900,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1011,7 +1023,7 @@ dependencies = [
  "tikv-jemalloc-sys",
  "tokio",
  "toml",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1155,7 +1167,7 @@ dependencies = [
  "sqlparser",
  "strength_reduce",
  "twox-hash",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -2098,7 +2110,7 @@ dependencies = [
  "twox-hash",
  "typetag",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "walkdir",
  "wiremock",
 ]
@@ -2128,7 +2140,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6ee87af31d84ef885378aebca32be3d682b0e0dc119d5b4860a2c5bb5046730"
 dependencies = [
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -2637,6 +2649,12 @@ name = "funty"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1847abb9cb65d566acd5942e94aea9c8f547ad02c98e1649326fc0e8910b8b1e"
+
+[[package]]
+name = "funty"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
 name = "futures"
@@ -4042,7 +4060,7 @@ dependencies = [
  "lazy_static",
  "lru",
  "mio",
- "mysql_common",
+ "mysql_common 0.28.2",
  "native-tls",
  "once_cell",
  "pem 1.0.2",
@@ -4057,7 +4075,7 @@ dependencies = [
  "tokio-util 0.6.10",
  "twox-hash",
  "url",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -4071,6 +4089,43 @@ dependencies = [
  "bindgen",
  "bitflags",
  "bitvec 0.22.3",
+ "byteorder",
+ "bytes 1.1.0",
+ "cc",
+ "cmake",
+ "crc32fast",
+ "flate2",
+ "frunk",
+ "lazy_static",
+ "lexical",
+ "num-bigint 0.4.3",
+ "num-traits",
+ "rand 0.8.5",
+ "regex",
+ "rust_decimal",
+ "saturating",
+ "serde",
+ "serde_json",
+ "sha-1",
+ "sha2 0.10.2",
+ "smallvec",
+ "subprocess",
+ "thiserror",
+ "time 0.3.9",
+ "uuid 0.8.2",
+]
+
+[[package]]
+name = "mysql_common"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20ce6fdcef94a8e87fea3f9402de4d7e403f10e8c20b6e2bd207e6b6f8a4eab0"
+dependencies = [
+ "base64 0.13.0",
+ "bigdecimal",
+ "bindgen",
+ "bitflags",
+ "bitvec 1.0.0",
  "byteorder",
  "bytes 1.1.0",
  "cc",
@@ -4095,7 +4150,7 @@ dependencies = [
  "subprocess",
  "thiserror",
  "time 0.3.9",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -4465,18 +4520,18 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
 name = "opensrv-mysql"
 version = "0.1.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=967477f1#967477f1f7005f8911a7d6c38cefbba4edd755ad"
+source = "git+https://github.com/datafuselabs/opensrv?rev=93de58a#93de58adcf3a78805dfcf2c4e5f47e3c41c69362"
 dependencies = [
  "async-trait",
  "byteorder",
  "chrono",
- "mysql_common",
+ "mysql_common 0.29.0",
  "nom",
  "tokio",
 ]
@@ -5406,6 +5461,12 @@ name = "radium"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "643f8f41a8ebc4c5dc4515c82bb8abd397b527fc20fd681b7c011c2aee5d44fb"
+
+[[package]]
+name = "radium"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand"
@@ -6482,7 +6543,7 @@ dependencies = [
  "debugid",
  "memmap2",
  "stable_deref_trait",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -7339,6 +7400,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6469f4314d5f1ffec476e05f17cc9a78bc7a27a6a857842170bdf8d6f98d2f"
+
+[[package]]
 name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7665,6 +7732,15 @@ name = "wyz"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "129e027ad65ce1453680623c3fb5163cbf7107bfe1aa32257e7d0e63f9ced188"
+dependencies = [
+ "tap",
+]
+
+[[package]]
+name = "wyz"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30b31594f29d27036c383b53b59ed3476874d518f0efb151b27a4c275141390e"
 dependencies = [
  "tap",
 ]
