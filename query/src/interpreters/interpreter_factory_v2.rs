@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::*;
@@ -55,6 +56,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::TruncateTable(_)
                 | DfStatement::OptimizeTable(_)
                 | DfStatement::DropView(_)
+                | DfStatement::ShowFunctions(_)
                 | DfStatement::ShowMetrics(_)
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
@@ -86,10 +88,6 @@ impl InterpreterFactoryV2 {
             Plan::Explain { kind, plan } => {
                 ExplainInterpreterV2::try_create(ctx, *plan.clone(), kind.clone())
             }
-
-            Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
-            Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
-            Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
 
             // Databases
             Plan::ShowDatabases(show_databases) => {
@@ -181,6 +179,15 @@ impl InterpreterFactoryV2 {
             }
             Plan::DropStage(s) => DropUserStageInterpreter::try_create(ctx, *s.clone()),
             Plan::RemoveStage(s) => RemoveUserStageInterpreter::try_create(ctx, *s.clone()),
+
+            // Shows
+            Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
+            Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
+            Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
+
+            Plan::ShowFunction(_) => Err(ErrorCode::UnImplement(
+                "SHOW FUNCTIONS should be rewritten to SELECT at binding phase",
+            )),
         }?;
         Ok(inner)
     }

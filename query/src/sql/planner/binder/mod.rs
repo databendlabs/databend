@@ -48,6 +48,7 @@ mod scalar;
 mod scalar_common;
 mod scalar_visitor;
 mod select;
+mod show;
 mod sort;
 mod subquery;
 mod table;
@@ -105,6 +106,10 @@ impl<'a> Binder {
                 kind: kind.clone(),
                 plan: Box::new(self.bind_statement(bind_context, query).await?),
             },
+
+            Statement::ShowFunctions { limit } => {
+                self.bind_show_functions(bind_context, limit).await?
+            }
 
             Statement::ShowMetrics => Plan::ShowMetrics,
             Statement::ShowProcessList => Plan::ShowProcessList,

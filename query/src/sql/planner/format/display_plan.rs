@@ -27,10 +27,6 @@ impl Plan {
                 Ok(format!("{:?}:\n{}", kind, result))
             }
 
-            Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
-            Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
-            Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
-
             // Databases
             Plan::ShowDatabases(show_databases) => Ok(format!("{:?}", show_databases)),
             Plan::ShowCreateDatabase(show_create_database) => {
@@ -81,6 +77,12 @@ impl Plan {
             Plan::CreateStage(create_stage) => Ok(format!("{:?}", create_stage)),
             Plan::DropStage(s) => Ok(format!("{:?}", s)),
             Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
+
+            // Shows
+            Plan::ShowFunction(show_func) => Ok(format!("{:?}", show_func)),
+            Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
+            Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
+            Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
         }
     }
 }
