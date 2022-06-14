@@ -140,7 +140,7 @@ fn test_format() {
                 },
             }
             .into()],
-            join_type: JoinType::InnerJoin,
+            join_type: JoinType::Inner,
         }
         .into(),
         SExpr::create_unary(
@@ -174,10 +174,10 @@ fn test_format() {
 
     let tree = s_expr.to_format_tree(&metadata_ref);
     let result = tree.format_indent().unwrap();
-    let expect = r#"PhysicalHashJoin: build keys: [plus(col1, 123)], probe keys: [col2]
+    let expect = r#"HashJoin: INNER, build keys: [plus(col1, 123)], probe keys: [col2]
     Filter: [true]
-        PhysicalScan: catalog.database.table
-    PhysicalScan: catalog.database.table
+        Scan: catalog.database.table
+    Scan: catalog.database.table
 "#;
     assert_eq!(result.as_str(), expect);
 }

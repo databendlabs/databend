@@ -145,7 +145,7 @@ impl ChainingHashTable {
         let mut results: Vec<DataBlock> = vec![];
         let keys = method.build_keys(&probe_keys, input.num_rows())?;
         match self.join_type {
-            JoinType::InnerJoin => {
+            JoinType::Inner => {
                 for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
                     let probe_result_ptr = hash_table.find_key(key);
                     if probe_result_ptr.is_none() {
@@ -158,7 +158,7 @@ impl ChainingHashTable {
                     results.push(self.merge_block(&build_block, &probe_block)?);
                 }
             }
-            JoinType::SemiJoin => {
+            JoinType::Semi => {
                 for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
                     let probe_result_ptr = hash_table.find_key(key);
                     if probe_result_ptr.is_none() {
@@ -168,7 +168,7 @@ impl ChainingHashTable {
                     results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
                 }
             }
-            JoinType::AntiJoin => {
+            JoinType::Anti => {
                 for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
                     let probe_result_ptr = hash_table.find_key(key);
                     if probe_result_ptr.is_none() {
@@ -232,7 +232,7 @@ impl ChainingHashTable {
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
                 match self.join_type {
-                    JoinType::InnerJoin => {
+                    JoinType::Inner => {
                         for (i, key) in serialized_probe_keys
                             .iter()
                             .enumerate()
@@ -250,7 +250,7 @@ impl ChainingHashTable {
                             results.push(self.merge_block(&build_block, &probe_block)?);
                         }
                     }
-                    JoinType::SemiJoin => {
+                    JoinType::Semi => {
                         for (i, key) in serialized_probe_keys
                             .iter()
                             .enumerate()
@@ -265,7 +265,7 @@ impl ChainingHashTable {
                             results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
                         }
                     }
-                    JoinType::AntiJoin => {
+                    JoinType::Anti => {
                         for (i, key) in serialized_probe_keys
                             .iter()
                             .enumerate()
@@ -370,8 +370,8 @@ impl HashJoinState for ChainingHashTable {
 
     fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
         match self.join_type {
-            JoinType::InnerJoin | JoinType::SemiJoin | JoinType::AntiJoin => self.probe_join(input),
-            JoinType::CrossJoin => self.probe_cross_join(input),
+            JoinType::Inner | JoinType::Semi | JoinType::Anti => self.probe_join(input),
+            JoinType::Cross => self.probe_cross_join(input),
             _ => unimplemented!("{} is unimplemented", self.join_type),
         }
     }
