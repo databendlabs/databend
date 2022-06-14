@@ -31,6 +31,8 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SortPlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
+use common_planners::WindowFuncPlan;
+use enum_extract::let_extract;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
@@ -105,6 +107,66 @@ impl ScattersOptimizerImpl {
             None => Err(ErrorCode::LogicalError("Standalone aggr input is None")),
             Some(input) => PlanBuilder::from(input.as_ref())
                 .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
+                .build(),
+        }
+    }
+
+    fn cluster_window(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
+        match self.input.take() {
+            None => Err(ErrorCode::LogicalError("Cluster window input is None")),
+            Some(input) => {
+                let_extract!(
+                    Expression::WindowFunction {
+                        op: _op,
+                        params: _params,
+                        args: _args,
+                        partition_by: partition_by,
+                        order_by: _order_by,
+                        window_frame: _window_frame
+                    },
+                    &plan.window_func,
+                    panic!()
+                );
+
+                let stage_input = if !partition_by.is_empty() {
+                    let mut concat_ws_args = vec![Expression::create_literal(DataValue::String(
+                        "#".as_bytes().to_vec(),
+                    ))];
+                    concat_ws_args.extend(partition_by.to_owned());
+                    let concat_partition_by =
+                        Expression::create_scalar_function("concat_ws", concat_ws_args);
+
+                    let scatters_expr =
+                        Expression::create_scalar_function("sipHash", vec![concat_partition_by]);
+
+                    PlanNode::Stage(StagePlan {
+                        scatters_expr,
+                        kind: StageKind::Normal,
+                        input,
+                    })
+                } else {
+                    self.running_mode = RunningMode::Standalone;
+                    PlanNode::Stage(StagePlan {
+                        scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
+                        kind: StageKind::Convergent,
+                        input,
+                    })
+                };
+
+                Ok(PlanNode::WindowFunc(WindowFuncPlan {
+                    window_func: plan.window_func.to_owned(),
+                    input: Arc::new(stage_input),
+                    schema: plan.schema.to_owned(),
+                }))
+            }
+        }
+    }
+
+    fn standalone_window(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
+        match self.input.take() {
+            None => Err(ErrorCode::LogicalError("Standalone window input is None")),
+            Some(input) => PlanBuilder::from(input.as_ref())
+                .window_func(plan.window_func.to_owned())?
                 .build(),
         }
     }
@@ -248,6 +310,17 @@ impl PlanRewriter for ScattersOptimizerImpl {
             Some(schema_before_group_by) => PlanBuilder::from(&new_input)
                 .aggregate_final(schema_before_group_by, &plan.aggr_expr, &plan.group_expr)?
                 .build(),
+        }
+    }
+
+    fn rewrite_window_func(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
+        let new_input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+
+        self.input = Some(new_input);
+
+        match self.running_mode {
+            RunningMode::Cluster => self.cluster_window(plan),
+            RunningMode::Standalone => self.standalone_window(plan),
         }
     }
 

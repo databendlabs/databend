@@ -3,12 +3,14 @@ show tables
 ---------- Output ---------
 SHOW TABLES
 ---------- AST ------------
-ShowTables {
-    database: None,
-    full: false,
-    limit: None,
-    with_history: false,
-}
+ShowTables(
+    ShowTablesStmt {
+        database: None,
+        full: false,
+        limit: None,
+        with_history: false,
+    },
+)
 
 
 ---------- Input ----------
@@ -24,20 +26,23 @@ show create table a.b;
 ---------- Output ---------
 SHOW CREATE TABLE a.b
 ---------- AST ------------
-ShowCreateTable {
-    database: Some(
-        Identifier {
-            name: "a",
+ShowCreateTable(
+    ShowCreateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(18..19),
+            },
+        ),
+        table: Identifier {
+            name: "b",
             quote: None,
-            span: Ident(18..19),
+            span: Ident(20..21),
         },
-    ),
-    table: Identifier {
-        name: "b",
-        quote: None,
-        span: Ident(20..21),
     },
-}
+)
 
 
 ---------- Input ----------
@@ -113,15 +118,17 @@ describe a;
 ---------- Output ---------
 DESCRIBE a
 ---------- AST ------------
-Describe {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "a",
-        quote: None,
-        span: Ident(9..10),
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(9..10),
+        },
     },
-}
+)
 
 
 ---------- Input ----------
@@ -129,29 +136,33 @@ describe a; describe b
 ---------- Output ---------
 DESCRIBE a
 ---------- AST ------------
-Describe {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "a",
-        quote: None,
-        span: Ident(9..10),
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(9..10),
+        },
     },
-}
+)
 
 
 ---------- Output ---------
 DESCRIBE b
 ---------- AST ------------
-Describe {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "b",
-        quote: None,
-        span: Ident(21..22),
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(21..22),
+        },
     },
-}
+)
 
 
 ---------- Input ----------
@@ -162,6 +173,7 @@ CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
 CreateTable(
     CreateTableStmt {
         if_not_exists: true,
+        catalog: None,
         database: Some(
             Identifier {
                 name: "a",
@@ -225,6 +237,7 @@ CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL) A
 CreateTable(
     CreateTableStmt {
         if_not_exists: true,
+        catalog: None,
         database: Some(
             Identifier {
                 name: "a",
@@ -335,6 +348,7 @@ CREATE TABLE a.b LIKE c.d
 CreateTable(
     CreateTableStmt {
         if_not_exists: false,
+        catalog: None,
         database: Some(
             Identifier {
                 name: "a",
@@ -349,6 +363,7 @@ CreateTable(
         },
         source: Some(
             Like {
+                catalog: None,
                 database: Some(
                     Identifier {
                         name: "c",
@@ -379,6 +394,7 @@ CREATE TABLE t LIKE t2ENGINE = MEMORY
 CreateTable(
     CreateTableStmt {
         if_not_exists: false,
+        catalog: None,
         database: None,
         table: Identifier {
             name: "t",
@@ -387,6 +403,7 @@ CreateTable(
         },
         source: Some(
             Like {
+                catalog: None,
                 database: None,
                 table: Identifier {
                     name: "t2",
@@ -412,15 +429,18 @@ truncate table a;
 ---------- Output ---------
 TRUNCATE TABLE a
 ---------- AST ------------
-TruncateTable {
-    database: None,
-    table: Identifier {
-        name: "a",
-        quote: None,
-        span: Ident(15..16),
+TruncateTable(
+    TruncateTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(15..16),
+        },
+        purge: false,
     },
-    purge: false,
-}
+)
 
 
 ---------- Input ----------
@@ -428,23 +448,26 @@ truncate table "a".b;
 ---------- Output ---------
 TRUNCATE TABLE "a".b
 ---------- AST ------------
-TruncateTable {
-    database: Some(
-        Identifier {
-            name: "a",
-            quote: Some(
-                '"',
-            ),
-            span: QuotedString(15..18),
+TruncateTable(
+    TruncateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: Some(
+                    '"',
+                ),
+                span: QuotedString(15..18),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(19..20),
         },
-    ),
-    table: Identifier {
-        name: "b",
-        quote: None,
-        span: Ident(19..20),
+        purge: false,
     },
-    purge: false,
-}
+)
 
 
 ---------- Input ----------
@@ -452,16 +475,19 @@ drop table a;
 ---------- Output ---------
 DROP TABLE a
 ---------- AST ------------
-DropTable {
-    if_exists: false,
-    database: None,
-    table: Identifier {
-        name: "a",
-        quote: None,
-        span: Ident(11..12),
+DropTable(
+    DropTableStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(11..12),
+        },
+        all: false,
     },
-    all: false,
-}
+)
 
 
 ---------- Input ----------
@@ -469,24 +495,27 @@ drop table if exists a."b";
 ---------- Output ---------
 DROP TABLE IF EXISTS a."b"
 ---------- AST ------------
-DropTable {
-    if_exists: true,
-    database: Some(
-        Identifier {
-            name: "a",
-            quote: None,
-            span: Ident(21..22),
-        },
-    ),
-    table: Identifier {
-        name: "b",
-        quote: Some(
-            '"',
+DropTable(
+    DropTableStmt {
+        if_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(21..22),
+            },
         ),
-        span: QuotedString(23..26),
+        table: Identifier {
+            name: "b",
+            quote: Some(
+                '"',
+            ),
+            span: QuotedString(23..26),
+        },
+        all: false,
     },
-    all: false,
-}
+)
 
 
 ---------- Input ----------
@@ -649,6 +678,7 @@ CREATE TABLE c (a DATETIME NULL, b DATETIME(3) NOT NULL)
 CreateTable(
     CreateTableStmt {
         if_not_exists: false,
+        catalog: None,
         database: None,
         table: Identifier {
             name: "c",
@@ -703,6 +733,7 @@ CREATE VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
 CreateView(
     CreateViewStmt {
         if_not_exists: false,
+        catalog: None,
         database: None,
         view: Identifier {
             name: "v",
@@ -811,19 +842,194 @@ CreateView(
 
 
 ---------- Input ----------
+alter view v as select number % 3 as a from numbers(1000);
+---------- Output ---------
+ALTER VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
+---------- AST ------------
+AlterView(
+    AlterViewStmt {
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v",
+            quote: None,
+            span: Ident(11..12),
+        },
+        query: Query {
+            span: [
+                SELECT(16..22),
+                Ident(23..29),
+                Modulo(30..31),
+                LiteralInteger(32..33),
+                AS(34..36),
+                Ident(37..38),
+                FROM(39..43),
+                Ident(44..51),
+                LParen(51..52),
+                LiteralInteger(52..56),
+                RParen(56..57),
+            ],
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(16..22),
+                        Ident(23..29),
+                        Modulo(30..31),
+                        LiteralInteger(32..33),
+                        AS(34..36),
+                        Ident(37..38),
+                        FROM(39..43),
+                        Ident(44..51),
+                        LParen(51..52),
+                        LiteralInteger(52..56),
+                        RParen(56..57),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: BinaryOp {
+                                span: [
+                                    Modulo(30..31),
+                                ],
+                                op: Modulo,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(23..29),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "number",
+                                        quote: None,
+                                        span: Ident(23..29),
+                                    },
+                                },
+                                right: Literal {
+                                    span: [
+                                        LiteralInteger(32..33),
+                                    ],
+                                    lit: Integer(
+                                        3,
+                                    ),
+                                },
+                            },
+                            alias: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(37..38),
+                                },
+                            ),
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            name: Identifier {
+                                name: "numbers",
+                                quote: None,
+                                span: Ident(44..51),
+                            },
+                            params: [
+                                Literal {
+                                    span: [
+                                        LiteralInteger(52..56),
+                                    ],
+                                    lit: Integer(
+                                        1000,
+                                    ),
+                                },
+                            ],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            format: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+drop view v;
+---------- Output ---------
+DROP VIEW v
+---------- AST ------------
+DropView(
+    DropViewStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v",
+            quote: None,
+            span: Ident(10..11),
+        },
+    },
+)
+
+
+---------- Input ----------
+rename table d.t to e.s;
+---------- Output ---------
+RENAME TABLE d.t TO e.s
+---------- AST ------------
+RenameTable(
+    RenameTableStmt {
+        if_exists: false,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "d",
+                quote: None,
+                span: Ident(13..14),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(15..16),
+        },
+        new_catalog: None,
+        new_database: Some(
+            Identifier {
+                name: "e",
+                quote: None,
+                span: Ident(20..21),
+            },
+        ),
+        new_table: Identifier {
+            name: "s",
+            quote: None,
+            span: Ident(22..23),
+        },
+    },
+)
+
+
+---------- Input ----------
 truncate table test;
 ---------- Output ---------
 TRUNCATE TABLE test
 ---------- AST ------------
-TruncateTable {
-    database: None,
-    table: Identifier {
-        name: "test",
-        quote: None,
-        span: Ident(15..19),
+TruncateTable(
+    TruncateTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "test",
+            quote: None,
+            span: Ident(15..19),
+        },
+        purge: false,
     },
-    purge: false,
-}
+)
 
 
 ---------- Input ----------
@@ -831,21 +1037,24 @@ truncate table test_db.test;
 ---------- Output ---------
 TRUNCATE TABLE test_db.test
 ---------- AST ------------
-TruncateTable {
-    database: Some(
-        Identifier {
-            name: "test_db",
+TruncateTable(
+    TruncateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test_db",
+                quote: None,
+                span: Ident(15..22),
+            },
+        ),
+        table: Identifier {
+            name: "test",
             quote: None,
-            span: Ident(15..22),
+            span: Ident(23..27),
         },
-    ),
-    table: Identifier {
-        name: "test",
-        quote: None,
-        span: Ident(23..27),
+        purge: false,
     },
-    purge: false,
-}
+)
 
 
 ---------- Input ----------
@@ -853,16 +1062,19 @@ DROP table table1;
 ---------- Output ---------
 DROP TABLE table1
 ---------- AST ------------
-DropTable {
-    if_exists: false,
-    database: None,
-    table: Identifier {
-        name: "table1",
-        quote: None,
-        span: Ident(11..17),
+DropTable(
+    DropTableStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "table1",
+            quote: None,
+            span: Ident(11..17),
+        },
+        all: false,
     },
-    all: false,
-}
+)
 
 
 ---------- Input ----------
@@ -870,16 +1082,19 @@ DROP table IF EXISTS table1;
 ---------- Output ---------
 DROP TABLE IF EXISTS table1
 ---------- AST ------------
-DropTable {
-    if_exists: true,
-    database: None,
-    table: Identifier {
-        name: "table1",
-        quote: None,
-        span: Ident(21..27),
+DropTable(
+    DropTableStmt {
+        if_exists: true,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "table1",
+            quote: None,
+            span: Ident(21..27),
+        },
+        all: false,
     },
-    all: false,
-}
+)
 
 
 ---------- Input ----------
@@ -890,6 +1105,7 @@ CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 STRING NULL)
 CreateTable(
     CreateTableStmt {
         if_not_exists: false,
+        catalog: None,
         database: None,
         table: Identifier {
             name: "t",
@@ -948,6 +1164,7 @@ CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 STRING NOT NULL)
 CreateTable(
     CreateTableStmt {
         if_not_exists: false,
+        catalog: None,
         database: None,
         table: Identifier {
             name: "t",
@@ -1006,6 +1223,7 @@ CREATE TABLE t (c1 Int32 NOT NULL DEFAULT 1)
 CreateTable(
     CreateTableStmt {
         if_not_exists: false,
+        catalog: None,
         database: None,
         table: Identifier {
             name: "t",
@@ -2604,6 +2822,7 @@ insert into t (c1, c2) values (1, 2), (3, 4);
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
 ---------- AST ------------
 Insert {
+    catalog: None,
     database: None,
     table: Identifier {
         name: "t",
@@ -2647,6 +2866,7 @@ insert into table t format json;
 INSERT INTO t FORMAT json
 ---------- AST ------------
 Insert {
+    catalog: None,
     database: None,
     table: Identifier {
         name: "t",
@@ -2667,6 +2887,7 @@ insert into table t select * from t2;
 INSERT INTO t SELECT * FROM t2
 ---------- AST ------------
 Insert {
+    catalog: None,
     database: None,
     table: Identifier {
         name: "t",
@@ -2830,6 +3051,45 @@ Query(
 
 
 ---------- Input ----------
+CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( FORMAT = 'CSV' compression = 'GZIP' record_delimiter = ',' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: true,
+        stage_name: "test_stage",
+        location: "s3://load/files/",
+        credential_options: {
+            "aws_key_id": "1a2b3c",
+            "aws_secret_key": "4x5y6z",
+        },
+        encryption_options: {},
+        file_format_options: {
+            "FORMAT": "CSV",
+            "compression": "GZIP",
+            "record_delimiter": ",",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
+list @stage_a;
+---------- Output ---------
+LIST @stage_a
+---------- AST ------------
+ListStage {
+    location: "stage_a",
+    pattern: "",
+}
+
+
+---------- Input ----------
 create user 'test-e'@'localhost' identified by 'password';
 ---------- Output ---------
 CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password'
@@ -2891,35 +3151,60 @@ AlterUser {
 
 
 ---------- Input ----------
+create role 'test'
+---------- Output ---------
+CREATE ROLE test
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "test",
+}
+
+
+---------- Input ----------
+drop role if exists 'test'
+---------- Output ---------
+DROP ROLE IF EXISTS test
+---------- AST ------------
+DropRole {
+    if_exists: true,
+    role_name: "test",
+}
+
+
+---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
 ALTER TABLE t CLUSTER BY c1
 ---------- AST ------------
-AlterTable {
-    if_exists: false,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(12..13),
-    },
-    action: AlterClusterKey {
-        cluster_by: [
-            ColumnRef {
-                span: [
-                    Ident(25..27),
-                ],
-                database: None,
-                table: None,
-                column: Identifier {
-                    name: "c1",
-                    quote: None,
-                    span: Ident(25..27),
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(12..13),
+        },
+        action: AlterTableClusterKey {
+            cluster_by: [
+                ColumnRef {
+                    span: [
+                        Ident(25..27),
+                    ],
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "c1",
+                        quote: None,
+                        span: Ident(25..27),
+                    },
                 },
-            },
-        ],
+            ],
+        },
     },
-}
+)
 
 
 ---------- Input ----------
@@ -2927,15 +3212,105 @@ ALTER TABLE t DROP CLUSTER KEY;
 ---------- Output ---------
 ALTER TABLE t DROP CLUSTER KEY
 ---------- AST ------------
-AlterTable {
-    if_exists: false,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(12..13),
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(12..13),
+        },
+        action: DropTableClusterKey,
     },
-    action: DropClusterKey,
-}
+)
+
+
+---------- Input ----------
+ALTER DATABASE IF EXISTS catalog.c RENAME TO a;
+---------- Output ---------
+ALTER DATABASE IF EXISTS catalog.c RENAME TO a
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: true,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(25..32),
+            },
+        ),
+        database: Identifier {
+            name: "c",
+            quote: None,
+            span: Ident(33..34),
+        },
+        action: RenameDatabase {
+            new_db: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(45..46),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER DATABASE c RENAME TO a;
+---------- Output ---------
+ALTER DATABASE c RENAME TO a
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: false,
+        catalog: None,
+        database: Identifier {
+            name: "c",
+            quote: None,
+            span: Ident(15..16),
+        },
+        action: RenameDatabase {
+            new_db: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(27..28),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER DATABASE catalog.c RENAME TO a;
+---------- Output ---------
+ALTER DATABASE catalog.c RENAME TO a
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: false,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(15..22),
+            },
+        ),
+        database: Identifier {
+            name: "c",
+            quote: None,
+            span: Ident(23..24),
+        },
+        action: RenameDatabase {
+            new_db: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(35..36),
+            },
+        },
+    },
+)
 
 

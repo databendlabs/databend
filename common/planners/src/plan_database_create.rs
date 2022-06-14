@@ -25,7 +25,7 @@ pub struct CreateDatabasePlan {
     pub if_not_exists: bool,
     pub tenant: String,
     pub catalog: String,
-    pub db: String,
+    pub database: String,
     pub meta: DatabaseMeta,
 }
 
@@ -35,7 +35,7 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
             name_ident: DatabaseNameIdent {
                 tenant: p.tenant,
-                db_name: p.db,
+                db_name: p.database,
             },
             meta: p.meta,
         }
@@ -48,7 +48,7 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
             name_ident: DatabaseNameIdent {
                 tenant: p.tenant.clone(),
-                db_name: p.db.clone(),
+                db_name: p.database.clone(),
             },
             meta: p.meta.clone(),
         }

@@ -139,7 +139,6 @@ impl<'a> DfParser<'a> {
             stmts.push(statement);
             expecting_statement_delimiter = true;
         }
-
         let mut hints = Vec::new();
 
         let mut parser = DfParser::new_with_dialect(sql, dialect)?;
@@ -230,6 +229,10 @@ impl<'a> DfParser<'a> {
                         "USE" => self.parse_use_database(),
                         "KILL" => self.parse_kill_query(),
                         "OPTIMIZE" => self.parse_optimize(),
+                        "REMOVE" => {
+                            *self = Self::new_with_dialect(self.sql, &SnowflakeDialect {})?;
+                            self.parse_remove()
+                        }
                         "UNDROP" => {
                             self.parser.next_token();
                             self.parse_undrop()
@@ -330,7 +333,7 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_desc_table(),
-                Keyword::STAGE => self.parse_desc_stage(),
+                Keyword::STAGE => self.parse_describe_stage(),
 
                 _ => {
                     self.parser.prev_token();
@@ -371,6 +374,14 @@ impl<'a> DfParser<'a> {
                 _ => self.expected("drop statement", Token::Word(w)),
             },
             unexpected => self.expected("drop statement", unexpected),
+        }
+    }
+
+    /// Remove stage.
+    fn parse_remove(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        match self.consume_token("REMOVE") {
+            true => self.parse_remove_stage(),
+            false => self.expected("Must REMOVE", self.parser.peek_token()),
         }
     }
 

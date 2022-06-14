@@ -19,16 +19,16 @@ use common_datavalues::DataType;
 
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
-use crate::AlterClusterKeyPlan;
+use crate::AlterTableClusterKeyPlan;
 use crate::BroadcastPlan;
 use crate::CallPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateRolePlan;
 use crate::CreateTablePlan;
-use crate::DropClusterKeyPlan;
 use crate::DropDatabasePlan;
 use crate::DropRolePlan;
+use crate::DropTableClusterKeyPlan;
 use crate::DropTablePlan;
 use crate::Expression;
 use crate::ExpressionPlan;
@@ -73,6 +73,9 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::AggregatorFinal(plan) => Self::format_aggregator_final(f, plan),
             PlanNode::Filter(plan) => write!(f, "Filter: {:?}", plan.predicate),
             PlanNode::Having(plan) => write!(f, "Having: {:?}", plan.predicate),
+            PlanNode::WindowFunc(plan) => {
+                write!(f, "WindowFunc: {:?}", plan.window_func)
+            }
             PlanNode::Sort(plan) => Self::format_sort(f, plan),
             PlanNode::Limit(plan) => Self::format_limit(f, plan),
             PlanNode::SubQueryExpression(plan) => Self::format_subquery_expr(f, plan),
@@ -87,8 +90,8 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::DropRole(plan) => Self::format_drop_role(f, plan),
             PlanNode::Copy(plan) => Self::format_copy(f, plan),
             PlanNode::Call(plan) => Self::format_call(f, plan),
-            PlanNode::AlterClusterKey(plan) => Self::format_alter_cluster_key(f, plan),
-            PlanNode::DropClusterKey(plan) => Self::format_drop_cluster_key(f, plan),
+            PlanNode::AlterTableClusterKey(plan) => Self::format_alter_table_cluster_key(f, plan),
+            PlanNode::DropTableClusterKey(plan) => Self::format_drop_table_cluster_key(f, plan),
             _ => {
                 let mut printed = true;
 
@@ -277,7 +280,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     }
 
     fn format_create_database(f: &mut Formatter, plan: &CreateDatabasePlan) -> fmt::Result {
-        write!(f, "Create database {:},", plan.db)?;
+        write!(f, "Create database {:},", plan.database)?;
         write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
         if !plan.meta.engine.is_empty() {
             write!(
@@ -290,7 +293,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     }
 
     fn format_drop_database(f: &mut Formatter, plan: &DropDatabasePlan) -> fmt::Result {
-        write!(f, "Drop database {:},", plan.db)?;
+        write!(f, "Drop database {:},", plan.database)?;
         write!(f, " if_exists:{:}", plan.if_exists)
     }
 
@@ -305,7 +308,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     }
 
     fn format_create_table(f: &mut Formatter, plan: &CreateTablePlan) -> fmt::Result {
-        write!(f, "Create table {:}.{:}", plan.db, plan.table)?;
+        write!(f, "Create table {:}.{:}", plan.database, plan.table)?;
         write!(f, " {:},", plan.schema())?;
         // need engine to impl Display
         write!(f, " engine: {},", plan.engine())?;
@@ -315,7 +318,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     }
 
     fn format_drop_table(f: &mut Formatter, plan: &DropTablePlan) -> fmt::Result {
-        write!(f, "Drop table {:}.{:},", plan.db, plan.table)?;
+        write!(f, "Drop table {:}.{:},", plan.database, plan.table)?;
         write!(f, " if_exists:{:}", plan.if_exists)
     }
 
@@ -326,10 +329,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             write!(
                 f,
                 "{:}.{:} to {:}.{:}",
-                entity.database_name,
-                entity.table_name,
-                entity.new_database_name,
-                entity.new_table_name
+                entity.database, entity.table, entity.new_database, entity.new_table
             )?;
 
             if i + 1 != plan.entities.len() {
@@ -343,7 +343,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         write!(f, "Rename database,")?;
         write!(f, " [")?;
         for (i, entity) in plan.entities.iter().enumerate() {
-            write!(f, "{:} to {:}", entity.db, entity.new_db,)?;
+            write!(f, "{:} to {:}", entity.database, entity.new_database,)?;
 
             if i + 1 != plan.entities.len() {
                 write!(f, ", ")?;
@@ -361,20 +361,22 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         write!(f, " args: {:?}", plan.args)
     }
 
-    fn format_alter_cluster_key(f: &mut Formatter, plan: &AlterClusterKeyPlan) -> fmt::Result {
-        write!(
-            f,
-            "Alter table {:}.{:}",
-            plan.database_name, plan.table_name
-        )?;
+    fn format_alter_table_cluster_key(
+        f: &mut Formatter,
+        plan: &AlterTableClusterKeyPlan,
+    ) -> fmt::Result {
+        write!(f, "Alter table {:}.{:}", plan.database, plan.table)?;
         write!(f, " cluster by {:?}", plan.cluster_keys)
     }
 
-    fn format_drop_cluster_key(f: &mut Formatter, plan: &DropClusterKeyPlan) -> fmt::Result {
+    fn format_drop_table_cluster_key(
+        f: &mut Formatter,
+        plan: &DropTableClusterKeyPlan,
+    ) -> fmt::Result {
         write!(
             f,
             "Alter table {:}.{:} drop cluster key",
-            plan.database_name, plan.table_name
+            plan.database, plan.table
         )
     }
 }

@@ -14,60 +14,48 @@
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
-use common_datavalues::TypeSerializerImpl;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
 use crate::formats::output_format::OutputFormat;
 
 #[derive(Default)]
-pub struct NDJsonOutputFormat {
-    serializers: Vec<TypeSerializerImpl>,
-}
+pub struct JsonEachRowOutputFormat {}
 
-impl NDJsonOutputFormat {
-    pub fn create(schema: DataSchemaRef) -> Self {
-        let serializers: Vec<_> = schema
-            .fields()
-            .iter()
-            .map(|field| field.data_type().create_serializer())
-            .collect();
-
-        Self { serializers }
+impl JsonEachRowOutputFormat {
+    pub fn create(_schema: DataSchemaRef) -> Self {
+        Self {}
     }
 }
 
-impl OutputFormat for NDJsonOutputFormat {
+impl OutputFormat for JsonEachRowOutputFormat {
     fn serialize_block(&mut self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
         let rows_size = block.column(0).len();
-        let columns_size = block.num_columns();
-
-        assert_eq!(self.serializers.len(), columns_size);
 
         let mut buf = Vec::with_capacity(block.memory_size());
-        let mut col_table = Vec::new();
-        for col_index in 0..columns_size {
-            let column = block.column(col_index).convert_full_column();
-            let res = self.serializers[col_index].serialize_column_quoted(&column, format)?;
-            col_table.push(res)
-        }
+        let serializers = block.get_serializers()?;
+        let field_names: Vec<_> = block
+            .schema()
+            .fields()
+            .iter()
+            .map(|f| f.name().as_bytes())
+            .collect();
 
         for row_index in 0..rows_size {
-            for (i, (col, field)) in col_table.iter().zip(block.schema().fields()).enumerate() {
-                if i != 0 {
+            for (col_index, serializer) in serializers.iter().enumerate() {
+                if col_index != 0 {
                     buf.push(b',');
                 } else {
                     buf.push(b'{')
                 }
 
                 buf.push(b'"');
-                buf.extend_from_slice(field.name().as_bytes());
+                buf.extend_from_slice(field_names[col_index]);
                 buf.push(b'"');
 
                 buf.push(b':');
-                buf.extend_from_slice(col[row_index].as_bytes());
+                serializer.write_field_quoted(row_index, &mut buf, format, b'\"');
             }
             buf.extend_from_slice("}\n".as_bytes());
         }

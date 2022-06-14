@@ -174,7 +174,9 @@ pub fn cast_with_type(
         for x in viewer {
             check_timestamp(x)?;
         }
-    } else if nonull_data_type.data_type_id() == TypeID::Array {
+    } else if nonull_data_type.data_type_id() == TypeID::Array
+        || nonull_data_type.data_type_id() == TypeID::Struct
+    {
         return Err(ErrorCode::BadDataValueType(format!(
             "Cast error happens in casting from {} to {}",
             from_type.name(),
@@ -234,9 +236,9 @@ pub fn cast_to_variant(
     }
     let mut builder = ColumnBuilder::<VariantValue>::with_capacity(size);
     if from_type.data_type_id().is_numeric() || from_type.data_type_id() == TypeID::Boolean {
-        let serializer = from_type.create_serializer();
+        let serializer = from_type.create_serializer(&column)?;
         let format = FormatSettings::default();
-        match serializer.serialize_json_object(&column, None, &format) {
+        match serializer.serialize_json_object(None, &format) {
             Ok(values) => {
                 for v in values {
                     builder.append(&VariantValue::from(v));

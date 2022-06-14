@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
 
 use crate::validate_function_arg;
@@ -52,9 +53,21 @@ pub fn find_aggregate_exprs_in_expr(expr: &Expression) -> Vec<Expression> {
     })
 }
 
+/// Collect all deeply nested `Expression::WindowFunction`.
+pub fn find_window_exprs(exprs: &[Expression]) -> Vec<Expression> {
+    find_exprs_in_exprs(exprs, &|nested_expr| {
+        matches!(nested_expr, Expression::WindowFunction { .. })
+    })
+}
+
+pub fn find_window_exprs_in_expr(expr: &Expression) -> Vec<Expression> {
+    find_exprs_in_expr(expr, &|nest_exprs| {
+        matches!(nest_exprs, Expression::WindowFunction { .. })
+    })
+}
+
 /// Collect all arguments from aggregation function and append to this exprs
 /// [ColumnExpr(b), Aggr(sum(a, b))] ---> [ColumnExpr(b), ColumnExpr(a)]
-
 pub fn expand_aggregate_arg_exprs(exprs: &[Expression]) -> Vec<Expression> {
     let mut res = vec![];
     for expr in exprs {
@@ -304,6 +317,31 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                     .collect::<Result<Vec<Expression>>>()?,
             }),
 
+            Expression::WindowFunction {
+                op,
+                params,
+                args,
+                partition_by,
+                order_by,
+                window_frame,
+            } => Ok(Expression::WindowFunction {
+                op: op.clone(),
+                params: params.clone(),
+                args: args
+                    .iter()
+                    .map(|e| clone_with_replacement(e, replacement_fn))
+                    .collect::<Result<Vec<Expression>>>()?,
+                partition_by: partition_by
+                    .iter()
+                    .map(|e| clone_with_replacement(e, replacement_fn))
+                    .collect::<Result<Vec<Expression>>>()?,
+                order_by: order_by
+                    .iter()
+                    .map(|e| clone_with_replacement(e, replacement_fn))
+                    .collect::<Result<Vec<Expression>>>()?,
+                window_frame: window_frame.to_owned(),
+            }),
+
             Expression::Sort {
                 expr: nested_expr,
                 asc,
@@ -481,6 +519,37 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
 
                 let aggregate_function = expr.to_aggregate_function(&self.input_schema)?;
                 let return_type = aggregate_function.return_type()?;
+
+                self.stack.push(return_type);
+                Ok(self)
+            }
+            Expression::WindowFunction {
+                op,
+                params,
+                args,
+                partition_by,
+                order_by,
+                ..
+            } => {
+                for _ in 0..partition_by.len() + order_by.len() {
+                    self.stack.remove(0);
+                }
+
+                if !AggregateFunctionFactory::instance().check(op) {
+                    return Err(ErrorCode::LogicalError(
+                        "not yet support non aggr window function",
+                    ));
+                }
+
+                let mut fields = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    let arg_type = self.stack.remove(0);
+                    fields.push(DataField::new(&arg.column_name(), arg_type));
+                }
+
+                let aggregate_window_function =
+                    AggregateFunctionFactory::instance().get(op, params.clone(), fields);
+                let return_type = aggregate_window_function.unwrap().return_type().unwrap();
 
                 self.stack.push(return_type);
                 Ok(self)

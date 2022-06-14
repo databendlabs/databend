@@ -192,6 +192,7 @@ build_exceptions! {
     DropTableWithDropTime(2314),
     DropDbWithDropTime(2315),
     UndropDbWithNoDropTime(2316),
+    TxnRetryMaxTimes(2317),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),
@@ -201,6 +202,8 @@ build_exceptions! {
     UnknownStage(2501),
     StageAlreadyExists(2502),
     IllegalUserStageFormat(2503),
+    StageFileAlreadyExists(2504),
+    IllegalStageFileFormat(2505),
 
     // User defined function error codes.
     IllegalUDFFormat(2601),

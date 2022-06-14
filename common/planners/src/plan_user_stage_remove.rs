@@ -16,16 +16,16 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_meta_types::UserStageInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct DropClusterKeyPlan {
-    pub tenant: String,
-    pub catalog_name: String,
-    pub database_name: String,
-    pub table_name: String,
+pub struct RemoveUserStagePlan {
+    pub stage: UserStageInfo,
+    pub path: String,
+    pub pattern: String,
 }
 
-impl DropClusterKeyPlan {
+impl RemoveUserStagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

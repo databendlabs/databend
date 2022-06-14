@@ -26,6 +26,7 @@ mod interpreter_empty;
 mod interpreter_explain;
 mod interpreter_factory_interceptor;
 mod interpreter_insert;
+mod interpreter_list;
 mod interpreter_privilege_grant;
 mod interpreter_privilege_revoke;
 mod interpreter_role_grant;

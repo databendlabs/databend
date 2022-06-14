@@ -21,12 +21,15 @@ use chrono::Utc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::data_type::ARROW_EXTENSION_META;
 use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::TimestampSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 /// timestamp ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999
 /// timestamp_max and timestamp_min means days offset from 1970-01-01 00:00:00.000000
@@ -116,6 +119,12 @@ impl DataType for TimestampType {
         DataValue::Int64(0)
     }
 
+    fn random_value(&self) -> DataValue {
+        let mut rng = rand::rngs::SmallRng::from_entropy();
+        let ts = rng.gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX);
+        DataValue::Int64(ts)
+    }
+
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         let value = data.as_i64()?;
         let column = Series::from_data(&[value]);
@@ -142,10 +151,9 @@ impl DataType for TimestampType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        TimestampSerializer::default().into()
+    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        Ok(TimestampSerializer::<'a>::try_create(col)?.into())
     }
-
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         TimestampDeserializer {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),

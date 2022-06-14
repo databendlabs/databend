@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-use crate::plan_show_tab_stat::ShowTabStatPlan;
+use crate::plan_show_tables_status::ShowTablesStatusPlan;
 use crate::ShowDatabasesPlan;
 use crate::ShowEnginesPlan;
 use crate::ShowFunctionsPlan;
@@ -26,7 +26,6 @@ use crate::ShowMetricsPlan;
 use crate::ShowProcessListsPlan;
 use crate::ShowRolesPlan;
 use crate::ShowSettingsPlan;
-use crate::ShowStagesPlan;
 use crate::ShowTablesPlan;
 use crate::ShowUsersPlan;
 
@@ -53,8 +52,8 @@ pub enum ShowPlan {
     ShowUsers(ShowUsersPlan),
     ShowGrants(ShowGrantsPlan),
     ShowRoles(ShowRolesPlan),
-    ShowTabStat(ShowTabStatPlan),
-    ShowStages(ShowStagesPlan),
+    ShowTablesStatus(ShowTablesStatusPlan),
+    ShowStages,
 }
 
 impl ShowPlan {

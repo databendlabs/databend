@@ -24,6 +24,7 @@ pub(crate) use execute_state::ExecuteState;
 pub use execute_state::ExecuteStateKind;
 pub(crate) use execute_state::Executor;
 pub use execute_state::HttpQueryHandle;
+pub use execute_state::Progresses;
 pub use http_query::HttpQuery;
 pub use http_query::HttpQueryRequest;
 pub use http_query::HttpQueryResponseInternal;

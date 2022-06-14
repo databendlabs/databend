@@ -51,10 +51,10 @@ error:
 truncate table a.b.c.d
 ---------- Output ---------
 error: 
-  --> SQL:1:19
+  --> SQL:1:21
   |
 1 | truncate table a.b.c.d
-  |                   ^ expected `PURGE` or `;`
+  |                     ^ expected `PURGE` or `;`
 
 
 ---------- Input ----------
@@ -76,7 +76,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, or `FUNCTION`
+  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, `ROLE`, or 2 more ...
 
 
 ---------- Input ----------
@@ -98,7 +98,7 @@ error:
   --> SQL:1:23
   |
 1 | alter database system x rename to db
-  | -----                 ^ expected `RENAME`
+  | -----                 ^ expected `RENAME` or `.`
   | |                      
   | while parsing `ALTER DATABASE [IF EXISTS] <action>`
 
@@ -120,7 +120,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j'@'localhost';
-  |      ^^^^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, or `FUNCTION`
+  |      ^^^^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, `ROLE`, or 2 more ...
 
 
 ---------- Input ----------
@@ -131,5 +131,25 @@ error:
   |
 1 | alter user 'test-e'@'localhost' identifie by 'new-password';
   |                                 ^^^^^^^^^ expected `IDENTIFIED`, `WITH`, or `;`
+
+
+---------- Input ----------
+create role 'test'@'localhost';
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | create role 'test'@'localhost';
+  |                   ^ expected `;`
+
+
+---------- Input ----------
+drop role 'test'@'localhost';
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | drop role 'test'@'localhost';
+  |                 ^ expected `;`
 
 

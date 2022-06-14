@@ -46,10 +46,12 @@ impl Interpreter for UseDatabaseInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        if self.plan.db.trim().is_empty() {
+        if self.plan.database.trim().is_empty() {
             return Err(ErrorCode::UnknownDatabase("No database selected"));
         }
-        self.ctx.set_current_database(self.plan.db.clone()).await?;
+        self.ctx
+            .set_current_database(self.plan.database.clone())
+            .await?;
         let schema = Arc::new(DataSchema::empty());
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }

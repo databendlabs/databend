@@ -63,6 +63,23 @@ pub enum ExecuteStateKind {
     Succeeded,
 }
 
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
+pub struct Progresses {
+    pub scan_progress: ProgressValues,
+    pub write_progress: ProgressValues,
+    pub result_progress: ProgressValues,
+}
+
+impl Progresses {
+    fn from_context(ctx: &Arc<QueryContext>) -> Self {
+        Progresses {
+            scan_progress: ctx.get_scan_progress_value(),
+            write_progress: ctx.get_write_progress_value(),
+            result_progress: ctx.get_result_progress_value(),
+        }
+    }
+}
+
 pub enum ExecuteState {
     Running(ExecuteRunning),
     Stopped(ExecuteStopped),
@@ -89,7 +106,7 @@ pub struct ExecuteRunning {
 }
 
 pub struct ExecuteStopped {
-    progress: Option<ProgressValues>,
+    stats: Progresses,
     reason: Result<()>,
     stop_time: Instant,
 }
@@ -100,10 +117,10 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub(crate) fn get_progress(&self) -> Option<ProgressValues> {
+    pub(crate) fn get_progress(&self) -> Progresses {
         match &self.state {
-            Running(r) => Some(r.ctx.get_scan_progress_value()),
-            Stopped(f) => f.progress.clone(),
+            Running(r) => Progresses::from_context(&r.ctx),
+            Stopped(f) => f.stats.clone(),
         }
     }
 
@@ -118,7 +135,6 @@ impl Executor {
         let mut guard = this.write().await;
         if let Running(r) = &guard.state {
             // release session
-            let progress = Some(r.ctx.get_scan_progress_value());
             if kill {
                 r.session.force_kill_query();
             }
@@ -129,7 +145,7 @@ impl Executor {
                 .await
                 .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
-                progress,
+                stats: Progresses::from_context(&r.ctx),
                 reason: reason.clone(),
                 stop_time: Instant::now(),
             });
@@ -194,7 +210,7 @@ impl ExecuteState {
                 executor: executor.clone(),
                 block_buffer,
             });
-            interpreter.execute(None).await.unwrap();
+            interpreter.execute(None).await?;
 
             Ok(executor)
         } else {
@@ -254,7 +270,7 @@ async fn execute(
     plan: Arc<PlanNode>,
 ) -> Result<()> {
     let data_stream: Result<SendableDataBlockStream> =
-        if ctx.clone().get_config().query.enable_async_insert
+        if ctx.get_settings().get_enable_async_insert()? != 0
             && matches!(&*plan, PlanNode::Insert(_))
         {
             match &*plan {
@@ -270,14 +286,17 @@ async fn execute(
                         .clone()
                         .push(Arc::new(insert_plan.to_owned()), ctx.clone())
                         .await?;
-                    if ctx.get_config().query.wait_for_async_insert {
+
+                    let wait_for_async_insert = ctx.get_settings().get_wait_for_async_insert()?;
+                    let wait_for_async_insert_timeout =
+                        ctx.get_settings().get_wait_for_async_insert_timeout()?;
+
+                    if wait_for_async_insert == 1 {
                         queue
                             .clone()
                             .wait_for_processing_insert(
                                 ctx.get_id(),
-                                Duration::from_secs(
-                                    ctx.get_config().query.wait_for_async_insert_timeout,
-                                ),
+                                Duration::from_secs(wait_for_async_insert_timeout),
                             )
                             .await?;
                     }

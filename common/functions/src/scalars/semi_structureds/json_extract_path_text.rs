@@ -74,10 +74,10 @@ impl Function for JsonExtractPathTextFunction {
         let path_keys = parse_path_keys(columns[1].column())?;
 
         let data_type = columns[0].field().data_type();
-        let serializer = data_type.create_serializer();
+        let serializer = data_type.create_serializer(columns[0].column())?;
         // TODO(veeupup): check if we can use default format_settings
         let format = FormatSettings::default();
-        let values = serializer.serialize_json_object(columns[0].column(), None, &format)?;
+        let values = serializer.serialize_json_object(None, &format)?;
 
         let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(input_rows);
         if columns[0].column().is_const() {

@@ -20,18 +20,15 @@ runs:
       with:
         image: ${{ inputs.target }}
 
-    # If you need to reset the cache version, increment the number after `v`
-    - uses: Swatinem/rust-cache@v1
+    - uses: actions/download-artifact@v2
       with:
-        sharedKey: debug-hive-${{ inputs.target }}-v2
+        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}-hive
+        path: ./target/debug
 
-    # for the time being, only databend-query is needed
-    - shell: bash
-      run: cargo build --bin databend-query --features hive
-
-    # for cache
-    - shell: bash
-      run: cargo metadata --all-features --format-version 1 > ./target/metadata.json
+    - name: Set up file as executable
+      shell: bash
+      run: |
+        chmod +x ./target/debug/databend-*
 
     # hive cluster setup
     - name: Hive Cluster Setup

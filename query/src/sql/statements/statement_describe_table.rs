@@ -36,12 +36,12 @@ impl AnalyzableStatement for DfDescribeTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let schema = Self::schema();
-        let (catalog, db, table) = resolve_table(&ctx, &self.name, "desc")?;
+        let (catalog, database, table) = resolve_table(&ctx, &self.name, "desc")?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::DescribeTable(DescribeTablePlan {
                 catalog,
-                db,
+                database,
                 table,
                 schema,
             }),

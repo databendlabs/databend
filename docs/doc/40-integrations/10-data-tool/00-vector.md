@@ -25,8 +25,13 @@ mysql -h127.0.0.1 -uroot -P3307
 ```
 
 Create a user:
-```
+```sql
 CREATE USER user1 IDENTIFIED BY 'abc123';
+```
+
+Create a Database:
+```sql
+CREATE DATABASE nginx;
 ```
 
 Grant insert privileges for the user:
@@ -49,7 +54,7 @@ database = "mydatabase" #Your database
 // highlight-next-line
 table = "mytable" #Your table.
 // highlight-next-line
-endpoint = "http://localhost:8000/clickhouse" #Databend ClickHouse REST API: http://{http_handler_host}:{http_handler_port}/clickhouse
+endpoint = "http://localhost:8124/" #Databend ClickHouse REST API: http://{clickhouse_http_handler_host}:{clickhouse_http_handler_port}/
 compression = "gzip"
 ```
 
@@ -62,6 +67,7 @@ user = "user1" #Databend username
 password = "abc123" #Databend password
 ```
 
+To learn more, please refer to the following documents.
 ## Tutorial
 
 [How to Analyze Nginx Access Logs With Databend](../../90-learn/02-analyze-nginx-logs-with-databend-and-vector.md)

@@ -14,22 +14,27 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
 use crate::Expression;
+use crate::PlanNode;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct AlterClusterKeyPlan {
-    pub tenant: String,
-    pub catalog_name: String,
-    pub database_name: String,
-    pub table_name: String,
-    pub cluster_keys: Vec<Expression>,
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+pub struct WindowFuncPlan {
+    /// The window function expression
+    pub window_func: Expression,
+    /// The incoming logical plan
+    pub input: Arc<PlanNode>,
+    /// output schema
+    pub schema: DataSchemaRef,
 }
 
-impl AlterClusterKeyPlan {
+impl WindowFuncPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+        self.schema.clone()
+    }
+
+    pub fn set_input(&mut self, node: &PlanNode) {
+        self.input = Arc::new(node.clone());
     }
 }

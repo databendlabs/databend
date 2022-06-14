@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::PlanShowKind;
+use std::sync::Arc;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
-pub struct ShowTabStatPlan {
-    pub kind: PlanShowKind,
-    // show tables from db1 [or in db1]
-    pub fromdb: Option<String>,
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+
+use crate::Expression;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct AlterTableClusterKeyPlan {
+    pub tenant: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub cluster_keys: Vec<Expression>,
+}
+
+impl AlterTableClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }

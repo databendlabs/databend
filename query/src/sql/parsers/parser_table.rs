@@ -36,7 +36,7 @@ use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRenameTable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfTruncateTable;
-use crate::sql::statements::DfUnDropTable;
+use crate::sql::statements::DfUndropTable;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -119,9 +119,9 @@ impl<'a> DfParser<'a> {
     // Drop table.
     pub(crate) fn parse_undrop_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let table_name = self.parser.parse_object_name()?;
-        let drop = DfUnDropTable { name: table_name };
+        let drop = DfUndropTable { name: table_name };
 
-        Ok(DfStatement::UnDropTable(drop))
+        Ok(DfStatement::UndropTable(drop))
     }
 
     // Alter table
@@ -137,7 +137,7 @@ impl<'a> DfParser<'a> {
 
                     let rename = DfAlterTable {
                         if_exists,
-                        table_name,
+                        table: table_name,
                         action: AlterTableAction::RenameTable(new_table_name),
                     };
 
@@ -152,8 +152,8 @@ impl<'a> DfParser<'a> {
 
                     let cluster_by = DfAlterTable {
                         if_exists,
-                        table_name,
-                        action: AlterTableAction::AlterClusterKey(cluster_keys),
+                        table: table_name,
+                        action: AlterTableAction::AlterTableClusterKey(cluster_keys),
                     };
 
                     Ok(DfStatement::AlterTable(cluster_by))
@@ -165,8 +165,8 @@ impl<'a> DfParser<'a> {
                     {
                         Ok(DfStatement::AlterTable(DfAlterTable {
                             if_exists,
-                            table_name,
-                            action: AlterTableAction::DropClusterKey,
+                            table: table_name,
+                            action: AlterTableAction::DropTableClusterKey,
                         }))
                     } else {
                         Err(ParserError::ParserError(String::from(

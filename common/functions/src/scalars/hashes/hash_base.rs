@@ -186,6 +186,31 @@ impl<'a> DFHash for ArrayValueRef<'a> {
     }
 }
 
+impl<'a> DFHash for StructValueRef<'a> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Hash::hash(&'(', state);
+        match self {
+            StructValueRef::Indexed { column, idx } => {
+                let value = column.get(*idx);
+                if let DataValue::Struct(vals) = value {
+                    for v in vals {
+                        DFHash::hash(&v, state);
+                        Hash::hash(&',', state);
+                    }
+                }
+            }
+            StructValueRef::ValueRef { val } => {
+                for v in &val.values {
+                    DFHash::hash(v, state);
+                    Hash::hash(&',', state);
+                }
+            }
+        }
+        Hash::hash(&')', state);
+    }
+}
+
 impl DFHash for DataValue {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {

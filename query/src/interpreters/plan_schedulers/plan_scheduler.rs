@@ -42,6 +42,7 @@ use common_planners::SortPlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
 use common_planners::SubQueriesSetPlan;
+use common_planners::WindowFuncPlan;
 use common_tracing::tracing;
 
 use crate::api::BroadcastAction;
@@ -296,6 +297,7 @@ impl PlanScheduler {
         match node {
             PlanNode::AggregatorPartial(plan) => self.visit_aggr_part(plan, tasks),
             PlanNode::AggregatorFinal(plan) => self.visit_aggr_final(plan, tasks),
+            PlanNode::WindowFunc(plan) => self.visit_window_func(plan, tasks),
             PlanNode::Empty(plan) => self.visit_empty(plan, tasks),
             PlanNode::Projection(plan) => self.visit_projection(plan, tasks),
             PlanNode::Filter(plan) => self.visit_filter(plan, tasks),
@@ -351,6 +353,33 @@ impl PlanScheduler {
             RunningMode::Standalone => self.visit_local_aggr_final(plan),
         };
         Ok(())
+    }
+
+    fn visit_window_func(&mut self, plan: &WindowFuncPlan, tasks: &mut Tasks) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref(), tasks)?;
+        match self.running_mode {
+            RunningMode::Cluster => self.visit_cluster_window_func(plan),
+            RunningMode::Standalone => self.visit_local_window_func(plan),
+        }
+        Ok(())
+    }
+
+    fn visit_cluster_window_func(&mut self, plan: &WindowFuncPlan) {
+        for index in 0..self.nodes_plan.len() {
+            self.nodes_plan[index] = PlanNode::WindowFunc(WindowFuncPlan {
+                window_func: plan.window_func.clone(),
+                input: Arc::new(self.nodes_plan[index].clone()),
+                schema: plan.schema.clone(),
+            })
+        }
+    }
+
+    fn visit_local_window_func(&mut self, plan: &WindowFuncPlan) {
+        self.nodes_plan[self.local_pos] = PlanNode::WindowFunc(WindowFuncPlan {
+            window_func: plan.window_func.clone(),
+            input: Arc::new(self.nodes_plan[self.local_pos].clone()),
+            schema: plan.schema(),
+        });
     }
 
     fn visit_local_aggr_final(&mut self, plan: &AggregatorFinalPlan) {

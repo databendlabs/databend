@@ -33,6 +33,7 @@ pub use crate::configs::StorageFsConfig;
 pub use crate::configs::StorageHdfsConfig;
 pub use crate::configs::StorageParams;
 pub use crate::configs::StorageS3Config;
+pub use crate::configs::AWS_S3_ENDPOINT;
 pub use crate::format_settings::Compression;
 pub use crate::format_settings::FormatSettings;
 pub use crate::marshal::Marshal;

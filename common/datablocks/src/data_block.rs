@@ -204,6 +204,20 @@ impl DataBlock {
 
         Ok(DataBlock::create(schema.clone(), columns))
     }
+
+    pub fn get_serializers(&self) -> Result<Vec<TypeSerializerImpl>> {
+        let columns_size = self.num_columns();
+
+        let mut serializers = vec![];
+        for col_index in 0..columns_size {
+            let column = self.column(col_index);
+            let field = self.schema().field(col_index);
+            let data_type = field.data_type();
+            let serializer = data_type.create_serializer(column)?;
+            serializers.push(serializer);
+        }
+        Ok(serializers)
+    }
 }
 
 impl TryFrom<DataBlock> for Chunk<ArrayRef> {

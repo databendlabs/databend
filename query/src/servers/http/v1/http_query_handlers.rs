@@ -14,7 +14,6 @@
 
 use std::str::FromStr;
 
-use common_base::base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_io::prelude::FormatSettings;
@@ -41,6 +40,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::formats::output_format::OutputFormatType;
+use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::SessionType;
@@ -79,7 +79,8 @@ impl QueryError {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct QueryStats {
-    pub scan_progress: Option<ProgressValues>,
+    #[serde(flatten)]
+    pub progresses: Progresses,
     pub running_time_ms: f64,
 }
 
@@ -112,7 +113,7 @@ impl QueryResponse {
         let schema = data.schema().clone();
         let session_id = r.session_id.clone();
         let stats = QueryStats {
-            scan_progress: state.scan_progress.clone(),
+            progresses: state.progresses.clone(),
             running_time_ms: state.running_time_ms,
         };
         QueryResponse {
@@ -203,7 +204,11 @@ async fn query_page_handler(
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             // TODO(veeupup): get query_ctx here to get format_settings
-            let format = FormatSettings::default();
+            let format = FormatSettings {
+                false_bytes: vec![b'f', b'a', b'l', b's', b'e'],
+                true_bytes: vec![b't', b'r', b'u', b'e'],
+                ..Default::default()
+            };
             query.clear_expire_time().await;
             let resp = query
                 .get_response_page(page_no, &format)
@@ -226,7 +231,11 @@ pub(crate) async fn query_handler(
     let query = http_query_manager.try_create_query(ctx, req).await;
 
     // TODO(veeupup): get global query_ctx's format_settings, because we cann't set session settings now
-    let format = FormatSettings::default();
+    let format = FormatSettings {
+        false_bytes: vec![b'f', b'a', b'l', b's', b'e'],
+        true_bytes: vec![b't', b'r', b'u', b'e'],
+        ..Default::default()
+    };
     match query {
         Ok(query) => {
             let resp = query

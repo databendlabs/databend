@@ -1231,7 +1231,7 @@ random(DISTINCT )
 ---------- AST ------------
 FunctionCall {
     span: [
-        Ident(0..6),
+        RANDOM(0..6),
         LParen(6..7),
         DISTINCT(7..15),
         RParen(15..16),
@@ -1240,7 +1240,7 @@ FunctionCall {
     name: Identifier {
         name: "random",
         quote: None,
-        span: Ident(0..6),
+        span: RANDOM(0..6),
     },
     args: [],
     params: [],

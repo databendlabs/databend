@@ -25,6 +25,7 @@ use crate::sql::statements::DfCreateUserStage;
 use crate::sql::statements::DfDescribeUserStage;
 use crate::sql::statements::DfDropUserStage;
 use crate::sql::statements::DfList;
+use crate::sql::statements::DfRemoveStage;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -81,10 +82,16 @@ impl<'a> DfParser<'a> {
             on_error = self.parse_value_or_ident()?;
         }
 
-        let mut size_limit = "".to_string();
+        let mut size_limit = 0;
         if self.consume_token("SIZE_LIMIT") {
             self.expect_token("=")?;
-            size_limit = self.parse_value_or_ident()?;
+            let size_limit_str = self.parse_value_or_ident()?;
+            size_limit = size_limit_str.parse::<usize>().map_err(|_e| {
+                ParserError::ParserError(format!(
+                    "size_limit must be number, got: {}",
+                    size_limit_str
+                ))
+            })?;
         }
 
         // VALIDATION_MODE = RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS
@@ -126,7 +133,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Desc stage.
-    pub(crate) fn parse_desc_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
+    pub(crate) fn parse_describe_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let table_name = self.parser.parse_object_name()?;
         let desc = DfDescribeUserStage { name: table_name };
         Ok(DfStatement::DescribeStage(desc))
@@ -146,5 +153,25 @@ impl<'a> DfParser<'a> {
             pattern = self.parse_value_or_ident()?;
         }
         Ok(DfStatement::List(DfList { location, pattern }))
+    }
+
+    // remove stage
+    pub(crate) fn parse_remove_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let location = match self.parser.next_token() {
+            Token::AtString(s) => Ok(format!("@{}", s)),
+            unexpected => self.expected("@string_literal", unexpected),
+        }?;
+
+        // PATTERN = '<regex_pattern>'
+        let mut pattern = "".to_string();
+        if self.consume_token("PATTERN") {
+            self.expect_token("=")?;
+            pattern = self.parse_value_or_ident()?
+        }
+
+        Ok(DfStatement::RemoveStage(DfRemoveStage {
+            location,
+            pattern,
+        }))
     }
 }

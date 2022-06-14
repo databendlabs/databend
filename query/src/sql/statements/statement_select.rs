@@ -24,6 +24,7 @@ use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::rebase_expr;
 use common_planners::Expression;
 use common_tracing::tracing;
+use common_tracing::tracing::log::debug;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Offset;
 use sqlparser::ast::OrderByExpr;
@@ -73,6 +74,8 @@ impl AnalyzableStatement for DfQueryStatement {
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema, has_aggregation)?;
 
         let analyze_state = self.analyze_query(ir).await?;
+        tracing::debug!("analyze state is:\n{:?}", analyze_state);
+
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await
     }
@@ -148,6 +151,10 @@ impl DfQueryStatement {
             Self::analyze_aggregate(&ir.aggregate_expressions, &mut analyze_state)?;
         }
 
+        if !ir.window_expressions.is_empty() {
+            Self::analyze_window(&ir.window_expressions, &mut analyze_state)?;
+        }
+
         if ir.distinct {
             Self::analyze_distinct(&ir.projection_expressions, &mut analyze_state)?;
         }
@@ -183,10 +190,57 @@ impl DfQueryStatement {
                 _ => item.clone(),
             };
 
-            // support select distinct aggr_func()...
+            let distinct_expr = rebase_expr(&distinct_expr, &state.expressions)?;
             let distinct_expr = rebase_expr(&distinct_expr, &state.group_by_expressions)?;
             let distinct_expr = rebase_expr(&distinct_expr, &state.aggregate_expressions)?;
+            let distinct_expr = rebase_expr(&distinct_expr, &state.window_expressions)?;
             state.distinct_expressions.push(distinct_expr);
+        }
+
+        Ok(())
+    }
+
+    fn analyze_window(window_exprs: &[Expression], state: &mut QueryAnalyzeState) -> Result<()> {
+        for expr in window_exprs {
+            match expr {
+                Expression::WindowFunction {
+                    args,
+                    partition_by,
+                    order_by,
+                    ..
+                } => {
+                    for arg in args {
+                        state.add_expression(arg);
+                    }
+                    for partition_by_expr in partition_by {
+                        state.add_expression(partition_by_expr);
+                    }
+                    for order_by_expr in order_by {
+                        match order_by_expr {
+                            Expression::Sort { expr, .. } => state.add_expression(expr),
+                            _ => {
+                                return Err(ErrorCode::LogicalError(format!(
+                                    "Found non-sort expression {:?} while analyzing order by expressions of window expressions",
+                                    order_by_expr
+                                )))
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    return Err(ErrorCode::LogicalError(format!(
+                        "Found non-window expression {:?} while analyzing window expressions!",
+                        expr
+                    )))
+                }
+            }
+        }
+
+        for expr in window_exprs {
+            let base_exprs = &state.expressions;
+            state
+                .window_expressions
+                .push(rebase_expr(expr, base_exprs)?);
         }
 
         Ok(())
@@ -194,9 +248,12 @@ impl DfQueryStatement {
 
     fn analyze_projection(exprs: &[Expression], state: &mut QueryAnalyzeState) -> Result<()> {
         for item in exprs {
-            match item {
-                Expression::Alias(_, expr) => state.add_expression(expr),
-                _ => state.add_expression(item),
+            let expr = match item {
+                Expression::Alias(_, expr) => expr,
+                _ => item,
+            };
+            if !matches!(expr, Expression::WindowFunction { .. }) {
+                state.add_expression(expr);
             }
 
             let rebased_expr = rebase_expr(item, &state.expressions)?;
@@ -226,6 +283,10 @@ impl DfQueryStatement {
     ) -> Result<AnalyzedResult> {
         let dry_run_res = Self::verify_with_dry_run(&schema, &state)?;
         state.finalize_schema = dry_run_res.schema().clone();
+        debug!(
+            "QueryAnalyzeState finalized schema:\n{}",
+            state.finalize_schema
+        );
 
         let mut tables_desc = schema.take_tables_desc();
 
@@ -331,6 +392,28 @@ impl DfQueryStatement {
         if let Some(predicate) = &state.having {
             if let Err(cause) = Self::dry_run_expr(predicate, &data_block) {
                 return Err(cause.add_message_back(" (while in select having)"));
+            }
+        }
+
+        if !state.window_expressions.is_empty() {
+            let new_len = state.window_expressions.len() + state.expressions.len();
+            let mut new_expression = Vec::with_capacity(new_len);
+
+            for expr in &state.window_expressions {
+                new_expression.push(expr);
+            }
+
+            for expr in &state.expressions {
+                new_expression.push(expr);
+            }
+
+            match Self::dry_run_exprs_ref(&new_expression, &data_block) {
+                Ok(res) => {
+                    data_block = res;
+                }
+                Err(cause) => {
+                    return Err(cause.add_message_back(" (while in select window func)"));
+                }
             }
         }
 

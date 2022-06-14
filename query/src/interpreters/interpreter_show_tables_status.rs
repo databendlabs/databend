@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::PlanShowKind;
-use common_planners::ShowTabStatPlan;
+use common_planners::ShowTablesStatusPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::DatabaseCatalog;
@@ -29,14 +29,17 @@ use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 
-pub struct ShowTabStatInterpreter {
+pub struct ShowTablesStatusInterpreter {
     ctx: Arc<QueryContext>,
-    plan: ShowTabStatPlan,
+    plan: ShowTablesStatusPlan,
 }
 
-impl ShowTabStatInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowTabStatPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowTabStatInterpreter { ctx, plan }))
+impl ShowTablesStatusInterpreter {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        plan: ShowTablesStatusPlan,
+    ) -> Result<InterpreterPtr> {
+        Ok(Arc::new(ShowTablesStatusInterpreter { ctx, plan }))
     }
 
     fn build_query(&self) -> Result<String> {
@@ -83,9 +86,9 @@ impl ShowTabStatInterpreter {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for ShowTabStatInterpreter {
+impl Interpreter for ShowTablesStatusInterpreter {
     fn name(&self) -> &str {
-        "ShowTabStatInterpreter"
+        "ShowTablesStatusInterpreter"
     }
 
     async fn execute(

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::window::WindowFrame;
 
 use crate::Expression;
 use crate::ExpressionVisitor;
@@ -121,6 +122,25 @@ pub trait ExpressionRewriter: Sized {
             distinct,
             args,
             params: params.to_owned(),
+        })
+    }
+
+    fn mutate_window_function(
+        &mut self,
+        op: String,
+        params: Vec<DataValue>,
+        args: Vec<Expression>,
+        partition_by: Vec<Expression>,
+        order_by: Vec<Expression>,
+        window_frame: Option<WindowFrame>,
+    ) -> Result<Expression> {
+        Ok(Expression::WindowFunction {
+            op,
+            params,
+            args,
+            partition_by,
+            order_by,
+            window_frame,
         })
     }
 
@@ -297,6 +317,61 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                 let new_expr = self
                     .inner
                     .mutate_aggregate_function(op, *distinct, params, args_expr, expr)?;
+                self.stack.push(new_expr);
+                Ok(self)
+            }
+            Expression::WindowFunction {
+                op,
+                params,
+                args,
+                partition_by,
+                order_by,
+                window_frame,
+            } => {
+                let mut new_args = Vec::with_capacity(args.len());
+                for i in 0..args.len() {
+                    match self.stack.pop() {
+                        Some(expr) => new_args.push(expr),
+                        None => {
+                            return Err(ErrorCode::LogicalError(format!(
+                                "WindowFunction expects {} partition by arguments, actual {}",
+                                partition_by.len(),
+                                i
+                            )))
+                        }
+                    }
+                }
+
+                let mut new_partition_by = Vec::with_capacity(partition_by.len());
+                let mut new_order_by = Vec::with_capacity(order_by.len());
+                for i in 0..partition_by.len() + order_by.len() {
+                    match self.stack.pop() {
+                        Some(expr) => {
+                            if i < partition_by.len() {
+                                new_partition_by.push(expr);
+                            } else {
+                                new_order_by.push(expr);
+                            }
+                        }
+                        None => {
+                            return Err(ErrorCode::LogicalError(format!(
+                                "WindowFunction expects {} partition by arguments, actual {}",
+                                partition_by.len(),
+                                i
+                            )))
+                        }
+                    }
+                }
+
+                let new_expr = self.inner.mutate_window_function(
+                    op.clone(),
+                    params.to_owned(),
+                    new_args,
+                    new_partition_by,
+                    new_order_by,
+                    window_frame.to_owned(),
+                )?;
+
                 self.stack.push(new_expr);
                 Ok(self)
             }

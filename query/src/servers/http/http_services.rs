@@ -20,6 +20,8 @@ use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
 use poem::listener::RustlsConfig;
+use poem::middleware::NormalizePath;
+use poem::middleware::TrailingSlash;
 use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
@@ -35,6 +37,7 @@ use crate::servers::Server;
 use crate::sessions::SessionManager;
 use crate::Config;
 
+#[derive(Copy, Clone)]
 pub enum HttpHandlerKind {
     Query,
     Clickhouse,
@@ -44,19 +47,20 @@ impl HttpHandlerKind {
     pub fn usage(&self, sock: SocketAddr) -> String {
         match self {
             HttpHandlerKind::Query => {
-                let json = r#"{"foo": "bar"}"#;
                 format!(
                     r#" examples:
 curl -u root: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
-echo '{}' "#,
-                    sock, json,
+"#,
+                    sock,
                 )
             }
             HttpHandlerKind::Clickhouse => {
+                let json = r#"{"foo": "bar"}"#;
                 format!(
                     r#" examples:
-curl '{:?}/clickhouse/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
-                    sock,
+echo 'create table test(foo string)' | curl -u root: '{:?}' --data-binary  @-
+echo '{}' | curl -u root: '{:?}/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
+                    sock, json, sock,
                 )
             }
         }
@@ -94,8 +98,10 @@ impl HttpHandler {
             HttpHandlerKind::Clickhouse => Route::new().nest("/", clickhouse_router()),
         };
         ep.with(HTTPSessionMiddleware {
+            kind: self.kind,
             session_manager: self.session_manager.clone(),
         })
+        .with(NormalizePath::new(TrailingSlash::Trim))
         .boxed()
     }
 

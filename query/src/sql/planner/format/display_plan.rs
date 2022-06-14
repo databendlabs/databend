@@ -26,16 +26,40 @@ impl Plan {
                 let result = plan.format_indent()?;
                 Ok(format!("{:?}:\n{}", kind, result))
             }
-            Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
-            Plan::CreateDatabase(create_database) => Ok(format!("{:?}", create_database)),
-            Plan::DropDatabase(drop_database) => Ok(format!("{:?}", drop_database)),
+
             Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
             Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
             Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
-            Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
-            Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
+
+            // Databases
+            Plan::CreateDatabase(create_database) => Ok(format!("{:?}", create_database)),
+            Plan::DropDatabase(drop_database) => Ok(format!("{:?}", drop_database)),
+            Plan::RenameDatabase(rename_database) => Ok(format!("{:?}", rename_database)),
+
+            // Tables
+            Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
+
+            // Views
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
+            Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),
+            Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
+
+            // Users
+            Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
+            Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
+
+            // Roles
+            Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
+            Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
+
+            // Stages
+            Plan::ShowStages => Ok("SHOW STAGES".to_string()),
+            Plan::ListStage(s) => Ok(format!("{:?}", s)),
+            Plan::DescribeStage(s) => Ok(format!("{:?}", s)),
+            Plan::CreateStage(create_stage) => Ok(format!("{:?}", create_stage)),
+            Plan::DropStage(s) => Ok(format!("{:?}", s)),
+            Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
         }
     }
 }

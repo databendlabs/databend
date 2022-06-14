@@ -42,7 +42,7 @@ pub struct DfCreateUserStage {
 
     pub file_format_options: BTreeMap<String, String>,
     pub on_error: String,
-    pub size_limit: String,
+    pub size_limit: usize,
     pub validation_mode: String,
     pub comments: String,
 }
@@ -80,16 +80,7 @@ impl AnalyzableStatement for DfCreateUserStage {
                     OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
             }
 
-            // size_limit.
-            if !self.size_limit.is_empty() {
-                let size_limit = self.size_limit.parse::<usize>().map_err(|_e| {
-                    ErrorCode::SyntaxException(format!(
-                        "size_limit must be number, got: {}",
-                        self.size_limit
-                    ))
-                })?;
-                stage_info.copy_options.size_limit = size_limit;
-            }
+            stage_info.copy_options.size_limit = self.size_limit;
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
