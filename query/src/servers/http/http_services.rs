@@ -20,6 +20,8 @@ use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
 use poem::listener::RustlsConfig;
+use poem::middleware::NormalizePath;
+use poem::middleware::TrailingSlash;
 use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
@@ -99,6 +101,7 @@ impl HttpHandler {
             kind: self.kind,
             session_manager: self.session_manager.clone(),
         })
+        .with(NormalizePath::new(TrailingSlash::Trim))
         .boxed()
     }
 
