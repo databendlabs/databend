@@ -42,7 +42,10 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // Create table.
-    pub(crate) fn parse_create_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
+    pub(crate) fn parse_create_table(
+        &mut self,
+        transient: bool,
+    ) -> Result<DfStatement<'a>, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -71,7 +74,11 @@ impl<'a> DfParser<'a> {
         }
 
         // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
-        let options = self.parse_options()?;
+        let mut options = self.parse_options()?;
+
+        if transient {
+            options.insert("TRANSIENT".to_owned(), "T".to_owned());
+        }
 
         let mut query = None;
         if let Token::Word(Word { keyword, .. }) = self.parser.peek_token() {

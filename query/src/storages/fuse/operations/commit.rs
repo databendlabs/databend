@@ -103,8 +103,8 @@ impl FuseTable {
                             let keep_last_snapshot = true;
                             // Removes history, if table is transient
                             // Errors of GC, if any, are ignored,
-                            if let Err(e) = self.do_gc(&ctx, true).await {
-                                warn!("GC for transient table not success (this is not a permanent error, GC task can be picked up later");
+                            if let Err(e) = self.do_gc(&ctx, keep_last_snapshot).await {
+                                warn!("GC for transient table not success (this is not a permanent error, GC task can be picked up later. the error : {}", e);
                             } else {
                                 info!("GC for transient table done");
                             }
