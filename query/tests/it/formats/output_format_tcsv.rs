@@ -42,7 +42,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         Series::from_data(vec![1, 2, 3]),
         Series::from_data(vec!["a", "b", "c"]),
         Series::from_data(vec![true, true, false]),
-        Series::from_data(vec![1.1, 2.2, 3.3]),
+        Series::from_data(vec![1.1f64, 2.2, 3.3]),
         Series::from_data(vec![1_i32, 2_i32, 3_i32]),
     ]);
 

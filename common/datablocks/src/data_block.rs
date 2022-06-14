@@ -38,7 +38,7 @@ impl DataBlock {
             .fields()
             .iter()
             .zip(columns.iter())
-            .all(|(f, c)| f.data_type() == &c.data_type()));
+            .all(|(f, c)| f.data_type().data_type_id().to_physical_type() == c.data_type().data_type_id().to_physical_type()));
         DataBlock { schema, columns }
     }
 

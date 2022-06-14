@@ -25,7 +25,7 @@ fn test_data_block_sort() -> Result<()> {
     ]);
 
     let raw = DataBlock::create(schema, vec![
-        Series::from_data(vec![6, 4, 3, 2, 1, 7]),
+        Series::from_data(vec![6i64, 4, 3, 2, 1, 7]),
         Series::from_data(vec!["b1", "b2", "b3", "b4", "b5", "b6"]),
     ]);
 
@@ -185,7 +185,7 @@ fn test_data_block_sort() -> Result<()> {
             asc: true,
             nulls_first: false,
         }];
-        println!("raw={:?}", raw);
+        // println!("raw={:?}", raw);
         let results = DataBlock::sort_block(&raw, &options, Some(3))?;
         assert_eq!(raw.schema(), results.schema());
 
@@ -233,12 +233,12 @@ fn test_data_block_merge_sort() -> Result<()> {
     ]);
 
     let raw1 = DataBlock::create(schema.clone(), vec![
-        Series::from_data(vec![3, 5, 7]),
+        Series::from_data(vec![3i64, 5, 7]),
         Series::from_data(vec!["b1", "b2", "b3"]),
     ]);
 
     let raw2 = DataBlock::create(schema, vec![
-        Series::from_data(vec![2, 4, 6]),
+        Series::from_data(vec![2i64, 4, 6]),
         Series::from_data(vec!["b4", "b5", "b6"]),
     ]);
 
