@@ -14,8 +14,8 @@
 
 use bytes::BufMut;
 use common_exception::Result;
+use micromarshal::Marshal;
 
-use crate::marshal::Marshal;
 use crate::stat_buffer::StatBuffer;
 
 const MAX_VARINT_LEN64: usize = 10;

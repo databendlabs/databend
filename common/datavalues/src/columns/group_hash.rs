@@ -17,6 +17,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
+use micromarshal::Marshal;
 
 use crate::prelude::*;
 
