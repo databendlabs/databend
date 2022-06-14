@@ -109,7 +109,7 @@ async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
             "
             CREATE TABLE default.a(\
                 a bigint comment 'a', b int comment 'b',\
-                c varchar(255) comment 'c', d smallint comment 'd', e Date comment 'e'\
+                c varchar(255) comment 'c', d smallint comment '', e Date\
             ) Engine = Null COMMENT = 'test create'\
         ",
         ],
@@ -122,8 +122,8 @@ async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
             "|       |   `a` BIGINT COMMENT 'a',           |",
             "|       |   `b` INT COMMENT 'b',              |",
             "|       |   `c` VARCHAR COMMENT 'c',          |",
-            "|       |   `d` SMALLINT COMMENT 'd',         |",
-            "|       |   `e` DATE COMMENT 'e'              |",
+            "|       |   `d` SMALLINT,                     |",
+            "|       |   `e` DATE                          |",
             "|       | ) ENGINE=NULL COMMENT='test create' |",
             "+-------+-------------------------------------+",
         ],

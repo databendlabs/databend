@@ -29,7 +29,6 @@ pub struct DataField {
     default_expr: Option<String>,
     #[ignore_malloc_size_of = "insignificant"]
     data_type: DataTypeImpl,
-    comment: Option<String>,
 }
 
 impl DataField {
@@ -38,7 +37,6 @@ impl DataField {
             name: name.to_string(),
             default_expr: None,
             data_type,
-            comment: None,
         }
     }
 
@@ -48,18 +46,12 @@ impl DataField {
             name: name.to_string(),
             default_expr: None,
             data_type,
-            comment: None,
         }
     }
 
     #[must_use]
     pub fn with_default_expr(mut self, default_expr: Option<String>) -> Self {
         self.default_expr = default_expr;
-        self
-    }
-
-    pub fn with_comment(mut self, comment: Option<String>) -> Self {
-        self.comment = comment;
         self
     }
 
@@ -73,10 +65,6 @@ impl DataField {
 
     pub fn default_expr(&self) -> Option<&String> {
         self.default_expr.as_ref()
-    }
-
-    pub fn comment(&self) -> Option<&String> {
-        self.comment.as_ref()
     }
 
     #[inline]
@@ -131,9 +119,6 @@ impl std::fmt::Debug for DataField {
             .field("nullable", &self.is_nullable());
         if let Some(ref default_expr) = self.default_expr {
             debug_struct.field("default_expr", default_expr);
-        }
-        if let Some(ref comment) = self.comment {
-            debug_struct.field("comment", comment);
         }
         debug_struct.finish()
     }

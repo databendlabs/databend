@@ -186,6 +186,9 @@ message TableMeta {
 
   // The time table droped.
   optional string drop_on = 24;
+
+  // Comments of each field.
+  repeated string field_comments = 25;
 }
 
 // Save table name id list history.
@@ -241,7 +244,4 @@ message DataField {
 
   // Column data type
   DataType data_type = 3;
-
-  // The comment of this field
-  optional string comment = 4;
 }

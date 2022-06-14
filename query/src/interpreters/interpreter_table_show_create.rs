@@ -59,13 +59,15 @@ impl Interpreter for ShowCreateTableInterpreter {
         let name = table.name();
         let engine = table.engine();
         let schema = table.schema();
+        let field_comments = table.field_comments();
+        let n_fields = schema.fields().len();
 
         let mut table_create_sql = format!("CREATE TABLE `{}` (\n", name);
 
         // Append columns.
         {
             let mut columns = vec![];
-            for field in schema.fields().iter() {
+            for (idx, field) in schema.fields().iter().enumerate() {
                 let default_expr = match field.default_expr() {
                     Some(expr) => {
                         let expression = PlanParser::parse_expr(expr)?;
@@ -73,11 +75,12 @@ impl Interpreter for ShowCreateTableInterpreter {
                     }
                     None => "".to_string(),
                 };
-                let comment = match field.comment() {
-                    Some(comment) => {
-                        format!(" COMMENT '{}'", comment)
-                    }
-                    None => "".to_string(),
+                // compatibility: creating table in the old planner will not have `fields_comments`
+                let comment = if field_comments.len() == n_fields && !field_comments[idx].is_empty()
+                {
+                    format!(" COMMENT '{}'", &field_comments[idx])
+                } else {
+                    "".to_string()
                 };
                 let column = format!(
                     "  `{}` {}{}{}",
