@@ -23,10 +23,15 @@ use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
+use common_datavalues::wrap_nullable;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 use primitive_types::U256;
@@ -177,6 +182,49 @@ impl ChainingHashTable {
                     }
                 }
             }
+            JoinType::LeftJoin => {
+                for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
+                    let probe_result_ptr = hash_table.find_key(key);
+                    let data_schema_fields = self.row_space.data_schema.fields();
+                    let mut nullable_data_schema = Vec::with_capacity(data_schema_fields.len());
+                    let mut columns = Vec::with_capacity(data_schema_fields.len());
+                    if probe_result_ptr.is_none() {
+                        // No matched row for current probe row
+                        // Create a NULL block for right side
+                        for field in data_schema_fields.iter() {
+                            let data_field =
+                                DataField::new_nullable(field.name(), field.data_type().clone());
+                            columns.push(
+                                data_field
+                                    .data_type()
+                                    .create_constant_column(&DataValue::Null, 1)?,
+                            );
+                            nullable_data_schema.push(data_field);
+                        }
+                    } else {
+                        let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
+                        let build_block = self.row_space.gather(probe_result_ptrs)?;
+                        // wrap nullable for block
+                        let cols = build_block.columns();
+                        for (idx, field) in data_schema_fields.iter().enumerate() {
+                            let data_field =
+                                DataField::new_nullable(field.name(), field.data_type().clone());
+                            let col = &cols[idx];
+                            let mut data_values = Vec::with_capacity(col.len());
+                            for i in 0..col.len() {
+                                data_values.push(col.get_checked(i)?);
+                            }
+                            columns.push(data_field.data_type().create_column(&data_values)?);
+                            nullable_data_schema.push(data_field);
+                        }
+                    }
+                    let build_block =
+                        DataBlock::create(DataSchemaRefExt::create(nullable_data_schema), columns);
+                    dbg!(build_block.schema());
+                    let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
+                    results.push(self.merge_block(&build_block, &probe_block)?);
+                }
+            }
             _ => unreachable!(),
         }
         Ok(results)
@@ -279,6 +327,29 @@ impl ChainingHashTable {
                             }
                         }
                     }
+                    JoinType::LeftJoin => {
+                        for (i, key) in serialized_probe_keys
+                            .iter()
+                            .enumerate()
+                            .take(input.num_rows())
+                        {
+                            let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
+                            let probe_result_ptr = table.hash_table.find_key(&keys_ref);
+                            let mut build_block;
+                            if probe_result_ptr.is_none() {
+                                // No matched row for current probe row
+                                // Create a NULL block for right side
+                                build_block = DataBlock::empty_with_schema(
+                                    self.row_space.data_schema.clone(),
+                                );
+                            } else {
+                                let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
+                                build_block = self.row_space.gather(probe_result_ptrs)?;
+                            }
+                            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
+                            results.push(self.merge_block(&build_block, &probe_block)?);
+                        }
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -370,7 +441,9 @@ impl HashJoinState for ChainingHashTable {
 
     fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
         match self.join_type {
-            JoinType::Inner | JoinType::Semi | JoinType::Anti => self.probe_join(input),
+            JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left => {
+                self.probe_join(input)
+            }
             JoinType::Cross => self.probe_cross_join(input),
             _ => unimplemented!("{} is unimplemented", self.join_type),
         }
