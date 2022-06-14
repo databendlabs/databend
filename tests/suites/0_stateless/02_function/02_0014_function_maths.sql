@@ -1,4 +1,4 @@
-CREATE TABLE math_sample_numbers (timestamp UInt32, value Int32) engine=Memory;
+CREATE TABLE math_sample_numbers (timestamp UInt32, value Int32) Engine = Fuse;
 INSERT INTO math_sample_numbers VALUES ('1', '-1'), ('2', '-2'), ('3', '3');
 
 SELECT pi();
@@ -16,7 +16,7 @@ SELECT abs(value) FROM math_sample_numbers;
 SELECT abs(value) + abs(-1) FROM math_sample_numbers;
 
 SELECT '===log===';
-CREATE TABLE math_log_numbers (a Float null, b Float null) engine=Memory;
+CREATE TABLE math_log_numbers (a Float null, b Float null) Engine = Fuse;
 INSERT INTO math_log_numbers VALUES (2.0, 1024.0), (NULL, 12), (12, NULL);
 
 SELECT log(NULL);

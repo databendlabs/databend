@@ -13,7 +13,7 @@ TRUNCATE TABLE [db.]name
 ## Examples
 
 ```sql
-CREATE TABLE test(a BIGINT UNSIGNED, b VARCHAR) Engine = Memory;
+CREATE TABLE test(a BIGINT UNSIGNED, b VARCHAR) Engine = Fuse;
 
 INSERT INTO test(a,b) VALUES(888, 'stars');
 

@@ -4443,9 +4443,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8885ecd915991814d3b17e85810a5e3b6d593503d4e09d67a9c3328ab7fa90d"
+checksum = "9cc4f8511adde5177e4c8292b5209e7f8d712cae1c01eb517b95eb97f9d06917"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6429,7 +6429,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=13d3176#13d3176cf85c0b51e291a6128f4c51f05326cb14"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=d44a8e1#d44a8e16ab1bef5789558fa6b96de83de4858447"
 dependencies = [
  "hashbrown 0.12.1",
  "log",
