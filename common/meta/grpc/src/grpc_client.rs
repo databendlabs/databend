@@ -78,7 +78,7 @@ use crate::METACLI_COMMIT_SEMVER;
 use crate::MIN_METASRV_SEMVER;
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
-const META_GRPC_CLIENT_REQUEST_DURATION_MILLIS: &str = "meta_grpc_client_request_duration_millis";
+const META_GRPC_CLIENT_REQUEST_DURATION_MS: &str = "meta_grpc_client_request_duration_ms";
 const META_GRPC_CLIENT_REQUEST_SUCCESS: &str = "meta_grpc_client_request_success";
 const META_GRPC_CLIENT_REQUEST_FAILED: &str = "meta_grpc_client_request_fail";
 const META_GRPC_MAKE_CLIENT_FAILED: &str = "meta_grpc_make_client_fail";
@@ -345,9 +345,9 @@ impl MetaGrpcClient {
 
             if let Some(current_endpoint) = &*current_endpoint {
                 label_histogram_with_val(
-                    META_GRPC_CLIENT_REQUEST_DURATION_MILLIS,
+                    META_GRPC_CLIENT_REQUEST_DURATION_MS,
                     vec![(LABEL_ENDPOINT, current_endpoint.to_string())],
-                    Instant::now().duration_since(start).as_millis() as f64,
+                    start.elapsed().as_millis() as f64,
                 );
                 if success {
                     label_counter_with_val_and_labels(
