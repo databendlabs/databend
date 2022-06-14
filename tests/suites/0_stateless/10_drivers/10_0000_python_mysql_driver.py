@@ -20,7 +20,7 @@ sqls = """
 DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
-CREATE TABLE IF NOT EXISTS t1(a String, b String, c String, d String, e String, f String, g String, h String) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(a String, b String, c String, d String, e String, f String, g String, h String) Engine = Fuse;
 """
 
 client1.run(sqls)
@@ -40,8 +40,8 @@ res = mycursor.fetchall()
 assert res == [('t1',)]
 mycursor.execute("SHOW FULL TABLES FROM db1")
 res = mycursor.fetchall()
-assert res == [('t1', 'BASE TABLE', 'db1', 'Memory',
-                '1970-01-01 00:00:00.000 +0000', None, None, None, None)], res
+assert res == [('t1', 'BASE TABLE', 'db1', 'Fuse',
+                '1970-01-01 00:00:00.000 +0000', 2, 296, 1816, None)], res
 sql3 = "SELECT COUNT(*) FROM db1.t1 WHERE a = %s" % (
     "\"Test Some Inser\\\"'`ts\"")
 mycursor.execute(sql3)
