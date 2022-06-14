@@ -77,7 +77,7 @@ impl<'a> Binder {
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let database = database.as_ref().map_or_else(
                     || self.ctx.get_current_catalog(),
-                    |ident| ident.name.to_lowercase().clone(),
+                    |ident| ident.name.to_lowercase(),
                 );
                 let table_name = table.name.to_lowercase();
                 let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
