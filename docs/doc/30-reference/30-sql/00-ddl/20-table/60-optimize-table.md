@@ -2,7 +2,7 @@
 title: OPTIMIZE TABLE
 ---
 
-Optimize the give table, by compacting data, purging historical data.
+Optimize the given table, by compacting data, and purging historical data.
 
 ## Syntax
 
