@@ -3151,6 +3151,28 @@ AlterUser {
 
 
 ---------- Input ----------
+create role 'test'
+---------- Output ---------
+CREATE ROLE test
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "test",
+}
+
+
+---------- Input ----------
+drop role if exists 'test'
+---------- Output ---------
+DROP ROLE IF EXISTS test
+---------- AST ------------
+DropRole {
+    if_exists: true,
+    role_name: "test",
+}
+
+
+---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
 ALTER TABLE t CLUSTER BY c1

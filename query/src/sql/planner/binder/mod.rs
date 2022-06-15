@@ -22,7 +22,9 @@ use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::CreateRolePlan;
 use common_planners::DescribeUserStagePlan;
+use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
 pub use scalar_common::*;
@@ -131,6 +133,30 @@ impl<'a> Binder {
                 let plan = self.bind_create_table(stmt).await?;
                 Ok(plan)
             }
+            Statement::DropTable(stmt) => {
+                let plan = self.bind_drop_table(stmt).await?;
+                Ok(plan)
+            }
+            Statement::UndropTable(stmt) => {
+                let plan = self.bind_undrop_table(stmt).await?;
+                Ok(plan)
+            }
+            Statement::AlterTable(stmt) => {
+                let plan = self.bind_alter_table(stmt).await?;
+                Ok(plan)
+            }
+            Statement::RenameTable(stmt) => {
+                let plan = self.bind_rename_table(stmt).await?;
+                Ok(plan)
+            }
+            Statement::TruncateTable(stmt) => {
+                let plan = self.bind_truncate_table(stmt).await?;
+                Ok(plan)
+            }
+            Statement::OptimizeTable(stmt) => {
+                let plan = self.bind_optimize_table(stmt).await?;
+                Ok(plan)
+            }
 
             // Views
             Statement::CreateView(stmt) => {
@@ -167,6 +193,28 @@ impl<'a> Binder {
                     .bind_alter_user(user, auth_option, role_options)
                     .await?;
                 Ok(plan)
+            }
+
+            // Roles
+            Statement::CreateRole {
+                if_not_exists,
+                role_name,
+            } => {
+                let plan = CreateRolePlan {
+                    if_not_exists: *if_not_exists,
+                    role_name: role_name.to_string(),
+                };
+                Ok(Plan::CreateRole(Box::new(plan)))
+            }
+            Statement::DropRole {
+                if_exists,
+                role_name,
+            } => {
+                let plan = DropRolePlan {
+                    if_exists: *if_exists,
+                    role_name: role_name.to_string(),
+                };
+                Ok(Plan::DropRole(Box::new(plan)))
             }
 
             // Stages

@@ -38,7 +38,7 @@ impl KVApi for StateMachine {
         };
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t).unwrap();
+            let r = self.apply_cmd(&cmd, &t, None).unwrap();
             Ok(r)
         })?;
 
@@ -54,7 +54,7 @@ impl KVApi for StateMachine {
         let cmd = Cmd::Transaction(txn);
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t).unwrap();
+            let r = self.apply_cmd(&cmd, &t, None).unwrap();
             Ok(r)
         })?;
 

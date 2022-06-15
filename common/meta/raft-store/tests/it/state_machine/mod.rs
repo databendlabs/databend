@@ -59,6 +59,7 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
                         key: "foo".to_string(),
                     },
                     &t,
+                    None,
                 )
                 .unwrap())
         })?;
@@ -74,6 +75,7 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
                         key: "bar".to_string(),
                     },
                     &t,
+                    None,
                 )
                 .unwrap())
         })?;
@@ -215,6 +217,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                         value_meta: c.value_meta.clone(),
                     },
                     &t,
+                    None,
                 )
                 .unwrap())
         })?;
@@ -283,6 +286,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     }),
                 },
                 &t,
+                None,
             )
             .unwrap())
     })?;
@@ -308,6 +312,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     }),
                 },
                 &t,
+                None,
             )
             .unwrap())
     })?;
@@ -325,6 +330,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     }),
                 },
                 &t,
+                None,
             )
             .unwrap())
     })?;
@@ -404,6 +410,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
                         value_meta: None,
                     },
                     &t,
+                    None,
                 )
                 .unwrap())
         })?;
@@ -419,6 +426,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
                         value_meta: None,
                     },
                     &t,
+                    None,
                 )
                 .unwrap())
         })?;

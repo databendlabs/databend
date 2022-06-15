@@ -30,8 +30,8 @@ use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
+use crate::sql::plans::Sort;
 use crate::sql::plans::SortItem;
-use crate::sql::plans::SortPlan;
 use crate::sql::BindContext;
 use crate::sql::IndexType;
 
@@ -153,7 +153,7 @@ impl<'a> Binder {
             child
         };
 
-        let sort_plan = SortPlan {
+        let sort_plan = Sort {
             items: order_by_items,
         };
         new_expr = SExpr::create_unary(sort_plan.into(), new_expr);
@@ -197,7 +197,7 @@ impl<'a> Binder {
                 }
             }
         }
-        let sort_plan = SortPlan {
+        let sort_plan = Sort {
             items: order_by_items,
         };
         Ok(SExpr::create_unary(sort_plan.into(), child))

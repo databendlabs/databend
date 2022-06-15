@@ -17,6 +17,7 @@ use chrono::NaiveDate;
 use common_exception::*;
 use common_io::prelude::*;
 use lexical_core::FromLexical;
+use micromarshal::Unmarshal;
 use num::cast::AsPrimitive;
 
 use crate::prelude::*;

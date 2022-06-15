@@ -44,7 +44,7 @@ statement ok
 optimize table `t` all;
 
 statement ok
-create table m(a uint64) engine=Memory;
+create table m(a uint64) Engine = Fuse;
 
 -- statement ok
 -- optimize table m;

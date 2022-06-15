@@ -23,6 +23,8 @@ use crate::txn_op::Request;
 use crate::txn_op_response::Response;
 use crate::ConditionResult;
 use crate::TxnCondition;
+use crate::TxnDeleteByPrefixRequest;
+use crate::TxnDeleteByPrefixResponse;
 use crate::TxnDeleteRequest;
 use crate::TxnDeleteResponse;
 use crate::TxnGetRequest;
@@ -127,6 +129,9 @@ impl Display for txn_op::Request {
             Request::Delete(r) => {
                 write!(f, "Delete({})", r)
             }
+            Request::DeleteByPrefix(r) => {
+                write!(f, "DeleteByPrefix({})", r)
+            }
         }
     }
 }
@@ -150,6 +155,12 @@ impl Display for TxnPutRequest {
 impl Display for TxnDeleteRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Delete key={}", self.key)
+    }
+}
+
+impl Display for TxnDeleteByPrefixRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TxnDeleteByPrefixRequest prefix={}", self.prefix)
     }
 }
 
@@ -198,6 +209,9 @@ impl Display for Response {
             Response::Delete(r) => {
                 write!(f, "Delete: {}", r)
             }
+            Response::DeleteByPrefix(r) => {
+                write!(f, "DeleteByPrefix: {}", r)
+            }
         }
     }
 }
@@ -230,6 +244,16 @@ impl Display for TxnDeleteResponse {
             self.success,
             self.key,
             self.prev_value.as_ref().map(|x| x.seq)
+        )
+    }
+}
+
+impl Display for TxnDeleteByPrefixResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TxnDeleteByPrefixResponse prefix={},count={}",
+            self.prefix, self.count
         )
     }
 }

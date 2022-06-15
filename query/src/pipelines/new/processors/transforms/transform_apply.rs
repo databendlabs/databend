@@ -204,7 +204,7 @@ impl OuterRefRewriter {
                 Ok(expr)
             }
 
-            Scalar::Cast(cast) => Ok(CastExpr {
+            Scalar::CastExpr(cast) => Ok(CastExpr {
                 argument: Box::new(self.rewrite_scalar(&cast.argument)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),

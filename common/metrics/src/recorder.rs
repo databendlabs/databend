@@ -18,6 +18,9 @@ use std::sync::Once;
 use common_base::infallible::RwLock;
 use common_tracing::tracing;
 use metrics::counter;
+use metrics::decrement_gauge;
+use metrics::histogram;
+use metrics::increment_gauge;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
 use once_cell::sync::Lazy;
@@ -27,6 +30,38 @@ static PROMETHEUS_HANDLE: Lazy<Arc<RwLock<Option<PrometheusHandle>>>> =
 
 pub const LABEL_KEY_TENANT: &str = "tenant";
 pub const LABEL_KEY_CLUSTER: &str = "cluster_name";
+
+#[inline]
+pub fn label_histogram_with_val(name: &'static str, labels: Vec<(&'static str, String)>, val: f64) {
+    histogram!(name, val, &labels);
+}
+
+#[inline]
+pub fn label_counter_with_val_and_labels(
+    name: &'static str,
+    labels: Vec<(&'static str, String)>,
+    val: u64,
+) {
+    counter!(name, val, &labels);
+}
+
+#[inline]
+pub fn label_increment_gauge_with_val_and_labels(
+    name: &'static str,
+    labels: Vec<(&'static str, String)>,
+    val: f64,
+) {
+    increment_gauge!(name, val, &labels);
+}
+
+#[inline]
+pub fn label_decrement_gauge_with_val_and_labels(
+    name: &'static str,
+    labels: Vec<(&'static str, String)>,
+    val: f64,
+) {
+    decrement_gauge!(name, val, &labels);
+}
 
 #[inline]
 pub fn label_counter(name: &'static str, tenant_id: &str, cluster_id: &str) {

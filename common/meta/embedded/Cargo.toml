@@ -22,7 +22,7 @@ common-meta-types = { path = "../types" }
 common-tracing = { path = "../../tracing" }
 
 # Crates.io dependencies
-async-trait = "0.1.53"
+async-trait = "0.1.56"
 once_cell = "1.10.0"
 tempfile = "3.3.0"
 
