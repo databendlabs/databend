@@ -374,6 +374,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map(
         rule! {
             CREATE ~ USER ~ ( IF ~ NOT ~ EXISTS )?
@@ -421,6 +422,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             user,
         },
     );
+    let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
     let create_role = map(
         rule! {
             CREATE ~ ROLE ~ ( IF ~ NOT ~ EXISTS )? ~ #literal_string
@@ -627,9 +629,11 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
         ),
         rule!(
-            #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <role_option> ...]`"
+            #show_users : "`SHOW USERS`"
+            | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <role_option> ...]`"
             | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <role_option> ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
+            | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] '<role_name>']`"
             | #drop_role : "`DROP ROLE [IF EXISTS] '<role_name>'`"
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"

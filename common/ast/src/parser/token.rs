@@ -443,6 +443,8 @@ pub enum TokenKind {
     KILL,
     #[token("ROLE", ignore(ascii_case))]
     ROLE,
+    #[token("ROLES", ignore(ascii_case))]
+    ROLES,
     #[token("LEADING", ignore(ascii_case))]
     LEADING,
     #[token("LEFT", ignore(ascii_case))]
@@ -621,6 +623,8 @@ pub enum TokenKind {
     USE,
     #[token("USER", ignore(ascii_case))]
     USER,
+    #[token("USERS", ignore(ascii_case))]
+    USERS,
     #[token("USING", ignore(ascii_case))]
     USING,
     #[token("VALUES", ignore(ascii_case))]
