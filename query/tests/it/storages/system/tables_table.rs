@@ -27,13 +27,13 @@ async fn test_tables_table() -> Result<()> {
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 9);
+    assert_eq!(block.num_columns(), 10);
 
     // check column "dropped_on"
     for x in &result {
         for row in 0..x.num_rows() {
-            // index of column dropped_on is 4
-            let column = x.column(4);
+            // index of column dropped_on is 5
+            let column = x.column(5);
             let str = column.get_checked(row)?.to_string();
             // All of them should be NULL
             assert_eq!("NULL", str)
@@ -47,33 +47,33 @@ async fn test_tables_table() -> Result<()> {
     }
 
     let expected = vec![
-        r"\+--------------------\+--------------\+--------------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
-        r"\| database           \| name         \| engine             \| created_on                    \| num_rows \| data_size \| data_compressed_size \| index_size \|",
-        r"\+--------------------\+--------------\+--------------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
-        r"\| INFORMATION_SCHEMA \| COLUMNS      \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| INFORMATION_SCHEMA \| KEYWORDS     \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| INFORMATION_SCHEMA \| SCHEMATA     \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| INFORMATION_SCHEMA \| TABLES       \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| INFORMATION_SCHEMA \| VIEWS        \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| clusters     \| SystemClusters     \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| columns      \| SystemColumns      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| configs      \| SystemConfigs      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| contributors \| SystemContributors \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| credits      \| SystemCredits      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| databases    \| SystemDatabases    \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| engines      \| SystemEngines      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| functions    \| SystemFunctions    \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| metrics      \| SystemMetrics      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| one          \| SystemOne          \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| processes    \| SystemProcesses    \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| query_log    \| SystemQueryLog     \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| roles        \| SystemRoles        \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| settings     \| SystemSettings     \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| tables       \| SystemTables       \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| tracing      \| SystemTracing      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| users        \| SystemUsers        \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| stages       \| SystemStages       \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\+--------------------\+--------------\+--------------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
+        r"\+--------------------\+--------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
+        r"\| database           \| name         \| engine             \| cluster_by \| created_on                    \| num_rows \| data_size \| data_compressed_size \| index_size \|",
+        r"\+--------------------\+--------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
+        r"\| INFORMATION_SCHEMA \| COLUMNS      \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| INFORMATION_SCHEMA \| KEYWORDS     \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| INFORMATION_SCHEMA \| SCHEMATA     \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| INFORMATION_SCHEMA \| TABLES       \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| INFORMATION_SCHEMA \| VIEWS        \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| clusters     \| SystemClusters     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| columns      \| SystemColumns      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| configs      \| SystemConfigs      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| contributors \| SystemContributors \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| credits      \| SystemCredits      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| databases    \| SystemDatabases    \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| engines      \| SystemEngines      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| functions    \| SystemFunctions    \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| metrics      \| SystemMetrics      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| one          \| SystemOne          \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| processes    \| SystemProcesses    \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| query_log    \| SystemQueryLog     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| roles        \| SystemRoles        \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| settings     \| SystemSettings     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| tables       \| SystemTables       \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| tracing      \| SystemTracing      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| users        \| SystemUsers        \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| stages       \| SystemStages       \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\+--------------------\+--------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
     ];
     common_datablocks::assert_blocks_sorted_eq_with_regex(expected, without_dropped.as_slice());
 

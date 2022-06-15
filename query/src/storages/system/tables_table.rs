@@ -96,11 +96,22 @@ impl AsyncSystemTable for TablesTable {
             })
             .collect();
         let created_ons: Vec<&[u8]> = created_ons.iter().map(|s| s.as_bytes()).collect();
+        let cluster_bys: Vec<String> = database_tables
+            .iter()
+            .map(|(_, v)| {
+                v.get_table_info()
+                    .meta
+                    .cluster_key
+                    .clone()
+                    .unwrap_or_else(|| "".to_owned())
+            })
+            .collect();
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(databases),
             Series::from_data(names),
             Series::from_data(engines),
+            Series::from_data(cluster_bys),
             Series::from_data(created_ons),
             Series::from_data(dropped_ons),
             Series::from_data(num_rows),
@@ -117,6 +128,7 @@ impl TablesTable {
             DataField::new("database", Vu8::to_data_type()),
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("engine", Vu8::to_data_type()),
+            DataField::new("cluster_by", Vu8::to_data_type()),
             DataField::new("created_on", Vu8::to_data_type()),
             DataField::new("dropped_on", Vu8::to_data_type()),
             DataField::new_nullable("num_rows", u64::to_data_type()),
