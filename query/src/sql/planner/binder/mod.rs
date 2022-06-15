@@ -27,6 +27,7 @@ use common_planners::DescribeUserStagePlan;
 use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
+use common_planners::ShowGrantsPlan;
 pub use scalar_common::*;
 
 use self::subquery::SubqueryRewriter;
@@ -194,6 +195,12 @@ impl<'a> Binder {
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
+
+            Statement::Grant(stmt) => self.bind_grant(stmt).await?,
+
+            Statement::ShowGrants { principal } => Plan::ShowGrants(Box::new(ShowGrantsPlan {
+                principal: principal.clone(),
+            })),
 
             _ => {
                 return Err(ErrorCode::UnImplement(format!(

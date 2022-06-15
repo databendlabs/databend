@@ -3352,3 +3352,430 @@ CreateTable(
 )
 
 
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT, CREATE ON TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON *.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: ALL {
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON *.* TO ROLE 'role2';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON *.* TO ROLE role2
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: ALL {
+            level: Global,
+        },
+        principal: Role(
+            "role2",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: ALL {
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL PRIVILEGES ON * TO ROLE 'role3';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON * TO ROLE role3
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: ALL {
+            level: Database(
+                None,
+            ),
+        },
+        principal: Role(
+            "role3",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO 'test-user';
+---------- Output ---------
+GRANT ROLE test TO USER 'test-user'@'%'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Role {
+            role: "test",
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-user",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO USER 'test-user';
+---------- Output ---------
+GRANT ROLE test TO USER 'test-user'@'%'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Role {
+            role: "test",
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-user",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO ROLE 'test-user';
+---------- Output ---------
+GRANT ROLE test TO ROLE test-user
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Role {
+            role: "test",
+        },
+        principal: Role(
+            "test-user",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO ROLE 'role1'
+---------- Output ---------
+GRANT SELECT ON db01.* TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS;
+---------- Output ---------
+SHOW GRANTS
+---------- AST ------------
+ShowGrants {
+    principal: None,
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR 'test-grant'@'localhost';
+---------- Output ---------
+SHOW GRANTS FOR USER 'test-grant'@'localhost'
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR USER 'test-grant'@'localhost';
+---------- Output ---------
+SHOW GRANTS FOR USER 'test-grant'@'localhost'
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR ROLE 'role1';
+---------- Output ---------
+SHOW GRANTS FOR ROLE role1
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        Role(
+            "role1",
+        ),
+    ),
+}
+
+
