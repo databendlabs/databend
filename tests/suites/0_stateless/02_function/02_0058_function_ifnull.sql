@@ -13,7 +13,7 @@ SELECT IFNULL('a', NULL);
 SELECT IFNULL(NULL, 'a');
 SELECT IFNULL(NULL, NULL);
 
-SELECT '==ifnull_non_nullable_columns=';
+SELECT '==ifnull_non_nullable_columns==';
 CREATE TABLE IF NOT EXISTS t(a INT, b INT) ENGINE=Memory;
 INSERT INTO t VALUES(0, 0), (0, 1), (1, 0), (1, 1);
 SELECT a, b, IFNULL(a, b) FROM t;
