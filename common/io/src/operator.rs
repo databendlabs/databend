@@ -122,7 +122,7 @@ pub async fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
 
     // Enable virtual host style
     if cfg.enable_virtual_host_style {
-        builder.enable_virtual_host_style()
+        builder.enable_virtual_host_style();
     }
 
     Ok(Operator::new(builder.finish().await?))

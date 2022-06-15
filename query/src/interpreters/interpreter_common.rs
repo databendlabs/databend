@@ -23,8 +23,8 @@ use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_tracing::tracing::warn;
 use futures::TryStreamExt;
-use opendal::ObjectMode;
 use regex::Regex;
 
 use crate::sessions::QueryContext;
@@ -79,6 +79,11 @@ pub async fn list_files(
     }
 }
 
+/// List files from DAL in recursive way.
+///
+/// - If input path is a dir, we will list it recursively.
+/// - Or, we will append the file itself, and try to list `path/`.
+/// - If not exist, we will try to list `path/` too.
 pub async fn list_files_from_dal(
     ctx: &Arc<QueryContext>,
     stage: &UserStageInfo,
@@ -86,40 +91,39 @@ pub async fn list_files_from_dal(
     pattern: &str,
 ) -> Result<Vec<StageFile>> {
     let op = StageSource::get_op(ctx, stage).await?;
-    let files = if path.ends_with('/') {
-        let mut list = vec![];
-        let mut dirs = vec![path.to_string()];
-        while let Some(dir) = dirs.pop() {
-            let mut objects = op.object(&dir).list().await?;
-            while let Some(de) = objects.try_next().await? {
-                let meta = de.metadata().await?;
-                let path = de.path().to_string();
-                match de.mode() {
-                    ObjectMode::FILE => {
-                        list.push((path, meta));
-                    }
-                    ObjectMode::DIR => {
-                        dirs.push(path);
-                    }
-                    ObjectMode::Unknown => continue,
-                }
-            }
+    let mut files = Vec::new();
+
+    // - If the path itself is a dir, return directly.
+    // - Otherwise, return a path suffix by `/`
+    // - If other errors happen, we will ignore them by returning None.
+    let dir_path = match op.object(path).metadata().await {
+        Ok(meta) if meta.mode().is_dir() => Some(path.to_string()),
+        Ok(meta) if !meta.mode().is_dir() => {
+            files.push((path.to_string(), meta));
+
+            Some(format!("{path}/"))
         }
-        list
-    } else {
-        let o = op.object(path);
-        match o.metadata().await {
-            Ok(meta) => {
-                if meta.mode().is_dir() {
-                    vec![]
-                } else {
-                    vec![(o.path().to_string(), meta)]
-                }
-            }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => vec![],
-            Err(e) => return Err(e.into()),
-        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Some(format!("{path}/")),
+        Err(e) => return Err(e.into()),
+        _ => None,
     };
+
+    // Check the if this dir valid and list it recursively.
+    if let Some(dir) = dir_path {
+        match op.object(&dir).metadata().await {
+            Ok(_) => {
+                let mut ds = op.batch().walk_top_down(path)?;
+                while let Some(de) = ds.try_next().await? {
+                    if de.mode().is_file() {
+                        let path = de.path().to_string();
+                        let meta = de.metadata().await?;
+                        files.push((path, meta));
+                    }
+                }
+            }
+            Err(e) => warn!("ignore listing {path}/, because: {:?}", e),
+        };
+    }
 
     let regex = if !pattern.is_empty() {
         Some(Regex::new(pattern).map_err(|e| {
@@ -201,7 +205,7 @@ pub async fn list_files_from_meta_api(
             if path.ends_with('/') {
                 name.starts_with(path)
             } else {
-                name == path
+                name.starts_with(&format!("{path}/")) || name == path
             }
         })
         .filter(|file| {
