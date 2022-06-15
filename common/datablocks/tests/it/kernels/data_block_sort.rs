@@ -185,7 +185,6 @@ fn test_data_block_sort() -> Result<()> {
             asc: true,
             nulls_first: false,
         }];
-        // println!("raw={:?}", raw);
         let results = DataBlock::sort_block(&raw, &options, Some(3))?;
         assert_eq!(raw.schema(), results.schema());
 
