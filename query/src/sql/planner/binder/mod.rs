@@ -188,9 +188,11 @@ impl<'a> Binder {
                 self.bind_remove_stage(location, pattern).await?
             }
 
-            _ => return Err(ErrorCode::UnImplement(format!(
-                "UnImplemented stmt {stmt} in binder"
-            ))),
+            _ => {
+                return Err(ErrorCode::UnImplement(format!(
+                    "UnImplemented stmt {stmt} in binder"
+                )))
+            }
         };
 
         Ok(plan)
