@@ -138,12 +138,6 @@ impl Metadata {
         column_index
     }
 
-    pub fn nullable_data_type(&mut self, index: IndexType) {
-        if let Some(col) = self.columns.get_mut(index) {
-            col.data_type = wrap_nullable(&col.data_type);
-        }
-    }
-
     pub fn add_table(
         &mut self,
         catalog: String,
