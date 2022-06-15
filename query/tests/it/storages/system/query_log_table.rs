@@ -17,8 +17,9 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use databend_query::storages::system::QueryLogTable;
 use databend_query::storages::Table;
@@ -33,7 +34,9 @@ async fn test_query_log_table() -> Result<()> {
     let max_rows = 2;
     let table_id = 0;
     let query_log = QueryLogTable::create(table_id, max_rows);
-    let schema = query_log.schema();
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", u32::to_data_type()),
+    ]);
     let table: Arc<dyn Table> = Arc::new(query_log);
 
     // Insert.
