@@ -19,7 +19,6 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planners::col;
 use common_planners::AlterTableClusterKeyPlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropTableClusterKeyPlan;
