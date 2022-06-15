@@ -105,15 +105,27 @@ impl<'a> Binder {
                 left_child,
                 right_child,
             ),
-            JoinOperator::LeftOuter => Err(ErrorCode::UnImplement(
-                "Unsupported join type: LEFT OUTER JOIN",
-            )),
-            JoinOperator::RightOuter => Err(ErrorCode::UnImplement(
-                "Unsupported join type: RIGHT OUTER JOIN",
-            )),
-            JoinOperator::FullOuter => Err(ErrorCode::UnImplement(
-                "Unsupported join type: FULL OUTER JOIN",
-            )),
+            JoinOperator::LeftOuter => self.bind_join_with_type(
+                JoinType::Left,
+                left_join_conditions,
+                right_join_conditions,
+                left_child,
+                right_child,
+            ),
+            JoinOperator::RightOuter => self.bind_join_with_type(
+                JoinType::Left,
+                right_join_conditions,
+                left_join_conditions,
+                right_child,
+                left_child,
+            ),
+            JoinOperator::FullOuter => self.bind_join_with_type(
+                JoinType::Full,
+                left_join_conditions,
+                right_join_conditions,
+                left_child,
+                right_child,
+            ),
             JoinOperator::CrossJoin => self.bind_join_with_type(
                 JoinType::Cross,
                 left_join_conditions,
@@ -124,11 +136,18 @@ impl<'a> Binder {
         }?;
 
         if !other_conditions.is_empty() {
-            let filter_plan = Filter {
-                predicates: other_conditions,
-                is_having: false,
-            };
-            s_expr = SExpr::create_unary(filter_plan.into(), s_expr);
+            match &join.op {
+                JoinOperator::Inner | JoinOperator::CrossJoin => {
+                    let filter_plan = Filter {
+                        predicates: other_conditions,
+                        is_having: false,
+                    };
+                    s_expr = SExpr::create_unary(filter_plan.into(), s_expr);
+                }
+                JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter => {
+                    return Err(ErrorCode::UnImplement("Outer join only support equi-join"));
+                }
+            }
         }
 
         Ok((s_expr, bind_context))
