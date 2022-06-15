@@ -57,16 +57,18 @@ impl IfFunction {
         &self,
         cond_col: &ColumnRef,
         columns: &ColumnsWithField,
-        _func_ctx: &FunctionContext,
+        func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         debug_assert!(cond_col.is_const());
         // whether nullable or not, we can use viewer to make it
         let cond_viewer = bool::try_create_viewer(cond_col)?;
-        if cond_viewer.value_at(0) {
-            return Ok(columns[0].column().clone());
+        let c = if cond_viewer.value_at(0) {
+            columns[0].clone()
         } else {
-            return Ok(columns[1].column().clone());
-        }
+            columns[1].clone()
+        };
+
+        cast_column_field(&c, c.data_type(), &self.least_supertype, func_ctx)
     }
 
     // lhs is const column and:
