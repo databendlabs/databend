@@ -30,7 +30,7 @@ pub struct LogicalGet {
 }
 
 impl Operator for LogicalGet {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         RelOp::LogicalGet
     }
 

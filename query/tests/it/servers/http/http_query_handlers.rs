@@ -1251,3 +1251,26 @@ async fn test_func_object_keys() -> Result<()> {
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn test_multi_partition() -> Result<()> {
+    let route = create_endpoint();
+
+    let sqls = vec![
+        ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
+        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
+        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
+        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
+        ("select * from tb2;", 6),
+    ];
+
+    for (sql, data_len) in sqls {
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1}});
+        let (status, result) = post_json_to_endpoint(&route, &json).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert_eq!(result.data.len(), data_len);
+    }
+    Ok(())
+}

@@ -73,7 +73,7 @@ pub struct LogicalInnerJoin {
 }
 
 impl Operator for LogicalInnerJoin {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         RelOp::LogicalInnerJoin
     }
 
