@@ -550,6 +550,7 @@ impl<'a> TypeChecker<'a> {
             } => {
                 // Rewrite IFNULL(expr1, expr2) to IF(ISNULL(expr1), expr2, expr1)
                 self.resolve_function(
+                    span,
                     "if",
                     &[
                         &Expr::IsNull {
