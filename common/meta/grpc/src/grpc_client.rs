@@ -14,6 +14,7 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -139,7 +140,7 @@ pub struct MetaGrpcClient {
     username: String,
     password: String,
     token: RwLock<Option<Vec<u8>>>,
-    current_endpoint: RwLock<Option<String>>,
+    current_endpoint: Arc<Mutex<Option<String>>>,
 
     /// Dedicated runtime to support meta client background tasks.
     ///
@@ -273,7 +274,7 @@ impl MetaGrpcClient {
         let worker = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
             endpoints: RwLock::new(endpoints),
-            current_endpoint: RwLock::new(None),
+            current_endpoint: Arc::new(Mutex::new(None)),
             username: username.to_string(),
             password: password.to_string(),
             token: RwLock::new(None),
@@ -355,9 +356,7 @@ impl MetaGrpcClient {
             );
 
             let res = resp_tx.send(resp);
-
-            let current_endpoint = self.current_endpoint.read().await;
-
+            let current_endpoint = self.current_endpoint.lock().unwrap();
             if let Some(current_endpoint) = &*current_endpoint {
                 label_histogram_with_val(
                     META_GRPC_CLIENT_REQUEST_DURATION_MS,
@@ -419,7 +418,7 @@ impl MetaGrpcClient {
         MetaError,
     > {
         {
-            let mut current_endpoint = self.current_endpoint.write().await;
+            let mut current_endpoint = self.current_endpoint.lock().unwrap();
             *current_endpoint = None;
         }
         let channel = {
@@ -438,7 +437,7 @@ impl MetaGrpcClient {
                     match ch {
                         Ok(c) => {
                             {
-                                let mut current_endpoint = self.current_endpoint.write().await;
+                                let mut current_endpoint = self.current_endpoint.lock().unwrap();
                                 *current_endpoint = Some(addr.clone());
                             }
                             break Ok(c);
