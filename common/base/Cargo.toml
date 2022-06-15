@@ -28,7 +28,7 @@ common-tracing = { path = "../tracing" }
 # Github dependencies
 
 # Crates.io dependencies
-async-trait = "0.1.53"
+async-trait = "0.1.56"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 futures = "0.3.21"
 hyper = "0.14.18"
