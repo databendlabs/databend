@@ -99,7 +99,7 @@ impl ExpressionBuilder {
                     args,
                 })
             }
-            Scalar::Cast(CastExpr {
+            Scalar::CastExpr(CastExpr {
                 argument,
                 target_type,
                 ..

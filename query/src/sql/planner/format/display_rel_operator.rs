@@ -19,7 +19,7 @@ use itertools::Itertools;
 
 use super::FormatTreeNode;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::AggregatePlan;
+use crate::sql::plans::Aggregate;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ComparisonOp;
@@ -27,7 +27,7 @@ use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
-use crate::sql::plans::LimitPlan;
+use crate::sql::plans::Limit;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::PhysicalHashJoin;
@@ -35,7 +35,7 @@ use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::Project;
 use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
-use crate::sql::plans::SortPlan;
+use crate::sql::plans::Sort;
 use crate::sql::MetadataRef;
 
 pub struct FormatContext {
@@ -113,7 +113,7 @@ pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
                     .join(", ")
             )
         }
-        Scalar::Cast(cast) => {
+        Scalar::CastExpr(cast) => {
             format!(
                 "CAST({} AS {})",
                 format_scalar(metadata, &cast.argument),
@@ -261,7 +261,7 @@ pub fn format_filter(
 pub fn format_aggregate(
     f: &mut std::fmt::Formatter<'_>,
     metadata: &MetadataRef,
-    op: &AggregatePlan,
+    op: &Aggregate,
 ) -> std::fmt::Result {
     let group_items = op
         .group_items
@@ -285,7 +285,7 @@ pub fn format_aggregate(
 pub fn format_sort(
     f: &mut std::fmt::Formatter<'_>,
     metadata: &MetadataRef,
-    op: &SortPlan,
+    op: &Sort,
 ) -> std::fmt::Result {
     let scalars = op
         .items
@@ -310,7 +310,7 @@ pub fn format_sort(
 pub fn format_limit(
     f: &mut std::fmt::Formatter<'_>,
     _metadata: &MetadataRef,
-    _op: &LimitPlan,
+    _op: &Limit,
 ) -> std::fmt::Result {
     write!(f, "Limit")
 }

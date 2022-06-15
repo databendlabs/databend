@@ -81,7 +81,7 @@ impl SExpr {
     }
 
     pub fn is_pattern(&self) -> bool {
-        matches!(self.plan.plan_type(), RelOp::Pattern)
+        matches!(self.plan.rel_op(), RelOp::Pattern)
     }
 
     pub fn original_group(&self) -> Option<IndexType> {
@@ -89,9 +89,9 @@ impl SExpr {
     }
 
     pub fn match_pattern(&self, pattern: &SExpr) -> bool {
-        if pattern.plan.plan_type() != RelOp::Pattern {
+        if pattern.plan.rel_op() != RelOp::Pattern {
             // Pattern is plan
-            if self.plan.plan_type() != pattern.plan.plan_type() {
+            if self.plan.rel_op() != pattern.plan.rel_op() {
                 return false;
             }
 
