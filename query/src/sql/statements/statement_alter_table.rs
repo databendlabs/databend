@@ -73,8 +73,7 @@ impl AnalyzableStatement for DfAlterTable {
                 )))
             }
             AlterTableAction::AlterTableClusterKey(exprs) => {
-                let table = ctx.get_table(&catalog, &database, &table).await?;
-                let schema = table.schema();
+                let schema = ctx.get_table(&catalog, &database, &table).await?.schema();
                 let expression_analyzer = ExpressionAnalyzer::create(ctx);
                 let cluster_keys = exprs.iter().try_fold(vec![], |mut acc, k| {
                     let expr = expression_analyzer.analyze_sync(k)?;
