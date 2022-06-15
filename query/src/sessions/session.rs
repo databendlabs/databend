@@ -193,7 +193,7 @@ impl Session {
     }
 
     pub fn set_current_user(self: &Arc<Self>, user: UserInfo) {
-        self.session_ctx.set_current_user(user)
+        self.session_ctx.set_current_user(user);
     }
 
     pub async fn validate_privilege(

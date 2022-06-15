@@ -1,6 +1,6 @@
 drop table if exists funnel_test;
 
-create table funnel_test (timestamp UInt32, d Date, dt DateTime(0), event UInt32) engine=Memory;
+create table funnel_test (timestamp UInt32, d Date, dt DateTime(0), event UInt32) Engine = Fuse;
 insert into funnel_test values
 (0, '2021-01-01', '2021-01-01 00:00:00', 1000),
 (1, '2021-01-02', '2021-01-01 00:00:01', 1001),
