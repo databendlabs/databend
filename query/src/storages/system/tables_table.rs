@@ -101,7 +101,7 @@ impl AsyncSystemTable for TablesTable {
             .map(|(_, v)| {
                 v.get_table_info()
                     .meta
-                    .cluster_key
+                    .current_cluster_key
                     .clone()
                     .unwrap_or_else(|| "".to_owned())
             })
