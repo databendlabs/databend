@@ -18,13 +18,11 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use enum_dispatch::enum_dispatch;
 
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 
-#[enum_dispatch]
 pub trait ScalarExpr {
     /// Get return type and nullability
     fn data_type(&self) -> DataTypeImpl;
@@ -40,7 +38,6 @@ pub trait ScalarExpr {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-#[enum_dispatch(ScalarExpr)]
 pub enum Scalar {
     BoundColumnRef(BoundColumnRef),
     ConstantExpr(ConstantExpr),
@@ -51,8 +48,205 @@ pub enum Scalar {
     FunctionCall(FunctionCall),
     // TODO(leiysky): maybe we don't need this variant any more
     // after making functions static typed?
-    Cast(CastExpr),
+    CastExpr(CastExpr),
     SubqueryExpr(SubqueryExpr),
+}
+
+impl ScalarExpr for Scalar {
+    fn data_type(&self) -> DataTypeImpl {
+        match self {
+            Scalar::BoundColumnRef(scalar) => scalar.data_type(),
+            Scalar::ConstantExpr(scalar) => scalar.data_type(),
+            Scalar::AndExpr(scalar) => scalar.data_type(),
+            Scalar::OrExpr(scalar) => scalar.data_type(),
+            Scalar::ComparisonExpr(scalar) => scalar.data_type(),
+            Scalar::AggregateFunction(scalar) => scalar.data_type(),
+            Scalar::FunctionCall(scalar) => scalar.data_type(),
+            Scalar::CastExpr(scalar) => scalar.data_type(),
+            Scalar::SubqueryExpr(scalar) => scalar.data_type(),
+        }
+    }
+
+    fn used_columns(&self) -> ColumnSet {
+        match self {
+            Scalar::BoundColumnRef(scalar) => scalar.used_columns(),
+            Scalar::ConstantExpr(scalar) => scalar.used_columns(),
+            Scalar::AndExpr(scalar) => scalar.used_columns(),
+            Scalar::OrExpr(scalar) => scalar.used_columns(),
+            Scalar::ComparisonExpr(scalar) => scalar.used_columns(),
+            Scalar::AggregateFunction(scalar) => scalar.used_columns(),
+            Scalar::FunctionCall(scalar) => scalar.used_columns(),
+            Scalar::CastExpr(scalar) => scalar.used_columns(),
+            Scalar::SubqueryExpr(scalar) => scalar.used_columns(),
+        }
+    }
+}
+
+impl From<BoundColumnRef> for Scalar {
+    fn from(v: BoundColumnRef) -> Self {
+        Self::BoundColumnRef(v)
+    }
+}
+
+impl TryFrom<Scalar> for BoundColumnRef {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::BoundColumnRef(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Cannot downcast Scalar to BoundColumnRef",
+            ))
+        }
+    }
+}
+
+impl From<ConstantExpr> for Scalar {
+    fn from(v: ConstantExpr) -> Self {
+        Self::ConstantExpr(v)
+    }
+}
+
+impl TryFrom<Scalar> for ConstantExpr {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::ConstantExpr(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Cannot downcast Scalar to ConstantExpr",
+            ))
+        }
+    }
+}
+
+impl From<AndExpr> for Scalar {
+    fn from(v: AndExpr) -> Self {
+        Self::AndExpr(v)
+    }
+}
+
+impl TryFrom<Scalar> for AndExpr {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::AndExpr(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError("Cannot downcast Scalar to AndExpr"))
+        }
+    }
+}
+
+impl From<OrExpr> for Scalar {
+    fn from(v: OrExpr) -> Self {
+        Self::OrExpr(v)
+    }
+}
+
+impl TryFrom<Scalar> for OrExpr {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::OrExpr(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError("Cannot downcast Scalar to OrExpr"))
+        }
+    }
+}
+
+impl From<ComparisonExpr> for Scalar {
+    fn from(v: ComparisonExpr) -> Self {
+        Self::ComparisonExpr(v)
+    }
+}
+
+impl TryFrom<Scalar> for ComparisonExpr {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::ComparisonExpr(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Cannot downcast Scalar to ComparisonExpr",
+            ))
+        }
+    }
+}
+
+impl From<AggregateFunction> for Scalar {
+    fn from(v: AggregateFunction) -> Self {
+        Self::AggregateFunction(v)
+    }
+}
+
+impl TryFrom<Scalar> for AggregateFunction {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::AggregateFunction(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Cannot downcast Scalar to AggregateFunction",
+            ))
+        }
+    }
+}
+
+impl From<FunctionCall> for Scalar {
+    fn from(v: FunctionCall) -> Self {
+        Self::FunctionCall(v)
+    }
+}
+
+impl TryFrom<Scalar> for FunctionCall {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::FunctionCall(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Cannot downcast Scalar to FunctionCall",
+            ))
+        }
+    }
+}
+
+impl From<CastExpr> for Scalar {
+    fn from(v: CastExpr) -> Self {
+        Self::CastExpr(v)
+    }
+}
+
+impl TryFrom<Scalar> for CastExpr {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::CastExpr(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Cannot downcast Scalar to CastExpr",
+            ))
+        }
+    }
+}
+
+impl From<SubqueryExpr> for Scalar {
+    fn from(v: SubqueryExpr) -> Self {
+        Self::SubqueryExpr(v)
+    }
+}
+
+impl TryFrom<Scalar> for SubqueryExpr {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::SubqueryExpr(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Cannot downcast Scalar to SubqueryExpr",
+            ))
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]

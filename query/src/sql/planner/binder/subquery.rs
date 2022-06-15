@@ -22,8 +22,8 @@ use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
-use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
@@ -153,7 +153,7 @@ impl SubqueryRewriter {
                     None,
                 );
 
-                let agg = AggregatePlan {
+                let agg = Aggregate {
                     group_items: vec![],
                     aggregate_functions: vec![ScalarItem {
                         scalar: AggregateFunction {
@@ -321,7 +321,7 @@ impl SubqueryRewriter {
                 Ok((expr, s_expr))
             }
 
-            Scalar::Cast(cast) => {
+            Scalar::CastExpr(cast) => {
                 let (scalar, s_expr) = self.try_rewrite_subquery(&cast.argument, s_expr)?;
                 Ok((
                     CastExpr {
