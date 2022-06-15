@@ -176,20 +176,35 @@ impl ClientHandle {
 
         label_increment_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
 
-        self.req_tx.send(req).await.map_err(|e| {
+        let res = self.req_tx.send(req).await.map_err(|e| {
             MetaError::Fatal(
                 AnyError::new(&e).add_context(|| "when sending req to MetaGrpcClient worker"),
             )
-        })?;
+        });
 
-        label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
+        if let Err(err) = res {
+            label_decrement_gauge_with_val_and_labels(
+                META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                vec![],
+                1.0,
+            );
+
+            return Err(err);
+        }
 
         let res = rx.await.map_err(|e| {
+            label_decrement_gauge_with_val_and_labels(
+                META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                vec![],
+                1.0,
+            );
+
             MetaError::Fatal(
                 AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
             )
         })?;
 
+        label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
         let resp = res?;
 
         let r = Resp::try_from(resp).map_err(|e| {
