@@ -81,7 +81,7 @@ use crate::MIN_METASRV_SEMVER;
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 const META_GRPC_CLIENT_REQUEST_DURATION_MS: &str = "meta_grpc_client_request_duration_ms";
-const META_GRPC_CLIENT_REQUEST_INFLIGHT: &str = "meta_grpc_client_request_flight";
+const META_GRPC_CLIENT_REQUEST_INFLIGHT: &str = "meta_grpc_client_request_inflight";
 const META_GRPC_CLIENT_REQUEST_SUCCESS: &str = "meta_grpc_client_request_success";
 const META_GRPC_CLIENT_REQUEST_FAILED: &str = "meta_grpc_client_request_fail";
 const META_GRPC_MAKE_CLIENT_FAILED: &str = "meta_grpc_make_client_fail";
