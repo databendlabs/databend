@@ -2603,7 +2603,7 @@ ifnull(1, 1)
 ---------- Output ---------
 IFNULL(1, 1)
 ---------- AST ------------
-NullIf {
+IfNull {
     span: [
         IFNULL(0..6),
         LParen(6..7),
