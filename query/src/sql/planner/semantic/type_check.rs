@@ -1074,7 +1074,7 @@ impl<'a> TypeChecker<'a> {
             types
                 .iter()
                 .fold(Ok(types[0].clone()), |acc, v| merge_types(&acc?, v))
-                .map_err(|e| span.display_error(e.message()))?
+                .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?
         };
         Ok((
             ConstantExpr {
