@@ -51,7 +51,9 @@ use common_meta_types::MetaResultError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_metrics::label_counter_with_val_and_labels;
+use common_metrics::label_decrement_gauge_with_val_and_labels;
 use common_metrics::label_histogram_with_val;
+use common_metrics::label_increment_gauge_with_val_and_labels;
 use common_tracing::tracing;
 use futures::stream::StreamExt;
 use prost::Message;
@@ -79,10 +81,12 @@ use crate::MIN_METASRV_SEMVER;
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 const META_GRPC_CLIENT_REQUEST_DURATION_MS: &str = "meta_grpc_client_request_duration_ms";
+const META_GRPC_CLIENT_REQUEST_INFLIGHT: &str = "meta_grpc_client_request_flight";
 const META_GRPC_CLIENT_REQUEST_SUCCESS: &str = "meta_grpc_client_request_success";
 const META_GRPC_CLIENT_REQUEST_FAILED: &str = "meta_grpc_client_request_fail";
 const META_GRPC_MAKE_CLIENT_FAILED: &str = "meta_grpc_make_client_fail";
 const LABEL_ENDPOINT: &str = "endpoint";
+const LABEL_ERROR: &str = "error";
 
 #[derive(Debug)]
 struct MetaChannelManager {
@@ -288,6 +292,11 @@ impl MetaGrpcClient {
                 continue;
             }
 
+            label_increment_gauge_with_val_and_labels(
+                META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                vec![],
+                1.0,
+            );
             let resp_tx = req.resp_tx;
             let req = req.req;
 
@@ -332,14 +341,12 @@ impl MetaGrpcClient {
             );
 
             let res = resp_tx.send(resp);
-            let mut success = true;
-            if let Err(err) = res {
-                tracing::warn!(
-                    err = debug(err),
-                    "MetaGrpcClient failed to send response to the handle. recv-end closed"
-                );
-                success = false;
-            }
+
+            label_decrement_gauge_with_val_and_labels(
+                META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                vec![],
+                1.0,
+            );
 
             let current_endpoint = self.current_endpoint.read().await;
 
@@ -349,19 +356,49 @@ impl MetaGrpcClient {
                     vec![(LABEL_ENDPOINT, current_endpoint.to_string())],
                     start.elapsed().as_millis() as f64,
                 );
-                if success {
+
+                if let Err(err) = res {
+                    match err {
+                        Err(err) => {
+                            label_counter_with_val_and_labels(
+                                META_GRPC_CLIENT_REQUEST_FAILED,
+                                vec![
+                                    (LABEL_ENDPOINT, current_endpoint.to_string()),
+                                    (LABEL_ERROR, err.to_string()),
+                                ],
+                                1,
+                            );
+                            tracing::warn!(
+                                "MetaGrpcClient failed to send response to the handle:{:?}",
+                                err
+                            );
+                        }
+                        Ok(_) => {
+                            label_counter_with_val_and_labels(
+                                META_GRPC_CLIENT_REQUEST_FAILED,
+                                vec![
+                                    (LABEL_ENDPOINT, current_endpoint.to_string()),
+                                    (LABEL_ERROR, "MetaGrpcClient recv-end closed".to_string()),
+                                ],
+                                1,
+                            );
+                            tracing::warn!(
+                                "MetaGrpcClient failed to send response to the handle. recv-end closed"
+                            );
+                        }
+                    }
+                } else {
                     label_counter_with_val_and_labels(
                         META_GRPC_CLIENT_REQUEST_SUCCESS,
                         vec![(LABEL_ENDPOINT, current_endpoint.to_string())],
                         1,
                     );
-                } else {
-                    label_counter_with_val_and_labels(
-                        META_GRPC_CLIENT_REQUEST_FAILED,
-                        vec![(LABEL_ENDPOINT, current_endpoint.to_string())],
-                        1,
-                    );
                 }
+            } else if let Err(err) = res {
+                tracing::warn!(
+                    err = debug(err),
+                    "MetaGrpcClient failed to send response to the handle. recv-end closed"
+                );
             }
         }
     }
@@ -373,8 +410,10 @@ impl MetaGrpcClient {
         MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>,
         MetaError,
     > {
-        let mut current_endpoint = self.current_endpoint.write().await;
-        *current_endpoint = None;
+        {
+            let mut current_endpoint = self.current_endpoint.write().await;
+            *current_endpoint = None;
+        }
         let channel = {
             let eps = self.endpoints.read().await;
             debug_assert!(!eps.is_empty());
@@ -390,7 +429,10 @@ impl MetaGrpcClient {
                     let ch = self.conn_pool.get(addr).await;
                     match ch {
                         Ok(c) => {
-                            *current_endpoint = Some(addr.clone());
+                            {
+                                let mut current_endpoint = self.current_endpoint.write().await;
+                                *current_endpoint = Some(addr.clone());
+                            }
                             break Ok(c);
                         }
                         Err(e) => {
