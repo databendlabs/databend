@@ -80,17 +80,17 @@ use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
 use crate::sql::exec::expression_builder::ExpressionBuilder;
 use crate::sql::exec::util::check_physical;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::AggregatePlan;
+use crate::sql::plans::Aggregate;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Filter;
-use crate::sql::plans::LimitPlan;
+use crate::sql::plans::Limit;
 use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::Project;
 use crate::sql::plans::ScalarExpr;
-use crate::sql::plans::SortPlan;
+use crate::sql::plans::Sort;
 use crate::sql::IndexType;
 
 /// Helper to build a `Pipeline` from `SExpr`
@@ -397,7 +397,7 @@ impl PipelineBuilder {
     fn build_aggregate(
         &mut self,
         ctx: Arc<QueryContext>,
-        aggregate: &AggregatePlan,
+        aggregate: &Aggregate,
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
@@ -604,7 +604,7 @@ impl PipelineBuilder {
     fn build_order_by(
         &mut self,
         ctx: Arc<QueryContext>,
-        sort_plan: &SortPlan,
+        sort_plan: &Sort,
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
@@ -686,7 +686,7 @@ impl PipelineBuilder {
     fn build_limit(
         &mut self,
         _ctx: Arc<QueryContext>,
-        limit_plan: &LimitPlan,
+        limit_plan: &Limit,
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {

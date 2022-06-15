@@ -29,7 +29,7 @@ pub struct PhysicalHashJoin {
 }
 
 impl Operator for PhysicalHashJoin {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         RelOp::PhysicalHashJoin
     }
 

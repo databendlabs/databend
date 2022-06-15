@@ -1327,6 +1327,7 @@ dependencies = [
  "common-meta-api",
  "common-meta-app",
  "common-meta-types",
+ "common-metrics",
  "common-proto-conv",
  "common-protos",
  "common-tracing",
