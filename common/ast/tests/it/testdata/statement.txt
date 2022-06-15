@@ -3153,7 +3153,7 @@ AlterUser {
 ---------- Input ----------
 create role 'test'
 ---------- Output ---------
-CREATE ROLE test
+CREATE ROLE 'test'
 ---------- AST ------------
 CreateRole {
     if_not_exists: false,
@@ -3164,7 +3164,7 @@ CreateRole {
 ---------- Input ----------
 drop role if exists 'test'
 ---------- Output ---------
-DROP ROLE IF EXISTS test
+DROP ROLE IF EXISTS 'test'
 ---------- AST ------------
 DropRole {
     if_exists: true,

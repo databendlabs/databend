@@ -990,7 +990,7 @@ impl<'a> Display for Statement<'a> {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " {role}")?;
+                write!(f, " '{role}'")?;
             }
             Statement::DropRole {
                 if_exists,
@@ -1000,7 +1000,7 @@ impl<'a> Display for Statement<'a> {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {role}")?;
+                write!(f, " '{role}'")?;
             }
             Statement::CreateUDF {
                 if_not_exists,
