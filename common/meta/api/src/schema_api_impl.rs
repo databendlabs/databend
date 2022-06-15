@@ -664,12 +664,15 @@ impl<KV: KVApi> SchemaApi for KV {
         Ok(db_infos)
     }
 
-    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
+    async fn create_table(&self, mut req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
         let mut tbcount_found = false;
         let mut tb_count = 0;
         let mut tb_count_seq;
+
+        req.table_meta.created_on = Utc::now();
+        req.table_meta.updated_on = Utc::now();
 
         if req.table_meta.drop_on.is_some() {
             return Err(MetaError::AppError(AppError::CreateTableWithDropTime(
@@ -1029,6 +1032,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     )));
                 }
                 tb_meta.drop_on = None;
+                tb_meta.updated_on = Utc::now();
 
                 let txn_req = TxnRequest {
                     condition: vec![
@@ -1075,7 +1079,7 @@ impl<KV: KVApi> SchemaApi for KV {
         )))
     }
 
-    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
+    async fn rename_table(&self, mut req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = tenant_dbname_tbname.db_name_ident();
         let tenant_newdbname_newtbname = TableNameIdent {
