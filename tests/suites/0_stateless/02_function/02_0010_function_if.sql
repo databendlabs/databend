@@ -6,3 +6,7 @@ select if(number<1, true, null) from numbers(3) order by number;
 select typeof(if(number % 3 = 0, to_uint32(1), to_int64(3))) from numbers(10) limit 1;
 select typeof(if(number % 3 = 0, to_uint32(1), to_float32(3))) from numbers(10) limit 1;
 SELECT if (number % 3 = 1, null, number) as a FROM numbers(7) order by number;
+
+-- constant
+select if(true, null, number), if(false, null, number) from numbers(1);
+select if(true, number, null), if(false, number, null) from numbers(1);

@@ -22,8 +22,8 @@ use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
-use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
@@ -33,6 +33,8 @@ use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::FunctionCall;
+use crate::sql::plans::JoinType;
+use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::Max1Row;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Project;
@@ -119,12 +121,23 @@ impl SubqueryRewriter {
         match subquery.typ {
             SubqueryType::Scalar => {
                 let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                let apply = CrossApply {
-                    subquery_output: rel_expr.derive_relational_prop()?.output_columns,
-                    correlated_columns: subquery.outer_columns.clone(),
+                let prop = rel_expr.derive_relational_prop()?;
+                let result: RelOperator = if prop.outer_columns.is_empty() {
+                    LogicalInnerJoin {
+                        left_conditions: vec![],
+                        right_conditions: vec![],
+                        join_type: JoinType::Cross,
+                    }
+                    .into()
+                } else {
+                    CrossApply {
+                        subquery_output: prop.output_columns,
+                        correlated_columns: subquery.outer_columns.clone(),
+                    }
+                    .into()
                 };
                 Ok(SExpr::create_binary(
-                    apply.into(),
+                    result,
                     left.clone(),
                     SExpr::create_unary(Max1Row.into(), subquery.subquery.clone()),
                 ))
@@ -140,7 +153,7 @@ impl SubqueryRewriter {
                     None,
                 );
 
-                let agg = AggregatePlan {
+                let agg = Aggregate {
                     group_items: vec![],
                     aggregate_functions: vec![ScalarItem {
                         scalar: AggregateFunction {
@@ -209,13 +222,24 @@ impl SubqueryRewriter {
 
                 let rel_expr = RelExpr::with_s_expr(&rewritten_subquery);
                 let prop = rel_expr.derive_relational_prop()?;
-                let apply = CrossApply {
-                    subquery_output: prop.output_columns,
-                    correlated_columns: prop.outer_columns,
+
+                let result: RelOperator = if prop.outer_columns.is_empty() {
+                    LogicalInnerJoin {
+                        left_conditions: vec![],
+                        right_conditions: vec![],
+                        join_type: JoinType::Cross,
+                    }
+                    .into()
+                } else {
+                    CrossApply {
+                        subquery_output: prop.output_columns,
+                        correlated_columns: subquery.outer_columns.clone(),
+                    }
+                    .into()
                 };
 
                 Ok(SExpr::create_binary(
-                    apply.into(),
+                    result,
                     left.clone(),
                     rewritten_subquery,
                 ))
@@ -297,7 +321,7 @@ impl SubqueryRewriter {
                 Ok((expr, s_expr))
             }
 
-            Scalar::Cast(cast) => {
+            Scalar::CastExpr(cast) => {
                 let (scalar, s_expr) = self.try_rewrite_subquery(&cast.argument, s_expr)?;
                 Ok((
                     CastExpr {

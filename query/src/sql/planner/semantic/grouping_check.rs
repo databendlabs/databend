@@ -95,7 +95,7 @@ impl<'a> GroupingChecker<'a> {
                 }
                 .into())
             }
-            Scalar::Cast(cast) => Ok(CastExpr {
+            Scalar::CastExpr(cast) => Ok(CastExpr {
                 argument: Box::new(self.resolve(&cast.argument)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),

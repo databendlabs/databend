@@ -28,7 +28,7 @@ mod project;
 mod scalar;
 mod sort;
 
-pub use aggregate::AggregatePlan;
+pub use aggregate::Aggregate;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_planners::*;
@@ -36,7 +36,7 @@ pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::Filter;
 pub use hash_join::PhysicalHashJoin;
-pub use limit::LimitPlan;
+pub use limit::Limit;
 pub use logical_get::LogicalGet;
 pub use logical_join::JoinType;
 pub use logical_join::LogicalInnerJoin;
@@ -46,8 +46,8 @@ pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
 pub use project::Project;
 pub use scalar::*;
+pub use sort::Sort;
 pub use sort::SortItem;
-pub use sort::SortPlan;
 
 use super::BindContext;
 use super::MetadataRef;

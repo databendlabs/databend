@@ -1095,6 +1095,7 @@ dependencies = [
  "enum_dispatch",
  "itertools",
  "lexical-core",
+ "micromarshal",
  "num",
  "once_cell",
  "opensrv-clickhouse",
@@ -1206,6 +1207,7 @@ dependencies = [
  "common-exception",
  "futures",
  "lexical-core",
+ "micromarshal",
  "opendal",
  "rand 0.8.5",
  "serde",
@@ -3902,6 +3904,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "micromarshal"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77420bc592a921d9897e6c67bcc65f8264c9f0a60d8e01c76c73c2252e20b362"
+
+[[package]]
 name = "mime"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4443,9 +4451,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8885ecd915991814d3b17e85810a5e3b6d593503d4e09d67a9c3328ab7fa90d"
+checksum = "9cc4f8511adde5177e4c8292b5209e7f8d712cae1c01eb517b95eb97f9d06917"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -4499,7 +4507,8 @@ dependencies = [
 [[package]]
 name = "opensrv-clickhouse"
 version = "0.1.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=15786d3#15786d3aee58ee1b2430b748f4b958a437a22718"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f6456cb429428f239e2014cba8fffccc79049764917dc9ee0c6cf2180f412f0"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -4507,12 +4516,9 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "combine",
- "futures",
- "futures-core",
- "futures-sink",
- "futures-util",
  "hostname",
  "lz4",
+ "micromarshal",
  "naive-cityhash",
  "once_cell",
  "thiserror",
@@ -4520,13 +4526,14 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
- "uuid 0.8.2",
+ "uuid 1.1.2",
 ]
 
 [[package]]
 name = "opensrv-mysql"
 version = "0.1.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=93de58a#93de58adcf3a78805dfcf2c4e5f47e3c41c69362"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bcb5fc2fda7e5e5f8478cd637285bbdd6196a9601e32293d0897e469a7dd020"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -6429,7 +6436,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=13d3176#13d3176cf85c0b51e291a6128f4c51f05326cb14"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=d44a8e1#d44a8e16ab1bef5789558fa6b96de83de4858447"
 dependencies = [
  "hashbrown 0.12.1",
  "log",
