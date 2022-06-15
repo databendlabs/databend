@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_base::base::tokio;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
@@ -272,12 +274,12 @@ async fn test_settings() -> PoemResult<()> {
         let (status, _body) = server
             .get_response(
                 QueryBuilder::new(sql)
-                    .settings(Some("a:1".to_string()))
+                    .extras(HashMap::from([("a".to_string(), "1".to_string())]))
                     .build(),
             )
             .await;
 
-        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(status, StatusCode::OK);
     }
 
     {
@@ -285,7 +287,10 @@ async fn test_settings() -> PoemResult<()> {
         let (status, body) = server
             .get_response(
                 QueryBuilder::new(sql)
-                    .settings(Some(" max_block_size : 1000 ".to_string()))
+                    .extras(HashMap::from([(
+                        "max_block_size".to_string(),
+                        "1000".to_string(),
+                    )]))
                     .build(),
             )
             .await;
@@ -298,9 +303,10 @@ async fn test_settings() -> PoemResult<()> {
         let (status, body) = server
             .get_response(
                 QueryBuilder::new(sql)
-                    .settings(Some(
-                        " max_block_size : 1000 , enable_async_insert:1".to_string(),
-                    ))
+                    .extras(HashMap::from([
+                        ("max_block_size".to_string(), "1000".to_string()),
+                        ("enable_async_insert".to_string(), "1".to_string()),
+                    ]))
                     .build(),
             )
             .await;
@@ -313,8 +319,8 @@ async fn test_settings() -> PoemResult<()> {
 
 struct QueryBuilder {
     sql: String,
-    settings: Option<String>,
     body: Option<Body>,
+    extras: HashMap<String, String>,
     compress: bool,
 }
 
@@ -323,7 +329,7 @@ impl QueryBuilder {
         QueryBuilder {
             sql: sql.to_string(),
             body: None,
-            settings: None,
+            extras: HashMap::new(),
             compress: false,
         }
     }
@@ -339,18 +345,18 @@ impl QueryBuilder {
         Self { compress, ..self }
     }
 
-    pub fn settings(self, settings: Option<String>) -> Self {
-        Self { settings, ..self }
+    pub fn extras(self, extras: HashMap<String, String>) -> Self {
+        Self { extras, ..self }
     }
 
     pub fn build(self) -> Request {
         let mut uri = url::form_urlencoded::Serializer::new(String::new());
         uri.append_pair("query", &self.sql);
-        if let Some(settings) = self.settings {
-            uri.append_pair("settings", &settings);
-        }
         if self.compress {
             uri.append_pair("compress", "1");
+        }
+        for (k, v) in self.extras.iter() {
+            uri.append_pair(k, v);
         }
         let uri = uri.finish();
 

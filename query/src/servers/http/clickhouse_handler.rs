@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -40,6 +41,7 @@ use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
 use serde::Deserialize;
+use serde::Serialize;
 
 use crate::formats::output_format::OutputFormatType;
 use crate::interpreters::InterpreterFactory;
@@ -52,11 +54,12 @@ use crate::sessions::SessionType;
 use crate::sql::statements::ValueSource;
 use crate::sql::PlanParser;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct StatementHandlerParams {
     query: Option<String>,
-    settings: Option<String>,
     compress: Option<u8>,
+    #[serde(flatten)]
+    extra: HashMap<String, String>,
 }
 
 impl StatementHandlerParams {
@@ -148,12 +151,11 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(InternalServerError)?;
 
-    if let Some(settings) = params.settings.clone() {
-        for session_setting in settings.trim().split_terminator(',') {
-            let s: Vec<&str> = session_setting.split(':').collect();
-            session
-                .get_settings()
-                .set_settings(s[0].trim().to_string(), s[1].trim().to_string(), false)
+    let settings = session.get_settings();
+    for (k, v) in params.extra.iter() {
+        if settings.has_setting(k.as_str()) {
+            settings
+                .set_settings(k.to_string(), v.to_string(), false)
                 .map_err(BadRequest)?;
         }
     }
@@ -187,12 +189,11 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(InternalServerError)?;
 
-    if let Some(settings) = params.settings.clone() {
-        for session_setting in settings.trim().split_terminator(',') {
-            let s: Vec<&str> = session_setting.split(':').collect();
-            session
-                .get_settings()
-                .set_settings(s[0].trim().to_string(), s[1].trim().to_string(), false)
+    let settings = session.get_settings();
+    for (k, v) in params.extra.iter() {
+        if settings.has_setting(k.as_str()) {
+            settings
+                .set_settings(k.to_string(), v.to_string(), false)
                 .map_err(BadRequest)?;
         }
     }
