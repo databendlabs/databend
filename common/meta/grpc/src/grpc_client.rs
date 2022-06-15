@@ -174,11 +174,15 @@ impl ClientHandle {
             req: req.into(),
         };
 
+        label_increment_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
+
         self.req_tx.send(req).await.map_err(|e| {
             MetaError::Fatal(
                 AnyError::new(&e).add_context(|| "when sending req to MetaGrpcClient worker"),
             )
         })?;
+
+        label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
 
         let res = rx.await.map_err(|e| {
             MetaError::Fatal(
@@ -292,11 +296,6 @@ impl MetaGrpcClient {
                 continue;
             }
 
-            label_increment_gauge_with_val_and_labels(
-                META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                vec![],
-                1.0,
-            );
             let resp_tx = req.resp_tx;
             let req = req.req;
 
@@ -341,12 +340,6 @@ impl MetaGrpcClient {
             );
 
             let res = resp_tx.send(resp);
-
-            label_decrement_gauge_with_val_and_labels(
-                META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                vec![],
-                1.0,
-            );
 
             let current_endpoint = self.current_endpoint.read().await;
 
