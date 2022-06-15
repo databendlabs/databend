@@ -224,11 +224,11 @@ Table "purchase_records": This table lists the purchase records for all the clie
 The following command returns the purchase records of all VIP clients, the purchase records will be NULL if the VIP client has no purchases:
 
 ```sql    
-select purchase_records.Client_ID, purchase_records.Item, purchase_records.QTY from vip_info left join purchase_records on vip_info.Client_ID = purchase_records.Client_ID;
+select vip_info.Client_ID, purchase_records.Item, purchase_records.QTY from vip_info left join purchase_records on vip_info.Client_ID = purchase_records.Client_ID;
 ```
 Output:
 ```sql
-|NULL|NULL|NULL
+|101|NULL|NULL
 |102|Donut|3000
 |103|Coffee|6000
 ```
