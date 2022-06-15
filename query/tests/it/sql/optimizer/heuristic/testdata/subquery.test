@@ -17,3 +17,30 @@ Project: [number]
                                     Scan: default.system.numbers
 
 
+# Uncorrelated subquery
+select t.number from numbers(1) as t where exists (select * from numbers(1) where number = 0)
+----
+Project: [number]
+    CrossJoin
+        Scan: default.system.numbers
+        Project: [exists]
+            Filter: [subquery_3]
+                EvalScalar: [count(*) > 0]
+                    Aggregate: group items: [], aggregate functions: [count(*)]
+                        Project: [number]
+                            Filter: [number = 0]
+                                Scan: default.system.numbers
+
+
+# Uncorrelated subquery
+select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
+----
+Project: [number]
+    HashJoin: INNER, build keys: [subquery_1], probe keys: [number]
+        Scan: default.system.numbers
+        Max1Row
+            Project: [number]
+                Filter: [number = 0]
+                    Scan: default.system.numbers
+
+

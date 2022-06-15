@@ -149,6 +149,10 @@ impl QueryContextShared {
         self.session.get_current_user()
     }
 
+    pub fn set_current_user(&self, user: UserInfo) {
+        self.session.set_current_user(user);
+    }
+
     pub fn set_current_tenant(&self, tenant: String) {
         self.session.set_current_tenant(tenant);
     }

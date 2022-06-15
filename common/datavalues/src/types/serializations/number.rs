@@ -15,8 +15,8 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::Marshal;
-use common_io::prelude::Unmarshal;
+use micromarshal::Marshal;
+use micromarshal::Unmarshal;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use opensrv_clickhouse::types::HasSqlType;
@@ -50,8 +50,6 @@ where T: PrimitiveType
         + HasSqlType
         + std::convert::Into<opensrv_clickhouse::types::Value>
         + std::convert::From<opensrv_clickhouse::types::Value>
-        + opensrv_clickhouse::io::Marshal
-        + opensrv_clickhouse::io::Unmarshal<T>
         + lexical_core::ToLexical
 {
     fn need_quote(&self) -> bool {

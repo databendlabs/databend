@@ -14,7 +14,7 @@ select '==Variant==';
 ==Variant==
 
 statement ok
-CREATE TABLE IF NOT EXISTS t1(id Int null, var Variant null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(id Int null, var Variant null) Engine = Fuse;
 
 statement ok
 INSERT INTO t1 (id, var) VALUES(1, null),                               (2, true),                               (3, false),                               (4, 1),                               (5, -1),                               (6, 1000),                               (7, -1000),                               (8, 9223372036854775807),                               (9, -9223372036854775808),                               (10, 18446744073709551615),                               (11, 0.12345679),                               (12, 0.12345678912121212);
@@ -38,7 +38,7 @@ select '==Array==';
 ==Array==
 
 statement ok
-CREATE TABLE IF NOT EXISTS t2(id Int null, arr Array null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t2(id Int null, arr Array null) Engine = Fuse;
 
 statement ok
 INSERT INTO t2 SELECT 1, parse_json('[1,2,3,["a","b","c"],{"k":"v"}]');
@@ -68,7 +68,7 @@ select '==Object==';
 ==Object==
 
 statement ok
-CREATE TABLE IF NOT EXISTS t3(id Int null, obj Object null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t3(id Int null, obj Object null) Engine = Fuse;
 
 statement error 1010
 INSERT INTO t3 SELECT 1, parse_json('["a","b","c"]');  
@@ -119,7 +119,7 @@ select '==Json==';
 ==Json==
 
 statement ok
-CREATE TABLE IF NOT EXISTS t4(id Int null, j Json null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t4(id Int null, j Json null) Engine = Fuse;
 
 statement ok
 INSERT INTO t4 (id, j) VALUES(1, null),                            (2, true),                            (3, false),                            (4, 1),                            (5, -1),                            (6, 1000),                            (7, -1000),                            (8, 9223372036854775807),                            (9, -9223372036854775808),                            (10, 18446744073709551615),                            (11, 0.12345679),                            (12, 0.12345678912121212);
@@ -143,7 +143,7 @@ select '==Map==';
 ==Map==
 
 statement ok
-CREATE TABLE IF NOT EXISTS t5(id Int null, m Map null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t5(id Int null, m Map null) Engine = Fuse;
 
 statement error 1010
 INSERT INTO t5 SELECT 1, parse_json('["a","b","c"]');  

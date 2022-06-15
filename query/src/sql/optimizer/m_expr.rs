@@ -67,7 +67,7 @@ impl MExpr {
             return false;
         }
 
-        self.plan.plan_type() == pattern.plan().plan_type()
+        self.plan.rel_op() == pattern.plan().rel_op()
     }
 
     pub fn apply_rule(
