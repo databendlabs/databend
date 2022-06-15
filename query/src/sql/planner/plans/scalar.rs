@@ -83,6 +83,20 @@ impl ScalarExpr for Scalar {
             Scalar::SubqueryExpr(scalar) => scalar.used_columns(),
         }
     }
+
+    fn is_deterministic(&self) -> bool {
+        match self {
+            Scalar::BoundColumnRef(scalar) => scalar.is_deterministic(),
+            Scalar::ConstantExpr(scalar) => scalar.is_deterministic(),
+            Scalar::AndExpr(scalar) => scalar.is_deterministic(),
+            Scalar::OrExpr(scalar) => scalar.is_deterministic(),
+            Scalar::ComparisonExpr(scalar) => scalar.is_deterministic(),
+            Scalar::AggregateFunction(scalar) => scalar.is_deterministic(),
+            Scalar::FunctionCall(scalar) => scalar.is_deterministic(),
+            Scalar::CastExpr(scalar) => scalar.is_deterministic(),
+            Scalar::SubqueryExpr(scalar) => scalar.is_deterministic(),
+        }
+    }
 }
 
 impl From<BoundColumnRef> for Scalar {

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::validate_clustering;
 use common_planners::validate_expression;
@@ -80,7 +81,7 @@ impl AnalyzableStatement for DfAlterTable {
                     validate_expression(&expr, &schema)?;
                     validate_clustering(&expr)?;
                     acc.push(expr.column_name());
-                    Ok(acc)
+                    Ok::<_, ErrorCode>(acc)
                 })?;
 
                 Ok(AnalyzedResult::SimpleQuery(Box::new(
