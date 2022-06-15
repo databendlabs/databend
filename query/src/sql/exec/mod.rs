@@ -26,6 +26,8 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::ToDataType;
+use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::find_aggregate_exprs;
@@ -444,6 +446,23 @@ impl PipelineBuilder {
         // Get partial schema from agg_expressions
         let partial_data_fields =
             RewriteHelper::exprs_to_fields(agg_expressions.as_slice(), &input_schema)?;
+        let mut partial_data_fields = partial_data_fields
+            .iter()
+            .map(|f| DataField::new(f.name(), Vu8::to_data_type()))
+            .collect::<Vec<_>>();
+
+        if !group_expressions.is_empty() {
+            // Fields. [aggrs,  key]
+            // aggrs: aggr_len aggregate states
+            // key: Varint by hash method
+            let group_cols: Vec<String> = group_expressions
+                .iter()
+                .map(|expr| expr.column_name())
+                .collect();
+            let sample_block = DataBlock::empty_with_schema(input_schema.clone());
+            let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
+            partial_data_fields.push(DataField::new("_group_by_key", method.data_type()));
+        }
         let partial_schema = DataSchemaRefExt::create(partial_data_fields);
 
         // Get final schema from agg_expression and group expression
