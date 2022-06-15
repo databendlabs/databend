@@ -27,6 +27,7 @@ use naive_cityhash::cityhash128;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
+use poem::get;
 use poem::post;
 use poem::web::Query;
 use poem::Body;
@@ -175,12 +176,19 @@ pub async fn clickhouse_handler_post(
         .map_err(InternalServerError)
 }
 
+#[poem::handler]
+pub async fn clickhouse_ping_handler() -> String {
+    "OK.\n".to_string()
+}
+
 pub fn clickhouse_router() -> impl Endpoint {
     Route::new()
         .at(
             "/",
             post(clickhouse_handler_post).get(clickhouse_handler_get),
         )
+        .at("/ping", get(clickhouse_ping_handler))
+        .at("/replicas_status", get(clickhouse_ping_handler))
         .with(poem::middleware::Compression)
 }
 
