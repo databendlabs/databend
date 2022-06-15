@@ -263,6 +263,37 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_multi_partition() -> PoemResult<()> {
+    let server = Server::new();
+    {
+        let sql = "create table tb2(id int, c1 varchar) Engine=Fuse;";
+        let (status, body) = server.get(sql).await;
+        assert_ok!(status, body);
+        assert_eq!(&body, "");
+    }
+    {
+        for _ in 0..3 {
+            let sql = "insert into tb2 format values ";
+            let data = "(1, 'mysql'),(2,'databend')";
+            let (status, body) = server.post(sql, data).await;
+            assert_ok!(status, body);
+            assert_eq!(&body, "");
+        }
+    }
+    {
+        let sql = "select * from tb2 format tsv;";
+        let (status, body) = server.get(sql).await;
+        assert_ok!(status, body);
+        assert_eq!(
+            &body,
+            "1\tmysql\n2\tdatabend\n1\tmysql\n2\tdatabend\n1\tmysql\n2\tdatabend\n"
+        );
+    }
+
+    Ok(())
+}
+
 struct QueryBuilder {
     sql: String,
     body: Option<Body>,
