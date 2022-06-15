@@ -1079,7 +1079,7 @@ impl<KV: KVApi> SchemaApi for KV {
         )))
     }
 
-    async fn rename_table(&self, mut req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = tenant_dbname_tbname.db_name_ident();
         let tenant_newdbname_newtbname = TableNameIdent {
