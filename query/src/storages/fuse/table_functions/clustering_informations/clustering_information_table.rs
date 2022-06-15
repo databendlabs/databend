@@ -14,7 +14,6 @@
 //
 
 use std::any::Any;
-use std::future::Future;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -192,38 +191,36 @@ impl ClusteringInformationSource {
     }
 }
 
+#[async_trait::async_trait]
 impl AsyncSource for ClusteringInformationSource {
     const NAME: &'static str = "clustering_information";
 
-    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
-
-    fn generate(&mut self) -> Self::BlockFuture<'_> {
-        async {
-            if self.finish {
-                return Ok(None);
-            }
-
-            self.finish = true;
-            let tenant_id = self.ctx.get_tenant();
-            let tbl = self
-                .ctx
-                .get_catalog(CATALOG_DEFAULT)?
-                .get_table(
-                    tenant_id.as_str(),
-                    self.arg_database_name.as_str(),
-                    self.arg_table_name.as_str(),
-                )
-                .await?;
-
-            let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-            let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys)?;
-
-            Ok(Some(
-                ClusteringInformation::new(self.ctx.clone(), tbl, cluster_keys)
-                    .get_clustering_info()
-                    .await?,
-            ))
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.finish {
+            return Ok(None);
         }
+
+        self.finish = true;
+        let tenant_id = self.ctx.get_tenant();
+        let tbl = self
+            .ctx
+            .get_catalog(CATALOG_DEFAULT)?
+            .get_table(
+                tenant_id.as_str(),
+                self.arg_database_name.as_str(),
+                self.arg_table_name.as_str(),
+            )
+            .await?;
+
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys)?;
+
+        Ok(Some(
+            ClusteringInformation::new(self.ctx.clone(), tbl, cluster_keys)
+                .get_clustering_info()
+                .await?,
+        ))
     }
 }
 

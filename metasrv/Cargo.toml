@@ -42,7 +42,7 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 # Crates.io dependencies
 anyerror = "0.1.6"
 anyhow = "1.0.56"
-async-trait = "0.1.53"
+async-trait = "0.1.56"
 clap = { version = "3.1.8", features = ["derive", "env"] }
 futures = "0.3.21"
 lazy_static = "1.4.0"

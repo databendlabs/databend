@@ -24,7 +24,7 @@ common-tracing = { path = "../../tracing" }
 
 anyerror = "0.1.6"
 anyhow = "1.0.56"
-async-trait = "0.1.53"
+async-trait = "0.1.56"
 maplit = "1.0.2"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
