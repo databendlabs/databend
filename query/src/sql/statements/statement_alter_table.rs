@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::validate_clustering;
+use common_planners::validate_expression;
 use common_planners::AlterTableClusterKeyPlan;
 use common_planners::DropTableClusterKeyPlan;
 use common_planners::PlanNode;
@@ -72,10 +74,13 @@ impl AnalyzableStatement for DfAlterTable {
                 )))
             }
             AlterTableAction::AlterTableClusterKey(exprs) => {
+                let schema = ctx.get_table(&catalog, &database, &table).await?.schema();
                 let expression_analyzer = ExpressionAnalyzer::create(ctx);
                 let cluster_keys = exprs.iter().try_fold(vec![], |mut acc, k| {
                     let expr = expression_analyzer.analyze_sync(k)?;
-                    acc.push(expr);
+                    validate_expression(&expr, &schema)?;
+                    validate_clustering(&expr)?;
+                    acc.push(expr.column_name());
                     Ok::<_, ErrorCode>(acc)
                 })?;
 

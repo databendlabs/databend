@@ -133,6 +133,30 @@ impl<'a> Binder {
                 let plan = self.bind_create_table(stmt).await?;
                 Ok(plan)
             }
+            Statement::DropTable(stmt) => {
+                let plan = self.bind_drop_table(stmt).await?;
+                Ok(plan)
+            }
+            Statement::UndropTable(stmt) => {
+                let plan = self.bind_undrop_table(stmt).await?;
+                Ok(plan)
+            }
+            Statement::AlterTable(stmt) => {
+                let plan = self.bind_alter_table(stmt).await?;
+                Ok(plan)
+            }
+            Statement::RenameTable(stmt) => {
+                let plan = self.bind_rename_table(stmt).await?;
+                Ok(plan)
+            }
+            Statement::TruncateTable(stmt) => {
+                let plan = self.bind_truncate_table(stmt).await?;
+                Ok(plan)
+            }
+            Statement::OptimizeTable(stmt) => {
+                let plan = self.bind_optimize_table(stmt).await?;
+                Ok(plan)
+            }
 
             // Views
             Statement::CreateView(stmt) => {
