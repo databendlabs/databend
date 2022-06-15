@@ -28,7 +28,9 @@ use common_datavalues::wrap_nullable;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
@@ -122,9 +124,19 @@ impl ChainingHashTable {
         hash_table: HashTable,
         build_expressions: Vec<Expression>,
         probe_expressions: Vec<Expression>,
-        build_data_schema: DataSchemaRef,
+        mut build_data_schema: DataSchemaRef,
         _probe_data_schema: DataSchemaRef,
     ) -> Result<Self> {
+        if join_type == JoinType::Left {
+            let mut nullable_field = Vec::with_capacity(build_data_schema.fields().len());
+            for field in build_data_schema.fields().iter() {
+                nullable_field.push(DataField::new_nullable(
+                    field.name(),
+                    field.data_type().clone(),
+                ));
+            }
+            build_data_schema = DataSchemaRefExt::create(nullable_field);
+        };
         Ok(Self {
             row_space: RowSpace::new(build_data_schema),
             ref_count: Mutex::new(0),
