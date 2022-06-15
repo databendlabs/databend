@@ -46,7 +46,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         ]),
     };
 
-    let columns = vec![
+    let mut columns = vec![
         Series::from_data(vec![1, 2, 3]),
         Series::from_data(vec!["a", "b", "c"]),
         Series::from_data(vec![true, true, false]),
@@ -54,8 +54,8 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         Series::from_data(vec![1_i32, 2_i32, 3_i32]),
     ];
 
-    let block = if is_nullable {
-        let columns = columns
+    if is_nullable {
+        columns = columns
             .iter()
             .map(|c| {
                 let mut validity = MutableBitmap::new();
@@ -63,10 +63,9 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
                 NullableColumn::wrap_inner(c.clone(), Some(validity.into()))
             })
             .collect();
-        DataBlock::create(schema.clone(), columns)
-    } else {
-        DataBlock::create(schema.clone(), columns)
-    };
+    }
+
+    let block = DataBlock::create(schema, columns);
 
     let format = FormatSettings::default();
     let json_block = JsonBlock::new(&block, &format, false)?;
