@@ -10,7 +10,7 @@ USE db1;
 statement ok
 CREATE TABLE IF NOT EXISTS t1(a int, b varchar) Engine = fuse cluster by(a);
 
-statement query TTTTTIIIII 
+statement query TTTTTTIIII 
 SELECT * FROM system.tables WHERE database='db1';
 
 ----  
