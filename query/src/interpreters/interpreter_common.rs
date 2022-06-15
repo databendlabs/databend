@@ -112,7 +112,7 @@ pub async fn list_files_from_dal(
     if let Some(dir) = dir_path {
         match op.object(&dir).metadata().await {
             Ok(_) => {
-                let mut ds = op.batch().walk_top_down(path)?;
+                let mut ds = op.batch().walk_top_down(&dir)?;
                 while let Some(de) = ds.try_next().await? {
                     if de.mode().is_file() {
                         let path = de.path().to_string();
