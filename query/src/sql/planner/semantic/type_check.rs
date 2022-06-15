@@ -25,6 +25,7 @@ use common_ast::ast::UnaryOperator;
 use common_ast::parser::error::Backtrace;
 use common_ast::parser::error::DisplayError;
 use common_ast::parser::parse_expr;
+use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
@@ -146,19 +147,25 @@ impl<'a> TypeChecker<'a> {
                 (BoundColumnRef { column }.into(), data_type)
             }
 
-            Expr::IsNull { expr, not, .. } => {
+            Expr::IsNull {
+                span, expr, not, ..
+            } => {
                 let func_name = if *not {
                     "is_not_null".to_string()
                 } else {
                     "is_null".to_string()
                 };
 
-                self.resolve_function(func_name.as_str(), &[&**expr], required_type)
+                self.resolve_function(span, func_name.as_str(), &[&**expr], required_type)
                     .await?
             }
 
             Expr::InList {
-                expr, list, not, ..
+                span,
+                expr,
+                list,
+                not,
+                ..
             } => {
                 let func_name = if *not {
                     "not_in".to_string()
@@ -170,11 +177,12 @@ impl<'a> TypeChecker<'a> {
                 for expr in list.iter() {
                     args.push(expr);
                 }
-                self.resolve_function(func_name.as_str(), &args, required_type)
+                self.resolve_function(span, func_name.as_str(), &args, required_type)
                     .await?
             }
 
             Expr::Between {
+                span,
                 expr,
                 low,
                 high,
@@ -185,10 +193,20 @@ impl<'a> TypeChecker<'a> {
                     // Rewrite `expr BETWEEN low AND high`
                     // into `expr >= low AND expr <= high`
                     let (ge_func, _) = self
-                        .resolve_function(">=", &[&**expr, &**low], Some(BooleanType::new_impl()))
+                        .resolve_function(
+                            span,
+                            ">=",
+                            &[&**expr, &**low],
+                            Some(BooleanType::new_impl()),
+                        )
                         .await?;
                     let (le_func, _) = self
-                        .resolve_function("<=", &[&**expr, &**high], Some(BooleanType::new_impl()))
+                        .resolve_function(
+                            span,
+                            "<=",
+                            &[&**expr, &**high],
+                            Some(BooleanType::new_impl()),
+                        )
                         .await?;
                     (
                         AndExpr {
@@ -202,10 +220,20 @@ impl<'a> TypeChecker<'a> {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
                     let (lt_func, _) = self
-                        .resolve_function("<", &[&**expr, &**low], Some(BooleanType::new_impl()))
+                        .resolve_function(
+                            span,
+                            "<",
+                            &[&**expr, &**low],
+                            Some(BooleanType::new_impl()),
+                        )
                         .await?;
                     let (gt_func, _) = self
-                        .resolve_function(">", &[&**expr, &**high], Some(BooleanType::new_impl()))
+                        .resolve_function(
+                            span,
+                            ">",
+                            &[&**expr, &**high],
+                            Some(BooleanType::new_impl()),
+                        )
                         .await?;
                     (
                         OrExpr {
@@ -219,14 +247,19 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::BinaryOp {
-                op, left, right, ..
+                span,
+                op,
+                left,
+                right,
+                ..
             } => {
-                self.resolve_binary_op(op, &**left, &**right, required_type)
+                self.resolve_binary_op(span, op, &**left, &**right, required_type)
                     .await?
             }
 
-            Expr::UnaryOp { op, expr, .. } => {
-                self.resolve_unary_op(op, &**expr, required_type).await?
+            Expr::UnaryOp { span, op, expr, .. } => {
+                self.resolve_unary_op(span, op, &**expr, required_type)
+                    .await?
             }
 
             Expr::Cast {
@@ -247,6 +280,7 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Substring {
+                span,
                 expr,
                 substring_from,
                 substring_for,
@@ -264,7 +298,7 @@ impl<'a> TypeChecker<'a> {
                     _ => return Err(ErrorCode::SemanticError("Invalid arguments of SUBSTRING")),
                 }
 
-                self.resolve_function("substring", &arguments, required_type)
+                self.resolve_function(span, "substring", &arguments, required_type)
                     .await?
             }
 
@@ -281,6 +315,7 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::FunctionCall {
+                span,
                 distinct,
                 name,
                 args,
@@ -289,10 +324,12 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let func_name = name.name.as_str();
                 if !is_builtin_function(func_name) {
-                    return self.resolve_udf(func_name, args).await;
+                    return self.resolve_udf(span, func_name, args).await;
                 }
                 // Check if current function is a context function, e.g. `database`, `version`
-                if let Some(ctx_func_result) = self.try_resolve_context_function(func_name).await {
+                if let Some(ctx_func_result) =
+                    self.try_resolve_context_function(span, func_name).await
+                {
                     return ctx_func_result;
                 }
 
@@ -333,11 +370,9 @@ impl<'a> TypeChecker<'a> {
                             (func_name, *distinct)
                         };
 
-                    let agg_func = AggregateFunctionFactory::instance().get(
-                        func_name,
-                        params.clone(),
-                        data_fields,
-                    )?;
+                    let agg_func = AggregateFunctionFactory::instance()
+                        .get(func_name, params.clone(), data_fields)
+                        .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
 
                     (
                         AggregateFunction {
@@ -361,7 +396,7 @@ impl<'a> TypeChecker<'a> {
                     )
                 } else {
                     // Scalar function
-                    self.resolve_function(func_name, &args, required_type)
+                    self.resolve_function(span, func_name, &args, required_type)
                         .await?
                 }
             }
@@ -409,18 +444,23 @@ impl<'a> TypeChecker<'a> {
                     },
                 };
 
-                self.resolve_function("get", &[&**expr, &arg], None).await?
+                self.resolve_function(span, "get", &[&**expr, &arg], None)
+                    .await?
             }
 
             Expr::TryCast {
-                expr, target_type, ..
+                span,
+                expr,
+                target_type,
+                ..
             } => {
                 let (scalar, data_type) = self.resolve(expr, required_type).await?;
                 let cast_func = CastFunction::create_try(
                     "",
                     target_type.to_string().as_str(),
                     data_type.clone(),
-                )?;
+                )
+                .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
                 (
                     CastExpr {
                         argument: Box::new(scalar),
@@ -432,43 +472,60 @@ impl<'a> TypeChecker<'a> {
                 )
             }
 
-            Expr::Extract { kind, expr, .. } => {
-                self.resolve_extract_expr(kind, expr, required_type).await?
+            Expr::Extract {
+                span, kind, expr, ..
+            } => {
+                self.resolve_extract_expr(span, kind, expr, required_type)
+                    .await?
             }
 
-            Expr::Interval { expr, unit, .. } => {
-                self.resolve_interval(expr, unit, required_type).await?
+            Expr::Interval {
+                span, expr, unit, ..
+            } => {
+                self.resolve_interval(span, expr, unit, required_type)
+                    .await?
             }
 
             Expr::DateAdd {
+                span,
                 date,
                 interval,
                 unit,
                 ..
             } => {
-                self.resolve_date_add(date, interval, unit, required_type)
+                self.resolve_date_add(span, date, interval, unit, required_type)
                     .await?
             }
             Expr::Trim {
-                expr, trim_where, ..
-            } => self.try_resolve_trim_function(expr, trim_where).await?,
+                span,
+                expr,
+                trim_where,
+                ..
+            } => self.resolve_trim_function(span, expr, trim_where).await?,
 
-            Expr::Array { exprs, .. } => self.resolve_array(exprs).await?,
+            Expr::Array { span, exprs, .. } => self.resolve_array(span, exprs).await?,
 
             Expr::Position {
                 substr_expr,
                 str_expr,
+                span,
                 ..
             } => {
-                self.resolve_function("locate", &[substr_expr.as_ref(), str_expr.as_ref()], None)
-                    .await?
+                self.resolve_function(
+                    span,
+                    "locate",
+                    &[substr_expr.as_ref(), str_expr.as_ref()],
+                    None,
+                )
+                .await?
             }
 
-            Expr::Tuple { exprs, .. } => self.resolve_tuple(exprs).await?,
+            Expr::Tuple { span, exprs, .. } => self.resolve_tuple(span, exprs).await?,
 
             Expr::NullIf { span, expr1, expr2 } => {
                 // Rewrite NULLIF(expr1, expr2) to IF(expr1 = expr2, NULL, expr1)
                 self.resolve_function(
+                    span,
                     "if",
                     &[
                         &Expr::BinaryOp {
@@ -500,6 +557,7 @@ impl<'a> TypeChecker<'a> {
     /// Resolve function call.
     pub async fn resolve_function(
         &mut self,
+        span: &[Token<'_>],
         func_name: &str,
         arguments: &[&Expr<'_>],
         _required_type: Option<DataTypeImpl>,
@@ -515,7 +573,9 @@ impl<'a> TypeChecker<'a> {
 
         let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
 
-        let func = FunctionFactory::instance().get(func_name, &arg_types_ref)?;
+        let func = FunctionFactory::instance()
+            .get(func_name, &arg_types_ref)
+            .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
         Ok((
             FunctionCall {
                 arguments: args,
@@ -533,6 +593,7 @@ impl<'a> TypeChecker<'a> {
     /// expressions, conjunction(`AND`) and disjunction(`OR`).
     pub async fn resolve_binary_op(
         &mut self,
+        span: &[Token<'_>],
         op: &BinaryOperator,
         left: &Expr<'_>,
         right: &Expr<'_>,
@@ -556,7 +617,7 @@ impl<'a> TypeChecker<'a> {
             | BinaryOperator::BitwiseAnd
             | BinaryOperator::BitwiseXor
             | BinaryOperator::Xor => {
-                self.resolve_function(op.to_string().as_str(), &[left, right], required_type)
+                self.resolve_function(span, op.to_string().as_str(), &[left, right], required_type)
                     .await
             }
             BinaryOperator::Gt
@@ -611,6 +672,7 @@ impl<'a> TypeChecker<'a> {
     /// Resolve unary expressions.
     pub async fn resolve_unary_op(
         &mut self,
+        span: &[Token<'_>],
         op: &UnaryOperator,
         child: &Expr<'_>,
         required_type: Option<DataTypeImpl>,
@@ -622,58 +684,78 @@ impl<'a> TypeChecker<'a> {
             }
 
             UnaryOperator::Minus => {
-                self.resolve_function("negate", &[child], required_type)
+                self.resolve_function(span, "negate", &[child], required_type)
                     .await
             }
 
-            UnaryOperator::Not => self.resolve_function("not", &[child], required_type).await,
+            UnaryOperator::Not => {
+                self.resolve_function(span, "not", &[child], required_type)
+                    .await
+            }
         }
     }
 
     pub async fn resolve_extract_expr(
         &mut self,
+        span: &[Token<'_>],
         interval_kind: &IntervalKind,
         arg: &Expr<'_>,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match interval_kind {
             IntervalKind::Year => {
-                self.resolve_function("toYear", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "toYear", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Month => {
-                self.resolve_function("toMonth", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "toMonth", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Day => {
-                self.resolve_function("toDayOfMonth", &[arg], Some(TimestampType::new_impl(0)))
-                    .await
+                self.resolve_function(
+                    span,
+                    "toDayOfMonth",
+                    &[arg],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
             }
             IntervalKind::Hour => {
-                self.resolve_function("toHour", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "toHour", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Minute => {
-                self.resolve_function("toMinute", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "toMinute", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Second => {
-                self.resolve_function("toSecond", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "toSecond", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Doy => {
-                self.resolve_function("toDayOfYear", &[arg], Some(TimestampType::new_impl(0)))
-                    .await
+                self.resolve_function(
+                    span,
+                    "toDayOfYear",
+                    &[arg],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
             }
             IntervalKind::Dow => {
-                self.resolve_function("toDayOfWeek", &[arg], Some(TimestampType::new_impl(0)))
-                    .await
+                self.resolve_function(
+                    span,
+                    "toDayOfWeek",
+                    &[arg],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
             }
         }
     }
 
     pub async fn resolve_interval(
         &mut self,
+        span: &[Token<'_>],
         arg: &Expr<'_>,
         interval_kind: &IntervalKind,
         _required_type: Option<DataTypeImpl>,
@@ -681,6 +763,7 @@ impl<'a> TypeChecker<'a> {
         match interval_kind {
             IntervalKind::Year => {
                 self.resolve_function(
+                    span,
                     "to_interval_year",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Year)),
@@ -689,6 +772,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Month => {
                 self.resolve_function(
+                    span,
                     "to_interval_month",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Month)),
@@ -697,6 +781,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Day => {
                 self.resolve_function(
+                    span,
                     "to_interval_day",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Day)),
@@ -705,6 +790,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Hour => {
                 self.resolve_function(
+                    span,
                     "to_interval_hour",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Hour)),
@@ -713,6 +799,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Minute => {
                 self.resolve_function(
+                    span,
                     "to_interval_minute",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Minute)),
@@ -721,6 +808,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Second => {
                 self.resolve_function(
+                    span,
                     "to_interval_second",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Second)),
@@ -729,6 +817,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Doy => {
                 self.resolve_function(
+                    span,
                     "to_interval_doy",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Doy)),
@@ -737,6 +826,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Dow => {
                 self.resolve_function(
+                    span,
                     "to_interval_dow",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Dow)),
@@ -748,6 +838,7 @@ impl<'a> TypeChecker<'a> {
 
     pub async fn resolve_date_add(
         &mut self,
+        span: &[Token<'_>],
         date: &Expr<'_>,
         interval: &Expr<'_>,
         interval_kind: &IntervalKind,
@@ -760,14 +851,17 @@ impl<'a> TypeChecker<'a> {
         args.push(date);
         arg_types.push(date_type);
 
-        let (interval, interval_type) =
-            self.resolve_interval(interval, interval_kind, None).await?;
+        let (interval, interval_type) = self
+            .resolve_interval(span, interval, interval_kind, None)
+            .await?;
         args.push(interval);
         arg_types.push(interval_type);
 
         let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
 
-        let func = FunctionFactory::instance().get("date_add", &arg_types_ref)?;
+        let func = FunctionFactory::instance()
+            .get("date_add", &arg_types_ref)
+            .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
         Ok((
             FunctionCall {
                 arguments: args,
@@ -821,6 +915,7 @@ impl<'a> TypeChecker<'a> {
 
     async fn try_resolve_context_function(
         &mut self,
+        span: &[Token<'_>],
         func_name: &str,
     ) -> Option<Result<(Scalar, DataTypeImpl)>> {
         match func_name.to_lowercase().as_str() {
@@ -829,14 +924,14 @@ impl<'a> TypeChecker<'a> {
                     span: &[],
                     lit: Literal::String(self.ctx.get_current_database()),
                 };
-                Some(self.resolve_function("database", &[&arg], None).await)
+                Some(self.resolve_function(span, "database", &[&arg], None).await)
             }
             "version" => {
                 let arg = Expr::Literal {
                     span: &[],
                     lit: Literal::String(self.ctx.get_fuse_version()),
                 };
-                Some(self.resolve_function("version", &[&arg], None).await)
+                Some(self.resolve_function(span, "version", &[&arg], None).await)
             }
             "current_user" => match self.ctx.get_current_user() {
                 Ok(user) => {
@@ -844,7 +939,10 @@ impl<'a> TypeChecker<'a> {
                         span: &[],
                         lit: Literal::String(user.identity().to_string()),
                     };
-                    Some(self.resolve_function("current_user", &[&arg], None).await)
+                    Some(
+                        self.resolve_function(span, "current_user", &[&arg], None)
+                            .await,
+                    )
                 }
                 Err(e) => Some(Err(e)),
             },
@@ -854,7 +952,7 @@ impl<'a> TypeChecker<'a> {
                         span: &[],
                         lit: Literal::String(user.identity().to_string()),
                     };
-                    Some(self.resolve_function("user", &[&arg], None).await)
+                    Some(self.resolve_function(span, "user", &[&arg], None).await)
                 }
                 Err(e) => Some(Err(e)),
             },
@@ -863,7 +961,10 @@ impl<'a> TypeChecker<'a> {
                     span: &[],
                     lit: Literal::String(self.ctx.get_connection_id()),
                 };
-                Some(self.resolve_function("connection_id", &[&arg], None).await)
+                Some(
+                    self.resolve_function(span, "connection_id", &[&arg], None)
+                        .await,
+                )
             }
             "timezone" => {
                 let tz = self.ctx.get_settings().get_timezone().unwrap();
@@ -873,14 +974,15 @@ impl<'a> TypeChecker<'a> {
                     span: &[],
                     lit: Literal::String(tz),
                 };
-                Some(self.resolve_function("timezone", &[&arg], None).await)
+                Some(self.resolve_function(span, "timezone", &[&arg], None).await)
             }
             _ => None,
         }
     }
 
-    async fn try_resolve_trim_function(
+    async fn resolve_trim_function(
         &mut self,
+        span: &[Token<'_>],
         expr: &Expr<'_>,
         trim_where: &Option<(TrimWhere, Box<Expr<'_>>)>,
     ) -> Result<(Scalar, DataTypeImpl)> {
@@ -906,7 +1008,9 @@ impl<'a> TypeChecker<'a> {
 
         let (trim_source, _) = self.resolve(expr, Some(StringType::new_impl())).await?;
         let args = vec![trim_source, trim_scalar];
-        let func = FunctionFactory::instance().get(func_name, &[&StringType::new_impl(); 2])?;
+        let func = FunctionFactory::instance()
+            .get(func_name, &[&StringType::new_impl(); 2])
+            .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
 
         Ok((
             FunctionCall {
@@ -945,7 +1049,11 @@ impl<'a> TypeChecker<'a> {
 
     // TODO(leiysky): use an array builder function instead, since we should allow declaring
     // an array with variable as element.
-    async fn resolve_array(&mut self, exprs: &[Expr<'_>]) -> Result<(Scalar, DataTypeImpl)> {
+    async fn resolve_array(
+        &mut self,
+        span: &[Token<'_>],
+        exprs: &[Expr<'_>],
+    ) -> Result<(Scalar, DataTypeImpl)> {
         let mut elems = Vec::with_capacity(exprs.len());
         let mut types = Vec::with_capacity(exprs.len());
         for expr in exprs.iter() {
@@ -965,7 +1073,8 @@ impl<'a> TypeChecker<'a> {
         } else {
             types
                 .iter()
-                .fold(Ok(types[0].clone()), |acc, v| merge_types(&acc?, v))?
+                .fold(Ok(types[0].clone()), |acc, v| merge_types(&acc?, v))
+                .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?
         };
         Ok((
             ConstantExpr {
@@ -977,7 +1086,11 @@ impl<'a> TypeChecker<'a> {
         ))
     }
 
-    async fn resolve_tuple(&mut self, exprs: &[Expr<'_>]) -> Result<(Scalar, DataTypeImpl)> {
+    async fn resolve_tuple(
+        &mut self,
+        span: &[Token<'_>],
+        exprs: &[Expr<'_>],
+    ) -> Result<(Scalar, DataTypeImpl)> {
         let mut args = Vec::with_capacity(exprs.len());
         let mut arg_types = Vec::with_capacity(exprs.len());
         for expr in exprs {
@@ -986,7 +1099,8 @@ impl<'a> TypeChecker<'a> {
             arg_types.push(data_type);
         }
         let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
-        let tuple_func = TupleFunction::try_create_func("", &arg_types_ref)?;
+        let tuple_func = TupleFunction::try_create_func("", &arg_types_ref)
+            .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
         Ok((
             FunctionCall {
                 arguments: args,
@@ -1001,6 +1115,7 @@ impl<'a> TypeChecker<'a> {
 
     async fn resolve_udf(
         &mut self,
+        span: &[Token<'_>],
         func_name: &str,
         arguments: &[Expr<'_>],
     ) -> Result<(Scalar, DataTypeImpl)> {
@@ -1009,14 +1124,14 @@ impl<'a> TypeChecker<'a> {
             .get_user_manager()
             .get_udf(self.ctx.get_tenant().as_str(), func_name)
             .await;
-        return if let Ok(udf) = udf {
+        if let Ok(udf) = udf {
             let parameters = udf.parameters;
             if parameters.len() != arguments.len() {
-                return Err(ErrorCode::SyntaxException(format!(
+                return Err(ErrorCode::SyntaxException(span.display_error(format!(
                     "Require {} parameters, but got: {}",
                     parameters.len(),
                     arguments.len()
-                )));
+                ))));
             }
             let backtrace = Backtrace::new();
             let sql_tokens = tokenize_sql(udf.definition.as_str())?;
@@ -1027,20 +1142,22 @@ impl<'a> TypeChecker<'a> {
                     args_map.insert(parameter, (*argument).clone());
                 }
             });
-            let udf_expr = self.clone_expr_with_replacement(&expr, &|nest_expr| {
-                if let Expr::ColumnRef { column, .. } = nest_expr {
-                    if let Some(arg) = args_map.get(&column.name) {
-                        return Ok(Some(arg.clone()));
+            let udf_expr = self
+                .clone_expr_with_replacement(&expr, &|nest_expr| {
+                    if let Expr::ColumnRef { column, .. } = nest_expr {
+                        if let Some(arg) = args_map.get(&column.name) {
+                            return Ok(Some(arg.clone()));
+                        }
                     }
-                }
-                Ok(None)
-            })?;
+                    Ok(None)
+                })
+                .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
             self.resolve(&udf_expr, None).await
         } else {
-            Err(ErrorCode::SemanticError(
-                "No function matches the given name.",
-            ))
-        };
+            Err(ErrorCode::SemanticError(span.display_error(
+                "No function matches the given name.".to_string(),
+            )))
+        }
     }
 
     fn clone_expr_with_replacement<F>(
