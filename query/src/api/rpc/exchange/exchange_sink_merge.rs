@@ -50,10 +50,11 @@ impl Processor for ExchangeMergeSink {
     fn event(&mut self) -> Result<Event> {
         if let Some(output) = self.output_data.take() {
             if self.peer_endpoint_publisher.is_none() {
+                let id = self.fragment_id;
                 let query_id = &self.exchange_params.query_id;
                 let destination_id = &self.exchange_params.destination_id;
                 let exchange_manager = self.ctx.get_exchange_manager();
-                self.peer_endpoint_publisher = Some(exchange_manager.get_fragment_sink(query_id, destination_id)?);
+                self.peer_endpoint_publisher = Some(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
             }
 
             let mut need_async_send = false;

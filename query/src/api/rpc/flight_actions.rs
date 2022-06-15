@@ -269,9 +269,9 @@ impl TryInto<Action> for FlightAction {
                 r#type: String::from("CancelAction"),
                 body: cancel_action.try_into()?,
             }),
-            FlightAction::PreparePipeline(executor) => Ok(Action {
+            FlightAction::PreparePipeline(prepare_pipeline) => Ok(Action {
                 r#type: String::from("PreparePipeline"),
-                body: executor.try_into()?,
+                body: prepare_pipeline.try_into()?,
             }),
             FlightAction::PreparePublisher(publisher) => Ok(Action {
                 r#type: String::from("PreparePublisher"),

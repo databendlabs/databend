@@ -151,7 +151,6 @@ impl QueryFragmentsActions {
         let nodes_info = Self::nodes_info(&ctx);
         let mut execute_packets = Vec::with_capacity(nodes_info.len());
 
-        let cluster = ctx.get_cluster();
         for (node_id, node_info) in &nodes_info {
             execute_packets.push(ExecutePacket::create(
                 ctx.get_id(),

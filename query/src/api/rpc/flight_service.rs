@@ -128,8 +128,7 @@ impl FlightService for DatabendQueryFlightService {
     type DoPutStream = FlightStream<PutResult>;
 
     async fn do_put(&self, req: StreamReq<FlightData>) -> Response<Self::DoPutStream> {
-        // TODO: panic hook.
-        println!("data flight do_put");
+        // TODO: panic hook?
         let query_id = match req.metadata().get("x-query-id") {
             None => Err(Status::invalid_argument("Must be send X-Query-ID metadata.")),
             Some(metadata_value) => match metadata_value.to_str() {
@@ -141,7 +140,7 @@ impl FlightService for DatabendQueryFlightService {
 
         let stream = req.into_inner();
         let exchange_manager = self.sessions.get_data_exchange_manager();
-        exchange_manager.handle_do_put(&query_id, stream).await?;
+        exchange_manager.handle_do_put(&query_id, stream).await?.await.unwrap();
         Ok(RawResponse::new(Box::pin(tokio_stream::once(Ok(
             PutResult {
                 app_metadata: vec![]

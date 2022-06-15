@@ -97,6 +97,7 @@ impl Processor for ViaExchangeSubscriber {
         }
 
         if let Some(data_block) = self.remote_data_block.take() {
+            println!("receive remote data block {:?}", data_block);
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -178,16 +179,17 @@ impl Processor for ExchangeSubscriberSource {
         }
 
         if let Some(data_block) = self.remote_data_block.take() {
+            println!("receive remote data block {:?}", data_block);
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
 
-        if self.rx.is_closed() {
-            return Ok(Event::Finished);
+        if self.remote_flight_data.is_some() {
+            return Ok(Event::Sync);
         }
 
-        match self.remote_flight_data.is_some() {
-            true => Ok(Event::Sync),
+        match self.rx.is_closed() && self.rx.is_empty() {
+            true => Ok(Event::Finished),
             false => Ok(Event::Async),
         }
     }

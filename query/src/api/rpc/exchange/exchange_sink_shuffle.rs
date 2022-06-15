@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use async_channel::{Sender, TrySendError};
 use common_arrow::arrow::io::flight::serialize_batch;
 use common_arrow::arrow_format::flight::data::FlightData;
@@ -33,7 +34,13 @@ pub struct ExchangePublisherSink<const HAS_OUTPUT: bool> {
 }
 
 impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
-    pub fn try_create(ctx: Arc<QueryContext>, fragment_id: usize, input: Arc<InputPort>, output: Arc<OutputPort>, shuffle_exchange_params: ShuffleExchangeParams) -> Result<ProcessorPtr> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        fragment_id: usize,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        shuffle_exchange_params: ShuffleExchangeParams,
+    ) -> Result<ProcessorPtr> {
         let serialize_params = shuffle_exchange_params.create_serialize_params()?;
         Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink::<HAS_OUTPUT> {
             ctx,
@@ -54,9 +61,10 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
         let exchange_manager = self.ctx.get_exchange_manager();
 
         for destination_id in destination_ids {
+            let id = self.fragment_id;
             let query_id = &self.shuffle_exchange_params.query_id;
             // self.shuffle_exchange_params.fragment_id
-            res.push(exchange_manager.get_fragment_sink(query_id, destination_id)?);
+            res.push(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
         }
 
         Ok(res)
@@ -66,13 +74,14 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
 #[async_trait::async_trait]
 impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
     fn name(&self) -> &'static str {
-        "HashExchangePublisher"
+        "ExchangePublisher"
     }
 
     fn event(&mut self) -> Result<Event> {
         if HAS_OUTPUT {
             if self.output.is_finished() {
                 self.input.finish();
+                self.peer_endpoint_publisher.clear();
                 return Ok(Event::Finished);
             }
 
@@ -105,7 +114,10 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
                     let data = output_data.serialized_blocks[index].take().unwrap();
                     match publisher.try_send(data) {
                         Ok(_) => { /* do nothing*/ }
-                        Err(TrySendError::Closed(_)) => { return Ok(Event::Finished); }
+                        Err(TrySendError::Closed(_)) => {
+                            self.peer_endpoint_publisher.clear();
+                            return Ok(Event::Finished);
+                        }
                         Err(TrySendError::Full(value)) => {
                             need_async_send = true;
                             output_data.serialized_blocks[index] = Some(value);
@@ -130,6 +142,7 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
 
         if self.input.is_finished() {
             self.output.finish();
+            self.peer_endpoint_publisher.clear();
             return Ok(Event::Finished);
         }
 

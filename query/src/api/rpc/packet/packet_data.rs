@@ -12,6 +12,7 @@ use common_exception::Result;
 
 pub enum DataPacket {
     Data(usize, FlightData),
+    EndFragment(usize),
     ErrorCode(ErrorCode),
     Progress(ProgressValues),
 }
@@ -60,12 +61,17 @@ impl Stream for DataPacketStream {
             Poll::Pending => Poll::Pending,
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Ready(Some(data_packet)) => match data_packet {
-                DataPacket::Data(fragment_id, data) => Poll::Ready(Some(FlightData {
-                    app_metadata: vec![0x01],
-                    data_body: data.data_body,
-                    data_header: data.data_header,
-                    flight_descriptor: None,
-                })),
+                DataPacket::Data(fragment_id, data) => {
+                    let mut app_metadata = vec![0x01];
+                    app_metadata.extend_from_slice(&fragment_id.to_be_bytes());
+
+                    Poll::Ready(Some(FlightData {
+                        app_metadata,
+                        data_body: data.data_body,
+                        data_header: data.data_header,
+                        flight_descriptor: None,
+                    }))
+                }
                 DataPacket::ErrorCode(error) => Poll::Ready(Some(FlightData {
                     app_metadata: vec![0x02],
                     data_body: error.message().into_bytes(),
@@ -75,6 +81,14 @@ impl Stream for DataPacketStream {
                 DataPacket::Progress(values) => {
                     // let rows = values.rows.to_be_bytes();
                     // let bytes = values.bytes.to_be_bytes();
+                    Poll::Ready(Some(FlightData {
+                        app_metadata: vec![0x03],
+                        data_body: vec![],
+                        data_header: vec![],
+                        flight_descriptor: None,
+                    }))
+                }
+                DataPacket::EndFragment(_) => {
                     Poll::Ready(Some(FlightData {
                         app_metadata: vec![0x03],
                         data_body: vec![],

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use common_arrow::arrow::io::flight::{serialize_batch, serialize_schema};
 use common_arrow::arrow::io::ipc::IpcField;
 use common_arrow::arrow::io::ipc::write::{default_ipc_fields, WriteOptions};
@@ -64,7 +65,7 @@ impl ExchangePublisher {
                         params.fragment_id,
                         transform_input_port,
                         transform_output_port,
-                        params.clone(),
+                        params.clone()
                     )
                 })
             }
@@ -81,7 +82,7 @@ impl ExchangePublisher {
                         params.fragment_id,
                         transform_input_port,
                         transform_output_port,
-                        params.clone(),
+                        params.clone()
                     )
                 })
             }

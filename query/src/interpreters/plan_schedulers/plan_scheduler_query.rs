@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-use common_tracing::tracing::info;
+use common_tracing::tracing::{debug, info};
 use crate::interpreters::fragments::{QueryFragmentsActions, QueryFragmentsBuilder, RootQueryFragment};
 
 use crate::interpreters::plan_schedulers;
@@ -67,12 +67,11 @@ pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Resu
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
     let root_query_fragments = RootQueryFragment::create(query_fragments, ctx.clone(), plan)?;
 
-    info!("QueryFragments: {:?}", root_query_fragments);
+    debug!("QueryFragments: {:?}", root_query_fragments);
     let exchange_manager = ctx.get_exchange_manager();
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_query_fragments.finalize(&mut fragments_actions)?;
-    info!("QueryFragments actions: {:?}", fragments_actions);
-    println!("QueryFragments actions: {:?}", fragments_actions);
+    debug!("QueryFragments actions: {:?}", fragments_actions);
     exchange_manager.submit_query_actions(ctx, fragments_actions).await
 }
 

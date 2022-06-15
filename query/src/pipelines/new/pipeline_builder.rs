@@ -48,6 +48,7 @@ use crate::pipelines::new::processors::TransformSortMerge;
 use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
+
 /// Builder for query pipeline
 /// ```
 /// # let builder = QueryPipelineBuilder::create(ctx);
