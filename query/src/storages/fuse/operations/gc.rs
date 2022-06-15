@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_cache::Cache;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::TryStreamExt;
 use opendal::Operator;
@@ -29,7 +30,15 @@ use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
     pub async fn do_gc(&self, ctx: &Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot(ctx.as_ref()).await?;
+        let r = self.read_table_snapshot(ctx.as_ref()).await;
+        let snapshot_opt = match r {
+            Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
+                // concurrent gc: someone else has already collected this snapshot, ignore it
+                return Ok(());
+            }
+            Err(e) => return Err(e),
+            Ok(v) => v,
+        };
 
         let last_snapshot = if let Some(s) = snapshot_opt {
             s
@@ -130,8 +139,16 @@ impl FuseTable {
         let reader = MetaReaders::segment_info_reader(ctx);
         for l in segments {
             let (x, ver) = l;
-            let res = reader.read(x, None, *ver).await?;
-            for block_meta in &res.blocks {
+            let r = reader.read(x, None, *ver).await;
+            let segment_info = match r {
+                Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
+                    // concurrent gc: someone else has already collected this segment, ignore it
+                    continue;
+                }
+                Err(e) => return Err(e),
+                Ok(v) => v,
+            };
+            for block_meta in &segment_info.blocks {
                 result.insert(block_meta.location.0.clone());
             }
         }
@@ -163,6 +180,20 @@ impl FuseTable {
     }
 
     async fn remove_location(
+        &self,
+        data_accessor: &Operator,
+        location: impl AsRef<str>,
+    ) -> Result<()> {
+        match self.do_remove_location(data_accessor, location).await {
+            Err(e) if e.code() == ErrorCode::storage_not_found_code() => Ok(()),
+            Err(e) => Err(e),
+            Ok(_) => Ok(()),
+        }
+    }
+
+    // make type checker happy
+    #[inline]
+    async fn do_remove_location(
         &self,
         data_accessor: &Operator,
         location: impl AsRef<str>,
