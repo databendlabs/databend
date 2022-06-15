@@ -196,7 +196,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let show_tables_status = map(
         rule! {
-            SHOW ~ TABLE ~ STATUS ~ ( FROM ~ ^#ident )? ~ #show_limit?
+            SHOW ~ ( TABLES | TABLE ) ~ STATUS ~ ( FROM ~ ^#ident )? ~ #show_limit?
         },
         |(_, _, _, opt_database, limit)| {
             Statement::ShowTablesStatus(ShowTablesStatusStmt {
