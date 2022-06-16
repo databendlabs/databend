@@ -27,6 +27,10 @@ pub struct JsonEachRowOutputFormat {
 
 impl JsonEachRowOutputFormat {
     pub fn create(_schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
+        let format_settings = FormatSettings {
+            null_bytes: vec![b'n', b'u', b'l', b'l'],
+            ..format_settings
+        };
         Self { format_settings }
     }
 }
