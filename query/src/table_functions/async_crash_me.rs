@@ -14,7 +14,6 @@
 //
 
 use std::any::Any;
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -163,16 +162,15 @@ impl AsyncCrashMeSource {
     }
 }
 
+#[async_trait::async_trait]
 impl AsyncSource for AsyncCrashMeSource {
     const NAME: &'static str = "async_crash_me";
-    type BlockFuture<'a> = impl Future<Output=Result<Option<DataBlock>>> where Self: 'a;
 
-    fn generate(&mut self) -> Self::BlockFuture<'_> {
-        async {
-            match &self.message {
-                None => panic!("async crash me panic"),
-                Some(message) => panic!("{}", message),
-            }
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        match &self.message {
+            None => panic!("async crash me panic"),
+            Some(message) => panic!("{}", message),
         }
     }
 }

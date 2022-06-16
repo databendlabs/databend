@@ -307,4 +307,14 @@ select * from t1 except select * from t2;
 drop table t1;
 drop table t2;
 
+--outer join
+select '====Outer Join====';
+create table t1(a int, b int);
+create table t2(c int, d int);
+insert into t1 values(1, 2), (3 ,4), (7, 8);
+insert into t2 values(1, 4), (2, 3), (6, 8);
+select * from t1 right join t2 on t1.a = t2.c;
+select * from t1 left join t2 on t1.a = t2.c;
+drop table t1;
+drop table t2;
 set enable_planner_v2 = 0;

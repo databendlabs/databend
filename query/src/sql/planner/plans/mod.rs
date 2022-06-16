@@ -73,12 +73,25 @@ pub enum Plan {
     ShowSettings,
 
     // Databases
+    ShowDatabases(Box<ShowDatabasesPlan>),
+    ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
     DropDatabase(Box<DropDatabasePlan>),
     RenameDatabase(Box<RenameDatabasePlan>),
 
     // Tables
+    ShowTables(Box<ShowTablesPlan>),
+    ShowCreateTable(Box<ShowCreateTablePlan>),
+    DescribeTable(Box<DescribeTablePlan>),
+    ShowTablesStatus(Box<ShowTablesStatusPlan>),
     CreateTable(Box<CreateTablePlan>),
+    DropTable(Box<DropTablePlan>),
+    UndropTable(Box<UndropTablePlan>),
+    RenameTable(Box<RenameTablePlan>),
+    AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
+    DropTableClusterKey(Box<DropTableClusterKeyPlan>),
+    TruncateTable(Box<TruncateTablePlan>),
+    OptimizeTable(Box<OptimizeTablePlan>),
 
     // Views
     CreateView(Box<CreateViewPlan>),

@@ -296,7 +296,7 @@ impl Table for FuseTable {
         }
 
         let mut new_table_meta = self.get_table_info().meta.clone();
-        new_table_meta.cluster_key = None;
+        new_table_meta.default_cluster_key = None;
         new_table_meta.default_cluster_key_id = None;
 
         let schema = self.schema().as_ref().clone();
