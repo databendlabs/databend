@@ -51,6 +51,7 @@ pub trait TypeSerializer<'a>: Send + Sync {
         false
     }
     fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings);
+
     fn write_field_escaped(
         &self,
         row_index: usize,
