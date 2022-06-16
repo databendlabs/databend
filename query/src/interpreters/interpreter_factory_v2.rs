@@ -89,6 +89,14 @@ impl InterpreterFactoryV2 {
                 ExplainInterpreterV2::try_create(ctx, *plan.clone(), kind.clone())
             }
 
+            // Shows
+            Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
+            Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
+            Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
+            Plan::ShowFunction(_) => Err(ErrorCode::UnImplement(
+                "SHOW FUNCTIONS should be rewritten to SELECT at binding phase",
+            )),
+
             // Databases
             Plan::ShowDatabases(show_databases) => {
                 ShowDatabasesInterpreter::try_create(ctx, *show_databases.clone())
@@ -179,15 +187,6 @@ impl InterpreterFactoryV2 {
             }
             Plan::DropStage(s) => DropUserStageInterpreter::try_create(ctx, *s.clone()),
             Plan::RemoveStage(s) => RemoveUserStageInterpreter::try_create(ctx, *s.clone()),
-
-            // Shows
-            Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
-            Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
-            Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
-
-            Plan::ShowFunction(_) => Err(ErrorCode::UnImplement(
-                "SHOW FUNCTIONS should be rewritten to SELECT at binding phase",
-            )),
         }?;
         Ok(inner)
     }
