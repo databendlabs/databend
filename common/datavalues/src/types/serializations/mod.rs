@@ -79,6 +79,10 @@ pub trait TypeSerializer<'a>: Send + Sync {
         }
     }
 
+    fn write_field_json(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        self.write_field_quoted(row_index, buf, format, b'\"');
+    }
+
     fn serialize_field(&self, row_index: usize, format: &FormatSettings) -> Result<String> {
         let mut buf = Vec::with_capacity(100);
         self.write_field(row_index, &mut buf, format);
