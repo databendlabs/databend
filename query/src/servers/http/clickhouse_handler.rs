@@ -53,7 +53,7 @@ pub struct StatementHandlerParams {
     query: Option<String>,
     compress: Option<u8>,
     #[serde(flatten)]
-    extra: HashMap<String, String>,
+    settings: HashMap<String, String>,
 }
 
 impl StatementHandlerParams {
@@ -145,14 +145,10 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(InternalServerError)?;
 
-    let settings = session.get_settings();
-    for (k, v) in params.extra.iter() {
-        if settings.has_setting(k.as_str()) {
-            settings
-                .set_settings(k.to_string(), v.to_string(), false)
-                .map_err(BadRequest)?;
-        }
-    }
+    session
+        .get_settings()
+        .set_batch_settings(&params.settings, false)
+        .map_err(BadRequest)?;
 
     let sql = params.query();
 
@@ -178,14 +174,10 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(InternalServerError)?;
 
-    let settings = session.get_settings();
-    for (k, v) in params.extra.iter() {
-        if settings.has_setting(k.as_str()) {
-            settings
-                .set_settings(k.to_string(), v.to_string(), false)
-                .map_err(BadRequest)?;
-        }
-    }
+    session
+        .get_settings()
+        .set_batch_settings(&params.settings, false)
+        .map_err(BadRequest)?;
 
     let mut sql = params.query();
     sql.push_str(body.into_string().await?.as_str());

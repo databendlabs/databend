@@ -269,6 +269,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
 async fn test_settings() -> PoemResult<()> {
     let server = Server::new();
 
+    // unknown setting
     {
         let sql = "select value from system.settings where name = 'max_block_size'";
         let (status, _body) = server
