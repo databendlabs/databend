@@ -221,15 +221,16 @@ function install_jdk {
 		;;
 	esac
 
-  JAVA_HOME=$(readlink -f `which javac` | sed "s:/bin/javac::")
+	if [[ "$INSTALL_PROFILE" == "true" ]]; then
+		JAVA_HOME=$(readlink -f `which javac` | sed "s:/bin/javac::")
+		if [[ -z ${JAVA_HOME} ]]; then
+			echo "JAVA_HOME not found"
+		else
+			echo "set JAVA_HOME to: ${JAVA_HOME}"
+			add_to_profile "export JAVA_HOME=\"${JAVA_HOME}\""
+		fi
+	fi
 
-  if [[ -z ${JAVA_HOME} ]];
-  then
-    echo "JAVA_HOME not found"
-  else
-    echo "set JAVA_HOME to: $JAVA_HOME"
-    add_to_profile "export JAVA_HOME=\"${JAVA_HOME}\""
-  fi
 }
 
 function install_pkg_config {

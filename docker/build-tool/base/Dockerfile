@@ -30,13 +30,16 @@ RUN chmod +x /build/scripts/setup/dev_setup.sh && \
     mv /root/.cargo /opt/rust/cargo && \
     mv /root/.rustup /opt/rust/rustup
 
+RUN ln -s $(readlink -f `which javac` | sed "s:/bin/javac::") /opt/java
+
 RUN curl -qL https://github.com/rui314/mold/releases/download/v1.2.1/mold-1.2.1-$(uname -m)-linux.tar.gz -o /tmp/mold.tar.gz && \
     tar --strip-components=1 -xzf /tmp/mold.tar.gz -C /usr/local && \
     rm -rf /tmp/mold.tar.gz && \
     ln -sf /usr/local/bin/mold /usr/bin/$(uname -m)-linux-gnu-ld
 
+ENV JAVA_HOME /opt/java
 ENV RUSTUP_HOME /opt/rust/rustup
 ENV CARGO_HOME /opt/rust/cargo
-ENV PATH /opt/rust/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH /opt/rust/cargo/bin:/opt/java/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 VOLUME [ "/workspace", "/opt/rust/cargo/registry", "/opt/rust/cargo/git" ]
 
