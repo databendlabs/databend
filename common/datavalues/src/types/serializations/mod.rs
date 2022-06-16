@@ -16,6 +16,7 @@ mod array;
 mod boolean;
 mod const_;
 mod date;
+mod escape;
 mod null;
 mod nullable;
 mod number;
