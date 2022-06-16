@@ -96,14 +96,17 @@ fn test_deserialize_multi_lines() -> Result<()> {
 
     let mut csv_input_state = csv_input_format.create_state();
 
-    csv_input_format.read_buf("1,\"second\"\n".as_bytes(), &mut csv_input_state)?;
+    csv_input_format.read_buf(
+        "1,\"{\\\"second\\\" : 33}\"\n".as_bytes(),
+        &mut csv_input_state,
+    )?;
     assert_blocks_eq(
         vec![
-            "+---+--------+",
-            "| a | b      |",
-            "+---+--------+",
-            "| 1 | second |",
-            "+---+--------+",
+            "+---+-----------------+",
+            "| a | b               |",
+            "+---+-----------------+",
+            "| 1 | {\"second\" : 33} |",
+            "+---+-----------------+",
         ],
         &csv_input_format.deserialize_data(&mut csv_input_state)?,
     );

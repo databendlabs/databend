@@ -164,7 +164,7 @@ message TableMeta {
   map<string, string> options = 5;
 
   // Keys to sort rows in table.
-   optional string cluster_key = 9;
+   optional string default_cluster_key = 9;
 
   // The vector of cluster keys.
   repeated string cluster_keys = 4;
