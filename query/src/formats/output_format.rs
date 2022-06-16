@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use strum_macros::EnumIter;
 
-use super::output_format_ndjson::JsonEachRowOutputFormat;
+use super::output_format_json_each_row::JsonEachRowOutputFormat;
 use super::output_format_parquet::ParquetOutputFormat;
 use super::output_format_values::ValuesOutputFormat;
 use crate::formats::output_format_csv::CSVOutputFormat;
