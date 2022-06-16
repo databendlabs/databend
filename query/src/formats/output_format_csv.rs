@@ -115,7 +115,12 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
                     buf.push(fd);
                 }
                 if TSV {
-                    serializer.write_field(row_index, &mut buf, &self.format_settings);
+                    serializer.write_field_escaped(
+                        row_index,
+                        &mut buf,
+                        &self.format_settings,
+                        b'\'',
+                    );
                 } else {
                     serializer.write_field_quoted(row_index, &mut buf, &self.format_settings, b'\"')
                 };
