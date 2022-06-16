@@ -318,6 +318,7 @@ function usage {
         -d Install development tools
         -p Install profile
         -s Install codegen tools
+        -t Install tpch data set
         -v Verbose mode
 EOF
 }
@@ -342,6 +343,7 @@ Build tools (since -b or no option was provided):
   * protobuf-compiler
   * thrift-compiler
   * openjdk
+  * tpch dataset for benchmark
 EOF
 	fi
 
@@ -368,6 +370,12 @@ Moreover, ~/.profile will be updated (since -p was provided).
 EOF
 	fi
 
+  if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
+    cat <<EOF
+Tpch dataset (since -t was provided):
+EOF
+  fi
+
 	cat <<EOF
 If you'd prefer to install these dependencies yourself, please exit this script
 now with Ctrl-C.
@@ -380,9 +388,10 @@ INSTALL_BUILD_TOOLS=false
 INSTALL_DEV_TOOLS=false
 INSTALL_PROFILE=false
 INSTALL_CODEGEN=false
+INSTALL_TPCH_DATA=false
 
 # parse args
-while getopts "ybdpsv" arg; do
+while getopts "ybdpstv" arg; do
 	case "$arg" in
 	y)
 		AUTO_APPROVE="true"
@@ -402,6 +411,10 @@ while getopts "ybdpsv" arg; do
 	v)
 		VERBOSE="true"
 		;;
+  t)
+    INSTALL_TPCH_DATA="true"
+    ;;
+
 	*)
 		usage
 		exit 0
@@ -416,6 +429,7 @@ fi
 if [[ "$INSTALL_BUILD_TOOLS" == "false" ]] &&
 	[[ "$INSTALL_DEV_TOOLS" == "false" ]] &&
 	[[ "$INSTALL_PROFILE" == "false" ]] &&
+	[[ "$INSTALL_TPCH_DATA" == "false" ]] &&
 	[[ "$INSTALL_CODEGEN" == "false" ]]; then
 	INSTALL_BUILD_TOOLS="true"
 fi
@@ -546,6 +560,23 @@ if [[ "$INSTALL_CODEGEN" == "true" ]]; then
 		install_pkg python3 "$PACKAGE_MANAGER"
 	fi
 	"${PRE_COMMAND[@]}" python3 -m pip install --quiet coscmd PyYAML
+fi
+
+if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
+  # Construct a docker imagine to generate tpch-data
+  if [[ -z $2 ]]; then
+    docker build  -f scripts/setup/tpchdata.dockerfile -t databend:latest .
+  else
+    docker build  -f scripts/setup/tpchdata.dockerfile -t databend:latest --build-arg scale_factor=$2 .
+  fi
+  # Generate data into the ./data directory if it does not already exist
+  FILE=benchmark/tpch/data/customer.tbl
+  if test -f "$FILE"; then
+      echo "$FILE exists."
+  else
+    mkdir `pwd`/benchmark/tpch/data 2>/dev/null
+    docker run -v `pwd`/benchmark/tpch/data:/data --rm databend:latest
+  fi
 fi
 
 [[ "${AUTO_APPROVE}" == "false" ]] && cat <<EOF

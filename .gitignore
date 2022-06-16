@@ -59,4 +59,4 @@ __pycache__/
 *.zip
 
 # tpch data set
-tpch/data
+benchmark/tpch/data
