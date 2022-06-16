@@ -79,7 +79,6 @@ impl Plan {
             Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
 
             // Shows
-            Plan::ShowFunction(show_func) => Ok(format!("{:?}", show_func)),
             Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
             Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
             Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),

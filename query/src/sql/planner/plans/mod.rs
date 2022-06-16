@@ -68,7 +68,6 @@ pub enum Plan {
     },
 
     // System
-    ShowFunction(Box<ShowFunctionsPlan>),
     ShowMetrics,
     ShowProcessList,
     ShowSettings,

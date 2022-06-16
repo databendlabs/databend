@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::*;
@@ -93,9 +92,6 @@ impl InterpreterFactoryV2 {
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
             Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
-            Plan::ShowFunction(_) => Err(ErrorCode::UnImplement(
-                "SHOW FUNCTIONS should be rewritten to SELECT at binding phase",
-            )),
 
             // Databases
             Plan::ShowDatabases(show_databases) => {
