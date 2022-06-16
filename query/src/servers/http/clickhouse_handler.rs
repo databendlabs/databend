@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -35,6 +36,7 @@ use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
 use serde::Deserialize;
+use serde::Serialize;
 
 use crate::formats::output_format::OutputFormatType;
 use crate::interpreters::InterpreterFactory;
@@ -46,10 +48,12 @@ use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct StatementHandlerParams {
     query: Option<String>,
     compress: Option<u8>,
+    #[serde(flatten)]
+    settings: HashMap<String, String>,
 }
 
 impl StatementHandlerParams {
@@ -141,7 +145,13 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(InternalServerError)?;
 
+    session
+        .get_settings()
+        .set_batch_settings(&params.settings, false)
+        .map_err(BadRequest)?;
+
     let sql = params.query();
+
     let (plan, format) = PlanParser::parse_with_format(context.clone(), &sql)
         .await
         .map_err(BadRequest)?;
@@ -163,6 +173,11 @@ pub async fn clickhouse_handler_post(
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
+
+    session
+        .get_settings()
+        .set_batch_settings(&params.settings, false)
+        .map_err(BadRequest)?;
 
     let mut sql = params.query();
     sql.push_str(body.into_string().await?.as_str());
