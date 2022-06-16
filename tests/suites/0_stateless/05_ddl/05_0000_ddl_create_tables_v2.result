@@ -25,3 +25,22 @@ bool	BOOLEAN	NO	false
 arr	ARRAY	NO	[]	
 obj	OBJECT	NO	{}	
 variant	VARIANT	NO	null	
+====CREATE TRANSIENT TABLE====
+tiny	TINYINT	NO	0	
+tiny_unsigned	TINYINT UNSIGNED	NO	0	
+smallint	SMALLINT	NO	0	
+smallint_unsigned	SMALLINT UNSIGNED	NO	0	
+int	INT	NO	0	
+int_unsigned	INT UNSIGNED	NO	0	
+bigint	BIGINT	NO	0	
+bigint_unsigned	BIGINT UNSIGNED	NO	0	
+float	FLOAT	NO	0	
+double	DOUBLE	NO	0	
+date	DATE	NO	0	
+datetime	TIMESTAMP(6)	NO	0	
+ts	TIMESTAMP(6)	NO	0	
+str	VARCHAR	NO	3	
+bool	BOOLEAN	NO	false	
+arr	ARRAY	NO	[]	
+obj	OBJECT	NO	{}	
+variant	VARIANT	NO	null	

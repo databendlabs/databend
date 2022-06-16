@@ -48,6 +48,11 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 - __Blazing Performance__
 
   Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering blazing performance data analytics.
+  
+  
+- __Git-like Storage__
+
+  Databend stores data with snapshots. It's easy to query, clone, and restore historical data in tables.
 
 - __Support for Semi-Structured Data__
 

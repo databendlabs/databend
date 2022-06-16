@@ -225,6 +225,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -336,6 +337,7 @@ CreateTable(
             },
         ),
         comment: None,
+        transient: false,
     },
 )
 
@@ -382,6 +384,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -420,6 +423,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -721,6 +725,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -1152,6 +1157,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -1211,6 +1217,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -1259,6 +1266,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 

@@ -18,7 +18,7 @@ fmt:
 
 lint:
 	cargo fmt
-	cargo clippy --all -- -D warnings
+	cargo clippy --workspace --all-targets -- -D warnings
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt
 	# Python file formatter(make setup to install)
