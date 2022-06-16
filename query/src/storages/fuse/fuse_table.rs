@@ -218,6 +218,10 @@ impl FuseTable {
             }
         }
     }
+
+    pub fn transient(&self) -> bool {
+        self.table_info.meta.options.contains_key("TRANSIENT")
+    }
 }
 
 #[async_trait::async_trait]
