@@ -326,7 +326,7 @@ SELECT count() AS count, request_method FROM nginx.access_logs GROUP BY request_
 
 - __Top 10 Request IPs__
 ```sql
-SELECT count(*) AS Count, remote_addr AS client FROM nginx.access_logs GROUP BY client ORDER BY count DESC LIMIT 10;
+SELECT count(*) AS count, remote_addr AS client FROM nginx.access_logs GROUP BY client ORDER BY count DESC LIMIT 10;
 +----------+-----------+
 | count    | client    |
 +----------+-----------+
