@@ -361,7 +361,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
-    assert_eq!(table_info.meta.current_cluster_key, None);
+    assert_eq!(table_info.meta.default_cluster_key, None);
     assert_eq!(table_info.meta.default_cluster_key_id, None);
 
     let snapshot_loc = table
