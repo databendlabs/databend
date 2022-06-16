@@ -6,6 +6,15 @@ pub enum DataExchange {
     HashDataExchange(HashDataExchange),
 }
 
+impl DataExchange {
+    pub fn get_destinations(&self) -> Vec<String> {
+        match self {
+            DataExchange::Merge(exchange) => vec![exchange.destination_id.clone()],
+            DataExchange::HashDataExchange(exchange) => exchange.destination_ids.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HashDataExchange {
     pub destination_ids: Vec<String>,

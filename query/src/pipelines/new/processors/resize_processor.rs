@@ -162,7 +162,8 @@ impl Processor for ResizeProcessor {
                     return Ok(Event::Finished);
                 }
 
-                cur_output.push_data(cur_input.pull_data().unwrap());
+                let data_block = cur_input.pull_data().unwrap();
+                cur_output.push_data(data_block);
                 return Ok(Event::NeedConsume);
             }
 

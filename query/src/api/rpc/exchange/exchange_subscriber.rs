@@ -83,7 +83,10 @@ impl Processor for ViaExchangeSubscriber {
         if self.input.is_finished() {
             return match self.rx.try_recv() {
                 Err(TryRecvError::Empty) => Ok(Event::Async),
-                Err(TryRecvError::Closed) => Ok(Event::Finished),
+                Err(TryRecvError::Closed) => {
+                    self.output.finish();
+                    Ok(Event::Finished)
+                }
                 Ok(flight_data) => {
                     self.remote_flight_data = Some(flight_data?);
                     Ok(Event::Sync)

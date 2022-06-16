@@ -11,18 +11,20 @@ use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use crate::sessions::QueryContext;
 
 use common_exception::Result;
+use crate::api::rpc::exchange::exchange_channel::FragmentSender;
 use crate::api::rpc::packet::DataPacket;
 
 pub struct ExchangeMergeSink {
     ctx: Arc<QueryContext>,
     fragment_id: usize,
+    initialize: bool,
 
     input: Arc<InputPort>,
     input_data: Option<DataBlock>,
     output_data: Option<DataPacket>,
     serialize_params: SerializeParams,
     exchange_params: MergeExchangeParams,
-    peer_endpoint_publisher: Option<Sender<DataPacket>>,
+    peer_endpoint_publisher: Option<FragmentSender>,
 }
 
 impl ExchangeMergeSink {
@@ -37,6 +39,7 @@ impl ExchangeMergeSink {
             input_data: None,
             output_data: None,
             peer_endpoint_publisher: None,
+            initialize: false,
         })))
     }
 }
@@ -48,20 +51,28 @@ impl Processor for ExchangeMergeSink {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if let Some(output) = self.output_data.take() {
-            if self.peer_endpoint_publisher.is_none() {
-                let id = self.fragment_id;
-                let query_id = &self.exchange_params.query_id;
-                let destination_id = &self.exchange_params.destination_id;
-                let exchange_manager = self.ctx.get_exchange_manager();
-                self.peer_endpoint_publisher = Some(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
-            }
+        if !self.initialize {
+            self.initialize = true;
 
+            let id = self.fragment_id;
+            let query_id = &self.exchange_params.query_id;
+            let destination_id = &self.exchange_params.destination_id;
+            let exchange_manager = self.ctx.get_exchange_manager();
+            self.peer_endpoint_publisher = Some(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
+        }
+
+        if let Some(output) = self.output_data.take() {
             let mut need_async_send = false;
             if let Some(publisher) = &self.peer_endpoint_publisher {
                 match publisher.try_send(output) {
                     Ok(_) => { /* do nothing*/ }
-                    Err(TrySendError::Closed(_)) => { return Ok(Event::Finished); }
+                    Err(TrySendError::Closed(_)) => {
+                        if let Some(publisher) = self.peer_endpoint_publisher.take() {
+                            drop(publisher);
+                        }
+
+                        return Ok(Event::Finished);
+                    }
                     Err(TrySendError::Full(value)) => {
                         need_async_send = true;
                         self.output_data = Some(value);
@@ -79,6 +90,10 @@ impl Processor for ExchangeMergeSink {
         }
 
         if self.input.is_finished() {
+            if let Some(publisher) = self.peer_endpoint_publisher.take() {
+                drop(publisher);
+            }
+
             return Ok(Event::Finished);
         }
 
@@ -116,6 +131,7 @@ impl Processor for ExchangeMergeSink {
     async fn async_process(&mut self) -> Result<()> {
         if let Some(mut output_data) = self.output_data.take() {
             if let Some(sender) = &self.peer_endpoint_publisher {
+                println!("async send data");
                 if let Err(_) = sender.send(output_data).await {
                     return Err(ErrorCode::TokioError(
                         "Cannot send flight data to endpoint, because sender is closed."

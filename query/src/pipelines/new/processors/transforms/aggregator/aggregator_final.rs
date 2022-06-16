@@ -49,17 +49,17 @@ pub type KeysU16FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, 
 pub type KeysU32FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU32>;
 pub type KeysU64FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU64>;
 pub type KeysU128FinalAggregator<const HAS_AGG: bool> =
-    FinalAggregator<HAS_AGG, HashMethodKeysU128>;
+FinalAggregator<HAS_AGG, HashMethodKeysU128>;
 pub type KeysU256FinalAggregator<const HAS_AGG: bool> =
-    FinalAggregator<HAS_AGG, HashMethodKeysU256>;
+FinalAggregator<HAS_AGG, HashMethodKeysU256>;
 pub type KeysU512FinalAggregator<const HAS_AGG: bool> =
-    FinalAggregator<HAS_AGG, HashMethodKeysU512>;
+FinalAggregator<HAS_AGG, HashMethodKeysU512>;
 
 pub type SingleStringFinalAggregator<const HAS_AGG: bool> =
-    FinalAggregator<HAS_AGG, HashMethodSingleString>;
+FinalAggregator<HAS_AGG, HashMethodSingleString>;
 
 pub type SerializerFinalAggregator<const HAS_AGG: bool> =
-    FinalAggregator<HAS_AGG, HashMethodSerializer>;
+FinalAggregator<HAS_AGG, HashMethodSerializer>;
 
 pub struct FinalAggregator<
     const HAS_AGG: bool,
@@ -77,7 +77,7 @@ pub struct FinalAggregator<
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
-    FinalAggregator<HAS_AGG, Method>
+FinalAggregator<HAS_AGG, Method>
 {
     pub fn create(
         ctx: Arc<QueryContext>,
@@ -135,9 +135,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
-    for FinalAggregator<true, Method>
+for FinalAggregator<true, Method>
 {
-    const NAME: &'static str = "";
+    const NAME: &'static str = "FinalAggregatorWithAggregateFunction";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
@@ -236,7 +236,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
-    for FinalAggregator<false, Method>
+for FinalAggregator<false, Method>
 {
     const NAME: &'static str = "";
 
@@ -278,7 +278,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 }
 
 impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
-    FinalAggregator<FINAL, Method>
+FinalAggregator<FINAL, Method>
 {
     fn drop_states(&mut self) {
         if !self.states_dropped {
@@ -318,7 +318,7 @@ impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Sen
 }
 
 impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Drop
-    for FinalAggregator<FINAL, Method>
+for FinalAggregator<FINAL, Method>
 {
     fn drop(&mut self) {
         self.drop_states();

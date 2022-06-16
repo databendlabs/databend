@@ -7,6 +7,8 @@ pub struct PublisherPacket {
     pub query_id: String,
     pub executor: String,
     pub request_server: String,
+    pub target_nodes_info: HashMap<String, Arc<NodeInfo>>,
+    pub target_2_fragments: HashMap<String, Vec<usize>>,
     pub data_endpoints: HashMap<String, Arc<NodeInfo>>,
 }
 
@@ -16,10 +18,14 @@ impl PublisherPacket {
         executor_id: String,
         request_server: String,
         executors: HashMap<String, Arc<NodeInfo>>,
+        target_nodes_info: HashMap<String, Arc<NodeInfo>>,
+        target_2_fragments: HashMap<String, Vec<usize>>,
     ) -> PublisherPacket {
         PublisherPacket {
             query_id,
             request_server,
+            target_nodes_info,
+            target_2_fragments,
             executor: executor_id,
             data_endpoints: executors,
         }

@@ -121,7 +121,7 @@ impl PipelinePullingExecutor {
     }
 
     pub fn try_pull_data<F>(&mut self, f: F) -> Result<Option<DataBlock>>
-    where F: Fn() -> bool {
+        where F: Fn() -> bool {
         while !f() && !self.executor.is_finished() {
             return match self.receiver.recv_timeout(Duration::from_millis(100)) {
                 Ok(data_block) => data_block,
@@ -174,6 +174,7 @@ impl Sink for PullingSink {
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
+        println!("pulling sink receive {:?}", data_block);
         if let Err(cause) = self.sender.send(Ok(Some(data_block))) {
             return Err(ErrorCode::LogicalError(format!(
                 "Logical error, cannot push data into SyncSender, cause {:?}",

@@ -25,8 +25,17 @@ impl DataPacket {
 
         match data.app_metadata[0] {
             0x01 => DataPacket::flight_data_packet(data),
+            0x04 => DataPacket::fragment_end(data),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type."))
         }
+    }
+
+    fn fragment_end(data: FlightData) -> Result<DataPacket> {
+        if let Ok(slice) = data.data_body.try_into() {
+            return Ok(DataPacket::EndFragment(usize::from_be_bytes(slice)));
+        }
+
+        Err(ErrorCode::BadBytes("Cannot parse inf usize."))
     }
 
     fn flight_data_packet(data: FlightData) -> Result<DataPacket> {
@@ -88,11 +97,11 @@ impl Stream for DataPacketStream {
                         flight_descriptor: None,
                     }))
                 }
-                DataPacket::EndFragment(_) => {
+                DataPacket::EndFragment(fragment) => {
                     Poll::Ready(Some(FlightData {
-                        app_metadata: vec![0x03],
-                        data_body: vec![],
+                        app_metadata: vec![0x04],
                         data_header: vec![],
+                        data_body: fragment.to_be_bytes().to_vec(),
                         flight_descriptor: None,
                     }))
                 }

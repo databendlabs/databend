@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::atomic::Ordering::Acquire;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
@@ -26,14 +26,14 @@ use async_channel::Receiver;
 use futures::{Stream, StreamExt};
 use tonic::{Status, Streaming};
 use common_base::base::tokio::task::JoinHandle;
-use crate::api::rpc::exchange::exchange_params::{ShuffleExchangeParams, MergeExchangeParams, ExchangeParams};
+use crate::api::rpc::exchange::exchange_channel::{FragmentReceiver, FragmentSender};
+use crate::api::rpc::exchange::exchange_params::{ExchangeParams, MergeExchangeParams, ShuffleExchangeParams};
 use crate::api::rpc::exchange::exchange_publisher::ExchangePublisher;
 use crate::api::rpc::exchange::exchange_subscriber::ExchangeSubscriber;
 use crate::api::rpc::flight_actions::{PreparePipeline, PreparePublisher};
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::packet::{DataPacket, ExecutePacket};
-use crate::api::rpc::packet::DataPacket::ErrorCode;
 use crate::Config;
 use crate::pipelines::new::processors::port::InputPort;
 
@@ -188,7 +188,7 @@ impl DataExchangeManager {
         Ok(pipeline)
     }
 
-    pub fn get_fragment_sink(&self, query_id: &str, id: usize, endpoint: &str) -> Result<Sender<DataPacket>> {
+    pub fn get_fragment_sink(&self, query_id: &str, id: usize, endpoint: &str) -> Result<FragmentSender> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
         match queries_coordinator.get(query_id) {
@@ -213,8 +213,8 @@ struct QueryCoordinator {
     executor_id: String,
     runtime: Arc<Runtime>,
     finished: Arc<AtomicBool>,
-    publish_fragments: HashMap<String, Sender<DataPacket>>,
-    subscribe_fragments: HashMap<usize, Sender<Result<FlightData>>>,
+    publish_fragments: HashMap<(String, usize), FragmentSender>,
+    subscribe_fragments: HashMap<usize, FragmentReceiver>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
 }
 
@@ -284,41 +284,78 @@ impl QueryCoordinator {
         let async_runtime = self.ctx.get_storage_runtime();
         let complete_executor = PipelineCompleteExecutor::from_pipelines(async_runtime, pipelines)?;
 
-        let fragments_tx = self.publish_fragments.clone();
         Thread::named_spawn(Some(String::from("Executor")), move || {
             if let Err(cause) = complete_executor.execute() {
                 // TODO: send error code to request server.
                 println!("execute failure: {:?}", cause);
             }
 
-            // TODO: close pub channel
-            println!("pipeline execute successfully.");
-            for (_index, fragment_tx) in &fragments_tx {
-                fragment_tx.close();
-            }
+            println!("execute successfully.");
         });
 
         Ok(())
     }
 
     pub fn init_publisher(&mut self, config: Config, packet: &PublisherPacket) -> Result<()> {
-        for (executor, info) in &packet.data_endpoints {
-            // if executor == &packet.request_server {
-            //     // Send log, metric, trace, (progress?)
-            // }
-
-            // let ctx = self.ctx.clone();
-            // if executor != &packet.executor {
-            if self.publish_fragments.contains_key(executor) {
+        for (target, fragments) in &packet.target_2_fragments {
+            if self.publish_fragments
+                .iter()
+                .any(|((t, _), _)| t == target) {
                 return Err(ErrorCode::LogicalError("Publisher id already exists"));
             }
 
+            if target == &packet.executor {
+                continue;
+            }
+
             let config = config.clone();
-            let address = info.flight_address.to_string();
+            let target_node_info = &packet.target_nodes_info[target];
+            let address = target_node_info.flight_address.to_string();
             let tx = self.spawn_pub_worker(config, address)?;
-            self.publish_fragments.insert(executor.to_string(), tx);
-            // }
+
+            for fragment_id in fragments {
+                let (f_tx, mut f_rx) = async_channel::bounded(1);
+
+                let c_tx = tx.clone();
+                let fragment_id_clone = *fragment_id;
+                println!("fragment: {}, source: {}, target: {}", fragment_id, packet.executor, target);
+                self.runtime.spawn(async move {
+                    while let Ok(packet) = f_rx.recv().await {
+                        if let Err(cause) = c_tx.send(packet).await {
+                            // TODO: channel closed.
+                        }
+                    }
+
+                    println!("End fragment {}", fragment_id_clone);
+                    if let Err(cause) = c_tx.send(DataPacket::EndFragment(fragment_id_clone)).await {
+                        // TODO: channel closed.
+                    }
+                });
+
+                self.publish_fragments.insert(
+                    (target.clone(), *fragment_id),
+                    FragmentSender::create_unrecorded(f_tx),
+                );
+            }
         }
+
+        // for (executor, info) in &packet.data_endpoints {
+        //     // if executor == &packet.request_server {
+        //     //     // Send log, metric, trace, (progress?)
+        //     // }
+        //
+        //     // let ctx = self.ctx.clone();
+        //     // if executor != &packet.executor {
+        //     if self.publish_fragments.contains_key(executor) {
+        //         return Err(ErrorCode::LogicalError("Publisher id already exists"));
+        //     }
+        //
+        //     let config = config.clone();
+        //     let address = info.flight_address.to_string();
+        //     let tx = self.spawn_pub_worker(config, address)?;
+        //     self.publish_fragments.insert(executor.to_string(), tx);
+        //     // }
+        // }
 
         Ok(())
     }
@@ -326,59 +363,59 @@ impl QueryCoordinator {
     pub fn receive_data(&mut self, mut stream: Streaming<FlightData>) -> JoinHandle<Result<()>> {
         let ctx = self.ctx.clone();
         let finished = self.finished.clone();
-        let subscribe_fragments = self.subscribe_fragments.clone();
+        let mut receiver = ExchangeReceiver::create(stream, &self.subscribe_fragments);
 
         self.runtime.spawn(async move {
+            receiver.listen().await
             // TODO: need select with timeout for stream.next()
-            while let Some(flight_data) = stream.next().await {
-                if finished.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                match flight_data {
-                    Ok(flight_data) => match DataPacket::from_flight(flight_data)
-                    {
-                        Err(error_code) => {
-                            println!("cannot parse flight data, {:?}", error_code);
-                        }
-                        Ok(data_packet) => match data_packet {
-                            DataPacket::Data(fragment_id, data) => {
-                                println!("receive fragment: {}", fragment_id);
-                                if let Err(e) = subscribe_fragments[&fragment_id].send(Ok(data)).await {
-                                    println!("Send fragment data failure");
-                                }
-                            }
-                            DataPacket::Progress(values) => {
-                                ctx.get_scan_progress().incr(&values);
-                            }
-                            DataPacket::ErrorCode(error_code) => {
-                                println!("receive data error");
-                                for (fragment_id, fragment_tx) in &subscribe_fragments {
-                                    fragment_tx.send(Err(error_code.clone())).await;
-                                }
-                            }
-                            DataPacket::EndFragment(fragment) => {
-                                // TODO: 先销毁, 然后在判断是否close
-                                // if subscribe_fragments[&fragment].sender_count() == 2 {
-                                //     // TODO:
-                                //     // subscribe_fragments[&fragment]
-                                // }
-                            }
-                        }
-                    }
-                    Err(status) => {
-                        // TODO: put error into request server.
-                        // Network error, shutdown execute.
-                        println!("Receive flight status handle_do_put");
-                    }
-                }
-            }
-
-            for (_index, fragment_tx) in &subscribe_fragments {
-                fragment_tx.close();
-            }
-
-            Ok(())
+            // while let Some(flight_data) = stream.next().await {
+            //     if finished.load(Ordering::Relaxed) {
+            //         break;
+            //     }
+            //
+            //     match flight_data {
+            //         Ok(flight_data) => match DataPacket::from_flight(flight_data) {
+            //             Err(error_code) => {
+            //                 println!("cannot parse flight data, {:?}", error_code);
+            //             }
+            //             Ok(data_packet) => match data_packet {
+            //                 DataPacket::Data(fragment_id, data) => {
+            //                     println!("receive fragment: {}", fragment_id);
+            //                     if let Err(e) = subscribe_fragments[&fragment_id].send(Ok(data)).await {
+            //                         println!("Send fragment data failure");
+            //                     }
+            //                 }
+            //                 DataPacket::Progress(values) => {
+            //                     ctx.get_scan_progress().incr(&values);
+            //                 }
+            //                 DataPacket::ErrorCode(error_code) => {
+            //                     println!("receive data error");
+            //                     for (fragment_id, fragment_tx) in &subscribe_fragments {
+            //                         fragment_tx.send(Err(error_code.clone())).await;
+            //                     }
+            //                 }
+            //                 DataPacket::EndFragment(fragment) => {
+            //                     println!("receive end fragment {}", fragment);
+            //                     // if subscribe_fragments[&fragment].sender_count() == 2 {
+            //                     //     // TODO:
+            //                     //     // subscribe_fragments[&fragment]
+            //                     // }
+            //                 }
+            //             }
+            //         }
+            //         Err(status) => {
+            //             // TODO: put error into request server.
+            //             // Network error, shutdown execute.
+            //             println!("Receive flight status handle_do_put");
+            //         }
+            //     }
+            // }
+            //
+            // for (_index, fragment_tx) in &subscribe_fragments {
+            //     fragment_tx.close();
+            // }
+            //
+            // Ok(())
         })
     }
 
@@ -446,9 +483,8 @@ impl QueryCoordinator {
         Ok(tx)
     }
 
-    pub fn get_fragment_sink(&self, id: usize, endpoint: &str) -> Result<Sender<DataPacket>> {
-        // self.ctx.get_exchange_manager();
-        match self.publish_fragments.get(endpoint) {
+    pub fn get_fragment_sink(&self, id: usize, endpoint: &str) -> Result<FragmentSender> {
+        match self.publish_fragments.get(&(endpoint.to_string(), id)) {
             None => Err(ErrorCode::LogicalError(format!("Not found node {} in cluster", endpoint))),
             Some(publisher) => Ok(publisher.clone())
         }
@@ -458,6 +494,7 @@ impl QueryCoordinator {
         let (tx, rx) = async_channel::bounded(1);
 
         // Register subscriber for data exchange.
+        let tx = FragmentReceiver::create_unrecorded(tx);
         self.subscribe_fragments.insert(fragment_id.clone(), tx);
 
         // Merge pipelines if exist locally pipeline
@@ -546,14 +583,32 @@ impl FragmentCoordinator {
 struct ExchangeReceiver {
     // finished: bool,
     stream: Streaming<FlightData>,
-    fragments_receiver: Vec<Option<Sender<Result<FlightData>>>>,
+    fragments_receiver: Vec<Option<FragmentReceiver>>,
 }
 
 impl ExchangeReceiver {
+    pub fn create(
+        stream: Streaming<FlightData>,
+        fragments_receiver: &HashMap<usize, FragmentReceiver>,
+    ) -> ExchangeReceiver {
+        let max_fragments_id = fragments_receiver.keys().max().cloned().unwrap_or(0);
+        let mut temp = vec![None; max_fragments_id + 1];
+
+        for (fragment_id, receiver) in fragments_receiver {
+            temp[*fragment_id] = Some(receiver.clone());
+        }
+
+        ExchangeReceiver {
+            stream,
+            fragments_receiver: temp,
+        }
+    }
+
     async fn process_data(&mut self, flight_data: FlightData) -> Result<()> {
         match DataPacket::from_flight(flight_data)? {
             DataPacket::Data(fragment_id, data) => {
                 if let Some(tx) = &self.fragments_receiver[fragment_id] {
+                    // println!("Fragment channel closed.");
                     if let Err(cause) = tx.send(Ok(data)).await {
                         println!("Fragment channel closed.");
                         return Ok(());
@@ -586,7 +641,7 @@ impl ExchangeReceiver {
             match flight_data {
                 Err(status) => Err(ErrorCode::from(status)),
                 Ok(flight_data) => self.process_data(flight_data).await,
-            }
+            }?;
         }
 
         // for (_index, fragment_tx) in &subscribe_fragments {
@@ -596,4 +651,3 @@ impl ExchangeReceiver {
         Ok(())
     }
 }
-

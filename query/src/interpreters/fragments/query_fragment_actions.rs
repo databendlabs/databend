@@ -1,5 +1,5 @@
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use common_base::base::GlobalUniqName;
@@ -134,13 +134,56 @@ impl QueryFragmentsActions {
         let nodes_info = Self::nodes_info(&ctx);
         let mut publisher_packets = Vec::with_capacity(nodes_info.len());
 
+        // map(source, map(target, vec(fragment_id)))
+        let mut connections_info = HashMap::new();
+        for fragment_actions in &self.fragments_actions {
+            if let Some(exchange) = &fragment_actions.data_exchange {
+                let fragment_id = fragment_actions.fragment_id;
+                let destinations = exchange.get_destinations();
+
+                for fragment_action in &fragment_actions.fragment_actions {
+                    let source = fragment_action.executor.to_string();
+
+                    for destination in &destinations {
+                        let target = destination.clone();
+                        match connections_info.entry(source.clone()) {
+                            Entry::Vacant(v) => {
+                                let target_2_fragments = v.insert(HashMap::new());
+                                target_2_fragments.insert(target, vec![fragment_id]);
+                            }
+                            Entry::Occupied(mut v) => match v.get_mut().entry(target) {
+                                Entry::Vacant(v) => {
+                                    v.insert(vec![fragment_id]);
+                                }
+                                Entry::Occupied(mut v) => {
+                                    v.get_mut().push(fragment_id);
+                                }
+                            },
+                        };
+                    }
+                }
+            }
+        }
+
         let cluster = ctx.get_cluster();
-        for (node_id, node_info) in &nodes_info {
+        for (node_id, _node_info) in &nodes_info {
+            let mut target_nodes_info = HashMap::new();
+            let mut target_2_fragments = HashMap::new();
+
+            for target_connections_info in connections_info.get(node_id) {
+                for (target, fragments) in target_connections_info {
+                    target_2_fragments.insert(target.clone(), fragments.clone());
+                    target_nodes_info.insert(target.clone(), nodes_info[target].clone());
+                }
+            }
+
             publisher_packets.push(PublisherPacket::create(
                 ctx.get_id(),
                 node_id.to_owned(),
                 cluster.local_id(),
                 nodes_info.clone(),
+                target_nodes_info,
+                target_2_fragments,
             ));
         }
 

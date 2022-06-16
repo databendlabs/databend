@@ -12,6 +12,7 @@ use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use crate::sessions::QueryContext;
 use common_exception::Result;
+use crate::api::rpc::exchange::exchange_channel::FragmentSender;
 use crate::api::rpc::packet::DataPacket;
 
 struct OutputData {
@@ -26,11 +27,12 @@ pub struct ExchangePublisherSink<const HAS_OUTPUT: bool> {
     serialize_params: SerializeParams,
     shuffle_exchange_params: ShuffleExchangeParams,
 
+    initialize: bool,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     input_data: Option<DataBlock>,
     output_data: Option<OutputData>,
-    peer_endpoint_publisher: Vec<Sender<DataPacket>>,
+    peer_endpoint_publisher: Vec<FragmentSender>,
 }
 
 impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
@@ -49,22 +51,28 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
             fragment_id,
             serialize_params,
             shuffle_exchange_params,
+            initialize: false,
             input_data: None,
             output_data: None,
             peer_endpoint_publisher: vec![],
         })))
     }
 
-    fn get_peer_endpoint_publisher(&self) -> Result<Vec<Sender<DataPacket>>> {
+    fn get_peer_endpoint_publisher(&self) -> Result<Vec<FragmentSender>> {
         let destination_ids = &self.shuffle_exchange_params.destination_ids;
         let mut res = Vec::with_capacity(destination_ids.len());
         let exchange_manager = self.ctx.get_exchange_manager();
 
         for destination_id in destination_ids {
-            let id = self.fragment_id;
-            let query_id = &self.shuffle_exchange_params.query_id;
-            // self.shuffle_exchange_params.fragment_id
-            res.push(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
+            if destination_id != &self.shuffle_exchange_params.executor_id {
+                let id = self.fragment_id;
+                let query_id = &self.shuffle_exchange_params.query_id;
+                res.push(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
+            } else if !HAS_OUTPUT {
+                return Err(ErrorCode::LogicalError(
+                    "Has local output, but not found output port. It's a bug."
+                ));
+            }
         }
 
         Ok(res)
@@ -78,6 +86,11 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if !self.initialize {
+            self.initialize = true;
+            self.peer_endpoint_publisher = self.get_peer_endpoint_publisher()?;
+        }
+
         if HAS_OUTPUT {
             if self.output.is_finished() {
                 self.input.finish();
@@ -94,10 +107,6 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
 
 
         if let Some(mut output_data) = self.output_data.take() {
-            if self.peer_endpoint_publisher.is_empty() {
-                self.peer_endpoint_publisher = self.get_peer_endpoint_publisher()?;
-            }
-
             let mut pushed_data = false;
             if HAS_OUTPUT {
                 // If has local data block, the push block to the output port
@@ -115,6 +124,10 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
                     match publisher.try_send(data) {
                         Ok(_) => { /* do nothing*/ }
                         Err(TrySendError::Closed(_)) => {
+                            if HAS_OUTPUT {
+                                self.output.finish();
+                            }
+
                             self.peer_endpoint_publisher.clear();
                             return Ok(Event::Finished);
                         }
@@ -141,7 +154,10 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
         }
 
         if self.input.is_finished() {
-            self.output.finish();
+            if HAS_OUTPUT {
+                self.output.finish();
+            }
+
             self.peer_endpoint_publisher.clear();
             return Ok(Event::Finished);
         }
@@ -195,7 +211,6 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
         if let Some(mut output_data) = self.output_data.take() {
             for (index, publisher) in self.peer_endpoint_publisher.iter().enumerate() {
                 if let Some(flight_data) = output_data.serialized_blocks[index].take() {
-                    println!("Send flight data");
                     if let Err(_) = publisher.send(flight_data).await {
                         return Err(ErrorCode::TokioError(
                             "Cannot send flight data to endpoint, because sender is closed."
