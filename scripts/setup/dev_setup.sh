@@ -10,7 +10,7 @@ cd "$SCRIPT_PATH/../.." || exit
 
 function add_to_profile {
 	eval "$1"
-	FOUND=$(grep -c "$1" <"${HOME}/.profile")
+	FOUND=$(grep -c "$1" "${HOME}/.profile" || true)
 	if [ "$FOUND" == "0" ]; then
 		echo "$1" >>"${HOME}"/.profile
 	fi
