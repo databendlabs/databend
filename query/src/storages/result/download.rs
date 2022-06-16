@@ -49,15 +49,15 @@ impl ResultTable {
             })
             .await?;
         let fmt_setting = ctx.get_format_settings()?;
-        let mut output_format = fmt.create_format(self.schema());
+        let mut output_format = fmt.create_format(self.schema(), fmt_setting);
 
-        let prefix = Ok(output_format.serialize_prefix(&fmt_setting)?);
+        let prefix = Ok(output_format.serialize_prefix()?);
         let stream = stream! {
             yield prefix;
             while let Some(block) = block_stream.next().await {
                 match block{
                     Ok(block) => {
-                        yield output_format.serialize_block(&block, &fmt_setting);
+                        yield output_format.serialize_block(&block);
                     },
                     Err(err) => yield(Err(err)),
                 };

@@ -101,8 +101,8 @@ async fn execute(
         fmt = OutputFormatType::from_str(format.as_str())?;
     }
 
-    let mut output_format = fmt.create_format(plan.schema());
-    let prefix = Ok(output_format.serialize_prefix(&format_setting)?);
+    let mut output_format = fmt.create_format(plan.schema(), format_setting);
+    let prefix = Ok(output_format.serialize_prefix()?);
 
     let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
         if compress {
@@ -119,7 +119,7 @@ async fn execute(
         while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
-                    yield compress_fn(output_format.serialize_block(&block, &format_setting));
+                    yield compress_fn(output_format.serialize_block(&block));
                 },
                 Err(err) => yield(Err(err)),
             };

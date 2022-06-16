@@ -33,15 +33,11 @@ use crate::formats::output_format_csv::TSVWithNamesAndTypesOutputFormat;
 use crate::formats::output_format_csv::TSVWithNamesOutputFormat;
 use crate::formats::FormatFactory;
 pub trait OutputFormat: Send {
-    fn serialize_block(
-        &mut self,
-        _data_block: &DataBlock,
-        _format_setting: &FormatSettings,
-    ) -> Result<Vec<u8>> {
+    fn serialize_block(&mut self, _data_block: &DataBlock) -> Result<Vec<u8>> {
         unimplemented!()
     }
 
-    fn serialize_prefix(&self, _format: &FormatSettings) -> Result<Vec<u8>> {
+    fn serialize_prefix(&self) -> Result<Vec<u8>> {
         Ok(vec![])
     }
 
@@ -109,21 +105,35 @@ impl OutputFormatType {
 }
 
 impl OutputFormatType {
-    pub fn create_format(&self, schema: DataSchemaRef) -> Box<dyn OutputFormat> {
+    pub fn create_format(
+        &self,
+        schema: DataSchemaRef,
+        format_setting: FormatSettings,
+    ) -> Box<dyn OutputFormat> {
         match self {
-            OutputFormatType::TSV => Box::new(TSVOutputFormat::create(schema)),
-            OutputFormatType::TSVWithNames => Box::new(TSVWithNamesOutputFormat::create(schema)),
-            OutputFormatType::TSVWithNamesAndTypes => {
-                Box::new(TSVWithNamesAndTypesOutputFormat::create(schema))
+            OutputFormatType::TSV => Box::new(TSVOutputFormat::create(schema, format_setting)),
+            OutputFormatType::TSVWithNames => {
+                Box::new(TSVWithNamesOutputFormat::create(schema, format_setting))
             }
-            OutputFormatType::CSV => Box::new(CSVOutputFormat::create(schema)),
-            OutputFormatType::CSVWithNames => Box::new(CSVWithNamesOutputFormat::create(schema)),
-            OutputFormatType::CSVWithNamesAndTypes => {
-                Box::new(CSVWithNamesAndTypesOutputFormat::create(schema))
+            OutputFormatType::TSVWithNamesAndTypes => Box::new(
+                TSVWithNamesAndTypesOutputFormat::create(schema, format_setting),
+            ),
+            OutputFormatType::CSV => Box::new(CSVOutputFormat::create(schema, format_setting)),
+            OutputFormatType::CSVWithNames => {
+                Box::new(CSVWithNamesOutputFormat::create(schema, format_setting))
             }
-            OutputFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema)),
-            OutputFormatType::JsonEachRow => Box::new(JsonEachRowOutputFormat::create(schema)),
-            OutputFormatType::Values => Box::new(ValuesOutputFormat::create(schema)),
+            OutputFormatType::CSVWithNamesAndTypes => Box::new(
+                CSVWithNamesAndTypesOutputFormat::create(schema, format_setting),
+            ),
+            OutputFormatType::Parquet => {
+                Box::new(ParquetOutputFormat::create(schema, format_setting))
+            }
+            OutputFormatType::JsonEachRow => {
+                Box::new(JsonEachRowOutputFormat::create(schema, format_setting))
+            }
+            OutputFormatType::Values => {
+                Box::new(ValuesOutputFormat::create(schema, format_setting))
+            }
         }
     }
 }

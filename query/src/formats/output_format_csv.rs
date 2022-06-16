@@ -34,13 +34,17 @@ pub type CSVWithNamesAndTypesOutputFormat = TCSVOutputFormat<false, true, true>;
 #[derive(Default)]
 pub struct TCSVOutputFormat<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> {
     schema: DataSchemaRef,
+    format_settings: FormatSettings,
 }
 
 impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
     TCSVOutputFormat<TSV, WITH_NAMES, WITH_TYPES>
 {
-    pub fn create(schema: DataSchemaRef) -> Self {
-        Self { schema }
+    pub fn create(schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
+        Self {
+            schema,
+            format_settings,
+        }
     }
 
     fn serialize_strings(&self, values: Vec<String>, format: &FormatSettings) -> Vec<u8> {
@@ -77,8 +81,9 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
 impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
     for TCSVOutputFormat<TSV, WITH_NAMES, WITH_TYPES>
 {
-    fn serialize_block(&mut self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.column(0).len();
+        let format_settings = &self.format_settings;
 
         let mut buf = Vec::with_capacity(block.memory_size());
         let serializers = block.get_serializers()?;
@@ -86,13 +91,13 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
         let fd = if TSV {
             FIELD_DELIMITER
         } else {
-            format.field_delimiter[0]
+            format_settings.field_delimiter[0]
         };
 
         let rd = if TSV {
             ROW_DELIMITER
         } else {
-            format.record_delimiter[0]
+            format_settings.record_delimiter[0]
         };
 
         for row_index in 0..rows_size {
@@ -101,9 +106,9 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
                     buf.push(fd);
                 }
                 if TSV {
-                    serializer.write_field(row_index, &mut buf, format);
+                    serializer.write_field(row_index, &mut buf, &self.format_settings);
                 } else {
-                    serializer.write_field_quoted(row_index, &mut buf, format, b'\"')
+                    serializer.write_field_quoted(row_index, &mut buf, &self.format_settings, b'\"')
                 };
             }
             buf.push(rd)
@@ -111,7 +116,9 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
         Ok(buf)
     }
 
-    fn serialize_prefix(&self, format: &FormatSettings) -> Result<Vec<u8>> {
+    fn serialize_prefix(&self) -> Result<Vec<u8>> {
+        let format_settings = &self.format_settings;
+
         let mut buf = vec![];
         if WITH_NAMES {
             let names = self
@@ -120,7 +127,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
                 .iter()
                 .map(|f| f.name().to_string())
                 .collect::<Vec<_>>();
-            buf.extend_from_slice(&self.serialize_strings(names, format));
+            buf.extend_from_slice(&self.serialize_strings(names, format_settings));
             if WITH_TYPES {
                 let types = self
                     .schema
@@ -128,7 +135,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
                     .iter()
                     .map(|f| f.data_type().name())
                     .collect::<Vec<_>>();
-                buf.extend_from_slice(&self.serialize_strings(types, format));
+                buf.extend_from_slice(&self.serialize_strings(types, format_settings));
             }
         }
         Ok(buf)
