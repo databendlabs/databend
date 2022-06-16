@@ -120,12 +120,8 @@ impl InterpreterFactory {
             PlanNode::Show(ShowPlan::ShowSettings(_)) => {
                 ShowSettingsInterpreter::try_create(ctx_clone)
             }
-            PlanNode::Show(ShowPlan::ShowUsers(v)) => {
-                ShowUsersInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::Show(ShowPlan::ShowRoles(v)) => {
-                ShowRolesInterpreter::try_create(ctx_clone, v)
-            }
+            PlanNode::Show(ShowPlan::ShowUsers(_)) => ShowUsersInterpreter::try_create(ctx_clone),
+            PlanNode::Show(ShowPlan::ShowRoles(_)) => ShowRolesInterpreter::try_create(ctx_clone),
             PlanNode::Show(ShowPlan::ShowStages) => ShowStagesInterpreter::try_create(ctx_clone),
 
             // Database related transforms.

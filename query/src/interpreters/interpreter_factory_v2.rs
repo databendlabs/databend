@@ -60,7 +60,13 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowSettings(_)
                 | DfStatement::CreateDatabase(_)
                 | DfStatement::DropDatabase(_)
+                | DfStatement::ShowUsers(_)
                 | DfStatement::CreateUser(_)
+                | DfStatement::DropUser(_)
+                | DfStatement::AlterUser(_)
+                | DfStatement::ShowRoles(_)
+                | DfStatement::CreateRole(_)
+                | DfStatement::DropRole(_)
                 | DfStatement::AlterDatabase(_)
         )
     }
@@ -150,6 +156,7 @@ impl InterpreterFactoryV2 {
             Plan::DropView(drop_view) => DropViewInterpreter::try_create(ctx, *drop_view.clone()),
 
             // Users
+            Plan::ShowUsers => ShowUsersInterpreter::try_create(ctx),
             Plan::CreateUser(create_user) => {
                 CreateUserInterpreter::try_create(ctx, *create_user.clone())
             }
@@ -159,6 +166,7 @@ impl InterpreterFactoryV2 {
             }
 
             // Roles
+            Plan::ShowRoles => ShowRolesInterpreter::try_create(ctx),
             Plan::CreateRole(create_role) => {
                 CreateRoleInterpreter::try_create(ctx, *create_role.clone())
             }

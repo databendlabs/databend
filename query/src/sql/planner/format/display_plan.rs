@@ -64,11 +64,13 @@ impl Plan {
             Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
 
             // Users
+            Plan::ShowUsers => Ok("SHOW USERS".to_string()),
             Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
             Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
 
             // Roles
+            Plan::ShowRoles => Ok("SHOW ROLES".to_string()),
             Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
             Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
 

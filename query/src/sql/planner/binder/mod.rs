@@ -141,6 +141,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
+            Statement::ShowUsers => Plan::ShowUsers,
             Statement::AlterUser {
                 user,
                 auth_option,
@@ -151,6 +152,7 @@ impl<'a> Binder {
             }
 
             // Roles
+            Statement::ShowRoles => Plan::ShowRoles,
             Statement::CreateRole {
                 if_not_exists,
                 role_name,

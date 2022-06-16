@@ -97,6 +97,7 @@ pub enum Statement<'a> {
     DropView(DropViewStmt<'a>),
 
     // User
+    ShowUsers,
     CreateUser(CreateUserStmt),
     AlterUser {
         // None means current user
@@ -109,6 +110,7 @@ pub enum Statement<'a> {
         if_exists: bool,
         user: UserIdentity,
     },
+    ShowRoles,
     CreateRole {
         if_not_exists: bool,
         role_name: String,
@@ -923,6 +925,12 @@ impl<'a> Display for Statement<'a> {
                     write!(f, "IF EXISTS ")?;
                 }
                 write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
+            }
+            Statement::ShowUsers => {
+                write!(f, "SHOW USERS")?;
+            }
+            Statement::ShowRoles => {
+                write!(f, "SHOW ROLES")?;
             }
             Statement::CreateUser(CreateUserStmt {
                 if_not_exists,
