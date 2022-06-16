@@ -61,7 +61,7 @@ impl OutputFormat for JsonEachRowOutputFormat {
                 buf.push(b'"');
 
                 buf.push(b':');
-                serializer.write_field_quoted(row_index, &mut buf, &self.format_settings, b'\"');
+                serializer.write_field_json(row_index, &mut buf, &self.format_settings);
             }
             buf.extend_from_slice("}\n".as_bytes());
         }
