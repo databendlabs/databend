@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_cache::Cache;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use opendal::Operator;
 
@@ -34,6 +35,12 @@ impl FuseTable {
         let snapshot_opt = match r {
             Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
                 // concurrent gc: someone else has already collected this snapshot, ignore it
+                warn!(
+                    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
+                    self.snapshot_loc(),
+                    self.table_info.desc,
+                    self.table_info.ident,
+                );
                 return Ok(());
             }
             Err(e) => return Err(e),
@@ -138,11 +145,17 @@ impl FuseTable {
         let mut result = HashSet::new();
         let reader = MetaReaders::segment_info_reader(ctx);
         for l in segments {
-            let (x, ver) = l;
-            let r = reader.read(x, None, *ver).await;
+            let (segment_location, ver) = l;
+            let r = reader.read(segment_location, None, *ver).await;
             let segment_info = match r {
                 Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
                     // concurrent gc: someone else has already collected this segment, ignore it
+                    warn!(
+                        "concurrent gc: segment of location {} already collected. table: {}, ident {}",
+                        segment_location,
+                        self.table_info.desc,
+                        self.table_info.ident,
+                    );
                     continue;
                 }
                 Err(e) => return Err(e),
@@ -184,8 +197,19 @@ impl FuseTable {
         data_accessor: &Operator,
         location: impl AsRef<str>,
     ) -> Result<()> {
-        match self.do_remove_location(data_accessor, location).await {
-            Err(e) if e.code() == ErrorCode::storage_not_found_code() => Ok(()),
+        match self
+            .do_remove_location(data_accessor, location.as_ref())
+            .await
+        {
+            Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
+                warn!(
+                    "concurrent gc: block of location {} already collected. table: {}, ident {}",
+                    location.as_ref(),
+                    self.table_info.desc,
+                    self.table_info.ident,
+                );
+                Ok(())
+            }
             Err(e) => Err(e),
             Ok(_) => Ok(()),
         }
@@ -193,11 +217,7 @@ impl FuseTable {
 
     // make type checker happy
     #[inline]
-    async fn do_remove_location(
-        &self,
-        data_accessor: &Operator,
-        location: impl AsRef<str>,
-    ) -> Result<()> {
+    async fn do_remove_location(&self, data_accessor: &Operator, location: &str) -> Result<()> {
         Ok(data_accessor.object(location.as_ref()).delete().await?)
     }
 
