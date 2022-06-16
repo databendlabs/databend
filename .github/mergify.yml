@@ -1,11 +1,5 @@
 queue_rules:
   - name: shared_queue
-    # Enable speculative_checks and batch size so that we can rollup
-    # enqueued PRs at the same time instead of one by one. 
-    #
-    # Reference: https://docs.mergify.com/actions/queue/#id4
-    speculative_checks: 2
-    batch_size: 5
     conditions:
       - "#approved-reviews-by>=2"
 
