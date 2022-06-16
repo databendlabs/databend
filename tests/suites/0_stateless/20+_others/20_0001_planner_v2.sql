@@ -139,6 +139,8 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number d
 SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s;
 create table t3(a int, b int);
 insert into t3 values(1,2),(2,3);
+select * from t3 order by 2 desc;
+select a from t3 order by 1 desc;
 drop table t;
 drop table t1;
 drop table t2;

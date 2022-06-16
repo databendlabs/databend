@@ -409,7 +409,7 @@ impl<'a> Binder {
         let index = index as usize - 1;
         if index >= select_list.items.len() {
             return Err(ErrorCode::SemanticError(expr.span().display_error(
-                format!("GROUP BY position {} is not in select list", index),
+                format!("GROUP BY position {} is not in select list", index + 1),
             )));
         }
         let item = select_list
