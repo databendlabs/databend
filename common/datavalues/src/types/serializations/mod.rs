@@ -61,6 +61,7 @@ pub trait TypeSerializer<'a>: Send + Sync {
     ) {
         self.write_field(row_index, buf, format);
     }
+
     fn write_field_quoted(
         &self,
         row_index: usize,
@@ -71,7 +72,7 @@ pub trait TypeSerializer<'a>: Send + Sync {
         let need_quote = self.need_quote();
         if need_quote {
             buf.push(quote);
-            self.write_field_escaped(row_index, buf, format);
+            self.write_field_escaped(row_index, buf, format, quote);
             buf.push(quote);
         } else {
             self.write_field(row_index, buf, format);
