@@ -21,7 +21,7 @@ use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
 
 use crate::prelude::*;
-use crate::serializations::escape::write_escaped_string;
+use crate::types::serializations::helper::escape::write_escaped_string;
 
 #[derive(Clone)]
 pub struct StringSerializer<'a> {
