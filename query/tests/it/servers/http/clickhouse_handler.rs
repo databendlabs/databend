@@ -275,7 +275,7 @@ async fn test_settings() -> PoemResult<()> {
         let (status, _body) = server
             .get_response(
                 QueryBuilder::new(sql)
-                    .extras(HashMap::from([("a".to_string(), "1".to_string())]))
+                    .settings(HashMap::from([("a".to_string(), "1".to_string())]))
                     .build(),
             )
             .await;
@@ -288,7 +288,7 @@ async fn test_settings() -> PoemResult<()> {
         let (status, body) = server
             .get_response(
                 QueryBuilder::new(sql)
-                    .extras(HashMap::from([(
+                    .settings(HashMap::from([(
                         "max_block_size".to_string(),
                         "1000".to_string(),
                     )]))
@@ -304,7 +304,7 @@ async fn test_settings() -> PoemResult<()> {
         let (status, body) = server
             .get_response(
                 QueryBuilder::new(sql)
-                    .extras(HashMap::from([
+                    .settings(HashMap::from([
                         ("max_block_size".to_string(), "1000".to_string()),
                         ("enable_async_insert".to_string(), "1".to_string()),
                     ]))
@@ -352,7 +352,7 @@ async fn test_multi_partition() -> PoemResult<()> {
 struct QueryBuilder {
     sql: String,
     body: Option<Body>,
-    extras: HashMap<String, String>,
+    settings: HashMap<String, String>,
     compress: bool,
 }
 
@@ -361,7 +361,7 @@ impl QueryBuilder {
         QueryBuilder {
             sql: sql.to_string(),
             body: None,
-            extras: HashMap::new(),
+            settings: HashMap::new(),
             compress: false,
         }
     }
@@ -377,8 +377,8 @@ impl QueryBuilder {
         Self { compress, ..self }
     }
 
-    pub fn extras(self, extras: HashMap<String, String>) -> Self {
-        Self { extras, ..self }
+    pub fn settings(self, settings: HashMap<String, String>) -> Self {
+        Self { settings, ..self }
     }
 
     pub fn build(self) -> Request {
@@ -387,7 +387,7 @@ impl QueryBuilder {
         if self.compress {
             uri.append_pair("compress", "1");
         }
-        for (k, v) in self.extras.iter() {
+        for (k, v) in self.settings.iter() {
             uri.append_pair(k, v);
         }
         let uri = uri.finish();
