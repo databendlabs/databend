@@ -174,7 +174,6 @@ impl Sink for PullingSink {
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        println!("pulling sink receive {:?}", data_block);
         if let Err(cause) = self.sender.send(Ok(Some(data_block))) {
             return Err(ErrorCode::LogicalError(format!(
                 "Logical error, cannot push data into SyncSender, cause {:?}",

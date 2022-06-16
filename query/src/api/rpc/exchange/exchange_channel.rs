@@ -50,7 +50,8 @@ impl Drop for FragmentSender {
         if self.is_track {
             if 1 == self.ref_count.fetch_sub(1, Ordering::AcqRel) {
                 std::sync::atomic::fence(Acquire);
-                self.tx.close();
+                // self.tx.close();
+                println!("drop fragment sender {:?}", self.tx.close());
             }
         }
     }
@@ -99,7 +100,8 @@ impl Drop for FragmentReceiver {
         if self.is_track {
             if 1 == self.ref_count.fetch_sub(1, Ordering::AcqRel) {
                 std::sync::atomic::fence(Acquire);
-                self.tx.close();
+                // self.tx.close();
+                println!("drop fragment receiver {:?}", self.tx.close());
             }
         }
     }

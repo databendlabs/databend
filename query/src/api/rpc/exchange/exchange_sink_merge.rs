@@ -1,3 +1,4 @@
+use std::any::Any;
 use common_exception::ErrorCode;
 use std::sync::Arc;
 use async_channel::{Sender, TrySendError};
@@ -11,13 +12,12 @@ use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use crate::sessions::QueryContext;
 
 use common_exception::Result;
-use crate::api::rpc::exchange::exchange_channel::FragmentSender;
+use crate::api::rpc::exchange::exchange_channel::{FragmentReceiver, FragmentSender};
 use crate::api::rpc::packet::DataPacket;
 
 pub struct ExchangeMergeSink {
     ctx: Arc<QueryContext>,
     fragment_id: usize,
-    initialize: bool,
 
     input: Arc<InputPort>,
     input_data: Option<DataBlock>,
@@ -39,8 +39,28 @@ impl ExchangeMergeSink {
             input_data: None,
             output_data: None,
             peer_endpoint_publisher: None,
-            initialize: false,
         })))
+    }
+
+    pub fn init(processor: &mut ProcessorPtr) -> Result<()> {
+        unsafe {
+            if let Some(exchange_merge) = processor.as_any().downcast_mut::<Self>() {
+                let id = exchange_merge.fragment_id;
+                let query_id = &exchange_merge.exchange_params.query_id;
+                let destination_id = &exchange_merge.exchange_params.destination_id;
+                let exchange_manager = exchange_merge.ctx.get_exchange_manager();
+                exchange_merge.peer_endpoint_publisher = Some(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
+            }
+
+            Ok(())
+        }
+    }
+
+    fn get_endpoint_publisher(&self) -> Result<&FragmentSender> {
+        match &self.peer_endpoint_publisher {
+            Some(tx) => Ok(tx),
+            None => Err(ErrorCode::LogicalError("Cannot get endpoint_publisher.")),
+        }
     }
 }
 
@@ -50,38 +70,22 @@ impl Processor for ExchangeMergeSink {
         "ExchangeSink"
     }
 
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn event(&mut self) -> Result<Event> {
-        if !self.initialize {
-            self.initialize = true;
-
-            let id = self.fragment_id;
-            let query_id = &self.exchange_params.query_id;
-            let destination_id = &self.exchange_params.destination_id;
-            let exchange_manager = self.ctx.get_exchange_manager();
-            self.peer_endpoint_publisher = Some(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
-        }
-
         if let Some(output) = self.output_data.take() {
-            let mut need_async_send = false;
-            if let Some(publisher) = &self.peer_endpoint_publisher {
-                match publisher.try_send(output) {
-                    Ok(_) => { /* do nothing*/ }
-                    Err(TrySendError::Closed(_)) => {
-                        if let Some(publisher) = self.peer_endpoint_publisher.take() {
-                            drop(publisher);
-                        }
+            let tx = self.get_endpoint_publisher()?;
 
-                        return Ok(Event::Finished);
-                    }
-                    Err(TrySendError::Full(value)) => {
-                        need_async_send = true;
+            if let Err(try_send_err) = tx.try_send(output) {
+                return match try_send_err {
+                    TrySendError::Closed(_) => Ok(Event::Finished),
+                    TrySendError::Full(value) => {
                         self.output_data = Some(value);
+                        Ok(Event::Async)
                     }
-                }
-            }
-
-            if need_async_send {
-                return Ok(Event::Async);
+                };
             }
         }
 
@@ -131,7 +135,6 @@ impl Processor for ExchangeMergeSink {
     async fn async_process(&mut self) -> Result<()> {
         if let Some(mut output_data) = self.output_data.take() {
             if let Some(sender) = &self.peer_endpoint_publisher {
-                println!("async send data");
                 if let Err(_) = sender.send(output_data).await {
                     return Err(ErrorCode::TokioError(
                         "Cannot send flight data to endpoint, because sender is closed."

@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -141,6 +142,10 @@ impl ResultTableSink {
 impl Processor for ResultTableSink {
     fn name(&self) -> &'static str {
         "FuseSink"
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

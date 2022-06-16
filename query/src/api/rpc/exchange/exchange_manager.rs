@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::atomic::Ordering::Acquire;
+use std::time::Duration;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::{Runtime, Thread, tokio, TrySpawn};
@@ -11,7 +12,7 @@ use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use common_exception::{ErrorCode, Result};
 use common_base::infallible::{Mutex, ReentrantMutex, RwLock};
-use crate::api::{DataExchange, ExecutorPacket, FlightAction, FlightClient, FragmentPacket, PublisherPacket};
+use crate::api::{DataExchange, ExecutorPacket, FlightAction, FlightClient, FragmentPacket, PrepareChannel};
 use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::{NewPipe, NewPipeline, QueryPipelineBuilder};
@@ -129,7 +130,7 @@ impl DataExchangeManager {
         Ok(())
     }
 
-    async fn prepare_publisher(&self, packets: Vec<PublisherPacket>, timeout: u64) -> Result<()> {
+    async fn prepare_publisher(&self, packets: Vec<PrepareChannel>, timeout: u64) -> Result<()> {
         for publisher_packet in packets.into_iter() {
             if !publisher_packet.data_endpoints.contains_key(&publisher_packet.executor) {
                 return Err(ErrorCode::LogicalError(format!(
@@ -174,9 +175,11 @@ impl DataExchangeManager {
 
         // Get local pipeline of local task
         let schema = root_actions.get_schema()?;
-        let root_pipeline = self.build_root_pipeline(ctx.get_id(), root_fragment_id, schema)?;
+        let mut root_pipeline = self.build_root_pipeline(ctx.get_id(), root_fragment_id, schema)?;
 
         self.prepare_publisher(actions.prepare_publisher(ctx.clone())?, timeout).await?;
+
+        QueryCoordinator::init_pipeline(&mut root_pipeline)?;
         self.execute_pipeline(actions.execute_packets(ctx.clone())?, timeout).await?;
 
         Ok(root_pipeline)
@@ -277,6 +280,8 @@ impl QueryCoordinator {
                 if !pipeline.is_complete_pipeline()? {
                     return Err(ErrorCode::LogicalError("Logical error, It's a bug"));
                 }
+
+                QueryCoordinator::init_pipeline(&mut pipeline)?;
                 pipelines.push(pipeline);
             }
         }
@@ -296,7 +301,7 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn init_publisher(&mut self, config: Config, packet: &PublisherPacket) -> Result<()> {
+    pub fn init_publisher(&mut self, config: Config, packet: &PrepareChannel) -> Result<()> {
         for (target, fragments) in &packet.target_2_fragments {
             if self.publish_fragments
                 .iter()
@@ -326,6 +331,9 @@ impl QueryCoordinator {
                         }
                     }
 
+                    if !f_rx.is_empty() {
+                        println!("rx is not empty");
+                    }
                     println!("End fragment {}", fragment_id_clone);
                     if let Err(cause) = c_tx.send(DataPacket::EndFragment(fragment_id_clone)).await {
                         // TODO: channel closed.
@@ -339,6 +347,11 @@ impl QueryCoordinator {
             }
         }
 
+        for (_, coordinator) in &mut self.fragments_coordinator {
+            if let Some(pipeline) = coordinator.pipeline.as_mut() {
+                Self::init_pipeline(pipeline)?;
+            }
+        }
         // for (executor, info) in &packet.data_endpoints {
         //     // if executor == &packet.request_server {
         //     //     // Send log, metric, trace, (progress?)
@@ -360,62 +373,26 @@ impl QueryCoordinator {
         Ok(())
     }
 
+    pub fn init_pipeline(pipeline: &mut NewPipeline) -> Result<()> {
+        for pipe in &mut pipeline.pipes {
+            if let NewPipe::SimplePipe { processors, .. } = pipe {
+                for processor in processors {
+                    ExchangePublisher::init(processor)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn receive_data(&mut self, mut stream: Streaming<FlightData>) -> JoinHandle<Result<()>> {
         let ctx = self.ctx.clone();
         let finished = self.finished.clone();
         let mut receiver = ExchangeReceiver::create(stream, &self.subscribe_fragments);
 
         self.runtime.spawn(async move {
-            receiver.listen().await
-            // TODO: need select with timeout for stream.next()
-            // while let Some(flight_data) = stream.next().await {
-            //     if finished.load(Ordering::Relaxed) {
-            //         break;
-            //     }
-            //
-            //     match flight_data {
-            //         Ok(flight_data) => match DataPacket::from_flight(flight_data) {
-            //             Err(error_code) => {
-            //                 println!("cannot parse flight data, {:?}", error_code);
-            //             }
-            //             Ok(data_packet) => match data_packet {
-            //                 DataPacket::Data(fragment_id, data) => {
-            //                     println!("receive fragment: {}", fragment_id);
-            //                     if let Err(e) = subscribe_fragments[&fragment_id].send(Ok(data)).await {
-            //                         println!("Send fragment data failure");
-            //                     }
-            //                 }
-            //                 DataPacket::Progress(values) => {
-            //                     ctx.get_scan_progress().incr(&values);
-            //                 }
-            //                 DataPacket::ErrorCode(error_code) => {
-            //                     println!("receive data error");
-            //                     for (fragment_id, fragment_tx) in &subscribe_fragments {
-            //                         fragment_tx.send(Err(error_code.clone())).await;
-            //                     }
-            //                 }
-            //                 DataPacket::EndFragment(fragment) => {
-            //                     println!("receive end fragment {}", fragment);
-            //                     // if subscribe_fragments[&fragment].sender_count() == 2 {
-            //                     //     // TODO:
-            //                     //     // subscribe_fragments[&fragment]
-            //                     // }
-            //                 }
-            //             }
-            //         }
-            //         Err(status) => {
-            //             // TODO: put error into request server.
-            //             // Network error, shutdown execute.
-            //             println!("Receive flight status handle_do_put");
-            //         }
-            //     }
-            // }
-            //
-            // for (_index, fragment_tx) in &subscribe_fragments {
-            //     fragment_tx.close();
-            // }
-            //
-            // Ok(())
+            receiver.listen().await?;
+            Ok(())
         })
     }
 
@@ -494,8 +471,7 @@ impl QueryCoordinator {
         let (tx, rx) = async_channel::bounded(1);
 
         // Register subscriber for data exchange.
-        let tx = FragmentReceiver::create_unrecorded(tx);
-        self.subscribe_fragments.insert(fragment_id.clone(), tx);
+        self.subscribe_fragments.insert(fragment_id, FragmentReceiver::create_unrecorded(tx));
 
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
@@ -623,6 +599,7 @@ impl ExchangeReceiver {
             }
             DataPacket::EndFragment(fragment) => {
                 if let Some(tx) = self.fragments_receiver[fragment].take() {
+                    // tokio::time::sleep(Duration::from_secs(5)).await;
                     drop(tx);
                     std::sync::atomic::fence(Acquire);
                 }

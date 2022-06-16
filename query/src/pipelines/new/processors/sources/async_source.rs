@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_base::base::Progress;
@@ -28,7 +29,7 @@ use crate::sessions::QueryContext;
 
 pub trait AsyncSource: Send {
     const NAME: &'static str;
-    type BlockFuture<'a>: Future<Output = Result<Option<DataBlock>>> + Send
+    type BlockFuture<'a>: Future<Output = Result<Option<DataBlock> > > + Send
     where Self: 'a;
 
     fn generate(&mut self) -> Self::BlockFuture<'_>;
@@ -67,6 +68,10 @@ impl<T: 'static + AsyncSource> AsyncSourcer<T> {
 impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
     fn name(&self) -> &'static str {
         T::NAME
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -60,6 +61,10 @@ impl<T: Sink + 'static> Sinker<T> {
 impl<T: Sink + 'static> Processor for Sinker<T> {
     fn name(&self) -> &'static str {
         T::NAME
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -67,6 +68,10 @@ impl<T: AsyncSink + 'static> AsyncSinker<T> {
 impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
     fn name(&self) -> &'static str {
         T::NAME
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

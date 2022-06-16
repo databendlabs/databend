@@ -22,7 +22,7 @@ use common_exception::ToErrorCode;
 use common_planners::Expression;
 use common_planners::PlanNode;
 use tonic::Status;
-use crate::api::{ExecutorPacket, PublisherPacket};
+use crate::api::{ExecutorPacket, PrepareChannel};
 use crate::sessions::QueryContext;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -150,7 +150,7 @@ impl TryInto<Vec<u8>> for PreparePipeline {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct PreparePublisher {
-    pub publisher_packet: PublisherPacket,
+    pub publisher_packet: PrepareChannel,
 }
 
 

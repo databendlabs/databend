@@ -228,7 +228,6 @@ for FinalAggregator<true, Method>
                 }
 
                 columns.extend_from_slice(&group_columns_builder.finish()?);
-
                 Ok(Some(DataBlock::create(self.params.schema.clone(), columns)))
             }
         }

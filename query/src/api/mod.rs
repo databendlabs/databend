@@ -15,7 +15,7 @@
 // The api module only used for internal communication, such as GRPC between cluster and the managed HTTP REST API.
 
 pub use http_service::HttpService;
-pub use rpc::PublisherPacket;
+pub use rpc::PrepareChannel;
 pub use rpc::BroadcastAction;
 pub use rpc::CancelAction;
 pub use rpc::DatabendQueryFlightDispatcher;

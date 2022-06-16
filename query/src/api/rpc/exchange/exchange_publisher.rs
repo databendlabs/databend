@@ -40,6 +40,12 @@ impl ExchangePublisher {
         }
     }
 
+    pub fn init(processor: &mut ProcessorPtr) -> Result<()> {
+        ExchangeMergeSink::init(processor)?;
+        ExchangePublisherSink::<true>::init(processor)?;
+        ExchangePublisherSink::<false>::init(processor)
+    }
+
     pub fn publisher_sink(ctx: &Arc<QueryContext>, params: &ExchangeParams, pipeline: &mut NewPipeline) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => {
@@ -65,7 +71,7 @@ impl ExchangePublisher {
                         params.fragment_id,
                         transform_input_port,
                         transform_output_port,
-                        params.clone()
+                        params.clone(),
                     )
                 })
             }
@@ -82,7 +88,7 @@ impl ExchangePublisher {
                         params.fragment_id,
                         transform_input_port,
                         transform_output_port,
-                        params.clone()
+                        params.clone(),
                     )
                 })
             }

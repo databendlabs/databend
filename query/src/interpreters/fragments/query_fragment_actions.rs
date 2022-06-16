@@ -7,7 +7,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::{ErrorCode, Result};
 use common_meta_types::NodeInfo;
 use common_planners::PlanNode;
-use crate::api::{DataExchange, ExecutePacket, ExecutorPacket, FragmentPacket, PublisherPacket};
+use crate::api::{DataExchange, ExecutePacket, ExecutorPacket, FragmentPacket, PrepareChannel};
 use crate::clusters::Cluster;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::sessions::QueryContext;
@@ -130,9 +130,9 @@ impl QueryFragmentsActions {
         Ok(executors_packets)
     }
 
-    pub fn prepare_publisher(&self, ctx: Arc<QueryContext>) -> Result<Vec<PublisherPacket>> {
+    pub fn prepare_publisher(&self, ctx: Arc<QueryContext>) -> Result<Vec<PrepareChannel>> {
         let nodes_info = Self::nodes_info(&ctx);
-        let mut publisher_packets = Vec::with_capacity(nodes_info.len());
+        let mut prepare_channel = Vec::with_capacity(nodes_info.len());
 
         // map(source, map(target, vec(fragment_id)))
         let mut connections_info = HashMap::new();
@@ -177,7 +177,7 @@ impl QueryFragmentsActions {
                 }
             }
 
-            publisher_packets.push(PublisherPacket::create(
+            prepare_channel.push(PrepareChannel::create(
                 ctx.get_id(),
                 node_id.to_owned(),
                 cluster.local_id(),
@@ -187,7 +187,7 @@ impl QueryFragmentsActions {
             ));
         }
 
-        Ok(publisher_packets)
+        Ok(prepare_channel)
     }
 
     pub fn execute_packets(&self, ctx: Arc<QueryContext>) -> Result<Vec<ExecutePacket>> {

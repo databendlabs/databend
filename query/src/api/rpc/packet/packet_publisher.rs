@@ -3,7 +3,7 @@ use std::sync::Arc;
 use common_meta_types::NodeInfo;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct PublisherPacket {
+pub struct PrepareChannel {
     pub query_id: String,
     pub executor: String,
     pub request_server: String,
@@ -12,7 +12,7 @@ pub struct PublisherPacket {
     pub data_endpoints: HashMap<String, Arc<NodeInfo>>,
 }
 
-impl PublisherPacket {
+impl PrepareChannel {
     pub fn create(
         query_id: String,
         executor_id: String,
@@ -20,8 +20,8 @@ impl PublisherPacket {
         executors: HashMap<String, Arc<NodeInfo>>,
         target_nodes_info: HashMap<String, Arc<NodeInfo>>,
         target_2_fragments: HashMap<String, Vec<usize>>,
-    ) -> PublisherPacket {
-        PublisherPacket {
+    ) -> PrepareChannel {
+        PrepareChannel {
             query_id,
             request_server,
             target_nodes_info,

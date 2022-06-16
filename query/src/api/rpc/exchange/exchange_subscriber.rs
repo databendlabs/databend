@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::sync::Arc;
 use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow::io::ipc::IpcSchema;
@@ -69,6 +70,10 @@ impl Processor for ViaExchangeSubscriber {
         "ViaExchangeSubscriber"
     }
 
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
@@ -100,7 +105,7 @@ impl Processor for ViaExchangeSubscriber {
         }
 
         if let Some(data_block) = self.remote_data_block.take() {
-            println!("receive remote data block {:?}", data_block);
+            // println!("receive remote data block {:?}", data_block);
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -172,6 +177,10 @@ impl Processor for ExchangeSubscriberSource {
         "ExchangeSubscriberSource"
     }
 
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             return Ok(Event::Finished);
@@ -182,7 +191,7 @@ impl Processor for ExchangeSubscriberSource {
         }
 
         if let Some(data_block) = self.remote_data_block.take() {
-            println!("receive remote data block {:?}", data_block);
+            // println!("receive remote data block {:?}", data_block);
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
