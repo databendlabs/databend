@@ -42,8 +42,8 @@ impl<'a> TypeSerializer<'a> for NullableSerializer<'a> {
         }
     }
 
-    fn serialize_json(&self, format: &FormatSettings) -> Result<Vec<Value>> {
-        let mut res = self.inner.serialize_json(format)?;
+    fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {
+        let mut res = self.inner.serialize_json_values(format)?;
         let validity = self.validity;
 
         (0..validity.len()).for_each(|row| {

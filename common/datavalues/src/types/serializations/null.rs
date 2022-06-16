@@ -41,7 +41,7 @@ impl<'a> TypeSerializer<'a> for NullSerializer {
         Ok(unsafe { String::from_utf8_unchecked(format.null_bytes.clone()) })
     }
 
-    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let null = Value::Null;
         let result: Vec<Value> = vec![null; self.size];
         Ok(result)

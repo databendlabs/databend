@@ -85,7 +85,7 @@ pub trait TypeSerializer<'a>: Send + Sync {
         String::from_utf8(buf).map_err_to_code(ErrorCode::BadBytes, || "fail to serialize field")
     }
 
-    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         unimplemented!()
     }
 

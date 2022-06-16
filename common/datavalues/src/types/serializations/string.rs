@@ -58,7 +58,7 @@ impl<'a> TypeSerializer<'a> for StringSerializer<'a> {
         )
     }
 
-    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = self
             .column
             .iter()
