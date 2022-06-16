@@ -28,20 +28,17 @@ pub struct NullSerializer {
     pub size: usize,
 }
 
-const NULL_STR: &str = "NULL";
-const NULL_BYTES: &[u8] = b"NULL";
-
 impl<'a> TypeSerializer<'a> for NullSerializer {
     fn need_quote(&self) -> bool {
         false
     }
 
-    fn write_field(&self, _row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
-        buf.extend_from_slice(NULL_BYTES);
+    fn write_field(&self, _row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        buf.extend_from_slice(&format.null_bytes);
     }
 
-    fn serialize_field(&self, _row_index: usize, _format: &FormatSettings) -> Result<String> {
-        Ok(NULL_STR.to_owned())
+    fn serialize_field(&self, _row_index: usize, format: &FormatSettings) -> Result<String> {
+        Ok(unsafe { String::from_utf8_unchecked(format.null_bytes.clone()) })
     }
 
     fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {

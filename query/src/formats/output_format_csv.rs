@@ -41,6 +41,15 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
     TCSVOutputFormat<TSV, WITH_NAMES, WITH_TYPES>
 {
     pub fn create(schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
+        let null_bytes = if TSV {
+            format_settings.tsv_null_bytes.clone()
+        } else {
+            format_settings.csv_null_bytes.clone()
+        };
+        let format_settings = FormatSettings {
+            null_bytes,
+            ..format_settings
+        };
         Self {
             schema,
             format_settings,

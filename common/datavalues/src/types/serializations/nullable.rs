@@ -23,8 +23,6 @@ use serde_json::Value;
 use crate::serializations::TypeSerializer;
 use crate::serializations::TypeSerializerImpl;
 
-const NULL_BYTES: &[u8] = b"NULL";
-
 #[derive(Clone)]
 pub struct NullableSerializer<'a> {
     pub validity: &'a Bitmap,
@@ -38,7 +36,7 @@ impl<'a> TypeSerializer<'a> for NullableSerializer<'a> {
 
     fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
         if !self.validity.get_bit(row_index) {
-            buf.extend_from_slice(NULL_BYTES);
+            buf.extend_from_slice(&format.null_bytes);
         } else {
             self.inner.write_field(row_index, buf, format)
         }
