@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::multi_if::MultiIfFunction;
 use super::InFunction;
 use super::IsNotNullFunction;
 use super::IsNullFunction;
-use super::multi_if::MultiIfFunction;
 use crate::scalars::FunctionFactory;
 use crate::scalars::IfFunction;
 

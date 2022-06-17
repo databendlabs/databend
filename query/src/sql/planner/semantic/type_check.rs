@@ -277,19 +277,25 @@ impl<'a> TypeChecker<'a> {
                     .into(),
                     cast_func.return_type(),
                 )
-            },
-            
-            Expr::Case { span, conditions, results, else_result, .. } => {
+            }
+
+            Expr::Case {
+                span,
+                conditions,
+                results,
+                else_result,
+                ..
+            } => {
                 let mut arguments = Vec::with_capacity(conditions.len() * 2);
-                for (c,r) in conditions.iter().zip(results.iter()) {
+                for (c, r) in conditions.iter().zip(results.iter()) {
                     arguments.push(c);
-                    arguments.push( r);
+                    arguments.push(r);
                 }
                 let null_arg = Expr::Literal {
                     span: &[],
                     lit: Literal::Null,
                 };
-                    
+
                 if let Some(expr) = else_result {
                     arguments.push(&**expr);
                 } else {
@@ -563,7 +569,7 @@ impl<'a> TypeChecker<'a> {
                     None,
                 )
                 .await?
-            },
+            }
 
             Expr::IfNull {
                 span, expr1, expr2, ..
