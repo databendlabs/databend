@@ -78,7 +78,11 @@ impl Interpreter for ShowCreateTableInterpreter {
                 // compatibility: creating table in the old planner will not have `fields_comments`
                 let comment = if field_comments.len() == n_fields && !field_comments[idx].is_empty()
                 {
-                    format!(" COMMENT '{}'", &field_comments[idx])
+                    // make the display more readable.
+                    format!(
+                        " COMMENT '{}'",
+                        &field_comments[idx].as_str().replace('\'', "\\'")
+                    )
                 } else {
                     "".to_string()
                 };

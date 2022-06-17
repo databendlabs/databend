@@ -120,7 +120,7 @@ async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
             "+-------+-------------------------------------+",
             "| a     | CREATE TABLE `a` (                  |",
             "|       |   `a` BIGINT COMMENT 'a',           |",
-            "|       |   `b` INT COMMENT 'b'b'b',          |",
+            "|       |   `b` INT COMMENT 'b\\'b\\'b',        |",
             "|       |   `c` VARCHAR COMMENT 'c',          |",
             "|       |   `d` SMALLINT,                     |",
             "|       |   `e` DATE                          |",
