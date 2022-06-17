@@ -33,7 +33,7 @@ use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::BoundColumnRef;
-use crate::sql::plans::FilterPlan;
+use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::Scalar;
@@ -49,13 +49,12 @@ impl<'a> Binder {
     ) -> Result<(SExpr, BindContext)> {
         let (left_child, left_context) =
             self.bind_table_reference(bind_context, &join.left).await?;
-        let (right_child, right_context) = self
-            .bind_table_reference(&left_context, &join.right)
-            .await?;
+        let (right_child, right_context) =
+            self.bind_table_reference(bind_context, &join.right).await?;
 
         check_duplicate_join_tables(&left_context, &right_context)?;
 
-        let mut bind_context = BindContext::new();
+        let mut bind_context = bind_context.replace();
         for column in left_context.all_column_bindings() {
             bind_context.add_column_binding(column.clone());
         }
@@ -69,12 +68,12 @@ impl<'a> Binder {
             {
                 return Err(ErrorCode::SemanticError(
                     "outer join should contain join conditions".to_string(),
-                ))
+                ));
             }
             JoinOperator::CrossJoin if join.condition != JoinCondition::None => {
                 return Err(ErrorCode::SemanticError(
                     "cross join should not contain join conditions".to_string(),
-                ))
+                ));
             }
             _ => (),
         };
@@ -100,23 +99,35 @@ impl<'a> Binder {
 
         let mut s_expr = match &join.op {
             JoinOperator::Inner => self.bind_join_with_type(
-                JoinType::InnerJoin,
+                JoinType::Inner,
                 left_join_conditions,
                 right_join_conditions,
                 left_child,
                 right_child,
             ),
-            JoinOperator::LeftOuter => Err(ErrorCode::UnImplement(
-                "Unsupported join type: LEFT OUTER JOIN",
-            )),
-            JoinOperator::RightOuter => Err(ErrorCode::UnImplement(
-                "Unsupported join type: RIGHT OUTER JOIN",
-            )),
-            JoinOperator::FullOuter => Err(ErrorCode::UnImplement(
-                "Unsupported join type: FULL OUTER JOIN",
-            )),
+            JoinOperator::LeftOuter => self.bind_join_with_type(
+                JoinType::Left,
+                left_join_conditions,
+                right_join_conditions,
+                left_child,
+                right_child,
+            ),
+            JoinOperator::RightOuter => self.bind_join_with_type(
+                JoinType::Left,
+                right_join_conditions,
+                left_join_conditions,
+                right_child,
+                left_child,
+            ),
+            JoinOperator::FullOuter => self.bind_join_with_type(
+                JoinType::Full,
+                left_join_conditions,
+                right_join_conditions,
+                left_child,
+                right_child,
+            ),
             JoinOperator::CrossJoin => self.bind_join_with_type(
-                JoinType::CrossJoin,
+                JoinType::Cross,
                 left_join_conditions,
                 right_join_conditions,
                 left_child,
@@ -125,17 +136,24 @@ impl<'a> Binder {
         }?;
 
         if !other_conditions.is_empty() {
-            let filter_plan = FilterPlan {
-                predicates: other_conditions,
-                is_having: false,
-            };
-            s_expr = SExpr::create_unary(filter_plan.into(), s_expr);
+            match &join.op {
+                JoinOperator::Inner | JoinOperator::CrossJoin => {
+                    let filter_plan = Filter {
+                        predicates: other_conditions,
+                        is_having: false,
+                    };
+                    s_expr = SExpr::create_unary(filter_plan.into(), s_expr);
+                }
+                JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter => {
+                    return Err(ErrorCode::UnImplement("Outer join only support equi-join"));
+                }
+            }
         }
 
         Ok((s_expr, bind_context))
     }
 
-    fn bind_join_with_type(
+    pub fn bind_join_with_type(
         &mut self,
         join_type: JoinType,
         left_conditions: Vec<Scalar>,
@@ -143,7 +161,7 @@ impl<'a> Binder {
         left_child: SExpr,
         right_child: SExpr,
     ) -> Result<SExpr> {
-        if join_type == JoinType::CrossJoin
+        if join_type == JoinType::Cross
             && (!left_conditions.is_empty() || !right_conditions.is_empty())
         {
             return Err(ErrorCode::SemanticError(

@@ -139,6 +139,8 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number d
 SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s;
 create table t3(a int, b int);
 insert into t3 values(1,2),(2,3);
+select * from t3 order by 2 desc;
+select a from t3 order by 1 desc;
 drop table t;
 drop table t1;
 drop table t2;
@@ -295,4 +297,26 @@ CREATE FUNCTION notnull1 AS (p) -> not(is_null(p));
 SELECT notnull1(null);
 SELECT notnull1('null');
 
+--set operator
+select '====Intersect Distinct===';
+create table t1(a int, b int);
+create table t2(c int, d int);
+insert into t1 values(1, 2), (2, 3), (3 ,4), (2, 3);
+insert into t2 values(2,2), (3, 5), (7 ,8), (2, 3), (3, 4);
+select * from t1 intersect select * from t2;
+select '====Except Distinct===';
+select * from t1 except select * from t2;
+drop table t1;
+drop table t2;
+
+--outer join
+select '====Outer Join====';
+create table t1(a int, b int);
+create table t2(c int, d int);
+insert into t1 values(1, 2), (3 ,4), (7, 8);
+insert into t2 values(1, 4), (2, 3), (6, 8);
+select * from t1 right join t2 on t1.a = t2.c;
+select * from t1 left join t2 on t1.a = t2.c;
+drop table t1;
+drop table t2;
 set enable_planner_v2 = 0;

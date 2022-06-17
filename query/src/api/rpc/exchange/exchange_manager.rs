@@ -338,9 +338,9 @@ impl QueryCoordinator {
         Thread::named_spawn(Some(String::from("Executor")), move || {
             if let Err(cause) = complete_executor.execute() {
                 // TODO: send error code to request server.
-                if let Some(request_tx) = self.request_server_tx.take() {
-                    // request_tx.send
-                }
+                // if let Some(request_tx) = self.request_server_tx.take() {
+                //     // request_tx.send
+                // }
                 println!("execute failure: {:?}", cause);
             }
 
@@ -364,7 +364,7 @@ impl QueryCoordinator {
                 let address = target_node_info.flight_address.to_string();
                 let tx = self.spawn_pub_worker(config, address)?;
 
-                if target == packet.request_server {
+                if target == &packet.request_server {
                     self.request_server_tx = Some(tx.clone());
                 }
 

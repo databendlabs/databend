@@ -19,7 +19,6 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use futures::Future;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
@@ -27,12 +26,12 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 use crate::sessions::QueryContext;
 
+#[async_trait::async_trait]
 pub trait AsyncSource: Send {
     const NAME: &'static str;
-    type BlockFuture<'a>: Future<Output = Result<Option<DataBlock> > > + Send
-    where Self: 'a;
 
-    fn generate(&mut self) -> Self::BlockFuture<'_>;
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
 
 // TODO: This can be refactored using proc macros

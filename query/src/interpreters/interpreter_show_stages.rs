@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_planners::ShowStagesPlan;
 use common_streams::SendableDataBlockStream;
 
 use super::SelectInterpreter;
@@ -32,12 +31,12 @@ pub struct ShowStagesInterpreter {
 }
 
 impl ShowStagesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, _plan: ShowStagesPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<InterpreterPtr> {
         Ok(Arc::new(ShowStagesInterpreter { ctx }))
     }
 
     fn build_query(&self) -> Result<String> {
-        Ok("SELECT name, stage_type, comment FROM system.stages ORDER BY name".to_string())
+        Ok("SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name".to_string())
     }
 }
 

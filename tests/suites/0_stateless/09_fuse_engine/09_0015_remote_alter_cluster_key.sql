@@ -16,6 +16,10 @@ SELECT * FROM t09_0015 ORDER BY b,a;
 
 select * from clustering_information('db1','t09_0015');
 
+ALTER TABLE t09_0015 DROP CLUSTER KEY;
+
+ALTER TABLE t09_0015 CLUSTER BY(rand()+a); -- {ErrorCode 1070}
+
 -- Drop table.
 DROP TABLE t09_0015;
 DROP DATABASE db1;

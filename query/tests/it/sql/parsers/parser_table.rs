@@ -225,7 +225,7 @@ fn alter_table() -> Result<()> {
         let new_table_name = ObjectName(vec![Ident::new("t2")]);
         let expected = DfStatement::AlterTable(DfAlterTable {
             if_exists: false,
-            table_name,
+            table: table_name,
             action: AlterTableAction::RenameTable(new_table_name),
         });
         expect_parse_ok(sql, expected)?;
@@ -306,18 +306,82 @@ fn truncate_table() -> Result<()> {
 }
 
 #[test]
-fn alter_cluster_key() -> Result<()> {
+fn alter_table_cluster_key() -> Result<()> {
     {
         let sql = "ALTER TABLE t1 CLUSTER BY (a, b)";
         let expected = DfStatement::AlterTable(DfAlterTable {
             if_exists: false,
-            table_name: ObjectName(vec![Ident::new("t1")]),
-            action: AlterTableAction::AlterClusterKey(vec![
+            table: ObjectName(vec![Ident::new("t1")]),
+            action: AlterTableAction::AlterTableClusterKey(vec![
                 Expr::Identifier(Ident::new("a")),
                 Expr::Identifier(Ident::new("b")),
             ]),
         });
         expect_parse_ok(sql, expected)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn drop_table_cluster_key() -> Result<()> {
+    {
+        let sql = "ALTER TABLE t1 DROP CLUSTER KEY";
+        let expected = DfStatement::AlterTable(DfAlterTable {
+            if_exists: false,
+            table: ObjectName(vec![Ident::new("t1")]),
+            action: AlterTableAction::DropTableClusterKey,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn create_transient_table() -> Result<()> {
+    {
+        let sql = "CREATE transient TABLE t(c1 int) ENGINE = Fuse location = '/data/33.csv' ";
+        let expected = DfStatement::CreateTable(DfCreateTable {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("t")]),
+            columns: vec![make_column_def("c1", None, DataType::Int(None))],
+            engine: "Fuse".to_string(),
+            options: maplit::btreemap! {"location".into() => "/data/33.csv".into(), "TRANSIENT".into() => "T".into()},
+            like: None,
+            query: None,
+            cluster_keys: vec![],
+        });
+
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        // unexpected qualifier
+        let sql = "CREATE tran TABLE t(c1 int) ENGINE = Fuse location = '/data/33.csv' ";
+
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected create statement, found: tran",
+        )?;
+    }
+
+    {
+        // unexpected keyword
+        let sql = "CREATE transient view ";
+
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected create transient TABLE, found: view",
+        )?;
+    }
+
+    {
+        // unexpected non-keyword
+        let sql = "CREATE transient vi ";
+
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected create transient TABLE, found: vi",
+        )?;
     }
     Ok(())
 }

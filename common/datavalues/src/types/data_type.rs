@@ -40,6 +40,7 @@ use super::type_string::StringType;
 use super::type_struct::StructType;
 use super::type_timestamp::TimestampType;
 use crate::prelude::*;
+use crate::serializations::ConstSerializer;
 
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
@@ -73,7 +74,9 @@ pub enum DataTypeImpl {
 }
 
 #[enum_dispatch]
-pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
+pub trait DataType: std::fmt::Debug + Sync + Send + DynClone
+where Self: Sized
+{
     fn data_type_id(&self) -> TypeID;
 
     fn is_nullable(&self) -> bool {
@@ -99,6 +102,11 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
 
     fn default_value(&self) -> DataValue;
 
+    /// Returns a random value of current type.
+    fn random_value(&self) -> DataValue {
+        self.default_value()
+    }
+
     fn can_inside_nullable(&self) -> bool {
         true
     }
@@ -106,6 +114,12 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef>;
 
     fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef>;
+
+    /// Returns a column with `len` random rows.
+    fn create_random_column(&self, len: usize) -> ColumnRef {
+        let data = (0..len).map(|_| self.random_value()).collect::<Vec<_>>();
+        self.create_column(&data).unwrap()
+    }
 
     /// arrow_type did not have nullable sign, it's nullable sign is in the field
     fn arrow_type(&self) -> ArrowType;
@@ -125,7 +139,23 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
 
-    fn create_serializer(&self) -> TypeSerializerImpl;
+    fn create_serializer<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        if col.is_const() {
+            let col: &ConstColumn = Series::check_get(col)?;
+            let inner = Box::new(self.create_serializer_inner(col.inner())?);
+            Ok(ConstSerializer {
+                inner,
+                size: col.len(),
+            }
+            .into())
+        } else {
+            self.create_serializer_inner(col)
+        }
+    }
+
+    fn create_serializer_inner<'a>(&self, _col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        unimplemented!()
+    }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl;
 }

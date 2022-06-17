@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::OptimizeTableAction;
 use common_exception::Result;
-use common_planners::Optimization;
 use databend_query::sql::statements::DfOptimizeTable;
 use databend_query::sql::*;
 use sqlparser::ast::*;
@@ -26,7 +26,7 @@ fn optimize_table() -> Result<()> {
         let sql = "optimize TABLE t1";
         let expected = DfStatement::OptimizeTable(DfOptimizeTable {
             name: ObjectName(vec![Ident::new("t1")]),
-            operation: Optimization::PURGE,
+            action: OptimizeTableAction::Purge,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -35,7 +35,7 @@ fn optimize_table() -> Result<()> {
         let sql = "OPTIMIZE tABLE t1";
         let expected = DfStatement::OptimizeTable(DfOptimizeTable {
             name: ObjectName(vec![Ident::new("t1")]),
-            operation: Optimization::PURGE,
+            action: OptimizeTableAction::Purge,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -44,7 +44,7 @@ fn optimize_table() -> Result<()> {
         let sql = "optimize TABLE t1 purge";
         let expected = DfStatement::OptimizeTable(DfOptimizeTable {
             name: ObjectName(vec![Ident::new("t1")]),
-            operation: Optimization::PURGE,
+            action: OptimizeTableAction::Purge,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -53,7 +53,7 @@ fn optimize_table() -> Result<()> {
         let sql = "optimize TABLE t1 compact";
         let expected = DfStatement::OptimizeTable(DfOptimizeTable {
             name: ObjectName(vec![Ident::new("t1")]),
-            operation: Optimization::COMPACT,
+            action: OptimizeTableAction::Compact,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -62,7 +62,7 @@ fn optimize_table() -> Result<()> {
         let sql = "optimize TABLE t1 all";
         let expected = DfStatement::OptimizeTable(DfOptimizeTable {
             name: ObjectName(vec![Ident::new("t1")]),
-            operation: Optimization::ALL,
+            action: OptimizeTableAction::All,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -71,8 +71,7 @@ fn optimize_table() -> Result<()> {
         let sql = "optimize TABLE t1 unacceptable";
         expect_parse_err(
             sql,
-            "sql parser error: Expected one of PURGE, COMPACT, ALL, found: unacceptable"
-                .to_string(),
+            "sql parser error: Expected one of PURGE, COMPACT, ALL, found: unacceptable",
         )?;
     }
 
@@ -80,8 +79,7 @@ fn optimize_table() -> Result<()> {
         let sql = "optimize TABLE t1 (";
         expect_parse_err(
             sql,
-            "sql parser error: Expected Nothing, or one of PURGE, COMPACT, ALL, found: ("
-                .to_string(),
+            "sql parser error: Expected Nothing, or one of PURGE, COMPACT, ALL, found: (",
         )?;
     }
 

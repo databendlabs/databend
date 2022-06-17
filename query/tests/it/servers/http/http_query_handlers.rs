@@ -100,11 +100,10 @@ async fn test_simple_sql(v2: u64) -> Result<()> {
     assert_eq!(result.data.len(), 10, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
-    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
     assert_eq!(
         result.schema.as_ref().unwrap().fields().len(),
-        9,
+        10,
         "{:?}",
         result
     );
@@ -118,7 +117,6 @@ async fn test_simple_sql(v2: u64) -> Result<()> {
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
-    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
     // get page, support retry
@@ -130,7 +128,6 @@ async fn test_simple_sql(v2: u64) -> Result<()> {
         assert_eq!(result.data.len(), 10, "{:?}", result);
         assert!(result.next_uri.is_none(), "{:?}", result);
         assert!(result.schema.is_some(), "{:?}", result);
-        assert!(result.stats.scan_progress.is_some(), "{:?}", result);
         assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     }
 
@@ -221,7 +218,6 @@ async fn test_bad_sql() -> Result<()> {
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Failed, "{:?}", result);
-    assert!(result.stats.scan_progress.is_none(), "{:?}", result);
     assert!(result.schema.is_none(), "{:?}", result);
 
     let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=3";
@@ -268,7 +264,6 @@ async fn test_wait_time_secs() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert_eq!(result.next_uri, Some(next_uri.clone()), "{:?}", result);
-    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
 
     let mut uri = make_page_uri(query_id, 0);
@@ -278,7 +273,6 @@ async fn test_wait_time_secs() -> Result<()> {
         let (status, result) = get_uri_checked(&ep, &uri).await?;
         assert_eq!(status, StatusCode::OK, "{:?}", result);
         assert!(result.error.is_none(), "{:?}", result);
-        assert!(result.stats.scan_progress.is_some(), "{:?}", result);
         num_row += result.data.len();
         match &result.next_uri {
             Some(next_uri) => {
@@ -336,7 +330,6 @@ async fn test_pagination(v2: u64) -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 2, "{:?}", result);
     assert_eq!(result.next_uri, Some(next_uri), "{:?}", result);
-    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
 
     for page in 0..5 {
@@ -348,7 +341,6 @@ async fn test_pagination(v2: u64) -> Result<()> {
         assert!(result.error.is_none(), "{:?}", msg());
         assert_eq!(result.data.len(), 2, "{:?}", msg());
         assert!(result.schema.is_some(), "{:?}", result);
-        assert!(result.stats.scan_progress.is_some(), "{:?}", msg());
         if page == 4 {
             expect_end(&ep, result).await?;
         } else {
@@ -364,7 +356,6 @@ async fn test_pagination(v2: u64) -> Result<()> {
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
-    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
     // get page not expected
@@ -430,7 +421,6 @@ async fn test_http_session() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert_eq!(result.next_uri, None, "{:?}", result);
-    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     let session_id = &result.session_id.unwrap();
@@ -464,7 +454,10 @@ async fn test_result_timeout() -> Result<()> {
         .unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let sql = "select sleep(0.1)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -489,7 +482,10 @@ async fn test_system_tables() -> Result<()> {
     let session_manager = SessionManagerBuilder::create().build().unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let sql = "select name from system.tables where database='system' order by name";
 
@@ -525,7 +521,6 @@ async fn test_system_tables() -> Result<()> {
             "{}",
             error_message
         );
-        assert!(result.stats.scan_progress.is_some(), "{:?}", result);
         assert!(result.next_uri.is_none(), "{:?}", result);
         assert!(result.schema.is_some(), "{:?}", result);
     }
@@ -537,18 +532,23 @@ async fn test_insert() -> Result<()> {
     let route = create_endpoint();
 
     let sqls = vec![
-        ("create table t(a int) engine=fuse", 0),
-        ("insert into t(a) values (1),(2)", 0),
-        ("select * from t", 2),
+        ("create table t(a int) engine=fuse", 0, 0),
+        ("insert into t(a) values (1),(2)", 0, 2),
+        ("select * from t", 2, 0),
     ];
 
-    for (sql, data_len) in sqls {
+    for (sql, data_len, rows_written) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
         let (status, result) = post_json_to_endpoint(&route, &json).await?;
         assert_eq!(status, StatusCode::OK, "{:?}", result);
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.data.len(), data_len, "{:?}", result);
         assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+        assert_eq!(
+            result.stats.progresses.write_progress.rows as usize, rows_written,
+            "{:?}",
+            result
+        );
     }
     Ok(())
 }
@@ -558,7 +558,10 @@ async fn test_query_log() -> Result<()> {
     let session_manager = SessionManagerBuilder::create().build().unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let sql = "create table t1(a int)";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
@@ -611,7 +614,10 @@ async fn test_query_log() -> Result<()> {
     let session_manager = SessionManagerBuilder::create().build().unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let sql = "select sleep(2)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -695,7 +701,10 @@ pub fn create_endpoint() -> EndpointType {
     let session_manager = SessionManagerBuilder::create().build().unwrap();
     Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager })
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        })
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
@@ -776,7 +785,10 @@ async fn test_auth_jwt() -> Result<()> {
         .unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let now = Some(Clock::now_since_epoch());
     let claims = JWTClaims {
@@ -868,7 +880,10 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
 
     let now = Some(Clock::now_since_epoch());
     let claims = JWTClaims {
@@ -1200,7 +1215,10 @@ async fn test_no_download_in_management_mode() -> Result<()> {
     let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
+        .with(HTTPSessionMiddleware {
+            kind: HttpHandlerKind::Query,
+            session_manager,
+        });
     let sql = "select 1";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -1230,6 +1248,29 @@ async fn test_func_object_keys() -> Result<()> {
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.data.len(), data_len);
         assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_multi_partition() -> Result<()> {
+    let route = create_endpoint();
+
+    let sqls = vec![
+        ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
+        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
+        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
+        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
+        ("select * from tb2;", 6),
+    ];
+
+    for (sql, data_len) in sqls {
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1}});
+        let (status, result) = post_json_to_endpoint(&route, &json).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert_eq!(result.data.len(), data_len);
     }
     Ok(())
 }

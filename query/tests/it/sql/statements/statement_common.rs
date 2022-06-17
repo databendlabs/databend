@@ -35,10 +35,12 @@ async fn test_parse_stage_location_internal() -> Result<()> {
         stage_type: StageType::Internal,
         ..Default::default()
     };
+    let tenant = ctx.get_tenant();
     // Add an internal stage for testing.
     ctx.get_user_manager()
-        .add_stage(&ctx.get_tenant(), user_stage_info.clone(), false)
+        .add_stage(&tenant, user_stage_info, false)
         .await?;
+    let stage_info = ctx.get_user_manager().get_stage(&tenant, "test").await?;
 
     // Cases are in the format: `name`, `input location`, `output path`.
     let cases = vec![
@@ -55,7 +57,7 @@ async fn test_parse_stage_location_internal() -> Result<()> {
     for (name, input, expected) in cases {
         let (stage, path) = parse_stage_location(&ctx, input).await?;
 
-        assert_eq!(stage, user_stage_info, "{}", name);
+        assert_eq!(stage, stage_info, "{}", name);
         assert_eq!(path, expected, "{}", name);
     }
 
@@ -70,10 +72,12 @@ async fn test_parse_stage_location_external() -> Result<()> {
         stage_type: StageType::External,
         ..Default::default()
     };
+    let tenant = ctx.get_tenant();
     // Add an external stage for testing.
     ctx.get_user_manager()
-        .add_stage(&ctx.get_tenant(), user_stage_info.clone(), false)
+        .add_stage(&tenant, user_stage_info, false)
         .await?;
+    let stage_info = ctx.get_user_manager().get_stage(&tenant, "test").await?;
 
     // Cases are in the format: `name`, `input location`, `output path`.
     let cases = vec![
@@ -86,7 +90,7 @@ async fn test_parse_stage_location_external() -> Result<()> {
     for (name, input, expected) in cases {
         let (stage, path) = parse_stage_location(&ctx, input).await?;
 
-        assert_eq!(stage, user_stage_info, "{}", name);
+        assert_eq!(stage, stage_info, "{}", name);
         assert_eq!(path, expected, "{}", name);
     }
 

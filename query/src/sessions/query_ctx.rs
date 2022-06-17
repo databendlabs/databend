@@ -316,6 +316,10 @@ impl QueryContext {
         self.shared.get_current_user()
     }
 
+    pub fn set_current_user(&self, user: UserInfo) {
+        self.shared.set_current_user(user)
+    }
+
     pub fn get_fuse_version(&self) -> String {
         self.version.clone()
     }
@@ -342,6 +346,10 @@ impl QueryContext {
 
     pub fn get_tenant(&self) -> String {
         self.shared.get_tenant()
+    }
+
+    pub fn set_current_tenant(&self, tenant: String) {
+        self.shared.set_current_tenant(tenant)
     }
 
     pub fn get_subquery_name(&self, _query: &PlanNode) -> String {

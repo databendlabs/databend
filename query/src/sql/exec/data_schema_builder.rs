@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::wrap_nullable;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -20,6 +21,7 @@ use common_planners::Expression;
 
 use crate::sql::exec::util::format_field_name;
 use crate::sql::plans::EvalScalar;
+use crate::sql::plans::JoinType;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::Project;
 use crate::sql::IndexType;
@@ -34,13 +36,23 @@ impl DataSchemaBuilder {
         DataSchemaBuilder { metadata }
     }
 
-    pub fn build_project(&self, plan: &Project) -> Result<DataSchemaRef> {
+    pub fn build_project(
+        &self,
+        plan: &Project,
+        input_schema: DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
         let mut fields = Vec::with_capacity(plan.columns.len());
         for index in plan.columns.iter() {
             let column_entry = self.metadata.read().column(*index).clone();
-            let field_name = format_field_name(column_entry.name.as_str(), *index);
-            let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
-            fields.push(field);
+            let col_name = column_entry.name.as_str();
+            let field_name = format_field_name(col_name, *index);
+            // Field in the input_schema is preferred
+            if input_schema.has_field(&field_name) {
+                fields.push(input_schema.field_with_name(&field_name)?.clone());
+            } else {
+                let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
+                fields.push(field);
+            }
         }
 
         Ok(DataSchemaRefExt::create(fields))
@@ -86,16 +98,26 @@ impl DataSchemaBuilder {
         DataSchemaRefExt::create(fields)
     }
 
-    pub fn build_join(&self, left: DataSchemaRef, right: DataSchemaRef) -> DataSchemaRef {
-        // TODO: NATURAL JOIN and USING
+    pub fn build_join(
+        &self,
+        left: DataSchemaRef,
+        right: DataSchemaRef,
+        join_type: &JoinType,
+    ) -> DataSchemaRef {
         let mut fields = Vec::with_capacity(left.num_fields() + right.num_fields());
         for field in left.fields().iter() {
             fields.push(field.clone());
         }
-        for field in right.fields().iter() {
-            fields.push(field.clone());
+        if join_type == &JoinType::Left {
+            for field in right.fields().iter() {
+                let nullable_field = DataField::new(field.name(), wrap_nullable(field.data_type()));
+                fields.push(nullable_field);
+            }
+        } else {
+            for field in right.fields().iter() {
+                fields.push(field.clone());
+            }
         }
-
         DataSchemaRefExt::create(fields)
     }
 

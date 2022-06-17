@@ -29,7 +29,7 @@ pub struct RuleImplementHashJoin {
 }
 
 impl RuleImplementHashJoin {
-    pub fn create() -> Self {
+    pub fn new() -> Self {
         RuleImplementHashJoin {
             id: RuleID::ImplementHashJoin,
             pattern: SExpr::create_binary(

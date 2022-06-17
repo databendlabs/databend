@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use common_exception::Result;
 
 use super::ScalarExpr;
@@ -23,15 +26,43 @@ use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum JoinType {
-    InnerJoin,
-    LeftJoin,
-    RightJoin,
-    FullJoin,
-    SemiJoin,
-    AntiJoin,
-    CrossJoin,
+    Inner,
+    Left,
+    Right,
+    Full,
+    Semi,
+    Anti,
+    Cross,
+}
+
+impl Display for JoinType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JoinType::Inner => {
+                write!(f, "INNER")
+            }
+            JoinType::Left => {
+                write!(f, "LEFT OUTER")
+            }
+            JoinType::Right => {
+                write!(f, "RIGHT OUTER")
+            }
+            JoinType::Full => {
+                write!(f, "FULL OUTER")
+            }
+            JoinType::Semi => {
+                write!(f, "SEMI")
+            }
+            JoinType::Anti => {
+                write!(f, "ANTI")
+            }
+            JoinType::Cross => {
+                write!(f, "CROSS")
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -42,7 +73,7 @@ pub struct LogicalInnerJoin {
 }
 
 impl Operator for LogicalInnerJoin {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         RelOp::LogicalInnerJoin
     }
 

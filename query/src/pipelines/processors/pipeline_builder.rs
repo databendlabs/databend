@@ -32,6 +32,7 @@ use common_planners::SinkPlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
 use common_planners::SubQueriesSetPlan;
+use common_planners::WindowFuncPlan;
 use common_tracing::tracing;
 
 use crate::api::FlightTicket;
@@ -53,6 +54,7 @@ use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::pipelines::transforms::SubQueriesPuller;
 use crate::pipelines::transforms::WhereTransform;
+use crate::pipelines::transforms::WindowFuncTransform;
 use crate::sessions::QueryContext;
 
 pub struct PipelineBuilder {
@@ -89,6 +91,7 @@ impl PipelineBuilder {
             PlanNode::Projection(node) => self.visit_projection(node),
             PlanNode::AggregatorPartial(node) => self.visit_aggregator_partial(node),
             PlanNode::AggregatorFinal(node) => self.visit_aggregator_final(node),
+            PlanNode::WindowFunc(node) => self.visit_window_func(node),
             PlanNode::Filter(node) => self.visit_filter(node),
             PlanNode::Having(node) => self.visit_having(node),
             PlanNode::Sort(node) => self.visit_sort(node),
@@ -218,6 +221,18 @@ impl PipelineBuilder {
             })?;
             pipeline.mixed_processor(self.ctx.get_settings().get_max_threads()? as usize)?;
         }
+        Ok(pipeline)
+    }
+
+    fn visit_window_func(&mut self, node: &WindowFuncPlan) -> Result<Pipeline> {
+        let mut pipeline = self.visit(&*node.input)?;
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(WindowFuncTransform::create(
+                node.window_func.to_owned(),
+                node.schema.to_owned(),
+                node.input.schema(),
+            )))
+        })?;
         Ok(pipeline)
     }
 

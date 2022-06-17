@@ -19,10 +19,8 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
-use nom::Slice as _;
 use pratt::Affix;
 use pratt::Associativity;
-use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
@@ -124,65 +122,9 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                 }
             }
         }
-
-        let mut iter = expr_elements.into_iter();
-        let expr = ExprParser
-            .parse(&mut iter)
-            .map_err(|err| {
-                map_pratt_error(
-                    iter.next()
-                        .map(|elem| elem.span)
-                        // It's safe to slice one more token because EOI is always added.
-                        .unwrap_or_else(|| rest.slice(..1)),
-                    err,
-                )
-            })
-            .map_err(nom::Err::Error)?;
-
-        if let Some(elem) = iter.next() {
-            return Err(nom::Err::Error(Error::from_error_kind(
-                elem.span,
-                ErrorKind::Other("unable to parse rest of the expression"),
-            )));
-        }
-
-        Ok((rest, expr))
+        let iter = &mut expr_elements.into_iter();
+        run_pratt_parser(ExprParser, iter, rest, i)
     }
-}
-
-fn map_pratt_error<'a>(
-    next_token: Input<'a>,
-    err: PrattError<WithSpan<'a>, pratt::NoError>,
-) -> Error<'a> {
-    match err {
-        PrattError::EmptyInput => Error::from_error_kind(
-            next_token,
-            ErrorKind::Other("expected more tokens for expression"),
-        ),
-        PrattError::UnexpectedNilfix(elem) => Error::from_error_kind(
-            elem.span,
-            ErrorKind::Other("unable to parse the expression value"),
-        ),
-        PrattError::UnexpectedPrefix(elem) => Error::from_error_kind(
-            elem.span,
-            ErrorKind::Other("unable to parse the prefix operator"),
-        ),
-        PrattError::UnexpectedInfix(elem) => Error::from_error_kind(
-            elem.span,
-            ErrorKind::Other("unable to parse the binary operator"),
-        ),
-        PrattError::UnexpectedPostfix(elem) => Error::from_error_kind(
-            elem.span,
-            ErrorKind::Other("unable to parse the postfix operator"),
-        ),
-        PrattError::UserError(_) => unreachable!(),
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct WithSpan<'a> {
-    span: Input<'a>,
-    elem: ExprElement<'a>,
 }
 
 /// A 'flattened' AST of expressions.
@@ -325,16 +267,20 @@ pub enum ExprElement<'a> {
         expr1: Expr<'a>,
         expr2: Expr<'a>,
     },
+    IfNull {
+        expr1: Expr<'a>,
+        expr2: Expr<'a>,
+    },
 }
 
 struct ExprParser;
 
-impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
+impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for ExprParser {
     type Error = pratt::NoError;
-    type Input = WithSpan<'a>;
+    type Input = WithSpan<'a, ExprElement<'a>>;
     type Output = Expr<'a>;
 
-    fn query(&mut self, elem: &WithSpan) -> pratt::Result<Affix> {
+    fn query(&mut self, elem: &WithSpan<ExprElement>) -> pratt::Result<Affix> {
         let affix = match &elem.elem {
             ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(10)),
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
@@ -386,7 +332,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(affix)
     }
 
-    fn primary(&mut self, elem: WithSpan<'a>) -> pratt::Result<Expr<'a>> {
+    fn primary(&mut self, elem: WithSpan<'a, ExprElement<'a>>) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::ColumnRef {
                 database,
@@ -503,6 +449,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 expr1: Box::new(expr1),
                 expr2: Box::new(expr2),
             },
+            ExprElement::IfNull { expr1, expr2 } => Expr::IfNull {
+                span: elem.span.0,
+                expr1: Box::new(expr1),
+                expr2: Box::new(expr2),
+            },
             _ => unreachable!(),
         };
         Ok(expr)
@@ -511,7 +462,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     fn infix(
         &mut self,
         lhs: Expr<'a>,
-        elem: WithSpan<'a>,
+        elem: WithSpan<'a, ExprElement>,
         rhs: Expr<'a>,
     ) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
@@ -526,7 +477,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn prefix(&mut self, elem: WithSpan<'a>, rhs: Expr<'a>) -> pratt::Result<Expr<'a>> {
+    fn prefix(
+        &mut self,
+        elem: WithSpan<'a, ExprElement>,
+        rhs: Expr<'a>,
+    ) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 span: elem.span.0,
@@ -538,7 +493,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn postfix(&mut self, lhs: Expr<'a>, elem: WithSpan<'a>) -> pratt::Result<Expr<'a>> {
+    fn postfix(
+        &mut self,
+        lhs: Expr<'a>,
+        elem: WithSpan<'a, ExprElement<'a>>,
+    ) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::MapAccess { accessor } => Expr::MapAccess {
                 span: elem.span.0,
@@ -581,27 +540,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     }
 }
 
-pub fn expr_element(i: Input) -> IResult<WithSpan> {
+pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(
-        rule! {
-            #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
-        },
-        |res| match res {
-            (column, None) => ExprElement::ColumnRef {
-                database: None,
-                table: None,
-                column,
-            },
-            (table, Some((_, column, None))) => ExprElement::ColumnRef {
-                database: None,
-                table: Some(table),
-                column,
-            },
-            (database, Some((_, table, Some((_, column))))) => ExprElement::ColumnRef {
-                database: Some(database),
-                table: Some(table),
-                column,
-            },
+        peroid_separated_idents_1_to_3,
+        |(database, table, column)| ExprElement::ColumnRef {
+            database,
+            table,
+            column,
         },
     );
     let is_null = map(
@@ -866,6 +811,17 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         },
         |(_, _, expr1, _, expr2, _)| ExprElement::NullIf { expr1, expr2 },
     );
+    let ifnull = map(
+        rule! {
+            IFNULL
+            ~ ^"("
+            ~ ^#subexpr(0)
+            ~ ^","
+            ~ ^#subexpr(0)
+            ~ ^")"
+        },
+        |(_, _, expr1, _, expr2, _)| ExprElement::IfNull { expr1, expr2 },
+    );
     let (rest, (span, elem)) = consumed(alt((
         rule! (
             #is_null : "`... IS [NOT] NULL`"
@@ -884,6 +840,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #nullif: "`NULLIF(..., ...)`"
+            | #ifnull: "`IFNULL(..., ...)`"
         ),
         rule!(
             #count_all : "COUNT(*)"
@@ -1038,6 +995,11 @@ pub fn literal_string(i: Input) -> IResult<String> {
             }
         },
     )(i)
+}
+
+pub fn at_string(i: Input) -> IResult<String> {
+    match_token(AtString)(i)
+        .map(|(i2, token)| (i2, token.text()[1..token.text().len()].to_string()))
 }
 
 pub fn type_name(i: Input) -> IResult<TypeName> {

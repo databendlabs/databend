@@ -12,34 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::Marshal;
-use common_io::prelude::Unmarshal;
+use micromarshal::Marshal;
+use micromarshal::Unmarshal;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use opensrv_clickhouse::types::HasSqlType;
 use serde_json::Value;
 
-use crate::prelude::*;
+use crate::ColumnRef;
+use crate::PrimitiveColumn;
+use crate::PrimitiveType;
+use crate::Series;
+use crate::TypeSerializer;
 
 #[derive(Debug, Clone)]
-pub struct NumberSerializer<T: PrimitiveType> {
-    t: PhantomData<T>,
+pub struct NumberSerializer<'a, T: PrimitiveType> {
+    pub(crate) values: &'a [T],
 }
 
-impl<T: PrimitiveType> Default for NumberSerializer<T> {
-    fn default() -> Self {
-        Self {
-            t: Default::default(),
-        }
+impl<'a, T: PrimitiveType> NumberSerializer<'a, T> {
+    pub fn try_create(col: &'a ColumnRef) -> Result<Self> {
+        let col: &PrimitiveColumn<T> = Series::check_get(col)?;
+        Ok(NumberSerializer {
+            values: col.values(),
+        })
     }
 }
 
-impl<T> TypeSerializer for NumberSerializer<T>
+impl<'a, T> TypeSerializer<'a> for NumberSerializer<'a, T>
 where T: PrimitiveType
         + opensrv_clickhouse::types::StatBuffer
         + Marshal
@@ -47,58 +50,59 @@ where T: PrimitiveType
         + HasSqlType
         + std::convert::Into<opensrv_clickhouse::types::Value>
         + std::convert::From<opensrv_clickhouse::types::Value>
-        + opensrv_clickhouse::io::Marshal
-        + opensrv_clickhouse::io::Unmarshal<T>
+        + lexical_core::ToLexical
 {
-    fn serialize_value(&self, value: &DataValue, _format: &FormatSettings) -> Result<String> {
-        Ok(format!("{:?}", value))
+    fn need_quote(&self) -> bool {
+        false
+    }
+    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
+        extend_lexical(self.values[row_index], buf);
     }
 
-    fn serialize_column(
-        &self,
-        column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<String>> {
-        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
-        let result: Vec<String> = column.iter().map(|x| x.to_string()).collect();
-        Ok(result)
-    }
-
-    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
-        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
-        let result: Vec<Value> = column
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+        let result: Vec<Value> = self
+            .values
             .iter()
             .map(|x| serde_json::to_value(x).unwrap())
             .collect();
         Ok(result)
     }
 
-    fn serialize_clickhouse_format(
+    fn serialize_clickhouse_const(
         &self,
-        column: &ColumnRef,
+        _format: &FormatSettings,
+        size: usize,
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
+        let mut values: Vec<T> = Vec::with_capacity(self.values.len() * size);
+        for _ in 0..size {
+            for v in self.values.iter() {
+                values.push(*v)
+            }
+        }
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
+    }
+    fn serialize_clickhouse_column(
+        &self,
         _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let col: &PrimitiveColumn<T> = Series::check_get(column)?;
-        let values: Vec<T> = col.iter().map(|c| c.to_owned()).collect();
+        let values: Vec<T> = self.values.iter().map(|c| c.to_owned()).collect();
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 
     fn serialize_json_object(
         &self,
-        column: &ColumnRef,
         _valids: Option<&Bitmap>,
         format: &FormatSettings,
     ) -> Result<Vec<Value>> {
-        self.serialize_json(column, format)
+        self.serialize_json_values(format)
     }
 
     fn serialize_json_object_suppress_error(
         &self,
-        column: &ColumnRef,
         _format: &FormatSettings,
     ) -> Result<Vec<Option<Value>>> {
-        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
-        let result: Vec<Option<Value>> = column
+        let result: Vec<Option<Value>> = self
+            .values
             .iter()
             .map(|x| match serde_json::to_value(x) {
                 Ok(v) => Some(v),
@@ -106,5 +110,18 @@ where T: PrimitiveType
             })
             .collect();
         Ok(result)
+    }
+}
+
+// 30% faster lexical_core::write to tmp buf and extend_from_slice
+#[inline]
+pub fn extend_lexical<N: lexical_core::ToLexical>(n: N, buf: &mut Vec<u8>) {
+    buf.reserve(N::FORMATTED_SIZE_DECIMAL);
+    let len0 = buf.len();
+    unsafe {
+        let slice =
+            std::slice::from_raw_parts_mut(buf.as_mut_ptr().add(len0), buf.capacity() - len0);
+        let len = lexical_core::write(n, slice).len();
+        buf.set_len(len0 + len);
     }
 }

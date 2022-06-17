@@ -18,11 +18,15 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
+use common_exception::Result;
+use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::NullableSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
@@ -72,6 +76,17 @@ impl DataType for NullableType {
         DataValue::Null
     }
 
+    fn random_value(&self) -> DataValue {
+        let mut rng = rand::rngs::SmallRng::from_entropy();
+        let p = rng.gen_bool(0.5);
+        // half possibility to be null
+        if p {
+            self.inner.random_value()
+        } else {
+            DataValue::Null
+        }
+    }
+
     fn arrow_type(&self) -> ArrowType {
         self.inner.arrow_type()
     }
@@ -80,11 +95,13 @@ impl DataType for NullableType {
         self.inner.custom_arrow_meta()
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        NullableSerializer {
-            inner: Box::new(self.inner.create_serializer()),
+    fn create_serializer_inner<'a>(&self, column: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        let column: &NullableColumn = Series::check_get(column)?;
+        Ok(NullableSerializer {
+            validity: column.ensure_validity(),
+            inner: Box::new(self.inner.create_serializer(column.inner())?),
         }
-        .into()
+        .into())
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {

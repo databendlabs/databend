@@ -39,13 +39,12 @@ impl AnalyzableStatement for DfRenameTable {
         let tenant = ctx.get_tenant();
         let mut entities = Vec::new();
         for (k, v) in &self.name_map {
-            let (catalog_name, database_name, table_name) =
-                super::resolve_table(&ctx, k, "RENAME TABLE")?;
-            let (new_catalog_name, new_database_name, new_table_name) =
+            let (catalog, database, table) = super::resolve_table(&ctx, k, "RENAME TABLE")?;
+            let (new_catalog, new_database, new_table) =
                 super::resolve_table(&ctx, v, "RENAME TABLE")?;
 
             // TODO if catalog != new_catalog, then throws Error
-            if new_catalog_name != catalog_name {
+            if new_catalog != catalog {
                 return Err(ErrorCode::BadArguments(
                     "alter catalog not allowed while reanme table",
                 ));
@@ -53,11 +52,11 @@ impl AnalyzableStatement for DfRenameTable {
 
             entities.push(RenameTableEntity {
                 if_exists: false,
-                catalog_name,
-                database_name,
-                table_name,
-                new_database_name,
-                new_table_name,
+                catalog,
+                database,
+                table,
+                new_database,
+                new_table,
             })
         }
 

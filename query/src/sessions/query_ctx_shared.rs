@@ -35,6 +35,7 @@ use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
+use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::sql::SQLCommon;
 use crate::storages::Table;
@@ -146,6 +147,10 @@ impl QueryContextShared {
 
     pub fn get_current_user(&self) -> Result<UserInfo> {
         self.session.get_current_user()
+    }
+
+    pub fn set_current_user(&self, user: UserInfo) {
+        self.session.set_current_user(user);
     }
 
     pub fn set_current_tenant(&self, tenant: String) {
@@ -279,6 +284,10 @@ impl QueryContextShared {
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
         let settings = self.get_settings();
         let mut format = FormatSettings::default();
+        if let SessionType::HTTPQuery = self.session.get_type() {
+            format.false_bytes = vec![b'f', b'a', b'l', b's', b'e'];
+            format.true_bytes = vec![b't', b'r', b'u', b'e'];
+        }
         {
             format.record_delimiter = settings.get_record_delimiter()?;
             format.field_delimiter = settings.get_field_delimiter()?;

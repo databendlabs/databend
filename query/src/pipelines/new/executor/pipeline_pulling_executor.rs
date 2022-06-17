@@ -121,22 +121,29 @@ impl PipelinePullingExecutor {
     }
 
     pub fn try_pull_data<F>(&mut self, f: F) -> Result<Option<DataBlock>>
-        where F: Fn() -> bool {
-        while !f() && !self.executor.is_finished() {
-            return match self.receiver.recv_timeout(Duration::from_millis(100)) {
+    where F: Fn() -> bool {
+        if !self.executor.is_finished() {
+            while !f() {
+                return match self.receiver.recv_timeout(Duration::from_millis(100)) {
+                    Ok(data_block) => data_block,
+                    Err(RecvTimeoutError::Timeout) => {
+                        continue;
+                    }
+                    Err(RecvTimeoutError::Disconnected) => {
+                        Err(ErrorCode::LogicalError("Logical error, receiver error."))
+                    }
+                };
+            }
+            Ok(None)
+        } else {
+            return match self.receiver.try_recv() {
                 Ok(data_block) => data_block,
-                Err(RecvTimeoutError::Timeout) => {
-                    continue;
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    Err(ErrorCode::LogicalError("Logical error, receiver error."))
-                }
+                // puller will not pull again once it received a None
+                Err(err) => Err(ErrorCode::LogicalError(format!(
+                    "Logical error, try receiver error. after executor finish {}",
+                    err
+                ))),
             };
-        }
-
-        match self.receiver.try_recv() {
-            Ok(data) => data,
-            Err(_) => Ok(None)
         }
     }
 }

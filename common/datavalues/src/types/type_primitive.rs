@@ -17,10 +17,13 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
+use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::NumberSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 #[derive(Default, Clone, Copy, serde::Deserialize, serde::Serialize)]
 
@@ -89,6 +92,11 @@ macro_rules! impl_numeric {
                 $ty::default().into()
             }
 
+            fn random_value(&self) -> DataValue {
+                let mut rng = rand::rngs::SmallRng::from_entropy();
+                rng.gen::<$ty>().into()
+            }
+
             fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
                 let value: $ty = DFTryFrom::try_from(data)?;
                 let column = Series::from_data(&[value]);
@@ -108,8 +116,11 @@ macro_rules! impl_numeric {
                 ArrowType::$tname
             }
 
-            fn create_serializer(&self) -> TypeSerializerImpl {
-                NumberSerializer::<$ty>::default().into()
+            fn create_serializer_inner<'a>(
+                &self,
+                col: &'a ColumnRef,
+            ) -> Result<TypeSerializerImpl<'a>> {
+                Ok(NumberSerializer::<'a, $ty>::try_create(col)?.into())
             }
 
             fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {

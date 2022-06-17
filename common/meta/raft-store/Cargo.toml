@@ -22,7 +22,7 @@ common-tracing = { path = "../../tracing" }
 
 # crates.io deps
 anyhow = "1.0.56"
-async-trait = "0.1.53"
+async-trait = "0.1.56"
 bytes = "1.1.0"
 derive_more = "0.99.17"
 hostname = "0.3.1"

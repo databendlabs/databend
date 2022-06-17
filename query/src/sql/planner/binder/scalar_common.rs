@@ -17,6 +17,7 @@ use common_exception::Result;
 
 use crate::sql::binder::scalar_visitor::Recursion;
 use crate::sql::binder::scalar_visitor::ScalarVisitor;
+use crate::sql::optimizer::RelationalProperty;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
@@ -94,4 +95,8 @@ pub fn wrap_cast_if_needed(scalar: Scalar, target_type: &DataTypeImpl) -> Scalar
     } else {
         scalar
     }
+}
+
+pub fn satisfied_by(scalar: &Scalar, prop: &RelationalProperty) -> bool {
+    scalar.used_columns().is_subset(&prop.output_columns)
 }

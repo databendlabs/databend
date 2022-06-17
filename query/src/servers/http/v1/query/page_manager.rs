@@ -53,22 +53,28 @@ pub struct PageManager {
     block_end: bool,
     schema: DataSchemaRef,
     last_page: Option<Page>,
-    page_buffer: VecDeque<Vec<Vec<JsonValue>>>,
+    row_buffer: VecDeque<Vec<JsonValue>>,
     block_buffer: Arc<BlockBuffer>,
+    string_fields: bool,
 }
 
 impl PageManager {
-    pub fn new(max_rows_per_page: usize, block_buffer: Arc<BlockBuffer>) -> PageManager {
+    pub fn new(
+        max_rows_per_page: usize,
+        block_buffer: Arc<BlockBuffer>,
+        string_fields: bool,
+    ) -> PageManager {
         PageManager {
             total_rows: 0,
             last_page: None,
             total_pages: 0,
             end: false,
             block_end: false,
-            page_buffer: Default::default(),
+            row_buffer: Default::default(),
             schema: Arc::new(DataSchema::empty()),
             block_buffer,
             max_rows_per_page,
+            string_fields,
         }
     }
 
@@ -120,29 +126,32 @@ impl PageManager {
         tp: &Wait,
         format: &FormatSettings,
     ) -> Result<(JsonBlock, bool)> {
-        let res: Vec<Vec<JsonValue>> = vec![];
-        let mut res = self.page_buffer.pop_front().unwrap_or(res);
-        loop {
-            if res.len() >= self.max_rows_per_page {
+        let mut res: Vec<Vec<JsonValue>> = Vec::with_capacity(self.max_rows_per_page);
+        while res.len() < self.max_rows_per_page {
+            if let Some(row) = self.row_buffer.pop_front() {
+                res.push(row)
+            } else {
                 break;
-            };
+            }
+        }
+        loop {
+            assert!(self.max_rows_per_page >= res.len());
+            let remain = self.max_rows_per_page - res.len();
+            if remain == 0 {
+                break;
+            }
             let (block, done) = self.block_buffer.pop().await?;
             match block {
                 Some(block) => {
                     if self.schema.fields().is_empty() {
                         self.schema = block.schema().clone();
                     }
-                    let mut iter = block_to_json_value(&block, format)?.into_iter().peekable();
-                    if res.is_empty() {
-                        let mut chunk = iter.by_ref().take(self.max_rows_per_page).collect();
-                        res.append(&mut chunk);
-                    } else {
-                        res = iter.by_ref().take(self.max_rows_per_page).collect();
-                    }
-                    while iter.peek().is_some() {
-                        let chunk: Vec<_> = iter.by_ref().take(self.max_rows_per_page).collect();
-                        self.page_buffer.push_back(chunk)
-                    }
+                    let mut iter = block_to_json_value(&block, format, self.string_fields)?
+                        .into_iter()
+                        .peekable();
+                    let chunk: Vec<_> = iter.by_ref().take(remain).collect();
+                    res.extend(chunk);
+                    self.row_buffer = iter.by_ref().collect();
                     if done {
                         self.block_end = true;
                         break;
@@ -180,7 +189,7 @@ impl PageManager {
         if !self.block_end {
             self.block_end = self.block_buffer.is_pop_done().await;
         }
-        let end = self.block_end && self.page_buffer.is_empty();
+        let end = self.block_end && self.row_buffer.is_empty();
         Ok((block, end))
     }
 

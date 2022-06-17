@@ -176,7 +176,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
         .truncate(ctx.clone(), TruncateTablePlan {
             // values do not matter
             catalog: "".to_string(),
-            db,
+            database: db,
             table: "".to_string(),
             purge: false,
         })

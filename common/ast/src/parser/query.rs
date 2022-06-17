@@ -16,6 +16,10 @@ use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
+use pratt::Affix;
+use pratt::Associativity;
+use pratt::PrattParser;
+use pratt::Precedence;
 
 use crate::ast::*;
 use crate::parser::expr::*;
@@ -26,56 +30,22 @@ use crate::rule;
 pub fn query(i: Input) -> IResult<Query> {
     map(
         consumed(rule! {
-            SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
-            ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
-            ~ ( WHERE ~ ^#expr )?
-            ~ ( GROUP ~ ^BY ~ ^#comma_separated_list1(expr) )?
-            ~ ( HAVING ~ ^#expr )?
+            #set_operation
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( LIMIT ~ ^#comma_separated_list1(expr) )?
             ~ ( OFFSET ~ ^#expr )?
             ~ ( FORMAT ~ #ident )?
             : "`SELECT ...`"
         }),
-        |(
-            span,
-            (
-                _select,
-                opt_distinct,
-                select_list,
-                opt_from_block,
-                opt_where_block,
-                opt_group_by_block,
-                opt_having_block,
-                opt_order_by_block,
-                opt_limit_block,
-                opt_offset_block,
-                opt_format,
-            ),
-        )| {
-            Query {
-                span: span.0,
-                body: SetExpr::Select(Box::new(SelectStmt {
-                    // TODO(andylokandy): span should exclude order by
-                    span: span.0,
-                    distinct: opt_distinct.is_some(),
-                    select_list,
-                    from: opt_from_block
-                        .map(|(_, table_refs)| table_refs)
-                        .unwrap_or_default(),
-                    selection: opt_where_block.map(|(_, selection)| selection),
-                    group_by: opt_group_by_block
-                        .map(|(_, _, group_by)| group_by)
-                        .unwrap_or_default(),
-                    having: opt_having_block.map(|(_, having)| having),
-                })),
-                order_by: opt_order_by_block
-                    .map(|(_, _, order_by)| order_by)
-                    .unwrap_or_default(),
-                limit: opt_limit_block.map(|(_, limit)| limit).unwrap_or_default(),
-                offset: opt_offset_block.map(|(_, offset)| offset),
-                format: opt_format.map(|(_, format)| format.name),
-            }
+        |(span, (body, opt_order_by_block, opt_limit_block, opt_offset_block, opt_format))| Query {
+            span: span.0,
+            body,
+            order_by: opt_order_by_block
+                .map(|(_, _, order_by)| order_by)
+                .unwrap_or_default(),
+            limit: opt_limit_block.map(|(_, limit)| limit).unwrap_or_default(),
+            offset: opt_offset_block.map(|(_, offset)| offset),
+            format: opt_format.map(|(_, format)| format.name),
         },
     )(i)
 }
@@ -99,11 +69,11 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
     );
     let projection = map(
         rule! {
-            #expr ~ ( AS ~ #ident_after_as )?
+            #expr ~ #alias_name?
         },
         |(expr, alias)| SelectTarget::AliasedExpr {
             expr: Box::new(expr),
-            alias: alias.map(|(_, name)| name),
+            alias,
         },
     );
 
@@ -158,14 +128,20 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     )(i)
 }
 
-pub fn table_alias(i: Input) -> IResult<TableAlias> {
-    map(
-        rule! { #ident | #map(rule! { AS ~ #ident_after_as }, |(_, name)| name) },
-        |name| TableAlias {
-            name,
-            columns: vec![],
-        },
+pub fn alias_name(i: Input) -> IResult<Identifier> {
+    let as_alias = map(rule! { AS ~ #ident_after_as }, |(_, name)| name);
+
+    rule!(
+        #ident
+        | #as_alias
     )(i)
+}
+
+pub fn table_alias(i: Input) -> IResult<TableAlias> {
+    map(alias_name, |name| TableAlias {
+        name,
+        columns: vec![],
+    })(i)
 }
 
 pub fn table_function(i: Input) -> IResult<TableReference> {
@@ -304,4 +280,179 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
             nulls_first: None,
         },
     )(i)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetOperationElement<'a> {
+    SelectStmt {
+        distinct: bool,
+        select_list: Box<Vec<SelectTarget<'a>>>,
+        from: Box<Vec<TableReference<'a>>>,
+        selection: Box<Option<Expr<'a>>>,
+        group_by: Box<Vec<Expr<'a>>>,
+        having: Box<Option<Expr<'a>>>,
+    },
+    SetOperation {
+        op: SetOperator,
+        all: bool,
+    },
+    Group(SetExpr<'a>),
+}
+
+pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
+    let set_operator = map(
+        rule! {
+            ( UNION | EXCEPT | INTERSECT ) ~ ALL?
+        },
+        |(op, all)| {
+            let op = match op.kind {
+                UNION => SetOperator::Union,
+                INTERSECT => SetOperator::Intersect,
+                EXCEPT => SetOperator::Except,
+                _ => unreachable!(),
+            };
+            SetOperationElement::SetOperation {
+                op,
+                all: all.is_some(),
+            }
+        },
+    );
+
+    let select_stmt = map(
+        rule! {
+             SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
+                ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
+                ~ ( WHERE ~ ^#expr )?
+                ~ ( GROUP ~ ^BY ~ ^#comma_separated_list1(expr) )?
+                ~ ( HAVING ~ ^#expr )?
+        },
+        |(
+            _select,
+            opt_distinct,
+            select_list,
+            opt_from_block,
+            opt_where_block,
+            opt_group_by_block,
+            opt_having_block,
+        )| {
+            SetOperationElement::SelectStmt {
+                distinct: opt_distinct.is_some(),
+                select_list: Box::new(select_list),
+                from: Box::new(
+                    opt_from_block
+                        .map(|(_, table_refs)| table_refs)
+                        .unwrap_or_default(),
+                ),
+                selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
+                group_by: Box::new(
+                    opt_group_by_block
+                        .map(|(_, _, group_by)| group_by)
+                        .unwrap_or_default(),
+                ),
+                having: Box::new(opt_having_block.map(|(_, having)| having)),
+            }
+        },
+    );
+
+    let group = map(
+        rule! {
+           "("
+           ~ ^#set_operation
+           ~ ^")"
+        },
+        |(_, set_expr, _)| SetOperationElement::Group(set_expr),
+    );
+
+    let (rest, (span, elem)) = consumed(rule!( #group | #set_operator | #select_stmt))(i)?;
+    Ok((rest, WithSpan { span, elem }))
+}
+
+pub fn set_operation(i: Input) -> IResult<SetExpr> {
+    let (rest, set_operation_elements) = rule!(#set_operation_element+)(i)?;
+    let iter = &mut set_operation_elements.into_iter();
+    run_pratt_parser(SetOperationParser, iter, rest, i)
+}
+
+struct SetOperationParser;
+
+impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement<'a>>>> PrattParser<I>
+    for SetOperationParser
+{
+    type Error = pratt::NoError;
+    type Input = WithSpan<'a, SetOperationElement<'a>>;
+    type Output = SetExpr<'a>;
+
+    fn query(&mut self, input: &Self::Input) -> pratt::Result<Affix> {
+        let affix = match &input.elem {
+            SetOperationElement::SetOperation { op, .. } => match op {
+                SetOperator::Union | SetOperator::Except => {
+                    Affix::Infix(Precedence(10), Associativity::Left)
+                }
+                SetOperator::Intersect => Affix::Infix(Precedence(20), Associativity::Left),
+            },
+            _ => Affix::Nilfix,
+        };
+        Ok(affix)
+    }
+
+    fn primary(&mut self, input: Self::Input) -> pratt::Result<SetExpr<'a>> {
+        let set_expr = match input.elem {
+            SetOperationElement::Group(expr) => expr,
+            SetOperationElement::SelectStmt {
+                distinct,
+                select_list,
+                from,
+                selection,
+                group_by,
+                having,
+            } => SetExpr::Select(Box::new(SelectStmt {
+                span: input.span.0,
+                distinct,
+                select_list: *select_list,
+                from: *from,
+                selection: *selection,
+                group_by: *group_by,
+                having: *having,
+            })),
+            _ => unreachable!(),
+        };
+        Ok(set_expr)
+    }
+
+    fn infix(
+        &mut self,
+        lhs: Self::Output,
+        input: Self::Input,
+        rhs: Self::Output,
+    ) -> pratt::Result<SetExpr<'a>> {
+        let set_expr = match input.elem {
+            SetOperationElement::SetOperation { op, all, .. } => {
+                SetExpr::SetOperation(Box::new(SetOperation {
+                    span: input.span.0,
+                    op,
+                    all,
+                    left: Box::new(lhs),
+                    right: Box::new(rhs),
+                }))
+            }
+            _ => unreachable!(),
+        };
+        Ok(set_expr)
+    }
+
+    fn prefix(
+        &mut self,
+        _op: Self::Input,
+        _rhs: Self::Output,
+    ) -> Result<Self::Output, Self::Error> {
+        unreachable!()
+    }
+
+    fn postfix(
+        &mut self,
+        _lhs: Self::Output,
+        _op: Self::Input,
+    ) -> Result<Self::Output, Self::Error> {
+        unreachable!()
+    }
 }

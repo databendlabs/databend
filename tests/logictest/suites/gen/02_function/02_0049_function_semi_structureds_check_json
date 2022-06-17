@@ -110,7 +110,7 @@ statement ok
 USE db1;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Fuse;
 
 statement ok
 insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}');
@@ -125,7 +125,7 @@ statement ok
 select check_json(v), v from t1;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Fuse;
 
 statement ok
 insert into t2 values ('abc'),('[1,');

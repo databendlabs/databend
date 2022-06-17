@@ -24,7 +24,7 @@ common-meta-types = { path = "../meta/types" }
 common-proto-conv = { path = "../proto-conv" }
 common-protos = { path = "../protos" }
 
-async-trait = "0.1.53"
+async-trait = "0.1.56"
 serde_json = "1.0.79"
 
 [dev-dependencies]

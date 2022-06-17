@@ -21,6 +21,7 @@ common-grpc = { path = "../../grpc" }
 common-meta-api = { path = "../api" }
 common-meta-app = { path = "../app" }
 common-meta-types = { path = "../types" }
+common-metrics = { path = "../../metrics" }
 common-proto-conv = { path = "../../proto-conv" }
 common-protos = { path = "../../protos" }
 common-tracing = { path = "../../tracing" }

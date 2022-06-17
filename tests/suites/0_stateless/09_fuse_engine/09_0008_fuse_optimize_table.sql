@@ -47,7 +47,7 @@ select * from t order by a;
 
 -- optimize memory table should not panic/throws exception
 
-create table m(a uint64) engine=Memory;
+create table m(a uint64) Engine = Fuse;
 optimize table m;
 optimize table m all;
 optimize table m purge;

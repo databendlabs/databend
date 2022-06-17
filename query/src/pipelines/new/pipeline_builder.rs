@@ -30,6 +30,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SelectPlan;
 use common_planners::SortPlan;
 use common_planners::SubQueriesSetPlan;
+use common_planners::WindowFuncPlan;
 
 use super::processors::SortMergeCompactor;
 use crate::pipelines::new::pipeline::NewPipeline;
@@ -88,6 +89,7 @@ impl PlanVisitor for QueryPipelineBuilder {
             PlanNode::Expression(n) => self.visit_expression(n),
             PlanNode::AggregatorPartial(n) => self.visit_aggregate_partial(n),
             PlanNode::AggregatorFinal(n) => self.visit_aggregate_final(n),
+            PlanNode::WindowFunc(n) => self.visit_window_func(n),
             PlanNode::Filter(n) => self.visit_filter(n),
             PlanNode::Having(n) => self.visit_having(n),
             PlanNode::Sort(n) => self.visit_sort(n),
@@ -148,6 +150,11 @@ impl PlanVisitor for QueryPipelineBuilder {
                     self.ctx.clone(),
                 )
             })
+    }
+
+    fn visit_window_func(&mut self, plan: &WindowFuncPlan) -> Result<()> {
+        self.visit_plan_node(&plan.input)?;
+        unimplemented!("window function cannot work in new scheduler framework now")
     }
 
     fn visit_projection(&mut self, plan: &ProjectionPlan) -> Result<()> {

@@ -28,20 +28,15 @@ mod project;
 mod scalar;
 mod sort;
 
-pub use aggregate::AggregatePlan;
+pub use aggregate::Aggregate;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
-use common_planners::AlterUserPlan;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::CreateUserPlan;
-use common_planners::CreateViewPlan;
-use common_planners::DropUserPlan;
+use common_planners::*;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
-pub use filter::FilterPlan;
+pub use filter::Filter;
 pub use hash_join::PhysicalHashJoin;
-pub use limit::LimitPlan;
+pub use limit::Limit;
 pub use logical_get::LogicalGet;
 pub use logical_join::JoinType;
 pub use logical_join::LogicalInnerJoin;
@@ -51,8 +46,8 @@ pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
 pub use project::Project;
 pub use scalar::*;
+pub use sort::Sort;
 pub use sort::SortItem;
-pub use sort::SortPlan;
 
 use super::BindContext;
 use super::MetadataRef;
@@ -60,31 +55,65 @@ use crate::sql::optimizer::SExpr;
 
 #[derive(Clone)]
 pub enum Plan {
-    // Query statement, `SELECT`
+    // `SELECT` statement
     Query {
         s_expr: SExpr,
         metadata: MetadataRef,
         bind_context: Box<BindContext>,
     },
 
-    // Explain query statement, `EXPLAIN`
     Explain {
         kind: ExplainKind,
         plan: Box<Plan>,
     },
-
-    // DDL
-    CreateTable(Box<CreateTablePlan>),
-    CreateDatabase(CreateDatabasePlan),
-    CreateView(Box<CreateViewPlan>),
 
     // System
     ShowMetrics,
     ShowProcessList,
     ShowSettings,
 
-    // DCL
+    // Databases
+    ShowDatabases(Box<ShowDatabasesPlan>),
+    ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
+    CreateDatabase(Box<CreateDatabasePlan>),
+    DropDatabase(Box<DropDatabasePlan>),
+    RenameDatabase(Box<RenameDatabasePlan>),
+
+    // Tables
+    ShowTables(Box<ShowTablesPlan>),
+    ShowCreateTable(Box<ShowCreateTablePlan>),
+    DescribeTable(Box<DescribeTablePlan>),
+    ShowTablesStatus(Box<ShowTablesStatusPlan>),
+    CreateTable(Box<CreateTablePlan>),
+    DropTable(Box<DropTablePlan>),
+    UndropTable(Box<UndropTablePlan>),
+    RenameTable(Box<RenameTablePlan>),
+    AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
+    DropTableClusterKey(Box<DropTableClusterKeyPlan>),
+    TruncateTable(Box<TruncateTablePlan>),
+    OptimizeTable(Box<OptimizeTablePlan>),
+
+    // Views
+    CreateView(Box<CreateViewPlan>),
+    AlterView(Box<AlterViewPlan>),
+    DropView(Box<DropViewPlan>),
+
+    // Users
+    ShowUsers,
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
+
+    // Roles
+    ShowRoles,
+    CreateRole(Box<CreateRolePlan>),
+    DropRole(Box<DropRolePlan>),
+
+    // Stages
+    ShowStages,
+    ListStage(Box<ListPlan>),
+    DescribeStage(Box<DescribeUserStagePlan>),
+    CreateStage(Box<CreateUserStagePlan>),
+    DropStage(Box<DropUserStagePlan>),
+    RemoveStage(Box<RemoveUserStagePlan>),
 }

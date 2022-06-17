@@ -21,71 +21,81 @@ use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
 
 use crate::prelude::*;
+use crate::types::serializations::helper::escape::write_escaped_string;
 
-#[derive(Debug, Clone)]
-pub struct StringSerializer {}
+#[derive(Clone)]
+pub struct StringSerializer<'a> {
+    pub(crate) column: &'a StringColumn,
+}
 
-impl TypeSerializer for StringSerializer {
-    fn serialize_value(&self, value: &DataValue, _format: &FormatSettings) -> Result<String> {
-        if let DataValue::String(x) = value {
-            Ok(String::from_utf8_lossy(x).to_string())
-        } else {
-            Err(ErrorCode::BadBytes("Incorrect String value"))
-        }
+impl<'a> StringSerializer<'a> {
+    pub fn try_create(col: &'a ColumnRef) -> Result<Self> {
+        let column: &StringColumn = Series::check_get(col)?;
+        Ok(Self { column })
+    }
+}
+
+impl<'a> TypeSerializer<'a> for StringSerializer<'a> {
+    fn need_quote(&self) -> bool {
+        true
     }
 
-    fn serialize_column(
+    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
+        buf.extend_from_slice(unsafe { self.column.value_unchecked(row_index) });
+    }
+
+    fn write_field_escaped(
         &self,
-        column: &ColumnRef,
+        row_index: usize,
+        buf: &mut Vec<u8>,
         _format: &FormatSettings,
-    ) -> Result<Vec<String>> {
-        let column: &StringColumn = Series::check_get(column)?;
-        let result: Vec<String> = column
-            .iter()
-            .map(|v| String::from_utf8_lossy(v).to_string())
-            .collect();
-        Ok(result)
+        quote: u8,
+    ) {
+        write_escaped_string(
+            unsafe { self.column.value_unchecked(row_index) },
+            buf,
+            quote,
+        )
     }
 
-    fn serialize_column_quoted(
-        &self,
-        column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<String>> {
-        let column: &StringColumn = Series::check_get(column)?;
-        let result: Vec<String> = column
-            .iter()
-            .map(|v| format!("{:?}", String::from_utf8_lossy(v)))
-            .collect();
-        Ok(result)
-    }
-
-    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
-        let column: &StringColumn = Series::check_get(column)?;
-        let result: Vec<Value> = column
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+        let result: Vec<Value> = self
+            .column
             .iter()
             .map(|x| serde_json::to_value(String::from_utf8_lossy(x).to_string()).unwrap())
             .collect();
         Ok(result)
     }
 
-    fn serialize_clickhouse_format(
+    fn serialize_clickhouse_const(
         &self,
-        column: &ColumnRef,
+        _format: &FormatSettings,
+        size: usize,
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
+        let strings: Vec<&[u8]> = self.column.iter().collect();
+        let mut values: Vec<&[u8]> = Vec::with_capacity(self.column.len() * size);
+        for _ in 0..size {
+            for v in strings.iter() {
+                values.push(v)
+            }
+        }
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
+    }
+
+    fn serialize_clickhouse_column(
+        &self,
         _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let column: &StringColumn = Series::check_get(column)?;
-        let values: Vec<&[u8]> = column.iter().collect();
+        let values: Vec<&[u8]> = self.column.iter().collect();
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 
     fn serialize_json_object(
         &self,
-        column: &ColumnRef,
         valids: Option<&Bitmap>,
         _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
-        let column: &StringColumn = Series::check_get(column)?;
+        let column = self.column;
         let mut result: Vec<Value> = Vec::new();
         for (i, v) in column.iter().enumerate() {
             if let Some(valids) = valids {
@@ -117,11 +127,10 @@ impl TypeSerializer for StringSerializer {
 
     fn serialize_json_object_suppress_error(
         &self,
-        column: &ColumnRef,
         _format: &FormatSettings,
     ) -> Result<Vec<Option<Value>>> {
-        let column: &StringColumn = Series::check_get(column)?;
-        let result: Vec<Option<Value>> = column
+        let result: Vec<Option<Value>> = self
+            .column
             .iter()
             .map(|v| match std::str::from_utf8(v) {
                 Ok(v) => match serde_json::from_str::<Value>(v) {

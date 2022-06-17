@@ -22,6 +22,8 @@ use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
 use crate::prelude::*;
+use crate::serializations::StructSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StructType {
@@ -30,6 +32,10 @@ pub struct StructType {
 }
 
 impl StructType {
+    pub fn new_impl(names: Vec<String>, types: Vec<DataTypeImpl>) -> DataTypeImpl {
+        DataTypeImpl::Struct(Self::create(names, types))
+    }
+
     pub fn create(names: Vec<String>, types: Vec<DataTypeImpl>) -> Self {
         debug_assert!(names.len() == types.len());
         StructType { names, types }
@@ -55,7 +61,21 @@ impl DataType for StructType {
     }
 
     fn name(&self) -> String {
-        "Struct".to_string()
+        let mut type_name = String::new();
+        type_name.push_str("Struct(");
+        let mut first = true;
+        for (name, ty) in self.names.iter().zip(self.types.iter()) {
+            if !first {
+                type_name.push_str(", ");
+            }
+            first = false;
+            type_name.push_str(name);
+            type_name.push(' ');
+            type_name.push_str(&ty.name());
+        }
+        type_name.push(')');
+
+        type_name
     }
 
     fn can_inside_nullable(&self) -> bool {
@@ -96,18 +116,19 @@ impl DataType for StructType {
         ArrowType::Struct(fields)
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        let inners = self
-            .types
-            .iter()
-            .map(|v| Box::new(v.create_serializer()))
-            .collect();
-        StructSerializer {
+    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        let column: &StructColumn = Series::check_get(col)?;
+        let cols = column.values();
+        let mut inners = vec![];
+        for (t, c) in self.types.iter().zip(cols) {
+            inners.push(t.create_serializer(c)?)
+        }
+        Ok(StructSerializer {
             names: self.names.clone(),
             inners,
-            types: self.types.clone(),
+            column: col,
         }
-        .into()
+        .into())
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
@@ -125,7 +146,7 @@ impl DataType for StructType {
 
         StructDeserializer {
             builder: MutableStructColumn::from_data(self.clone().into(), inners_mutable),
-            inner: inners_desers,
+            inners: inners_desers,
         }
         .into()
     }

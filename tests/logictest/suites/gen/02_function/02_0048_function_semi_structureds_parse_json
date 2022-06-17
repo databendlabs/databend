@@ -28,14 +28,11 @@ select parse_json(12.34);
 ----  
 12.34
 
-statement query T label(mysql,http)
+statement query T
 select parse_json('null');
 
-----  mysql
+----
 null
-
-----  http
-NULL
 
 statement query T 
 select parse_json('true');
@@ -61,32 +58,23 @@ select parse_json('1.912e2');
 ----  
 191.2
 
-statement query T label(mysql,http)
+statement query T label
 select parse_json('"Om ara pa ca na dhih"  ');
 
-----  mysql
+----
 "Om ara pa ca na dhih"
 
-----  http
-Om ara pa ca na dhih
-
-statement query T label(mysql,http)
+statement query T
 select parse_json('[-1, 12, 289, 2188, false]');
 
-----  mysql
+----
 [-1,12,289,2188,false]
 
-----  http
-[-1, 12, 289, 2188, False]
-
-statement query T label(mysql,http)
+statement query T
 select parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 
-----  mysql
+----
 {"x":"abc","y":false,"z":10}
-
-----  http
-{'x': 'abc', 'y': False, 'z': 10}
 
 statement error 1010
 select parse_json('[1,'); 
@@ -100,6 +88,7 @@ select parse_json(parse_json('123'));
 ----  
 123
 
+-- http handler could not parse
 statement ok
 select parse_json(parse_json('"\\\"abc\\\""'));
 
@@ -148,16 +137,13 @@ select try_parse_json(12.34);
 ----  
 12.34
 
-statement query T label(mysql,http)
+statement query T
 select try_parse_json('null');
 
-----  mysql
+----
 null
 
-----  http
-NULL
-
-statement query T 
+statement query T
 select try_parse_json('true');
 
 ----  
@@ -181,34 +167,25 @@ select try_parse_json('1.912e2');
 ----  
 191.2
 
-statement query T label(mysql,http)
+statement query T
 select try_parse_json('"Om ara pa ca na dhih"  ');
 
-----  mysql
+----
 "Om ara pa ca na dhih"
 
-----  http
-Om ara pa ca na dhih
-
-statement query T label(mysql,http)
+statement query T
 select try_parse_json('[-1, 12, 289, 2188, false]');
 
-----  mysql
+----
 [-1,12,289,2188,false]
 
-----  http
-[-1, 12, 289, 2188, False]
-
-statement query T label(mysql,http)
+statement query T
 select try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 
-----  mysql
+----
 {"x":"abc","y":false,"z":10}
 
-----  http
-{'x': 'abc', 'y': False, 'z': 10}
-
-statement query T 
+statement query T
 select try_parse_json('[1,');
 
 ----  
@@ -251,7 +228,7 @@ statement ok
 USE db1;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Fuse;
 
 statement ok
 insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}');
@@ -275,7 +252,7 @@ statement ok
 select try_parse_json(v), v from t1;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Fuse;
 
 statement ok
 insert into t2 values ('abc'),('[1,');

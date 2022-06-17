@@ -1,5 +1,5 @@
 statement ok
-CREATE TABLE math_sample_numbers (timestamp UInt32, value Int32) engine=Memory;
+CREATE TABLE math_sample_numbers (timestamp UInt32, value Int32) Engine = Fuse;
 
 statement ok
 INSERT INTO math_sample_numbers VALUES ('1', '-1'), ('2', '-2'), ('3', '3');
@@ -69,7 +69,7 @@ SELECT '===log===';
 ===log===
 
 statement ok
-CREATE TABLE math_log_numbers (a Float null, b Float null) engine=Memory;
+CREATE TABLE math_log_numbers (a Float null, b Float null) Engine = Fuse;
 
 statement ok
 INSERT INTO math_log_numbers VALUES (2.0, 1024.0), (NULL, 12), (12, NULL);
@@ -110,14 +110,11 @@ SELECT ln(NULL);
 ----  
 NULL
 
-statement query F label(mysql,http)
+statement query F
 SELECT ln(1, 2);
 
-----  mysql
+----
 inf
-
-----  http
-NULL
 
 statement query T 
 SELECT log10(NULL);
@@ -223,14 +220,11 @@ SELECT tan(pi()/4);
 ----  
 0.9999999999999999
 
-statement query F label(mysql,http)
+statement query F
 SELECT cot(0);
 
-----  mysql
+----
 inf
-
-----  http
-NULL
 
 statement query F 
 SELECT cot(pi()/4);
@@ -251,7 +245,7 @@ SELECT asin(1.1);
 nan
 
 ----  http
-NULL
+NaN
 
 statement query F 
 SELECT acos(1);
@@ -266,7 +260,7 @@ SELECT acos(1.0001);
 nan
 
 ----  http
-NULL
+NaN
 
 statement query F 
 SELECT atan(1);
@@ -355,7 +349,7 @@ SELECT sqrt(-4);
 nan
 
 ----  http
-NULL
+NaN
 
 statement error 1007
 SELECT sqrt('a'); 

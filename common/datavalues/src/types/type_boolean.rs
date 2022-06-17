@@ -16,10 +16,13 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
+use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
 pub use crate::prelude::*;
+use crate::serializations::BooleanSerializer;
+use crate::serializations::TypeSerializerImpl;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct BooleanType {}
@@ -52,6 +55,11 @@ impl DataType for BooleanType {
         DataValue::Boolean(false)
     }
 
+    fn random_value(&self) -> DataValue {
+        let mut rng = rand::rngs::SmallRng::from_entropy();
+        DataValue::Boolean(rng.gen())
+    }
+
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         let value = data.as_bool()?;
         let column = Series::from_data(&[value]);
@@ -71,8 +79,8 @@ impl DataType for BooleanType {
         ArrowType::Boolean
     }
 
-    fn create_serializer(&self) -> TypeSerializerImpl {
-        BooleanSerializer {}.into()
+    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
+        Ok(BooleanSerializer::try_create(col)?.into())
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {

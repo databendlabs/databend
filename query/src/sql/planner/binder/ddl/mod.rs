@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod database;
+mod stage;
 mod table;
 mod user;
 mod view;

@@ -16,7 +16,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
@@ -25,71 +24,136 @@ use crate::formats::output_format::OutputFormat;
 const FIELD_DELIMITER: u8 = b'\t';
 const ROW_DELIMITER: u8 = b'\n';
 
-pub type TSVOutputFormat = TCSVOutputFormat<true>;
-pub type CSVOutputFormat = TCSVOutputFormat<false>;
+pub type TSVOutputFormat = TCSVOutputFormat<true, false, false>;
+pub type CSVOutputFormat = TCSVOutputFormat<false, false, false>;
+pub type TSVWithNamesOutputFormat = TCSVOutputFormat<true, true, false>;
+pub type CSVWithNamesOutputFormat = TCSVOutputFormat<false, true, false>;
+pub type TSVWithNamesAndTypesOutputFormat = TCSVOutputFormat<true, true, true>;
+pub type CSVWithNamesAndTypesOutputFormat = TCSVOutputFormat<false, true, true>;
 
 #[derive(Default)]
-pub struct TCSVOutputFormat<const TSV: bool> {}
-
-impl<const TSV: bool> TCSVOutputFormat<TSV> {
-    pub fn create(_schema: DataSchemaRef) -> Self {
-        Self {}
-    }
+pub struct TCSVOutputFormat<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> {
+    schema: DataSchemaRef,
+    format_settings: FormatSettings,
 }
 
-impl<const TSV: bool> OutputFormat for TCSVOutputFormat<TSV> {
-    fn serialize_block(&mut self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
-        let rows_size = block.column(0).len();
-        let columns_size = block.num_columns();
-
-        let mut buf = Vec::with_capacity(block.memory_size());
-        let mut col_table = Vec::new();
-        for col_index in 0..columns_size {
-            let column = block.column(col_index);
-            let column = column.convert_full_column();
-            let field = block.schema().field(col_index);
-            let data_type = field.data_type();
-            let serializer = data_type.create_serializer();
-
-            let res = if TSV {
-                serializer.serialize_column(&column, format)
-            } else {
-                serializer.serialize_column_quoted(&column, format)
-            };
-            let res = res.map_err(|e| {
-                ErrorCode::UnexpectedError(format!(
-                    "fail to serialize field {}, error = {}",
-                    field.name(),
-                    e
-                ))
-            })?;
-            col_table.push(res)
+impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
+    TCSVOutputFormat<TSV, WITH_NAMES, WITH_TYPES>
+{
+    pub fn create(schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
+        let null_bytes = if TSV {
+            format_settings.tsv_null_bytes.clone()
+        } else {
+            format_settings.csv_null_bytes.clone()
+        };
+        let format_settings = FormatSettings {
+            null_bytes,
+            ..format_settings
+        };
+        Self {
+            schema,
+            format_settings,
         }
+    }
 
+    fn serialize_strings(&self, values: Vec<String>, format: &FormatSettings) -> Vec<u8> {
+        let mut buf = vec![];
         let fd = if TSV {
             FIELD_DELIMITER
         } else {
             format.field_delimiter[0]
         };
 
+        for (col_index, v) in values.iter().enumerate() {
+            if col_index != 0 {
+                buf.push(fd);
+            }
+            if !TSV {
+                buf.push(b'\"')
+            };
+            buf.extend_from_slice(v.as_bytes());
+            if !TSV {
+                buf.push(b'\"')
+            };
+        }
+
         let rd = if TSV {
             ROW_DELIMITER
         } else {
             format.record_delimiter[0]
         };
+        buf.push(rd);
+        buf
+    }
+}
+
+impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
+    for TCSVOutputFormat<TSV, WITH_NAMES, WITH_TYPES>
+{
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
+        let rows_size = block.column(0).len();
+        let format_settings = &self.format_settings;
+
+        let mut buf = Vec::with_capacity(block.memory_size());
+        let serializers = block.get_serializers()?;
+
+        let fd = if TSV {
+            FIELD_DELIMITER
+        } else {
+            format_settings.field_delimiter[0]
+        };
+
+        let rd = if TSV {
+            ROW_DELIMITER
+        } else {
+            format_settings.record_delimiter[0]
+        };
 
         for row_index in 0..rows_size {
-            for (i, col) in col_table.iter().enumerate() {
-                if i != 0 {
+            for (col_index, serializer) in serializers.iter().enumerate() {
+                if col_index != 0 {
                     buf.push(fd);
                 }
-                buf.extend_from_slice(col[row_index].as_bytes());
+                if TSV {
+                    serializer.write_field_escaped(
+                        row_index,
+                        &mut buf,
+                        &self.format_settings,
+                        b'\'',
+                    );
+                } else {
+                    serializer.write_field_quoted(row_index, &mut buf, &self.format_settings, b'\"')
+                };
             }
-            buf.push(rd);
+            buf.push(rd)
         }
         Ok(buf)
     }
 
+    fn serialize_prefix(&self) -> Result<Vec<u8>> {
+        let format_settings = &self.format_settings;
+
+        let mut buf = vec![];
+        if WITH_NAMES {
+            let names = self
+                .schema
+                .fields()
+                .iter()
+                .map(|f| f.name().to_string())
+                .collect::<Vec<_>>();
+            buf.extend_from_slice(&self.serialize_strings(names, format_settings));
+            if WITH_TYPES {
+                let types = self
+                    .schema
+                    .fields()
+                    .iter()
+                    .map(|f| f.data_type().name())
+                    .collect::<Vec<_>>();
+                buf.extend_from_slice(&self.serialize_strings(types, format_settings));
+            }
+        }
+        Ok(buf)
+    }
     fn finalize(&mut self) -> Result<Vec<u8>> {
         Ok(vec![])
     }

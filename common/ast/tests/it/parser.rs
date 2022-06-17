@@ -81,8 +81,13 @@ fn test_statement() {
         r#"create database catalog.t engine = Default;"#,
         r#"create database t engine = Github(token='123456');"#,
         r#"create database t engine = Default;"#,
+        r#"drop database catalog.t;"#,
+        r#"drop database if exists t;"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,
         r#"create view v as select number % 3 as a from numbers(1000);"#,
+        r#"alter view v as select number % 3 as a from numbers(1000);"#,
+        r#"drop view v;"#,
+        r#"rename table d.t to e.s;"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
         r#"DROP table table1;"#,
@@ -108,9 +113,19 @@ fn test_statement() {
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')"#,
+        r#"list @stage_a;"#,
         r#"create user 'test-e'@'localhost' identified by 'password';"#,
         r#"drop user if exists 'test-j'@'localhost';"#,
         r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
+        r#"create role 'test'"#,
+        r#"drop role if exists 'test'"#,
+        r#"ALTER TABLE t CLUSTER BY(c1);"#,
+        r#"ALTER TABLE t DROP CLUSTER KEY;"#,
+        r#"ALTER DATABASE IF EXISTS catalog.c RENAME TO a;"#,
+        r#"ALTER DATABASE c RENAME TO a;"#,
+        r#"ALTER DATABASE catalog.c RENAME TO a;"#,
+        r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
     ];
 
     for case in cases {
@@ -145,7 +160,7 @@ fn test_statements_in_legacy_suites() {
         // TODO(andylokandy): support all cases eventually
         // Remove currently unimplemented cases
         let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP).*\n",
+            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|OVER|CHARSET|COLLATION).*\n",
         )
         .unwrap()
         .replace_all(&file_str, "")
@@ -178,6 +193,8 @@ fn test_statement_error() {
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
         r#"drop usar if exists 'test-j'@'localhost';"#,
         r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
+        r#"create role 'test'@'localhost';"#,
+        r#"drop role 'test'@'localhost';"#,
     ];
 
     for case in cases {
@@ -203,7 +220,7 @@ fn test_query() {
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
         r#"select * from customer natural join orders left outer join detail using (id)"#,
-        r#"select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
+        r#"select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
                     select
@@ -219,6 +236,11 @@ fn test_query() {
             group by c_count
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal"#,
+        r#"select * from t1 union select * from t2"#,
+        r#"select * from t1 union select * from t2 union select * from t3"#,
+        r#"select * from t1 union select * from t2 intersect select * from t3"#,
+        r#"(select * from t1 union select * from t2) union select * from t3"#,
+        r#"select * from t1 union (select * from t2 union select * from t3)"#,
     ];
 
     for case in cases {
@@ -237,6 +259,7 @@ fn test_query_error() {
         r#"select * order a"#,
         r#"select * order"#,
         r#"select number + 5 as a, cast(number as float(255))"#,
+        r#"select 1 1"#,
     ];
 
     for case in cases {
@@ -301,6 +324,8 @@ fn test_expr() {
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
         r#"nullif(1, 1)"#,
         r#"nullif(a, b)"#,
+        r#"ifnull(1, 1)"#,
+        r#"ifnull(a, b)"#,
     ];
 
     for case in cases {
@@ -317,7 +342,6 @@ fn test_expr_error() {
         r#"5 * (a and ) 1"#,
         r#"a + +"#,
         r#"CAST(col1 AS foo)"#,
-        // TODO(andylokandy): This is a bug being tracking in https://github.com/segeljakt/pratt/issues/7
         r#"1 a"#,
         r#"CAST(col1)"#,
         r#"G.E.B IS NOT NULL AND

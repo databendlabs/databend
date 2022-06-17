@@ -34,6 +34,11 @@ pub struct DataBlock {
 impl DataBlock {
     #[inline]
     pub fn create(schema: DataSchemaRef, columns: Vec<ColumnRef>) -> Self {
+        debug_assert!(schema.fields().iter().zip(columns.iter()).all(|(f, c)| f
+            .data_type()
+            .data_type_id()
+            .to_physical_type()
+            == c.data_type().data_type_id().to_physical_type()));
         DataBlock { schema, columns }
     }
 
@@ -203,6 +208,20 @@ impl DataBlock {
             .collect();
 
         Ok(DataBlock::create(schema.clone(), columns))
+    }
+
+    pub fn get_serializers(&self) -> Result<Vec<TypeSerializerImpl>> {
+        let columns_size = self.num_columns();
+
+        let mut serializers = vec![];
+        for col_index in 0..columns_size {
+            let column = self.column(col_index);
+            let field = self.schema().field(col_index);
+            let data_type = field.data_type();
+            let serializer = data_type.create_serializer(column)?;
+            serializers.push(serializer);
+        }
+        Ok(serializers)
     }
 }
 
