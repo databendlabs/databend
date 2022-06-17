@@ -32,6 +32,7 @@ use crate::formats::output_format_csv::TSVOutputFormat;
 use crate::formats::output_format_csv::TSVWithNamesAndTypesOutputFormat;
 use crate::formats::output_format_csv::TSVWithNamesOutputFormat;
 use crate::formats::FormatFactory;
+
 pub trait OutputFormat: Send {
     fn serialize_block(&mut self, _data_block: &DataBlock) -> Result<Vec<u8>> {
         unimplemented!()
@@ -101,6 +102,22 @@ impl OutputFormatType {
             OutputFormatType::JsonEachRow => vec!["NDJson".to_string()],
             _ => vec![],
         }
+    }
+
+    pub fn get_content_type(&self) -> String {
+        match self {
+            OutputFormatType::TSV
+            | OutputFormatType::TSVWithNames
+            | OutputFormatType::TSVWithNamesAndTypes => "text/tab-separated-values; charset=UTF-8",
+            OutputFormatType::CSV => "text/csv; charset=UTF-8; header=absent",
+            OutputFormatType::CSVWithNames | OutputFormatType::CSVWithNamesAndTypes => {
+                "text/csv; charset=UTF-8; header=present"
+            }
+            OutputFormatType::Parquet => "application/octet-stream",
+            OutputFormatType::JsonEachRow => "application/json; charset=UTF-8",
+            _ => "text/plain; charset=UTF-8",
+        }
+        .to_string()
     }
 }
 
