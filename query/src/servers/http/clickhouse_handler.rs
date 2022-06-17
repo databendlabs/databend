@@ -34,6 +34,7 @@ use poem::web::Query;
 use poem::Body;
 use poem::Endpoint;
 use poem::EndpointExt;
+use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
@@ -72,7 +73,7 @@ async fn execute(
     format: Option<String>,
     input_stream: Option<SendableDataBlockStream>,
     compress: bool,
-) -> Result<Body> {
+) -> Result<impl IntoResponse> {
     let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
     let _ = interpreter
         .start()
@@ -131,14 +132,14 @@ async fn execute(
             .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
     };
 
-    Ok(Body::from_bytes_stream(stream))
+    Ok(Body::from_bytes_stream(stream).with_content_type(fmt.get_content_type()))
 }
 
 #[poem::handler]
 pub async fn clickhouse_handler_get(
     ctx: &HttpQueryContext,
     Query(params): Query<StatementHandlerParams>,
-) -> PoemResult<Body> {
+) -> PoemResult<impl IntoResponse> {
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     let context = session
         .create_query_context()
@@ -167,7 +168,7 @@ pub async fn clickhouse_handler_post(
     ctx: &HttpQueryContext,
     body: Body,
     Query(params): Query<StatementHandlerParams>,
-) -> PoemResult<Body> {
+) -> PoemResult<impl IntoResponse> {
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     let ctx = session
         .create_query_context()
