@@ -55,6 +55,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::TruncateTable(_)
                 | DfStatement::OptimizeTable(_)
                 | DfStatement::DropView(_)
+                | DfStatement::ShowFunctions(_)
                 | DfStatement::ShowMetrics(_)
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
@@ -87,6 +88,7 @@ impl InterpreterFactoryV2 {
                 ExplainInterpreterV2::try_create(ctx, *plan.clone(), kind.clone())
             }
 
+            // Shows
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
             Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),
