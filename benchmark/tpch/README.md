@@ -1,4 +1,4 @@
-# DataBend TPCH-Benchmark
+# Databend TPCH-Benchmark
 
 ### TPCH DataSet
 Run the following command to generate tpch dataset:
