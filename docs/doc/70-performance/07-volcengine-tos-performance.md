@@ -13,7 +13,7 @@ description:
 * No Local Caching(Data Caching/Query Result Caching)
 * Databend is automatic performance optimization with **no manual tuning** required.
 * [Analyzing OnTime Datasets with Databend on Volcengine TOS](../90-learn/01-analyze-ontime-with-databend-on-ec2-and-s3.md)
-:::
+  :::
 
 ## Q1 ( 7 rows in set (0.15 sec) )
 
@@ -320,7 +320,7 @@ GROUP BY Carrier
 ```
 
 ```text
-25 rows in set (0.46 sec)25 rows in set (0.46 sec)+---------+--------------------+
++---------+--------------------+
 | Carrier | c3                 |
 +---------+--------------------+
 | OO      |  7156.105931260668 |
