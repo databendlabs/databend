@@ -110,6 +110,34 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
 }
 
 #[test]
+fn test_null() -> Result<()> {
+    let format_setting = FormatSettings::default();
+
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new_nullable("c1", i32::to_data_type()),
+        DataField::new_nullable("c2", i32::to_data_type()),
+    ]);
+
+    let columns = vec![
+        Series::from_data(vec![Some(1i32), None, Some(3)]),
+        Series::from_data(vec![None, Some(2i32), None]),
+    ];
+
+    let block = DataBlock::create(schema.clone(), columns);
+
+    {
+        let fmt = OutputFormatType::TSV;
+        let mut formatter = fmt.create_format(schema, format_setting);
+        let buffer = formatter.serialize_block(&block)?;
+
+        let tsv_block = String::from_utf8(buffer)?;
+        let expect = "1\t\\N\n\\N\t2\n3\t\\N\n";
+        assert_eq!(&tsv_block, expect);
+    }
+    Ok(())
+}
+
+#[test]
 fn test_data_block_nullable() -> Result<()> {
     test_data_block(true)
 }
