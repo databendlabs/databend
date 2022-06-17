@@ -126,5 +126,6 @@ jeprof \
     > mem.pdf
 ```
 
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/profiling/memleak.png" width="200"/>
+The output `pdf` would be:
+<img src="https://user-images.githubusercontent.com/44069/174307263-a2c9bbe6-e417-48b7-bf4d-cbbbaad03a6e.png" width="600"/>
     
