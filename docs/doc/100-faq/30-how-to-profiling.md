@@ -33,31 +33,52 @@ Or
 go tool pprof -http=0.0.0.0:8081 $HOME/pprof/pprof.cpu.007.pb.gz
 ```
 
-## memory profiling
+## Memory profiling
 
-- Build `databend-query` with memory-profiling feature enabled
+`databend-query` and `databend-meta` can be built optionally with `jemalloc`,
+which provides various memory profiling features.
 
-  under the project root path:
+Currently, it does not work on Mac, with either intel or ARM.
 
-  `~/workspace/fuse-query$ cargo build --features memory-profiling`
+### Bring up with memory profiling enabled
 
-- Fire up `databend`, with proper `MALLOC_CONF` setting
+- Build `databend-query` and `databend-meta` with memory-profiling feature enabled
+
+  Under the project root path, e.g. `~/workspace/fuse-query/`:
+  `cargo build --features memory-profiling`
+
+- Fire up `databend`, using environment variable `MALLOC_CONF` to enable memory profiling.
   
-  for example `MALLOC_CONF=prof:true ./target/debug/databend-query`
+  For example:
+  `MALLOC_CONF=prof:true ./target/debug/databend-query`
 
-- Dump memory prof
+### Examine memory usage
 
-  NOTE: currently, periodical heap prof dump is NOT supported. A "snaphost" of the heap prof is dump instead.
+There are several typical use case to examine memory usage:
 
-  - by using `jeprof`
+#### Dump a heap snapshot from a running `databend-query` or `databend-meta` process.
+
+NOTE: currently, periodical heap prof dump is NOT supported. A "snapshot" of the heap prof is dump instead.
+
+- Using `jeprof` 
 
   ```shell
-      ~/workspace/fuse-query$ jeprof ./target/debug/databend-query http://localhost:8080/debug/mem
+  jeprof ./target/debug/databend-query http://localhost:8080/debug/mem
+  ```
+  
+  The TCP port `8080` is defined in the config entry `admin_api_address`.
+  This command loads profiling data from a running server then enters `jeprof` interactive tool, e.g.:
+  
+  ```
       Using local file ./target/debug/databend-query.
       Gathering CPU profile from http://localhost:8080/debug/mem/pprof/profile?seconds=30 for 30 seconds to ~/jeprof/databend-query.1650949265.localhost
       Be patient...
       Wrote profile to /home/zhaobr/jeprof/databend-query.1650949265.localhost
       Welcome to jeprof!  For help, type 'help'.
+  ```
+  
+  Use `top` to list functions ordered by memory allocated.
+  ```
       (jeprof) top
       Total: 16.2 MB
           10.2  62.7%  62.7%     10.2  62.7% ::alloc
@@ -72,13 +93,38 @@ go tool pprof -http=0.0.0.0:8081 $HOME/pprof/pprof.cpu.007.pb.gz
            0.0   0.0% 100.0%      9.2  56.6% ::from_iter
       (jeprof)
   ``` 
-  - or curl 
-   ```shell
-    ~/workspace/fuse-query$ curl -O  -J  http://localhost:8080/debug/mem/pprof/profile
-        % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                       Dload  Upload   Total   Spent    Left  Speed
-      100 22733  100 22733    0     0  21.6M      0 --:--:-- --:--:-- --:--:-- 21.6M
-      curl: Saved to filename 'heap_dump_NIKcRe.prof'
-   ```
+  
+  Other `jeprof` commands can be found with `help`.
 
+- Download raw profile data: `curl 'http://localhost:8080/debug/mem/pprof/profile?seconds=0' > mem.prof`.
+  Then one could analyze the profiling data with other tool.
 
+#### Generate memory allocation call graph.
+
+The most common use case is to find memory leak.
+This can be done by comparing two memory profile before and after an interval:
+
+```shell
+curl 'http://localhost:8080/debug/mem/pprof/profile?seconds=0' > a.prof
+sleep 10
+curl 'http://localhost:8080/debug/mem/pprof/profile?seconds=0' > b.prof
+```
+
+Generate a call graph in `pdf` illustrating memory allocation during this interval:
+
+```shell
+jeprof \
+    --show_bytes \
+    --nodecount=1024 \
+    --nodefraction=0.001 \
+    --edgefraction=0.001 \
+    --maxdegree=64 \
+    --pdf \
+    ./target/debug/databend-meta \
+    --base=a.prof \
+    b.prof \
+    > mem.pdf
+```
+
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/profiling/memleak.png" width="200"/>
+    
