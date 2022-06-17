@@ -29,7 +29,7 @@ fast-float = "0.2"
 itertools = "0.10"
 logos = "0.12.0"
 nom = "7.1.1"
-nom-rule = "0.2.2"
+nom-rule = "0.3.0"
 pratt = "0.3.0"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0.30"

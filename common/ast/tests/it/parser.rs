@@ -165,6 +165,11 @@ fn test_statements_in_legacy_suites() {
         .unwrap()
         .replace_all(&file_str, "")
         .into_owned();
+        // Remove insert statements
+        let file_str = regex::Regex::new("(?i).*INSERT INTO[^;]*.*\n")
+            .unwrap()
+            .replace_all(&file_str, "")
+            .into_owned();
 
         let tokens = tokenize_sql(&file_str).unwrap();
         let backtrace = Backtrace::new();

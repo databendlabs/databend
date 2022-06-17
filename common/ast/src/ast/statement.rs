@@ -432,9 +432,16 @@ pub enum KillTarget {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InsertSource<'a> {
-    Streaming { format: String },
-    Values { values_tokens: &'a [Token<'a>] },
-    Select { query: Box<Query<'a>> },
+    Streaming {
+        format: String,
+        rest_tokens: &'a [Token<'a>],
+    },
+    Values {
+        rest_tokens: &'a [Token<'a>],
+    },
+    Select {
+        query: Box<Query<'a>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -603,12 +610,20 @@ impl<'a> Display for Statement<'a> {
                     write!(f, ")")?;
                 }
                 match source {
-                    InsertSource::Streaming { format } => write!(f, " FORMAT {format}")?,
-                    InsertSource::Values { values_tokens } => write!(
+                    InsertSource::Streaming {
+                        format,
+                        rest_tokens,
+                    } => write!(
+                        f,
+                        " FORMAT {format} {}",
+                        &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
+                            ..rest_tokens.last().unwrap().span.end]
+                    )?,
+                    InsertSource::Values { rest_tokens } => write!(
                         f,
                         " VALUES {}",
-                        &values_tokens[0].source[values_tokens.first().unwrap().span.start
-                            ..values_tokens.last().unwrap().span.end]
+                        &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
+                            ..rest_tokens.last().unwrap().span.end]
                     )?,
                     InsertSource::Select { query } => write!(f, " {query}")?,
                 }
