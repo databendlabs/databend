@@ -655,6 +655,8 @@ pub enum TokenKind {
     NULLIF,
     #[token("RANDOM", ignore(ascii_case))]
     RANDOM,
+    #[token("IFNULL", ignore(ascii_case))]
+    IFNULL,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -758,6 +760,7 @@ impl TokenKind {
             // | TokenKind::FOREIGN
             // | TokenKind::GREATEST
             // | TokenKind::GROUPING
+            | TokenKind::IFNULL
             | TokenKind::IN
             // | TokenKind::INITIALLY
             // | TokenKind::INOUT

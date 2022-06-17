@@ -545,6 +545,27 @@ impl<'a> TypeChecker<'a> {
                 .await?
             }
 
+            Expr::IfNull {
+                span, expr1, expr2, ..
+            } => {
+                // Rewrite IFNULL(expr1, expr2) to IF(ISNULL(expr1), expr2, expr1)
+                self.resolve_function(
+                    span,
+                    "if",
+                    &[
+                        &Expr::IsNull {
+                            span,
+                            expr: expr1.clone(),
+                            not: false,
+                        },
+                        expr2.as_ref(),
+                        expr1.as_ref(),
+                    ],
+                    None,
+                )
+                .await?
+            }
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr
