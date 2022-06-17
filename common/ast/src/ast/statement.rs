@@ -29,6 +29,7 @@ use crate::ast::expr::Literal;
 use crate::ast::expr::TypeName;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
+use crate::ast::write_quoted_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::parser::token::Token;
@@ -49,6 +50,16 @@ pub enum Statement<'a> {
         columns: Vec<Identifier<'a>>,
         source: InsertSource<'a>,
         overwrite: bool,
+    },
+
+    CopyInto {
+        src: CopyTarget<'a>,
+        dst: CopyTarget<'a>,
+        files: Vec<String>,
+        pattern: String,
+        file_format: BTreeMap<String, String>,
+        validation_mode: String,
+        size_limit: usize,
     },
 
     ShowSettings,
@@ -347,6 +358,29 @@ pub enum DatabaseEngine {
     Github(String),
 }
 
+/// CopyTarget is the target that can be used in `COPY INTO`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyTarget<'a> {
+    /// Table can be used in `INTO` or `FROM`.
+    ///
+    /// While table used as `FROM`, it will be rewrite as `(SELECT * FROM table)`
+    Table(Option<Identifier<'a>>, Identifier<'a>),
+    /// Location can be used in `INTO` or `FROM`.
+    ///
+    /// Location could be
+    ///
+    /// - internal stage: `@internal_stage/path/to/dir/`
+    /// - external stage: `@s3_external_stage/path/to/dir/`
+    /// - external location: `s3://bucket/path/to/dir/`
+    ///
+    /// We only parse them into `String` and leave the location parser in further.
+    Location(String),
+    /// Query can only be used as `FROM`.
+    ///
+    /// For example:`(SELECT field_a,field_b FROM table)`
+    Query(Box<Query<'a>>),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateViewStmt<'a> {
     pub if_not_exists: bool,
@@ -549,6 +583,26 @@ impl Display for KillTarget {
     }
 }
 
+impl Display for CopyTarget<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CopyTarget::Table(database, table) => {
+                if let Some(database) = database {
+                    write!(f, "{database}.{table}")
+                } else {
+                    write!(f, "{table}")
+                }
+            }
+            CopyTarget::Location(location) => {
+                write!(f, "{location}")
+            }
+            CopyTarget::Query(query) => {
+                write!(f, "({query})")
+            }
+        }
+    }
+}
+
 impl Display for RoleOption {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -604,6 +658,45 @@ impl<'a> Display for Statement<'a> {
                             ..values_tokens.last().unwrap().span.end]
                     )?,
                     InsertSource::Select { query } => write!(f, " {query}")?,
+                }
+            }
+            Statement::CopyInto {
+                src,
+                dst,
+                files,
+                pattern,
+                file_format,
+                validation_mode,
+                size_limit,
+            } => {
+                write!(f, "COPY")?;
+                write!(f, " INTO {dst}")?;
+                write!(f, " FROM {src}")?;
+
+                if !file_format.is_empty() {
+                    write!(f, " FILE_FORMAT = (")?;
+                    for (k, v) in file_format.iter() {
+                        write!(f, " {} = '{}'", k, v)?;
+                    }
+                    write!(f, " )")?;
+                }
+
+                if !files.is_empty() {
+                    write!(f, " FILES = (")?;
+                    write_quoted_comma_separated_list(f, files)?;
+                    write!(f, " )")?;
+                }
+
+                if !pattern.is_empty() {
+                    write!(f, " PATTERN = '{pattern}'")?;
+                }
+
+                if *size_limit != 0 {
+                    write!(f, " SIZE_LIMIT = {size_limit}")?;
+                }
+
+                if !validation_mode.is_empty() {
+                    write!(f, "VALIDATION_MODE = {validation_mode}")?;
                 }
             }
             Statement::ShowSettings => {

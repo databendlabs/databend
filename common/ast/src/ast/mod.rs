@@ -58,6 +58,7 @@ fn write_period_separated_list(
     Ok(())
 }
 
+/// Write input items into `a, b, c`
 fn write_comma_separated_list(
     f: &mut Formatter<'_>,
     items: impl IntoIterator<Item = impl Display>,
@@ -66,7 +67,21 @@ fn write_comma_separated_list(
         if i > 0 {
             write!(f, ", ")?;
         }
-        write!(f, "{}", item)?;
+        write!(f, "{item}")?;
+    }
+    Ok(())
+}
+
+/// Write input items into `'a', 'b', 'c'`
+fn write_quoted_comma_separated_list(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = impl Display>,
+) -> std::fmt::Result {
+    for (i, item) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, ", ")?;
+        }
+        write!(f, "'{item}'")?;
     }
     Ok(())
 }

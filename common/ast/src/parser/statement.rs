@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::format;
 
 use common_meta_types::AuthType;
 use common_meta_types::UserIdentity;
@@ -591,6 +592,30 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
     );
 
+    let copy_into = map(
+        rule! {
+            COPY
+            ~ INTO ~ #copy_target
+            ~ FROM ~ #copy_target
+            ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")?
+            ~ ( PATTERN ~ "=" ~ #literal_string)?
+            ~ ( FILE_FORMAT ~ "=" ~ #options)?
+            ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
+            ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
+        },
+        |(_, _, dst, _, src, files, pattern, file_format, validation_mode, size_limit)| {
+            Statement::CopyInto {
+                src,
+                dst,
+                files: files.map(|v| v.3).unwrap_or_default(),
+                pattern: pattern.map(|v| v.2).unwrap_or_default(),
+                file_format: file_format.map(|v| v.2).unwrap_or_default(),
+                validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
+                size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
+            }
+        },
+    );
+
     alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -645,6 +670,16 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
+        ),
+        rule! (
+            #copy_into: "`COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`"
         ),
     ))(i)
 }
@@ -799,6 +834,39 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
         value(KillTarget::Query, rule! { QUERY }),
         value(KillTarget::Connection, rule! { CONNECTION }),
     ))(i)
+}
+
+/// Parse input into `CopyTarget`
+pub fn copy_target(i: Input) -> IResult<CopyTarget> {
+    let table = map(
+        rule! {
+             #peroid_separated_idents_1_to_2
+        },
+        |(database, table)| CopyTarget::Table(database, table),
+    );
+    let query = map(
+        rule! {
+            #parenthesized_query
+        },
+        |query| CopyTarget::Query(Box::new(query)),
+    );
+    let stage_location = map(
+        rule! {
+            "@" ~ #literal_string
+        },
+        |(_, location)| CopyTarget::Location(format!("@{location}")),
+    );
+    let uri_location = map(
+        rule! {
+            #literal_string ~ "://" ~ #literal_string
+        },
+        // TODO(xuanwo): Maybe we can check the proposal during parse?
+        |(protocol, _, location)| CopyTarget::Location(format!("{protocol}://{location}")),
+    );
+
+    rule!(
+        #table | #query | #stage_location | #uri_location
+    )(i)
 }
 
 pub fn show_limit(i: Input) -> IResult<ShowLimit> {
