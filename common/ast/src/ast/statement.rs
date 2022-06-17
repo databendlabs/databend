@@ -393,6 +393,7 @@ pub struct ColumnDefinition<'a> {
     pub data_type: TypeName,
     pub nullable: bool,
     pub default_expr: Option<Box<Expr<'a>>>,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -496,6 +497,9 @@ impl<'a> Display for ColumnDefinition<'a> {
         }
         if let Some(default_expr) = &self.default_expr {
             write!(f, " DEFAULT {default_expr}")?;
+        }
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT '{comment}'")?;
         }
         Ok(())
     }

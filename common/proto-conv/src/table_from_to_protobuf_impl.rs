@@ -140,6 +140,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
                 None => None,
             },
             comment: p.comment,
+            field_comments: p.field_comments,
             statistics: p
                 .statistics
                 .map(mt::TableStatistics::from_pb)
@@ -167,6 +168,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
                 None => None,
             },
             comment: self.comment.clone(),
+            field_comments: self.field_comments.clone(),
             statistics: Some(self.statistics.to_pb()?),
         };
         Ok(p)

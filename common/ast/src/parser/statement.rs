@@ -672,20 +672,28 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         },
         |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
     );
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
 
     map(
         rule! {
             #ident
             ~ #type_name
             ~ ( #nullable | #default_expr )*
-            : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`"
+            ~ ( #comment )?
+            : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>] [COMMENT '<comment>']`"
         },
-        |(name, data_type, constraints)| {
+        |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
                 nullable: false,
                 default_expr: None,
+                comment,
             };
             for constraint in constraints {
                 match constraint {

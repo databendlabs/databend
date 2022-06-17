@@ -198,7 +198,7 @@ impl<'a> Binder {
         }
 
         // Build table schema
-        let schema = match (&source, &as_query) {
+        let (schema, field_comments) = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
                 self.analyze_create_table_schema(source).await?
@@ -217,7 +217,7 @@ impl<'a> Binder {
                         )
                     })
                     .collect();
-                DataSchemaRefExt::create(fields)
+                (DataSchemaRefExt::create(fields), vec![])
             }
             // TODO(leiysky): Support `CREATE TABLE AS SELECT` with specified column definitions
             _ => Err(ErrorCode::UnImplement("Unsupported CREATE TABLE statement"))?,
@@ -227,6 +227,7 @@ impl<'a> Binder {
             schema: schema.clone(),
             engine: engine.to_string(),
             options: options.clone(),
+            field_comments,
             ..Default::default()
         };
 
@@ -523,13 +524,14 @@ impl<'a> Binder {
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource<'a>,
-    ) -> Result<DataSchemaRef> {
+    ) -> Result<(DataSchemaRef, Vec<String>)> {
         let bind_context = BindContext::new();
         match source {
             CreateTableSource::Columns(columns) => {
                 let mut scalar_binder =
                     ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone());
                 let mut fields = Vec::with_capacity(columns.len());
+                let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
                     let name = column.name.name.clone();
                     let mut data_type = TypeFactory::instance()
@@ -547,8 +549,9 @@ impl<'a> Binder {
                         }
                     });
                     fields.push(field);
+                    fields_comments.push(column.comment.clone().unwrap_or_default());
                 }
-                Ok(DataSchemaRefExt::create(fields))
+                Ok((DataSchemaRefExt::create(fields), fields_comments))
             }
             CreateTableSource::Like {
                 catalog,
@@ -565,7 +568,7 @@ impl<'a> Binder {
                 );
                 let table_name = table.name.to_lowercase();
                 let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
-                Ok(table.schema())
+                Ok((table.schema(), table.field_comments().clone()))
             }
         }
     }
