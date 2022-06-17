@@ -1,5 +1,13 @@
 Thank you for downloading Databend, an open-source elastic and workload-aware modern cloud data warehouse.
 
+Try Databend(standalone) in 5 easy steps:
+
+- Edit the `configs` to suit your needs.
+- Check that the `scripts` meet your needs.
+- Start: `./scripts/start.sh`
+- Run some queries by the way you like with mysql/clickhouse client or http handler.
+- Stop: `./scripts/stop.sh`
+
 You might need these links to move forward:
 - Deployment Instructions: https://databend.rs/doc/deploy
 - Documentation: https://databend.rs/doc
