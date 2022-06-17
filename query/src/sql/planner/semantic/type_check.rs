@@ -277,6 +277,26 @@ impl<'a> TypeChecker<'a> {
                     .into(),
                     cast_func.return_type(),
                 )
+            },
+            
+            Expr::Case { span, conditions, results, else_result, .. } => {
+                let mut arguments = Vec::with_capacity(conditions.len() * 2);
+                for (c,r) in conditions.iter().zip(results.iter()) {
+                    arguments.push(c);
+                    arguments.push( r);
+                }
+                let null_arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::Null,
+                };
+                    
+                if let Some(expr) = else_result {
+                    arguments.push(&**expr);
+                } else {
+                    arguments.push(&null_arg)
+                }
+                self.resolve_function(span, "multi_if", &arguments, required_type)
+                    .await?
             }
 
             Expr::Substring {
@@ -543,7 +563,7 @@ impl<'a> TypeChecker<'a> {
                     None,
                 )
                 .await?
-            }
+            },
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",

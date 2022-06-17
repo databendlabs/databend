@@ -178,6 +178,11 @@ insert into temp values (1);
 select a from temp;
 drop table temp;
 
+-- CASE WHEN
+select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is null) from (
+	SELECT (CASE WHEN number % 4 = 1 THEN '1' WHEN number % 4 = 2 THEN '2' WHEN number % 4 = 3 THEN '3' END) as a FROM numbers(100)
+);
+
 -- subquery in from
 select '=== Test Subquery In From ===';
 create table t(a int, b int);
@@ -320,3 +325,4 @@ select * from t1 left join t2 on t1.a = t2.c;
 drop table t1;
 drop table t2;
 set enable_planner_v2 = 0;
+

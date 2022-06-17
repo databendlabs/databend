@@ -15,6 +15,7 @@
 use super::InFunction;
 use super::IsNotNullFunction;
 use super::IsNullFunction;
+use super::multi_if::MultiIfFunction;
 use crate::scalars::FunctionFactory;
 use crate::scalars::IfFunction;
 
@@ -24,6 +25,7 @@ pub struct ConditionalFunction;
 impl ConditionalFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("if", IfFunction::desc());
+        factory.register("multi_if", MultiIfFunction::desc());
         factory.register("is_null", IsNullFunction::desc());
         factory.register("is_not_null", IsNotNullFunction::desc());
         factory.register("in", InFunction::<false>::desc());
