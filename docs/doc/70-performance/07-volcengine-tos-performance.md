@@ -6,8 +6,8 @@ description:
 ---
 :::tip
 
-* Hardware: Volcengine(ecs.c1.4xlarge), 16vCPU
-* Storage: TOS (cn-beijing)
+* Hardware: [Volcengine](https://www.volcengine.com/product/ecs)(ecs.c1.4xlarge), 16vCPU
+* Storage: [TOS](https://www.volcengine.com/product/tos) (cn-beijing)
 * Dataset: [ontime](https://transtats.bts.gov/PREZIP/), 60.8 GB Raw CSV Data, 202687654 records
 * Databend: [v0.7.88-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.7.32-nightly)
 * No Local Caching(Data Caching/Query Result Caching)
