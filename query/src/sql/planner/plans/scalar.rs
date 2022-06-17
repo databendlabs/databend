@@ -16,6 +16,7 @@ use common_ast::ast::BinaryOperator;
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::NullType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -410,7 +411,13 @@ pub struct ComparisonExpr {
 
 impl ScalarExpr for ComparisonExpr {
     fn data_type(&self) -> DataTypeImpl {
-        BooleanType::new_impl()
+        let mut data_type = BooleanType::new_impl();
+        if self.left.data_type() == DataTypeImpl::Null(NullType {})
+            || self.right.data_type() == DataTypeImpl::Null(NullType {})
+        {
+            data_type = NullType::new_impl();
+        }
+        data_type
     }
 
     fn used_columns(&self) -> ColumnSet {

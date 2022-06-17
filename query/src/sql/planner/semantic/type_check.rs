@@ -65,6 +65,7 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
 use crate::sql::BindContext;
+use crate::sql::ScalarExpr;
 
 /// A helper for type checking.
 ///
@@ -650,7 +651,12 @@ impl<'a> TypeChecker<'a> {
                 let op = ComparisonOp::try_from(op)?;
                 let (left, _) = self.resolve(left, None).await?;
                 let (right, _) = self.resolve(right, None).await?;
-
+                let mut data_type = BooleanType::new_impl();
+                if left.data_type() == DataTypeImpl::Null(NullType {})
+                    || right.data_type() == DataTypeImpl::Null(NullType {})
+                {
+                    data_type = NullType::new_impl();
+                }
                 Ok((
                     ComparisonExpr {
                         op,
@@ -658,7 +664,7 @@ impl<'a> TypeChecker<'a> {
                         right: Box::new(right),
                     }
                     .into(),
-                    BooleanType::new_impl(),
+                    data_type,
                 ))
             }
             BinaryOperator::And => {
