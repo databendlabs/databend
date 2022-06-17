@@ -38,6 +38,7 @@ RUN curl -qL https://github.com/rui314/mold/releases/download/v1.2.1/mold-1.2.1-
     ln -sf /usr/local/bin/mold /usr/bin/$(uname -m)-linux-gnu-ld
 
 ENV JAVA_HOME /opt/java
+ENV LD_LIBRARY_PATH /opt/java/lib/server
 ENV RUSTUP_HOME /opt/rust/rustup
 ENV CARGO_HOME /opt/rust/cargo
 ENV PATH /opt/rust/cargo/bin:/opt/java/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
