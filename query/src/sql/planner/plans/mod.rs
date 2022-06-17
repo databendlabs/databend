@@ -67,6 +67,9 @@ pub enum Plan {
         plan: Box<Plan>,
     },
 
+    // Copy
+    Copy(Box<CopyPlan>),
+
     // System
     ShowMetrics,
     ShowProcessList,

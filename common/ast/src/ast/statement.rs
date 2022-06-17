@@ -52,15 +52,7 @@ pub enum Statement<'a> {
         overwrite: bool,
     },
 
-    CopyInto {
-        src: CopyTarget<'a>,
-        dst: CopyTarget<'a>,
-        files: Vec<String>,
-        pattern: String,
-        file_format: BTreeMap<String, String>,
-        validation_mode: String,
-        size_limit: usize,
-    },
+    Copy(CopyStmt<'a>),
 
     ShowSettings,
     ShowProcessList,
@@ -173,6 +165,24 @@ pub enum ExplainKind {
     Syntax,
     Graph,
     Pipeline,
+}
+
+/// CopyStmt is the parsed statement of `COPY`.
+///
+/// ## Examples
+///
+/// ```sql
+/// COPY INTO table from s3://bucket/path/to/x.csv
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct CopyStmt<'a> {
+    pub src: CopyTarget<'a>,
+    pub dst: CopyTarget<'a>,
+    pub files: Vec<String>,
+    pub pattern: String,
+    pub file_format: BTreeMap<String, String>,
+    pub validation_mode: String,
+    pub size_limit: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)] // Databases
@@ -660,43 +670,35 @@ impl<'a> Display for Statement<'a> {
                     InsertSource::Select { query } => write!(f, " {query}")?,
                 }
             }
-            Statement::CopyInto {
-                src,
-                dst,
-                files,
-                pattern,
-                file_format,
-                validation_mode,
-                size_limit,
-            } => {
+            Statement::Copy(stmt) => {
                 write!(f, "COPY")?;
-                write!(f, " INTO {dst}")?;
-                write!(f, " FROM {src}")?;
+                write!(f, " INTO {}", stmt.dst)?;
+                write!(f, " FROM {}", stmt.src)?;
 
-                if !file_format.is_empty() {
+                if !stmt.file_format.is_empty() {
                     write!(f, " FILE_FORMAT = (")?;
-                    for (k, v) in file_format.iter() {
+                    for (k, v) in stmt.file_format.iter() {
                         write!(f, " {} = '{}'", k, v)?;
                     }
                     write!(f, " )")?;
                 }
 
-                if !files.is_empty() {
+                if !stmt.files.is_empty() {
                     write!(f, " FILES = (")?;
-                    write_quoted_comma_separated_list(f, files)?;
+                    write_quoted_comma_separated_list(f, &stmt.files)?;
                     write!(f, " )")?;
                 }
 
-                if !pattern.is_empty() {
-                    write!(f, " PATTERN = '{pattern}'")?;
+                if !stmt.pattern.is_empty() {
+                    write!(f, " PATTERN = '{}'", stmt.pattern)?;
                 }
 
-                if *size_limit != 0 {
-                    write!(f, " SIZE_LIMIT = {size_limit}")?;
+                if stmt.size_limit != 0 {
+                    write!(f, " SIZE_LIMIT = {}", stmt.size_limit)?;
                 }
 
-                if !validation_mode.is_empty() {
-                    write!(f, "VALIDATION_MODE = {validation_mode}")?;
+                if !stmt.validation_mode.is_empty() {
+                    write!(f, "VALIDATION_MODE = {}", stmt.validation_mode)?;
                 }
             }
             Statement::ShowSettings => {

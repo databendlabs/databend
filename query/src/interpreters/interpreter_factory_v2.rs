@@ -68,6 +68,8 @@ impl InterpreterFactoryV2 {
                 ExplainInterpreterV2::try_create(ctx, *plan.clone(), kind.clone())
             }
 
+            Plan::Copy(_) => todo!(),
+
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),
             Plan::ShowSettings => ShowSettingsInterpreter::try_create(ctx),

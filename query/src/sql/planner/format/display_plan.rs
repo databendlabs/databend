@@ -27,6 +27,8 @@ impl Plan {
                 Ok(format!("{:?}:\n{}", kind, result))
             }
 
+            Plan::Copy(_) => todo!(),
+
             Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
             Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
             Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),

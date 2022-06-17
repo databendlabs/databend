@@ -604,7 +604,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
         },
         |(_, _, dst, _, src, files, pattern, file_format, validation_mode, size_limit)| {
-            Statement::CopyInto {
+            Statement::Copy(CopyStmt {
                 src,
                 dst,
                 files: files.map(|v| v.3).unwrap_or_default(),
@@ -612,7 +612,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 file_format: file_format.map(|v| v.2).unwrap_or_default(),
                 validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
                 size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
-            }
+            })
         },
     );
 

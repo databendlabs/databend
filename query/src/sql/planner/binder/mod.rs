@@ -39,6 +39,7 @@ use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod copy;
 mod ddl;
 mod distinct;
 mod join;
@@ -108,6 +109,11 @@ impl<'a> Binder {
                     kind: kind.clone(),
                     plan: Box::new(plan),
                 })
+            }
+
+            Statement::Copy(stmt) => {
+                let plan = self.bind_copy(stmt).await?;
+                Ok(plan)
             }
 
             Statement::ShowMetrics => Ok(Plan::ShowMetrics),
