@@ -114,7 +114,7 @@ fn new_table_info() -> mt::TableInfo {
             created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
             updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
             comment: s("table_comment"),
-            field_comments: vec![],
+            field_comments: vec!["c".to_string(); 21],
             drop_on: None,
             statistics: Default::default(),
         },

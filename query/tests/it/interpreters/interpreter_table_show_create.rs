@@ -108,7 +108,7 @@ async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
         create_stmt: vec![
             "
             CREATE TABLE default.a(\
-                a bigint comment 'a', b int comment 'b',\
+                a bigint comment 'a', b int comment 'b\\'b\\'b',\
                 c varchar(255) comment 'c', d smallint comment '', e Date\
             ) Engine = Null COMMENT = 'test create'\
         ",
@@ -120,7 +120,7 @@ async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
             "+-------+-------------------------------------+",
             "| a     | CREATE TABLE `a` (                  |",
             "|       |   `a` BIGINT COMMENT 'a',           |",
-            "|       |   `b` INT COMMENT 'b',              |",
+            "|       |   `b` INT COMMENT 'b'b'b',          |",
             "|       |   `c` VARCHAR COMMENT 'c',          |",
             "|       |   `d` SMALLINT,                     |",
             "|       |   `e` DATE                          |",

@@ -3377,6 +3377,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
