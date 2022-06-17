@@ -34,8 +34,6 @@ use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_tracing::tracing;
 use tokio_stream::Stream;
-use tonic::metadata::{Ascii, MetadataValue};
-use tonic::metadata::errors::ToStrError;
 use tonic::Request;
 use tonic::Response as RawResponse;
 use tonic::Status;
@@ -46,11 +44,11 @@ use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
 use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcherRef;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
-use crate::api::rpc::packet::DataPacket::ErrorCode;
-use crate::sessions::{SessionManager, SessionType};
+use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 
 pub type FlightStream<T> =
-Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
+    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
     sessions: Arc<SessionManager>,
@@ -130,11 +128,16 @@ impl FlightService for DatabendQueryFlightService {
     async fn do_put(&self, req: StreamReq<FlightData>) -> Response<Self::DoPutStream> {
         // TODO: panic hook?
         let query_id = match req.metadata().get("x-query-id") {
-            None => Err(Status::invalid_argument("Must be send X-Query-ID metadata.")),
+            None => Err(Status::invalid_argument(
+                "Must be send X-Query-ID metadata.",
+            )),
             Some(metadata_value) => match metadata_value.to_str() {
                 Ok(query_id) if !query_id.is_empty() => Ok(query_id.to_string()),
                 Ok(_query_id) => Err(Status::invalid_argument("x-query-id metadata is empty.")),
-                Err(cause) => Err(Status::invalid_argument(format!("Cannot parse X-Query-ID metadata value, cause: {:?}", cause))),
+                Err(cause) => Err(Status::invalid_argument(format!(
+                    "Cannot parse X-Query-ID metadata value, cause: {:?}",
+                    cause
+                ))),
             },
         }?;
 
@@ -143,18 +146,23 @@ impl FlightService for DatabendQueryFlightService {
             Some(metadata_value) => match metadata_value.to_str() {
                 Ok(source) if !source.is_empty() => Ok(source.to_string()),
                 Ok(_source) => Err(Status::invalid_argument("x-source metadata is empty.")),
-                Err(cause) => Err(Status::invalid_argument(format!("Cannot parse x-source metadata value, cause: {:?}", cause))),
+                Err(cause) => Err(Status::invalid_argument(format!(
+                    "Cannot parse x-source metadata value, cause: {:?}",
+                    cause
+                ))),
             },
         }?;
 
         let stream = req.into_inner();
         let exchange_manager = self.sessions.get_data_exchange_manager();
-        exchange_manager.handle_do_put(&query_id, &source, stream).await?.await.unwrap();
-        Ok(RawResponse::new(Box::pin(tokio_stream::once(Ok(
-            PutResult {
-                app_metadata: vec![]
-            }))) as FlightStream<PutResult>,
-        ))
+        exchange_manager
+            .handle_do_put(&query_id, &source, stream)
+            .await?
+            .await
+            .unwrap();
+        Ok(RawResponse::new(Box::pin(tokio_stream::once(Ok(PutResult {
+            app_metadata: vec![],
+        }))) as FlightStream<PutResult>))
     }
 
     type DoExchangeStream = FlightStream<FlightData>;

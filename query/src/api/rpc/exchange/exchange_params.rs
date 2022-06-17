@@ -1,12 +1,13 @@
 use std::sync::Arc;
+
+use common_arrow::arrow::io::ipc::write::default_ipc_fields;
+use common_arrow::arrow::io::ipc::write::WriteOptions;
 use common_arrow::arrow::io::ipc::IpcField;
-use common_arrow::arrow::io::ipc::write::{default_ipc_fields, WriteOptions};
 use common_datavalues::DataSchemaRef;
-use crate::api::DataExchange;
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 use crate::api::rpc::flight_scatter::FlightScatter;
-use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
-use crate::sessions::QueryContext;
-use common_exception::{ErrorCode, Result};
 
 #[derive(Clone)]
 pub struct SerializeParams {
@@ -73,7 +74,7 @@ impl ExchangeParams {
     pub fn get_schema(&self) -> DataSchemaRef {
         match self {
             ExchangeParams::ShuffleExchange(exchange) => exchange.schema.clone(),
-            ExchangeParams::MergeExchange(exchange) => exchange.schema.clone()
+            ExchangeParams::MergeExchange(exchange) => exchange.schema.clone(),
         }
     }
 }

@@ -13,12 +13,8 @@
 // limitations under the License.
 
 use std::convert::TryInto;
-use std::pin::Pin;
-use std::sync::mpsc::{channel};
-use std::task::{Context, Poll};
-use futures::Stream;
-use tonic::metadata::{Ascii, MetadataKey, MetadataValue};
 
+use async_channel::Receiver;
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::data::Ticket;
@@ -29,18 +25,17 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use tonic::metadata::MetadataKey;
+use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Streaming;
-use common_base::base::tokio;
-use common_base::base::tokio::sync::mpsc::{Sender};
-use async_channel::Receiver;
-use tonic::metadata::errors::InvalidMetadataValue;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_client_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
-use crate::api::rpc::packet::{DataPacket, DataPacketStream};
+use crate::api::rpc::packet::DataPacket;
+use crate::api::rpc::packet::DataPacketStream;
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
@@ -75,11 +70,19 @@ impl FlightClient {
                 request.metadata_mut().insert(metadata_key, metadata_value);
                 Ok(())
             }
-            Err(cause) => Err(ErrorCode::BadBytes(format!("Cannot parse query id to MetadataValue, {:?}", cause))),
+            Err(cause) => Err(ErrorCode::BadBytes(format!(
+                "Cannot parse query id to MetadataValue, {:?}",
+                cause
+            ))),
         }
     }
 
-    pub async fn do_put(&mut self, query_id: &str, source: &str, rx: Receiver<DataPacket>) -> Result<()> {
+    pub async fn do_put(
+        &mut self,
+        query_id: &str,
+        source: &str,
+        rx: Receiver<DataPacket>,
+    ) -> Result<()> {
         let mut request = Request::new(Box::pin(DataPacketStream::create(rx)));
 
         Self::set_metadata(&mut request, "x-source", source)?;

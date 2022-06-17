@@ -1,14 +1,13 @@
-use std::mem::size_of;
 use std::pin::Pin;
-use std::task::{Context, Poll};
-use byteorder::{BigEndian, ReadBytesExt};
-use futures::{Stream, StreamExt};
+use std::task::Context;
+use std::task::Poll;
+
 use common_arrow::arrow_format::flight::data::FlightData;
-use common_ast::ast::DatabaseEngine::Default;
 use common_base::base::ProgressValues;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::Stream;
+use futures::StreamExt;
 
 pub enum DataPacket {
     Data(usize, FlightData),
@@ -26,7 +25,7 @@ impl DataPacket {
         match data.app_metadata[0] {
             0x01 => DataPacket::flight_data_packet(data),
             0x04 => DataPacket::fragment_end(data),
-            _ => Err(ErrorCode::BadBytes("Unknown flight data packet type."))
+            _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
     }
 
@@ -87,7 +86,7 @@ impl Stream for DataPacketStream {
                     data_header: error.code().to_be_bytes().to_vec(),
                     flight_descriptor: None,
                 })),
-                DataPacket::Progress(values) => {
+                DataPacket::Progress(_values) => {
                     // let rows = values.rows.to_be_bytes();
                     // let bytes = values.bytes.to_be_bytes();
                     Poll::Ready(Some(FlightData {
@@ -97,15 +96,13 @@ impl Stream for DataPacketStream {
                         flight_descriptor: None,
                     }))
                 }
-                DataPacket::EndFragment(fragment) => {
-                    Poll::Ready(Some(FlightData {
-                        app_metadata: vec![0x04],
-                        data_header: vec![],
-                        data_body: fragment.to_be_bytes().to_vec(),
-                        flight_descriptor: None,
-                    }))
-                }
-            }
+                DataPacket::EndFragment(fragment) => Poll::Ready(Some(FlightData {
+                    app_metadata: vec![0x04],
+                    data_header: vec![],
+                    data_body: fragment.to_be_bytes().to_vec(),
+                    flight_descriptor: None,
+                })),
+            },
         }
     }
 }

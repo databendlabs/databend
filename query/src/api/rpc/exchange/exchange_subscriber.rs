@@ -1,25 +1,33 @@
 use std::any::Any;
 use std::sync::Arc;
+
+use async_channel::Receiver;
+use async_channel::TryRecvError;
 use common_arrow::arrow::io::flight::deserialize_batch;
-use common_arrow::arrow::io::ipc::IpcSchema;
 use common_arrow::arrow::io::ipc::write::default_ipc_fields;
+use common_arrow::arrow::io::ipc::IpcSchema;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_exception::{ErrorCode, Result};
-use common_base::infallible::Mutex;
-use crate::api::DataExchange;
-use async_channel::{Receiver, TryRecvError};
+use common_exception::Result;
+
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
-use crate::pipelines::new::{NewPipe, NewPipeline};
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
-use crate::pipelines::new::processors::{AsyncSource, Processor, ResizeProcessor};
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::Processor;
+use crate::pipelines::new::NewPipe;
+use crate::pipelines::new::NewPipeline;
 
 pub struct ExchangeSubscriber {}
 
 impl ExchangeSubscriber {
-    pub fn via_exchange(rx: Receiver<Result<FlightData>>, params: &ExchangeParams, pipeline: &mut NewPipeline) -> Result<()> {
+    pub fn via_exchange(
+        rx: Receiver<Result<FlightData>>,
+        params: &ExchangeParams,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             ViaExchangeSubscriber::try_create(
                 transform_input_port,
@@ -30,7 +38,11 @@ impl ExchangeSubscriber {
         })
     }
 
-    pub fn create_source(rx: Receiver<Result<FlightData>>, schema: DataSchemaRef, pipeline: &mut NewPipeline) -> Result<()> {
+    pub fn create_source(
+        rx: Receiver<Result<FlightData>>,
+        schema: DataSchemaRef,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
         let output = OutputPort::create();
         pipeline.add_pipe(NewPipe::SimplePipe {
             inputs_port: vec![],
@@ -52,7 +64,12 @@ struct ViaExchangeSubscriber {
 }
 
 impl ViaExchangeSubscriber {
-    pub fn try_create(input: Arc<InputPort>, output: Arc<OutputPort>, rx: Receiver<Result<FlightData>>, schema: DataSchemaRef) -> Result<ProcessorPtr> {
+    pub fn try_create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        rx: Receiver<Result<FlightData>>,
+        schema: DataSchemaRef,
+    ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(ViaExchangeSubscriber {
             rx,
             input,
@@ -107,11 +124,9 @@ impl Processor for ViaExchangeSubscriber {
                     Ok(Event::Sync)
                 }
             };
-        } else {
-            if let Ok(flight_data) = self.rx.try_recv() {
-                self.remote_flight_data = Some(flight_data?);
-                return Ok(Event::Sync);
-            }
+        } else if let Ok(flight_data) = self.rx.try_recv() {
+            self.remote_flight_data = Some(flight_data?);
+            return Ok(Event::Sync);
         }
 
         if self.input.has_data() {
@@ -127,7 +142,10 @@ impl Processor for ViaExchangeSubscriber {
         if let Some(flight_data) = self.remote_flight_data.take() {
             let arrow_schema = Arc::new(self.schema.to_arrow());
             let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-            let ipc_schema = IpcSchema { fields: ipc_fields, is_little_endian: true };
+            let ipc_schema = IpcSchema {
+                fields: ipc_fields,
+                is_little_endian: true,
+            };
 
             let batch = deserialize_batch(
                 &flight_data,
@@ -160,7 +178,11 @@ struct ExchangeSubscriberSource {
 }
 
 impl ExchangeSubscriberSource {
-    pub fn try_create(output: Arc<OutputPort>, rx: Receiver<Result<FlightData>>, schema: DataSchemaRef) -> Result<ProcessorPtr> {
+    pub fn try_create(
+        output: Arc<OutputPort>,
+        rx: Receiver<Result<FlightData>>,
+        schema: DataSchemaRef,
+    ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(ExchangeSubscriberSource {
             rx,
             output,
@@ -210,7 +232,10 @@ impl Processor for ExchangeSubscriberSource {
         if let Some(flight_data) = self.remote_flight_data.take() {
             let arrow_schema = Arc::new(self.schema.to_arrow());
             let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-            let ipc_schema = IpcSchema { fields: ipc_fields, is_little_endian: true };
+            let ipc_schema = IpcSchema {
+                fields: ipc_fields,
+                is_little_endian: true,
+            };
 
             let batch = deserialize_batch(
                 &flight_data,

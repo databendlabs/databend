@@ -1,11 +1,14 @@
 use std::ops::Deref;
-use async_channel::Sender;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
+use std::sync::Arc;
+
+use async_channel::Sender;
 use common_arrow::arrow_format::flight::data::FlightData;
-use crate::api::rpc::packet::DataPacket;
 use common_exception::Result;
+
+use crate::api::rpc::packet::DataPacket;
 
 // Different from async_channel::Sender
 // It is allowed to close the channel when has one reference.
@@ -47,11 +50,9 @@ impl Clone for FragmentSender {
 
 impl Drop for FragmentSender {
     fn drop(&mut self) {
-        if self.is_track {
-            if 1 == self.ref_count.fetch_sub(1, Ordering::AcqRel) {
-                std::sync::atomic::fence(Acquire);
-                self.tx.close();
-            }
+        if self.is_track && 1 == self.ref_count.fetch_sub(1, Ordering::AcqRel) {
+            std::sync::atomic::fence(Acquire);
+            self.tx.close();
         }
     }
 }
@@ -96,12 +97,9 @@ impl Clone for FragmentReceiver {
 
 impl Drop for FragmentReceiver {
     fn drop(&mut self) {
-        if self.is_track {
-            if 1 == self.ref_count.fetch_sub(1, Ordering::AcqRel) {
-                std::sync::atomic::fence(Acquire);
-                self.tx.close();
-            }
+        if self.is_track && 1 == self.ref_count.fetch_sub(1, Ordering::AcqRel) {
+            std::sync::atomic::fence(Acquire);
+            self.tx.close();
         }
     }
 }
-

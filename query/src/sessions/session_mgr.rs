@@ -35,9 +35,8 @@ use common_tracing::tracing_appender::non_blocking::WorkerGuard;
 use futures::future::Either;
 use futures::StreamExt;
 use opendal::Operator;
-use opendal::Scheme as DalSchema;
-use crate::api::DataExchangeManager;
 
+use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::AsyncInsertQueue;
@@ -63,7 +62,7 @@ pub struct SessionManager {
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
     pub(in crate::sessions) query_logger:
-    RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
+        RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: RwLock<Operator>,
     storage_runtime: Arc<Runtime>,
@@ -265,7 +264,7 @@ impl SessionManager {
             self.clone(),
             None,
         )
-            .await?;
+        .await?;
 
         let mut sessions = self.active_sessions.write();
         let v = sessions.get(&id);
@@ -328,7 +327,7 @@ impl SessionManager {
         self: &Arc<Self>,
         mut signal: SignalStream,
         timeout_secs: i32,
-    ) -> impl Future<Output=()> {
+    ) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             tracing::info!(

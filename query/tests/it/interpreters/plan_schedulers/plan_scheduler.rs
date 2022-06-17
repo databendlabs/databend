@@ -69,9 +69,8 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
-            FlightAction::CancelAction(_) => panic!(),
-            FlightAction::BroadcastAction(_) => panic!(),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
+            _ => panic!(),
         }
     }
 
@@ -147,9 +146,8 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
-            FlightAction::CancelAction(_) => panic!(),
-            FlightAction::BroadcastAction(_) => panic!(),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
+            _ => panic!(),
         }
     }
     assert_eq!(remote_actions.len(), 3);
@@ -247,9 +245,8 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
-            FlightAction::CancelAction(_) => panic!(),
-            FlightAction::BroadcastAction(_) => panic!(),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
+            _ => panic!(),
         }
     }
 
@@ -331,5 +328,5 @@ async fn create_env() -> Result<Arc<QueryContext>> {
             .with_node("dummy", "github.com:9090")
             .with_local_id("dummy_local"),
     )
-        .await
+    .await
 }

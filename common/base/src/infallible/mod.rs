@@ -15,18 +15,18 @@
 mod condvar;
 mod exit_guard;
 mod mutex;
-mod rwlock;
-mod rwlock_upgrade_read;
 mod remutex;
 mod remutex_guard;
+mod rwlock;
+mod rwlock_upgrade_read;
 
 pub use condvar::Condvar;
 pub use exit_guard::ExitGuard;
 pub use mutex::Mutex;
-pub use rwlock::RwLock;
-pub use rwlock_upgrade_read::RwLockUpgradableReadGuard;
 pub use remutex::ReentrantMutex;
 pub use remutex_guard::ReentrantMutexGuard;
+pub use rwlock::RwLock;
+pub use rwlock_upgrade_read::RwLockUpgradableReadGuard;
 
 #[macro_export]
 macro_rules! exit_scope {

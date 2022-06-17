@@ -1,13 +1,25 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
-use common_base::base::GlobalUniqName;
-use common_datavalues::DataSchemaRef;
-use crate::interpreters::fragments::query_fragment::QueryFragment;
-use common_exception::{ErrorCode, Result};
-use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, RemotePlan, PlanBuilder, PlanNode, PlanRewriter, V1RemotePlan, StageKind, StagePlan};
-use crate::api::{DataExchange, HashDataExchange, MergeExchange};
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::PlanBuilder;
+use common_planners::PlanNode;
+use common_planners::PlanRewriter;
+use common_planners::RemotePlan;
+use common_planners::StageKind;
+use common_planners::StagePlan;
+
+use crate::api::HashDataExchange;
+use crate::api::MergeExchange;
 use crate::interpreters::fragments::partition_state::PartitionState;
-use crate::interpreters::fragments::query_fragment_actions::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
+use crate::interpreters::fragments::query_fragment::QueryFragment;
+use crate::interpreters::fragments::query_fragment_actions::QueryFragmentAction;
+use crate::interpreters::fragments::query_fragment_actions::QueryFragmentActions;
+use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 
 pub struct StageQueryFragment {
@@ -18,9 +30,18 @@ pub struct StageQueryFragment {
 }
 
 impl StageQueryFragment {
-    pub fn create(ctx: Arc<QueryContext>, node: &StagePlan, input: Box<dyn QueryFragment>) -> Result<Box<dyn QueryFragment>> {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        node: &StagePlan,
+        input: Box<dyn QueryFragment>,
+    ) -> Result<Box<dyn QueryFragment>> {
         let id = ctx.get_fragment_id();
-        Ok(Box::new(StageQueryFragment { id, stage: node.clone(), ctx, input }))
+        Ok(Box::new(StageQueryFragment {
+            id,
+            stage: node.clone(),
+            ctx,
+            input,
+        }))
     }
 }
 
@@ -29,7 +50,7 @@ impl QueryFragment for StageQueryFragment {
         match self.stage.kind {
             StageKind::Normal => Ok(PartitionState::HashPartition),
             StageKind::Expansive => Ok(PartitionState::HashPartition),
-            StageKind::Merge => Ok(PartitionState::NotPartition)
+            StageKind::Merge => Ok(PartitionState::NotPartition),
         }
     }
 
@@ -40,13 +61,16 @@ impl QueryFragment for StageQueryFragment {
 
         if self.input.get_out_partition()? == PartitionState::NotPartition {
             if input_actions.get_actions().is_empty() {
-                return Err(ErrorCode::LogicalError("Logical error, input actions is empty."));
+                return Err(ErrorCode::LogicalError(
+                    "Logical error, input actions is empty.",
+                ));
             }
 
             let action = &input_actions.get_actions()[0];
             let fragment_action = QueryFragmentAction::create(
                 actions.get_local_executor(),
-                self.input.rewrite_remote_plan(&self.stage.input, &action.node)?,
+                self.input
+                    .rewrite_remote_plan(&self.stage.input, &action.node)?,
             );
 
             fragment_actions.add_action(fragment_action);
@@ -55,18 +79,20 @@ impl QueryFragment for StageQueryFragment {
             for action in input_actions.get_actions() {
                 let fragment_action = QueryFragmentAction::create(
                     action.executor.clone(),
-                    self.input.rewrite_remote_plan(&self.stage.input, &action.node)?,
+                    self.input
+                        .rewrite_remote_plan(&self.stage.input, &action.node)?,
                 );
 
                 fragment_actions.add_action(fragment_action);
             }
         }
 
-
         fragment_actions.set_exchange(match self.stage.kind {
             StageKind::Expansive => unimplemented!(),
             StageKind::Merge => MergeExchange::create(actions.get_local_executor()),
-            StageKind::Normal => HashDataExchange::create(actions.get_executors(), self.stage.scatters_expr.clone()),
+            StageKind::Normal => {
+                HashDataExchange::create(actions.get_executors(), self.stage.scatters_expr.clone())
+            }
         });
 
         match input_actions.exchange_actions {
@@ -89,7 +115,10 @@ struct StageRewrite {
 
 impl StageRewrite {
     pub fn create(query_id: String, fragment_id: usize) -> StageRewrite {
-        StageRewrite { query_id, fragment_id }
+        StageRewrite {
+            query_id,
+            fragment_id,
+        }
     }
 }
 

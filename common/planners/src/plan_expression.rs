@@ -343,9 +343,10 @@ impl Expression {
                 }
                 AggregateFunctionFactory::instance().get(&func_name, params.clone(), fields)
             }
-            _ => Err(ErrorCode::LogicalError(
-                format!("Expression must be aggregated function, {:?}", self),
-            )),
+            _ => Err(ErrorCode::LogicalError(format!(
+                "Expression must be aggregated function, {:?}",
+                self
+            ))),
         }
     }
 
@@ -394,7 +395,7 @@ impl fmt::Debug for Expression {
             Expression::Subquery { name, .. } => write!(f, "subquery({})", name),
             Expression::ScalarSubquery { name, .. } => write!(f, "scalar subquery({})", name),
             Expression::BinaryExpression { op, left, right } => {
-                write!(f, "({:?} {} {:?})", left, op, right, )
+                write!(f, "({:?} {} {:?})", left, op, right,)
             }
 
             Expression::UnaryExpression { op, expr } => {
@@ -408,7 +409,7 @@ impl fmt::Debug for Expression {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}", args[i], )?;
+                    write!(f, "{:?}", args[i],)?;
                 }
                 write!(f, ")")
             }

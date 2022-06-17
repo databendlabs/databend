@@ -13,15 +13,19 @@
 // limitations under the License.
 
 use std::cell::UnsafeCell;
+
 use parking_lot::ReentrantMutex as ParkingReentrantMutex;
+
 use crate::infallible::ReentrantMutexGuard;
 
 /// A simple wrapper around the lock() function of a ReentrantMutex
 #[derive(Debug)]
 pub struct ReentrantMutex<T>(ParkingReentrantMutex<UnsafeCell<T>>);
 
+#[allow(suspicious_auto_trait_impls)]
 unsafe impl<T> Send for ReentrantMutex<UnsafeCell<T>> where ParkingReentrantMutex<T>: Send {}
 
+#[allow(suspicious_auto_trait_impls)]
 unsafe impl<T> Sync for ReentrantMutex<UnsafeCell<T>> where ParkingReentrantMutex<T>: Sync {}
 
 impl<T> ReentrantMutex<T> {
@@ -35,5 +39,3 @@ impl<T> ReentrantMutex<T> {
         ReentrantMutexGuard::create(self.0.lock())
     }
 }
-
-

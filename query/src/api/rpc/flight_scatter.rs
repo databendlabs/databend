@@ -12,14 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::Expression;
-
-use crate::sessions::QueryContext;
 
 pub trait FlightScatter: Sync + Send {
     fn execute(&self, data_block: &DataBlock, num: usize) -> Result<Vec<DataBlock>>;

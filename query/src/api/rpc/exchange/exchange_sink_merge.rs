@@ -1,19 +1,21 @@
 use std::any::Any;
-use common_exception::ErrorCode;
 use std::sync::Arc;
-use async_channel::{Sender, TrySendError};
-use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow_format::flight::data::FlightData;
-use common_datablocks::DataBlock;
-use crate::api::rpc::exchange::exchange_params::{MergeExchangeParams, SerializeParams};
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
-use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
-use crate::sessions::QueryContext;
 
+use async_channel::TrySendError;
+use common_arrow::arrow::io::flight::serialize_batch;
+use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
-use crate::api::rpc::exchange::exchange_channel::{FragmentReceiver, FragmentSender};
+
+use crate::api::rpc::exchange::exchange_channel::FragmentSender;
+use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
+use crate::api::rpc::exchange::exchange_params::SerializeParams;
 use crate::api::rpc::packet::DataPacket;
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::Processor;
+use crate::sessions::QueryContext;
 
 pub struct ExchangeMergeSink {
     ctx: Arc<QueryContext>,
@@ -28,7 +30,12 @@ pub struct ExchangeMergeSink {
 }
 
 impl ExchangeMergeSink {
-    pub fn try_create(ctx: Arc<QueryContext>, fragment_id: usize, input: Arc<InputPort>, exchange_params: MergeExchangeParams) -> Result<ProcessorPtr> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        fragment_id: usize,
+        input: Arc<InputPort>,
+        exchange_params: MergeExchangeParams,
+    ) -> Result<ProcessorPtr> {
         let serialize_params = exchange_params.create_serialize_params()?;
         Ok(ProcessorPtr::create(Box::new(ExchangeMergeSink {
             ctx,
@@ -49,7 +56,8 @@ impl ExchangeMergeSink {
                 let query_id = &exchange_merge.exchange_params.query_id;
                 let destination_id = &exchange_merge.exchange_params.destination_id;
                 let exchange_manager = exchange_merge.ctx.get_exchange_manager();
-                exchange_merge.peer_endpoint_publisher = Some(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
+                exchange_merge.peer_endpoint_publisher =
+                    Some(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
             }
 
             Ok(())
@@ -122,7 +130,9 @@ impl Processor for ExchangeMergeSink {
             let (dicts, values) = serialize_batch(&chunks, ipc_fields, options);
 
             if !dicts.is_empty() {
-                return Err(ErrorCode::UnImplement("DatabendQuery does not implement dicts."));
+                return Err(ErrorCode::UnImplement(
+                    "DatabendQuery does not implement dicts.",
+                ));
             }
 
             // FlightData
@@ -133,11 +143,11 @@ impl Processor for ExchangeMergeSink {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        if let Some(mut output_data) = self.output_data.take() {
+        if let Some(output_data) = self.output_data.take() {
             let tx = self.get_endpoint_publisher()?;
-            if let Err(_) = tx.send(output_data).await {
+            if tx.send(output_data).await.is_err() {
                 return Err(ErrorCode::TokioError(
-                    "Cannot send flight data to endpoint, because sender is closed."
+                    "Cannot send flight data to endpoint, because sender is closed.",
                 ));
             }
         }

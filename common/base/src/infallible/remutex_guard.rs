@@ -1,17 +1,25 @@
 use std::cell::UnsafeCell;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
+use std::ops::DerefMut;
+
 use parking_lot::ReentrantMutexGuard as ParkingReentrantMutexGuard;
 
 pub struct ReentrantMutexGuard<'a, T> {
     inner: ParkingReentrantMutexGuard<'a, UnsafeCell<T>>,
 }
 
-unsafe impl<'a, T> Send for ReentrantMutexGuard<'a, UnsafeCell<T>> where ParkingReentrantMutexGuard<'a, T>: Send {}
+#[allow(suspicious_auto_trait_impls)]
+unsafe impl<'a, T> Send for ReentrantMutexGuard<'a, UnsafeCell<T>> where ParkingReentrantMutexGuard<'a, T>: Send
+{}
 
-unsafe impl<'a, T> Sync for ReentrantMutexGuard<'a, UnsafeCell<T>> where ParkingReentrantMutexGuard<'a, T>: Sync {}
+#[allow(suspicious_auto_trait_impls)]
+unsafe impl<'a, T> Sync for ReentrantMutexGuard<'a, UnsafeCell<T>> where ParkingReentrantMutexGuard<'a, T>: Sync
+{}
 
 impl<'a, T> ReentrantMutexGuard<'a, T> {
-    pub fn create(inner: ParkingReentrantMutexGuard<'a, UnsafeCell<T>>) -> ReentrantMutexGuard<'a, T> {
+    pub fn create(
+        inner: ParkingReentrantMutexGuard<'a, UnsafeCell<T>>,
+    ) -> ReentrantMutexGuard<'a, T> {
         ReentrantMutexGuard { inner }
     }
 }
@@ -29,4 +37,3 @@ impl<'a, T> DerefMut for ReentrantMutexGuard<'a, T> {
         unsafe { &mut *self.inner.deref().get() }
     }
 }
-

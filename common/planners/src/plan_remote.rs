@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use common_datavalues::{DataSchema, DataSchemaRef};
+use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct V1RemotePlan {
@@ -45,7 +44,13 @@ impl RemotePlan {
         stream_id: String,
         fetch_nodes: Vec<String>,
     ) -> RemotePlan {
-        RemotePlan::V1(V1RemotePlan { schema, query_id, stage_id, stream_id, fetch_nodes })
+        RemotePlan::V1(V1RemotePlan {
+            schema,
+            query_id,
+            stage_id,
+            stream_id,
+            fetch_nodes,
+        })
     }
 
     pub fn create_v2(schema: DataSchemaRef, query_id: String, fragment: usize) -> RemotePlan {

@@ -1,7 +1,9 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
 use common_planners::PlanNode;
+
 use crate::api::DataExchange;
-use crate::interpreters::QueryFragmentAction;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct FragmentPacket {
@@ -11,7 +13,11 @@ pub struct FragmentPacket {
 }
 
 impl FragmentPacket {
-    pub fn create(fragment_id: usize, node: PlanNode, data_exchange: DataExchange) -> FragmentPacket {
+    pub fn create(
+        fragment_id: usize,
+        node: PlanNode,
+        data_exchange: DataExchange,
+    ) -> FragmentPacket {
         FragmentPacket {
             node,
             fragment_id,
@@ -29,4 +35,3 @@ impl Debug for FragmentPacket {
             .finish()
     }
 }
-

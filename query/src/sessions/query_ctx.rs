@@ -15,7 +15,8 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
@@ -49,12 +50,11 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::future::AbortHandle;
 use opendal::Operator;
-use crate::api::{DataExchangeManager, ExecutorPacket};
 
+use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
-use crate::pipelines::new::NewPipeline;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
@@ -482,9 +482,9 @@ impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static,
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
     {
         Ok(self.shared.try_get_runtime()?.spawn(task))
     }

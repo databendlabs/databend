@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::{AggregatorFinalPlan, RemotePlan};
+use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::BroadcastPlan;
 use common_planners::ExpressionPlan;
@@ -26,7 +26,7 @@ use common_planners::LimitPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
-use common_planners::V1RemotePlan;
+use common_planners::RemotePlan;
 use common_planners::SelectPlan;
 use common_planners::SinkPlan;
 use common_planners::SortPlan;
@@ -127,7 +127,9 @@ impl PipelineBuilder {
         let mut pipeline = Pipeline::create(self.ctx.clone());
 
         match plan {
-            RemotePlan::V2(_) => Err(ErrorCode::LogicalError("Use version 2 remote plan in version 1")),
+            RemotePlan::V2(_) => Err(ErrorCode::LogicalError(
+                "Use version 2 remote plan in version 1",
+            )),
             RemotePlan::V1(plan) => {
                 for fetch_node in &plan.fetch_nodes {
                     let flight_ticket =

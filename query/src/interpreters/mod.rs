@@ -14,6 +14,7 @@
 
 mod access;
 mod async_insert_queue;
+mod fragments;
 mod interpreter;
 mod interpreter_call;
 mod interpreter_cluster_key_alter;
@@ -81,10 +82,11 @@ mod interpreter_view_create;
 mod interpreter_view_drop;
 mod plan_schedulers;
 mod stream;
-mod fragments;
 
 pub use access::ManagementModeAccess;
 pub use async_insert_queue::AsyncInsertQueue;
+pub use fragments::QueryFragmentAction;
+pub use fragments::QueryFragmentsActions;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;
@@ -151,5 +153,3 @@ pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;
 pub use plan_schedulers::PlanScheduler;
-pub use fragments::QueryFragmentsActions;
-pub use fragments::QueryFragmentAction;

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+
 use common_meta_types::NodeInfo;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

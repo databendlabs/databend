@@ -1,7 +1,9 @@
-use crate::interpreters::fragments::query_fragment::QueryFragment;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_planners::PlanNode;
+
 use crate::interpreters::fragments::partition_state::PartitionState;
+use crate::interpreters::fragments::query_fragment::QueryFragment;
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
 
 #[derive(Debug)]
@@ -24,11 +26,11 @@ impl QueryFragment for BroadcastQueryFragment {
         Ok(PartitionState::Broadcast)
     }
 
-    fn finalize(&self, nodes: &mut QueryFragmentsActions) -> Result<()> {
+    fn finalize(&self, _nodes: &mut QueryFragmentsActions) -> Result<()> {
         todo!()
     }
 
-    fn rewrite_remote_plan(&self, node: &PlanNode, new: &PlanNode) -> Result<PlanNode> {
+    fn rewrite_remote_plan(&self, _node: &PlanNode, _new: &PlanNode) -> Result<PlanNode> {
         todo!()
     }
 }

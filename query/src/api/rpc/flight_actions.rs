@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::convert::TryInto;
-use std::string::FromUtf8Error;
-use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::data::Action;
 use common_exception::ErrorCode;
@@ -22,8 +20,9 @@ use common_exception::ToErrorCode;
 use common_planners::Expression;
 use common_planners::PlanNode;
 use tonic::Status;
-use crate::api::{ExecutorPacket, PrepareChannel};
-use crate::sessions::QueryContext;
+
+use crate::api::ExecutorPacket;
+use crate::api::PrepareChannel;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ShuffleAction {
@@ -153,7 +152,6 @@ pub struct PreparePublisher {
     pub publisher_packet: PrepareChannel,
 }
 
-
 impl TryInto<PreparePublisher> for Vec<u8> {
     type Error = Status;
 
@@ -280,7 +278,7 @@ impl TryInto<Action> for FlightAction {
             FlightAction::ExecutePipeline(query_id) => Ok(Action {
                 r#type: String::from("ExecutePipeline"),
                 body: query_id.into_bytes(),
-            })
+            }),
         }
     }
 }

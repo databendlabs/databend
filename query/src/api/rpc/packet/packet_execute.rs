@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+
 use common_meta_types::NodeInfo;
-use crate::api::rpc::packet::packet_fragment::FragmentPacket;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExecutePacket {
@@ -12,7 +12,15 @@ pub struct ExecutePacket {
 }
 
 impl ExecutePacket {
-    pub fn create(query_id: String, executor: String, executors_info: HashMap<String, Arc<NodeInfo>>) -> ExecutePacket {
-        ExecutePacket { query_id, executor, executors_info }
+    pub fn create(
+        query_id: String,
+        executor: String,
+        executors_info: HashMap<String, Arc<NodeInfo>>,
+    ) -> ExecutePacket {
+        ExecutePacket {
+            query_id,
+            executor,
+            executors_info,
+        }
     }
 }

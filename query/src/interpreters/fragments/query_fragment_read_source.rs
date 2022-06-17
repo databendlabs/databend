@@ -1,13 +1,22 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
-use common_datavalues::DataSchemaRef;
 
-use common_exception::{ErrorCode, Result};
-use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, Partitions, PlanBuilder, PlanNode, PlanRewriter, ReadDataSourcePlan};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::Partitions;
+use common_planners::PlanBuilder;
+use common_planners::PlanNode;
+use common_planners::PlanRewriter;
+use common_planners::ReadDataSourcePlan;
 
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment::QueryFragment;
-use crate::interpreters::fragments::query_fragment_actions::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
+use crate::interpreters::fragments::query_fragment_actions::QueryFragmentAction;
+use crate::interpreters::fragments::query_fragment_actions::QueryFragmentActions;
+use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 
 pub struct ReadDatasourceQueryFragment {
@@ -16,8 +25,14 @@ pub struct ReadDatasourceQueryFragment {
 }
 
 impl ReadDatasourceQueryFragment {
-    pub fn create(ctx: Arc<QueryContext>, plan: &ReadDataSourcePlan) -> Result<Box<dyn QueryFragment>> {
-        Ok(Box::new(ReadDatasourceQueryFragment { ctx, read_data_source: plan.clone() }))
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        plan: &ReadDataSourcePlan,
+    ) -> Result<Box<dyn QueryFragment>> {
+        Ok(Box::new(ReadDatasourceQueryFragment {
+            ctx,
+            read_data_source: plan.clone(),
+        }))
     }
 }
 
@@ -49,7 +64,9 @@ impl ReadDatasourceQueryFragment {
 
 impl QueryFragment for ReadDatasourceQueryFragment {
     fn get_out_partition(&self) -> Result<PartitionState> {
-        let read_table = self.ctx.build_table_from_source_plan(&self.read_data_source)?;
+        let read_table = self
+            .ctx
+            .build_table_from_source_plan(&self.read_data_source)?;
 
         match read_table.is_local() {
             true => Ok(PartitionState::NotPartition),
@@ -95,17 +112,18 @@ impl QueryFragment for ReadDatasourceQueryFragment {
 
     fn rewrite_remote_plan(&self, node: &PlanNode, new_node: &PlanNode) -> Result<PlanNode> {
         if !matches!(new_node, PlanNode::ReadSource(_)) {
-            return Err(ErrorCode::UnknownPlan("Unknown plan type while in rewrite_remote_plan"));
+            return Err(ErrorCode::UnknownPlan(
+                "Unknown plan type while in rewrite_remote_plan",
+            ));
         }
 
         // use new node replace node children.
-        ReplaceDataSource { new_node, before_group_by_schema: None }.rewrite_plan_node(node)
+        ReplaceDataSource { new_node }.rewrite_plan_node(node)
     }
 }
 
 struct ReplaceDataSource<'a> {
     new_node: &'a PlanNode,
-    before_group_by_schema: Option<DataSchemaRef>,
 }
 
 impl<'a> PlanRewriter for ReplaceDataSource<'a> {
@@ -131,7 +149,6 @@ impl<'a> PlanRewriter for ReplaceDataSource<'a> {
 
 impl Debug for ReadDatasourceQueryFragment {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ReadDatasourceQueryFragment")
-            .finish()
+        f.debug_struct("ReadDatasourceQueryFragment").finish()
     }
 }

@@ -99,13 +99,13 @@ impl ExecutingGraph {
         let mut graph = StableGraph::new();
 
         for pipeline in &pipelines {
-            Self::init_graph(&pipeline, &mut graph);
+            Self::init_graph(pipeline, &mut graph);
         }
 
         Ok(ExecutingGraph { graph })
     }
 
-    fn init_graph(pipeline: &NewPipeline, mut graph: &mut StableGraph<Arc<Node>, ()>) {
+    fn init_graph(pipeline: &NewPipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
         let mut node_stack = Vec::new();
         let mut edge_stack: Vec<Arc<OutputPort>> = Vec::new();
         for query_pipe in &pipeline.pipes {

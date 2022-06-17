@@ -1,15 +1,20 @@
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Formatter};
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
-use common_base::base::GlobalUniqName;
+
 use common_datavalues::DataSchemaRef;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_meta_types::NodeInfo;
 use common_planners::PlanNode;
-use crate::api::{DataExchange, ExecutePacket, ExecutorPacket, FragmentPacket, PrepareChannel};
-use crate::clusters::Cluster;
-use crate::interpreters::fragments::partition_state::PartitionState;
+
+use crate::api::DataExchange;
+use crate::api::ExecutePacket;
+use crate::api::ExecutorPacket;
+use crate::api::FragmentPacket;
+use crate::api::PrepareChannel;
 use crate::sessions::QueryContext;
 
 // Query plan fragment with executor name
@@ -34,7 +39,12 @@ pub struct QueryFragmentActions {
 
 impl QueryFragmentActions {
     pub fn create(exchange_actions: bool, fragment_id: usize) -> QueryFragmentActions {
-        QueryFragmentActions { exchange_actions, fragment_id, data_exchange: None, fragment_actions: vec![] }
+        QueryFragmentActions {
+            exchange_actions,
+            fragment_id,
+            data_exchange: None,
+            fragment_actions: vec![],
+        }
     }
 
     pub fn get_actions(&self) -> &[QueryFragmentAction] {
@@ -56,12 +66,16 @@ impl QueryFragmentActions {
         }
 
         if actions_schema.is_empty() {
-            return Err(ErrorCode::DataStructMissMatch("Schema miss match in fragment actions."));
+            return Err(ErrorCode::DataStructMissMatch(
+                "Schema miss match in fragment actions.",
+            ));
         }
 
         for action_schema in &actions_schema {
             if action_schema != &actions_schema[0] {
-                return Err(ErrorCode::DataStructMissMatch("Schema miss match in fragment actions."));
+                return Err(ErrorCode::DataStructMissMatch(
+                    "Schema miss match in fragment actions.",
+                ));
             }
         }
 
@@ -76,15 +90,17 @@ pub struct QueryFragmentsActions {
 
 impl QueryFragmentsActions {
     pub fn create(ctx: Arc<QueryContext>) -> QueryFragmentsActions {
-        QueryFragmentsActions { ctx, fragments_actions: Vec::new() }
+        QueryFragmentsActions {
+            ctx,
+            fragments_actions: Vec::new(),
+        }
     }
 
     pub fn get_executors(&self) -> Vec<String> {
         let cluster = self.ctx.get_cluster();
         let cluster_nodes = cluster.get_nodes();
 
-        cluster_nodes.iter().map(|node| &node.id)
-            .cloned().collect()
+        cluster_nodes.iter().map(|node| &node.id).cloned().collect()
     }
 
     pub fn get_local_executor(&self) -> String {
@@ -93,8 +109,10 @@ impl QueryFragmentsActions {
 
     pub fn get_root_actions(&self) -> Result<&QueryFragmentActions> {
         match self.fragments_actions.last() {
-            None => Err(ErrorCode::LogicalError("Logical error, call get_root_actions in empty QueryFragmentsActions")),
-            Some(entity) => Ok(entity)
+            None => Err(ErrorCode::LogicalError(
+                "Logical error, call get_root_actions in empty QueryFragmentsActions",
+            )),
+            Some(entity) => Ok(entity),
         }
     }
 
@@ -106,7 +124,7 @@ impl QueryFragmentsActions {
     pub fn update_root_fragment_actions(&mut self, actions: QueryFragmentActions) -> Result<()> {
         if self.fragments_actions.is_empty() {
             return Err(ErrorCode::LogicalError(
-                "Logical error, cannot update last element for empty actions."
+                "Logical error, cannot update last element for empty actions.",
             ));
         }
 
@@ -150,11 +168,11 @@ impl QueryFragmentsActions {
         let connections_info = self.get_target_2_fragments();
 
         let cluster = ctx.get_cluster();
-        for (node_id, _node_info) in &nodes_info {
+        for node_id in nodes_info.keys() {
             let mut target_nodes_info = HashMap::new();
             let mut target_2_fragments = HashMap::new();
 
-            for target_connections_info in connections_info.get(node_id) {
+            if let Some(target_connections_info) = connections_info.get(node_id) {
                 for (target, fragments) in target_connections_info {
                     target_2_fragments.insert(target.clone(), fragments.clone());
                     target_nodes_info.insert(target.clone(), nodes_info[target].clone());
@@ -246,7 +264,7 @@ impl QueryFragmentsActions {
         let nodes_info = Self::nodes_info(&ctx);
         let mut execute_packets = Vec::with_capacity(nodes_info.len());
 
-        for (node_id, node_info) in &nodes_info {
+        for node_id in nodes_info.keys() {
             execute_packets.push(ExecutePacket::create(
                 ctx.get_id(),
                 node_id.to_owned(),

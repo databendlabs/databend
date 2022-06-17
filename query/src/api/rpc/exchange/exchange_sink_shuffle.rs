@@ -1,20 +1,22 @@
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use async_channel::{Sender, TrySendError};
+
+use async_channel::TrySendError;
 use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow_format::flight::data::FlightData;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
-use crate::api::rpc::exchange::exchange_params::{SerializeParams, ShuffleExchangeParams};
-use crate::api::rpc::flight_scatter::FlightScatter;
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
-use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
-use crate::sessions::QueryContext;
 use common_exception::Result;
+
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
+use crate::api::rpc::exchange::exchange_params::SerializeParams;
+use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::packet::DataPacket;
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::Processor;
+use crate::sessions::QueryContext;
 
 struct OutputData {
     pub data_block: Option<DataBlock>,
@@ -44,7 +46,9 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
         shuffle_exchange_params: ShuffleExchangeParams,
     ) -> Result<ProcessorPtr> {
         let serialize_params = shuffle_exchange_params.create_serialize_params()?;
-        Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink::<HAS_OUTPUT> {
+        Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink::<
+            HAS_OUTPUT,
+        > {
             ctx,
             input,
             output,
@@ -83,11 +87,15 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
             if destination_id != &self.shuffle_exchange_params.executor_id {
                 let id = self.fragment_id;
                 let query_id = &self.shuffle_exchange_params.query_id;
-                res.push(Some(exchange_manager.get_fragment_sink(query_id, id, destination_id)?));
+                res.push(Some(exchange_manager.get_fragment_sink(
+                    query_id,
+                    id,
+                    destination_id,
+                )?));
             } else {
                 if !HAS_OUTPUT {
                     return Err(ErrorCode::LogicalError(
-                        "Has local output, but not found output port. It's a bug."
+                        "Has local output, but not found output port. It's a bug.",
                     ));
                 }
 
@@ -123,7 +131,6 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
                 return Ok(Event::NeedConsume);
             }
         }
-
 
         if let Some(mut output_data) = self.output_data.take() {
             let mut pushed_data = false;
@@ -197,7 +204,10 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
             let scatter = &self.shuffle_exchange_params.shuffle_scatter;
 
             let scatted_blocks = scatter.execute(&data_block, 0)?;
-            let mut output_data = OutputData { data_block: None, serialized_blocks: vec![] };
+            let mut output_data = OutputData {
+                data_block: None,
+                serialized_blocks: vec![],
+            };
 
             for (index, data_block) in scatted_blocks.into_iter().enumerate() {
                 if data_block.is_empty() {
@@ -215,10 +225,14 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
                     let (dicts, values) = serialize_batch(&chunks, ipc_fields, options);
 
                     if !dicts.is_empty() {
-                        return Err(ErrorCode::UnImplement("DatabendQuery does not implement dicts."));
+                        return Err(ErrorCode::UnImplement(
+                            "DatabendQuery does not implement dicts.",
+                        ));
                     }
 
-                    output_data.serialized_blocks.push(Some(DataPacket::Data(self.fragment_id, values)));
+                    output_data
+                        .serialized_blocks
+                        .push(Some(DataPacket::Data(self.fragment_id, values)));
                 }
             }
 
@@ -234,9 +248,9 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
                 if let Some(output_packet) = output_data.serialized_blocks[index].take() {
                     let tx = self.get_endpoint_publisher(index)?;
 
-                    if let Err(_) = tx.send(output_packet).await {
+                    if tx.send(output_packet).await.is_err() {
                         return Err(ErrorCode::TokioError(
-                            "Cannot send flight data to endpoint, because sender is closed."
+                            "Cannot send flight data to endpoint, because sender is closed.",
                         ));
                     }
                 }

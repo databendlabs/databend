@@ -43,19 +43,33 @@ impl PipelineExecutor {
         Self::try_create(async_rt, RunningGraph::create(pipeline)?, threads_num)
     }
 
-    pub fn from_pipelines(async_rt: Arc<Runtime>, pipelines: Vec<NewPipeline>) -> Result<Arc<PipelineExecutor>> {
+    pub fn from_pipelines(
+        async_rt: Arc<Runtime>,
+        pipelines: Vec<NewPipeline>,
+    ) -> Result<Arc<PipelineExecutor>> {
         if pipelines.is_empty() {
             return Err(ErrorCode::LogicalError("Executor Pipelines is empty."));
         }
 
-        let threads_num = pipelines.iter().map(|x| x.get_max_threads()).max()
+        let threads_num = pipelines
+            .iter()
+            .map(|x| x.get_max_threads())
+            .max()
             .unwrap_or(0);
 
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
-        Self::try_create(async_rt, RunningGraph::from_pipelines(pipelines)?, threads_num)
+        Self::try_create(
+            async_rt,
+            RunningGraph::from_pipelines(pipelines)?,
+            threads_num,
+        )
     }
 
-    fn try_create(async_rt: Arc<Runtime>, graph: RunningGraph, threads_num: usize) -> Result<Arc<PipelineExecutor>> {
+    fn try_create(
+        async_rt: Arc<Runtime>,
+        graph: RunningGraph,
+        threads_num: usize,
+    ) -> Result<Arc<PipelineExecutor>> {
         unsafe {
             let workers_condvar = WorkersCondvar::create(threads_num);
             let global_tasks_queue = ExecutorTasksQueue::create(threads_num);

@@ -15,24 +15,24 @@
 // The api module only used for internal communication, such as GRPC between cluster and the managed HTTP REST API.
 
 pub use http_service::HttpService;
-pub use rpc::PrepareChannel;
 pub use rpc::BroadcastAction;
 pub use rpc::CancelAction;
+pub use rpc::DataExchange;
+pub use rpc::DataExchangeManager;
 pub use rpc::DatabendQueryFlightDispatcher;
 pub use rpc::DatabendQueryFlightService;
+pub use rpc::ExecutePacket;
+pub use rpc::ExecutorPacket;
 pub use rpc::FlightAction;
 pub use rpc::FlightClient;
 pub use rpc::FlightTicket;
-pub use rpc::ShuffleAction;
-pub use rpc::StreamTicket;
-pub use rpc::ExecutorPacket;
 pub use rpc::FragmentPacket;
-pub use rpc::ExecutePacket;
-pub use rpc::DataExchangeManager;
-pub use rpc_service::RpcService;
-pub use rpc::DataExchange;
 pub use rpc::HashDataExchange;
 pub use rpc::MergeExchange;
+pub use rpc::PrepareChannel;
+pub use rpc::ShuffleAction;
+pub use rpc::StreamTicket;
+pub use rpc_service::RpcService;
 
 pub mod http;
 mod http_service;

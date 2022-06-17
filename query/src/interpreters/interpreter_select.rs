@@ -100,6 +100,6 @@ impl Interpreter for SelectInterpreter {
     /// The QueryPipelineBuilder will use the optimized plan to generate a NewPipeline
     fn create_new_pipeline(&self) -> Result<NewPipeline> {
         let builder = QueryPipelineBuilder::create(self.ctx.clone());
-        Ok(builder.finalize(&self.rewrite_plan()?)?)
+        builder.finalize(&self.rewrite_plan()?)
     }
 }

@@ -1,10 +1,14 @@
 use std::sync::Arc;
-use crate::interpreters::fragments::query_fragment::QueryFragment;
+
 use common_exception::Result;
-use common_planners::{PlanNode, V1RemotePlan, StageKind, StagePlan};
-use crate::api::{DataExchange, MergeExchange};
+use common_planners::PlanNode;
+
+use crate::api::MergeExchange;
 use crate::interpreters::fragments::partition_state::PartitionState;
-use crate::interpreters::fragments::query_fragment_actions::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
+use crate::interpreters::fragments::query_fragment::QueryFragment;
+use crate::interpreters::fragments::query_fragment_actions::QueryFragmentAction;
+use crate::interpreters::fragments::query_fragment_actions::QueryFragmentActions;
+use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
@@ -15,8 +19,16 @@ pub struct RootQueryFragment {
 }
 
 impl RootQueryFragment {
-    pub fn create(input: Box<dyn QueryFragment>, ctx: Arc<QueryContext>, node: &PlanNode) -> Result<Box<dyn QueryFragment>> {
-        Ok(Box::new(RootQueryFragment { input, ctx, node: node.clone() }))
+    pub fn create(
+        input: Box<dyn QueryFragment>,
+        ctx: Arc<QueryContext>,
+        node: &PlanNode,
+    ) -> Result<Box<dyn QueryFragment>> {
+        Ok(Box::new(RootQueryFragment {
+            input,
+            ctx,
+            node: node.clone(),
+        }))
     }
 }
 

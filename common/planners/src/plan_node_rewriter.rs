@@ -70,7 +70,6 @@ use crate::PlanBuilder;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
-use crate::V1RemotePlan;
 use crate::RemotePlan;
 use crate::RemoveUserStagePlan;
 use crate::RenameDatabasePlan;
