@@ -496,6 +496,26 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_date_add(span, date, interval, unit, required_type)
                     .await?
             }
+            Expr::DateSub {
+                span,
+                date,
+                interval,
+                unit,
+                ..
+            } => {
+                self.resolve_date_add(
+                    span,
+                    date,
+                    &Expr::UnaryOp {
+                        span,
+                        op: UnaryOperator::Minus,
+                        expr: interval.clone(),
+                    },
+                    unit,
+                    required_type,
+                )
+                .await?
+            }
             Expr::Trim {
                 span,
                 expr,
