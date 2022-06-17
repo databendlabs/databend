@@ -97,6 +97,7 @@ pub enum Statement<'a> {
     DropView(DropViewStmt<'a>),
 
     // User
+    ShowUsers,
     CreateUser(CreateUserStmt),
     AlterUser {
         // None means current user
@@ -109,6 +110,7 @@ pub enum Statement<'a> {
         if_exists: bool,
         user: UserIdentity,
     },
+    ShowRoles,
     CreateRole {
         if_not_exists: bool,
         role_name: String,
@@ -231,6 +233,7 @@ pub struct CreateTableStmt<'a> {
     pub cluster_by: Vec<Expr<'a>>,
     pub as_query: Option<Box<Query<'a>>>,
     pub comment: Option<String>,
+    pub transient: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -752,8 +755,13 @@ impl<'a> Display for Statement<'a> {
                 comment,
                 cluster_by,
                 as_query,
+                transient,
             }) => {
-                write!(f, "CREATE TABLE ")?;
+                write!(f, "CREATE ")?;
+                if *transient {
+                    write!(f, "TRANSIENT ")?;
+                }
+                write!(f, "TABLE ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
@@ -923,6 +931,12 @@ impl<'a> Display for Statement<'a> {
                     write!(f, "IF EXISTS ")?;
                 }
                 write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
+            }
+            Statement::ShowUsers => {
+                write!(f, "SHOW USERS")?;
+            }
+            Statement::ShowRoles => {
+                write!(f, "SHOW ROLES")?;
             }
             Statement::CreateUser(CreateUserStmt {
                 if_not_exists,

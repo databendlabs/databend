@@ -54,18 +54,12 @@ fn select_table_at() -> Result<()> {
 
     {
         let sql = "select * from t at( => '0de4865bba874065905625e5db6024c1');";
-        expect_parse_err(
-            sql,
-            "sql parser error: Expected SNAPSHOT, found: =>".to_string(),
-        )?;
+        expect_parse_err(sql, "sql parser error: Expected SNAPSHOT, found: =>")?;
     }
 
     {
         let sql = "select * from t at( SNAPSHOT => );";
-        expect_parse_err(
-            sql,
-            "sql parser error: Expected snapshot id, found: )".to_string(),
-        )?;
+        expect_parse_err(sql, "sql parser error: Expected snapshot id, found: )")?;
     }
 
     Ok(())

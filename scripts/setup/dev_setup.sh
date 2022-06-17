@@ -10,7 +10,7 @@ cd "$SCRIPT_PATH/../.." || exit
 
 function add_to_profile {
 	eval "$1"
-	FOUND=$(grep -c "$1" <"${HOME}/.profile")
+	FOUND=$(grep -c "$1" "${HOME}/.profile" || true)
 	if [ "$FOUND" == "0" ]; then
 		echo "$1" >>"${HOME}"/.profile
 	fi
@@ -198,7 +198,7 @@ function install_jdk {
 
 	case "$PACKAGE_MANAGER" in
 	apt-get)
-		install_pkg openjdk-11-jre-headless "$PACKAGE_MANAGER"
+		install_pkg openjdk-11-jdk-headless "$PACKAGE_MANAGER"
 		;;
 	pacman)
 		install_pkg jre11-openjdk-headless "$PACKAGE_MANAGER"
@@ -220,6 +220,17 @@ function install_jdk {
 		exit 1
 		;;
 	esac
+
+	if [[ "$INSTALL_PROFILE" == "true" ]]; then
+		JAVA_HOME=$(readlink -f `which javac` | sed "s:/bin/javac::")
+		if [[ -z ${JAVA_HOME} ]]; then
+			echo "JAVA_HOME not found"
+		else
+			echo "set JAVA_HOME to: ${JAVA_HOME}"
+			add_to_profile "export JAVA_HOME=\"${JAVA_HOME}\""
+		fi
+	fi
+
 }
 
 function install_pkg_config {

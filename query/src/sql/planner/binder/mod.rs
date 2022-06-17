@@ -48,6 +48,7 @@ mod scalar;
 mod scalar_common;
 mod scalar_visitor;
 mod select;
+mod show;
 mod sort;
 mod subquery;
 mod table;
@@ -106,6 +107,10 @@ impl<'a> Binder {
                 plan: Box::new(self.bind_statement(bind_context, query).await?),
             },
 
+            Statement::ShowFunctions { limit } => {
+                self.bind_show_functions(bind_context, limit).await?
+            }
+
             Statement::ShowMetrics => Plan::ShowMetrics,
             Statement::ShowProcessList => Plan::ShowProcessList,
             Statement::ShowSettings => Plan::ShowSettings,
@@ -141,6 +146,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
+            Statement::ShowUsers => Plan::ShowUsers,
             Statement::AlterUser {
                 user,
                 auth_option,
@@ -151,6 +157,7 @@ impl<'a> Binder {
             }
 
             // Roles
+            Statement::ShowRoles => Plan::ShowRoles,
             Statement::CreateRole {
                 if_not_exists,
                 role_name,
