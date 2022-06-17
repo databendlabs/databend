@@ -119,12 +119,26 @@ impl QueryFragmentsActions {
         let mut executors_packets = Vec::with_capacity(fragments_packets.len());
 
         let nodes_info = Self::nodes_info(&ctx);
+        let source_2_fragments = self.get_source_2_fragments();
 
+        let cluster = ctx.get_cluster();
         for (executor, fragments) in fragments_packets.into_iter() {
             let query_id = ctx.get_id();
             let executors_info = nodes_info.clone();
-            let packet = ExecutorPacket::create(query_id, executor, fragments, executors_info);
-            executors_packets.push(packet);
+
+            let source_2_fragments = match source_2_fragments.get(&executor) {
+                None => HashMap::new(),
+                Some(source_2_fragments) => source_2_fragments.clone(),
+            };
+
+            executors_packets.push(ExecutorPacket::create(
+                query_id,
+                executor,
+                fragments,
+                executors_info,
+                source_2_fragments,
+                cluster.local_id(),
+            ));
         }
 
         Ok(executors_packets)
@@ -133,37 +147,7 @@ impl QueryFragmentsActions {
     pub fn prepare_publisher(&self, ctx: Arc<QueryContext>) -> Result<Vec<PrepareChannel>> {
         let nodes_info = Self::nodes_info(&ctx);
         let mut prepare_channel = Vec::with_capacity(nodes_info.len());
-
-        // map(source, map(target, vec(fragment_id)))
-        let mut connections_info = HashMap::new();
-        for fragment_actions in &self.fragments_actions {
-            if let Some(exchange) = &fragment_actions.data_exchange {
-                let fragment_id = fragment_actions.fragment_id;
-                let destinations = exchange.get_destinations();
-
-                for fragment_action in &fragment_actions.fragment_actions {
-                    let source = fragment_action.executor.to_string();
-
-                    for destination in &destinations {
-                        let target = destination.clone();
-                        match connections_info.entry(source.clone()) {
-                            Entry::Vacant(v) => {
-                                let target_2_fragments = v.insert(HashMap::new());
-                                target_2_fragments.insert(target, vec![fragment_id]);
-                            }
-                            Entry::Occupied(mut v) => match v.get_mut().entry(target) {
-                                Entry::Vacant(v) => {
-                                    v.insert(vec![fragment_id]);
-                                }
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(fragment_id);
-                                }
-                            },
-                        };
-                    }
-                }
-            }
-        }
+        let connections_info = self.get_target_2_fragments();
 
         let cluster = ctx.get_cluster();
         for (node_id, _node_info) in &nodes_info {
@@ -188,6 +172,74 @@ impl QueryFragmentsActions {
         }
 
         Ok(prepare_channel)
+    }
+
+    // map(source, map(target, vec(fragment_id)))
+    fn get_target_2_fragments(&self) -> HashMap<String, HashMap<String, Vec<usize>>> {
+        let mut target_2_fragments = HashMap::new();
+        for fragment_actions in &self.fragments_actions {
+            if let Some(exchange) = &fragment_actions.data_exchange {
+                let fragment_id = fragment_actions.fragment_id;
+                let destinations = exchange.get_destinations();
+
+                for fragment_action in &fragment_actions.fragment_actions {
+                    let source = fragment_action.executor.to_string();
+
+                    for destination in &destinations {
+                        let target = destination.clone();
+                        match target_2_fragments.entry(source.clone()) {
+                            Entry::Vacant(v) => {
+                                let target_2_fragments = v.insert(HashMap::new());
+                                target_2_fragments.insert(target, vec![fragment_id]);
+                            }
+                            Entry::Occupied(mut v) => match v.get_mut().entry(target) {
+                                Entry::Vacant(v) => {
+                                    v.insert(vec![fragment_id]);
+                                }
+                                Entry::Occupied(mut v) => {
+                                    v.get_mut().push(fragment_id);
+                                }
+                            },
+                        };
+                    }
+                }
+            }
+        }
+        target_2_fragments
+    }
+
+    // map(target, map(source, vec(fragment_id)))
+    fn get_source_2_fragments(&self) -> HashMap<String, HashMap<String, Vec<usize>>> {
+        let mut source_2_fragments = HashMap::new();
+        for fragment_actions in &self.fragments_actions {
+            if let Some(exchange) = &fragment_actions.data_exchange {
+                let fragment_id = fragment_actions.fragment_id;
+                let destinations = exchange.get_destinations();
+
+                for fragment_action in &fragment_actions.fragment_actions {
+                    let source = fragment_action.executor.to_string();
+
+                    for destination in &destinations {
+                        let target = destination.clone();
+                        match source_2_fragments.entry(target) {
+                            Entry::Vacant(v) => {
+                                let target_2_fragments = v.insert(HashMap::new());
+                                target_2_fragments.insert(source.clone(), vec![fragment_id]);
+                            }
+                            Entry::Occupied(mut v) => match v.get_mut().entry(source.clone()) {
+                                Entry::Vacant(v) => {
+                                    v.insert(vec![fragment_id]);
+                                }
+                                Entry::Occupied(mut v) => {
+                                    v.get_mut().push(fragment_id);
+                                }
+                            },
+                        };
+                    }
+                }
+            }
+        }
+        source_2_fragments
     }
 
     pub fn execute_packets(&self, ctx: Arc<QueryContext>) -> Result<Vec<ExecutePacket>> {

@@ -138,9 +138,18 @@ impl FlightService for DatabendQueryFlightService {
             },
         }?;
 
+        let source = match req.metadata().get("x-source") {
+            None => Err(Status::invalid_argument("Must be send x-source metadata.")),
+            Some(metadata_value) => match metadata_value.to_str() {
+                Ok(source) if !source.is_empty() => Ok(source.to_string()),
+                Ok(_source) => Err(Status::invalid_argument("x-source metadata is empty.")),
+                Err(cause) => Err(Status::invalid_argument(format!("Cannot parse x-source metadata value, cause: {:?}", cause))),
+            },
+        }?;
+
         let stream = req.into_inner();
         let exchange_manager = self.sessions.get_data_exchange_manager();
-        exchange_manager.handle_do_put(&query_id, stream).await?.await.unwrap();
+        exchange_manager.handle_do_put(&query_id, &source, stream).await?.await.unwrap();
         Ok(RawResponse::new(Box::pin(tokio_stream::once(Ok(
             PutResult {
                 app_metadata: vec![]
@@ -206,7 +215,7 @@ impl FlightService for DatabendQueryFlightService {
                 let session = self.sessions.create_session(SessionType::FlightRPC).await?;
                 let query_context = session.create_query_context().await?;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.handle_prepare_executor(&query_context, packet)?;
+                exchange_manager.handle_prepare_pipeline(&query_context, packet)?;
                 FlightResult { body: vec![] }
             }
             FlightAction::PreparePublisher(packet) => {

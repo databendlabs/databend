@@ -85,6 +85,16 @@ impl Processor for ViaExchangeSubscriber {
             return Ok(Event::NeedConsume);
         }
 
+        if self.remote_flight_data.is_some() {
+            return Ok(Event::Sync);
+        }
+
+        if let Some(data_block) = self.remote_data_block.take() {
+            // println!("receive remote data block {:?}", data_block);
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
+        }
+
         if self.input.is_finished() {
             return match self.rx.try_recv() {
                 Err(TryRecvError::Empty) => Ok(Event::Async),
@@ -97,26 +107,16 @@ impl Processor for ViaExchangeSubscriber {
                     Ok(Event::Sync)
                 }
             };
+        } else {
+            if let Ok(flight_data) = self.rx.try_recv() {
+                self.remote_flight_data = Some(flight_data?);
+                return Ok(Event::Sync);
+            }
         }
 
         if self.input.has_data() {
             self.output.push_data(self.input.pull_data().unwrap());
             return Ok(Event::NeedConsume);
-        }
-
-        if let Some(data_block) = self.remote_data_block.take() {
-            // println!("receive remote data block {:?}", data_block);
-            self.output.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.remote_flight_data.is_some() {
-            return Ok(Event::Sync);
-        }
-
-        if let Ok(flight_data) = self.rx.try_recv() {
-            self.remote_flight_data = Some(flight_data?);
-            return Ok(Event::Sync);
         }
 
         self.input.set_need_data();

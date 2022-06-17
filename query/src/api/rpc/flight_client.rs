@@ -68,18 +68,24 @@ impl FlightClient {
         Ok(())
     }
 
-    pub async fn do_put(&mut self, query_id: &str, rx: Receiver<DataPacket>) -> Result<()> {
-        let mut request = Request::new(Box::pin(DataPacketStream::create(rx)));
-
-        match MetadataValue::try_from(query_id) {
+    fn set_metadata<T>(request: &mut Request<T>, name: &'static str, value: &str) -> Result<()> {
+        match MetadataValue::try_from(value) {
             Ok(metadata_value) => {
-                let key = MetadataKey::from_static("x-query-id");
-                request.metadata_mut().insert(key, metadata_value);
-                self.inner.do_put(request).await?;
+                let metadata_key = MetadataKey::from_static(name);
+                request.metadata_mut().insert(metadata_key, metadata_value);
                 Ok(())
             }
             Err(cause) => Err(ErrorCode::BadBytes(format!("Cannot parse query id to MetadataValue, {:?}", cause))),
         }
+    }
+
+    pub async fn do_put(&mut self, query_id: &str, source: &str, rx: Receiver<DataPacket>) -> Result<()> {
+        let mut request = Request::new(Box::pin(DataPacketStream::create(rx)));
+
+        Self::set_metadata(&mut request, "x-source", source)?;
+        Self::set_metadata(&mut request, "x-query-id", query_id)?;
+        self.inner.do_put(request).await?;
+        Ok(())
     }
 
     // Execute do_get.

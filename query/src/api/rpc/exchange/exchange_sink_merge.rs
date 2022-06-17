@@ -134,12 +134,11 @@ impl Processor for ExchangeMergeSink {
 
     async fn async_process(&mut self) -> Result<()> {
         if let Some(mut output_data) = self.output_data.take() {
-            if let Some(sender) = &self.peer_endpoint_publisher {
-                if let Err(_) = sender.send(output_data).await {
-                    return Err(ErrorCode::TokioError(
-                        "Cannot send flight data to endpoint, because sender is closed."
-                    ));
-                }
+            let tx = self.get_endpoint_publisher()?;
+            if let Err(_) = tx.send(output_data).await {
+                return Err(ErrorCode::TokioError(
+                    "Cannot send flight data to endpoint, because sender is closed."
+                ));
             }
         }
 

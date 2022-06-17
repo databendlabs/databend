@@ -70,17 +70,17 @@ impl DataExchangeManager {
     }
 
     // Receive data by cluster other nodes.
-    pub async fn handle_do_put(&self, id: &str, stream: Streaming<FlightData>) -> Result<JoinHandle<Result<()>>> {
+    pub async fn handle_do_put(&self, id: &str, source: &str, stream: Streaming<FlightData>) -> Result<JoinHandle<()>> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
         match queries_coordinator.get_mut(id) {
             None => Err(ErrorCode::LogicalError(format!("Query {} not found in cluster.", id))),
-            Some(coordinator) => Ok(coordinator.receive_data(stream))
+            Some(coordinator) => coordinator.receive_data(source, stream)
         }
     }
 
     // Create a pipeline based on query plan
-    pub fn handle_prepare_executor(&self, ctx: &Arc<QueryContext>, prepare: &PreparePipeline) -> Result<()> {
+    pub fn handle_prepare_pipeline(&self, ctx: &Arc<QueryContext>, prepare: &PreparePipeline) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
         let executor_packet = &prepare.executor_packet;
@@ -89,7 +89,14 @@ impl DataExchangeManager {
             Entry::Occupied(_) => Err(ErrorCode::LogicalError(format!("Already exists query id {:?}", executor_packet.query_id))),
             Entry::Vacant(entry) => {
                 let query_coordinator = QueryCoordinator::create(ctx, executor_packet)?;
-                entry.insert(query_coordinator).prepare_pipeline()
+                let query_coordinator = entry.insert(query_coordinator);
+                query_coordinator.prepare_pipeline()?;
+
+                if executor_packet.executor != executor_packet.request_executor {
+                    query_coordinator.prepare_subscribes_channel(executor_packet)?;
+                }
+
+                Ok(())
             }
         }
     }
@@ -113,7 +120,7 @@ impl DataExchangeManager {
         };
     }
 
-    async fn prepare_pipeline(&self, packets: Vec<ExecutorPacket>, timeout: u64) -> Result<()> {
+    async fn prepare_pipeline(&self, packets: &[ExecutorPacket], timeout: u64) -> Result<()> {
         for executor_packet in packets.into_iter() {
             if !executor_packet.executors_info.contains_key(&executor_packet.executor) {
                 return Err(ErrorCode::LogicalError(format!(
@@ -121,6 +128,7 @@ impl DataExchangeManager {
                 )));
             }
 
+            let executor_packet = executor_packet.clone();
             let executor_info = &executor_packet.executors_info[&executor_packet.executor];
             let mut connection = self.create_client(&executor_info.flight_address).await?;
             let action = FlightAction::PreparePipeline(PreparePipeline { executor_packet });
@@ -171,11 +179,17 @@ impl DataExchangeManager {
         let root_fragment_id = root_actions.fragment_id.to_owned();
 
         // Submit distributed tasks to all nodes.
-        self.prepare_pipeline(actions.prepare_packets(ctx.clone())?, timeout).await?;
+        let prepare_pipeline = actions.prepare_packets(ctx.clone())?;
+        self.prepare_pipeline(&prepare_pipeline, timeout).await?;
 
         // Get local pipeline of local task
         let schema = root_actions.get_schema()?;
-        let mut root_pipeline = self.build_root_pipeline(ctx.get_id(), root_fragment_id, schema)?;
+        let mut root_pipeline = self.build_root_pipeline(
+            ctx.get_id(),
+            root_fragment_id,
+            schema,
+            &prepare_pipeline,
+        )?;
 
         self.prepare_publisher(actions.prepare_publisher(ctx.clone())?, timeout).await?;
 
@@ -185,9 +199,23 @@ impl DataExchangeManager {
         Ok(root_pipeline)
     }
 
-    fn build_root_pipeline(&self, query_id: String, fragment_id: usize, schema: DataSchemaRef) -> Result<NewPipeline> {
+    fn build_root_pipeline(&self, query_id: String, fragment_id: usize, schema: DataSchemaRef, executor_packet: &[ExecutorPacket]) -> Result<NewPipeline> {
         let mut pipeline = NewPipeline::create();
         self.get_fragment_source(query_id, fragment_id, schema, &mut pipeline)?;
+
+        for executor_packet in executor_packet {
+            if executor_packet.executor == executor_packet.request_executor {
+                let mut queries_coordinator = self.queries_coordinator.lock();
+
+                match queries_coordinator.entry(executor_packet.query_id.to_owned()) {
+                    Entry::Vacant(_) => Err(ErrorCode::LogicalError(format!("Already exists query id {:?}", executor_packet.query_id))),
+                    Entry::Occupied(mut entry) => {
+                        entry.get_mut().prepare_subscribes_channel(executor_packet)
+                    }
+                }?;
+            }
+        }
+
         Ok(pipeline)
     }
 
@@ -216,7 +244,9 @@ struct QueryCoordinator {
     executor_id: String,
     runtime: Arc<Runtime>,
     finished: Arc<AtomicBool>,
+    request_server_tx: Option<Sender<DataPacket>>,
     publish_fragments: HashMap<(String, usize), FragmentSender>,
+    subscribe_channel: HashMap<String, Sender<Result<DataPacket>>>,
     subscribe_fragments: HashMap<usize, FragmentReceiver>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
 }
@@ -235,8 +265,10 @@ impl QueryCoordinator {
         Ok(QueryCoordinator {
             ctx: ctx.clone(),
             fragments_coordinator,
+            request_server_tx: None,
             publish_fragments: Default::default(),
             query_id: executor.query_id.to_owned(),
+            subscribe_channel: Default::default(),
             subscribe_fragments: Default::default(),
             executor_id: executor.executor.to_owned(),
             finished: Arc::new(AtomicBool::new(false)),
@@ -247,6 +279,20 @@ impl QueryCoordinator {
     pub fn prepare_pipeline(&mut self) -> Result<()> {
         for (_, coordinator) in self.fragments_coordinator.iter_mut() {
             coordinator.prepare_pipeline(&self.ctx)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn prepare_subscribes_channel(&mut self, prepare: &ExecutorPacket) -> Result<()> {
+        for (source, _fragments) in &prepare.source_2_fragments {
+            if source != &prepare.executor {
+                let (tx, rx) = async_channel::bounded(1);
+
+                let mut receiver = ExchangeReceiver::create(rx, &self.subscribe_fragments);
+                self.runtime.spawn(async move { receiver.listen().await });
+                self.subscribe_channel.insert(source.to_string(), tx);
+            }
         }
 
         Ok(())
@@ -287,11 +333,14 @@ impl QueryCoordinator {
         }
 
         let async_runtime = self.ctx.get_storage_runtime();
-        let complete_executor = PipelineCompleteExecutor::from_pipelines(async_runtime, pipelines)?;
+        let complete_executor = Arc::new(PipelineCompleteExecutor::from_pipelines(async_runtime, pipelines)?);
 
         Thread::named_spawn(Some(String::from("Executor")), move || {
             if let Err(cause) = complete_executor.execute() {
                 // TODO: send error code to request server.
+                if let Some(request_tx) = self.request_server_tx.take() {
+                    // request_tx.send
+                }
                 println!("execute failure: {:?}", cause);
             }
 
@@ -303,47 +352,52 @@ impl QueryCoordinator {
 
     pub fn init_publisher(&mut self, config: Config, packet: &PrepareChannel) -> Result<()> {
         for (target, fragments) in &packet.target_2_fragments {
-            if self.publish_fragments
-                .iter()
-                .any(|((t, _), _)| t == target) {
-                return Err(ErrorCode::LogicalError("Publisher id already exists"));
-            }
+            if target != &packet.executor {
+                if self.publish_fragments
+                    .iter()
+                    .any(|((t, _), _)| t == target) {
+                    return Err(ErrorCode::LogicalError("Publisher id already exists"));
+                }
 
-            if target == &packet.executor {
-                continue;
-            }
+                let config = config.clone();
+                let target_node_info = &packet.target_nodes_info[target];
+                let address = target_node_info.flight_address.to_string();
+                let tx = self.spawn_pub_worker(config, address)?;
 
-            let config = config.clone();
-            let target_node_info = &packet.target_nodes_info[target];
-            let address = target_node_info.flight_address.to_string();
-            let tx = self.spawn_pub_worker(config, address)?;
+                if target == packet.request_server {
+                    self.request_server_tx = Some(tx.clone());
+                }
 
-            for fragment_id in fragments {
-                let (f_tx, mut f_rx) = async_channel::bounded(1);
+                for fragment_id in fragments {
+                    let (f_tx, mut f_rx) = async_channel::bounded(1);
 
-                let c_tx = tx.clone();
-                let fragment_id_clone = *fragment_id;
-                println!("fragment: {}, source: {}, target: {}", fragment_id, packet.executor, target);
-                self.runtime.spawn(async move {
-                    while let Ok(packet) = f_rx.recv().await {
-                        if let Err(cause) = c_tx.send(packet).await {
-                            // TODO: channel closed.
+                    let c_tx = tx.clone();
+                    let fragment_id_clone = *fragment_id;
+                    let target_clone = target.clone();
+                    let source_clone = packet.executor.clone();
+                    self.runtime.spawn(async move {
+                        'fragment_loop: while let Ok(packet) = f_rx.recv().await {
+                            if let Err(_cause) = c_tx.send(packet).await {
+                                common_tracing::tracing::warn!(
+                                    "{} to {} channel closed.", source_clone, target_clone
+                                );
+
+                                break 'fragment_loop;
+                            }
                         }
-                    }
 
-                    if !f_rx.is_empty() {
-                        println!("rx is not empty");
-                    }
-                    println!("End fragment {}", fragment_id_clone);
-                    if let Err(cause) = c_tx.send(DataPacket::EndFragment(fragment_id_clone)).await {
-                        // TODO: channel closed.
-                    }
-                });
+                        if let Err(cause) = c_tx.send(DataPacket::EndFragment(fragment_id_clone)).await {
+                            common_tracing::tracing::warn!(
+                                "{} to {} channel closed.", source_clone, target_clone
+                            );
+                        }
+                    });
 
-                self.publish_fragments.insert(
-                    (target.clone(), *fragment_id),
-                    FragmentSender::create_unrecorded(f_tx),
-                );
+                    self.publish_fragments.insert(
+                        (target.clone(), *fragment_id),
+                        FragmentSender::create_unrecorded(f_tx),
+                    );
+                }
             }
         }
 
@@ -352,23 +406,6 @@ impl QueryCoordinator {
                 Self::init_pipeline(pipeline)?;
             }
         }
-        // for (executor, info) in &packet.data_endpoints {
-        //     // if executor == &packet.request_server {
-        //     //     // Send log, metric, trace, (progress?)
-        //     // }
-        //
-        //     // let ctx = self.ctx.clone();
-        //     // if executor != &packet.executor {
-        //     if self.publish_fragments.contains_key(executor) {
-        //         return Err(ErrorCode::LogicalError("Publisher id already exists"));
-        //     }
-        //
-        //     let config = config.clone();
-        //     let address = info.flight_address.to_string();
-        //     let tx = self.spawn_pub_worker(config, address)?;
-        //     self.publish_fragments.insert(executor.to_string(), tx);
-        //     // }
-        // }
 
         Ok(())
     }
@@ -385,15 +422,32 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn receive_data(&mut self, mut stream: Streaming<FlightData>) -> JoinHandle<Result<()>> {
-        let ctx = self.ctx.clone();
-        let finished = self.finished.clone();
-        let mut receiver = ExchangeReceiver::create(stream, &self.subscribe_fragments);
+    pub fn receive_data(&mut self, source: &str, mut stream: Streaming<FlightData>) -> Result<JoinHandle<()>> {
+        if let Some(subscribe_channel) = self.subscribe_channel.remove(source) {
+            let source = source.to_string();
+            let target = self.executor_id.clone();
+            return Ok(self.runtime.spawn(async move {
+                'fragment_loop: while let Some(flight_data) = stream.next().await {
+                    let send_res = match flight_data {
+                        Err(status) => subscribe_channel.send(Err(ErrorCode::from(status))).await,
+                        Ok(flight_data) => match DataPacket::from_flight(flight_data) {
+                            Ok(data_packet) => subscribe_channel.send(Ok(data_packet)).await,
+                            Err(error) => subscribe_channel.send(Err(error)).await,
+                        },
+                    };
 
-        self.runtime.spawn(async move {
-            receiver.listen().await?;
-            Ok(())
-        })
+                    if send_res.is_err() {
+                        common_tracing::tracing::warn!(
+                            "Subscribe channel closed, source {}, target {}", source, target
+                        );
+
+                        break 'fragment_loop;
+                    }
+                }
+            }));
+        };
+
+        Err(ErrorCode::LogicalError(""))
     }
 
     async fn create_client(config: Config, address: &str) -> Result<FlightClient> {
@@ -418,16 +472,17 @@ impl QueryCoordinator {
     fn spawn_pub_worker(&mut self, config: Config, addr: String) -> Result<Sender<DataPacket>> {
         let ctx = self.ctx.clone();
         let query_id = self.query_id.clone();
+        let source = self.executor_id.clone();
         let (tx, rx) = async_channel::bounded(2);
 
         self.runtime.spawn(async move {
             let mut connection = Self::create_client(config, &addr).await?;
 
-            if let Err(status) = connection.do_put(&query_id, rx).await {
+            if let Err(status) = connection.do_put(&query_id, &source, rx).await {
                 // finished.store(true, Ordering::Release);
 
                 println!("do put error: {:?}", status);
-                // TODO:
+                // TODO: shutdown pipeline executor,
                 // Shutdown all query fragments executor and report error to request server.
                 let exchange_manager = ctx.get_exchange_manager();
                 // exchange_manager.shutdown_query(query_id, status);
@@ -556,15 +611,16 @@ impl FragmentCoordinator {
     }
 }
 
-struct ExchangeReceiver {
-    // finished: bool,
-    stream: Streaming<FlightData>,
+pub struct ExchangeReceiver {
+    // runtime: Arc<Runtime>,
+    rx: Receiver<Result<DataPacket>>,
     fragments_receiver: Vec<Option<FragmentReceiver>>,
 }
 
 impl ExchangeReceiver {
     pub fn create(
-        stream: Streaming<FlightData>,
+        // runtime: Arc<Runtime>,
+        rx: Receiver<Result<DataPacket>>,
         fragments_receiver: &HashMap<usize, FragmentReceiver>,
     ) -> ExchangeReceiver {
         let max_fragments_id = fragments_receiver.keys().max().cloned().unwrap_or(0);
@@ -575,55 +631,47 @@ impl ExchangeReceiver {
         }
 
         ExchangeReceiver {
-            stream,
+            rx,
             fragments_receiver: temp,
         }
     }
 
-    async fn process_data(&mut self, flight_data: FlightData) -> Result<()> {
-        match DataPacket::from_flight(flight_data)? {
-            DataPacket::Data(fragment_id, data) => {
-                if let Some(tx) = &self.fragments_receiver[fragment_id] {
-                    // println!("Fragment channel closed.");
-                    if let Err(cause) = tx.send(Ok(data)).await {
-                        println!("Fragment channel closed.");
-                        return Ok(());
-                    }
-                }
-            }
-            DataPacket::Progress(values) => {
-                // ctx.get_scan_progress().incr(&values);
-            }
-            DataPacket::ErrorCode(error_code) => {
-                return Err(error_code);
-            }
-            DataPacket::EndFragment(fragment) => {
-                if let Some(tx) = self.fragments_receiver[fragment].take() {
-                    // tokio::time::sleep(Duration::from_secs(5)).await;
-                    drop(tx);
-                    std::sync::atomic::fence(Acquire);
-                }
-            }
-        };
-
-        Ok(())
-    }
-
     pub async fn listen(&mut self) -> Result<()> {
         // TODO: need select with timeout for stream.next()
-        while let Some(flight_data) = self.stream.next().await {
+        while let Ok(flight_data) = self.rx.recv().await {
             // if finished.load(Ordering::Relaxed) {
             //     break;
             // }
             match flight_data {
-                Err(status) => Err(ErrorCode::from(status)),
-                Ok(flight_data) => self.process_data(flight_data).await,
-            }?;
+                Err(error_code) => {
+                    return Err(error_code);
+                }
+                Ok(data_packet) => match data_packet {
+                    DataPacket::Data(fragment_id, data) => {
+                        if let Some(tx) = &self.fragments_receiver[fragment_id] {
+                            if let Err(cause) = tx.send(Ok(data)).await {
+                                println!("Fragment channel closed.");
+                                return Ok(());
+                            }
+                        }
+                    }
+                    DataPacket::Progress(values) => {
+                        // ctx.get_scan_progress().incr(&values);
+                    }
+                    DataPacket::ErrorCode(error_code) => {
+                        return Err(error_code);
+                    }
+                    DataPacket::EndFragment(fragment) => {
+                        if fragment < self.fragments_receiver.len() {
+                            if let Some(tx) = self.fragments_receiver[fragment].take() {
+                                drop(tx);
+                                std::sync::atomic::fence(Acquire);
+                            }
+                        }
+                    }
+                }
+            };
         }
-
-        // for (_index, fragment_tx) in &subscribe_fragments {
-        //     fragment_tx.close();
-        // }
 
         Ok(())
     }
