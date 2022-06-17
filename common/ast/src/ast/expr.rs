@@ -179,6 +179,12 @@ pub enum Expr<'a> {
         expr1: Box<Expr<'a>>,
         expr2: Box<Expr<'a>>,
     },
+    /// IFNULL(<expr>, <expr>)
+    IfNull {
+        span: &'a [Token<'a>],
+        expr1: Box<Expr<'a>>,
+        expr2: Box<Expr<'a>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -301,6 +307,7 @@ impl<'a> Expr<'a> {
             Expr::Interval { span, .. } => span,
             Expr::DateAdd { span, .. } => span,
             Expr::NullIf { span, .. } => span,
+            Expr::IfNull { span, .. } => span,
         }
     }
 }
@@ -723,6 +730,9 @@ impl<'a> Display for Expr<'a> {
             }
             Expr::NullIf { expr1, expr2, .. } => {
                 write!(f, "NULLIF({expr1}, {expr2})")?;
+            }
+            Expr::IfNull { expr1, expr2, .. } => {
+                write!(f, "IFNULL({expr1}, {expr2})")?;
             }
         }
 

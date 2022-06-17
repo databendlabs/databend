@@ -2598,3 +2598,77 @@ NullIf {
 }
 
 
+---------- Input ----------
+ifnull(1, 1)
+---------- Output ---------
+IFNULL(1, 1)
+---------- AST ------------
+IfNull {
+    span: [
+        IFNULL(0..6),
+        LParen(6..7),
+        LiteralInteger(7..8),
+        Comma(8..9),
+        LiteralInteger(10..11),
+        RParen(11..12),
+    ],
+    expr1: Literal {
+        span: [
+            LiteralInteger(7..8),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+    expr2: Literal {
+        span: [
+            LiteralInteger(10..11),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+}
+
+
+---------- Input ----------
+ifnull(a, b)
+---------- Output ---------
+IFNULL(a, b)
+---------- AST ------------
+IfNull {
+    span: [
+        IFNULL(0..6),
+        LParen(6..7),
+        Ident(7..8),
+        Comma(8..9),
+        Ident(10..11),
+        RParen(11..12),
+    ],
+    expr1: ColumnRef {
+        span: [
+            Ident(7..8),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(7..8),
+        },
+    },
+    expr2: ColumnRef {
+        span: [
+            Ident(10..11),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(10..11),
+        },
+    },
+}
+
+
