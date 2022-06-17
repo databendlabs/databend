@@ -250,7 +250,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
     {
         let (status, body) = server.get(r#"select * from t1 order by a"#).await;
         assert_ok!(status, body);
-        assert_eq!(&body, "0\ta\n1\tb\n2\tNULL\n");
+        assert_eq!(&body, "0\ta\n1\tb\n2\t\\N\n");
     }
 
     {
