@@ -374,7 +374,11 @@ pub enum CopyTarget<'a> {
     /// Table can be used in `INTO` or `FROM`.
     ///
     /// While table used as `FROM`, it will be rewrite as `(SELECT * FROM table)`
-    Table(Option<Identifier<'a>>, Identifier<'a>),
+    Table(
+        Option<Identifier<'a>>,
+        Option<Identifier<'a>>,
+        Identifier<'a>,
+    ),
     /// Location can be used in `INTO` or `FROM`.
     ///
     /// Location could be
@@ -596,8 +600,14 @@ impl Display for KillTarget {
 impl Display for CopyTarget<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CopyTarget::Table(database, table) => {
-                if let Some(database) = database {
+            CopyTarget::Table(catalog, database, table) => {
+                if let Some(catalog) = catalog {
+                    write!(
+                        f,
+                        "{catalog}.{}.{table}",
+                        database.as_ref().expect("database must be valid")
+                    )
+                } else if let Some(database) = database {
                     write!(f, "{database}.{table}")
                 } else {
                     write!(f, "{table}")

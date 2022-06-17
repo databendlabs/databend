@@ -840,9 +840,9 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
 pub fn copy_target(i: Input) -> IResult<CopyTarget> {
     let table = map(
         rule! {
-             #peroid_separated_idents_1_to_2
+             #peroid_separated_idents_1_to_3
         },
-        |(database, table)| CopyTarget::Table(database, table),
+        |(catalog, database, table)| CopyTarget::Table(catalog, database, table),
     );
     let query = map(
         rule! {
