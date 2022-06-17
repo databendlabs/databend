@@ -25,7 +25,7 @@ fn find_first(values: &[u8], quote: u8) -> usize {
             return i;
         }
     }
-    return values.len();
+    values.len()
 }
 
 pub fn write_escaped_string(values: &[u8], buf: &mut Vec<u8>, quote: u8) {
@@ -49,9 +49,9 @@ pub fn write_escaped_string(values: &[u8], buf: &mut Vec<u8>, quote: u8) {
             if e != 0u8 {
                 buf.push(b'\\');
                 buf.push(e);
-            } else if e == quote {
+            } else if *v == quote {
                 buf.push(b'\\');
-                buf.push(*v);
+                buf.push(quote);
             } else {
                 buf.push(*v);
             }
