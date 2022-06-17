@@ -42,6 +42,35 @@ impl<'a> TypeSerializer<'a> for NullableSerializer<'a> {
         }
     }
 
+    fn write_field_escaped(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: u8,
+    ) {
+        if !self.validity.get_bit(row_index) {
+            buf.extend_from_slice(&format.null_bytes);
+        } else {
+            self.inner
+                .write_field_escaped(row_index, buf, format, quote)
+        }
+    }
+
+    fn write_field_quoted(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: u8,
+    ) {
+        if !self.validity.get_bit(row_index) {
+            buf.extend_from_slice(&format.null_bytes);
+        } else {
+            self.inner.write_field_quoted(row_index, buf, format, quote)
+        }
+    }
+
     fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {
         let mut res = self.inner.serialize_json_values(format)?;
         let validity = self.validity;
