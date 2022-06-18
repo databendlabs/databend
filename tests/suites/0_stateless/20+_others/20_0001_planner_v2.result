@@ -317,13 +317,13 @@ abc
 ===Explain===
 Project: [a]
     Filter: [a > 0]
-     Scan: default.default.t1
+        Scan: default.default.t1
 ===Explain Pipeline===
 ProjectionTransform × 1 processor
   ProjectionTransform × 1 processor
     TransformHashJoin × 1 processor
-   ProjectionTransform × 1 processor
-     FuseEngineSource × 1 processor
+      ProjectionTransform × 1 processor
+        FuseEngineSource × 1 processor
 
 BuildHashTable × 1 processor
   ProjectionTransform × 1 processor
