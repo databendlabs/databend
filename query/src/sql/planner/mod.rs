@@ -66,7 +66,7 @@ impl Planner {
         let plan = binder.bind(&stmts[0]).await?;
 
         // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr
-        let optimized_plan = optimize(plan)?;
+        let optimized_plan = optimize(self.ctx.clone(), plan)?;
 
         Ok((optimized_plan, metadata.clone()))
     }

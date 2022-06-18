@@ -17,9 +17,9 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::FunctionFactory;
 
 use crate::sql::binder::ColumnBinding;
+use crate::sql::optimizer::heuristic::decorrelate::try_decorrelate_subquery;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
@@ -45,7 +45,12 @@ use crate::sql::plans::ScalarItem;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
 use crate::sql::MetadataRef;
-use crate::sql::ScalarExpr;
+
+enum UnnestResult {
+    Uncorrelated,
+    Apply,
+    SimpleJoin, // SemiJoin or AntiJoin
+}
 
 /// Rewrite subquery into `Apply` operator
 pub struct SubqueryRewriter {
@@ -63,7 +68,7 @@ impl SubqueryRewriter {
                 let mut input = self.rewrite(s_expr.child(0)?)?;
 
                 for item in plan.items.iter_mut() {
-                    let res = self.try_rewrite_subquery(&item.scalar, &input)?;
+                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
                     input = res.1;
                     item.scalar = res.0;
                 }
@@ -74,7 +79,7 @@ impl SubqueryRewriter {
                 let mut input = self.rewrite(s_expr.child(0)?)?;
 
                 for pred in plan.predicates.iter_mut() {
-                    let res = self.try_rewrite_subquery(pred, &input)?;
+                    let res = self.try_rewrite_subquery(pred, &input, true)?;
                     input = res.1;
                     *pred = res.0;
                 }
@@ -85,13 +90,13 @@ impl SubqueryRewriter {
                 let mut input = self.rewrite(s_expr.child(0)?)?;
 
                 for item in plan.group_items.iter_mut() {
-                    let res = self.try_rewrite_subquery(&item.scalar, &input)?;
+                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
                     input = res.1;
                     item.scalar = res.0;
                 }
 
                 for item in plan.aggregate_functions.iter_mut() {
-                    let res = self.try_rewrite_subquery(&item.scalar, &input)?;
+                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
                     input = res.1;
                     item.scalar = res.0;
                 }
@@ -119,33 +124,54 @@ impl SubqueryRewriter {
         }
     }
 
-    pub fn build_apply(&mut self, left: &SExpr, subquery: &SubqueryExpr) -> Result<SExpr> {
+    fn unnest_subquery(
+        &mut self,
+        left: &SExpr,
+        subquery: &SubqueryExpr,
+        is_conjunctive_predicate: bool,
+    ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
             SubqueryType::Scalar => {
                 let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                 let prop = rel_expr.derive_relational_prop()?;
-                let result: RelOperator = if prop.outer_columns.is_empty() {
-                    LogicalInnerJoin {
-                        left_conditions: vec![],
-                        right_conditions: vec![],
-                        join_type: JoinType::Cross,
-                    }
-                    .into()
+                let (rel_op, result): (RelOperator, _) = if prop.outer_columns.is_empty() {
+                    (
+                        LogicalInnerJoin {
+                            left_conditions: vec![],
+                            right_conditions: vec![],
+                            join_type: JoinType::Cross,
+                        }
+                        .into(),
+                        UnnestResult::Uncorrelated,
+                    )
                 } else {
-                    CrossApply {
-                        subquery_output: prop.output_columns,
-                        correlated_columns: subquery.outer_columns.clone(),
-                    }
-                    .into()
+                    (
+                        CrossApply {
+                            subquery_output: prop.output_columns,
+                            correlated_columns: subquery.outer_columns.clone(),
+                        }
+                        .into(),
+                        UnnestResult::Apply,
+                    )
                 };
-                Ok(SExpr::create_binary(
+                Ok((
+                    SExpr::create_binary(
+                        rel_op,
+                        left.clone(),
+                        SExpr::create_unary(Max1Row.into(), subquery.subquery.clone()),
+                    ),
                     result,
-                    left.clone(),
-                    SExpr::create_unary(Max1Row.into(), subquery.subquery.clone()),
                 ))
             }
-            SubqueryType::Exists => {
+            SubqueryType::Exists | SubqueryType::NotExists => {
+                if is_conjunctive_predicate {
+                    if let Some(result) = try_decorrelate_subquery(left, subquery)? {
+                        return Ok((result, UnnestResult::SimpleJoin));
+                    }
+                }
+
                 // We will rewrite EXISTS subquery into the form `COUNT(*) > 0`.
+                // In contrast, NOT EXISTS subquery will be rewritten into `COUNT(*) = 0`.
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) > 0 FROM t WHERE a > 1)`
                 let agg_func = AggregateFunctionFactory::instance().get("count", vec![], vec![])?;
@@ -172,14 +198,18 @@ impl SubqueryRewriter {
                     from_distinct: false,
                 };
 
-                // COUNT(*) > 0
+                // COUNT(*) > 0 or COUNT(*) = 0
                 let compare_index = self.metadata.write().add_column(
-                    "exists".to_string(),
+                    "subquery".to_string(),
                     BooleanType::new_impl(),
                     None,
                 );
                 let compare = ComparisonExpr {
-                    op: ComparisonOp::GT,
+                    op: if subquery.typ == SubqueryType::Exists {
+                        ComparisonOp::GT
+                    } else {
+                        ComparisonOp::Equal
+                    },
                     left: Box::new(
                         BoundColumnRef {
                             column: ColumnBinding {
@@ -213,7 +243,7 @@ impl SubqueryRewriter {
                 };
 
                 // Project
-                //     EvalScalar: COUNT(*) > 0
+                //     EvalScalar: COUNT(*) > 0 or COUNT(*) = 0
                 //         Aggregate: COUNT(*)
                 let rewritten_subquery = SExpr::create_unary(
                     project.into(),
@@ -226,25 +256,30 @@ impl SubqueryRewriter {
                 let rel_expr = RelExpr::with_s_expr(&rewritten_subquery);
                 let prop = rel_expr.derive_relational_prop()?;
 
-                let result: RelOperator = if prop.outer_columns.is_empty() {
-                    LogicalInnerJoin {
-                        left_conditions: vec![],
-                        right_conditions: vec![],
-                        join_type: JoinType::Cross,
-                    }
-                    .into()
+                let (rel_op, result): (RelOperator, _) = if prop.outer_columns.is_empty() {
+                    (
+                        LogicalInnerJoin {
+                            left_conditions: vec![],
+                            right_conditions: vec![],
+                            join_type: JoinType::Cross,
+                        }
+                        .into(),
+                        UnnestResult::Uncorrelated,
+                    )
                 } else {
-                    CrossApply {
-                        subquery_output: prop.output_columns,
-                        correlated_columns: subquery.outer_columns.clone(),
-                    }
-                    .into()
+                    (
+                        CrossApply {
+                            subquery_output: prop.output_columns,
+                            correlated_columns: subquery.outer_columns.clone(),
+                        }
+                        .into(),
+                        UnnestResult::Apply,
+                    )
                 };
 
-                Ok(SExpr::create_binary(
+                Ok((
+                    SExpr::create_binary(rel_op, left.clone(), rewritten_subquery),
                     result,
-                    left.clone(),
-                    rewritten_subquery,
                 ))
             }
             _ => Err(ErrorCode::LogicalError(format!(
@@ -256,38 +291,41 @@ impl SubqueryRewriter {
 
     /// Try to extract subquery from a scalar expression. Returns replaced scalar expression
     /// and the subqueries.
-    fn try_rewrite_subquery(&mut self, scalar: &Scalar, s_expr: &SExpr) -> Result<(Scalar, SExpr)> {
+    fn try_rewrite_subquery(
+        &mut self,
+        scalar: &Scalar,
+        s_expr: &SExpr,
+        is_conjunctive_predicate: bool,
+    ) -> Result<(Scalar, SExpr)> {
         match scalar {
             Scalar::BoundColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
 
             Scalar::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
 
             Scalar::AndExpr(expr) => {
-                let (left, _result_left) = self.try_rewrite_subquery(&expr.left, s_expr)?;
-                let (right, _result_right) = self.try_rewrite_subquery(&expr.right, s_expr)?;
-                let func = FunctionFactory::instance()
-                    .get("and", &[&left.data_type(), &right.data_type()])?;
+                // Notice that the conjunctions has been flattened in binder, if we encounter
+                // a AND here, we can't treat it as a conjunction.
+                let (left, s_expr) = self.try_rewrite_subquery(&expr.left, s_expr, false)?;
+                let (right, s_expr) = self.try_rewrite_subquery(&expr.right, &s_expr, false)?;
                 Ok((
                     AndExpr {
                         left: Box::new(left),
                         right: Box::new(right),
-                        return_type: func.return_type(),
+                        return_type: expr.return_type.clone(),
                     }
                     .into(),
-                    s_expr.clone(),
+                    s_expr,
                 ))
             }
 
             Scalar::OrExpr(expr) => {
-                let (left, s_expr) = self.try_rewrite_subquery(&expr.left, s_expr)?;
-                let (right, s_expr) = self.try_rewrite_subquery(&expr.right, &s_expr)?;
-                let func = FunctionFactory::instance()
-                    .get("or", &[&left.data_type(), &right.data_type()])?;
+                let (left, s_expr) = self.try_rewrite_subquery(&expr.left, s_expr, false)?;
+                let (right, s_expr) = self.try_rewrite_subquery(&expr.right, &s_expr, false)?;
                 Ok((
                     OrExpr {
                         left: Box::new(left),
                         right: Box::new(right),
-                        return_type: func.return_type(),
+                        return_type: expr.return_type.clone(),
                     }
                     .into(),
                     s_expr,
@@ -295,18 +333,14 @@ impl SubqueryRewriter {
             }
 
             Scalar::ComparisonExpr(expr) => {
-                let (left, s_expr) = self.try_rewrite_subquery(&expr.left, s_expr)?;
-                let (right, s_expr) = self.try_rewrite_subquery(&expr.right, &s_expr)?;
-                let func = FunctionFactory::instance().get(expr.op.to_func_name(), &[
-                    &left.data_type(),
-                    &right.data_type(),
-                ])?;
+                let (left, s_expr) = self.try_rewrite_subquery(&expr.left, s_expr, false)?;
+                let (right, s_expr) = self.try_rewrite_subquery(&expr.right, &s_expr, false)?;
                 Ok((
                     ComparisonExpr {
                         op: expr.op.clone(),
                         left: Box::new(left),
                         right: Box::new(right),
-                        return_type: func.return_type(),
+                        return_type: expr.return_type.clone(),
                     }
                     .into(),
                     s_expr,
@@ -319,7 +353,7 @@ impl SubqueryRewriter {
                 let mut args = vec![];
                 let mut s_expr = s_expr.clone();
                 for arg in func.arguments.iter() {
-                    let res = self.try_rewrite_subquery(arg, &s_expr)?;
+                    let res = self.try_rewrite_subquery(arg, &s_expr, false)?;
                     s_expr = res.1;
                     args.push(res.0);
                 }
@@ -336,7 +370,7 @@ impl SubqueryRewriter {
             }
 
             Scalar::CastExpr(cast) => {
-                let (scalar, s_expr) = self.try_rewrite_subquery(&cast.argument, s_expr)?;
+                let (scalar, s_expr) = self.try_rewrite_subquery(&cast.argument, s_expr, false)?;
                 Ok((
                     CastExpr {
                         argument: Box::new(scalar),
@@ -353,7 +387,20 @@ impl SubqueryRewriter {
                 let mut subquery = subquery.clone();
                 subquery.subquery = self.rewrite(&subquery.subquery)?;
 
-                let s_expr = self.build_apply(s_expr, &subquery)?;
+                let (s_expr, result) =
+                    self.unnest_subquery(s_expr, &subquery, is_conjunctive_predicate)?;
+
+                // If we unnest the subquery into a simple join, then we can replace the
+                // original predicate with a `TRUE` literal to eliminate the conjunction.
+                if matches!(result, UnnestResult::SimpleJoin) {
+                    return Ok((
+                        Scalar::ConstantExpr(ConstantExpr {
+                            value: DataValue::Boolean(true),
+                            data_type: BooleanType::new_impl(),
+                        }),
+                        s_expr,
+                    ));
+                }
 
                 let rel_expr = RelExpr::with_s_expr(s_expr.child(1)?);
                 let prop = rel_expr.derive_relational_prop()?;

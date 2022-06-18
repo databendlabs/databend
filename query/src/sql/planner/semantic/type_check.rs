@@ -404,9 +404,18 @@ impl<'a> TypeChecker<'a> {
                 )
             }
 
-            Expr::Exists { subquery, .. } => {
-                self.resolve_subquery(SubqueryType::Exists, subquery, true, None)
-                    .await?
+            Expr::Exists { subquery, not, .. } => {
+                self.resolve_subquery(
+                    if *not {
+                        SubqueryType::NotExists
+                    } else {
+                        SubqueryType::Exists
+                    },
+                    subquery,
+                    true,
+                    None,
+                )
+                .await?
             }
 
             Expr::Subquery { subquery, .. } => {
