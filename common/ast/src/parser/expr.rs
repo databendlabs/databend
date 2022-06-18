@@ -263,6 +263,11 @@ pub enum ExprElement<'a> {
         interval: Expr<'a>,
         unit: IntervalKind,
     },
+    DateSub {
+        date: Expr<'a>,
+        interval: Expr<'a>,
+        unit: IntervalKind,
+    },
     NullIf {
         expr1: Expr<'a>,
         expr2: Expr<'a>,
@@ -439,6 +444,16 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 interval,
                 unit,
             } => Expr::DateAdd {
+                span: elem.span.0,
+                date: Box::new(date),
+                interval: Box::new(interval),
+                unit,
+            },
+            ExprElement::DateSub {
+                date,
+                interval,
+                unit,
+            } => Expr::DateSub {
                 span: elem.span.0,
                 date: Box::new(date),
                 interval: Box::new(interval),
@@ -791,6 +806,16 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             unit,
         },
     );
+    let date_sub = map(
+        rule! {
+            DATE_SUB ~ "(" ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ "," ~ #interval_kind ~ ")"
+        },
+        |(_, _, date, _, interval, _, unit, _)| ExprElement::DateSub {
+            date,
+            interval,
+            unit,
+        },
+    );
     let interval = map(
         rule! {
             INTERVAL ~ #subexpr(0) ~ #interval_kind
@@ -832,6 +857,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #unary_op : "<operator>"
             | #cast : "`CAST(... AS ...)`"
             | #date_add: "`DATE_ADD(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+            | #date_sub: "`DATE_SUB(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
             | #interval: "`INTERVAL ... (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
             | #pg_cast : "`::<type_name>`"
             | #extract : "`EXTRACT((YEAR | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
