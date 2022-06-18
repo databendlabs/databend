@@ -21,6 +21,8 @@ mod other;
 mod running_difference_function;
 mod sleep;
 mod type_of;
+mod assume_not_null;
+mod to_nullable;
 
 pub use exists::ExistsFunction;
 pub use humanize::HumanizeNumberFunction;
@@ -34,3 +36,5 @@ pub use other::OtherFunction;
 pub use running_difference_function::RunningDifferenceFunction;
 pub use sleep::SleepFunction;
 pub use type_of::TypeOfFunction;
+pub use assume_not_null::AssumeNotNullFunction;
+pub use to_nullable::ToNullableFunction;
