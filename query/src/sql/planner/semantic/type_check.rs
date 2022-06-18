@@ -193,26 +193,19 @@ impl<'a> TypeChecker<'a> {
                 if !*not {
                     // Rewrite `expr BETWEEN low AND high`
                     // into `expr >= low AND expr <= high`
-                    let (ge_func, _) = self
-                        .resolve_function(
-                            span,
-                            ">=",
-                            &[&**expr, &**low],
-                            Some(BooleanType::new_impl()),
-                        )
+                    let (ge_func, left_type) = self
+                        .resolve_function(span, ">=", &[&**expr, &**low], None)
                         .await?;
-                    let (le_func, _) = self
-                        .resolve_function(
-                            span,
-                            "<=",
-                            &[&**expr, &**high],
-                            Some(BooleanType::new_impl()),
-                        )
+                    let (le_func, right_type) = self
+                        .resolve_function(span, "<=", &[&**expr, &**high], None)
                         .await?;
+                    let func =
+                        FunctionFactory::instance().get("and", &[&left_type, &right_type])?;
                     (
                         AndExpr {
                             left: Box::new(ge_func),
                             right: Box::new(le_func),
+                            return_type: func.return_type(),
                         }
                         .into(),
                         BooleanType::new_impl(),
@@ -220,26 +213,18 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
-                    let (lt_func, _) = self
-                        .resolve_function(
-                            span,
-                            "<",
-                            &[&**expr, &**low],
-                            Some(BooleanType::new_impl()),
-                        )
+                    let (lt_func, left_type) = self
+                        .resolve_function(span, "<", &[&**expr, &**low], None)
                         .await?;
-                    let (gt_func, _) = self
-                        .resolve_function(
-                            span,
-                            ">",
-                            &[&**expr, &**high],
-                            Some(BooleanType::new_impl()),
-                        )
+                    let (gt_func, right_type) = self
+                        .resolve_function(span, ">", &[&**expr, &**high], None)
                         .await?;
+                    let func = FunctionFactory::instance().get("or", &[&left_type, &right_type])?;
                     (
                         OrExpr {
                             left: Box::new(lt_func),
                             right: Box::new(gt_func),
+                            return_type: func.return_type(),
                         }
                         .into(),
                         BooleanType::new_impl(),
@@ -651,30 +636,29 @@ impl<'a> TypeChecker<'a> {
                 let op = ComparisonOp::try_from(op)?;
                 let (left, _) = self.resolve(left, None).await?;
                 let (right, _) = self.resolve(right, None).await?;
-                let mut data_type = BooleanType::new_impl();
-                if left.data_type() == DataTypeImpl::Null(NullType {})
-                    || right.data_type() == DataTypeImpl::Null(NullType {})
-                {
-                    data_type = NullType::new_impl();
-                }
+                let func = FunctionFactory::instance()
+                    .get(op.to_func_name(), &[&left.data_type(), &right.data_type()])?;
                 Ok((
                     ComparisonExpr {
                         op,
                         left: Box::new(left),
                         right: Box::new(right),
+                        return_type: func.return_type(),
                     }
                     .into(),
-                    data_type,
+                    func.return_type(),
                 ))
             }
             BinaryOperator::And => {
                 let (left, _) = self.resolve(left, Some(BooleanType::new_impl())).await?;
                 let (right, _) = self.resolve(right, Some(BooleanType::new_impl())).await?;
-
+                let func = FunctionFactory::instance()
+                    .get("and", &[&left.data_type(), &right.data_type()])?;
                 Ok((
                     AndExpr {
                         left: Box::new(left),
                         right: Box::new(right),
+                        return_type: func.return_type(),
                     }
                     .into(),
                     BooleanType::new_impl(),
@@ -683,11 +667,13 @@ impl<'a> TypeChecker<'a> {
             BinaryOperator::Or => {
                 let (left, _) = self.resolve(left, Some(BooleanType::new_impl())).await?;
                 let (right, _) = self.resolve(right, Some(BooleanType::new_impl())).await?;
-
+                let func = FunctionFactory::instance()
+                    .get("or", &[&left.data_type(), &right.data_type()])?;
                 Ok((
                     OrExpr {
                         left: Box::new(left),
                         right: Box::new(right),
+                        return_type: func.return_type(),
                     }
                     .into(),
                     BooleanType::new_impl(),
