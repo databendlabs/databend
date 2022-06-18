@@ -567,27 +567,6 @@ impl QueryCoordinator {
             common_exception::Result::Ok(())
         });
 
-        // let sender = tx.clone();
-        // let finished = self.finished.clone();
-        // self.runtime.spawn(async move {
-        //     while let Ok(flight_data) = rx.recv().await {
-        //         if finished.load(Ordering::Relaxed) {
-        //             break;
-        //         }
-        //
-        //         if let Err(TrySendError::Full(data)) = sender.try_send(flight_data) {
-        //             if let Err(_) = sender.send(data).await {
-        //                 common_tracing::tracing::warn!("Publisher channel is closed.");
-        //                 break;
-        //             }
-        //         }
-        //
-        //         if finished.load(Ordering::Relaxed) {
-        //             break;
-        //         }
-        //     }
-        // });
-
         Ok(tx)
     }
 
