@@ -48,7 +48,7 @@ impl<'a> Binder {
         );
         let tokens = tokenize_sql(query.as_str())?;
         let backtrace = Backtrace::new();
-        let stmts = parse_sql(&tokens, &backtrace)?;
-        self.bind_statement(bind_context, &stmts[0]).await
+        let stmt = parse_sql(&tokens, &backtrace)?;
+        self.bind_statement(bind_context, &stmt).await
     }
 }
