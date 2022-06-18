@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod assume_not_null;
 mod exists;
 mod humanize;
 mod ignore;
@@ -20,10 +21,10 @@ mod inet_ntoa;
 mod other;
 mod running_difference_function;
 mod sleep;
-mod type_of;
-mod assume_not_null;
 mod to_nullable;
+mod type_of;
 
+pub use assume_not_null::AssumeNotNullFunction;
 pub use exists::ExistsFunction;
 pub use humanize::HumanizeNumberFunction;
 pub use humanize::HumanizeSizeFunction;
@@ -35,6 +36,5 @@ pub use inet_ntoa::TryInetNtoaFunction;
 pub use other::OtherFunction;
 pub use running_difference_function::RunningDifferenceFunction;
 pub use sleep::SleepFunction;
-pub use type_of::TypeOfFunction;
-pub use assume_not_null::AssumeNotNullFunction;
 pub use to_nullable::ToNullableFunction;
+pub use type_of::TypeOfFunction;

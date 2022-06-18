@@ -30,9 +30,7 @@ pub struct ToNullableFunction {
 impl ToNullableFunction {
     pub fn try_create(_display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let return_type = wrap_nullable(args[0]);
-        Ok(Box::new(ToNullableFunction {
-            return_type
-        }))
+        Ok(Box::new(ToNullableFunction { return_type }))
     }
 
     pub fn desc() -> FunctionDescription {
@@ -61,7 +59,10 @@ impl Function for ToNullableFunction {
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
         if columns[0].column().data_type().can_inside_nullable() {
-            return Ok(NullableColumn::wrap_inner(columns[0].column().clone(), None))
+            return Ok(NullableColumn::wrap_inner(
+                columns[0].column().clone(),
+                None,
+            ));
         }
         Ok(columns[0].column().clone())
     }

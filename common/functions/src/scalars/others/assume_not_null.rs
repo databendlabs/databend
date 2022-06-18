@@ -32,15 +32,13 @@ impl AssumeNotNullFunction {
     pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         if args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
-                    "Can't accept null datatype to call {} function",
-                    display_name
-                )));
+                "Can't accept null datatype to call {} function",
+                display_name
+            )));
         }
-        
+
         let return_type = remove_nullable(args[0]);
-        Ok(Box::new(AssumeNotNullFunction {
-            return_type
-        }))
+        Ok(Box::new(AssumeNotNullFunction { return_type }))
     }
 
     pub fn desc() -> FunctionDescription {
@@ -70,7 +68,7 @@ impl Function for AssumeNotNullFunction {
     ) -> Result<common_datavalues::ColumnRef> {
         if columns[0].column().is_nullable() {
             let c: &NullableColumn = Series::check_get(columns[0].column())?;
-            return Ok(c.inner().clone())
+            return Ok(c.inner().clone());
         }
         Ok(columns[0].column().clone())
     }

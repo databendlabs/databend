@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::ToNullableFunction;
 use super::assume_not_null::AssumeNotNullFunction;
 use super::humanize::HumanizeNumberFunction;
 use super::humanize::HumanizeSizeFunction;
@@ -24,6 +23,7 @@ use super::running_difference_function::RunningDifferenceFunction;
 use super::ExistsFunction;
 use super::IgnoreFunction;
 use super::SleepFunction;
+use super::ToNullableFunction;
 use super::TypeOfFunction;
 use crate::scalars::FunctionFactory;
 
@@ -52,7 +52,7 @@ impl OtherFunction {
         factory.register("try_ipv4_num_to_string", TryInetNtoaFunction::desc());
         factory.register("inet_ntoa", InetNtoaFunction::desc());
         factory.register("try_inet_ntoa", TryInetNtoaFunction::desc());
-        
+
         factory.register("assume_not_null", AssumeNotNullFunction::desc());
         factory.register("to_nullable", ToNullableFunction::desc());
     }
