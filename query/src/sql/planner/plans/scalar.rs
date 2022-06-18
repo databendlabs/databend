@@ -310,11 +310,12 @@ impl ScalarExpr for ConstantExpr {
 pub struct AndExpr {
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
+    pub return_type: DataTypeImpl,
 }
 
 impl ScalarExpr for AndExpr {
     fn data_type(&self) -> DataTypeImpl {
-        BooleanType::new_impl()
+        self.return_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -332,11 +333,12 @@ impl ScalarExpr for AndExpr {
 pub struct OrExpr {
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
+    pub return_type: DataTypeImpl,
 }
 
 impl ScalarExpr for OrExpr {
     fn data_type(&self) -> DataTypeImpl {
-        BooleanType::new_impl()
+        self.return_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -406,11 +408,12 @@ pub struct ComparisonExpr {
     pub op: ComparisonOp,
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
+    pub return_type: DataTypeImpl,
 }
 
 impl ScalarExpr for ComparisonExpr {
     fn data_type(&self) -> DataTypeImpl {
-        BooleanType::new_impl()
+        self.return_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
