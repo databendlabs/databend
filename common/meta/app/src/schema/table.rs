@@ -183,6 +183,7 @@ pub struct TableMeta {
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
+    pub field_comments: Vec<String>,
 
     // if used in CreateTableReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
@@ -228,6 +229,10 @@ impl TableInfo {
         &self.meta.engine_options
     }
 
+    pub fn field_comments(&self) -> &Vec<String> {
+        &self.meta.field_comments
+    }
+
     #[must_use]
     pub fn set_schema(mut self, schema: Arc<DataSchema>) -> TableInfo {
         self.meta.schema = schema;
@@ -248,6 +253,7 @@ impl Default for TableMeta {
             created_on: Default::default(),
             updated_on: Default::default(),
             comment: "".to_string(),
+            field_comments: vec![],
             drop_on: None,
             statistics: Default::default(),
         }
@@ -272,11 +278,12 @@ impl Display for TableMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Engine: {}={:?}, Schema: {}, Options: {:?} CreatedOn: {:?} DropOn: {:?}",
+            "Engine: {}={:?}, Schema: {}, Options: {:?}, FieldComments: {:?} CreatedOn: {:?} DropOn: {:?}",
             self.engine,
             self.engine_options,
             self.schema,
             self.options,
+            self.field_comments,
             self.created_on,
             self.drop_on,
         )

@@ -19,6 +19,7 @@ use common_meta_types::UserIdentity;
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
+use nom::Slice;
 
 use super::error::ErrorKind;
 use crate::ast::*;
@@ -32,12 +33,19 @@ pub fn statements(i: Input) -> IResult<Vec<Statement>> {
     let stmt = map(statement, Some);
     let eoi = map(rule! { &EOI }, |_| None);
 
-    map(
-        rule!(
-            #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi }) ~ &EOI
+    alt((
+        map(
+            rule!(
+                #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi }) ~ &EOI
+            ),
+            |(stmts, _)| stmts.into_iter().flatten().collect(),
         ),
-        |(stmts, _)| stmts.into_iter().flatten().collect(),
-    )(i)
+        // `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
+        // stop the parser immediately and return the rest tokens by `InsertSource`.
+        //
+        // This is a hack to make it able to parse a large streaming insert statement.
+        map(insert_statement, |insert_stmt| vec![insert_stmt]),
+    ))(i)
 }
 
 pub fn statement(i: Input) -> IResult<Statement> {
@@ -53,24 +61,6 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 _ => unreachable!(),
             },
             query: Box::new(statement),
-        },
-    );
-    let insert = map(
-        rule! {
-            INSERT ~ ( INTO | OVERWRITE ) ~ TABLE?
-            ~ #peroid_separated_idents_1_to_3
-            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ #insert_source
-        },
-        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| Statement::Insert {
-            catalog,
-            database,
-            table,
-            columns: opt_columns
-                .map(|(_, columns, _)| columns)
-                .unwrap_or_default(),
-            source,
-            overwrite: overwrite.kind == OVERWRITE,
         },
     );
     let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
@@ -599,7 +589,6 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
-            | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #show_settings : "`SHOW SETTINGS`"
             | #show_stages : "`SHOW STAGES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
@@ -655,6 +644,68 @@ pub fn statement(i: Input) -> IResult<Statement> {
     ))(i)
 }
 
+pub fn insert_statement(i: Input) -> IResult<Statement> {
+    map(
+        rule! {
+            INSERT ~ ( INTO | OVERWRITE ) ~ TABLE?
+            ~ #peroid_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ #insert_source
+            : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+        },
+        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| Statement::Insert {
+            catalog,
+            database,
+            table,
+            columns: opt_columns
+                .map(|(_, columns, _)| columns)
+                .unwrap_or_default(),
+            source,
+            overwrite: overwrite.kind == OVERWRITE,
+        },
+    )(i)
+}
+
+pub fn insert_source(i: Input) -> IResult<InsertSource> {
+    let streaming = map(
+        rule! {
+            FORMAT ~ #ident ~ #rest_tokens
+        },
+        |(_, format, rest_tokens)| InsertSource::Streaming {
+            format: format.name,
+            rest_tokens,
+        },
+    );
+    let values = map(
+        rule! {
+            VALUES ~ #rest_tokens
+        },
+        |(_, rest_tokens)| InsertSource::Values { rest_tokens },
+    );
+    let query = map(
+        rule! {
+            #query ~ ( ";" | &EOI )
+        },
+        |(query, _)| InsertSource::Select {
+            query: Box::new(query),
+        },
+    );
+
+    rule!(
+        #streaming
+        | #values
+        | #query
+    )(i)
+}
+
+pub fn rest_tokens<'a>(i: Input<'a>) -> IResult<&'a [Token]> {
+    if i.last().map(|token| token.kind) == Some(EOI) {
+        Ok((i.slice(i.len() - 1..), i.slice(..i.len() - 1).0))
+    } else {
+        Ok((i.slice(i.len()..), i.0))
+    }
+}
+
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     #[derive(Clone)]
     enum ColumnConstraint<'a> {
@@ -672,20 +723,28 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         },
         |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
     );
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
 
     map(
         rule! {
             #ident
             ~ #type_name
             ~ ( #nullable | #default_expr )*
-            : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`"
+            ~ ( #comment )?
+            : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>] [COMMENT '<comment>']`"
         },
-        |(name, data_type, constraints)| {
+        |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
                 nullable: false,
                 default_expr: None,
+                comment,
             };
             for constraint in constraints {
                 match constraint {
@@ -697,32 +756,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             }
             def
         },
-    )(i)
-}
-
-pub fn insert_source(i: Input) -> IResult<InsertSource> {
-    let streaming = map(
-        rule! {
-            FORMAT ~ #ident
-        },
-        |(_, format)| InsertSource::Streaming {
-            format: format.name,
-        },
-    );
-    let values = map(
-        rule! {
-            VALUES ~ #values_tokens
-        },
-        |(_, values_tokens)| InsertSource::Values { values_tokens },
-    );
-    let query = map(query, |query| InsertSource::Select {
-        query: Box::new(query),
-    });
-
-    rule!(
-        #streaming
-        | #values
-        | #query
     )(i)
 }
 
@@ -876,15 +909,6 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
         },
         |(_, _, engine)| engine,
     )(i)
-}
-
-pub fn values_tokens(i: Input) -> IResult<&[Token]> {
-    let semicolon_pos = i
-        .iter()
-        .position(|token| token.text() == ";")
-        .unwrap_or(i.len() - 1);
-    let (value_tokens, rest_tokens) = i.0.split_at(semicolon_pos);
-    Ok((Input(rest_tokens, i.1), value_tokens))
 }
 
 pub fn role_option(i: Input) -> IResult<RoleOption> {

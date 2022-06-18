@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use strum_macros::EnumIter;
 
-use super::output_format_ndjson::JsonEachRowOutputFormat;
+use super::output_format_json_each_row::JsonEachRowOutputFormat;
 use super::output_format_parquet::ParquetOutputFormat;
 use super::output_format_values::ValuesOutputFormat;
 use crate::formats::output_format_csv::CSVOutputFormat;
@@ -32,16 +32,13 @@ use crate::formats::output_format_csv::TSVOutputFormat;
 use crate::formats::output_format_csv::TSVWithNamesAndTypesOutputFormat;
 use crate::formats::output_format_csv::TSVWithNamesOutputFormat;
 use crate::formats::FormatFactory;
+
 pub trait OutputFormat: Send {
-    fn serialize_block(
-        &mut self,
-        _data_block: &DataBlock,
-        _format_setting: &FormatSettings,
-    ) -> Result<Vec<u8>> {
+    fn serialize_block(&mut self, _data_block: &DataBlock) -> Result<Vec<u8>> {
         unimplemented!()
     }
 
-    fn serialize_prefix(&self, _format: &FormatSettings) -> Result<Vec<u8>> {
+    fn serialize_prefix(&self) -> Result<Vec<u8>> {
         Ok(vec![])
     }
 
@@ -106,24 +103,54 @@ impl OutputFormatType {
             _ => vec![],
         }
     }
+
+    pub fn get_content_type(&self) -> String {
+        match self {
+            OutputFormatType::TSV
+            | OutputFormatType::TSVWithNames
+            | OutputFormatType::TSVWithNamesAndTypes => "text/tab-separated-values; charset=UTF-8",
+            OutputFormatType::CSV => "text/csv; charset=UTF-8; header=absent",
+            OutputFormatType::CSVWithNames | OutputFormatType::CSVWithNamesAndTypes => {
+                "text/csv; charset=UTF-8; header=present"
+            }
+            OutputFormatType::Parquet => "application/octet-stream",
+            OutputFormatType::JsonEachRow => "application/json; charset=UTF-8",
+            _ => "text/plain; charset=UTF-8",
+        }
+        .to_string()
+    }
 }
 
 impl OutputFormatType {
-    pub fn create_format(&self, schema: DataSchemaRef) -> Box<dyn OutputFormat> {
+    pub fn create_format(
+        &self,
+        schema: DataSchemaRef,
+        format_setting: FormatSettings,
+    ) -> Box<dyn OutputFormat> {
         match self {
-            OutputFormatType::TSV => Box::new(TSVOutputFormat::create(schema)),
-            OutputFormatType::TSVWithNames => Box::new(TSVWithNamesOutputFormat::create(schema)),
-            OutputFormatType::TSVWithNamesAndTypes => {
-                Box::new(TSVWithNamesAndTypesOutputFormat::create(schema))
+            OutputFormatType::TSV => Box::new(TSVOutputFormat::create(schema, format_setting)),
+            OutputFormatType::TSVWithNames => {
+                Box::new(TSVWithNamesOutputFormat::create(schema, format_setting))
             }
-            OutputFormatType::CSV => Box::new(CSVOutputFormat::create(schema)),
-            OutputFormatType::CSVWithNames => Box::new(CSVWithNamesOutputFormat::create(schema)),
-            OutputFormatType::CSVWithNamesAndTypes => {
-                Box::new(CSVWithNamesAndTypesOutputFormat::create(schema))
+            OutputFormatType::TSVWithNamesAndTypes => Box::new(
+                TSVWithNamesAndTypesOutputFormat::create(schema, format_setting),
+            ),
+            OutputFormatType::CSV => Box::new(CSVOutputFormat::create(schema, format_setting)),
+            OutputFormatType::CSVWithNames => {
+                Box::new(CSVWithNamesOutputFormat::create(schema, format_setting))
             }
-            OutputFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema)),
-            OutputFormatType::JsonEachRow => Box::new(JsonEachRowOutputFormat::create(schema)),
-            OutputFormatType::Values => Box::new(ValuesOutputFormat::create(schema)),
+            OutputFormatType::CSVWithNamesAndTypes => Box::new(
+                CSVWithNamesAndTypesOutputFormat::create(schema, format_setting),
+            ),
+            OutputFormatType::Parquet => {
+                Box::new(ParquetOutputFormat::create(schema, format_setting))
+            }
+            OutputFormatType::JsonEachRow => {
+                Box::new(JsonEachRowOutputFormat::create(schema, format_setting))
+            }
+            OutputFormatType::Values => {
+                Box::new(ValuesOutputFormat::create(schema, format_setting))
+            }
         }
     }
 }

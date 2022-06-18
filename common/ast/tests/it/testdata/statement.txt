@@ -207,6 +207,7 @@ CreateTable(
                                 ),
                             },
                         ),
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -217,6 +218,7 @@ CreateTable(
                         data_type: String,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -272,6 +274,7 @@ CreateTable(
                                 ),
                             },
                         ),
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -282,6 +285,7 @@ CreateTable(
                         data_type: String,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -703,6 +707,7 @@ CreateTable(
                         },
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -717,6 +722,7 @@ CreateTable(
                         },
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -1129,6 +1135,7 @@ CreateTable(
                         data_type: Int32,
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1139,6 +1146,7 @@ CreateTable(
                         data_type: Int64,
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1149,6 +1157,7 @@ CreateTable(
                         data_type: String,
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -1189,6 +1198,7 @@ CreateTable(
                         data_type: Int32,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1199,6 +1209,7 @@ CreateTable(
                         data_type: Int64,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1209,6 +1220,7 @@ CreateTable(
                         data_type: String,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -1258,6 +1270,7 @@ CreateTable(
                                 ),
                             },
                         ),
+                        comment: None,
                     },
                 ],
             ),
@@ -2827,7 +2840,7 @@ Query(
 ---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
-INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
+INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
 ---------- AST ------------
 Insert {
     catalog: None,
@@ -2850,7 +2863,7 @@ Insert {
         },
     ],
     source: Values {
-        values_tokens: [
+        rest_tokens: [
             LParen(30..31),
             LiteralInteger(31..32),
             Comma(32..33),
@@ -2862,6 +2875,7 @@ Insert {
             Comma(40..41),
             LiteralInteger(42..43),
             RParen(43..44),
+            SemiColon(44..45),
         ],
     },
     overwrite: false,
@@ -2871,7 +2885,7 @@ Insert {
 ---------- Input ----------
 insert into table t format json;
 ---------- Output ---------
-INSERT INTO t FORMAT json
+INSERT INTO t FORMAT json ;
 ---------- AST ------------
 Insert {
     catalog: None,
@@ -2884,6 +2898,9 @@ Insert {
     columns: [],
     source: Streaming {
         format: "json",
+        rest_tokens: [
+            SemiColon(31..32),
+        ],
     },
     overwrite: false,
 }
@@ -3318,6 +3335,53 @@ AlterDatabase(
                 span: Ident(35..36),
             },
         },
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
+---------- Output ---------
+CREATE TABLE t (a Int32 NOT NULL COMMENT 'col comment')COMMENT = table comment
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(16..17),
+                        },
+                        data_type: Int32,
+                        nullable: false,
+                        default_expr: None,
+                        comment: Some(
+                            "col comment",
+                        ),
+                    },
+                ],
+            ),
+        ),
+        table_options: [
+            Comment(
+                "table comment",
+            ),
+        ],
+        cluster_by: [],
+        as_query: None,
+        comment: None,
+        transient: false,
     },
 )
 

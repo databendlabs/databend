@@ -17,6 +17,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::FunctionFactory;
 
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::ColumnSet;
@@ -44,6 +45,7 @@ use crate::sql::plans::ScalarItem;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
 use crate::sql::MetadataRef;
+use crate::sql::ScalarExpr;
 
 /// Rewrite subquery into `Apply` operator
 pub struct SubqueryRewriter {
@@ -197,6 +199,7 @@ impl SubqueryRewriter {
                         }
                         .into(),
                     ),
+                    return_type: agg_func.return_type()?,
                 };
                 let eval_scalar = EvalScalar {
                     items: vec![ScalarItem {
@@ -262,10 +265,13 @@ impl SubqueryRewriter {
             Scalar::AndExpr(expr) => {
                 let (left, _result_left) = self.try_rewrite_subquery(&expr.left, s_expr)?;
                 let (right, _result_right) = self.try_rewrite_subquery(&expr.right, s_expr)?;
+                let func = FunctionFactory::instance()
+                    .get("and", &[&left.data_type(), &right.data_type()])?;
                 Ok((
                     AndExpr {
                         left: Box::new(left),
                         right: Box::new(right),
+                        return_type: func.return_type(),
                     }
                     .into(),
                     s_expr.clone(),
@@ -275,10 +281,13 @@ impl SubqueryRewriter {
             Scalar::OrExpr(expr) => {
                 let (left, s_expr) = self.try_rewrite_subquery(&expr.left, s_expr)?;
                 let (right, s_expr) = self.try_rewrite_subquery(&expr.right, &s_expr)?;
+                let func = FunctionFactory::instance()
+                    .get("or", &[&left.data_type(), &right.data_type()])?;
                 Ok((
                     OrExpr {
                         left: Box::new(left),
                         right: Box::new(right),
+                        return_type: func.return_type(),
                     }
                     .into(),
                     s_expr,
@@ -288,11 +297,16 @@ impl SubqueryRewriter {
             Scalar::ComparisonExpr(expr) => {
                 let (left, s_expr) = self.try_rewrite_subquery(&expr.left, s_expr)?;
                 let (right, s_expr) = self.try_rewrite_subquery(&expr.right, &s_expr)?;
+                let func = FunctionFactory::instance().get(expr.op.to_func_name(), &[
+                    &left.data_type(),
+                    &right.data_type(),
+                ])?;
                 Ok((
                     ComparisonExpr {
                         op: expr.op.clone(),
                         left: Box::new(left),
                         right: Box::new(right),
+                        return_type: func.return_type(),
                     }
                     .into(),
                     s_expr,

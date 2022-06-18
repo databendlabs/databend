@@ -66,6 +66,7 @@ impl<'a> Predicate<'a> {
             op: ComparisonOp::Equal,
             left,
             right,
+            ..
         }) = scalar
         {
             if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {

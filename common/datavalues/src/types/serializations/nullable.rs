@@ -23,8 +23,6 @@ use serde_json::Value;
 use crate::serializations::TypeSerializer;
 use crate::serializations::TypeSerializerImpl;
 
-const NULL_BYTES: &[u8] = b"NULL";
-
 #[derive(Clone)]
 pub struct NullableSerializer<'a> {
     pub validity: &'a Bitmap,
@@ -38,14 +36,43 @@ impl<'a> TypeSerializer<'a> for NullableSerializer<'a> {
 
     fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
         if !self.validity.get_bit(row_index) {
-            buf.extend_from_slice(NULL_BYTES);
+            buf.extend_from_slice(&format.null_bytes);
         } else {
             self.inner.write_field(row_index, buf, format)
         }
     }
 
-    fn serialize_json(&self, format: &FormatSettings) -> Result<Vec<Value>> {
-        let mut res = self.inner.serialize_json(format)?;
+    fn write_field_escaped(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: u8,
+    ) {
+        if !self.validity.get_bit(row_index) {
+            buf.extend_from_slice(&format.null_bytes);
+        } else {
+            self.inner
+                .write_field_escaped(row_index, buf, format, quote)
+        }
+    }
+
+    fn write_field_quoted(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: u8,
+    ) {
+        if !self.validity.get_bit(row_index) {
+            buf.extend_from_slice(&format.null_bytes);
+        } else {
+            self.inner.write_field_quoted(row_index, buf, format, quote)
+        }
+    }
+
+    fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {
+        let mut res = self.inner.serialize_json_values(format)?;
         let validity = self.validity;
 
         (0..validity.len()).for_each(|row| {

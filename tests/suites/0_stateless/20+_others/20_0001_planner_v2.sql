@@ -326,5 +326,11 @@ select * from t1 right join t2 on t1.a = t2.c;
 select * from t1 left join t2 on t1.a = t2.c;
 drop table t1;
 drop table t2;
+
+-- NULL
+select '====NULL====';
+create table n( a int null, b int null) ;
+insert into n select  if (number % 3, null, number), if (number % 2, null, number) from numbers(10);
+select a + b, a and b, a - b, a or b from n;
 set enable_planner_v2 = 0;
 

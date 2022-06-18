@@ -30,6 +30,7 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionFactory;
 use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
@@ -334,9 +335,13 @@ impl PipelineBuilder {
         let eb = ExpressionBuilder::create(self.metadata.clone());
         let scalars = &filter.predicates;
         let pred = scalars.iter().cloned().reduce(|acc, v| {
+            let func = FunctionFactory::instance()
+                .get("and", &[&acc.data_type(), &v.data_type()])
+                .unwrap();
             AndExpr {
                 left: Box::new(acc),
                 right: Box::new(v),
+                return_type: func.return_type(),
             }
             .into()
         });

@@ -64,7 +64,7 @@ where F: Fn(&Scalar) -> bool
 
 pub fn split_conjunctions(scalar: &Scalar) -> Vec<Scalar> {
     match scalar {
-        Scalar::AndExpr(AndExpr { left, right }) => {
+        Scalar::AndExpr(AndExpr { left, right, .. }) => {
             vec![split_conjunctions(left), split_conjunctions(right)].concat()
         }
         _ => {
@@ -75,11 +75,9 @@ pub fn split_conjunctions(scalar: &Scalar) -> Vec<Scalar> {
 
 pub fn split_equivalent_predicate(scalar: &Scalar) -> Option<(Scalar, Scalar)> {
     match scalar {
-        Scalar::ComparisonExpr(ComparisonExpr { op, left, right })
-            if *op == ComparisonOp::Equal =>
-        {
-            Some((*left.clone(), *right.clone()))
-        }
+        Scalar::ComparisonExpr(ComparisonExpr {
+            op, left, right, ..
+        }) if *op == ComparisonOp::Equal => Some((*left.clone(), *right.clone())),
         _ => None,
     }
 }
