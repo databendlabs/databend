@@ -112,7 +112,7 @@ impl<'a> Binder {
             }
 
             Statement::Copy(stmt) => {
-                let plan = self.bind_copy(stmt).await?;
+                let plan = self.bind_copy(bind_context, stmt).await?;
                 Ok(plan)
             }
 

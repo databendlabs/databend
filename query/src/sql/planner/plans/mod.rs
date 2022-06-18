@@ -14,6 +14,7 @@
 
 mod aggregate;
 mod apply;
+mod copy_v2;
 mod eval_scalar;
 mod filter;
 mod hash_join;
@@ -32,6 +33,8 @@ pub use aggregate::Aggregate;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_planners::*;
+pub use copy_v2::CopyPlanV2;
+pub use copy_v2::ValidationMode;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::Filter;
@@ -68,7 +71,7 @@ pub enum Plan {
     },
 
     // Copy
-    Copy(Box<CopyPlan>),
+    Copy(Box<CopyPlanV2>),
 
     // System
     ShowMetrics,

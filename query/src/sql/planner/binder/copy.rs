@@ -36,22 +36,25 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::RemoveUserStagePlan;
 use common_planners::SourceInfo;
 use common_planners::StageTableInfo;
-use common_planners::ValidationMode;
 
 use crate::sql::binder::Binder;
+use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
+use crate::sql::plans::ValidationMode;
 use crate::sql::statements::parse_copy_file_format_options;
 use crate::sql::statements::parse_stage_location;
 use crate::sql::statements::parse_uri_location;
+use crate::sql::BindContext;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_copy(
         &mut self,
+        bind_context: &BindContext,
         stmt: &CopyStmt<'a>,
     ) -> Result<Plan> {
         match &stmt.dst {
             CopyTarget::Table(catalog, database, table) => {
-                let (mut stage_info, path) = match &stmt.src {
+                let (stage_info, path) = match &stmt.src {
                     CopyTarget::Table(_, _, _) => {
                         return Err(ErrorCode::SyntaxException(
                             "COPY INTO <table> FROM <table> is invalid",
@@ -66,10 +69,15 @@ impl<'a> Binder {
                     CopyTarget::Location(location) => self.bind_stage(stmt, location).await?,
                 };
 
+                let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+                    .map_err(ErrorCode::SyntaxException)?;
+
                 let catalog_name = catalog
+                    .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or(self.ctx.get_current_catalog());
                 let database_name = database
+                    .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or(self.ctx.get_current_database());
                 let table_name = table.to_string();
@@ -77,7 +85,7 @@ impl<'a> Binder {
                     .ctx
                     .get_table(&catalog_name, &database_name, &table_name)
                     .await?;
-                let mut schema = table.schema();
+                let schema = table.schema();
                 let table_id = table.get_id();
 
                 // TODO(xuanwo): we need to support columns in COPY.
@@ -99,46 +107,47 @@ impl<'a> Binder {
                     push_downs: None,
                 };
 
-                // Pattern.
-                let pattern = self.pattern.clone();
-
-                Ok(Plan::Copy(Box::new(CopyPlan {
+                Ok(Plan::Copy(Box::new(CopyPlanV2::IntoTable {
+                    catalog_name,
+                    database_name,
+                    table_name,
+                    table_id,
+                    schema,
+                    from,
+                    files: stmt.files.clone(),
+                    pattern: stmt.pattern.clone(),
                     validation_mode,
-                    copy_mode: CopyMode::IntoTable {
-                        catalog_name,
-                        db_name,
-                        tbl_name,
-                        tbl_id,
-                        schema,
-                        from,
-                        files: self.files.clone(),
-                        pattern,
-                    },
                 })))
             }
             CopyTarget::Location(location) => {
-                let (mut stage_info, path) = self.bind_stage(stmt, location).await?;
+                let (stage_info, path) = self.bind_stage(stmt, location).await?;
                 let query = match &stmt.src {
                     CopyTarget::Table(catalog, database, table) => {
                         let catalog_name = catalog
+                            .as_ref()
                             .map(|v| v.to_string())
                             .unwrap_or(self.ctx.get_current_catalog());
                         let database_name = database
+                            .as_ref()
                             .map(|v| v.to_string())
                             .unwrap_or(self.ctx.get_current_database());
                         let table_name = table.to_string();
+
                         let subquery = format!(
                             "SELECT * FROM {}.{}.{}",
                             catalog_name, database_name, table_name
                         );
-                        let tokens = tokenize_sql(sql)?;
+                        let tokens = tokenize_sql(&subquery)?;
                         let backtrace = Backtrace::new();
                         let stmts = parse_sql(&tokens, &backtrace)?;
                         if stmts.len() > 1 {
                             return Err(ErrorCode::UnImplement("unsupported multiple statements"));
                         }
                         match &stmts[0] {
-                            Statement::Query(query) => query,
+                            Statement::Query(query) => {
+                                self.bind_statement(bind_context, &Statement::Query(query.clone()))
+                                    .await?
+                            }
                             _ => {
                                 return Err(ErrorCode::SyntaxException(
                                     "COPY INTO <location> FROM <non-query> is invalid",
@@ -146,7 +155,10 @@ impl<'a> Binder {
                             }
                         }
                     }
-                    CopyTarget::Query(query) => query,
+                    CopyTarget::Query(query) => {
+                        self.bind_statement(bind_context, &Statement::Query(query.clone()))
+                            .await?
+                    }
                     CopyTarget::Location(_) => {
                         return Err(ErrorCode::SyntaxException(
                             "COPY INTO <location> FROM <location> is invalid",
@@ -154,18 +166,16 @@ impl<'a> Binder {
                     }
                 };
 
-                Ok(Plan::Copy(Box::new(CopyPlan {
+                // Validation mode.
+                let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+                    .map_err(ErrorCode::SyntaxException)?;
+
+                Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
+                    stage: stage_info,
+                    path,
                     validation_mode,
-                    copy_mode: CopyMode::IntoStage {
-                        stage_table_info: StageTableInfo {
-                            schema: query.schema(),
-                            stage_info,
-                            path,
-                            files: vec![],
-                        },
-                        // TODO(xuanwo): we need to convert query to Plan.
-                        query: Box::new(query),
-                    },
+                    // TODO(xuanwo): we need to convert query to Plan.
+                    query: Box::new(query),
                 })))
             }
             CopyTarget::Query(_) => {
@@ -186,8 +196,7 @@ impl<'a> Binder {
         };
 
         if !stmt.file_format.is_empty() {
-            stage_info.file_format_options =
-                parse_copy_file_format_options(&self.file_format_options)?;
+            stage_info.file_format_options = parse_copy_file_format_options(&stmt.file_format)?;
         }
 
         // Copy options.
@@ -204,10 +213,6 @@ impl<'a> Binder {
                 stage_info.copy_options.size_limit = stmt.size_limit;
             }
         }
-
-        // Validation mode.
-        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
-            .map_err(ErrorCode::SyntaxException)?;
 
         Ok((stage_info, path))
     }
