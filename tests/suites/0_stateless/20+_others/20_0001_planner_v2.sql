@@ -184,6 +184,7 @@ select '=== Test CASE-WHEN ===';
 select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is null) from (
 	SELECT (CASE WHEN number % 4 = 1 THEN '1' WHEN number % 4 = 2 THEN '2' WHEN number % 4 = 3 THEN '3' END) as a FROM numbers(100)
 );
+select case when number >= 2 then 'ge2' WHEN number >= 0 then 'ge0' ELSE 'else' end from numbers(3);
 
 -- subquery in from
 select '=== Test Subquery In From ===';
