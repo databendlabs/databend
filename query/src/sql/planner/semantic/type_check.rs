@@ -265,6 +265,32 @@ impl<'a> TypeChecker<'a> {
                 )
             }
 
+            Expr::Case {
+                span,
+                conditions,
+                results,
+                else_result,
+                ..
+            } => {
+                let mut arguments = Vec::with_capacity(conditions.len() * 2 + 1);
+                for (c, r) in conditions.iter().zip(results.iter()) {
+                    arguments.push(c);
+                    arguments.push(r);
+                }
+                let null_arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::Null,
+                };
+
+                if let Some(expr) = else_result {
+                    arguments.push(&**expr);
+                } else {
+                    arguments.push(&null_arg)
+                }
+                self.resolve_function(span, "multi_if", &arguments, required_type)
+                    .await?
+            }
+
             Expr::Substring {
                 span,
                 expr,
