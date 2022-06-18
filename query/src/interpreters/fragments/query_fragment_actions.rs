@@ -162,7 +162,7 @@ impl QueryFragmentsActions {
         Ok(executors_packets)
     }
 
-    pub fn prepare_publisher(&self, ctx: Arc<QueryContext>) -> Result<Vec<PrepareChannel>> {
+    pub fn prepare_channel(&self, ctx: Arc<QueryContext>) -> Result<Vec<PrepareChannel>> {
         let nodes_info = Self::nodes_info(&ctx);
         let mut prepare_channel = Vec::with_capacity(nodes_info.len());
         let connections_info = self.get_target_2_fragments();

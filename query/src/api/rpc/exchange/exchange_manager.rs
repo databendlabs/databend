@@ -171,7 +171,7 @@ impl DataExchangeManager {
         Ok(())
     }
 
-    async fn prepare_publisher(&self, packets: Vec<PrepareChannel>, timeout: u64) -> Result<()> {
+    async fn prepare_channel(&self, packets: Vec<PrepareChannel>, timeout: u64) -> Result<()> {
         for publisher_packet in packets.into_iter() {
             if !publisher_packet
                 .data_endpoints
@@ -213,7 +213,7 @@ impl DataExchangeManager {
         Ok(())
     }
 
-    pub async fn submit_query_actions(
+    pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,
         actions: QueryFragmentsActions,
@@ -232,8 +232,8 @@ impl DataExchangeManager {
         let mut root_pipeline =
             self.build_root_pipeline(ctx.get_id(), root_fragment_id, schema, &prepare_pipeline)?;
 
-        self.prepare_publisher(actions.prepare_publisher(ctx.clone())?, timeout)
-            .await?;
+        let prepare_channel = actions.prepare_channel(ctx.clone())?;
+        self.prepare_channel(prepare_channel, timeout).await?;
 
         QueryCoordinator::init_pipeline(&mut root_pipeline)?;
         self.execute_pipeline(actions.execute_packets(ctx.clone())?, timeout)

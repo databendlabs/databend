@@ -33,6 +33,10 @@ impl RootQueryFragment {
 }
 
 impl QueryFragment for RootQueryFragment {
+    fn distribute_query(&self) -> Result<bool> {
+        self.input.distribute_query()
+    }
+
     fn get_out_partition(&self) -> Result<PartitionState> {
         Ok(PartitionState::NotPartition)
     }

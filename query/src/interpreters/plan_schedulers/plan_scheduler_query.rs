@@ -29,6 +29,7 @@ use crate::interpreters::plan_schedulers::Scheduled;
 use crate::interpreters::plan_schedulers::ScheduledStream;
 use crate::interpreters::PlanScheduler;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::QueryPipelineBuilder;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::QueryContext;
 
@@ -66,20 +67,29 @@ pub async fn schedule_query(
     }
 }
 
-pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
-    let settings = ctx.get_settings();
+async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
     let root_query_fragments = RootQueryFragment::create(query_fragments, ctx.clone(), plan)?;
 
-    debug!("QueryFragments: {:?}", root_query_fragments);
+    if !root_query_fragments.distribute_query()? {
+        println!("local query");
+        return QueryPipelineBuilder::create(ctx.clone()).finalize(plan);
+    }
+
     let exchange_manager = ctx.get_exchange_manager();
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_query_fragments.finalize(&mut fragments_actions)?;
-    debug!("QueryFragments actions: {:?}", fragments_actions);
-    let mut pipeline = exchange_manager
-        .submit_query_actions(ctx, fragments_actions)
-        .await?;
 
+    debug!("QueryFragments actions: {:?}", fragments_actions);
+
+    exchange_manager
+        .commit_actions(ctx, fragments_actions)
+        .await
+}
+
+pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
+    let settings = ctx.get_settings();
+    let mut pipeline = schedule_query_impl(ctx, plan).await?;
     pipeline.set_max_threads(settings.get_max_threads()? as usize);
     Ok(pipeline)
 }

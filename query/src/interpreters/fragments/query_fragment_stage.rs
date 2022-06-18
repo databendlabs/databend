@@ -46,6 +46,10 @@ impl StageQueryFragment {
 }
 
 impl QueryFragment for StageQueryFragment {
+    fn distribute_query(&self) -> Result<bool> {
+        Ok(true)
+    }
+
     fn get_out_partition(&self) -> Result<PartitionState> {
         match self.stage.kind {
             StageKind::Normal => Ok(PartitionState::HashPartition),

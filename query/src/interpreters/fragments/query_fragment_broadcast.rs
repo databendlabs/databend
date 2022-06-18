@@ -18,6 +18,10 @@ impl BroadcastQueryFragment {
 }
 
 impl QueryFragment for BroadcastQueryFragment {
+    fn distribute_query(&self) -> Result<bool> {
+        Ok(true)
+    }
+
     fn get_out_partition(&self) -> Result<PartitionState> {
         if self.input.get_out_partition()? != PartitionState::NotPartition {
             return Err(ErrorCode::UnImplement("broadcast distributed subquery."));
