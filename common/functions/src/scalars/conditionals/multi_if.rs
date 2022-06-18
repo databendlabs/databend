@@ -46,7 +46,6 @@ impl MultiIfFunction {
         }
 
         let mut type_of_branches = Vec::with_capacity(args.len() / 2);
-        // branch
         for i in (1..args.len()).step_by(2) {
             type_of_branches.push(args[i].clone());
         }
@@ -150,7 +149,7 @@ impl Function for MultiIfFunction {
         self.return_type.clone()
     }
 
-    // multi_if(c1, a1, c2, a2, c3, a3, c4, a4, d)
+    // multi_if(c1, a1, c2, a2, c3, a3, c4, a4, else_a)
     fn eval(
         &self,
         func_ctx: FunctionContext,
@@ -158,7 +157,6 @@ impl Function for MultiIfFunction {
         input_rows: usize,
     ) -> Result<ColumnRef> {
         let mut condition_columns = Vec::with_capacity(columns.len() / 2);
-        // branch
         for i in (0..columns.len() - 1).step_by(2) {
             let cond_col = DataBlock::cast_to_nonull_boolean(columns[i].column())?;
             condition_columns.push(cond_col);
