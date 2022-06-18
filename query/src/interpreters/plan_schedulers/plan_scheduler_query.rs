@@ -67,6 +67,7 @@ pub async fn schedule_query(
 }
 
 pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
+    let settings = ctx.get_settings();
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
     let root_query_fragments = RootQueryFragment::create(query_fragments, ctx.clone(), plan)?;
 
@@ -75,7 +76,10 @@ pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Resu
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_query_fragments.finalize(&mut fragments_actions)?;
     debug!("QueryFragments actions: {:?}", fragments_actions);
-    exchange_manager
+    let mut pipeline = exchange_manager
         .submit_query_actions(ctx, fragments_actions)
-        .await
+        .await?;
+
+    pipeline.set_max_threads(settings.get_max_threads()? as usize);
+    Ok(pipeline)
 }
