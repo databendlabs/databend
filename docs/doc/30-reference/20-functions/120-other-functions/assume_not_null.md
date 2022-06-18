@@ -24,7 +24,7 @@ Returns the original datatype from the non-`Nullable` type; Returns the embedded
 
 ## Examples
 
-``` sql
+```sql
 CREATE TABLE default.t_null ( x int,  y int null);
 INSERT INTO default.t_null values (1, null), (2, 3);
 SELECT ASSUME_NOT_NULL(y) FROM t_null;

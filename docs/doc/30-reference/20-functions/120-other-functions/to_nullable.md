@@ -24,7 +24,7 @@ Returns the original datatype from the `Nullable` type; Returns the wrapped `Nul
 
 ## Examples
 
-``` sql
+```sql
 select to_nullable(3);
 
 +----------------+
@@ -34,7 +34,7 @@ select to_nullable(3);
 +----------------+
 ```
 
-```
+```sql
 select to_nullable(null);
 
 +-------------------+
