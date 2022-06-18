@@ -178,6 +178,14 @@ insert into temp values (1);
 select a from temp;
 drop table temp;
 
+
+-- CASE WHEN
+select '=== Test CASE-WHEN ===';
+select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is null) from (
+	SELECT (CASE WHEN number % 4 = 1 THEN '1' WHEN number % 4 = 2 THEN '2' WHEN number % 4 = 3 THEN '3' END) as a FROM numbers(100)
+);
+select case when number >= 2 then 'ge2' WHEN number >= 1 then 'ge1' ELSE null end from numbers(3);
+select case when 1 = 3 then null when 1 = 2 then 20.0 when 1 = 1 then 1 ELSE null END;
 -- subquery in from
 select '=== Test Subquery In From ===';
 create table t(a int, b int);
@@ -332,3 +340,4 @@ select * from numbers(5) as t where exists (select * from numbers(3) where numbe
 select * from numbers(5) as t where not exists (select * from numbers(3) where number = t.number);
 
 set enable_planner_v2 = 0;
+

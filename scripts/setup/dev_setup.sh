@@ -370,11 +370,11 @@ Moreover, ~/.profile will be updated (since -p was provided).
 EOF
 	fi
 
-  if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
-    cat <<EOF
+	if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
+		cat <<EOF
 Tpch dataset (since -t was provided):
 EOF
-  fi
+	fi
 
 	cat <<EOF
 If you'd prefer to install these dependencies yourself, please exit this script
@@ -411,9 +411,9 @@ while getopts "ybdpstv" arg; do
 	v)
 		VERBOSE="true"
 		;;
-  t)
-    INSTALL_TPCH_DATA="true"
-    ;;
+	t)
+		INSTALL_TPCH_DATA="true"
+		;;
 
 	*)
 		usage
@@ -563,20 +563,20 @@ if [[ "$INSTALL_CODEGEN" == "true" ]]; then
 fi
 
 if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
-  # Construct a docker imagine to generate tpch-data
-  if [[ -z $2 ]]; then
-    docker build  -f scripts/setup/tpchdata.dockerfile -t databend:latest .
-  else
-    docker build  -f scripts/setup/tpchdata.dockerfile -t databend:latest --build-arg scale_factor=$2 .
-  fi
-  # Generate data into the ./data directory if it does not already exist
-  FILE=benchmark/tpch/data/customer.tbl
-  if test -f "$FILE"; then
-      echo "$FILE exists."
-  else
-    mkdir `pwd`/benchmark/tpch/data 2>/dev/null
-    docker run -v `pwd`/benchmark/tpch/data:/data --rm databend:latest
-  fi
+	# Construct a docker imagine to generate tpch-data
+	if [[ -z $2 ]]; then
+		docker build -f scripts/setup/tpchdata.dockerfile -t databend:latest .
+	else
+		docker build -f scripts/setup/tpchdata.dockerfile -t databend:latest --build-arg scale_factor=$2 .
+	fi
+	# Generate data into the ./data directory if it does not already exist
+	FILE=benchmark/tpch/data/customer.tbl
+	if test -f "$FILE"; then
+		echo "$FILE exists."
+	else
+		mkdir $(pwd)/benchmark/tpch/data 2>/dev/null
+		docker run -v $(pwd)/benchmark/tpch/data:/data --rm databend:latest
+	fi
 fi
 
 [[ "${AUTO_APPROVE}" == "false" ]] && cat <<EOF

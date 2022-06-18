@@ -252,6 +252,12 @@ new_planner
 18
 ====Memory Table====
 1
+=== Test CASE-WHEN ===
+25	25	25	25
+NULL
+ge1
+ge2
+1.0
 === Test Subquery In From ===
 1
 2

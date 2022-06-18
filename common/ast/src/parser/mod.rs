@@ -27,7 +27,7 @@ use self::error::DisplayError;
 use crate::ast::Expr;
 use crate::ast::Statement;
 use crate::parser::error::Backtrace;
-use crate::parser::statement::statements;
+use crate::parser::statement::statement;
 use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
@@ -41,8 +41,8 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 pub fn parse_sql<'a>(
     sql_tokens: &'a [Token<'a>],
     backtrace: &'a Backtrace<'a>,
-) -> Result<Vec<Statement<'a>>> {
-    match statements(Input(sql_tokens, backtrace)) {
+) -> Result<Statement<'a>> {
+    match statement(Input(sql_tokens, backtrace)) {
         Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok(stmts),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
             rest[0].display_error("unable to parse rest of the sql".to_string()),
