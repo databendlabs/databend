@@ -196,6 +196,9 @@ impl InterpreterFactory {
                 plan.name()
             ))),
         }?;
-        Ok(Arc::new(InterceptorInterpreter::create(ctx, inner, plan)))
+        let query_kind = plan.name().to_string();
+        Ok(Arc::new(InterceptorInterpreter::create(
+            ctx, inner, plan, query_kind,
+        )))
     }
 }

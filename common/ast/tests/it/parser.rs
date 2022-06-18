@@ -67,7 +67,6 @@ fn test_statement() {
         r#"show create table a.b;"#,
         r#"explain pipeline select a from b;"#,
         r#"describe a;"#,
-        r#"describe a; describe b"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table a.b like c.d;"#,
@@ -131,52 +130,14 @@ fn test_statement() {
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let backtrace = Backtrace::new();
-        let stmts = parse_sql(&tokens, &backtrace).unwrap();
+        let stmt = parse_sql(&tokens, &backtrace).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
-        for stmt in stmts {
-            writeln!(file, "---------- Output ---------").unwrap();
-            writeln!(file, "{}", stmt).unwrap();
-            writeln!(file, "---------- AST ------------").unwrap();
-            writeln!(file, "{:#?}", stmt).unwrap();
-            writeln!(file, "\n").unwrap();
-        }
-    }
-}
-
-// TODO(andylokandy): remove this test once the new optimizer has been being tested on suites
-#[test]
-fn test_statements_in_legacy_suites() {
-    for entry in glob::glob("../../tests/suites/**/*.sql").unwrap() {
-        let file_content = std::fs::read(entry.unwrap()).unwrap();
-        let file_str = String::from_utf8_lossy(&file_content).into_owned();
-
-        // Remove error cases
-        let file_str = regex::Regex::new(".+ErrorCode.+\n")
-            .unwrap()
-            .replace_all(&file_str, "")
-            .into_owned();
-
-        // TODO(andylokandy): support all cases eventually
-        // Remove currently unimplemented cases
-        let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|OVER|CHARSET|COLLATION).*\n",
-        )
-        .unwrap()
-        .replace_all(&file_str, "")
-        .into_owned();
-        // Remove insert statements
-        let file_str = regex::Regex::new("(?i).*INSERT INTO[^;]*.*\n")
-            .unwrap()
-            .replace_all(&file_str, "")
-            .into_owned();
-
-        let tokens = tokenize_sql(&file_str).unwrap();
-        let backtrace = Backtrace::new();
-        parse_sql(&tokens, &backtrace).expect(
-            "Parser error should not exist in integration suites. \
-            Please add parser error cases to `common/ast/tests/it/parser.rs`",
-        );
+        writeln!(file, "---------- Output ---------").unwrap();
+        writeln!(file, "{}", stmt).unwrap();
+        writeln!(file, "---------- AST ------------").unwrap();
+        writeln!(file, "{:#?}", stmt).unwrap();
+        writeln!(file, "\n").unwrap();
     }
 }
 

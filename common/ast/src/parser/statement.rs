@@ -29,25 +29,6 @@ use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
 
-pub fn statements(i: Input) -> IResult<Vec<Statement>> {
-    let stmt = map(statement, Some);
-    let eoi = map(rule! { &EOI }, |_| None);
-
-    alt((
-        map(
-            rule!(
-                #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi }) ~ &EOI
-            ),
-            |(stmts, _)| stmts.into_iter().flatten().collect(),
-        ),
-        // `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
-        // stop the parser immediately and return the rest tokens by `InsertSource`.
-        //
-        // This is a hack to make it able to parse a large streaming insert statement.
-        map(insert_statement, |insert_stmt| vec![insert_stmt]),
-    ))(i)
-}
-
 pub fn statement(i: Input) -> IResult<Statement> {
     let explain = map(
         rule! {
@@ -61,6 +42,24 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 _ => unreachable!(),
             },
             query: Box::new(statement),
+        },
+    );
+    let insert = map(
+        rule! {
+            INSERT ~ ( INTO | OVERWRITE ) ~ TABLE?
+            ~ #peroid_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ #insert_source
+        },
+        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| Statement::Insert {
+            catalog,
+            database,
+            table,
+            columns: opt_columns
+                .map(|(_, columns, _)| columns)
+                .unwrap_or_default(),
+            source,
+            overwrite: overwrite.kind == OVERWRITE,
         },
     );
     let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
@@ -585,10 +584,11 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
     );
 
-    alt((
+    let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+            | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #show_settings : "`SHOW SETTINGS`"
             | #show_stages : "`SHOW STAGES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
@@ -641,31 +641,20 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
         ),
-    ))(i)
-}
+    ));
 
-pub fn insert_statement(i: Input) -> IResult<Statement> {
     map(
         rule! {
-            INSERT ~ ( INTO | OVERWRITE ) ~ TABLE?
-            ~ #peroid_separated_idents_1_to_3
-            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ #insert_source
-            : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            #statement_body ~ ";"? ~ &EOI
         },
-        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| Statement::Insert {
-            catalog,
-            database,
-            table,
-            columns: opt_columns
-                .map(|(_, columns, _)| columns)
-                .unwrap_or_default(),
-            source,
-            overwrite: overwrite.kind == OVERWRITE,
-        },
+        |(stmt, _, _)| stmt,
     )(i)
 }
 
+// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
+// stop the parser immediately and return the rest tokens by `InsertSource`.
+//
+// This is a hack to make it able to parse a large streaming insert statement.
 pub fn insert_source(i: Input) -> IResult<InsertSource> {
     let streaming = map(
         rule! {
@@ -682,14 +671,9 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         },
         |(_, rest_tokens)| InsertSource::Values { rest_tokens },
     );
-    let query = map(
-        rule! {
-            #query ~ ( ";" | &EOI )
-        },
-        |(query, _)| InsertSource::Select {
-            query: Box::new(query),
-        },
-    );
+    let query = map(query, |query| InsertSource::Select {
+        query: Box::new(query),
+    });
 
     rule!(
         #streaming
