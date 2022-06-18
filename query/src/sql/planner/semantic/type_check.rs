@@ -272,7 +272,7 @@ impl<'a> TypeChecker<'a> {
                 else_result,
                 ..
             } => {
-                let mut arguments = Vec::with_capacity(conditions.len() * 2);
+                let mut arguments = Vec::with_capacity(conditions.len() * 2 + 1);
                 for (c, r) in conditions.iter().zip(results.iter()) {
                     arguments.push(c);
                     arguments.push(r);
