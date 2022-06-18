@@ -1,5 +1,5 @@
 ---
-title: MULTI_MULTI_IF
+title: MULTI_IF
 description: 'MULTI_IF( <expr1>, <expr2>, <expr3> ) function'
 ---
 
