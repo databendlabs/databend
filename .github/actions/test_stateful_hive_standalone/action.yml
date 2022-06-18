@@ -42,11 +42,6 @@ runs:
       run: |
         docker-compose -f "./docker/it-hive/hive-docker-compose.yml" up -d
 
-    - name: Hive Cluster Setup
-      shell: bash
-      run: |
-        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" up -d
-
     # Wait for h2 to come alive
     #  INSIDE the container of service "hive-server", wait for port 10000 being listened:
     #  - check if port 10000 is available, per sec
@@ -57,10 +52,16 @@ runs:
         docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "timeout 50 bash -c 'until nc -z localhost 10000; do sleep 1; echo "waiting..."; done'"
 
     # hive test data setup, to be refined
-    - name: Hive Testing Data
+    # hasn't find a way to read hdfs data from docker isolated network yet, use local fs not hdfs to do the ci
+    # hive data is loaded to hdfs://namenode:8020/user/hive/warehouse/t_1/,  we copy a mirror data to local fs .databend/stateless_test_data/user/hive/warehouse/t_1/
+    # databend actually read data from local fs
+    - name: Hive Create Table&Load Data
       shell: bash
       run: |
-        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'CREATE TABLE if not exists pokes (foo INT);'"
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'CREATE TABLE t_1 (lo_orderkey integer, lo_orderpriority varchar(15)) stored as parquet;'"
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'load data local inpath \"/databend-data/t_1.parquet\" OVERWRITE into table t_1;'"
+        mkdir -p .databend/stateless_test_data/user/hive/warehouse/t_1/
+        cp tests/data/hive/t_1.parquet .databend/stateless_test_data/user/hive/warehouse/t_1/
 
     - name: Run Stateful Tests with Standalone mode
       shell: bash

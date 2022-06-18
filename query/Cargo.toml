@@ -23,7 +23,7 @@ simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "tempfile"]
 storage-hdfs = ["opendal/services-hdfs", "common-io/storage-hdfs"]
-hive = ["common-hive-meta-store", "thrift"]
+hive = ["common-hive-meta-store", "thrift", "storage-hdfs"]
 
 [dependencies]
 # Workspace dependencies
