@@ -19,6 +19,7 @@ use common_meta_types::UserIdentity;
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
+use nom::Slice;
 
 use super::error::ErrorKind;
 use crate::ast::*;
@@ -27,18 +28,6 @@ use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
-
-pub fn statements(i: Input) -> IResult<Vec<Statement>> {
-    let stmt = map(statement, Some);
-    let eoi = map(rule! { &EOI }, |_| None);
-
-    map(
-        rule!(
-            #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi }) ~ &EOI
-        ),
-        |(stmts, _)| stmts.into_iter().flatten().collect(),
-    )(i)
-}
 
 pub fn statement(i: Input) -> IResult<Statement> {
     let explain = map(
@@ -595,7 +584,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
     );
 
-    alt((
+    let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
@@ -652,7 +641,53 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
         ),
-    ))(i)
+    ));
+
+    map(
+        rule! {
+            #statement_body ~ ";"? ~ &EOI
+        },
+        |(stmt, _, _)| stmt,
+    )(i)
+}
+
+// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
+// stop the parser immediately and return the rest tokens by `InsertSource`.
+//
+// This is a hack to make it able to parse a large streaming insert statement.
+pub fn insert_source(i: Input) -> IResult<InsertSource> {
+    let streaming = map(
+        rule! {
+            FORMAT ~ #ident ~ #rest_tokens
+        },
+        |(_, format, rest_tokens)| InsertSource::Streaming {
+            format: format.name,
+            rest_tokens,
+        },
+    );
+    let values = map(
+        rule! {
+            VALUES ~ #rest_tokens
+        },
+        |(_, rest_tokens)| InsertSource::Values { rest_tokens },
+    );
+    let query = map(query, |query| InsertSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+        #streaming
+        | #values
+        | #query
+    )(i)
+}
+
+pub fn rest_tokens<'a>(i: Input<'a>) -> IResult<&'a [Token]> {
+    if i.last().map(|token| token.kind) == Some(EOI) {
+        Ok((i.slice(i.len() - 1..), i.slice(..i.len() - 1).0))
+    } else {
+        Ok((i.slice(i.len()..), i.0))
+    }
 }
 
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
@@ -705,32 +740,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             }
             def
         },
-    )(i)
-}
-
-pub fn insert_source(i: Input) -> IResult<InsertSource> {
-    let streaming = map(
-        rule! {
-            FORMAT ~ #ident
-        },
-        |(_, format)| InsertSource::Streaming {
-            format: format.name,
-        },
-    );
-    let values = map(
-        rule! {
-            VALUES ~ #values_tokens
-        },
-        |(_, values_tokens)| InsertSource::Values { values_tokens },
-    );
-    let query = map(query, |query| InsertSource::Select {
-        query: Box::new(query),
-    });
-
-    rule!(
-        #streaming
-        | #values
-        | #query
     )(i)
 }
 
@@ -884,15 +893,6 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
         },
         |(_, _, engine)| engine,
     )(i)
-}
-
-pub fn values_tokens(i: Input) -> IResult<&[Token]> {
-    let semicolon_pos = i
-        .iter()
-        .position(|token| token.text() == ";")
-        .unwrap_or(i.len() - 1);
-    let (value_tokens, rest_tokens) = i.0.split_at(semicolon_pos);
-    Ok((Input(rest_tokens, i.1), value_tokens))
 }
 
 pub fn role_option(i: Input) -> IResult<RoleOption> {

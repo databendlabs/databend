@@ -173,6 +173,12 @@ pub enum Expr<'a> {
         interval: Box<Expr<'a>>,
         unit: IntervalKind,
     },
+    DateSub {
+        span: &'a [Token<'a>],
+        date: Box<Expr<'a>>,
+        interval: Box<Expr<'a>>,
+        unit: IntervalKind,
+    },
     /// NULLIF(<expr>, <expr>)
     NullIf {
         span: &'a [Token<'a>],
@@ -306,6 +312,7 @@ impl<'a> Expr<'a> {
             Expr::Array { span, .. } => span,
             Expr::Interval { span, .. } => span,
             Expr::DateAdd { span, .. } => span,
+            Expr::DateSub { span, .. } => span,
             Expr::NullIf { span, .. } => span,
             Expr::IfNull { span, .. } => span,
         }
@@ -727,6 +734,14 @@ impl<'a> Display for Expr<'a> {
                 ..
             } => {
                 write!(f, "DATE_ADD({date}, INTERVAL {interval} {unit})")?;
+            }
+            Expr::DateSub {
+                date,
+                interval,
+                unit,
+                ..
+            } => {
+                write!(f, "DATE_SUB({date}, INTERVAL {interval} {unit})")?;
             }
             Expr::NullIf { expr1, expr2, .. } => {
                 write!(f, "NULLIF({expr1}, {expr2})")?;

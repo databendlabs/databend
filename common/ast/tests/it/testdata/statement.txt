@@ -132,40 +132,6 @@ DescribeTable(
 
 
 ---------- Input ----------
-describe a; describe b
----------- Output ---------
-DESCRIBE a
----------- AST ------------
-DescribeTable(
-    DescribeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "a",
-            quote: None,
-            span: Ident(9..10),
-        },
-    },
-)
-
-
----------- Output ---------
-DESCRIBE b
----------- AST ------------
-DescribeTable(
-    DescribeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "b",
-            quote: None,
-            span: Ident(21..22),
-        },
-    },
-)
-
-
----------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
@@ -2840,7 +2806,7 @@ Query(
 ---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
-INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
+INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
 ---------- AST ------------
 Insert {
     catalog: None,
@@ -2863,7 +2829,7 @@ Insert {
         },
     ],
     source: Values {
-        values_tokens: [
+        rest_tokens: [
             LParen(30..31),
             LiteralInteger(31..32),
             Comma(32..33),
@@ -2875,6 +2841,7 @@ Insert {
             Comma(40..41),
             LiteralInteger(42..43),
             RParen(43..44),
+            SemiColon(44..45),
         ],
     },
     overwrite: false,
@@ -2884,7 +2851,7 @@ Insert {
 ---------- Input ----------
 insert into table t format json;
 ---------- Output ---------
-INSERT INTO t FORMAT json
+INSERT INTO t FORMAT json ;
 ---------- AST ------------
 Insert {
     catalog: None,
@@ -2897,6 +2864,9 @@ Insert {
     columns: [],
     source: Streaming {
         format: "json",
+        rest_tokens: [
+            SemiColon(31..32),
+        ],
     },
     overwrite: false,
 }
