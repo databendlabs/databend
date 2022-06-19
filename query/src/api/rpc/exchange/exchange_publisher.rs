@@ -21,7 +21,12 @@ impl ExchangePublisher {
         match params.destination_id == ctx.get_cluster().local_id() {
             true => Ok(()), /* do nothing */
             false => Err(ErrorCode::LogicalError(
-                "Locally depends on merge exchange, but the localhost is not a coordination node.",
+                format!(
+                    "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
+                    ctx.get_cluster().local_id(),
+                    params.destination_id,
+                    params.fragment_id
+                ),
             )),
         }
     }

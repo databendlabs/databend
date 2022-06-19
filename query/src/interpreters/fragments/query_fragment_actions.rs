@@ -293,7 +293,7 @@ impl QueryFragmentsActions {
                 let fragment_packet = FragmentPacket::create(
                     fragment_actions.fragment_id,
                     fragment_action.node.clone(),
-                    fragment_actions.data_exchange.clone().unwrap(),
+                    fragment_actions.data_exchange.clone(),
                 );
 
                 match fragments_packets.entry(fragment_action.executor.to_owned()) {
@@ -323,6 +323,7 @@ impl Debug for QueryFragmentAction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("QueryFragmentAction")
             .field("node", &self.node)
+            .field("executor", &self.executor)
             .finish()
     }
 }

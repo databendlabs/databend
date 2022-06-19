@@ -13,8 +13,8 @@ use common_planners::RemotePlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
 
-use crate::api::HashDataExchange;
 use crate::api::MergeExchange;
+use crate::api::ShuffleDataExchange;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment::QueryFragment;
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentAction;
@@ -94,9 +94,10 @@ impl QueryFragment for StageQueryFragment {
         fragment_actions.set_exchange(match self.stage.kind {
             StageKind::Expansive => unimplemented!(),
             StageKind::Merge => MergeExchange::create(actions.get_local_executor()),
-            StageKind::Normal => {
-                HashDataExchange::create(actions.get_executors(), self.stage.scatters_expr.clone())
-            }
+            StageKind::Normal => ShuffleDataExchange::create(
+                actions.get_executors(),
+                self.stage.scatters_expr.clone(),
+            ),
         });
 
         match input_actions.exchange_actions {

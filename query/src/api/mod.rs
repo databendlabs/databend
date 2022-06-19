@@ -27,10 +27,10 @@ pub use rpc::FlightAction;
 pub use rpc::FlightClient;
 pub use rpc::FlightTicket;
 pub use rpc::FragmentPacket;
-pub use rpc::HashDataExchange;
 pub use rpc::MergeExchange;
 pub use rpc::PrepareChannel;
 pub use rpc::ShuffleAction;
+pub use rpc::ShuffleDataExchange;
 pub use rpc::StreamTicket;
 pub use rpc_service::RpcService;
 

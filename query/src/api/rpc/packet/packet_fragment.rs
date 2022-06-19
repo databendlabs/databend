@@ -9,14 +9,14 @@ use crate::api::DataExchange;
 pub struct FragmentPacket {
     pub node: PlanNode,
     pub fragment_id: usize,
-    pub data_exchange: DataExchange,
+    pub data_exchange: Option<DataExchange>,
 }
 
 impl FragmentPacket {
     pub fn create(
         fragment_id: usize,
         node: PlanNode,
-        data_exchange: DataExchange,
+        data_exchange: Option<DataExchange>,
     ) -> FragmentPacket {
         FragmentPacket {
             node,

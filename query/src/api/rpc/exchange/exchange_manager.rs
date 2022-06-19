@@ -602,6 +602,13 @@ impl QueryCoordinator {
                 ));
             }
 
+            if fragment_coordinator.data_exchange.is_none() {
+                // When the root fragment and the data has been send to the coordination node,
+                // we do not need to wait for the data of other nodes.
+                *pipeline = fragment_coordinator.pipeline.unwrap();
+                return Ok(());
+            }
+
             let exchange_params = fragment_coordinator.create_exchange_params(self)?;
             *pipeline = fragment_coordinator.pipeline.unwrap();
 
@@ -621,7 +628,7 @@ struct FragmentCoordinator {
     node: PlanNode,
     initialized: bool,
     fragment_id: usize,
-    data_exchange: DataExchange,
+    data_exchange: Option<DataExchange>,
     pipeline: Option<NewPipeline>,
 }
 
@@ -638,7 +645,8 @@ impl FragmentCoordinator {
 
     pub fn create_exchange_params(&self, query: &QueryCoordinator) -> Result<ExchangeParams> {
         match &self.data_exchange {
-            DataExchange::Merge(exchange) => {
+            None => Err(ErrorCode::LogicalError("Cannot found data exchange.")),
+            Some(DataExchange::Merge(exchange)) => {
                 Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
                     schema: self.node.schema(),
                     fragment_id: self.fragment_id,
@@ -646,7 +654,7 @@ impl FragmentCoordinator {
                     destination_id: exchange.destination_id.clone(),
                 }))
             }
-            DataExchange::HashDataExchange(exchange) => {
+            Some(DataExchange::ShuffleDataExchange(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
                     schema: self.node.schema(),
                     fragment_id: self.fragment_id,

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 
@@ -47,15 +48,31 @@ impl QueryFragment for RootQueryFragment {
         let fragment_id = self.ctx.get_fragment_id();
         let mut fragment_actions = QueryFragmentActions::create(false, fragment_id);
 
-        // This is an implicit stage. We run remaining plans on the current hosts
-        for action in input_actions.get_actions() {
+        if PartitionState::NotPartition == self.input.get_out_partition()? {
+            if input_actions.get_actions().is_empty() {
+                return Err(ErrorCode::LogicalError(
+                    "Logical error, input actions is empty.",
+                ));
+            }
+
+            let action = &input_actions.get_actions()[0];
+
             fragment_actions.add_action(QueryFragmentAction::create(
-                action.executor.clone(),
+                actions.get_local_executor(),
                 self.input.rewrite_remote_plan(&self.node, &action.node)?,
             ));
+        } else {
+            // This is an implicit stage. We run remaining plans on the current hosts
+            for action in input_actions.get_actions() {
+                fragment_actions.add_action(QueryFragmentAction::create(
+                    action.executor.clone(),
+                    self.input.rewrite_remote_plan(&self.node, &action.node)?,
+                ));
+            }
+
+            fragment_actions.set_exchange(MergeExchange::create(actions.get_local_executor()));
         }
 
-        fragment_actions.set_exchange(MergeExchange::create(actions.get_local_executor()));
         match input_actions.exchange_actions {
             true => actions.add_fragment_actions(fragment_actions),
             false => actions.update_root_fragment_actions(fragment_actions),
