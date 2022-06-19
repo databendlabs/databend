@@ -48,14 +48,17 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
         ctx.get_catalogs(),
         Arc::new(RwLock::new(Metadata::create())),
     );
-
     let plan = binder.bind(&stmt).await?;
-    let mut heuristic_opt = HeuristicOptimizer::new(RuleList::create(suite.rules.clone())?);
 
     let result = match plan {
         Plan::Query {
             s_expr, metadata, ..
         } => {
+            let mut heuristic_opt = HeuristicOptimizer::new(
+                ctx.clone(),
+                metadata.clone(),
+                RuleList::create(suite.rules.clone())?,
+            );
             let optimized = heuristic_opt.optimize(s_expr)?;
             optimized.to_format_tree(&metadata).format_indent()
         }

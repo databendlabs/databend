@@ -1045,12 +1045,12 @@ select '====Correlated Subquery====';
 ----  
 ====Correlated Subquery====
 
-statement query I 
-select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
+# statement query I
+# select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
 
-----  
-0
-1
+# ----
+# 0
+# 1
 
 statement query I 
 select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;

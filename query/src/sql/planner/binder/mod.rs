@@ -30,7 +30,6 @@ use common_planners::DropUserStagePlan;
 use common_planners::ShowGrantsPlan;
 pub use scalar_common::*;
 
-use self::subquery::SubqueryRewriter;
 use super::plans::Plan;
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
@@ -51,7 +50,6 @@ mod scalar_visitor;
 mod select;
 mod show;
 mod sort;
-mod subquery;
 mod table;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
@@ -93,9 +91,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let plan = match stmt {
             Statement::Query(query) => {
-                let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
-                let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
-                s_expr = rewriter.rewrite(&s_expr)?;
+                let (s_expr, bind_context) = self.bind_query(bind_context, query).await?;
                 Plan::Query {
                     s_expr,
                     metadata: self.metadata.clone(),
