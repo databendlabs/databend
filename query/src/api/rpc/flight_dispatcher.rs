@@ -87,10 +87,7 @@ impl DatabendQueryFlightDispatcher {
         let stream_name = format!("{}/{}", stage_name, ticket.stream);
         match self.streams.write().remove(&stream_name) {
             Some(stream_info) => Ok((stream_info.rx, stream_info.schema)),
-            None => Err(ErrorCode::NotFoundStream(format!(
-                "Stream is not found, id: {}",
-                stream_name
-            ))),
+            None => Err(ErrorCode::NotFoundStream("Stream is not found")),
         }
     }
 

@@ -198,12 +198,11 @@ impl Table for NumbersTable {
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
         if plan.parts.is_empty() {
-            let schema = plan.schema();
             let output = OutputPort::create();
             pipeline.add_pipe(NewPipe::SimplePipe {
                 inputs_port: vec![],
                 outputs_port: vec![output.clone()],
-                processors: vec![EmptySource::create(ctx, output, schema)?],
+                processors: vec![EmptySource::create(output)?],
             });
 
             return Ok(());
