@@ -15,7 +15,7 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../exception" }
 common-io = { path = "../../io" }
 
-openraft = { git = "https://github.com/datafuselabs/openraft", rev = "f633756d60152d171909aea56f80d18905cd4002" }
+openraft = { git = "https://github.com/datafuselabs/openraft", rev = "v0.7.0-alpha.1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 anyerror = "0.1.6"
