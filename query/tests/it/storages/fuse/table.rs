@@ -19,7 +19,6 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planners::col;
 use common_planners::AlterTableClusterKeyPlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropTableClusterKeyPlan;
@@ -328,7 +327,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
-        cluster_keys: vec![col("id")],
+        cluster_keys: vec!["id".to_string()],
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
@@ -362,7 +361,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
-    assert_eq!(table_info.meta.cluster_key, None);
+    assert_eq!(table_info.meta.default_cluster_key, None);
     assert_eq!(table_info.meta.default_cluster_key_id, None);
 
     let snapshot_loc = table

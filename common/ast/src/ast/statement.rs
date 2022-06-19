@@ -97,6 +97,7 @@ pub enum Statement<'a> {
     DropView(DropViewStmt<'a>),
 
     // User
+    ShowUsers,
     CreateUser(CreateUserStmt),
     AlterUser {
         // None means current user
@@ -109,6 +110,7 @@ pub enum Statement<'a> {
         if_exists: bool,
         user: UserIdentity,
     },
+    ShowRoles,
     CreateRole {
         if_not_exists: bool,
         role_name: String,
@@ -231,6 +233,7 @@ pub struct CreateTableStmt<'a> {
     pub cluster_by: Vec<Expr<'a>>,
     pub as_query: Option<Box<Query<'a>>>,
     pub comment: Option<String>,
+    pub transient: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -390,6 +393,7 @@ pub struct ColumnDefinition<'a> {
     pub data_type: TypeName,
     pub nullable: bool,
     pub default_expr: Option<Box<Expr<'a>>>,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -428,9 +432,16 @@ pub enum KillTarget {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InsertSource<'a> {
-    Streaming { format: String },
-    Values { values_tokens: &'a [Token<'a>] },
-    Select { query: Box<Query<'a>> },
+    Streaming {
+        format: String,
+        rest_tokens: &'a [Token<'a>],
+    },
+    Values {
+        rest_tokens: &'a [Token<'a>],
+    },
+    Select {
+        query: Box<Query<'a>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -493,6 +504,9 @@ impl<'a> Display for ColumnDefinition<'a> {
         }
         if let Some(default_expr) = &self.default_expr {
             write!(f, " DEFAULT {default_expr}")?;
+        }
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT '{comment}'")?;
         }
         Ok(())
     }
@@ -596,12 +610,20 @@ impl<'a> Display for Statement<'a> {
                     write!(f, ")")?;
                 }
                 match source {
-                    InsertSource::Streaming { format } => write!(f, " FORMAT {format}")?,
-                    InsertSource::Values { values_tokens } => write!(
+                    InsertSource::Streaming {
+                        format,
+                        rest_tokens,
+                    } => write!(
+                        f,
+                        " FORMAT {format} {}",
+                        &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
+                            ..rest_tokens.last().unwrap().span.end]
+                    )?,
+                    InsertSource::Values { rest_tokens } => write!(
                         f,
                         " VALUES {}",
-                        &values_tokens[0].source[values_tokens.first().unwrap().span.start
-                            ..values_tokens.last().unwrap().span.end]
+                        &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
+                            ..rest_tokens.last().unwrap().span.end]
                     )?,
                     InsertSource::Select { query } => write!(f, " {query}")?,
                 }
@@ -752,8 +774,13 @@ impl<'a> Display for Statement<'a> {
                 comment,
                 cluster_by,
                 as_query,
+                transient,
             }) => {
-                write!(f, "CREATE TABLE ")?;
+                write!(f, "CREATE ")?;
+                if *transient {
+                    write!(f, "TRANSIENT ")?;
+                }
+                write!(f, "TABLE ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
@@ -924,6 +951,12 @@ impl<'a> Display for Statement<'a> {
                 }
                 write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
             }
+            Statement::ShowUsers => {
+                write!(f, "SHOW USERS")?;
+            }
+            Statement::ShowRoles => {
+                write!(f, "SHOW ROLES")?;
+            }
             Statement::CreateUser(CreateUserStmt {
                 if_not_exists,
                 user,
@@ -990,7 +1023,7 @@ impl<'a> Display for Statement<'a> {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " {role}")?;
+                write!(f, " '{role}'")?;
             }
             Statement::DropRole {
                 if_exists,
@@ -1000,7 +1033,7 @@ impl<'a> Display for Statement<'a> {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {role}")?;
+                write!(f, " '{role}'")?;
             }
             Statement::CreateUDF {
                 if_not_exists,

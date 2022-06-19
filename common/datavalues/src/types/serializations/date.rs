@@ -69,7 +69,7 @@ impl<'a, T: PrimitiveType + AsPrimitive<i64> + ToLexical> TypeSerializer<'a>
         buf.extend_from_slice(s.as_bytes())
     }
 
-    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = (0..self.values.len())
             .map(|row_index| {
                 let s = v_to_string(&self.values[row_index].as_i64());

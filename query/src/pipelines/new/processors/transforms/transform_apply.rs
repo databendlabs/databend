@@ -150,12 +150,14 @@ impl OuterRefRewriter {
             Scalar::AndExpr(expr) => Ok(AndExpr {
                 left: Box::new(self.rewrite_scalar(&expr.left)?),
                 right: Box::new(self.rewrite_scalar(&expr.right)?),
+                return_type: expr.return_type.clone(),
             }
             .into()),
 
             Scalar::OrExpr(expr) => Ok(OrExpr {
                 left: Box::new(self.rewrite_scalar(&expr.left)?),
                 right: Box::new(self.rewrite_scalar(&expr.right)?),
+                return_type: expr.return_type.clone(),
             }
             .into()),
 
@@ -163,6 +165,7 @@ impl OuterRefRewriter {
                 op: expr.op.clone(),
                 left: Box::new(self.rewrite_scalar(&expr.left)?),
                 right: Box::new(self.rewrite_scalar(&expr.right)?),
+                return_type: expr.return_type.clone(),
             }
             .into()),
 
@@ -204,7 +207,7 @@ impl OuterRefRewriter {
                 Ok(expr)
             }
 
-            Scalar::Cast(cast) => Ok(CastExpr {
+            Scalar::CastExpr(cast) => Ok(CastExpr {
                 argument: Box::new(self.rewrite_scalar(&cast.argument)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),

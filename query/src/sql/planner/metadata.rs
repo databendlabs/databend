@@ -57,7 +57,7 @@ impl TableEntry {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ColumnEntry {
     pub column_index: IndexType,
     pub name: String,

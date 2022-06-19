@@ -130,7 +130,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: p.engine,
             engine_options: p.engine_options,
             options: p.options,
-            cluster_key: p.cluster_key,
+            default_cluster_key: p.default_cluster_key,
             cluster_keys: p.cluster_keys,
             default_cluster_key_id: p.default_cluster_key_id,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
@@ -140,6 +140,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
                 None => None,
             },
             comment: p.comment,
+            field_comments: p.field_comments,
             statistics: p
                 .statistics
                 .map(mt::TableStatistics::from_pb)
@@ -157,7 +158,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             options: self.options.clone(),
-            cluster_key: self.cluster_key.clone(),
+            default_cluster_key: self.default_cluster_key.clone(),
             cluster_keys: self.cluster_keys.clone(),
             default_cluster_key_id: self.default_cluster_key_id,
             created_on: self.created_on.to_pb()?,
@@ -167,6 +168,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
                 None => None,
             },
             comment: self.comment.clone(),
+            field_comments: self.field_comments.clone(),
             statistics: Some(self.statistics.to_pb()?),
         };
         Ok(p)

@@ -22,7 +22,7 @@ use super::Suite;
 use crate::tests::create_query_context;
 
 #[tokio::test]
-pub async fn test_optimizer_join() -> Result<()> {
+pub async fn test_heuristic_optimizer_join() -> Result<()> {
     let mut mint = Mint::new("tests/it/sql/optimizer/heuristic/testdata/");
     let mut file = mint.new_goldenfile("join.test")?;
 

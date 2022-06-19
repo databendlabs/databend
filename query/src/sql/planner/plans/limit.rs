@@ -24,13 +24,13 @@ use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::RelOp;
 
 #[derive(Clone, Debug)]
-pub struct LimitPlan {
+pub struct Limit {
     pub limit: Option<usize>,
     pub offset: usize,
 }
 
-impl Operator for LimitPlan {
-    fn plan_type(&self) -> RelOp {
+impl Operator for Limit {
+    fn rel_op(&self) -> RelOp {
         RelOp::Limit
     }
 
@@ -51,13 +51,13 @@ impl Operator for LimitPlan {
     }
 }
 
-impl PhysicalPlan for LimitPlan {
+impl PhysicalPlan for Limit {
     fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
         todo!()
     }
 }
 
-impl LogicalPlan for LimitPlan {
+impl LogicalPlan for Limit {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         rel_expr.derive_relational_prop_child(0)
     }

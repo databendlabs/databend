@@ -8,13 +8,13 @@ statement ok
 USE db1;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t1(a UInt8, b UInt64, c Int8, d Int64, e Date, f Date, g DateTime, h String) Engine = fuse;
+CREATE TABLE IF NOT EXISTS t1(a UInt8, b UInt64, c Int8, d Int64, e Date, f Date, g DateTime, h String) Engine = Fuse;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t2(a String, b String, c String, d String, e String, f String, g String, h String) Engine = fuse;
+CREATE TABLE IF NOT EXISTS t2(a String, b String, c String, d String, e String, f String, g String, h String) Engine = Fuse;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t3(a String, b String, c String, d String) Engine = fuse;
+CREATE TABLE IF NOT EXISTS t3(a String, b String, c String, d String) Engine = Fuse;
 
 statement error 1006
 INSERT INTO t1 (a,b,c,d,e) select * from t3; 

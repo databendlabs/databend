@@ -103,7 +103,7 @@ async fn test_simple_sql(v2: u64) -> Result<()> {
     assert!(result.schema.is_some(), "{:?}", result);
     assert_eq!(
         result.schema.as_ref().unwrap().fields().len(),
-        9,
+        10,
         "{:?}",
         result
     );
@@ -1248,6 +1248,29 @@ async fn test_func_object_keys() -> Result<()> {
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.data.len(), data_len);
         assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_multi_partition() -> Result<()> {
+    let route = create_endpoint();
+
+    let sqls = vec![
+        ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
+        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
+        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
+        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
+        ("select * from tb2;", 6),
+    ];
+
+    for (sql, data_len) in sqls {
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1}});
+        let (status, result) = post_json_to_endpoint(&route, &json).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert_eq!(result.data.len(), data_len);
     }
     Ok(())
 }

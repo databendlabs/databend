@@ -15,8 +15,8 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::Marshal;
-use common_io::prelude::Unmarshal;
+use micromarshal::Marshal;
+use micromarshal::Unmarshal;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use opensrv_clickhouse::types::HasSqlType;
@@ -50,8 +50,6 @@ where T: PrimitiveType
         + HasSqlType
         + std::convert::Into<opensrv_clickhouse::types::Value>
         + std::convert::From<opensrv_clickhouse::types::Value>
-        + opensrv_clickhouse::io::Marshal
-        + opensrv_clickhouse::io::Unmarshal<T>
         + lexical_core::ToLexical
 {
     fn need_quote(&self) -> bool {
@@ -61,7 +59,7 @@ where T: PrimitiveType
         extend_lexical(self.values[row_index], buf);
     }
 
-    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = self
             .values
             .iter()
@@ -96,7 +94,7 @@ where T: PrimitiveType
         _valids: Option<&Bitmap>,
         format: &FormatSettings,
     ) -> Result<Vec<Value>> {
-        self.serialize_json(format)
+        self.serialize_json_values(format)
     }
 
     fn serialize_json_object_suppress_error(

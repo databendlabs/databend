@@ -335,3 +335,53 @@ fn drop_table_cluster_key() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn create_transient_table() -> Result<()> {
+    {
+        let sql = "CREATE transient TABLE t(c1 int) ENGINE = Fuse location = '/data/33.csv' ";
+        let expected = DfStatement::CreateTable(DfCreateTable {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("t")]),
+            columns: vec![make_column_def("c1", None, DataType::Int(None))],
+            engine: "Fuse".to_string(),
+            options: maplit::btreemap! {"location".into() => "/data/33.csv".into(), "TRANSIENT".into() => "T".into()},
+            like: None,
+            query: None,
+            cluster_keys: vec![],
+        });
+
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        // unexpected qualifier
+        let sql = "CREATE tran TABLE t(c1 int) ENGINE = Fuse location = '/data/33.csv' ";
+
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected create statement, found: tran",
+        )?;
+    }
+
+    {
+        // unexpected keyword
+        let sql = "CREATE transient view ";
+
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected create transient TABLE, found: view",
+        )?;
+    }
+
+    {
+        // unexpected non-keyword
+        let sql = "CREATE transient vi ";
+
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected create transient TABLE, found: vi",
+        )?;
+    }
+    Ok(())
+}

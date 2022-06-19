@@ -30,6 +30,10 @@ pub struct FormatSettings {
     pub timezone: Tz,
     pub true_bytes: Vec<u8>,
     pub false_bytes: Vec<u8>,
+    pub null_bytes: Vec<u8>,
+
+    pub csv_null_bytes: Vec<u8>,
+    pub tsv_null_bytes: Vec<u8>,
 }
 
 impl Default for FormatSettings {
@@ -43,6 +47,9 @@ impl Default for FormatSettings {
             timezone: "UTC".parse::<Tz>().unwrap(),
             true_bytes: vec![b'1'],
             false_bytes: vec![b'0'],
+            null_bytes: vec![b'N', b'U', b'L', b'L'],
+            csv_null_bytes: vec![b'\\', b'N'],
+            tsv_null_bytes: vec![b'\\', b'N'],
         }
     }
 }
