@@ -110,6 +110,9 @@ pub enum Plan {
     ShowRoles,
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
+    GrantRole(Box<GrantRolePlan>),
+    GrantPriv(Box<GrantPrivilegePlan>),
+    ShowGrants(Box<ShowGrantsPlan>),
 
     // Stages
     ShowStages,
@@ -161,6 +164,9 @@ impl Display for Plan {
             Plan::CreateStage(_) => write!(f, "CreateStage"),
             Plan::DropStage(_) => write!(f, "DropStage"),
             Plan::RemoveStage(_) => write!(f, "RemoveStage"),
+            Plan::GrantRole(_) => write!(f, "GrantRole"),
+            Plan::GrantPriv(_) => write!(f, "GrantPriv"),
+            Plan::ShowGrants(_) => write!(f, "ShowGrants"),
         }
     }
 }
