@@ -99,7 +99,10 @@ impl PlanVisitor for QueryPipelineBuilder {
             PlanNode::Select(n) => self.visit_select(n),
             PlanNode::Remote(n) => self.visit_remote(n),
             PlanNode::SubQueryExpression(n) => self.visit_sub_queries_sets(n),
-            _ => Err(ErrorCode::UnImplement("")),
+            node => Err(ErrorCode::UnImplement(format!(
+                "Unknown plan type, {:?}",
+                node
+            ))),
         }
     }
 

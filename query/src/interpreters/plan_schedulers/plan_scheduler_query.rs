@@ -47,6 +47,7 @@ pub async fn schedule_query(
     let timeout = ctx.get_settings().get_flight_client_timeout()?;
     let mut scheduled = Scheduled::new();
     for (node, action) in remote_stage_actions {
+        println!("node {} execute action {:?}", node.id, action);
         let mut flight_client = cluster.create_node_conn(&node.id, &config).await?;
         let executing_action = flight_client.execute_action(action.clone(), timeout);
 

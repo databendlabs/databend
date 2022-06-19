@@ -261,8 +261,8 @@ impl PlanScheduler {
     fn converge_remote_plan(&self, node_name: &str, stage: &StagePlan) -> RemotePlan {
         RemotePlan::create_v1(
             stage.schema(),
-            self.stage_id.clone(),
             self.query_context.get_id(),
+            self.stage_id.clone(),
             node_name.to_string(),
             self.cluster_nodes.clone(),
         )
