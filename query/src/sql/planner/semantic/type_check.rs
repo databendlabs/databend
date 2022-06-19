@@ -488,6 +488,16 @@ impl<'a> TypeChecker<'a> {
                 .await?
             }
 
+            Expr::Coalesce { span, exprs} => {
+              // Rewrite COALESCE(expr1, expr2, ...) to IF(IS_NOT_NULL(expr1), expr1, expr2)
+              exprs.into_iter().rev().fold( Expr::Literal {
+                        span,
+                        lit: Literal::Null,
+                    }, |acc, item| {
+                        Expr::IsNull {span, expr: item, not: true}
+                    })
+            }
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr

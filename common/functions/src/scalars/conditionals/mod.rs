@@ -24,4 +24,4 @@ pub use in_basic::InFunction;
 pub use is_not_null::IsNotNullFunction;
 pub use is_null::IsNullFunction;
 pub use r#if::IfFunction;
-pub use coalesce::CoalesceFunction;
+// pub use coalesce::CoalesceFunction;
