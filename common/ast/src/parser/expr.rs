@@ -239,6 +239,7 @@ pub enum ExprElement<'a> {
     /// `EXISTS` expression
     Exists {
         subquery: Query<'a>,
+        not: bool,
     },
     /// Scalar subquery, which will only return a single row with a single column.
     Subquery {
@@ -421,8 +422,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 results,
                 else_result,
             },
-            ExprElement::Exists { subquery } => Expr::Exists {
+            ExprElement::Exists { subquery, not } => Expr::Exists {
                 span: elem.span.0,
+                not,
                 subquery: Box::new(subquery),
             },
             ExprElement::Subquery { subquery } => Expr::Subquery {
@@ -761,8 +763,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
     let exists = map(
-        rule! { EXISTS ~ ^"(" ~ ^#query ~ ^")" },
-        |(_, _, subquery, _)| ExprElement::Exists { subquery },
+        rule! { NOT? ~ EXISTS ~ ^"(" ~ ^#query ~ ^")" },
+        |(opt_not, _, _, subquery, _)| ExprElement::Exists {
+            subquery,
+            not: opt_not.is_some(),
+        },
     );
     let subquery = map(
         rule! {
@@ -848,10 +853,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, _, expr1, _, expr2, _)| ExprElement::IfNull { expr1, expr2 },
     );
     let (rest, (span, elem)) = consumed(alt((
-        rule! (
+        rule!(
             #is_null : "`... IS [NOT] NULL`"
             | #in_list : "`[NOT] IN (<expr>, ...)`"
             | #in_subquery : "`[NOT] IN (SELECT ...)`"
+            | #exists : "`[NOT] EXISTS (SELECT ...)`"
             | #between : "`[NOT] BETWEEN ... AND ...`"
             | #binary_op : "<operator>"
             | #unary_op : "<operator>"
@@ -875,7 +881,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #function_call : "<function>"
             | #literal : "<literal>"
             | #case : "`CASE ... END`"
-            | #exists : "`EXISTS (SELECT ...)`"
             | #subquery : "`(SELECT ...)`"
             | #group
             | #column_ref : "<column>"
