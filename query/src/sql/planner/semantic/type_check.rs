@@ -14,9 +14,11 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::vec;
 
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
+use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
@@ -490,14 +492,27 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Coalesce { span, exprs} => {
               // Rewrite COALESCE(expr1, expr2, ...) to IF(IS_NOT_NULL(expr1), expr1, expr2)
-              exprs.into_iter().rev().fold( Expr::Literal {
+      
+              let resolve_args = exprs.into_iter().rev().fold( Expr::Literal {
                         span,
                         lit: Literal::Null,
-                    }, |acc, item| {
-                        Expr::IsNull {span, expr: item, not: true}
-                    })
-            }
+                }, |acc, item| { 
+                    let function_call_args = vec![
+                        Expr::IsNull {span, expr: Box::new(item.clone()), not: true},
+                         item.clone(), 
+                         acc,
+                        ];
+                        Expr::FunctionCall{
+                            span, 
+                            distinct: false, 
+                            name: Identifier{name:"if".to_string(), quote: None, span: span[0].clone()},
+                            args: function_call_args,
+                            params: vec![],
+                        }
+               });
 
+               self.resolve(&resolve_args, None).await?
+            }
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr

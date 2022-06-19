@@ -17,11 +17,9 @@ mod r#if;
 mod in_basic;
 mod is_not_null;
 mod is_null;
-mod coalesce;
 
 pub use conditional::ConditionalFunction;
 pub use in_basic::InFunction;
 pub use is_not_null::IsNotNullFunction;
 pub use is_null::IsNullFunction;
 pub use r#if::IfFunction;
-// pub use coalesce::CoalesceFunction;
