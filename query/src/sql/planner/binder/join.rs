@@ -33,7 +33,6 @@ use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::BoundColumnRef;
-use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::Scalar;
@@ -97,11 +96,12 @@ impl<'a> Binder {
             )
             .await?;
 
-        let mut s_expr = match &join.op {
+        let s_expr = match &join.op {
             JoinOperator::Inner => self.bind_join_with_type(
                 JoinType::Inner,
                 left_join_conditions,
                 right_join_conditions,
+                other_conditions,
                 left_child,
                 right_child,
             ),
@@ -109,6 +109,7 @@ impl<'a> Binder {
                 JoinType::Left,
                 left_join_conditions,
                 right_join_conditions,
+                other_conditions,
                 left_child,
                 right_child,
             ),
@@ -116,6 +117,7 @@ impl<'a> Binder {
                 JoinType::Left,
                 right_join_conditions,
                 left_join_conditions,
+                other_conditions,
                 right_child,
                 left_child,
             ),
@@ -123,6 +125,7 @@ impl<'a> Binder {
                 JoinType::Full,
                 left_join_conditions,
                 right_join_conditions,
+                other_conditions,
                 left_child,
                 right_child,
             ),
@@ -130,25 +133,11 @@ impl<'a> Binder {
                 JoinType::Cross,
                 left_join_conditions,
                 right_join_conditions,
+                other_conditions,
                 left_child,
                 right_child,
             ),
         }?;
-
-        if !other_conditions.is_empty() {
-            match &join.op {
-                JoinOperator::Inner | JoinOperator::CrossJoin => {
-                    let filter_plan = Filter {
-                        predicates: other_conditions,
-                        is_having: false,
-                    };
-                    s_expr = SExpr::create_unary(filter_plan.into(), s_expr);
-                }
-                JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter => {
-                    return Err(ErrorCode::UnImplement("Outer join only support equi-join"));
-                }
-            }
-        }
 
         Ok((s_expr, bind_context))
     }
@@ -158,6 +147,7 @@ impl<'a> Binder {
         join_type: JoinType,
         left_conditions: Vec<Scalar>,
         right_conditions: Vec<Scalar>,
+        other_conditions: Vec<Scalar>,
         left_child: SExpr,
         right_child: SExpr,
     ) -> Result<SExpr> {
@@ -171,6 +161,7 @@ impl<'a> Binder {
         let inner_join = LogicalInnerJoin {
             left_conditions,
             right_conditions,
+            other_conditions,
             join_type,
         };
         let expr = SExpr::create_binary(inner_join.into(), left_child, right_child);

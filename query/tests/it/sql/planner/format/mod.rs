@@ -140,6 +140,7 @@ fn test_format() {
                 },
             }
             .into()],
+            other_conditions: vec![],
             join_type: JoinType::Inner,
         }
         .into(),

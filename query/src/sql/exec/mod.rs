@@ -90,6 +90,7 @@ use crate::sql::plans::Limit;
 use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::Project;
+use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::Sort;
 use crate::sql::IndexType;
@@ -573,6 +574,7 @@ impl PipelineBuilder {
         let hash_join_state = create_join_state(
             ctx.clone(),
             hash_join.join_type.clone(),
+            hash_join.other_conditions.clone(),
             build_expressions,
             probe_expressions,
             build_schema,
@@ -763,6 +765,7 @@ impl PipelineBuilder {
 fn create_join_state(
     ctx: Arc<QueryContext>,
     join_type: JoinType,
+    other_conditions: Vec<Scalar>,
     build_expressions: Vec<Expression>,
     probe_expressions: Vec<Expression>,
     build_schema: DataSchemaRef,
@@ -778,6 +781,7 @@ fn create_join_state(
             Arc::new(ChainingHashTable::try_create(
                 ctx,
                 join_type,
+                other_conditions,
                 HashTable::SerializerHashTable(SerializerHashTable {
                     hash_table: HashMap::<KeysRef, Vec<RowPtr>>::create(),
                     hash_method: HashMethodSerializer::default(),
@@ -791,6 +795,7 @@ fn create_join_state(
         HashMethodKind::KeysU8(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU8HashTable(KeyU8HashTable {
                 hash_table: HashMap::<u8, Vec<RowPtr>>::create(),
                 hash_method,
@@ -803,6 +808,7 @@ fn create_join_state(
         HashMethodKind::KeysU16(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU16HashTable(KeyU16HashTable {
                 hash_table: HashMap::<u16, Vec<RowPtr>>::create(),
                 hash_method,
@@ -815,6 +821,7 @@ fn create_join_state(
         HashMethodKind::KeysU32(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU32HashTable(KeyU32HashTable {
                 hash_table: HashMap::<u32, Vec<RowPtr>>::create(),
                 hash_method,
@@ -827,6 +834,7 @@ fn create_join_state(
         HashMethodKind::KeysU64(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU64HashTable(KeyU64HashTable {
                 hash_table: HashMap::<u64, Vec<RowPtr>>::create(),
                 hash_method,
@@ -839,6 +847,7 @@ fn create_join_state(
         HashMethodKind::KeysU128(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU128HashTable(KeyU128HashTable {
                 hash_table: HashMap::<u128, Vec<RowPtr>>::create(),
                 hash_method,
@@ -851,6 +860,7 @@ fn create_join_state(
         HashMethodKind::KeysU256(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU256HashTable(KeyU256HashTable {
                 hash_table: HashMap::<U256, Vec<RowPtr>>::create(),
                 hash_method,
@@ -863,6 +873,7 @@ fn create_join_state(
         HashMethodKind::KeysU512(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU512HashTable(KeyU512HashTable {
                 hash_table: HashMap::<U512, Vec<RowPtr>>::create(),
                 hash_method,

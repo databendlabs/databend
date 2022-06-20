@@ -27,9 +27,9 @@ use common_functions::scalars::FunctionFactory;
 use super::eval_context::EmptyEvalContext;
 use crate::common::evaluator::eval_context::EvalContext;
 use crate::common::evaluator::eval_context::TypedVector;
+use crate::sql::exec::format_field_name;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
-use crate::sql::IndexType;
 
 enum EvalNode {
     Function {
@@ -41,7 +41,7 @@ enum EvalNode {
         data_type: DataTypeImpl,
     },
     Variable {
-        index: IndexType,
+        name: String,
     },
 }
 
@@ -57,9 +57,13 @@ impl ScalarEvaluator {
 
     fn build_eval_tree(scalar: &Scalar) -> Result<EvalNode> {
         match scalar {
-            Scalar::BoundColumnRef(column_ref) => Ok(EvalNode::Variable {
-                index: column_ref.column.index,
-            }),
+            Scalar::BoundColumnRef(column_ref) => {
+                let name = format_field_name(
+                    column_ref.column.column_name.as_str(),
+                    column_ref.column.index,
+                );
+                Ok(EvalNode::Variable { name })
+            }
             Scalar::ConstantExpr(constant) => Ok(EvalNode::Const {
                 constant: constant.value.clone(),
                 data_type: constant.data_type.clone(),
@@ -129,7 +133,7 @@ impl ScalarEvaluator {
         &self,
         eval_node: &EvalNode,
         func_ctx: &FunctionContext,
-        eval_ctx: &impl EvalContext<VectorID = IndexType>,
+        eval_ctx: &impl EvalContext<VectorID = String>,
     ) -> Result<TypedVector> {
         match &eval_node {
             EvalNode::Function { func, args } => {
@@ -155,14 +159,14 @@ impl ScalarEvaluator {
                 let vector = constant.as_const_column(data_type, eval_ctx.tuple_count())?;
                 Ok(TypedVector::new(vector, data_type.clone()))
             }
-            EvalNode::Variable { index } => eval_ctx.get_vector(index),
+            EvalNode::Variable { name } => eval_ctx.get_vector(name),
         }
     }
 
     pub fn eval(
         &self,
         func_ctx: &FunctionContext,
-        eval_ctx: &impl EvalContext<VectorID = IndexType>,
+        eval_ctx: &impl EvalContext<VectorID = String>,
     ) -> Result<TypedVector> {
         self.eval_impl(&self.eval_tree, func_ctx, eval_ctx)
     }

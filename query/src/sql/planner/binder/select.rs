@@ -348,6 +348,7 @@ impl<'a> Binder {
             join_type,
             left_conditions,
             right_conditions,
+            vec![],
             left_expr,
             right_expr,
         )?;

@@ -42,6 +42,7 @@ use primitive_types::U512;
 use crate::common::ExpressionEvaluator;
 use crate::common::HashMap;
 use crate::common::HashTableKeyable;
+use crate::common::ScalarEvaluator;
 use crate::pipelines::new::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
@@ -49,6 +50,7 @@ use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
 use crate::sql::planner::plans::JoinType;
+use crate::sql::plans::Scalar;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
@@ -115,12 +117,14 @@ pub struct ChainingHashTable {
     hash_table: RwLock<HashTable>,
     row_space: RowSpace,
     join_type: JoinType,
+    other_conditions: Vec<Scalar>,
 }
 
 impl ChainingHashTable {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         join_type: JoinType,
+        other_conditions: Vec<Scalar>,
         hash_table: HashTable,
         build_expressions: Vec<Expression>,
         probe_expressions: Vec<Expression>,
@@ -146,6 +150,7 @@ impl ChainingHashTable {
             ctx,
             hash_table: RwLock::new(hash_table),
             join_type,
+            other_conditions,
         })
     }
 
@@ -456,13 +461,27 @@ impl HashJoinState for ChainingHashTable {
     }
 
     fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
-        match self.join_type {
+        let mut data_blocks = match self.join_type {
             JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left => {
                 self.probe_join(input)
             }
             JoinType::Cross => self.probe_cross_join(input),
             _ => unimplemented!("{} is unimplemented", self.join_type),
+        }?;
+        if self.other_conditions.is_empty() {
+            return Ok(data_blocks);
         }
+        for scalar in self.other_conditions.iter() {
+            let func_ctx = self.ctx.try_get_function_context()?;
+            let eval = ScalarEvaluator::try_create(scalar)?;
+            let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
+            for block in data_blocks.iter() {
+                let result = eval.eval(&func_ctx, block)?;
+                filtered_blocks.push(DataBlock::filter_block(block, result.vector())?);
+            }
+            data_blocks = filtered_blocks;
+        }
+        Ok(data_blocks)
     }
 
     fn attach(&self) -> Result<()> {
