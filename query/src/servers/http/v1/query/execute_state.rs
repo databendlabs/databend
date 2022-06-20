@@ -399,14 +399,15 @@ impl HttpQueryHandle {
             inputs_port: vec![input],
             processors: vec![sink],
         });
-        let pipeline_executor =
-            PipelineCompleteExecutor::try_create(async_runtime.clone(), root_pipeline)?;
+
         let async_runtime_clone = async_runtime.clone();
         let run = move || -> Result<()> {
             for pipeline in pipelines {
                 let executor = PipelineExecutor::create(async_runtime_clone.clone(), pipeline)?;
                 executor.execute()?;
             }
+            let pipeline_executor =
+                PipelineCompleteExecutor::try_create(async_runtime_clone, root_pipeline)?;
             pipeline_executor.execute()
         };
 
