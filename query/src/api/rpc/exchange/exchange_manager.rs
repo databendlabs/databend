@@ -1,9 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
-use async_channel::Receiver;
 use async_channel::Sender;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
@@ -22,11 +20,12 @@ use tonic::Streaming;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentReceiver;
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
+use crate::api::rpc::exchange::exchange_channel_receiver::ExchangeReceiver;
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
-use crate::api::rpc::exchange::exchange_publisher::ExchangePublisher;
-use crate::api::rpc::exchange::exchange_subscriber::ExchangeSubscriber;
+use crate::api::rpc::exchange::exchange_sink::ExchangeSink;
+use crate::api::rpc::exchange::exchange_source::ExchangeSource;
 use crate::api::rpc::flight_actions::PreparePipeline;
 use crate::api::rpc::flight_actions::PreparePublisher;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
@@ -92,7 +91,7 @@ impl DataExchangeManager {
         id: &str,
         source: &str,
         stream: Streaming<FlightData>,
-    ) -> Result<JoinHandle<()>> {
+    ) -> Result<JoinHandle<Result<()>>> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
         match queries_coordinator.get_mut(id) {
@@ -101,6 +100,18 @@ impl DataExchangeManager {
                 id
             ))),
             Some(coordinator) => coordinator.receive_data(source, stream),
+        }
+    }
+
+    pub fn shutdown_query(&self, query_id: &str) -> Result<()> {
+        let mut queries_coordinator = self.queries_coordinator.lock();
+
+        match queries_coordinator.remove(query_id) {
+            None => Err(ErrorCode::LogicalError(format!(
+                "Query {} not found in cluster.",
+                query_id
+            ))),
+            Some(mut coordinator) => coordinator.shutdown(),
         }
     }
 
@@ -141,7 +152,7 @@ impl DataExchangeManager {
                     None,
                     Some(self.config.query.to_rpc_client_tls_config()),
                 )
-                .await?,
+                    .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
@@ -313,6 +324,9 @@ struct QueryCoordinator {
     subscribe_channel: HashMap<String, Sender<Result<DataPacket>>>,
     subscribe_fragments: HashMap<usize, FragmentReceiver>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
+
+    executor: Option<Arc<PipelineCompleteExecutor>>,
+    receivers: Vec<Arc<ExchangeReceiver>>,
 }
 
 impl QueryCoordinator {
@@ -329,6 +343,8 @@ impl QueryCoordinator {
         Ok(QueryCoordinator {
             ctx: ctx.clone(),
             fragments_coordinator,
+            executor: None,
+            receivers: vec![],
             request_server_tx: None,
             publish_fragments: Default::default(),
             query_id: executor.query_id.to_owned(),
@@ -358,13 +374,35 @@ impl QueryCoordinator {
         Ok(())
     }
 
+    pub fn shutdown(&mut self) -> Result<()> {
+        if let Some(executor) = &self.executor {
+            executor.finish()?;
+        }
+
+        // TODO: then, shutdown, publisher
+
+        for receivers in &self.receivers {
+            receivers.shutdown();
+        }
+
+        unimplemented!()
+
+        // TODO: then, shutdown, receiver
+    }
+
     pub fn prepare_subscribes_channel(&mut self, prepare: &ExecutorPacket) -> Result<()> {
         for source in prepare.source_2_fragments.keys() {
             if source != &prepare.executor {
                 let (tx, rx) = async_channel::bounded(1);
 
-                let mut receiver = ExchangeReceiver::create(rx, &self.subscribe_fragments);
-                self.runtime.spawn(async move { receiver.listen().await });
+                let ctx = self.ctx.clone();
+                let query_id = prepare.query_id.clone();
+                let runtime = self.runtime.clone();
+                let receivers_map = &self.subscribe_fragments;
+                let receiver = ExchangeReceiver::create(ctx, query_id, runtime, rx, receivers_map);
+
+                receiver.listen()?;
+                self.receivers.push(receiver);
                 self.subscribe_channel.insert(source.to_string(), tx);
             }
         }
@@ -395,7 +433,7 @@ impl QueryCoordinator {
                 }
 
                 // Add exchange data publisher.
-                ExchangePublisher::publisher_sink(&self.ctx, &params, &mut pipeline)?;
+                ExchangeSink::publisher_sink(&self.ctx, &params, &mut pipeline)?;
 
                 if !pipeline.is_complete_pipeline()? {
                     return Err(ErrorCode::LogicalError("Logical error, It's a bug"));
@@ -407,14 +445,13 @@ impl QueryCoordinator {
         }
 
         let async_runtime = self.ctx.get_storage_runtime();
-        let complete_executor = Arc::new(PipelineCompleteExecutor::from_pipelines(
-            async_runtime,
-            pipelines,
-        )?);
+        let executor = PipelineCompleteExecutor::from_pipelines(async_runtime, pipelines)?;
+        self.executor = Some(executor.clone());
 
         Thread::named_spawn(Some(String::from("Executor")), move || {
-            if let Err(cause) = complete_executor.execute() {
+            if let Err(cause) = executor.execute() {
                 // TODO: send error code to request server.
+
                 // if let Some(request_tx) = self.request_server_tx.take() {
                 //     // request_tx.send
                 // }
@@ -464,7 +501,7 @@ impl QueryCoordinator {
                         }
 
                         if let Err(_cause) =
-                            c_tx.send(DataPacket::EndFragment(fragment_id_clone)).await
+                        c_tx.send(DataPacket::EndFragment(fragment_id_clone)).await
                         {
                             common_tracing::tracing::warn!(
                                 "{} to {} channel closed.",
@@ -495,7 +532,7 @@ impl QueryCoordinator {
         for pipe in &mut pipeline.pipes {
             if let NewPipe::SimplePipe { processors, .. } = pipe {
                 for processor in processors {
-                    ExchangePublisher::init(processor)?;
+                    ExchangeSink::init(processor)?;
                 }
             }
         }
@@ -507,34 +544,48 @@ impl QueryCoordinator {
         &mut self,
         source: &str,
         mut stream: Streaming<FlightData>,
-    ) -> Result<JoinHandle<()>> {
+    ) -> Result<JoinHandle<Result<()>>> {
         if let Some(subscribe_channel) = self.subscribe_channel.remove(source) {
+            let ctx = self.ctx.clone();
+            let query_id = self.query_id.clone();
             let source = source.to_string();
             let target = self.executor_id.clone();
             return Ok(self.runtime.spawn(async move {
                 'fragment_loop: while let Some(flight_data) = stream.next().await {
-                    let send_res = match flight_data {
-                        Err(status) => subscribe_channel.send(Err(ErrorCode::from(status))).await,
+                    match flight_data {
+                        Err(status) => {
+                            // shutdown current query if network failure.
+                            ctx.get_exchange_manager().shutdown_query(&query_id)?;
+                            return Err(ErrorCode::from(status));
+                        }
                         Ok(flight_data) => match DataPacket::from_flight(flight_data) {
-                            Ok(data_packet) => subscribe_channel.send(Ok(data_packet)).await,
-                            Err(error) => subscribe_channel.send(Err(error)).await,
+                            Err(error_code) => {
+                                // shutdown current query if protocol parse error.
+                                ctx.get_exchange_manager().shutdown_query(&query_id)?;
+                                return Err(error_code);
+                            }
+                            Ok(data_packet) => {
+                                if let Err(_cause) = subscribe_channel.send(Ok(data_packet)).await {
+                                    common_tracing::tracing::warn!(
+                                        "Subscribe channel closed, source {}, target {}",
+                                        source,
+                                        target
+                                    );
+
+                                    break 'fragment_loop;
+                                }
+                            }
                         },
-                    };
-
-                    if send_res.is_err() {
-                        common_tracing::tracing::warn!(
-                            "Subscribe channel closed, source {}, target {}",
-                            source,
-                            target
-                        );
-
-                        break 'fragment_loop;
                     }
                 }
+
+                Ok(())
             }));
         };
 
-        Err(ErrorCode::LogicalError(""))
+        Err(ErrorCode::LogicalError(
+            "Cannot found fragment channel, It's a bug.",
+        ))
     }
 
     async fn create_client(config: Config, address: &str) -> Result<FlightClient> {
@@ -545,7 +596,7 @@ impl QueryCoordinator {
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                .await?,
+                    .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
@@ -563,13 +614,13 @@ impl QueryCoordinator {
             let mut connection = Self::create_client(config, &addr).await?;
 
             if let Err(status) = connection.do_put(&query_id, &source, rx).await {
-                // finished.store(true, Ordering::Release);
+                common_tracing::tracing::warn!("Flight connection failure: {:?}", status);
 
-                println!("do put error: {:?}", status);
-                // TODO: shutdown pipeline executor,
                 // Shutdown all query fragments executor and report error to request server.
-                let _exchange_manager = ctx.get_exchange_manager();
-                // exchange_manager.shutdown_query(query_id, status);
+                let exchange_manager = ctx.get_exchange_manager();
+                if let Err(cause) = exchange_manager.shutdown_query(&query_id) {
+                    common_tracing::tracing::warn!("Cannot shutdown query, cause {:?}", cause);
+                }
             }
 
             common_exception::Result::Ok(())
@@ -621,14 +672,14 @@ impl QueryCoordinator {
             *pipeline = fragment_coordinator.pipeline.unwrap();
 
             // Add exchange data publisher.
-            ExchangePublisher::via_exchange(&self.ctx, &exchange_params, pipeline)?;
+            ExchangeSink::via_exchange(&self.ctx, &exchange_params, pipeline)?;
 
             // Add exchange data subscriber.
-            return ExchangeSubscriber::via_exchange(rx, &exchange_params, pipeline);
+            return ExchangeSource::via_exchange(rx, &exchange_params, pipeline);
         }
 
         // Add exchange data subscriber.
-        ExchangeSubscriber::create_source(rx, schema, pipeline)
+        ExchangeSource::create_source(rx, schema, pipeline)
     }
 }
 
@@ -685,72 +736,6 @@ impl FragmentCoordinator {
             self.initialized = true;
             let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
             self.pipeline = Some(pipeline_builder.finalize(&self.node)?);
-        }
-
-        Ok(())
-    }
-}
-
-pub struct ExchangeReceiver {
-    // runtime: Arc<Runtime>,
-    rx: Receiver<Result<DataPacket>>,
-    fragments_receiver: Vec<Option<FragmentReceiver>>,
-}
-
-impl ExchangeReceiver {
-    pub fn create(
-        // runtime: Arc<Runtime>,
-        rx: Receiver<Result<DataPacket>>,
-        fragments_receiver: &HashMap<usize, FragmentReceiver>,
-    ) -> ExchangeReceiver {
-        let max_fragments_id = fragments_receiver.keys().max().cloned().unwrap_or(0);
-        let mut temp = vec![None; max_fragments_id + 1];
-
-        for (fragment_id, receiver) in fragments_receiver {
-            temp[*fragment_id] = Some(receiver.clone());
-        }
-
-        ExchangeReceiver {
-            rx,
-            fragments_receiver: temp,
-        }
-    }
-
-    pub async fn listen(&mut self) -> Result<()> {
-        // TODO: need select with timeout for stream.next()
-        while let Ok(flight_data) = self.rx.recv().await {
-            // if finished.load(Ordering::Relaxed) {
-            //     break;
-            // }
-            match flight_data {
-                Err(error_code) => {
-                    return Err(error_code);
-                }
-                Ok(data_packet) => match data_packet {
-                    DataPacket::Data(fragment_id, data) => {
-                        if let Some(tx) = &self.fragments_receiver[fragment_id] {
-                            if let Err(_cause) = tx.send(Ok(data)).await {
-                                println!("Fragment channel closed.");
-                                return Ok(());
-                            }
-                        }
-                    }
-                    DataPacket::Progress(_values) => {
-                        // ctx.get_scan_progress().incr(&values);
-                    }
-                    DataPacket::ErrorCode(error_code) => {
-                        return Err(error_code);
-                    }
-                    DataPacket::EndFragment(fragment) => {
-                        if fragment < self.fragments_receiver.len() {
-                            if let Some(tx) = self.fragments_receiver[fragment].take() {
-                                drop(tx);
-                                std::sync::atomic::fence(Acquire);
-                            }
-                        }
-                    }
-                },
-            };
         }
 
         Ok(())

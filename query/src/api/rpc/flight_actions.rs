@@ -184,6 +184,7 @@ pub enum FlightAction {
     PreparePipeline(PreparePipeline),
     PreparePublisher(PreparePublisher),
     ExecutePipeline(String),
+    // ShutdownQuery(String),
 }
 
 impl FlightAction {
@@ -242,6 +243,10 @@ impl TryInto<FlightAction> for Action {
                 Ok(query_id) => Ok(FlightAction::ExecutePipeline(query_id)),
                 Err(cause) => Err(Status::invalid_argument(cause.to_string())),
             },
+            // "ShutdownQuery" => match String::from_utf8(self.body.to_owned()) {
+            //     Ok(query_id) => Ok(FlightAction::ShutdownQuery(query_id)),
+            //     Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            // },
             un_implemented => Err(Status::unimplemented(format!(
                 "UnImplement action {}",
                 un_implemented

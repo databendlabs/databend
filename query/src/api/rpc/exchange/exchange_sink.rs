@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-// use crate::api::rpc::exchange::exchange_channel::{Sender, SendError};
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -14,9 +13,9 @@ use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
 use crate::sessions::QueryContext;
 
-pub struct ExchangePublisher;
+pub struct ExchangeSink;
 
-impl ExchangePublisher {
+impl ExchangeSink {
     fn via_merge_exchange(ctx: &Arc<QueryContext>, params: &MergeExchangeParams) -> Result<()> {
         match params.destination_id == ctx.get_cluster().local_id() {
             true => Ok(()), /* do nothing */

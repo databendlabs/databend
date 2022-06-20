@@ -54,7 +54,7 @@ impl BuilderVisitor {
         match plan {
             PlanNode::Stage(node) => self.visit_stage(node),
             PlanNode::Select(node) => self.visit_select(node),
-            PlanNode::Broadcast(node) => self.visit_broadcast(node),
+            // PlanNode::Broadcast(node) => self.visit_broadcast(node),
             PlanNode::AggregatorFinal(node) => self.visit_aggr_final(node),
             PlanNode::AggregatorPartial(node) => self.visit_aggr_part(node),
             // PlanNode::Empty(plan) => self.visit_empty(plan, tasks),
@@ -67,7 +67,6 @@ impl BuilderVisitor {
             PlanNode::Sink(node) => self.visit_sink(node),
             PlanNode::Having(node) => self.visit_having(node),
             PlanNode::Expression(node) => self.visit_expression(node),
-            // PlanNode::SubQueryExpression(plan) => self.visit_subqueries_set(plan, tasks),
             _ => Err(ErrorCode::UnknownPlan("Unknown plan type")),
         }
     }
@@ -102,10 +101,6 @@ impl BuilderVisitor {
 
     fn visit_limit_by(&self, node: &LimitByPlan) -> Result<Box<dyn QueryFragment>> {
         self.visit(&node.input)
-    }
-
-    fn visit_broadcast(&self, node: &BroadcastPlan) -> Result<Box<dyn QueryFragment>> {
-        BroadcastQueryFragment::create(self.visit(&node.input)?)
     }
 
     fn visit_expression(&self, node: &ExpressionPlan) -> Result<Box<dyn QueryFragment>> {

@@ -159,6 +159,7 @@ impl FlightService for DatabendQueryFlightService {
             .handle_do_put(&query_id, &source, stream)
             .await?
             .await
+            .unwrap()
             .unwrap();
         Ok(RawResponse::new(Box::pin(tokio_stream::once(Ok(PutResult {
             app_metadata: vec![],
