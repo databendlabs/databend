@@ -20,7 +20,7 @@ use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::encoding::Encoding;
-use common_arrow::parquet::metadata::FileMetaData;
+use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_arrow::parquet::write::Version;
 use common_arrow::write_parquet_file;
 use common_datablocks::DataBlock;
@@ -34,7 +34,7 @@ pub async fn write_block(
     block: DataBlock,
     data_accessor: Operator,
     location: &str,
-) -> Result<(u64, FileMetaData)> {
+) -> Result<(u64, ThriftFileMetaData)> {
     // we need a configuration of block size threshold here
     let mut buf = Vec::with_capacity(100 * 1024 * 1024);
 
@@ -50,7 +50,7 @@ pub fn serialize_data_blocks(
     blocks: Vec<DataBlock>,
     schema: &DataSchemaRef,
     buf: &mut Vec<u8>,
-) -> Result<(u64, FileMetaData)> {
+) -> Result<(u64, ThriftFileMetaData)> {
     let arrow_schema = schema.to_arrow();
 
     let row_group_write_options = WriteOptions {
