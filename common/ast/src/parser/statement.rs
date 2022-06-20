@@ -998,7 +998,7 @@ pub fn copy_target(i: Input) -> IResult<CopyTarget> {
             #literal_string
         },
         // TODO(xuanwo): Maybe we can check the protocol during parse?
-        |location| CopyTarget::Location(location),
+        CopyTarget::Location,
     );
 
     rule!(
