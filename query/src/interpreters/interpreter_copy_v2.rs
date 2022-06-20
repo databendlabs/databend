@@ -26,15 +26,14 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::sql::exec::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 use crate::sql::BindContext;
 use crate::sql::MetadataRef;
 
 pub struct CopyInterpreterV2 {
     ctx: Arc<QueryContext>,
-    schema: DataSchemaRef,
-    kind: ExplainKind,
-    plan: Plan,
+    plan: CopyPlanV2,
 }
 
 #[async_trait::async_trait]

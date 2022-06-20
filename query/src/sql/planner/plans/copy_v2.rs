@@ -22,6 +22,7 @@ use common_meta_types::UserStageInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::StageTableInfo;
 
+use crate::interpreters::SelectInterpreterV2;
 use crate::sql::plans::Plan;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]

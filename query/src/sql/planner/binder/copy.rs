@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::assert_matches::debug_assert_matches;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
@@ -37,6 +38,7 @@ use common_planners::RemoveUserStagePlan;
 use common_planners::SourceInfo;
 use common_planners::StageTableInfo;
 
+use crate::interpreters::SelectInterpreterV2;
 use crate::sql::binder::Binder;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
@@ -165,6 +167,11 @@ impl<'a> Binder {
                         ))
                     }
                 };
+
+                debug_assert!(
+                    matches!(query, Plan::Query { .. }),
+                    "input sql must be Plan::Query, but it's not"
+                );
 
                 // Validation mode.
                 let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
