@@ -395,15 +395,17 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )? )?
             ~ ( WITH ~ ^#role_option+ )?
         },
-        |(_, _, user, opt_auth_option, opt_role_options)| Statement::AlterUser {
-            user,
-            auth_option: opt_auth_option.map(|(_, opt_auth_type, opt_password)| AuthOption {
-                auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
-                password: opt_password.map(|(_, password)| password),
-            }),
-            role_options: opt_role_options
-                .map(|(_, role_options)| role_options)
-                .unwrap_or_default(),
+        |(_, _, user, opt_auth_option, opt_role_options)| {
+            Statement::AlterUser(AlterUserStmt {
+                user,
+                auth_option: opt_auth_option.map(|(_, opt_auth_type, opt_password)| AuthOption {
+                    auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
+                    password: opt_password.map(|(_, password)| password),
+                }),
+                role_options: opt_role_options
+                    .map(|(_, role_options)| role_options)
+                    .unwrap_or_default(),
+            })
         },
     );
     let drop_user = map(
@@ -434,12 +436,12 @@ pub fn statement(i: Input) -> IResult<Statement> {
             role_name,
         },
     );
-    let grant_priv = map(
+    let grant = map(
         rule! {
             GRANT ~ #grant_source ~ TO ~ #grant_option
         },
         |(_, source, _, grant_option)| {
-            Statement::Grant(GrantStatement {
+            Statement::Grant(AccountMgrStatement {
                 source,
                 principal: grant_option,
             })
@@ -451,6 +453,17 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
         |(_, _, opt_principal)| Statement::ShowGrants {
             principal: opt_principal.map(|(_, principal)| principal),
+        },
+    );
+    let revoke = map(
+        rule! {
+            REVOKE ~ #grant_source ~ FROM ~ #grant_option
+        },
+        |(_, source, _, grant_option)| {
+            Statement::Revoke(AccountMgrStatement {
+                source,
+                principal: grant_option,
+            })
         },
     );
     let create_udf = map(
@@ -663,8 +676,10 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #drop_stage: "`DROP STAGE <stage_name>`"
         ),
         rule!(
-            #grant_priv : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
+            #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS [FOR  { ROLE <role_name> | [USER] <user> }]`"
+                        | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+
         ),
     ));
 
@@ -768,25 +783,25 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     )(i)
 }
 
-pub fn grant_source(i: Input) -> IResult<GrantSource> {
+pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
     let role = map(
         rule! {
             ROLE ~ #literal_string
         },
-        |(_, role_name)| GrantSource::Role { role: role_name },
+        |(_, role_name)| AccountMgrSource::Role { role: role_name },
     );
     let privs = map(
         rule! {
             #comma_separated_list1(priv_type) ~ ON ~ #grant_level
         },
-        |(privs, _, level)| GrantSource::Privs {
+        |(privs, _, level)| AccountMgrSource::Privs {
             privileges: privs,
             level,
         },
     );
     let all = map(
         rule! { ALL ~ PRIVILEGES? ~ ON ~ #grant_level },
-        |(_, _, _, level)| GrantSource::ALL { level },
+        |(_, _, _, level)| AccountMgrSource::ALL { level },
     );
 
     rule!(
@@ -815,16 +830,16 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
     ))(i)
 }
 
-pub fn grant_level(i: Input) -> IResult<GrantLevel> {
+pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
     // *.*
-    let global = map(rule! { "*" ~ "." ~ "*" }, |_| GrantLevel::Global);
+    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
     // db.*
     // "*": as current db or "table" with current db
     let db = map(
         rule! {
             ( #ident ~ "." )? ~ "*"
         },
-        |(database, _)| GrantLevel::Database(database.map(|(database, _)| database.name)),
+        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
     );
     // db.table
     let table = map(
@@ -832,7 +847,7 @@ pub fn grant_level(i: Input) -> IResult<GrantLevel> {
             ( #ident ~ "." )? ~ #ident
         },
         |(database, table)| {
-            GrantLevel::Table(database.map(|(database, _)| database.name), table.name)
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table.name)
         },
     );
 

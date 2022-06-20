@@ -144,14 +144,7 @@ impl<'a> Binder {
                 user: user.clone(),
             })),
             Statement::ShowUsers => Plan::ShowUsers,
-            Statement::AlterUser {
-                user,
-                auth_option,
-                role_options,
-            } => {
-                self.bind_alter_user(user, auth_option, role_options)
-                    .await?
-            }
+            Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
             Statement::ShowRoles => Plan::ShowRoles,
@@ -197,6 +190,8 @@ impl<'a> Binder {
             Statement::ShowGrants { principal } => Plan::ShowGrants(Box::new(ShowGrantsPlan {
                 principal: principal.clone(),
             })),
+
+            Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             _ => {
                 return Err(ErrorCode::UnImplement(format!(

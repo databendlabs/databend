@@ -59,17 +59,6 @@ impl Plan {
             Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),
             Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
 
-            // Users
-            Plan::ShowUsers => Ok("SHOW USERS".to_string()),
-            Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
-            Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
-            Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
-
-            // Roles
-            Plan::ShowRoles => Ok("SHOW ROLES".to_string()),
-            Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
-            Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
-
             // Stages
             Plan::ShowStages => Ok("SHOW STAGES".to_string()),
             Plan::ListStage(s) => Ok(format!("{:?}", s)),
@@ -83,10 +72,19 @@ impl Plan {
             Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
             Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
 
-            // Grant
+            // Account
             Plan::GrantRole(grant_role) => Ok(format!("{:?}", grant_role)),
             Plan::GrantPriv(grant_priv) => Ok(format!("{:?}", grant_priv)),
             Plan::ShowGrants(show_grants) => Ok(format!("{:?}", show_grants)),
+            Plan::RevokePriv(revoke_priv) => Ok(format!("{:?}", revoke_priv)),
+            Plan::RevokeRole(revoke_role) => Ok(format!("{:?}", revoke_role)),
+            Plan::ShowUsers => Ok("SHOW USERS".to_string()),
+            Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
+            Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
+            Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
+            Plan::ShowRoles => Ok("SHOW ROLES".to_string()),
+            Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
+            Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
         }
     }
 }
