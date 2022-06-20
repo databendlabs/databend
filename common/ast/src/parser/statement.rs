@@ -993,22 +993,16 @@ pub fn copy_target(i: Input) -> IResult<CopyTarget> {
         },
         |query| CopyTarget::Query(Box::new(query)),
     );
-    let stage_location = map(
+    let location = map(
         rule! {
-            "@" ~ #literal_string
+            #literal_string
         },
-        |(_, location)| CopyTarget::Location(format!("@{location}")),
-    );
-    let uri_location = map(
-        rule! {
-            #literal_string ~ "://" ~ #literal_string
-        },
-        // TODO(xuanwo): Maybe we can check the proposal during parse?
-        |(protocol, _, location)| CopyTarget::Location(format!("{protocol}://{location}")),
+        // TODO(xuanwo): Maybe we can check the protocol during parse?
+        |location| CopyTarget::Location(location),
     );
 
     rule!(
-        #table | #query | #stage_location | #uri_location
+        #table | #query | #location
     )(i)
 }
 
@@ -1129,6 +1123,8 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
         })(i)
     };
 
+    let u64_to_string = |i| map_res(literal_u64, |v| Ok(v.to_string()))(i);
+
     let ident_with_format = alt((
         ident_to_string,
         map(rule! { FORMAT }, |_| "FORMAT".to_string()),
@@ -1136,7 +1132,7 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     map(
         rule! {
-            "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #literal_string) )* ~ ")"
+            "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #u64_to_string | #literal_string) )* ~ ")"
         },
         |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.clone(), v.clone()))),
     )(i)

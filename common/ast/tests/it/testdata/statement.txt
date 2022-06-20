@@ -3779,3 +3779,183 @@ ShowGrants {
 }
 
 
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM s3://mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Location(
+            "s3://mybucket/data.csv",
+        ),
+        dst: Table(
+            None,
+            None,
+            Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        ),
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM @my_stage FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table(
+            None,
+            None,
+            Identifier {
+                name: "@my_stage",
+                quote: None,
+                span: AtString(39..48),
+            },
+        ),
+        dst: Table(
+            None,
+            None,
+            Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        ),
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO 's3://mybucket/data.csv'
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO s3://mybucket/data.csv FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table(
+            None,
+            None,
+            Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(56..63),
+            },
+        ),
+        dst: Location(
+            "s3://mybucket/data.csv",
+        ),
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO @my_stage
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO @my_stage FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table(
+            None,
+            None,
+            Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(41..48),
+            },
+        ),
+        dst: Table(
+            None,
+            None,
+            Identifier {
+                name: "@my_stage",
+                quote: None,
+                span: AtString(10..19),
+            },
+        ),
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+

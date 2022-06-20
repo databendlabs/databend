@@ -145,6 +145,42 @@ fn test_statement() {
         r#"SHOW GRANTS FOR 'test-grant'@'localhost';"#,
         r#"SHOW GRANTS FOR USER 'test-grant'@'localhost';"#,
         r#"SHOW GRANTS FOR ROLE 'role1';"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO 's3://mybucket/data.csv'
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO @my_stage
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
     ];
 
     for case in cases {
