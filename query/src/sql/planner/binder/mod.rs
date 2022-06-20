@@ -109,10 +109,7 @@ impl<'a> Binder {
                 self.bind_show_functions(bind_context, limit).await?
             }
 
-            Statement::Copy(stmt) => {
-                let plan = self.bind_copy(bind_context, stmt).await?;
-                Ok(plan)
-            }
+            Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
 
             Statement::ShowMetrics => Plan::ShowMetrics,
             Statement::ShowProcessList => Plan::ShowProcessList,

@@ -189,7 +189,7 @@ impl CopyInterpreterV2 {
                 metadata,
                 bind_context,
             } => (s_expr, metadata, bind_context),
-            v => unreachable!("Input plan must be Query, but it's {}", v.name()),
+            v => unreachable!("Input plan must be Query, but it's {v}"),
         };
 
         let select_interpreter = SelectInterpreterV2::try_create(

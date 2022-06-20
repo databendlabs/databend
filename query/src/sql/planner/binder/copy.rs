@@ -130,11 +130,8 @@ impl<'a> Binder {
                         );
                         let tokens = tokenize_sql(&subquery)?;
                         let backtrace = Backtrace::new();
-                        let stmts = parse_sql(&tokens, &backtrace)?;
-                        if stmts.len() > 1 {
-                            return Err(ErrorCode::UnImplement("unsupported multiple statements"));
-                        }
-                        match &stmts[0] {
+                        let sub_stmt = parse_sql(&tokens, &backtrace)?;
+                        match &sub_stmt {
                             Statement::Query(query) => {
                                 self.bind_statement(bind_context, &Statement::Query(query.clone()))
                                     .await?
