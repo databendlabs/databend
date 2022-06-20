@@ -75,15 +75,7 @@ impl Interpreter for SelectInterpreter {
         let settings = self.ctx.get_settings();
 
         if settings.get_enable_new_processor_framework()? != 0 {
-            let query_pipeline = match self.ctx.get_cluster().is_empty() {
-                true => self.create_new_pipeline()?,
-                false => {
-                    let ctx = self.ctx.clone();
-                    let optimized_plan = self.rewrite_plan()?;
-                    plan_schedulers::schedule_query_new(ctx, &optimized_plan).await?
-                }
-            };
-
+            let query_pipeline = self.create_new_pipeline().await?;
             let async_runtime = self.ctx.get_storage_runtime();
             let executor = PipelinePullingExecutor::try_create(async_runtime, query_pipeline)?;
             let (handler, stream) = ProcessorExecutorStream::create(executor)?;
@@ -97,11 +89,20 @@ impl Interpreter for SelectInterpreter {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a NewPipeline
-    fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        let settings = self.ctx.get_settings();
-        let builder = QueryPipelineBuilder::create(self.ctx.clone());
-        let mut query_pipeline = builder.finalize(&self.rewrite_plan()?)?;
-        query_pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        Ok(query_pipeline)
+    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
+        match self.ctx.get_cluster().is_empty() {
+            true => {
+                let settings = self.ctx.get_settings();
+                let builder = QueryPipelineBuilder::create(self.ctx.clone());
+                let mut query_pipeline = builder.finalize(&self.rewrite_plan()?)?;
+                query_pipeline.set_max_threads(settings.get_max_threads()? as usize);
+                Ok(query_pipeline)
+            }
+            false => {
+                let ctx = self.ctx.clone();
+                let optimized_plan = self.rewrite_plan()?;
+                plan_schedulers::schedule_query_new(ctx, &optimized_plan).await
+            }
+        }
     }
 }

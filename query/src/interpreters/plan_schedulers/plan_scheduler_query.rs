@@ -81,6 +81,8 @@ async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<
 
     debug!("QueryFragments actions: {:?}", fragments_actions);
 
+    // TODO: move commit into pipeline processor(e.g CommitActionProcessor). It can help us make
+    // Interpreter::execute as sync method
     exchange_manager
         .commit_actions(ctx, fragments_actions)
         .await
