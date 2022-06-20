@@ -53,7 +53,7 @@ lazy_static! {
     .expect("meta metric cannot be created");
 
     pub static ref NODE_IS_HEALTH: IntGauge = IntGauge::with_opts(
-        Opts::new("node_is_health", "Whether or not this node is health(in leader/follower state).")
+        Opts::new("node_is_health", "Whether or not this node is health.")
             .namespace(META_NAMESPACE)
             .subsystem(SERVER_SUBSYSTEM)
     )

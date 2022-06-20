@@ -21,7 +21,7 @@ These metrics describe the status of the `metasrv`. All these metrics are prefix
 | ----------------- | ------------------------------------------------- | ------- |
 | current_leader_id | Current leader id of cluster, 0 means no leader.  | IntGauge   |
 | is_leader         | Whether or not this node is current leader.       | Gauge   |
-| node_is_health | Whether or not this node is health(in leader/follower state). | IntGauge |
+| node_is_health    | Whether or not this node is health.               | IntGauge |
 | leader_changes    | Number of leader changes seen.                    | Counter |
 | applying_snapshot | Whether or not statemachine is applying snapshot. | Gauge   |
 | proposals_applied | Total number of consensus proposals applied.      | Gauge   |
@@ -33,11 +33,7 @@ These metrics describe the status of the `metasrv`. All these metrics are prefix
 
 `is_leader` indicate if this `metasrv` currently is the leader of cluster, and `leader_changes` show the total number of leader changes since start.If change leader too frequently, it will impact the performance of `metasrv`, also it signal that the cluster is unstable.
 
-
-
 If and only if the node state is `Follower` or `Leader` , `node_is_health` is 1, otherwise is 0.
-
-
 
 `proposals_applied` records the total number of applied write requests.
 
@@ -83,8 +79,6 @@ These metrics describe the network status of raft nodes in the `metasrv`. All th
 
 These metrics describe the network status of meta service in the `metasrv`. All these metrics are prefixed with `metasrv_meta_network_`.
 
-
-
 | Name             | Description                                            | Type       |
 | ---------------- | ------------------------------------------------------ | ---------- |
 | meta_sent_bytes  | Total number of sent bytes to meta grpc client.        | IntCounter |
@@ -92,4 +86,3 @@ These metrics describe the network status of meta service in the `metasrv`. All 
 | meta_inflights   | Total number of inflight meta grpc requests.           | IntGauge   |
 | meta_req_success | Total number of success request from meta grpc client. | IntCounter |
 | meta_req_failed  | Total number of fail request from meta grpc client.    | IntCounter |
-
