@@ -1,14 +1,15 @@
 Thank you for downloading Databend, an open-source elastic and workload-aware modern cloud data warehouse.
 
-Try Databend(standalone) in 5 easy steps:
+Get started with a standalone Databend:
+1. Edit the configuration files in 'configs' to customize Databend settings.
+2. Start Databend: ./scripts/start.sh
+3. Run queries with your MySQL / ClickHouse client or an HTTP handler.
+4. Stop Databend: ./scripts/stop.sh
 
-- Edit the `configs` to suit your needs.
-- Check that the `scripts` meet your needs.
-- Start: `./scripts/start.sh`
-- Run some queries by the way you like with mysql/clickhouse client or http handler.
-- Stop: `./scripts/stop.sh`
+NOTE: If you deploy Databend with a self-hosted S3-compatible object storage, 
+set the environment variable STORAGE_S3_ENABLE_VIRTUAL_HOST_STYLE to 'true' before starting Databend.
 
-You might need these links to move forward:
+You might need these links to proceed:
 - Deployment Instructions: https://databend.rs/doc/deploy
 - Documentation: https://databend.rs/doc
 - Code Browser: https://github.com/datafuselabs/databend
