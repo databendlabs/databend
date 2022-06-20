@@ -100,19 +100,19 @@ pub enum Plan {
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
 
-    // Users
+    // Account
     ShowUsers,
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
-
-    // Roles
     ShowRoles,
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
     GrantPriv(Box<GrantPrivilegePlan>),
     ShowGrants(Box<ShowGrantsPlan>),
+    RevokePriv(Box<RevokePrivilegePlan>),
+    RevokeRole(Box<RevokeRolePlan>),
 
     // Stages
     ShowStages,
@@ -167,6 +167,8 @@ impl Display for Plan {
             Plan::GrantRole(_) => write!(f, "GrantRole"),
             Plan::GrantPriv(_) => write!(f, "GrantPriv"),
             Plan::ShowGrants(_) => write!(f, "ShowGrants"),
+            Plan::RevokePriv(_) => write!(f, "RevokePriv"),
+            Plan::RevokeRole(_) => write!(f, "RevokeRole"),
         }
     }
 }

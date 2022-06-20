@@ -15,6 +15,8 @@
 pub mod cache;
 pub mod fuse;
 pub mod github;
+#[cfg(feature = "hive")]
+pub mod hive;
 pub mod index;
 pub mod information_schema;
 pub mod memory;
