@@ -61,11 +61,11 @@ pub trait ScalarVisitor: Sized {
                                     stack.push(RecursionProcessing::Call(&**left));
                                     stack.push(RecursionProcessing::Call(&**right));
                                 }
-                                Scalar::AndExpr(AndExpr { left, right }) => {
+                                Scalar::AndExpr(AndExpr { left, right, .. }) => {
                                     stack.push(RecursionProcessing::Call(&**left));
                                     stack.push(RecursionProcessing::Call(&**right));
                                 }
-                                Scalar::OrExpr(OrExpr { left, right }) => {
+                                Scalar::OrExpr(OrExpr { left, right, .. }) => {
                                     stack.push(RecursionProcessing::Call(&**left));
                                     stack.push(RecursionProcessing::Call(&**right));
                                 }

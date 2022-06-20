@@ -1985,6 +1985,7 @@ dependencies = [
  "clap 3.1.18",
  "common-base",
  "common-meta-api",
+ "common-meta-app",
  "common-meta-grpc",
  "common-meta-types",
  "databend-meta",
@@ -4238,9 +4239,9 @@ dependencies = [
 
 [[package]]
 name = "nom-rule"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4c5f75e2f95ede19929b28ea8f9afeb804e5397f1d5c550c18e94b264202911"
+checksum = "ea8dd3c6d80d1e61031aecc5fdfaf4b7d2324dbd94d575ac12f94e5d6856c2d4"
 dependencies = [
  "nom",
  "pratt",
@@ -4495,8 +4496,8 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.6.4"
-source = "git+https://github.com/datafuselabs/openraft?rev=f633756d60152d171909aea56f80d18905cd4002#f633756d60152d171909aea56f80d18905cd4002"
+version = "0.7.0-alpha.1"
+source = "git+https://github.com/datafuselabs/openraft?rev=v0.7.0-alpha.1#1bc3ded67976fdbe1380ee62bf07de75e50a31cb"
 dependencies = [
  "anyerror",
  "anyhow",

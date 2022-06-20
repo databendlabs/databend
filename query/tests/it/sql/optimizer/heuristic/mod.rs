@@ -42,23 +42,23 @@ pub(super) struct Suite {
 async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     let tokens = tokenize_sql(&suite.query)?;
     let bt = Backtrace::new();
-    let stmts = parse_sql(&tokens, &bt)?;
-    if stmts.len() != 1 {
-        return Err(ErrorCode::LogicalError("Unsupported statements number"));
-    }
+    let stmt = parse_sql(&tokens, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
         ctx.get_catalogs(),
         Arc::new(RwLock::new(Metadata::create())),
     );
-
-    let plan = binder.bind(&stmts[0]).await?;
-    let mut heuristic_opt = HeuristicOptimizer::new(RuleList::create(suite.rules.clone())?);
+    let plan = binder.bind(&stmt).await?;
 
     let result = match plan {
         Plan::Query {
             s_expr, metadata, ..
         } => {
+            let mut heuristic_opt = HeuristicOptimizer::new(
+                ctx.clone(),
+                metadata.clone(),
+                RuleList::create(suite.rules.clone())?,
+            );
             let optimized = heuristic_opt.optimize(s_expr)?;
             optimized.to_format_tree(&metadata).format_indent()
         }

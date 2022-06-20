@@ -63,3 +63,9 @@ Project: [number]
         Scan: default.system.numbers
 
 
+select a from (select number as a, number as b from numbers(1))
+----
+Project: [number]
+    Scan: default.system.numbers
+
+

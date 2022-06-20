@@ -235,8 +235,9 @@ insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '1000
 select * from t order by b;
 drop table t;
 
--- select '===date_add===';
 -- set enable_planner_v2=1;
+
+-- select '===date_add===';
 -- select date_add(to_date(18321), 1, YEAR);
 -- select date_add(to_date(18321), -1, YEAR);
 -- select date_add(to_date(18321), 1, SECOND);
@@ -244,6 +245,16 @@ drop table t;
 -- create table t(a int);
 -- insert into t values(1), (2);
 -- select date_add(to_date(18321), a, YEAR) from t;
+-- drop table t;
+
+-- select '===date_sub===';
+-- select date_sub(to_date(18321), 1, YEAR);
+-- select date_sub(to_date(18321), -1, YEAR);
+-- select date_sub(to_date(18321), 1, SECOND);
+
+-- create table t(a int);
+-- insert into t values(1), (2);
+-- select date_sub(to_date(18321), a, YEAR) from t;
 -- drop table t;
 
 -- set enable_planner_v2=0;

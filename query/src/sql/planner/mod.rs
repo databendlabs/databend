@@ -18,7 +18,6 @@ use common_ast::parser::error::Backtrace;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_base::infallible::RwLock;
-use common_exception::ErrorCode;
 use common_exception::Result;
 pub use plans::ScalarExpr;
 
@@ -55,18 +54,15 @@ impl Planner {
         // Step 1: parse SQL text into AST
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();
-        let stmts = parse_sql(&tokens, &backtrace)?;
-        if stmts.len() > 1 {
-            return Err(ErrorCode::UnImplement("unsupported multiple statements"));
-        }
+        let stmt = parse_sql(&tokens, &backtrace)?;
 
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
         let metadata = Arc::new(RwLock::new(Metadata::create()));
         let binder = Binder::new(self.ctx.clone(), self.ctx.get_catalogs(), metadata.clone());
-        let plan = binder.bind(&stmts[0]).await?;
+        let plan = binder.bind(&stmt).await?;
 
         // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr
-        let optimized_plan = optimize(plan)?;
+        let optimized_plan = optimize(self.ctx.clone(), plan)?;
 
         Ok((optimized_plan, metadata.clone()))
     }
