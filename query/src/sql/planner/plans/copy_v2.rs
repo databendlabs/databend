@@ -66,7 +66,7 @@ pub enum CopyPlanV2 {
         pattern: String,
         schema: DataSchemaRef,
         validation_mode: ValidationMode,
-        from: ReadDataSourcePlan,
+        from: Box<ReadDataSourcePlan>,
     },
     IntoStage {
         stage: UserStageInfo,

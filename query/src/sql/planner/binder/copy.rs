@@ -66,11 +66,11 @@ impl<'a> Binder {
                 let catalog_name = catalog
                     .as_ref()
                     .map(|v| v.to_string())
-                    .unwrap_or(self.ctx.get_current_catalog());
+                    .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let database_name = database
                     .as_ref()
                     .map(|v| v.to_string())
-                    .unwrap_or(self.ctx.get_current_database());
+                    .unwrap_or_else(|| self.ctx.get_current_database());
                 let table_name = table.to_string();
                 let table = self
                     .ctx
@@ -104,7 +104,7 @@ impl<'a> Binder {
                     table_name,
                     table_id,
                     schema,
-                    from,
+                    from: Box::new(from),
                     files: stmt.files.clone(),
                     pattern: stmt.pattern.clone(),
                     validation_mode,
@@ -117,11 +117,11 @@ impl<'a> Binder {
                         let catalog_name = catalog
                             .as_ref()
                             .map(|v| v.to_string())
-                            .unwrap_or(self.ctx.get_current_catalog());
+                            .unwrap_or_else(|| self.ctx.get_current_catalog());
                         let database_name = database
                             .as_ref()
                             .map(|v| v.to_string())
-                            .unwrap_or(self.ctx.get_current_database());
+                            .unwrap_or_else(|| self.ctx.get_current_database());
                         let table_name = table.to_string();
 
                         let subquery = format!(
@@ -173,9 +173,7 @@ impl<'a> Binder {
                     from: Box::new(query),
                 })))
             }
-            CopyTarget::Query(_) => {
-                return Err(ErrorCode::SyntaxException("COPY INTO <query> is invalid"))
-            }
+            CopyTarget::Query(_) => Err(ErrorCode::SyntaxException("COPY INTO <query> is invalid")),
         }
     }
 
@@ -185,9 +183,9 @@ impl<'a> Binder {
         location: &str,
     ) -> Result<(UserStageInfo, String)> {
         let (mut stage_info, path) = if location.starts_with('@') {
-            parse_stage_location(&self.ctx, &location).await?
+            parse_stage_location(&self.ctx, location).await?
         } else {
-            parse_uri_location(&location, &BTreeMap::new(), &BTreeMap::new())?
+            parse_uri_location(location, &BTreeMap::new(), &BTreeMap::new())?
         };
 
         if !stmt.file_format.is_empty() {
