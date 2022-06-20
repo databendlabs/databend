@@ -16,6 +16,7 @@ test = false
 # Workspace dependencies
 common-base = { path = "../../common/base" }
 common-meta-api = { path = "../../common/meta/api" }
+common-meta-app = { path = "../../common/meta/app" }
 common-meta-grpc = { path = "../../common/meta/grpc" }
 common-meta-types = { path = "../../common/meta/types" }
 databend-meta = { path = "../../metasrv" }

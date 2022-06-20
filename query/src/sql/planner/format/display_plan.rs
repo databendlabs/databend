@@ -82,6 +82,11 @@ impl Plan {
             Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
             Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
             Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
+
+            // Grant
+            Plan::GrantRole(grant_role) => Ok(format!("{:?}", grant_role)),
+            Plan::GrantPriv(grant_priv) => Ok(format!("{:?}", grant_priv)),
+            Plan::ShowGrants(show_grants) => Ok(format!("{:?}", show_grants)),
         }
     }
 }

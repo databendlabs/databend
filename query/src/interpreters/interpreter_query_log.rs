@@ -22,7 +22,6 @@ use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 use serde::Serialize;
 use serde_json;
@@ -105,7 +104,7 @@ pub struct LogEvent {
 #[derive(Clone)]
 pub struct InterpreterQueryLog {
     ctx: Arc<QueryContext>,
-    plan: Option<PlanNode>,
+    query_kind: String,
 }
 
 fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, String, String) {
@@ -132,8 +131,8 @@ fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, Str
 }
 
 impl InterpreterQueryLog {
-    pub fn create(ctx: Arc<QueryContext>, plan: Option<PlanNode>) -> Self {
-        InterpreterQueryLog { ctx, plan }
+    pub fn create(ctx: Arc<QueryContext>, query_kind: String) -> Self {
+        InterpreterQueryLog { ctx, query_kind }
     }
 
     async fn write_log(&self, event: &LogEvent) -> Result<()> {
@@ -215,7 +214,7 @@ impl InterpreterQueryLog {
 
     pub async fn fail_to_start(ctx: Arc<QueryContext>, err: ErrorCode) {
         ctx.set_error(err.clone());
-        InterpreterQueryLog::create(ctx, None)
+        InterpreterQueryLog::create(ctx, "".to_string())
             .log_start(SystemTime::now(), Some(err))
             .await
             .unwrap_or_else(|e| tracing::error!("fail to write query_log {:?}", e));
@@ -233,11 +232,7 @@ impl InterpreterQueryLog {
 
         // Query.
         let query_id = self.ctx.get_id();
-        let query_kind = self
-            .plan
-            .as_ref()
-            .map(|p| p.name().to_string())
-            .unwrap_or_else(|| "".to_string());
+        let query_kind = self.query_kind.clone();
         let query_text = self.ctx.get_query_str();
         // Schema.
         let current_database = self.ctx.get_current_database();
@@ -343,12 +338,7 @@ impl InterpreterQueryLog {
 
         // Query.
         let query_id = self.ctx.get_id();
-        let query_kind = self
-            .plan
-            .as_ref()
-            .map(|p| p.name())
-            .unwrap_or("")
-            .to_string();
+        let query_kind = self.query_kind.clone();
         let query_text = self.ctx.get_query_str();
 
         // Stats.

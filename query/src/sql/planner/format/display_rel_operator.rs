@@ -15,6 +15,7 @@
 use std::fmt::Display;
 
 use common_datavalues::format_data_type_sql;
+use common_functions::scalars::FunctionFactory;
 use itertools::Itertools;
 
 use super::FormatTreeNode;
@@ -37,6 +38,7 @@ use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::Sort;
 use crate::sql::MetadataRef;
+use crate::sql::ScalarExpr;
 
 pub struct FormatContext {
     metadata: MetadataRef,
@@ -147,18 +149,26 @@ pub fn format_logical_inner_join(
         .iter()
         .zip(op.right_conditions.iter())
         .map(|(left, right)| {
+            let func = FunctionFactory::instance()
+                .get("=", &[&left.data_type(), &right.data_type()])
+                .unwrap();
             ComparisonExpr {
                 op: ComparisonOp::Equal,
                 left: Box::new(left.clone()),
                 right: Box::new(right.clone()),
+                return_type: func.return_type(),
             }
             .into()
         })
         .collect();
     let pred: Scalar = preds.iter().fold(preds[0].clone(), |prev, next| {
+        let func = FunctionFactory::instance()
+            .get("and", &[&prev.data_type(), &next.data_type()])
+            .unwrap();
         Scalar::AndExpr(AndExpr {
             left: Box::new(prev),
             right: Box::new(next.clone()),
+            return_type: func.return_type(),
         })
     });
     write!(f, "LogicalInnerJoin: {}", format_scalar(metadata, &pred))
