@@ -69,7 +69,7 @@ pub enum CopyPlanV2 {
         from: Box<ReadDataSourcePlan>,
     },
     IntoStage {
-        stage: UserStageInfo,
+        stage: Box<UserStageInfo>,
         path: String,
         validation_mode: ValidationMode,
         from: Box<Plan>,

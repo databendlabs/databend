@@ -164,7 +164,7 @@ impl<'a> Binder {
                     .map_err(ErrorCode::SyntaxException)?;
 
                 Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
-                    stage: stage_info,
+                    stage: Box::new(stage_info),
                     path,
                     validation_mode,
                     from: Box::new(query),
