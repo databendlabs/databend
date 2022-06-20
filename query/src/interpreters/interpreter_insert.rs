@@ -239,8 +239,7 @@ impl Interpreter for InsertInterpreter {
         let settings = self.ctx.get_settings();
 
         // Use insert in new processor
-        if settings.get_enable_new_processor_framework()? != 0 && self.ctx.get_cluster().is_empty()
-        {
+        if settings.get_enable_new_processor_framework()? != 0 {
             return self.execute_new(input_stream).await;
         }
 
