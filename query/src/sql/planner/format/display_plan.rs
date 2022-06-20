@@ -29,17 +29,32 @@ impl Plan {
 
             Plan::Copy(_) => todo!(),
 
-            Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
-            Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
-            Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
-
             // Databases
+            Plan::ShowDatabases(show_databases) => Ok(format!("{:?}", show_databases)),
+            Plan::ShowCreateDatabase(show_create_database) => {
+                Ok(format!("{:?}", show_create_database))
+            }
             Plan::CreateDatabase(create_database) => Ok(format!("{:?}", create_database)),
             Plan::DropDatabase(drop_database) => Ok(format!("{:?}", drop_database)),
             Plan::RenameDatabase(rename_database) => Ok(format!("{:?}", rename_database)),
 
             // Tables
+            Plan::ShowTables(show_tables) => Ok(format!("{:?}", show_tables)),
+            Plan::ShowCreateTable(show_create_table) => Ok(format!("{:?}", show_create_table)),
+            Plan::ShowTablesStatus(show_tables_status) => Ok(format!("{:?}", show_tables_status)),
             Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
+            Plan::DropTable(drop_table) => Ok(format!("{:?}", drop_table)),
+            Plan::UndropTable(undrop_table) => Ok(format!("{:?}", undrop_table)),
+            Plan::DescribeTable(describe_table) => Ok(format!("{:?}", describe_table)),
+            Plan::RenameTable(rename_table) => Ok(format!("{:?}", rename_table)),
+            Plan::AlterTableClusterKey(alter_table_cluster_key) => {
+                Ok(format!("{:?}", alter_table_cluster_key))
+            }
+            Plan::DropTableClusterKey(drop_table_cluster_key) => {
+                Ok(format!("{:?}", drop_table_cluster_key))
+            }
+            Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
+            Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
 
             // Views
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
@@ -47,11 +62,13 @@ impl Plan {
             Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
 
             // Users
+            Plan::ShowUsers => Ok("SHOW USERS".to_string()),
             Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
             Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
 
             // Roles
+            Plan::ShowRoles => Ok("SHOW ROLES".to_string()),
             Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
             Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
 
@@ -62,6 +79,16 @@ impl Plan {
             Plan::CreateStage(create_stage) => Ok(format!("{:?}", create_stage)),
             Plan::DropStage(s) => Ok(format!("{:?}", s)),
             Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
+
+            // Shows
+            Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
+            Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
+            Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
+
+            // Grant
+            Plan::GrantRole(grant_role) => Ok(format!("{:?}", grant_role)),
+            Plan::GrantPriv(grant_priv) => Ok(format!("{:?}", grant_priv)),
+            Plan::ShowGrants(show_grants) => Ok(format!("{:?}", show_grants)),
         }
     }
 }

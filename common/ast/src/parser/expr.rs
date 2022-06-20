@@ -239,6 +239,7 @@ pub enum ExprElement<'a> {
     /// `EXISTS` expression
     Exists {
         subquery: Query<'a>,
+        not: bool,
     },
     /// Scalar subquery, which will only return a single row with a single column.
     Subquery {
@@ -263,7 +264,16 @@ pub enum ExprElement<'a> {
         interval: Expr<'a>,
         unit: IntervalKind,
     },
+    DateSub {
+        date: Expr<'a>,
+        interval: Expr<'a>,
+        unit: IntervalKind,
+    },
     NullIf {
+        expr1: Expr<'a>,
+        expr2: Expr<'a>,
+    },
+    IfNull {
         expr1: Expr<'a>,
         expr2: Expr<'a>,
     },
@@ -412,8 +422,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 results,
                 else_result,
             },
-            ExprElement::Exists { subquery } => Expr::Exists {
+            ExprElement::Exists { subquery, not } => Expr::Exists {
                 span: elem.span.0,
+                not,
                 subquery: Box::new(subquery),
             },
             ExprElement::Subquery { subquery } => Expr::Subquery {
@@ -440,7 +451,22 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 interval: Box::new(interval),
                 unit,
             },
+            ExprElement::DateSub {
+                date,
+                interval,
+                unit,
+            } => Expr::DateSub {
+                span: elem.span.0,
+                date: Box::new(date),
+                interval: Box::new(interval),
+                unit,
+            },
             ExprElement::NullIf { expr1, expr2 } => Expr::NullIf {
+                span: elem.span.0,
+                expr1: Box::new(expr1),
+                expr2: Box::new(expr2),
+            },
+            ExprElement::IfNull { expr1, expr2 } => Expr::IfNull {
                 span: elem.span.0,
                 expr1: Box::new(expr1),
                 expr2: Box::new(expr2),
@@ -737,8 +763,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
     let exists = map(
-        rule! { EXISTS ~ ^"(" ~ ^#query ~ ^")" },
-        |(_, _, subquery, _)| ExprElement::Exists { subquery },
+        rule! { NOT? ~ EXISTS ~ ^"(" ~ ^#query ~ ^")" },
+        |(opt_not, _, _, subquery, _)| ExprElement::Exists {
+            subquery,
+            not: opt_not.is_some(),
+        },
     );
     let subquery = map(
         rule! {
@@ -782,6 +811,16 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             unit,
         },
     );
+    let date_sub = map(
+        rule! {
+            DATE_SUB ~ "(" ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ "," ~ #interval_kind ~ ")"
+        },
+        |(_, _, date, _, interval, _, unit, _)| ExprElement::DateSub {
+            date,
+            interval,
+            unit,
+        },
+    );
     let interval = map(
         rule! {
             INTERVAL ~ #subexpr(0) ~ #interval_kind
@@ -802,16 +841,29 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, _, expr1, _, expr2, _)| ExprElement::NullIf { expr1, expr2 },
     );
+    let ifnull = map(
+        rule! {
+            IFNULL
+            ~ ^"("
+            ~ ^#subexpr(0)
+            ~ ^","
+            ~ ^#subexpr(0)
+            ~ ^")"
+        },
+        |(_, _, expr1, _, expr2, _)| ExprElement::IfNull { expr1, expr2 },
+    );
     let (rest, (span, elem)) = consumed(alt((
-        rule! (
+        rule!(
             #is_null : "`... IS [NOT] NULL`"
             | #in_list : "`[NOT] IN (<expr>, ...)`"
             | #in_subquery : "`[NOT] IN (SELECT ...)`"
+            | #exists : "`[NOT] EXISTS (SELECT ...)`"
             | #between : "`[NOT] BETWEEN ... AND ...`"
             | #binary_op : "<operator>"
             | #unary_op : "<operator>"
             | #cast : "`CAST(... AS ...)`"
             | #date_add: "`DATE_ADD(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+            | #date_sub: "`DATE_SUB(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
             | #interval: "`INTERVAL ... (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
             | #pg_cast : "`::<type_name>`"
             | #extract : "`EXTRACT((YEAR | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
@@ -820,6 +872,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #nullif: "`NULLIF(..., ...)`"
+            | #ifnull: "`IFNULL(..., ...)`"
         ),
         rule!(
             #count_all : "COUNT(*)"
@@ -828,7 +881,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #function_call : "<function>"
             | #literal : "<literal>"
             | #case : "`CASE ... END`"
-            | #exists : "`EXISTS (SELECT ...)`"
             | #subquery : "`(SELECT ...)`"
             | #group
             | #column_ref : "<column>"

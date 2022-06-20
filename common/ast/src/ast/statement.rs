@@ -17,9 +17,11 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_meta_types::AuthType;
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 use common_meta_types::UserOptionFlag;
+use common_meta_types::UserPrivilegeType;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -100,6 +102,7 @@ pub enum Statement<'a> {
     DropView(DropViewStmt<'a>),
 
     // User
+    ShowUsers,
     CreateUser(CreateUserStmt),
     AlterUser {
         // None means current user
@@ -112,6 +115,7 @@ pub enum Statement<'a> {
         if_exists: bool,
         user: UserIdentity,
     },
+    ShowRoles,
     CreateRole {
         if_not_exists: bool,
         role_name: String,
@@ -119,6 +123,10 @@ pub enum Statement<'a> {
     DropRole {
         if_exists: bool,
         role_name: String,
+    },
+    Grant(GrantStatement),
+    ShowGrants {
+        principal: Option<PrincipalIdentity>,
     },
 
     // UDF
@@ -252,6 +260,7 @@ pub struct CreateTableStmt<'a> {
     pub cluster_by: Vec<Expr<'a>>,
     pub as_query: Option<Box<Query<'a>>>,
     pub comment: Option<String>,
+    pub transient: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -438,6 +447,7 @@ pub struct ColumnDefinition<'a> {
     pub data_type: TypeName,
     pub nullable: bool,
     pub default_expr: Option<Box<Expr<'a>>>,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -476,9 +486,16 @@ pub enum KillTarget {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InsertSource<'a> {
-    Streaming { format: String },
-    Values { values_tokens: &'a [Token<'a>] },
-    Select { query: Box<Query<'a>> },
+    Streaming {
+        format: String,
+        rest_tokens: &'a [Token<'a>],
+    },
+    Values {
+        rest_tokens: &'a [Token<'a>],
+    },
+    Select {
+        query: Box<Query<'a>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -501,6 +518,33 @@ pub enum RoleOption {
     NoTenantSetting,
     ConfigReload,
     NoConfigReload,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrantStatement {
+    pub source: GrantSource,
+    pub principal: PrincipalIdentity,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GrantSource {
+    Role {
+        role: String,
+    },
+    Privs {
+        privileges: Vec<UserPrivilegeType>,
+        level: GrantLevel,
+    },
+    ALL {
+        level: GrantLevel,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GrantLevel {
+    Global,
+    Database(Option<String>),
+    Table(Option<String>, String),
 }
 
 impl RoleOption {
@@ -541,6 +585,9 @@ impl<'a> Display for ColumnDefinition<'a> {
         }
         if let Some(default_expr) = &self.default_expr {
             write!(f, " DEFAULT {default_expr}")?;
+        }
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT '{comment}'")?;
         }
         Ok(())
     }
@@ -670,12 +717,20 @@ impl<'a> Display for Statement<'a> {
                     write!(f, ")")?;
                 }
                 match source {
-                    InsertSource::Streaming { format } => write!(f, " FORMAT {format}")?,
-                    InsertSource::Values { values_tokens } => write!(
+                    InsertSource::Streaming {
+                        format,
+                        rest_tokens,
+                    } => write!(
+                        f,
+                        " FORMAT {format} {}",
+                        &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
+                            ..rest_tokens.last().unwrap().span.end]
+                    )?,
+                    InsertSource::Values { rest_tokens } => write!(
                         f,
                         " VALUES {}",
-                        &values_tokens[0].source[values_tokens.first().unwrap().span.start
-                            ..values_tokens.last().unwrap().span.end]
+                        &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
+                            ..rest_tokens.last().unwrap().span.end]
                     )?,
                     InsertSource::Select { query } => write!(f, " {query}")?,
                 }
@@ -857,8 +912,13 @@ impl<'a> Display for Statement<'a> {
                 comment,
                 cluster_by,
                 as_query,
+                transient,
             }) => {
-                write!(f, "CREATE TABLE ")?;
+                write!(f, "CREATE ")?;
+                if *transient {
+                    write!(f, "TRANSIENT ")?;
+                }
+                write!(f, "TABLE ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
@@ -1029,6 +1089,12 @@ impl<'a> Display for Statement<'a> {
                 }
                 write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
             }
+            Statement::ShowUsers => {
+                write!(f, "SHOW USERS")?;
+            }
+            Statement::ShowRoles => {
+                write!(f, "SHOW ROLES")?;
+            }
             Statement::CreateUser(CreateUserStmt {
                 if_not_exists,
                 user,
@@ -1095,7 +1161,7 @@ impl<'a> Display for Statement<'a> {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " {role}")?;
+                write!(f, " '{role}'")?;
             }
             Statement::DropRole {
                 if_exists,
@@ -1105,7 +1171,73 @@ impl<'a> Display for Statement<'a> {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {role}")?;
+                write!(f, " '{role}'")?;
+            }
+            Statement::Grant(GrantStatement { source, principal }) => {
+                write!(f, "GRANT")?;
+                match source {
+                    GrantSource::Role { role } => write!(f, " ROLE {role}")?,
+                    GrantSource::Privs { privileges, level } => {
+                        write!(
+                            f,
+                            " {}",
+                            privileges
+                                .iter()
+                                .map(|p| p.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )?;
+                        write!(f, " ON")?;
+                        match level {
+                            GrantLevel::Global => write!(f, " *.*")?,
+                            GrantLevel::Database(database_name) => {
+                                if let Some(database_name) = database_name {
+                                    write!(f, " {database_name}.*")?;
+                                }
+                            }
+                            GrantLevel::Table(database_name, table_name) => {
+                                if let Some(database_name) = database_name {
+                                    write!(f, " {database_name}.{table_name}")?;
+                                }
+                            }
+                        }
+                    }
+                    GrantSource::ALL { level, .. } => {
+                        write!(f, " ALL PRIVILEGES")?;
+                        write!(f, " ON")?;
+                        match level {
+                            GrantLevel::Global => write!(f, " *.*")?,
+                            GrantLevel::Database(database_name) => {
+                                if let Some(database_name) = database_name {
+                                    write!(f, " {database_name}.*")?;
+                                } else {
+                                    write!(f, " *")?;
+                                }
+                            }
+                            GrantLevel::Table(database_name, table_name) => {
+                                if let Some(database_name) = database_name {
+                                    write!(f, " {database_name}.{table_name}")?;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                write!(f, " TO")?;
+                match principal {
+                    PrincipalIdentity::User(user) => write!(f, " USER {user}")?,
+                    PrincipalIdentity::Role(role) => write!(f, " ROLE {role}")?,
+                }
+            }
+            Statement::ShowGrants { principal } => {
+                write!(f, "SHOW GRANTS")?;
+                if let Some(principal) = principal {
+                    write!(f, " FOR")?;
+                    match principal {
+                        PrincipalIdentity::User(user) => write!(f, " USER {user}")?,
+                        PrincipalIdentity::Role(role) => write!(f, " ROLE {role}")?,
+                    }
+                }
             }
             Statement::CreateUDF {
                 if_not_exists,

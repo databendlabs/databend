@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future::Future;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -41,23 +40,22 @@ impl StreamSource {
     }
 }
 
+#[async_trait::async_trait]
 impl AsyncSource for StreamSource {
     const NAME: &'static str = "stream source";
-    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
-    fn generate(&mut self) -> Self::BlockFuture<'_> {
-        async move {
-            match self
-                .stream
-                .as_mut()
-                .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))?
-                .next()
-                .await
-            {
-                Some(Ok(block)) => Ok(Some(block)),
-                Some(Err(e)) => Err(e),
-                None => Ok(None),
-            }
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        match self
+            .stream
+            .as_mut()
+            .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))?
+            .next()
+            .await
+        {
+            Some(Ok(block)) => Ok(Some(block)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
         }
     }
 }

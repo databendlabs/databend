@@ -309,6 +309,8 @@ pub enum TokenKind {
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
     DATE_ADD,
+    #[token("DATE_SUB", ignore(ascii_case))]
+    DATE_SUB,
     #[token("DATETIME", ignore(ascii_case))]
     DATETIME,
     #[token("DAY", ignore(ascii_case))]
@@ -441,8 +443,8 @@ pub enum TokenKind {
     KEY,
     #[token("KILL", ignore(ascii_case))]
     KILL,
-    #[token("ROLE", ignore(ascii_case))]
-    ROLE,
+    #[token("ROLES", ignore(ascii_case))]
+    ROLES,
     #[token("LEADING", ignore(ascii_case))]
     LEADING,
     #[token("LEFT", ignore(ascii_case))]
@@ -525,8 +527,16 @@ pub enum TokenKind {
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
     RENAME,
+    #[token("GRANT", ignore(ascii_case))]
+    GRANT,
+    #[token("ROLE", ignore(ascii_case))]
+    ROLE,
+    #[token("PRIVILEGES", ignore(ascii_case))]
+    PRIVILEGES,
     #[token("REMOVE", ignore(ascii_case))]
     REMOVE,
+    #[token("GRANTS", ignore(ascii_case))]
+    GRANTS,
     #[token("RIGHT", ignore(ascii_case))]
     RIGHT,
     #[token("RLIKE", ignore(ascii_case))]
@@ -561,6 +571,14 @@ pub enum TokenKind {
     SNAPSHOT,
     #[token("STAGE", ignore(ascii_case))]
     STAGE,
+    #[token("USAGE", ignore(ascii_case))]
+    USAGE,
+    #[token("UPDATE", ignore(ascii_case))]
+    UPDATE,
+    #[token("DELETE", ignore(ascii_case))]
+    DELETE,
+    #[token("SUPER", ignore(ascii_case))]
+    SUPER,
     #[token("STATUS", ignore(ascii_case))]
     STATUS,
     #[token("STRING", ignore(ascii_case))]
@@ -591,6 +609,8 @@ pub enum TokenKind {
     TOKEN,
     #[token("TRAILING", ignore(ascii_case))]
     TRAILING,
+    #[token("TRANSIENT", ignore(ascii_case))]
+    TRANSIENT,
     #[token("TRIM", ignore(ascii_case))]
     TRIM,
     #[token("TRUE", ignore(ascii_case))]
@@ -621,6 +641,8 @@ pub enum TokenKind {
     USE,
     #[token("USER", ignore(ascii_case))]
     USER,
+    #[token("USERS", ignore(ascii_case))]
+    USERS,
     #[token("USING", ignore(ascii_case))]
     USING,
     #[token("VALUES", ignore(ascii_case))]
@@ -649,6 +671,8 @@ pub enum TokenKind {
     NULLIF,
     #[token("RANDOM", ignore(ascii_case))]
     RANDOM,
+    #[token("IFNULL", ignore(ascii_case))]
+    IFNULL,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -752,6 +776,7 @@ impl TokenKind {
             // | TokenKind::FOREIGN
             // | TokenKind::GREATEST
             // | TokenKind::GROUPING
+            | TokenKind::IFNULL
             | TokenKind::IN
             // | TokenKind::INITIALLY
             // | TokenKind::INOUT
@@ -841,6 +866,7 @@ impl TokenKind {
             // | TokenKind::WINDOW
             | TokenKind::WITH
             | TokenKind::DATE_ADD
+            | TokenKind::DATE_SUB
             if !after_as => true,
             _ => false
         }

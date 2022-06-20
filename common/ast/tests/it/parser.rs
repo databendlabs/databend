@@ -67,7 +67,6 @@ fn test_statement() {
         r#"show create table a.b;"#,
         r#"explain pipeline select a from b;"#,
         r#"describe a;"#,
-        r#"describe a; describe b"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table a.b like c.d;"#,
@@ -125,52 +124,40 @@ fn test_statement() {
         r#"ALTER DATABASE IF EXISTS catalog.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE catalog.c RENAME TO a;"#,
+        r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON * TO ROLE 'role1';"#,
+        r#"GRANT ALL ON *.* TO 'test-grant'@'localhost';"#,
+        r#"GRANT ALL ON *.* TO ROLE 'role2';"#,
+        r#"GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT ALL PRIVILEGES ON * TO ROLE 'role3';"#,
+        r#"GRANT ROLE 'test' TO 'test-user';"#,
+        r#"GRANT ROLE 'test' TO USER 'test-user';"#,
+        r#"GRANT ROLE 'test' TO ROLE 'test-user';"#,
+        r#"GRANT SELECT ON db01.* TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.* TO ROLE 'role1'"#,
+        r#"GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.tb1 TO ROLE 'role1';"#,
+        r#"SHOW GRANTS;"#,
+        r#"SHOW GRANTS FOR 'test-grant'@'localhost';"#,
+        r#"SHOW GRANTS FOR USER 'test-grant'@'localhost';"#,
+        r#"SHOW GRANTS FOR ROLE 'role1';"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let backtrace = Backtrace::new();
-        let stmts = parse_sql(&tokens, &backtrace).unwrap();
+        let stmt = parse_sql(&tokens, &backtrace).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
-        for stmt in stmts {
-            writeln!(file, "---------- Output ---------").unwrap();
-            writeln!(file, "{}", stmt).unwrap();
-            writeln!(file, "---------- AST ------------").unwrap();
-            writeln!(file, "{:#?}", stmt).unwrap();
-            writeln!(file, "\n").unwrap();
-        }
-    }
-}
-
-// TODO(andylokandy): remove this test once the new optimizer has been being tested on suites
-#[test]
-fn test_statements_in_legacy_suites() {
-    for entry in glob::glob("../../tests/suites/**/*.sql").unwrap() {
-        let file_content = std::fs::read(entry.unwrap()).unwrap();
-        let file_str = String::from_utf8_lossy(&file_content).into_owned();
-
-        // Remove error cases
-        let file_str = regex::Regex::new(".+ErrorCode.+\n")
-            .unwrap()
-            .replace_all(&file_str, "")
-            .into_owned();
-
-        // TODO(andylokandy): support all cases eventually
-        // Remove currently unimplemented cases
-        let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|OVER|CHARSET|COLLATION).*\n",
-        )
-        .unwrap()
-        .replace_all(&file_str, "")
-        .into_owned();
-
-        let tokens = tokenize_sql(&file_str).unwrap();
-        let backtrace = Backtrace::new();
-        parse_sql(&tokens, &backtrace).expect(
-            "Parser error should not exist in integration suites. \
-            Please add parser error cases to `common/ast/tests/it/parser.rs`",
-        );
+        writeln!(file, "---------- Output ---------").unwrap();
+        writeln!(file, "{}", stmt).unwrap();
+        writeln!(file, "---------- AST ------------").unwrap();
+        writeln!(file, "{:#?}", stmt).unwrap();
+        writeln!(file, "\n").unwrap();
     }
 }
 
@@ -194,6 +181,12 @@ fn test_statement_error() {
         r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
         r#"create role 'test'@'localhost';"#,
         r#"drop role 'test'@'localhost';"#,
+        r#"drop role role1;"#,
+        r#"GRANT ROLE test TO ROLE 'test-user';"#,
+        r#"GRANT ROLE 'test' TO ROLE test-user;"#,
+        r#"GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON *.c TO 'test-grant'@'localhost';"#,
+        r#"SHOW GRANT FOR ROLE role1;"#,
     ];
 
     for case in cases {
@@ -323,6 +316,8 @@ fn test_expr() {
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
         r#"nullif(1, 1)"#,
         r#"nullif(a, b)"#,
+        r#"ifnull(1, 1)"#,
+        r#"ifnull(a, b)"#,
     ];
 
     for case in cases {

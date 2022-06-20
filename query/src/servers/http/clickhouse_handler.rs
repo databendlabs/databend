@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -33,8 +34,10 @@ use poem::web::Query;
 use poem::Body;
 use poem::Endpoint;
 use poem::EndpointExt;
+use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
+use serde::Serialize;
 
 use crate::formats::output_format::OutputFormatType;
 use crate::interpreters::InterpreterFactory;
@@ -46,10 +49,12 @@ use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct StatementHandlerParams {
     query: Option<String>,
     compress: Option<u8>,
+    #[serde(flatten)]
+    settings: HashMap<String, String>,
 }
 
 impl StatementHandlerParams {
@@ -68,7 +73,7 @@ async fn execute(
     format: Option<String>,
     input_stream: Option<SendableDataBlockStream>,
     compress: bool,
-) -> Result<Body> {
+) -> Result<impl IntoResponse> {
     let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
     let _ = interpreter
         .start()
@@ -97,8 +102,8 @@ async fn execute(
         fmt = OutputFormatType::from_str(format.as_str())?;
     }
 
-    let mut output_format = fmt.create_format(plan.schema());
-    let prefix = Ok(output_format.serialize_prefix(&format_setting)?);
+    let mut output_format = fmt.create_format(plan.schema(), format_setting);
+    let prefix = Ok(output_format.serialize_prefix()?);
 
     let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
         if compress {
@@ -115,7 +120,7 @@ async fn execute(
         while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
-                    yield compress_fn(output_format.serialize_block(&block, &format_setting));
+                    yield compress_fn(output_format.serialize_block(&block));
                 },
                 Err(err) => yield(Err(err)),
             };
@@ -127,21 +132,27 @@ async fn execute(
             .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
     };
 
-    Ok(Body::from_bytes_stream(stream))
+    Ok(Body::from_bytes_stream(stream).with_content_type(fmt.get_content_type()))
 }
 
 #[poem::handler]
 pub async fn clickhouse_handler_get(
     ctx: &HttpQueryContext,
     Query(params): Query<StatementHandlerParams>,
-) -> PoemResult<Body> {
+) -> PoemResult<impl IntoResponse> {
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     let context = session
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
 
+    session
+        .get_settings()
+        .set_batch_settings(&params.settings, false)
+        .map_err(BadRequest)?;
+
     let sql = params.query();
+
     let (plan, format) = PlanParser::parse_with_format(context.clone(), &sql)
         .await
         .map_err(BadRequest)?;
@@ -157,12 +168,17 @@ pub async fn clickhouse_handler_post(
     ctx: &HttpQueryContext,
     body: Body,
     Query(params): Query<StatementHandlerParams>,
-) -> PoemResult<Body> {
+) -> PoemResult<impl IntoResponse> {
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     let ctx = session
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
+
+    session
+        .get_settings()
+        .set_batch_settings(&params.settings, false)
+        .map_err(BadRequest)?;
 
     let mut sql = params.query();
     sql.push_str(body.into_string().await?.as_str());

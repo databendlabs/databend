@@ -14,7 +14,6 @@
 //
 
 use std::any::Any;
-use std::future::Future;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -186,36 +185,34 @@ impl FuseHistorySource {
     }
 }
 
+#[async_trait::async_trait]
 impl AsyncSource for FuseHistorySource {
     const NAME: &'static str = "fuse_snapshot";
 
-    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
-
-    fn generate(&mut self) -> Self::BlockFuture<'_> {
-        async {
-            if self.finish {
-                return Ok(None);
-            }
-
-            self.finish = true;
-            let tenant_id = self.ctx.get_tenant();
-            let tbl = self
-                .ctx
-                .get_catalog(&self.catalog_name)?
-                .get_table(
-                    tenant_id.as_str(),
-                    self.arg_database_name.as_str(),
-                    self.arg_table_name.as_str(),
-                )
-                .await?;
-
-            let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-            Ok(Some(
-                FuseSnapshot::new(self.ctx.clone(), tbl)
-                    .get_history()
-                    .await?,
-            ))
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.finish {
+            return Ok(None);
         }
+
+        self.finish = true;
+        let tenant_id = self.ctx.get_tenant();
+        let tbl = self
+            .ctx
+            .get_catalog(&self.catalog_name)?
+            .get_table(
+                tenant_id.as_str(),
+                self.arg_database_name.as_str(),
+                self.arg_table_name.as_str(),
+            )
+            .await?;
+
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        Ok(Some(
+            FuseSnapshot::new(self.ctx.clone(), tbl)
+                .get_history()
+                .await?,
+        ))
     }
 }
 

@@ -163,6 +163,10 @@ NULL	2	3
 7
 8
 9
+2	3
+1	2
+2
+1
 ====SELECT_WITHOUT_FROM====
 2
 8
@@ -248,6 +252,12 @@ new_planner
 18
 ====Memory Table====
 1
+=== Test CASE-WHEN ===
+25	25	25	25
+NULL
+ge1
+ge2
+1.0
 === Test Subquery In From ===
 1
 2
@@ -354,3 +364,26 @@ BuildHashTable × 1 processor
 2	3
 ====Except Distinct===
 1	2
+====Outer Join====
+1	2	1	4
+NULL	NULL	2	3
+NULL	NULL	6	8
+1	2	1	4
+3	4	NULL	NULL
+7	8	NULL	NULL
+====NULL====
+0	0	0	0
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	1
+NULL	NULL	NULL	1
+NULL	NULL	NULL	1
+NULL	NULL	NULL	NULL
+12	1	0	1
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	1
+NULL	NULL	NULL	1
+0
+1
+2
+3
+4

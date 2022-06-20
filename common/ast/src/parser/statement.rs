@@ -15,10 +15,13 @@
 use std::collections::BTreeMap;
 
 use common_meta_types::AuthType;
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
+use common_meta_types::UserPrivilegeType;
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
+use nom::Slice;
 
 use super::error::ErrorKind;
 use crate::ast::*;
@@ -27,18 +30,6 @@ use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
-
-pub fn statements(i: Input) -> IResult<Vec<Statement>> {
-    let stmt = map(statement, Some);
-    let eoi = map(rule! { &EOI }, |_| None);
-
-    map(
-        rule!(
-            #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi }) ~ &EOI
-        ),
-        |(stmts, _)| stmts.into_iter().flatten().collect(),
-    )(i)
-}
 
 pub fn statement(i: Input) -> IResult<Statement> {
     let explain = map(
@@ -196,7 +187,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let show_tables_status = map(
         rule! {
-            SHOW ~ TABLE ~ STATUS ~ ( FROM ~ ^#ident )? ~ #show_limit?
+            SHOW ~ ( TABLES | TABLE ) ~ STATUS ~ ( FROM ~ ^#ident )? ~ #show_limit?
         },
         |(_, _, _, opt_database, limit)| {
             Statement::ShowTablesStatus(ShowTablesStatusStmt {
@@ -207,7 +198,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let create_table = map(
         rule! {
-            CREATE ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ #peroid_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #table_option )*
@@ -217,6 +208,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
         |(
             _,
+            opt_transient,
             _,
             opt_if_not_exists,
             (catalog, database, table),
@@ -238,6 +230,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
                     .map(|(_, _, _, exprs, _)| exprs)
                     .unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
+                transient: opt_transient.is_some(),
             })
         },
     );
@@ -374,6 +367,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map(
         rule! {
             CREATE ~ USER ~ ( IF ~ NOT ~ EXISTS )?
@@ -421,6 +415,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             user,
         },
     );
+    let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
     let create_role = map(
         rule! {
             CREATE ~ ROLE ~ ( IF ~ NOT ~ EXISTS )? ~ #literal_string
@@ -437,6 +432,25 @@ pub fn statement(i: Input) -> IResult<Statement> {
         |(_, _, opt_if_exists, role_name)| Statement::DropRole {
             if_exists: opt_if_exists.is_some(),
             role_name,
+        },
+    );
+    let grant_priv = map(
+        rule! {
+            GRANT ~ #grant_source ~ TO ~ #grant_option
+        },
+        |(_, source, _, grant_option)| {
+            Statement::Grant(GrantStatement {
+                source,
+                principal: grant_option,
+            })
+        },
+    );
+    let show_grants = map(
+        rule! {
+            SHOW ~ GRANTS ~ (FOR ~ #grant_option)?
+        },
+        |(_, _, opt_principal)| Statement::ShowGrants {
+            principal: opt_principal.map(|(_, principal)| principal),
         },
     );
     let create_udf = map(
@@ -615,7 +629,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
     );
 
-    alt((
+    let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
@@ -651,9 +665,11 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
         ),
         rule!(
-            #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <role_option> ...]`"
+            #show_users : "`SHOW USERS`"
+            | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <role_option> ...]`"
             | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <role_option> ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
+            | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] '<role_name>']`"
             | #drop_role : "`DROP ROLE [IF EXISTS] '<role_name>'`"
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"
@@ -680,7 +696,57 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`"
         ),
-    ))(i)
+        rule!(
+            #grant_priv : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
+            | #show_grants : "`SHOW GRANTS [FOR  { ROLE <role_name> | [USER] <user> }]`"
+        ),
+    ));
+
+    map(
+        rule! {
+            #statement_body ~ ";"? ~ &EOI
+        },
+        |(stmt, _, _)| stmt,
+    )(i)
+}
+
+// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
+// stop the parser immediately and return the rest tokens by `InsertSource`.
+//
+// This is a hack to make it able to parse a large streaming insert statement.
+pub fn insert_source(i: Input) -> IResult<InsertSource> {
+    let streaming = map(
+        rule! {
+            FORMAT ~ #ident ~ #rest_tokens
+        },
+        |(_, format, rest_tokens)| InsertSource::Streaming {
+            format: format.name,
+            rest_tokens,
+        },
+    );
+    let values = map(
+        rule! {
+            VALUES ~ #rest_tokens
+        },
+        |(_, rest_tokens)| InsertSource::Values { rest_tokens },
+    );
+    let query = map(query, |query| InsertSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+        #streaming
+        | #values
+        | #query
+    )(i)
+}
+
+pub fn rest_tokens<'a>(i: Input<'a>) -> IResult<&'a [Token]> {
+    if i.last().map(|token| token.kind) == Some(EOI) {
+        Ok((i.slice(i.len() - 1..), i.slice(..i.len() - 1).0))
+    } else {
+        Ok((i.slice(i.len()..), i.0))
+    }
 }
 
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
@@ -700,20 +766,28 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         },
         |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
     );
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
 
     map(
         rule! {
             #ident
             ~ #type_name
             ~ ( #nullable | #default_expr )*
-            : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`"
+            ~ ( #comment )?
+            : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>] [COMMENT '<comment>']`"
         },
-        |(name, data_type, constraints)| {
+        |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
                 nullable: false,
                 default_expr: None,
+                comment,
             };
             for constraint in constraints {
                 match constraint {
@@ -728,29 +802,99 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     )(i)
 }
 
-pub fn insert_source(i: Input) -> IResult<InsertSource> {
-    let streaming = map(
+pub fn grant_source(i: Input) -> IResult<GrantSource> {
+    let role = map(
         rule! {
-            FORMAT ~ #ident
+            ROLE ~ #literal_string
         },
-        |(_, format)| InsertSource::Streaming {
-            format: format.name,
+        |(_, role_name)| GrantSource::Role { role: role_name },
+    );
+    let privs = map(
+        rule! {
+            #comma_separated_list1(priv_type) ~ ON ~ #grant_level
+        },
+        |(privs, _, level)| GrantSource::Privs {
+            privileges: privs,
+            level,
         },
     );
-    let values = map(
-        rule! {
-            VALUES ~ #values_tokens
-        },
-        |(_, values_tokens)| InsertSource::Values { values_tokens },
+    let all = map(
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ #grant_level },
+        |(_, _, _, level)| GrantSource::ALL { level },
     );
-    let query = map(query, |query| InsertSource::Select {
-        query: Box::new(query),
-    });
 
     rule!(
-        #streaming
-        | #values
-        | #query
+        #role : "ROLE <role_name>"
+        | #privs : "<privileges> ON <privileges_level>"
+        | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
+    )(i)
+}
+
+pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
+    alt((
+        value(UserPrivilegeType::Usage, rule! { USAGE }),
+        value(UserPrivilegeType::Select, rule! { SELECT }),
+        value(UserPrivilegeType::Insert, rule! { INSERT }),
+        value(UserPrivilegeType::Update, rule! { UPDATE }),
+        value(UserPrivilegeType::Delete, rule! { DELETE }),
+        value(UserPrivilegeType::Create, rule! { CREATE }),
+        value(UserPrivilegeType::Drop, rule! { DROP }),
+        value(UserPrivilegeType::Alter, rule! { ALTER }),
+        value(UserPrivilegeType::Super, rule! { SUPER }),
+        value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER }),
+        value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
+        value(UserPrivilegeType::Grant, rule! { GRANT }),
+        value(UserPrivilegeType::CreateStage, rule! { CREATE ~ STAGE }),
+        value(UserPrivilegeType::Set, rule! { SET }),
+    ))(i)
+}
+
+pub fn grant_level(i: Input) -> IResult<GrantLevel> {
+    // *.*
+    let global = map(rule! { "*" ~ "." ~ "*" }, |_| GrantLevel::Global);
+    // db.*
+    // "*": as current db or "table" with current db
+    let db = map(
+        rule! {
+            ( #ident ~ "." )? ~ "*"
+        },
+        |(database, _)| GrantLevel::Database(database.map(|(database, _)| database.name)),
+    );
+    // db.table
+    let table = map(
+        rule! {
+            ( #ident ~ "." )? ~ #ident
+        },
+        |(database, table)| {
+            GrantLevel::Table(database.map(|(database, _)| database.name), table.name)
+        },
+    );
+
+    rule!(
+        #global : "*.*"
+        | #db : "<database>.*"
+        | #table : "<database>.<table>"
+    )(i)
+}
+
+pub fn grant_option(i: Input) -> IResult<PrincipalIdentity> {
+    let role = map(
+        rule! {
+            ROLE ~ #literal_string
+        },
+        |(_, role_name)| PrincipalIdentity::Role(role_name),
+    );
+
+    let user = map(
+        rule! {
+            USER? ~ #user_identity
+        },
+        |(_, user)| PrincipalIdentity::User(user),
+    );
+
+    rule!(
+        #role
+        | #user
     )(i)
 }
 
@@ -937,15 +1081,6 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
         },
         |(_, _, engine)| engine,
     )(i)
-}
-
-pub fn values_tokens(i: Input) -> IResult<&[Token]> {
-    let semicolon_pos = i
-        .iter()
-        .position(|token| token.text() == ";")
-        .unwrap_or(i.len() - 1);
-    let (value_tokens, rest_tokens) = i.0.split_at(semicolon_pos);
-    Ok((Input(rest_tokens, i.1), value_tokens))
 }
 
 pub fn role_option(i: Input) -> IResult<RoleOption> {

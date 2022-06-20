@@ -95,17 +95,20 @@ impl<'a> AggregateRewriter<'a> {
             Scalar::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::OrExpr(scalar) => Ok(OrExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::FunctionCall(func) => {
@@ -409,7 +412,7 @@ impl<'a> Binder {
         let index = index as usize - 1;
         if index >= select_list.items.len() {
             return Err(ErrorCode::SemanticError(expr.span().display_error(
-                format!("GROUP BY position {} is not in select list", index),
+                format!("GROUP BY position {} is not in select list", index + 1),
             )));
         }
         let item = select_list

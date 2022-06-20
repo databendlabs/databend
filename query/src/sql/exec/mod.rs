@@ -30,6 +30,7 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionFactory;
 use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
@@ -153,7 +154,16 @@ impl PipelineBuilder {
                 name.clone(),
                 Box::new(Expression::Column(self.get_field_name(*index))),
             ));
-            let field = DataField::new(name.as_str(), column_entry.data_type.clone());
+            let field_name = self.get_field_name(*index);
+            let mut data_type = column_entry.data_type.clone();
+            // Field info in the input_schema is preferred
+            if input_schema.has_field(&field_name) {
+                data_type = input_schema
+                    .field_with_name(&field_name)?
+                    .data_type()
+                    .clone();
+            }
+            let field = DataField::new(name.as_str(), data_type);
             output_fields.push(field);
         }
         let output_schema = Arc::new(DataSchema::new(output_fields));
@@ -264,7 +274,7 @@ impl PipelineBuilder {
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
         let schema_builder = DataSchemaBuilder::new(self.metadata.clone());
-        let output_schema = schema_builder.build_project(project)?;
+        let output_schema = schema_builder.build_project(project, input_schema.clone())?;
         let mut expressions = Vec::with_capacity(project.columns.len());
         for index in project.columns.iter() {
             let expression = Expression::Column(self.get_field_name(*index));
@@ -325,9 +335,13 @@ impl PipelineBuilder {
         let eb = ExpressionBuilder::create(self.metadata.clone());
         let scalars = &filter.predicates;
         let pred = scalars.iter().cloned().reduce(|acc, v| {
+            let func = FunctionFactory::instance()
+                .get("and", &[&acc.data_type(), &v.data_type()])
+                .unwrap();
             AndExpr {
                 left: Box::new(acc),
                 right: Box::new(v),
+                return_type: func.return_type(),
             }
             .into()
         });
@@ -538,7 +552,11 @@ impl PipelineBuilder {
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
         let builder = DataSchemaBuilder::new(self.metadata.clone());
-        let output_schema = builder.build_join(probe_schema.clone(), build_schema.clone());
+        let output_schema = builder.build_join(
+            probe_schema.clone(),
+            build_schema.clone(),
+            &hash_join.join_type,
+        );
 
         let eb = ExpressionBuilder::create(self.metadata.clone());
         let build_expressions = hash_join
@@ -738,7 +756,7 @@ impl PipelineBuilder {
                 subquery.clone(),
             ))
         })?;
-        Ok(schema_builder.build_join(input_schema, subquery_schema))
+        Ok(schema_builder.build_join(input_schema, subquery_schema, &JoinType::Inner))
     }
 }
 

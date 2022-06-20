@@ -275,9 +275,19 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.53"
+version = "0.1.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed6aa3524a2dfcf9fe180c51eae2b58738348d819517ceadf95789c51fff7600"
+checksum = "96cf8829f67d2eab0b2dfa42c5d0ef737e0724e4a82b01b3e292456202b19716"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "async-trait"
+version = "0.1.56"
+source = "git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5#f0b0fd55141be00fc3e224e556b6cc6b759e353e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -325,7 +335,7 @@ version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab2504b827a8bef941ba3dd64bdffe9cf56ca182908a147edd6189c95fbcae7d"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "axum-core",
  "bitflags",
  "bytes 1.1.0",
@@ -354,7 +364,7 @@ version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da31c0ed7b4690e2c78fe4b880d21cd7db04a346ebc658b4270251b695437f17"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 1.1.0",
  "futures-util",
  "http",
@@ -978,7 +988,7 @@ dependencies = [
 name = "common-ast"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "codespan-reporting",
  "common-base",
  "common-datavalues",
@@ -1005,7 +1015,7 @@ name = "common-base"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-exception",
  "common-macros",
  "common-tracing",
@@ -1055,7 +1065,7 @@ dependencies = [
 name = "common-contexts"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-base",
  "opendal",
  "time 0.3.9",
@@ -1228,7 +1238,7 @@ dependencies = [
 name = "common-management"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-ast",
  "common-base",
  "common-datavalues",
@@ -1250,7 +1260,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-base",
  "common-datavalues",
  "common-exception",
@@ -1303,7 +1313,7 @@ name = "common-meta-embedded"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-base",
  "common-exception",
  "common-meta-api",
@@ -1327,6 +1337,7 @@ dependencies = [
  "common-meta-api",
  "common-meta-app",
  "common-meta-types",
+ "common-metrics",
  "common-proto-conv",
  "common-protos",
  "common-tracing",
@@ -1347,7 +1358,7 @@ name = "common-meta-raft-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 1.1.0",
  "common-base",
  "common-exception",
@@ -1485,7 +1496,7 @@ name = "common-streams"
 version = "0.1.0"
 dependencies = [
  "async-stream",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono-tz",
  "common-arrow",
  "common-base",
@@ -1928,7 +1939,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "async-entry",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 3.1.18",
  "common-arrow",
  "common-base",
@@ -1974,6 +1985,7 @@ dependencies = [
  "clap 3.1.18",
  "common-base",
  "common-meta-api",
+ "common-meta-app",
  "common-meta-grpc",
  "common-meta-types",
  "databend-meta",
@@ -2011,7 +2023,7 @@ dependencies = [
  "async-compat",
  "async-recursion",
  "async-stream",
- "async-trait",
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
  "backoff",
  "backon",
  "base64 0.13.0",
@@ -2123,7 +2135,7 @@ version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "421fe0f90f2ab22016f32a9881be5134fdd71c65298917084b0c7477cbc3856e"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "deadpool-runtime",
  "num_cpus",
  "retain_mut",
@@ -3326,7 +3338,7 @@ version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e85a1509a128c855368e135cffcde7eac17d8e1083f41e2b98c58bc1a5074be"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-util",
 ]
 
@@ -4227,9 +4239,9 @@ dependencies = [
 
 [[package]]
 name = "nom-rule"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4c5f75e2f95ede19929b28ea8f9afeb804e5397f1d5c550c18e94b264202911"
+checksum = "ea8dd3c6d80d1e61031aecc5fdfaf4b7d2324dbd94d575ac12f94e5d6856c2d4"
 dependencies = [
  "nom",
  "pratt",
@@ -4416,7 +4428,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afcfecea7633fbd11141b7ce1cc4e49e01566570dd5d995ee1edb497dd340082"
 dependencies = [
  "arc-swap",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "base64 0.13.0",
  "bytes 1.1.0",
  "chrono",
@@ -4458,7 +4470,7 @@ dependencies = [
  "anyhow",
  "async-compat",
  "async-compression-issue-150-workaround",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "backon",
  "base64 0.13.0",
  "bytes 1.1.0",
@@ -4484,12 +4496,12 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.6.4"
-source = "git+https://github.com/datafuselabs/openraft?rev=f633756d60152d171909aea56f80d18905cd4002#f633756d60152d171909aea56f80d18905cd4002"
+version = "0.7.0-alpha.1"
+source = "git+https://github.com/datafuselabs/openraft?rev=v0.7.0-alpha.1#1bc3ded67976fdbe1380ee62bf07de75e50a31cb"
 dependencies = [
  "anyerror",
  "anyhow",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "byte-unit",
  "bytes 1.1.0",
  "clap 3.1.18",
@@ -4510,7 +4522,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f6456cb429428f239e2014cba8fffccc79049764917dc9ee0c6cf2180f412f0"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder",
  "bytes 1.1.0",
  "chrono",
@@ -4535,7 +4547,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bcb5fc2fda7e5e5f8478cd637285bbdd6196a9601e32293d0897e469a7dd020"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder",
  "chrono",
  "mysql_common 0.29.0",
@@ -4604,7 +4616,7 @@ version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6105e89802af13fdf48c49d7646d3b533a70e536d818aae7e78ba0433d01acb8"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam-channel",
  "futures-channel",
  "futures-executor",
@@ -4625,7 +4637,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8c0b12cd9e3f9b35b52f6e0dac66866c519b26f424f4bbf96e3fe8bfbdc5229"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
  "opentelemetry",
  "opentelemetry-semantic-conventions",
@@ -4770,7 +4782,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488c8b5f43521d019fade4bcc0ce88cce5da5fd26eb1d38b933807041f5930bf"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures",
  "integer-encoding",
 ]
@@ -5023,7 +5035,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0636cb735205476927fa4c0e1b2a308ea265a20880cbd80ae92d57072482604"
 dependencies = [
  "async-compression",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 1.1.0",
  "futures-util",
  "headers",
@@ -6566,9 +6578,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.95"
+version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbaf6116ab8924f39d52792136fb74fd60a80194cf1b1c6ffa6453eef1c3f942"
+checksum = "0748dd251e24453cb8717f0354206b91557e4ec8703673a4b30208f2abaf1ebf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6923,7 +6935,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff08f4649d10a70ffa3522ca559031285d8e421d727ac85c60825761818f5d0a"
 dependencies = [
  "async-stream",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "base64 0.13.0",
  "bytes 1.1.0",
  "futures-core",
@@ -6956,7 +6968,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5be9d60db39854b30b835107500cf0aca0b0d14d6e1c3de124217c23a29c2ddb"
 dependencies = [
  "async-stream",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "axum",
  "base64 0.13.0",
  "bytes 1.1.0",
@@ -7197,7 +7209,7 @@ version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c31f240f59877c3d4bb3b3ea0ec5a6a0cff07323580ff8c7a605cd7d08b255d"
 dependencies = [
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "cfg-if",
  "data-encoding",
  "enum-as-inner",
@@ -7720,7 +7732,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b12f508bdca434a55d43614d26f02e6b3e98ebeecfbc5a1614e0a0c8bf3e315"
 dependencies = [
  "assert-json-diff",
- "async-trait",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "deadpool",
  "futures",
  "futures-timer",

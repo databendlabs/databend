@@ -51,6 +51,10 @@ pub trait Table: Sync + Send {
         self.get_table_info().options()
     }
 
+    fn field_comments(&self) -> &Vec<String> {
+        self.get_table_info().field_comments()
+    }
+
     fn get_id(&self) -> MetaId {
         self.get_table_info().ident.table_id
     }

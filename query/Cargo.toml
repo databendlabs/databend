@@ -23,7 +23,7 @@ simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "tempfile"]
 storage-hdfs = ["opendal/services-hdfs", "common-io/storage-hdfs"]
-hive = ["common-hive-meta-store", "thrift"]
+hive = ["common-hive-meta-store", "thrift", "storage-hdfs"]
 
 [dependencies]
 # Workspace dependencies
@@ -54,6 +54,7 @@ common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 
 # Github dependencies
+async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "d44a8e1" }
 
@@ -63,7 +64,6 @@ async-channel = "1.6.1"
 async-compat = "0.2.1"
 async-recursion = "1.0.0"
 async-stream = "0.3.3"
-async-trait = "0.1.53"
 backoff = "0.4.0"
 backon = "0.0.2"
 base64 = "0.13.0"

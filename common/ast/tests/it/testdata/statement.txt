@@ -132,40 +132,6 @@ DescribeTable(
 
 
 ---------- Input ----------
-describe a; describe b
----------- Output ---------
-DESCRIBE a
----------- AST ------------
-DescribeTable(
-    DescribeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "a",
-            quote: None,
-            span: Ident(9..10),
-        },
-    },
-)
-
-
----------- Output ---------
-DESCRIBE b
----------- AST ------------
-DescribeTable(
-    DescribeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "b",
-            quote: None,
-            span: Ident(21..22),
-        },
-    },
-)
-
-
----------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
@@ -207,6 +173,7 @@ CreateTable(
                                 ),
                             },
                         ),
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -217,6 +184,7 @@ CreateTable(
                         data_type: String,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -225,6 +193,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -271,6 +240,7 @@ CreateTable(
                                 ),
                             },
                         ),
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -281,6 +251,7 @@ CreateTable(
                         data_type: String,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -336,6 +307,7 @@ CreateTable(
             },
         ),
         comment: None,
+        transient: false,
     },
 )
 
@@ -382,6 +354,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -420,6 +393,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -699,6 +673,7 @@ CreateTable(
                         },
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -713,6 +688,7 @@ CreateTable(
                         },
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -721,6 +697,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -1124,6 +1101,7 @@ CreateTable(
                         data_type: Int32,
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1134,6 +1112,7 @@ CreateTable(
                         data_type: Int64,
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1144,6 +1123,7 @@ CreateTable(
                         data_type: String,
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -1152,6 +1132,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -1183,6 +1164,7 @@ CreateTable(
                         data_type: Int32,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1193,6 +1175,7 @@ CreateTable(
                         data_type: Int64,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1203,6 +1186,7 @@ CreateTable(
                         data_type: String,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -1211,6 +1195,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -1251,6 +1236,7 @@ CreateTable(
                                 ),
                             },
                         ),
+                        comment: None,
                     },
                 ],
             ),
@@ -1259,6 +1245,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -2819,7 +2806,7 @@ Query(
 ---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
-INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
+INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
 ---------- AST ------------
 Insert {
     catalog: None,
@@ -2842,7 +2829,7 @@ Insert {
         },
     ],
     source: Values {
-        values_tokens: [
+        rest_tokens: [
             LParen(30..31),
             LiteralInteger(31..32),
             Comma(32..33),
@@ -2854,6 +2841,7 @@ Insert {
             Comma(40..41),
             LiteralInteger(42..43),
             RParen(43..44),
+            SemiColon(44..45),
         ],
     },
     overwrite: false,
@@ -2863,7 +2851,7 @@ Insert {
 ---------- Input ----------
 insert into table t format json;
 ---------- Output ---------
-INSERT INTO t FORMAT json
+INSERT INTO t FORMAT json ;
 ---------- AST ------------
 Insert {
     catalog: None,
@@ -2876,6 +2864,9 @@ Insert {
     columns: [],
     source: Streaming {
         format: "json",
+        rest_tokens: [
+            SemiColon(31..32),
+        ],
     },
     overwrite: false,
 }
@@ -3153,7 +3144,7 @@ AlterUser {
 ---------- Input ----------
 create role 'test'
 ---------- Output ---------
-CREATE ROLE test
+CREATE ROLE 'test'
 ---------- AST ------------
 CreateRole {
     if_not_exists: false,
@@ -3164,7 +3155,7 @@ CreateRole {
 ---------- Input ----------
 drop role if exists 'test'
 ---------- Output ---------
-DROP ROLE IF EXISTS test
+DROP ROLE IF EXISTS 'test'
 ---------- AST ------------
 DropRole {
     if_exists: true,
@@ -3312,5 +3303,479 @@ AlterDatabase(
         },
     },
 )
+
+
+---------- Input ----------
+CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
+---------- Output ---------
+CREATE TABLE t (a Int32 NOT NULL COMMENT 'col comment')COMMENT = table comment
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(16..17),
+                        },
+                        data_type: Int32,
+                        nullable: false,
+                        default_expr: None,
+                        comment: Some(
+                            "col comment",
+                        ),
+                    },
+                ],
+            ),
+        ),
+        table_options: [
+            Comment(
+                "table comment",
+            ),
+        ],
+        cluster_by: [],
+        as_query: None,
+        comment: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT, CREATE ON TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON *.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: ALL {
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON *.* TO ROLE 'role2';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON *.* TO ROLE role2
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: ALL {
+            level: Global,
+        },
+        principal: Role(
+            "role2",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: ALL {
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL PRIVILEGES ON * TO ROLE 'role3';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON * TO ROLE role3
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: ALL {
+            level: Database(
+                None,
+            ),
+        },
+        principal: Role(
+            "role3",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO 'test-user';
+---------- Output ---------
+GRANT ROLE test TO USER 'test-user'@'%'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Role {
+            role: "test",
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-user",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO USER 'test-user';
+---------- Output ---------
+GRANT ROLE test TO USER 'test-user'@'%'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Role {
+            role: "test",
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-user",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO ROLE 'test-user';
+---------- Output ---------
+GRANT ROLE test TO ROLE test-user
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Role {
+            role: "test",
+        },
+        principal: Role(
+            "test-user",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO ROLE 'role1'
+---------- Output ---------
+GRANT SELECT ON db01.* TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS;
+---------- Output ---------
+SHOW GRANTS
+---------- AST ------------
+ShowGrants {
+    principal: None,
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR 'test-grant'@'localhost';
+---------- Output ---------
+SHOW GRANTS FOR USER 'test-grant'@'localhost'
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR USER 'test-grant'@'localhost';
+---------- Output ---------
+SHOW GRANTS FOR USER 'test-grant'@'localhost'
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR ROLE 'role1';
+---------- Output ---------
+SHOW GRANTS FOR ROLE role1
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        Role(
+            "role1",
+        ),
+    ),
+}
 
 
