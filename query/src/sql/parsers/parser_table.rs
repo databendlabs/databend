@@ -59,7 +59,9 @@ impl<'a> DfParser<'a> {
         }
 
         let (columns, _) = self.parse_columns()?;
-        if !columns.is_empty() && table_like.is_some() {
+        if columns.is_empty() {
+            return parser_err!("A table must have at least one visible column.");
+        } else if table_like.is_some() {
             return parser_err!("mix create table like statement and column definition.");
         }
 
