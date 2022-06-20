@@ -343,8 +343,16 @@ impl QueryCoordinator {
     }
 
     pub fn prepare_pipeline(&mut self) -> Result<()> {
-        for (_, coordinator) in self.fragments_coordinator.iter_mut() {
-            coordinator.prepare_pipeline(&self.ctx)?;
+        let fragments_id = self
+            .fragments_coordinator
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+
+        for fragment_id in fragments_id {
+            if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
+                coordinator.prepare_pipeline(&self.ctx)?;
+            }
         }
 
         Ok(())

@@ -79,7 +79,6 @@ async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_query_fragments.finalize(&mut fragments_actions)?;
 
-    println!("QueryFragments actions: {:?}", fragments_actions);
     debug!("QueryFragments actions: {:?}", fragments_actions);
 
     exchange_manager
