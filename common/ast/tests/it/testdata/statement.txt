@@ -3122,23 +3122,25 @@ alter user 'test-e'@'localhost' identified by 'new-password';
 ---------- Output ---------
 ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password'
 ---------- AST ------------
-AlterUser {
-    user: Some(
-        UserIdentity {
-            username: "test-e",
-            hostname: "localhost",
-        },
-    ),
-    auth_option: Some(
-        AuthOption {
-            auth_type: None,
-            password: Some(
-                "new-password",
-            ),
-        },
-    ),
-    role_options: [],
-}
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "test-e",
+                hostname: "localhost",
+            },
+        ),
+        auth_option: Some(
+            AuthOption {
+                auth_type: None,
+                password: Some(
+                    "new-password",
+                ),
+            },
+        ),
+        role_options: [],
+    },
+)
 
 
 ---------- Input ----------
@@ -3355,10 +3357,10 @@ CreateTable(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
 ---------- Output ---------
-GRANT SELECT, CREATE ON TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Privs {
             privileges: [
                 Select,
@@ -3381,10 +3383,10 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
 ---------- Output ---------
-GRANT SELECT, CREATE ON TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Privs {
             privileges: [
                 Select,
@@ -3407,10 +3409,10 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO ROLE 'role1';
 ---------- Output ---------
-GRANT SELECT, CREATE ON TO ROLE role1
+GRANT SELECT, CREATE ON * TO ROLE role1
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Privs {
             privileges: [
                 Select,
@@ -3433,7 +3435,7 @@ GRANT ALL ON *.* TO 'test-grant'@'localhost';
 GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: ALL {
             level: Global,
         },
@@ -3453,7 +3455,7 @@ GRANT ALL ON *.* TO ROLE 'role2';
 GRANT ALL PRIVILEGES ON *.* TO ROLE role2
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: ALL {
             level: Global,
         },
@@ -3470,7 +3472,7 @@ GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
 GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: ALL {
             level: Database(
                 None,
@@ -3492,7 +3494,7 @@ GRANT ALL PRIVILEGES ON * TO ROLE 'role3';
 GRANT ALL PRIVILEGES ON * TO ROLE role3
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: ALL {
             level: Database(
                 None,
@@ -3511,7 +3513,7 @@ GRANT ROLE 'test' TO 'test-user';
 GRANT ROLE test TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Role {
             role: "test",
         },
@@ -3531,7 +3533,7 @@ GRANT ROLE 'test' TO USER 'test-user';
 GRANT ROLE test TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Role {
             role: "test",
         },
@@ -3551,7 +3553,7 @@ GRANT ROLE 'test' TO ROLE 'test-user';
 GRANT ROLE test TO ROLE test-user
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Role {
             role: "test",
         },
@@ -3568,7 +3570,7 @@ GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
 GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Privs {
             privileges: [
                 Select,
@@ -3595,7 +3597,7 @@ GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';
 GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Privs {
             privileges: [
                 Select,
@@ -3622,7 +3624,7 @@ GRANT SELECT ON db01.* TO ROLE 'role1'
 GRANT SELECT ON db01.* TO ROLE role1
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Privs {
             privileges: [
                 Select,
@@ -3646,7 +3648,7 @@ GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
 GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Privs {
             privileges: [
                 Select,
@@ -3674,7 +3676,7 @@ GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';
 GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Privs {
             privileges: [
                 Select,
@@ -3702,7 +3704,7 @@ GRANT SELECT ON db01.tb1 TO ROLE 'role1';
 GRANT SELECT ON db01.tb1 TO ROLE role1
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    AccountMgrStatement {
         source: Privs {
             privileges: [
                 Select,
@@ -3716,6 +3718,52 @@ Grant(
         },
         principal: Role(
             "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON tb1 TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT ON tb1 TO ROLE role1
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON tb1 TO 'u1';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON tb1 TO USER 'u1'@'%'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: ALL {
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
         ),
     },
 )
@@ -3777,6 +3825,78 @@ ShowGrants {
         ),
     ),
 }
+
+
+---------- Input ----------
+REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';
+---------- Output ---------
+REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'localhost'
+---------- AST ------------
+Revoke(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE SELECT ON tb1 FROM ROLE 'role1';
+---------- Output ---------
+REVOKE SELECT ON tb1 FROM ROLE role1
+---------- AST ------------
+Revoke(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE ALL ON tb1 FROM 'u1';
+---------- Output ---------
+REVOKE ALL PRIVILEGES ON tb1 FROM USER 'u1'@'%'
+---------- AST ------------
+Revoke(
+    AccountMgrStatement {
+        source: ALL {
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+    },
+)
 
 
 ---------- Input ----------

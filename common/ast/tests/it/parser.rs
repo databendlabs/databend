@@ -141,10 +141,15 @@ fn test_statement() {
         r#"GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';"#,
         r#"GRANT SELECT ON db01.tb1 TO ROLE 'role1';"#,
+        r#"GRANT SELECT ON tb1 TO ROLE 'role1';"#,
+        r#"GRANT ALL ON tb1 TO 'u1';"#,
         r#"SHOW GRANTS;"#,
         r#"SHOW GRANTS FOR 'test-grant'@'localhost';"#,
         r#"SHOW GRANTS FOR USER 'test-grant'@'localhost';"#,
         r#"SHOW GRANTS FOR ROLE 'role1';"#,
+        r#"REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';"#,
+        r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
+        r#"REVOKE ALL ON tb1 FROM 'u1';"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 FILE_FORMAT = (
@@ -223,6 +228,8 @@ fn test_statement_error() {
         r#"GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON *.c TO 'test-grant'@'localhost';"#,
         r#"SHOW GRANT FOR ROLE role1;"#,
+        r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';"#,
+        r#"REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
     ];
 
     for case in cases {

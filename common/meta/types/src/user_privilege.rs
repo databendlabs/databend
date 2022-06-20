@@ -75,6 +75,7 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | CreateUser
         | CreateRole
         | Grant
+        | CreateStage
         | Set
     }
 );
