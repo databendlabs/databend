@@ -18,7 +18,6 @@ use poem::http::StatusCode;
 use poem::web::Data;
 use poem::web::IntoResponse;
 use poem::web::Json;
-use serde_json;
 
 use crate::meta_service::MetaNode;
 
@@ -38,31 +37,13 @@ pub async fn nodes_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl
 }
 
 #[poem::handler]
-pub async fn state_handler(
-    meta_node: Data<&Arc<MetaNode>>,
-) -> poem::Result<Json<serde_json::Value>> {
-    let voters = meta_node.get_voters().await.map_err(|e| {
-        poem::Error::from_string(
-            format!("failed to get voters: {}", e),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )
-    })?;
-    let non_voters = meta_node.get_non_voters().await.map_err(|e| {
-        poem::Error::from_string(
-            format!("failed to get non-voters: {}", e),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )
-    })?;
-    let leader_id = meta_node.get_leader().await;
-    let leader_node = meta_node.get_node(&leader_id).await.map_err(|e| {
+pub async fn state_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
+    let status = meta_node.get_status().await.map_err(|e| {
         poem::Error::from_string(
             format!("failed to get leader: {}", e),
             StatusCode::INTERNAL_SERVER_ERROR,
         )
     })?;
-    Ok(Json(serde_json::json!({
-        "voters": voters,
-        "non_voters": non_voters,
-        "leader": leader_node,
-    })))
+
+    Ok(Json(status))
 }

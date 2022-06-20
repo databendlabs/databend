@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use common_base::base::tokio;
 use common_base::base::tokio::sync::watch;
@@ -50,6 +51,7 @@ use common_meta_types::ToMetaError;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use openraft::Config;
+use openraft::LogId;
 use openraft::Raft;
 use openraft::RaftMetrics;
 use openraft::SnapshotPolicy;
@@ -70,6 +72,31 @@ use crate::watcher::WatcherManager;
 use crate::watcher::WatcherStreamSender;
 use crate::Opened;
 
+#[derive(serde::Serialize)]
+pub struct MetaNodeStatus {
+    pub id: NodeId,
+
+    pub endpoint: String,
+
+    pub db_size: u64,
+
+    pub state: String,
+
+    pub is_leader: bool,
+
+    pub current_term: u64,
+
+    pub last_log_index: u64,
+
+    pub last_applied: LogId,
+
+    pub leader: NodeId,
+
+    pub voters: Vec<Node>,
+
+    pub non_voters: Vec<Node>,
+}
+
 // MetaRaft is a impl of the generic Raft handling meta data R/W.
 pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaRaftStore>;
 
@@ -82,6 +109,10 @@ pub struct MetaNode {
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<MetaResult<()>>>>,
     pub joined_tasks: AtomicI32,
+
+    endpoint: Endpoint,
+
+    metrics: RwLock<Option<RaftMetrics>>,
 }
 
 impl Opened for MetaNode {
@@ -127,6 +158,12 @@ impl MetaNodeBuilder {
             .await
             .set_subscriber(Box::new(watcher.subscriber.clone()));
 
+        let endpoint = if let Some(a) = self.endpoint.take() {
+            a
+        } else {
+            sto.get_node_endpoint(&node_id).await?
+        };
+
         let mn = Arc::new(MetaNode {
             sto: sto.clone(),
             watcher,
@@ -135,18 +172,14 @@ impl MetaNodeBuilder {
             running_rx: rx,
             join_handles: Mutex::new(Vec::new()),
             joined_tasks: AtomicI32::new(1),
+            endpoint: endpoint.clone(),
+            metrics: RwLock::new(None),
         });
 
         if self.monitor_metrics {
             tracing::info!("about to subscribe raft metrics");
             MetaNode::subscribe_metrics(mn.clone(), metrics_rx).await;
         }
-
-        let endpoint = if let Some(a) = self.endpoint.take() {
-            a
-        } else {
-            sto.get_node_endpoint(&node_id).await?
-        };
 
         tracing::info!("about to start raft grpc on endpoint {}", endpoint);
 
@@ -379,6 +412,10 @@ impl MetaNode {
                         };
                         if changed.is_ok() {
                             let mm = metrics_rx.borrow().clone();
+                            {
+                                let mut metrics = mn.metrics.write().unwrap();
+                                *metrics = Some(mm.clone());
+                            }
                             if let Some(cur) = mm.current_leader {
                                 // if current leader has changed?
                                 if let Some(leader) = current_leader {
@@ -590,6 +627,55 @@ impl MetaNode {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.get_nodes()
+    }
+
+    fn get_state_string(state: openraft::State) -> String {
+        match state {
+            openraft::State::Learner => "Learner".to_string(),
+            openraft::State::Follower => "Follower".to_string(),
+            openraft::State::Candidate => "Candidate".to_string(),
+            openraft::State::Leader => "Leader".to_string(),
+            openraft::State::Shutdown => "Shutdown".to_string(),
+        }
+    }
+
+    pub async fn get_status(&self) -> MetaResult<MetaNodeStatus> {
+        let voters = self.get_voters().await?;
+        let non_voters = self.get_non_voters().await?;
+
+        let db_size = self
+            .sto
+            .db
+            .size_on_disk()
+            .map_err(|_| MetaError::MetaServiceError("get db_size failed".to_string()))?;
+        let metrics = self
+            .metrics
+            .read()
+            .map_err(|_e| MetaError::MetaServiceError("no meta node status available".to_string()));
+
+        if let Ok(metrics) = metrics {
+            if let Some(metrics) = &*metrics {
+                return Ok(MetaNodeStatus {
+                    id: self.sto.id,
+                    endpoint: self.endpoint.to_string(),
+                    db_size,
+                    state: MetaNode::get_state_string(metrics.state),
+                    is_leader: metrics.state == openraft::State::Leader,
+                    current_term: metrics.current_term,
+                    last_log_index: metrics.last_log_index.unwrap_or(0),
+                    last_applied: match metrics.last_applied {
+                        Some(id) => id,
+                        None => LogId::new(0, 0),
+                    },
+                    leader: metrics.current_leader.unwrap_or(0),
+                    voters,
+                    non_voters,
+                });
+            }
+        }
+        Err(MetaError::MetaServiceError(
+            "no meta node status available".to_string(),
+        ))
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
