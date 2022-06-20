@@ -78,7 +78,12 @@ pub async fn test_heuristic_optimizer_subquery() -> Result<()> {
         },
         Suite {
             comment: "# Exists project required columns".to_string(),
-            query: "select t.number from numbers(1) as t where exists (select number as a, number as b, number as c from numbers(1) where number = t.number)"
+            query: "select t.number from numbers(1) as t where exists (select number as a, number as b, number as c from numbers(1) where number = t.number)".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "# Push down filter through CrossApply".to_string(),
+            query: "select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number"
                 .to_string(),
             rules: DEFAULT_REWRITE_RULES.clone(),
         },

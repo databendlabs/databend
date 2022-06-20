@@ -110,3 +110,20 @@ Project: [number]
             Scan: default.system.numbers
 
 
+# Push down filter through CrossApply
+select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
+----
+Project: [number]
+    Filter: [subquery_3]
+        CrossApply
+            HashJoin: INNER, build keys: [number], probe keys: [number]
+                Scan: default.system.numbers
+                Scan: default.system.numbers
+            Max1Row
+                Project: [COUNT(*) = 1]
+                    EvalScalar: [COUNT(*) = 1]
+                        Aggregate: group items: [], aggregate functions: [COUNT(*)]
+                            Filter: [number = number]
+                                Scan: default.system.numbers
+
+
