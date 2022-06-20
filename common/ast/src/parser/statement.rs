@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::fmt::format;
 
 use common_meta_types::AuthType;
 use common_meta_types::UserIdentity;

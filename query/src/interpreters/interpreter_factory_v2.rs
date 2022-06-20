@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use super::*;
+use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -68,7 +69,7 @@ impl InterpreterFactoryV2 {
                 ExplainInterpreterV2::try_create(ctx, *plan.clone(), kind.clone())
             }
 
-            Plan::Copy(_) => todo!(),
+            Plan::Copy(copy_plan) => CopyInterpreterV2::try_create(ctx, *copy_plan.clone()),
 
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx),
             Plan::ShowProcessList => ShowProcessListInterpreter::try_create(ctx),

@@ -12,33 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::assert_matches::debug_assert_matches;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyTarget;
-use common_ast::ast::CreateStageStmt;
-use common_ast::ast::Query;
 use common_ast::ast::Statement;
 use common_ast::parser::error::Backtrace;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::OnErrorMode;
-use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
-use common_planners::CopyMode;
-use common_planners::CopyPlan;
-use common_planners::CreateUserStagePlan;
-use common_planners::ListPlan;
 use common_planners::ReadDataSourcePlan;
-use common_planners::RemoveUserStagePlan;
 use common_planners::SourceInfo;
 use common_planners::StageTableInfo;
 
-use crate::interpreters::SelectInterpreterV2;
 use crate::sql::binder::Binder;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;

@@ -14,7 +14,6 @@ use std::path::Path;
 // limitations under the License.
 use std::sync::Arc;
 
-use common_ast::ast::ExplainKind;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -32,18 +31,13 @@ use regex::Regex;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
-use crate::sql::exec::PipelineBuilder;
-use crate::sql::optimizer::SExpr;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
-use crate::sql::BindContext;
-use crate::sql::MetadataRef;
 use crate::storages::stage::StageSource;
 use crate::storages::stage::StageTable;
 
@@ -265,12 +259,10 @@ impl Interpreter for CopyInterpreterV2 {
                 catalog_name,
                 database_name,
                 table_name,
-                table_id,
                 files,
                 pattern,
-                schema,
-                validation_mode,
                 from,
+                ..
             } => {
                 let mut files = self.list_files(from, files).await?;
 
@@ -315,12 +307,9 @@ impl Interpreter for CopyInterpreterV2 {
                     vec![],
                 )))
             }
-            CopyPlanV2::IntoStage {
-                stage,
-                path,
-                validation_mode,
-                from,
-            } => self.execute_copy_into_stage(stage, from).await,
+            CopyPlanV2::IntoStage { stage, from, .. } => {
+                self.execute_copy_into_stage(stage, from).await
+            }
         }
     }
 }

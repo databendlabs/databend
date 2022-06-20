@@ -20,9 +20,7 @@ use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 use common_meta_types::UserStageInfo;
 use common_planners::ReadDataSourcePlan;
-use common_planners::StageTableInfo;
 
-use crate::interpreters::SelectInterpreterV2;
 use crate::sql::plans::Plan;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
@@ -106,7 +104,7 @@ impl Debug for CopyPlanV2 {
                 stage,
                 path,
                 validation_mode,
-                from: query,
+                ..
             } => {
                 write!(f, "Copy into {:?}", stage)?;
                 write!(f, ", path: {:?}", path)?;
