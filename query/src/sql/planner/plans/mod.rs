@@ -106,3 +106,35 @@ pub enum Plan {
     DropStage(Box<DropUserStagePlan>),
     RemoveStage(Box<RemoveUserStagePlan>),
 }
+
+impl Plan {
+    /// Returning this plan's name.
+    pub fn name(&self) -> &str {
+        match self {
+            Plan::Query { .. } => "Query",
+            Plan::Explain { .. } => "Explain",
+            Plan::Copy(_) => "Copy",
+            Plan::ShowMetrics => "ShowMetrics",
+            Plan::ShowProcessList => "ShowProcessList",
+            Plan::ShowSettings => "ShowSettings",
+            Plan::CreateDatabase(_) => "CreateDatabase",
+            Plan::DropDatabase(_) => "DropDatabase",
+            Plan::RenameDatabase(_) => "RenameDatabase",
+            Plan::CreateTable(_) => "CreateTable",
+            Plan::CreateView(_) => "CreateView",
+            Plan::AlterView(_) => "AlterView",
+            Plan::DropView(_) => "DropView",
+            Plan::AlterUser(_) => "AlterUser",
+            Plan::CreateUser(_) => "CreateUser",
+            Plan::DropUser(_) => "DropUser",
+            Plan::CreateRole(_) => "CreateRole",
+            Plan::DropRole(_) => "DropRole",
+            Plan::ShowStages => "ShowStages",
+            Plan::ListStage(_) => "ListStage",
+            Plan::DescribeStage(_) => "DescribeStage",
+            Plan::CreateStage(_) => "CreateStage",
+            Plan::DropStage(_) => "DropStage",
+            Plan::RemoveStage(_) => "RemoveStage",
+        }
+    }
+}
