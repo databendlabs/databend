@@ -18,12 +18,14 @@ use common_exception::Result;
 use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::JoinCondition;
 use crate::sql::optimizer::heuristic::subquery_rewriter::SubqueryRewriter;
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::PatternPlan;
+use crate::sql::plans::Project;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
@@ -119,7 +121,8 @@ pub fn try_decorrelate_subquery(input: &SExpr, subquery: &SubqueryExpr) -> Resul
     // This is not necessary, but it is a good heuristic for most cases.
     let mut left_conditions = vec![];
     let mut right_conditions = vec![];
-    let mut extra_predicates = vec![];
+    let mut left_filters = vec![];
+    let mut right_filters = vec![];
     for pred in filter.predicates.iter() {
         let join_condition = JoinCondition::new(pred, &input_prop, &filter_prop);
         match join_condition {
@@ -128,8 +131,11 @@ pub fn try_decorrelate_subquery(input: &SExpr, subquery: &SubqueryExpr) -> Resul
                 return Ok(None);
             }
 
-            JoinCondition::Left(_) | JoinCondition::Right(_) => {
-                extra_predicates.push(pred.clone());
+            JoinCondition::Left(filter) => {
+                left_filters.push(filter.clone());
+            }
+            JoinCondition::Right(filter) => {
+                right_filters.push(filter.clone());
             }
 
             JoinCondition::Both { left, right } => {
@@ -155,27 +161,52 @@ pub fn try_decorrelate_subquery(input: &SExpr, subquery: &SubqueryExpr) -> Resul
     };
 
     // Rewrite plan to semi-join.
-    let left_child = input.clone();
+    let mut left_child = input.clone();
+    if !left_filters.is_empty() {
+        left_child = SExpr::create_unary(
+            Filter {
+                predicates: left_filters,
+                is_having: false,
+            }
+            .into(),
+            left_child,
+        );
+    }
+
     // Remove `Filter` from subquery.
-    let right_child = SExpr::create_unary(
+    let mut right_child = SExpr::create_unary(
         subquery.subquery.plan().clone(),
         SExpr::create_unary(
             subquery.subquery.child(0)?.plan().clone(),
             SExpr::create_leaf(filter_tree.child(0)?.plan().clone()),
         ),
     );
-    let mut result = SExpr::create_binary(semi_join.into(), left_child, right_child);
-
-    if !extra_predicates.is_empty() {
-        result = SExpr::create_unary(
+    if !right_filters.is_empty() {
+        right_child = SExpr::create_unary(
             Filter {
-                predicates: extra_predicates,
+                predicates: right_filters,
                 is_having: false,
             }
             .into(),
-            result,
+            right_child,
         );
     }
+    // Add project for join keys
+    let used_columns = semi_join
+        .right_conditions
+        .iter()
+        .fold(ColumnSet::new(), |v, acc| {
+            v.union(&acc.used_columns()).cloned().collect()
+        });
+    right_child = SExpr::create_unary(
+        Project {
+            columns: used_columns,
+        }
+        .into(),
+        right_child,
+    );
+
+    let result = SExpr::create_binary(semi_join.into(), left_child, right_child);
 
     Ok(Some(result))
 }

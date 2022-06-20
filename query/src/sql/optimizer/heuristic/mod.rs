@@ -43,6 +43,7 @@ lazy_static! {
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterProject,
         RuleID::PushDownFilterJoin,
+        RuleID::PushDownFilterCrossApply,
     ];
 }
 
