@@ -95,7 +95,7 @@ impl Rule for RulePushDownFilterCrossApply {
         }
 
         let mut result = SExpr::create_binary(
-            apply_expr.plan().clone().into(),
+            apply_expr.plan().clone(),
             SExpr::create_unary(
                 Filter {
                     predicates: push_down,
