@@ -590,7 +590,10 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Coalesce { span, exprs } => {
                 // Rewrite COALESCE(expr1, expr2, ...) to IF(IS_NOT_NULL(expr1), expr1, expr2)   
-                let resolve_args = exprs.iter().rev().fold(
+                let resolve_args = exprs.iter().filter(|expr| match expr {
+                    Expr::Literal {span: _, lit: Literal::Null} => false,
+                    _ => true,  
+                }).rev().fold(
                     Expr::Literal {
                         span,
                         lit: Literal::Null,
