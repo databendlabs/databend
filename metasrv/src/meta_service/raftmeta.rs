@@ -29,7 +29,6 @@ use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
-use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
@@ -38,6 +37,7 @@ use common_meta_types::Endpoint;
 use common_meta_types::ForwardRequest;
 use common_meta_types::ForwardResponse;
 use common_meta_types::ForwardToLeader;
+use common_meta_types::LeaveRequest;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
@@ -55,7 +55,6 @@ use openraft::Raft;
 use openraft::RaftMetrics;
 use openraft::SnapshotPolicy;
 use openraft::State;
-use tonic::Status;
 
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
@@ -469,28 +468,96 @@ impl MetaNode {
         Ok(mn)
     }
 
+    /// Leave the cluster if `--leave` is specified.
+    ///
+    /// Return whether it has left the cluster.
+    #[tracing::instrument(level = "info", skip_all)]
+    pub async fn leave_cluster(conf: &RaftConfig) -> Result<bool, MetaError> {
+        if conf.leave_via.is_empty() {
+            tracing::info!("'--leave-via' is empty, do not need to leave cluster");
+            return Ok(false);
+        }
+
+        let leave_id = if let Some(id) = conf.leave_id {
+            id
+        } else {
+            tracing::info!("'--leave-id' is None, do not need to leave cluster");
+            return Ok(false);
+        };
+
+        let addrs = &conf.leave_via;
+        tracing::info!("node-{} about to leave cluster via {:?}", leave_id, addrs);
+
+        #[allow(clippy::never_loop)]
+        for addr in addrs {
+            tracing::info!("leave cluster via {}...", addr);
+
+            let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
+            let mut raft_client = match conn_res {
+                Ok(c) => c,
+                Err(err) => {
+                    tracing::error!(
+                        "fail connecting to {} while leaving cluster, err: {:?}",
+                        addr,
+                        err
+                    );
+                    continue;
+                }
+            };
+
+            let req = ForwardRequest {
+                forward_to_leader: 1,
+                body: ForwardRequestBody::Leave(LeaveRequest { node_id: leave_id }),
+            };
+
+            let leave_res = raft_client.forward(req).await;
+            match leave_res {
+                Ok(resp) => {
+                    let reply = resp.into_inner();
+
+                    if !reply.data.is_empty() {
+                        tracing::info!("Done leaving cluster via {} reply: {:?}", addr, reply.data);
+                        return Ok(true);
+                    } else {
+                        tracing::error!("leaving cluster via {} fail: {:?}", addr, reply.error);
+                    }
+                }
+                Err(s) => {
+                    tracing::error!("leaving cluster via {} fail: {:?}", addr, s);
+                }
+            };
+        }
+        Err(MetaError::MetaServiceError(format!(
+            "leave cluster via {:?} failed",
+            addrs
+        )))
+    }
+
+    /// Join an existent cluster if `--join` is specified and this meta node is just created, i.e., not opening an already initialized store.
     #[tracing::instrument(level = "info", skip(conf, self))]
     pub async fn join_cluster(&self, conf: &RaftConfig) -> MetaResult<()> {
         if conf.join.is_empty() {
-            tracing::info!("--join config is empty");
+            tracing::info!("'--join' is empty, do not need joining cluster");
             return Ok(());
         }
 
         // Try to join a cluster only when this node is just created.
         // Joining a node with log has risk messing up the data in this node and in the target cluster.
         if self.is_opened() {
-            tracing::info!("has opened");
+            tracing::info!("meta node is opened");
             return Ok(());
         }
 
         let addrs = &conf.join;
-        // Join cluster use advertise host instead of listen host
-        let raft_api_advertise_host_endpoint = conf.raft_api_advertise_host_endpoint();
+
+        // Joining cluster has to use advertise host instead of listen host.
+        let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
         #[allow(clippy::never_loop)]
         for addr in addrs {
             tracing::info!("try to join cluster accross {}...", addr);
 
-            let mut client = match RaftServiceClient::connect(format!("http://{}", addr)).await {
+            let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
+            let mut raft_client = match conn_res {
                 Ok(c) => c,
                 Err(e) => {
                     tracing::error!("connect to {} join cluster fail: {:?}", addr, e);
@@ -498,41 +565,34 @@ impl MetaNode {
                 }
             };
 
-            let admin_req = ForwardRequest {
+            let req = ForwardRequest {
                 forward_to_leader: 1,
                 body: ForwardRequestBody::Join(JoinRequest {
                     node_id: conf.id,
-                    endpoint: raft_api_advertise_host_endpoint.clone(),
+                    endpoint: advertise_endpoint.clone(),
                 }),
             };
 
-            let result: std::result::Result<RaftReply, Status> =
-                match client.forward(admin_req.clone()).await {
-                    Ok(r) => Ok(r.into_inner()),
-                    Err(s) => {
-                        tracing::error!("join cluster accross {} fail: {:?}", addr, s);
-                        continue;
-                    }
-                };
-
-            match result {
-                Ok(reply) => {
+            let join_res = raft_client.forward(req.clone()).await;
+            match join_res {
+                Ok(r) => {
+                    let reply = r.into_inner();
                     if !reply.data.is_empty() {
-                        tracing::info!("join cluster accross {} success: {:?}", addr, reply.data);
+                        tracing::info!("join cluster via {} success: {:?}", addr, reply.data);
                         return Ok(());
                     } else {
-                        tracing::error!("join cluster accross {} fail: {:?}", addr, reply.error);
+                        tracing::error!("join cluster via {} fail: {:?}", addr, reply.error);
                     }
                 }
                 Err(s) => {
-                    tracing::error!("join cluster accross {} fail: {:?}", addr, s);
+                    tracing::error!("join cluster via {} fail: {:?}", addr, s);
                 }
-            }
+            };
         }
-        Err(
-            MetaRaftError::JoinClusterFail(format!("join cluster accross addrs {:?} fail", addrs))
-                .into(),
-        )
+        Err(MetaError::MetaServiceError(format!(
+            "join cluster via {:?} fail",
+            addrs
+        )))
     }
 
     async fn do_start(conf: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {
