@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_arrow::parquet::FileMetaData;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;

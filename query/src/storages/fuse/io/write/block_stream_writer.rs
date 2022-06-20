@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::parquet::FileMetaData;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -229,9 +229,9 @@ impl BlockStreamWriter {
             )));
         }
         let row_group = &file_meta.row_groups[0];
-        let mut col_metas = HashMap::with_capacity(row_group.columns.len());
-        for (idx, col_chunk) in row_group.columns.iter().enumerate() {
-            match &col_chunk.meta_data {
+        let mut col_metas = HashMap::with_capacity(row_group.columns().len());
+        for (idx, col) in row_group.columns().iter().enumerate() {
+            match &col.column_chunk().meta_data {
                 Some(chunk_meta) => {
                     let col_start =
                         if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
