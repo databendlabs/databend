@@ -181,8 +181,7 @@ impl<'a> Binder {
                     stage: stage_info,
                     path,
                     validation_mode,
-                    // TODO(xuanwo): we need to convert query to Plan.
-                    query: Box::new(query),
+                    from: Box::new(query),
                 })))
             }
             CopyTarget::Query(_) => {

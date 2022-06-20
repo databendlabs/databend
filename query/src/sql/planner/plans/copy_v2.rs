@@ -74,7 +74,7 @@ pub enum CopyPlanV2 {
         stage: UserStageInfo,
         path: String,
         validation_mode: ValidationMode,
-        query: Box<Plan>,
+        from: Box<Plan>,
     },
 }
 
@@ -106,7 +106,7 @@ impl Debug for CopyPlanV2 {
                 stage,
                 path,
                 validation_mode,
-                query,
+                from: query,
             } => {
                 write!(f, "Copy into {:?}", stage)?;
                 write!(f, ", path: {:?}", path)?;
