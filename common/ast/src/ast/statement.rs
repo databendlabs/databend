@@ -101,13 +101,7 @@ pub enum Statement<'a> {
     // User
     ShowUsers,
     CreateUser(CreateUserStmt),
-    AlterUser {
-        // None means current user
-        user: Option<UserIdentity>,
-        // None means no change to make
-        auth_option: Option<AuthOption>,
-        role_options: Vec<RoleOption>,
-    },
+    AlterUser(AlterUserStmt),
     DropUser {
         if_exists: bool,
         user: UserIdentity,
@@ -121,10 +115,11 @@ pub enum Statement<'a> {
         if_exists: bool,
         role_name: String,
     },
-    Grant(GrantStatement),
+    Grant(AccountMgrStatement),
     ShowGrants {
         principal: Option<PrincipalIdentity>,
     },
+    Revoke(AccountMgrStatement),
 
     // UDF
     CreateUDF {
@@ -458,6 +453,15 @@ pub struct CreateUserStmt {
     pub role_options: Vec<RoleOption>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterUserStmt {
+    // None means current user
+    pub user: Option<UserIdentity>,
+    // None means no change to make
+    pub auth_option: Option<AuthOption>,
+    pub role_options: Vec<RoleOption>,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AuthOption {
     pub auth_type: Option<AuthType>,
@@ -473,27 +477,27 @@ pub enum RoleOption {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct GrantStatement {
-    pub source: GrantSource,
+pub struct AccountMgrStatement {
+    pub source: AccountMgrSource,
     pub principal: PrincipalIdentity,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum GrantSource {
+pub enum AccountMgrSource {
     Role {
         role: String,
     },
     Privs {
         privileges: Vec<UserPrivilegeType>,
-        level: GrantLevel,
+        level: AccountMgrLevel,
     },
     ALL {
-        level: GrantLevel,
+        level: AccountMgrLevel,
     },
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum GrantLevel {
+pub enum AccountMgrLevel {
     Global,
     Database(Option<String>),
     Table(Option<String>, String),
@@ -561,6 +565,58 @@ impl Display for TableOption {
             TableOption::Engine(engine) => write!(f, "ENGINE = {engine}"),
             TableOption::Comment(comment) => write!(f, "COMMENT = {comment}"),
         }
+    }
+}
+
+impl Display for AccountMgrSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccountMgrSource::Role { role } => write!(f, " ROLE {role}")?,
+            AccountMgrSource::Privs { privileges, level } => {
+                write!(f, " ")?;
+                write_comma_separated_list(f, privileges.iter().map(|p| p.to_string()))?;
+                write!(f, " ON")?;
+                match level {
+                    AccountMgrLevel::Global => write!(f, " *.*")?,
+                    AccountMgrLevel::Database(database_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.*")?;
+                        } else {
+                            write!(f, " *")?;
+                        }
+                    }
+                    AccountMgrLevel::Table(database_name, table_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.{table_name}")?;
+                        } else {
+                            write!(f, " {table_name}")?;
+                        }
+                    }
+                }
+            }
+            AccountMgrSource::ALL { level, .. } => {
+                write!(f, " ALL PRIVILEGES")?;
+                write!(f, " ON")?;
+                match level {
+                    AccountMgrLevel::Global => write!(f, " *.*")?,
+                    AccountMgrLevel::Database(database_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.*")?;
+                        } else {
+                            write!(f, " *")?;
+                        }
+                    }
+                    AccountMgrLevel::Table(database_name, table_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.{table_name}")?;
+                        } else {
+                            write!(f, " {table_name}")?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1014,11 +1070,11 @@ impl<'a> Display for Statement<'a> {
                     }
                 }
             }
-            Statement::AlterUser {
+            Statement::AlterUser(AlterUserStmt {
                 user,
                 auth_option,
                 role_options,
-            } => {
+            }) => {
                 write!(f, "ALTER USER")?;
                 if let Some(user) = user {
                     write!(f, " {user}")?;
@@ -1068,71 +1124,26 @@ impl<'a> Display for Statement<'a> {
                 }
                 write!(f, " '{role}'")?;
             }
-            Statement::Grant(GrantStatement { source, principal }) => {
+            Statement::Grant(AccountMgrStatement { source, principal }) => {
                 write!(f, "GRANT")?;
-                match source {
-                    GrantSource::Role { role } => write!(f, " ROLE {role}")?,
-                    GrantSource::Privs { privileges, level } => {
-                        write!(
-                            f,
-                            " {}",
-                            privileges
-                                .iter()
-                                .map(|p| p.to_string())
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )?;
-                        write!(f, " ON")?;
-                        match level {
-                            GrantLevel::Global => write!(f, " *.*")?,
-                            GrantLevel::Database(database_name) => {
-                                if let Some(database_name) = database_name {
-                                    write!(f, " {database_name}.*")?;
-                                }
-                            }
-                            GrantLevel::Table(database_name, table_name) => {
-                                if let Some(database_name) = database_name {
-                                    write!(f, " {database_name}.{table_name}")?;
-                                }
-                            }
-                        }
-                    }
-                    GrantSource::ALL { level, .. } => {
-                        write!(f, " ALL PRIVILEGES")?;
-                        write!(f, " ON")?;
-                        match level {
-                            GrantLevel::Global => write!(f, " *.*")?,
-                            GrantLevel::Database(database_name) => {
-                                if let Some(database_name) = database_name {
-                                    write!(f, " {database_name}.*")?;
-                                } else {
-                                    write!(f, " *")?;
-                                }
-                            }
-                            GrantLevel::Table(database_name, table_name) => {
-                                if let Some(database_name) = database_name {
-                                    write!(f, " {database_name}.{table_name}")?;
-                                }
-                            }
-                        }
-                    }
-                }
+                write!(f, "{source}")?;
 
                 write!(f, " TO")?;
-                match principal {
-                    PrincipalIdentity::User(user) => write!(f, " USER {user}")?,
-                    PrincipalIdentity::Role(role) => write!(f, " ROLE {role}")?,
-                }
+                write!(f, "{principal}")?;
             }
             Statement::ShowGrants { principal } => {
                 write!(f, "SHOW GRANTS")?;
                 if let Some(principal) = principal {
                     write!(f, " FOR")?;
-                    match principal {
-                        PrincipalIdentity::User(user) => write!(f, " USER {user}")?,
-                        PrincipalIdentity::Role(role) => write!(f, " ROLE {role}")?,
-                    }
+                    write!(f, "{principal}")?;
                 }
+            }
+            Statement::Revoke(AccountMgrStatement { source, principal }) => {
+                write!(f, "REVOKE")?;
+                write!(f, "{source}")?;
+
+                write!(f, " FROM")?;
+                write!(f, "{principal}")?;
             }
             Statement::CreateUDF {
                 if_not_exists,
