@@ -43,6 +43,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         "databend-meta",
         conf.log_dir.as_str(),
         conf.log_level.as_str(),
+        None,
     );
 
     tracing::info!("Databend-meta version: {}", METASRV_COMMIT_VERSION.as_str());

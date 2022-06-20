@@ -57,6 +57,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         app_name.as_str(),
         conf.log.dir.as_str(),
         conf.log.level.as_str(),
+        None,
     );
 
     init_default_metrics_recorder();

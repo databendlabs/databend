@@ -84,4 +84,3 @@ E.g., `curl -s localhost:28101/v1/cluster/nodes` will display the members in a c
   }
 ]
 ```
-
