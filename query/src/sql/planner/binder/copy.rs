@@ -17,6 +17,7 @@ use std::str::FromStr;
 
 use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyTarget;
+use common_ast::ast::Query;
 use common_ast::ast::Statement;
 use common_ast::parser::error::Backtrace;
 use common_ast::parser::parse_sql;
@@ -34,7 +35,9 @@ use crate::sql::plans::Plan;
 use crate::sql::plans::ValidationMode;
 use crate::sql::statements::parse_copy_file_format_options;
 use crate::sql::statements::parse_stage_location;
+use crate::sql::statements::parse_stage_location_v2;
 use crate::sql::statements::parse_uri_location;
+use crate::sql::statements::parse_uri_location_v2;
 use crate::sql::BindContext;
 
 impl<'a> Binder {
@@ -43,150 +46,433 @@ impl<'a> Binder {
         bind_context: &BindContext,
         stmt: &CopyStmt<'a>,
     ) -> Result<Plan> {
-        match &stmt.dst {
-            CopyTarget::Table(catalog, database, table) => {
-                let (stage_info, path) = match &stmt.src {
-                    CopyTarget::Table(_, _, _) => {
-                        return Err(ErrorCode::SyntaxException(
-                            "COPY INTO <table> FROM <table> is invalid",
-                        ))
-                    }
-                    CopyTarget::Query(_) => {
-                        return Err(ErrorCode::SyntaxException(
-                            "COPY INTO <table> FROM <query> is invalid",
-                        ))
-                    }
-                    // TODO(xuanwo): we need to parse credential and encryption.
-                    CopyTarget::UriLocation(location) => self.bind_stage(stmt, location).await?,
-                };
-
-                let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
-                    .map_err(ErrorCode::SyntaxException)?;
-
+        match (&stmt.src, &stmt.dst) {
+            (
+                &CopyTarget::StageLocation { name, path },
+                &CopyTarget::Table(catalog, database, table),
+            ) => {
                 let catalog_name = catalog
                     .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database_name = database
+                let database_name = catalog
                     .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| self.ctx.get_current_database());
-                let table_name = table.to_string();
-                let table = self
-                    .ctx
-                    .get_table(&catalog_name, &database_name, &table_name)
-                    .await?;
-                let schema = table.schema();
-                let table_id = table.get_id();
+                let table = table.to_string();
 
-                // TODO(xuanwo): we need to support columns in COPY.
-
-                // Read Source plan.
-                let from = ReadDataSourcePlan {
-                    catalog: catalog_name.clone(),
-                    source_info: SourceInfo::StageSource(StageTableInfo {
-                        schema: schema.clone(),
-                        stage_info,
-                        path,
-                        files: vec![],
-                    }),
-                    scan_fields: None,
-                    parts: vec![],
-                    statistics: Default::default(),
-                    description: "".to_string(),
-                    tbl_args: None,
-                    push_downs: None,
-                };
-
-                Ok(Plan::Copy(Box::new(CopyPlanV2::IntoTable {
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    table_id,
-                    schema,
-                    from: Box::new(from),
-                    files: stmt.files.clone(),
-                    pattern: stmt.pattern.clone(),
-                    validation_mode,
-                })))
+                self.bind_copy_from_stage_into_table(
+                    bind_context,
+                    stmt,
+                    &name,
+                    &path,
+                    &catalog_name,
+                    &database_name,
+                    &table,
+                )
+                .await
             }
-            CopyTarget::UriLocation(location) => {
-                let (stage_info, path) = self.bind_stage(stmt, location).await?;
-                let query = match &stmt.src {
-                    CopyTarget::Table(catalog, database, table) => {
-                        let catalog_name = catalog
-                            .as_ref()
-                            .map(|v| v.to_string())
-                            .unwrap_or_else(|| self.ctx.get_current_catalog());
-                        let database_name = database
-                            .as_ref()
-                            .map(|v| v.to_string())
-                            .unwrap_or_else(|| self.ctx.get_current_database());
-                        let table_name = table.to_string();
-
-                        let subquery = format!(
-                            "SELECT * FROM {}.{}.{}",
-                            catalog_name, database_name, table_name
-                        );
-                        let tokens = tokenize_sql(&subquery)?;
-                        let backtrace = Backtrace::new();
-                        let sub_stmt = parse_sql(&tokens, &backtrace)?;
-                        match &sub_stmt {
-                            Statement::Query(query) => {
-                                self.bind_statement(bind_context, &Statement::Query(query.clone()))
-                                    .await?
-                            }
-                            _ => {
-                                return Err(ErrorCode::SyntaxException(
-                                    "COPY INTO <location> FROM <non-query> is invalid",
-                                ))
-                            }
-                        }
-                    }
-                    CopyTarget::Query(query) => {
-                        self.bind_statement(bind_context, &Statement::Query(query.clone()))
-                            .await?
-                    }
-                    CopyTarget::UriLocation(_) => {
-                        return Err(ErrorCode::SyntaxException(
-                            "COPY INTO <location> FROM <location> is invalid",
-                        ))
-                    }
-                };
-
-                debug_assert!(
-                    matches!(query, Plan::Query { .. }),
-                    "input sql must be Plan::Query, but it's not"
-                );
-
-                // Validation mode.
-                let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
-                    .map_err(ErrorCode::SyntaxException)?;
-
-                Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
-                    stage: Box::new(stage_info),
+            (
+                &CopyTarget::UriLocation {
+                    protocol,
+                    name,
                     path,
-                    validation_mode,
-                    from: Box::new(query),
-                })))
+                    credentials,
+                    encryption,
+                },
+                &CopyTarget::Table(catalog, database, table),
+            ) => {
+                let catalog_name = catalog
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| self.ctx.get_current_catalog());
+                let database_name = catalog
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| self.ctx.get_current_database());
+                let table = table.to_string();
+
+                self.bind_copy_from_uri_into_table(
+                    bind_context,
+                    stmt,
+                    &protocol,
+                    &name,
+                    &path,
+                    &credentials,
+                    &encryption,
+                    &catalog_name,
+                    &database_name,
+                    &table,
+                )
+                .await
             }
-            CopyTarget::Query(_) => Err(ErrorCode::SyntaxException("COPY INTO <query> is invalid")),
+            (
+                &CopyTarget::Table(catalog, database, table),
+                &CopyTarget::StageLocation { name, path },
+            ) => {
+                let catalog_name = catalog
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| self.ctx.get_current_catalog());
+                let database_name = catalog
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| self.ctx.get_current_database());
+                let table = table.to_string();
+
+                self.bind_copy_from_table_into_stage(
+                    bind_context,
+                    stmt,
+                    &catalog_name,
+                    &database_name,
+                    &table,
+                    &name,
+                    &path,
+                )
+                .await
+            }
+            (
+                &CopyTarget::Table(catalog, database, table),
+                &CopyTarget::UriLocation {
+                    protocol,
+                    name,
+                    path,
+                    credentials,
+                    encryption,
+                },
+            ) => {
+                let catalog_name = catalog
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| self.ctx.get_current_catalog());
+                let database_name = catalog
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| self.ctx.get_current_database());
+                let table = table.to_string();
+
+                self.bind_copy_from_table_into_uri(
+                    bind_context,
+                    stmt,
+                    &catalog_name,
+                    &database_name,
+                    &table,
+                    &protocol,
+                    &name,
+                    &path,
+                    &credentials,
+                    &encryption,
+                )
+                .await
+            }
+            (&CopyTarget::Query(query), &CopyTarget::StageLocation { name, path }) => {
+                self.bind_copy_from_query_into_stage(bind_context, stmt, &query, &name, &path)
+                    .await
+            }
+            (
+                &CopyTarget::Query(query),
+                &CopyTarget::UriLocation {
+                    protocol,
+                    name,
+                    path,
+                    credentials,
+                    encryption,
+                },
+            ) => {
+                self.bind_copy_from_query_into_uri(
+                    bind_context,
+                    stmt,
+                    &query,
+                    &protocol,
+                    &name,
+                    &path,
+                    &credentials,
+                    &encryption,
+                )
+                .await
+            }
+            (src, dst) => Err(ErrorCode::SyntaxException(format!(
+                "COPY INTO <{}> FROM <{}> is invalid",
+                dst.target(),
+                src.target()
+            ))),
         }
     }
 
-    async fn bind_stage(
+    /// Bind COPY INFO <table> FROM <stage_location>
+    async fn bind_copy_from_stage_into_table(
         &mut self,
+        bind_context: &BindContext,
         stmt: &CopyStmt<'a>,
-        location: &str,
-    ) -> Result<(UserStageInfo, String)> {
-        let (mut stage_info, path) = if location.starts_with('@') {
-            parse_stage_location(&self.ctx, location).await?
-        } else {
-            parse_uri_location(location, &BTreeMap::new(), &BTreeMap::new())?
+        src_stage: &str,
+        src_path: &str,
+        dst_catalog_name: &str,
+        dst_database_name: &str,
+        dst_table_name: &str,
+    ) -> Result<Plan> {
+        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+            .map_err(ErrorCode::SyntaxException)?;
+
+        let table = self
+            .ctx
+            .get_table(dst_catalog_name, dst_database_name, dst_table_name)
+            .await?;
+
+        let (mut stage_info, path) =
+            parse_stage_location_v2(&self.ctx, src_stage, src_path).await?;
+        self.apply_stage_options(stmt, &mut stage_info);
+
+        let from = ReadDataSourcePlan {
+            catalog: dst_catalog_name.to_string(),
+            source_info: SourceInfo::StageSource(StageTableInfo {
+                schema: table.schema.clone(),
+                stage_info,
+                path,
+                files: vec![],
+            }),
+            scan_fields: None,
+            parts: vec![],
+            statistics: Default::default(),
+            description: "".to_string(),
+            tbl_args: None,
+            push_downs: None,
         };
 
+        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoTable {
+            catalog_name: dst_catalog_name.to_string(),
+            database_name: dst_database_name.to_string(),
+            table_name: dst_table_name.to_string(),
+            table_id: table.get_id(),
+            schema: table.schema(),
+            from: Box::new(from),
+            files: stmt.files.clone(),
+            pattern: stmt.pattern.clone(),
+            validation_mode,
+        })))
+    }
+
+    /// Bind COPY INFO <table> FROM <uri_location>
+    async fn bind_copy_from_uri_into_table(
+        &mut self,
+        bind_context: &BindContext,
+        stmt: &CopyStmt<'a>,
+        src_protocol: &str,
+        src_name: &str,
+        src_path: &str,
+        src_credentials: &BTreeMap<String, String>,
+        src_encryption: &BTreeMap<String, String>,
+        dst_catalog_name: &str,
+        dst_database_name: &str,
+        dst_table_name: &str,
+    ) -> Result<Plan> {
+        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+            .map_err(ErrorCode::SyntaxException)?;
+
+        let table = self
+            .ctx
+            .get_table(dst_catalog_name, dst_database_name, dst_table_name)
+            .await?;
+
+        let (mut stage_info, path) = parse_uri_location_v2(
+            &src_protocol,
+            src_name,
+            src_path,
+            src_credentials,
+            src_encryption,
+        )?;
+        self.apply_stage_options(stmt, &mut stage_info);
+
+        let from = ReadDataSourcePlan {
+            catalog: dst_catalog_name.to_string(),
+            source_info: SourceInfo::StageSource(StageTableInfo {
+                schema: table.schema.clone(),
+                stage_info,
+                path,
+                files: vec![],
+            }),
+            scan_fields: None,
+            parts: vec![],
+            statistics: Default::default(),
+            description: "".to_string(),
+            tbl_args: None,
+            push_downs: None,
+        };
+
+        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoTable {
+            catalog_name,
+            database_name,
+            table_name,
+            table_id,
+            schema,
+            from: Box::new(from),
+            files: stmt.files.clone(),
+            pattern: stmt.pattern.clone(),
+            validation_mode,
+        })))
+    }
+
+    /// Bind COPY INFO <stage_location> FROM <table>
+    async fn bind_copy_from_table_into_stage(
+        &mut self,
+        bind_context: &BindContext,
+        stmt: &CopyStmt<'a>,
+        src_catalog_name: &str,
+        src_database_name: &str,
+        src_table_name: &str,
+        dst_stage: &str,
+        dst_path: &str,
+    ) -> Result<Plan> {
+        let subquery =
+            format!("SELECT * FROM {src_catalog_name}.{src_database_name}.{src_table_name}");
+        let tokens = tokenize_sql(&subquery)?;
+        let backtrace = Backtrace::new();
+        let sub_stmt = parse_sql(&tokens, &backtrace)?;
+
+        let query = match &sub_stmt {
+            Statement::Query(query) => {
+                self.bind_statement(bind_context, &Statement::Query(query.clone()))
+                    .await?
+            }
+            _ => {
+                return Err(ErrorCode::SyntaxException(
+                    "COPY INTO <location> FROM <non-query> is invalid",
+                ))
+            }
+        };
+
+        // Validation mode.
+        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+            .map_err(ErrorCode::SyntaxException)?;
+
+        let (mut stage_info, path) =
+            parse_stage_location_v2(&self.ctx, dst_stage, dst_path).await?;
+        self.apply_stage_options(stmt, &mut stage_info);
+
+        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
+            stage: Box::new(stage_info),
+            path,
+            validation_mode,
+            from: Box::new(query),
+        })))
+    }
+
+    /// Bind COPY INFO <uri_location> FROM <table>
+    async fn bind_copy_from_table_into_uri(
+        &mut self,
+        bind_context: &BindContext,
+        stmt: &CopyStmt<'a>,
+        src_catalog_name: &str,
+        src_database_name: &str,
+        src_table_name: &str,
+        dst_protocol: &str,
+        dst_name: &str,
+        dst_path: &str,
+        dst_credentials: &BTreeMap<String, String>,
+        dst_encryption: &BTreeMap<String, String>,
+    ) -> Result<Plan> {
+        let subquery =
+            format!("SELECT * FROM {src_catalog_name}.{src_database_name}.{src_table_name}");
+        let tokens = tokenize_sql(&subquery)?;
+        let backtrace = Backtrace::new();
+        let sub_stmt = parse_sql(&tokens, &backtrace)?;
+
+        let query = match &sub_stmt {
+            Statement::Query(query) => {
+                self.bind_statement(bind_context, &Statement::Query(query.clone()))
+                    .await?
+            }
+            _ => {
+                return Err(ErrorCode::SyntaxException(
+                    "COPY INTO <location> FROM <non-query> is invalid",
+                ))
+            }
+        };
+
+        // Validation mode.
+        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+            .map_err(ErrorCode::SyntaxException)?;
+
+        let (mut stage_info, path) =
+            parse_stage_location_v2(&self.ctx, dst_stage, dst_path).await?;
+        self.apply_stage_options(stmt, &mut stage_info);
+
+        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
+            stage: Box::new(stage_info),
+            path,
+            validation_mode,
+            from: Box::new(query),
+        })))
+    }
+
+    /// Bind COPY INFO <stage_location> FROM <query>
+    async fn bind_copy_from_query_into_stage(
+        &mut self,
+        bind_context: &BindContext,
+        stmt: &CopyStmt<'a>,
+        src_query: &Box<Query>,
+        dst_stage: &str,
+        dst_path: &str,
+    ) -> Result<Plan> {
+        let query = self
+            .bind_statement(bind_context, &Statement::Query(src_query.clone()))
+            .await?;
+
+        // Validation mode.
+        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+            .map_err(ErrorCode::SyntaxException)?;
+
+        let (mut stage_info, path) =
+            parse_stage_location_v2(&self.ctx, dst_stage, dst_path).await?;
+        self.apply_stage_options(stmt, &mut stage_info);
+
+        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
+            stage: Box::new(stage_info),
+            path,
+            validation_mode,
+            from: Box::new(query),
+        })))
+    }
+
+    /// Bind COPY INFO <uri_location> FROM <query>
+    async fn bind_copy_from_query_into_uri(
+        &mut self,
+        bind_context: &BindContext,
+        stmt: &CopyStmt<'a>,
+        src_query: &Box<Query>,
+        dst_protocol: &str,
+        dst_name: &str,
+        dst_path: &str,
+        dst_credentials: &BTreeMap<String, String>,
+        dst_encryption: &BTreeMap<String, String>,
+    ) -> Result<Plan> {
+        let query = self
+            .bind_statement(bind_context, &Statement::Query(src_query.clone()))
+            .await?;
+
+        // Validation mode.
+        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+            .map_err(ErrorCode::SyntaxException)?;
+
+        let (mut stage_info, path) = parse_uri_location_v2(
+            dst_protocol,
+            dst_name,
+            dst_path,
+            dst_credentials,
+            dst_encryption,
+        )?;
+        self.apply_stage_options(stmt, &mut stage_info);
+
+        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
+            stage: Box::new(stage_info),
+            path,
+            validation_mode,
+            from: Box::new(query),
+        })))
+    }
+
+    async fn apply_stage_options(&mut self, stmt: &CopyStmt<'a>, stage: &mut UserStageInfo) {
         if !stmt.file_format.is_empty() {
-            stage_info.file_format_options = parse_copy_file_format_options(&stmt.file_format)?;
+            stage.file_format_options = parse_copy_file_format_options(&stmt.file_format)?;
         }
 
         // Copy options.
@@ -200,10 +486,8 @@ impl<'a> Binder {
 
             // size_limit.
             if stmt.size_limit != 0 {
-                stage_info.copy_options.size_limit = stmt.size_limit;
+                stage.copy_options.size_limit = stmt.size_limit;
             }
         }
-
-        Ok((stage_info, path))
     }
 }

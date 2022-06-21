@@ -55,6 +55,8 @@ use crate::sessions::QueryContext;
 /// For internal stage, we will also add prefix `/stage/<stage>/`
 ///
 /// - @internal/abc => (internal, "/stage/internal/abc")
+///
+/// TODO(xuanwo): Move those logic into parser.
 pub async fn parse_stage_location(
     ctx: &Arc<QueryContext>,
     location: &str,
@@ -74,6 +76,31 @@ pub async fn parse_stage_location(
     Ok((stage, relative_path))
 }
 
+/// parse_stage_location_v2 work similar to parse_stage_location.
+///
+/// Difference is input location has already been parsed by parser.
+///
+/// TODO(xuanwo): Move this logic into parser
+pub async fn parse_stage_location_v2(
+    ctx: &Arc<QueryContext>,
+    name: &str,
+    path: &str,
+) -> Result<(UserStageInfo, String)> {
+    debug_assert!(path.starts_with('/'), "path should starts with '/'");
+
+    let mgr = ctx.get_user_manager();
+    let stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
+
+    let prefix = stage.get_prefix();
+    debug_assert!(prefix.ends_with('/'), "prefix should ends with '/'");
+
+    // prefix must be endswith `/`, so we should trim path here.
+    let relative_path = format!("{prefix}{}", path.trim_start_matches('/'));
+
+    debug!("parsed stage: {stage:?}, path: {relative_path}");
+    Ok((stage, relative_path))
+}
+
 /// External stage(location starts without `@`):
 ///
 /// ```sql
@@ -82,6 +109,8 @@ pub async fn parse_stage_location(
 ///     encryption=(master_key = 'my_master_key')
 ///     file_format = (type = csv field_delimiter = '|' skip_header = 1)"
 /// ```
+///
+/// TODO(xuanwo): Move this logic into parser
 pub fn parse_uri_location(
     location: &str,
     credential_options: &BTreeMap<String, String>,
@@ -113,13 +142,44 @@ pub fn parse_uri_location(
         path = "/".to_string();
     }
 
+    parse_uri_location_v2(
+        uri.scheme_str().ok_or(Err(ErrorCode::SyntaxException(
+            "File location scheme must be specified",
+        )))?,
+        &bucket,
+        &path,
+        credential_options,
+        encryption_options,
+    )
+}
+
+/// External stage(location starts without `@`):
+///
+/// ```sql
+/// copy into table from 's3://mybucket/data/files'
+///     credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
+///     encryption=(master_key = 'my_master_key')
+///     file_format = (type = csv field_delimiter = '|' skip_header = 1)"
+/// ```
+///
+/// This function works similar with parse_uri_location.
+/// Different is input location has been parsed.
+///
+/// TODO(xuanwo): Move this logic into parser
+pub fn parse_uri_location_v2(
+    protocol: &str,
+    name: &str,
+    path: &str,
+    credentials: &BTreeMap<String, String>,
+    encryption: &BTreeMap<String, String>,
+) -> Result<(UserStageInfo, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
     let (root, path) = if path.ends_with('/') {
-        (path.as_str(), "/")
+        (path, "/")
     } else {
-        ("/", path.as_str())
+        ("/", path)
     };
 
     // File storage plan.
@@ -133,18 +193,12 @@ pub fn parse_uri_location(
                 let cfg = StorageS3Config {
                     bucket,
                     root: root.to_string(),
-                    access_key_id: credential_options
-                        .get("aws_key_id")
-                        .cloned()
-                        .unwrap_or_default(),
-                    secret_access_key: credential_options
+                    access_key_id: credentials.get("aws_key_id").cloned().unwrap_or_default(),
+                    secret_access_key: credentials
                         .get("aws_secret_key")
                         .cloned()
                         .unwrap_or_default(),
-                    master_key: encryption_options
-                        .get("master_key")
-                        .cloned()
-                        .unwrap_or_default(),
+                    master_key: encryption.get("master_key").cloned().unwrap_or_default(),
                     disable_credential_loader: true,
                     ..Default::default()
                 };
@@ -171,6 +225,7 @@ pub fn parse_uri_location(
     Ok((stage, path))
 }
 
+/// TODO(xuanwo): Move those logic into parser
 pub fn parse_copy_file_format_options(
     file_format_options: &BTreeMap<String, String>,
 ) -> Result<FileFormatOptions> {

@@ -185,6 +185,7 @@ pub struct CopyStmt<'a> {
     pub files: Vec<String>,
     pub pattern: String,
     pub file_format: BTreeMap<String, String>,
+    /// TODO(xuanwo): parse into validation_mode directly.
     pub validation_mode: String,
     pub size_limit: usize,
 }
@@ -414,6 +415,17 @@ pub enum CopyTarget<'a> {
     ///
     /// For example:`(SELECT field_a,field_b FROM table)`
     Query(Box<Query<'a>>),
+}
+
+impl CopyTarget<'_> {
+    pub fn target(&self) -> &str {
+        match self {
+            CopyTarget::Table(_, _, _) => "Table",
+            CopyTarget::StageLocation { .. } => "StageLocation",
+            CopyTarget::UriLocation { .. } => "UriLocation",
+            CopyTarget::Query(_) => "Query",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
