@@ -17,12 +17,20 @@
 pub use http_service::HttpService;
 pub use rpc::BroadcastAction;
 pub use rpc::CancelAction;
+pub use rpc::DataExchange;
+pub use rpc::DataExchangeManager;
 pub use rpc::DatabendQueryFlightDispatcher;
 pub use rpc::DatabendQueryFlightService;
+pub use rpc::ExecutePacket;
+pub use rpc::ExecutorPacket;
 pub use rpc::FlightAction;
 pub use rpc::FlightClient;
 pub use rpc::FlightTicket;
+pub use rpc::FragmentPacket;
+pub use rpc::MergeExchange;
+pub use rpc::PrepareChannel;
 pub use rpc::ShuffleAction;
+pub use rpc::ShuffleDataExchange;
 pub use rpc::StreamTicket;
 pub use rpc_service::RpcService;
 
