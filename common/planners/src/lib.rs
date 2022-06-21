@@ -188,6 +188,8 @@ pub use plan_projection::ProjectionPlan;
 pub use plan_read_datasource::ReadDataSourcePlan;
 pub use plan_read_datasource::SourceInfo;
 pub use plan_remote::RemotePlan;
+pub use plan_remote::V1RemotePlan;
+pub use plan_remote::V2RemotePlan;
 pub use plan_role_create::CreateRolePlan;
 pub use plan_role_drop::DropRolePlan;
 pub use plan_role_grant::GrantRolePlan;
