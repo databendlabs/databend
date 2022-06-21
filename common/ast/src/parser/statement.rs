@@ -1003,10 +1003,7 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
 pub fn copy_target(i: Input) -> IResult<CopyUnit> {
     // Parse input like `@my_stage/path/to/dir`
     let stage_location = |i| {
-        map_res(
-            rule! {
-                #at_string
-            },
+        map(at_string,
             |location| {
                 let parsed = location.splitn(2, '/').collect::<Vec<_>>();
                 if parsed.len() == 1 {
