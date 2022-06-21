@@ -402,6 +402,7 @@ pub enum CopyTarget<'a> {
     ///
     /// TODO(xuanwo): Add endpoint_url support.
     /// TODO(xuanwo): We can check if we support this protocol during parsing.
+    /// TODO(xuanwo): Maybe we can introduce more strict (friendly) report for credentials and encryption, like parsed into StorageConfig?
     UriLocation {
         protocol: String,
         name: String,
@@ -742,7 +743,7 @@ impl Display for CopyTarget<'_> {
                 credentials,
                 encryption,
             } => {
-                write!(f, "{protocol}://{name}{path}")?;
+                write!(f, "'{protocol}://{name}{path}'")?;
                 if !credentials.is_empty() {
                     write!(f, " CREDENTIALS = ( ")?;
                     write_space_seperated_map(f, credentials)?;

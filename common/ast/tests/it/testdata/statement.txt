@@ -3910,7 +3910,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM s3://mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
 ---------- AST ------------
 Copy(
@@ -3999,7 +3999,7 @@ COPY INTO 's3://mybucket/data.csv'
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO s3://mybucket/data.csv FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
 ---------- AST ------------
 Copy(
@@ -4063,6 +4063,64 @@ Copy(
             name: "my_stage",
             path: "/",
         },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CREDENTIALS = (
+                    AWS_KEY_ID = 'access_key'
+                    AWS_SECRET_KEY = 'secret_key'
+                )
+                ENCRYPTION = (
+                    MASTER_KEY = 'master_key'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' CREDENTIALS = ( AWS_KEY_ID='access_key' AWS_SECRET_KEY='secret_key' ) ENCRYPTION = ( MASTER_KEY='master_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {
+                "AWS_KEY_ID": "access_key",
+                "AWS_SECRET_KEY": "secret_key",
+            },
+            encryption: {
+                "MASTER_KEY": "master_key",
+            },
+        },
+        dst: Table(
+            None,
+            None,
+            Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        ),
         files: [],
         pattern: "",
         file_format: {

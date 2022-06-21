@@ -186,6 +186,22 @@ fn test_statement() {
                     skip_header = 1
                 )
                 size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CREDENTIALS = (
+                    AWS_KEY_ID = 'access_key'
+                    AWS_SECRET_KEY = 'secret_key'
+                )
+                ENCRYPTION = (
+                    MASTER_KEY = 'master_key'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
     ];
 
     for case in cases {
@@ -230,6 +246,8 @@ fn test_statement_error() {
         r#"SHOW GRANT FOR ROLE role1;"#,
         r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';"#,
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
+        r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
     ];
 
     for case in cases {
