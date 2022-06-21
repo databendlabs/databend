@@ -80,7 +80,7 @@ pub struct MetaRaftStore {
     /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
     /// This db is also used to generate a locally unique id.
     /// Currently the id is used to create a unique snapshot id.
-    pub db: sled::Db,
+    pub(crate) db: sled::Db,
 
     // Raft state includes:
     // id: NodeId,
@@ -101,6 +101,8 @@ pub struct MetaRaftStore {
 
     /// The current snapshot.
     pub current_snapshot: RwLock<Option<Snapshot>>,
+
+    pub endpoint: Endpoint,
 }
 
 impl Opened for MetaRaftStore {
@@ -118,6 +120,7 @@ impl MetaRaftStore {
     #[tracing::instrument(level = "debug", skip(config,open,create), fields(config_id=%config.config_id))]
     pub async fn open_create(
         config: &RaftConfig,
+        endpoint: Endpoint,
         open: Option<()>,
         create: Option<()>,
     ) -> MetaResult<MetaRaftStore> {
@@ -152,6 +155,7 @@ impl MetaRaftStore {
             log,
             state_machine: sm,
             current_snapshot,
+            endpoint,
         })
     }
 

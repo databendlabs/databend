@@ -29,6 +29,7 @@ use common_meta_sled_store::openraft::LogId;
 use common_meta_sled_store::openraft::Membership;
 use common_meta_sled_store::openraft::RaftStorage;
 use common_meta_types::AppliedState;
+use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
 use databend_meta::store::MetaRaftStore;
@@ -46,9 +47,10 @@ struct MetaStoreBuilder {
 impl StoreBuilder<LogEntry, AppliedState, MetaRaftStore> for MetaStoreBuilder {
     async fn build(&self) -> MetaRaftStore {
         let tc = MetaSrvTestContext::new(555);
-        let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(()))
-            .await
-            .expect("fail to create store");
+        let ms =
+            MetaRaftStore::open_create(&tc.config.raft_config, Endpoint::default(), None, Some(()))
+                .await
+                .expect("fail to create store");
 
         {
             let mut tcs = self.test_contexts.lock().unwrap();
@@ -82,7 +84,9 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     tracing::info!("--- new meta store");
     {
-        let sto = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
+        let sto =
+            MetaRaftStore::open_create(&tc.config.raft_config, Endpoint::default(), None, Some(()))
+                .await?;
         assert_eq!(id, sto.id);
         assert!(!sto.is_opened());
         assert_eq!(None, sto.read_hard_state().await?);
@@ -110,7 +114,9 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     tracing::info!("--- reopen meta store");
     {
-        let sto = MetaRaftStore::open_create(&tc.config.raft_config, Some(()), None).await?;
+        let sto =
+            MetaRaftStore::open_create(&tc.config.raft_config, Endpoint::default(), Some(()), None)
+                .await?;
         assert_eq!(id, sto.id);
         assert!(sto.is_opened());
         assert_eq!(
@@ -136,7 +142,9 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    let sto = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
+    let sto =
+        MetaRaftStore::open_create(&tc.config.raft_config, Endpoint::default(), None, Some(()))
+            .await?;
 
     tracing::info!("--- feed logs and state machine");
 
@@ -173,7 +181,9 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    let sto = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
+    let sto =
+        MetaRaftStore::open_create(&tc.config.raft_config, Endpoint::default(), None, Some(()))
+            .await?;
 
     tracing::info!("--- feed logs and state machine");
 
@@ -219,7 +229,9 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     {
         let tc = MetaSrvTestContext::new(id);
 
-        let sto = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
+        let sto =
+            MetaRaftStore::open_create(&tc.config.raft_config, Endpoint::default(), None, Some(()))
+                .await?;
 
         tracing::info!("--- feed logs and state machine");
 
@@ -236,7 +248,9 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     {
         let tc = MetaSrvTestContext::new(id);
 
-        let sto = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
+        let sto =
+            MetaRaftStore::open_create(&tc.config.raft_config, Endpoint::default(), None, Some(()))
+                .await?;
 
         tracing::info!("--- rejected because old sm is not cleaned");
         {
