@@ -161,6 +161,9 @@ pub async fn clickhouse_handler_get(
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<impl IntoResponse> {
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
+    if let Some(db) = &params.database {
+        session.set_current_database(db.clone());
+    }
     let context = session
         .create_query_context()
         .await
@@ -190,6 +193,9 @@ pub async fn clickhouse_handler_post(
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<impl IntoResponse> {
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
+    if let Some(db) = &params.database {
+        session.set_current_database(db.clone());
+    }
     let ctx = session
         .create_query_context()
         .await
