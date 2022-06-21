@@ -14,6 +14,7 @@
 
 mod aggregate;
 mod apply;
+mod copy_v2;
 mod eval_scalar;
 mod filter;
 mod hash_join;
@@ -34,6 +35,8 @@ pub use aggregate::Aggregate;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_planners::*;
+pub use copy_v2::CopyPlanV2;
+pub use copy_v2::ValidationMode;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::Filter;
@@ -68,6 +71,9 @@ pub enum Plan {
         kind: ExplainKind,
         plan: Box<Plan>,
     },
+
+    // Copy
+    Copy(Box<CopyPlanV2>),
 
     // System
     ShowMetrics,
@@ -127,6 +133,7 @@ impl Display for Plan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Plan::Query { .. } => write!(f, "Query"),
+            Plan::Copy(_) => write!(f, "Copy"),
             Plan::Explain { .. } => write!(f, "Explain"),
             Plan::ShowMetrics => write!(f, "ShowMetrics"),
             Plan::ShowProcessList => write!(f, "ShowProcessList"),

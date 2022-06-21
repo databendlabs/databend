@@ -21,6 +21,7 @@ mod interpreter_cluster_key_alter;
 mod interpreter_cluster_key_drop;
 mod interpreter_common;
 mod interpreter_copy;
+mod interpreter_copy_v2;
 mod interpreter_database_create;
 mod interpreter_database_drop;
 mod interpreter_database_rename;

@@ -977,6 +977,7 @@ dependencies = [
  "serde",
  "sqlparser",
  "thiserror",
+ "url",
 ]
 
 [[package]]

@@ -151,6 +151,58 @@ fn test_statement() {
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
         r#"REVOKE ALL ON tb1 FROM 'u1';"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO 's3://mybucket/data.csv'
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO @my_stage
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CREDENTIALS = (
+                    AWS_KEY_ID = 'access_key'
+                    AWS_SECRET_KEY = 'secret_key'
+                )
+                ENCRYPTION = (
+                    MASTER_KEY = 'master_key'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
     ];
 
     for case in cases {
@@ -195,6 +247,8 @@ fn test_statement_error() {
         r#"SHOW GRANT FOR ROLE role1;"#,
         r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';"#,
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
+        r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
     ];
 
     for case in cases {

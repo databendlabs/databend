@@ -39,6 +39,7 @@ use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod copy;
 mod ddl;
 mod distinct;
 mod join;
@@ -107,6 +108,8 @@ impl<'a> Binder {
             Statement::ShowFunctions { limit } => {
                 self.bind_show_functions(bind_context, limit).await?
             }
+
+            Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
 
             Statement::ShowMetrics => Plan::ShowMetrics,
             Statement::ShowProcessList => Plan::ShowProcessList,
