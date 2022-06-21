@@ -59,7 +59,7 @@ impl ResizeProcessor {
         &self.outputs
     }
 
-    pub fn get_current_input(&mut self) -> Option<Arc<InputPort>> {
+    fn get_current_input(&mut self) -> Option<Arc<InputPort>> {
         let mut finished = true;
         let mut index = self.cur_input_index;
 
@@ -89,7 +89,7 @@ impl ResizeProcessor {
         }
     }
 
-    pub fn get_current_output(&mut self) -> Option<Arc<OutputPort>> {
+    fn get_current_output(&mut self) -> Option<Arc<OutputPort>> {
         let mut finished = true;
         let mut index = self.cur_output_index;
 
@@ -119,25 +119,25 @@ impl ResizeProcessor {
         }
     }
 
-    pub fn finish_inputs(&mut self) {
+    fn finish_inputs(&mut self) {
         for input in &self.inputs {
             input.finish();
         }
     }
 
-    pub fn inputs_need_data(&mut self) {
+    fn inputs_need_data(&mut self) {
         for input in &self.inputs {
             input.set_need_data();
         }
     }
 
-    pub fn inputs_not_need_data(&mut self) {
+    fn inputs_not_need_data(&mut self) {
         for input in &self.inputs {
             input.set_not_need_data();
         }
     }
 
-    pub fn finish_outputs(&mut self) {
+    fn finish_outputs(&mut self) {
         for output in &self.outputs {
             output.finish();
         }
@@ -167,8 +167,7 @@ impl Processor for ResizeProcessor {
                     return Ok(Event::Finished);
                 }
 
-                let data_block = cur_input.pull_data().unwrap();
-                cur_output.push_data(data_block);
+                cur_output.push_data(cur_input.pull_data().unwrap());
                 return Ok(Event::NeedConsume);
             }
 
