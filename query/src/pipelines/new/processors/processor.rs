@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::cell::UnsafeCell;
 use std::sync::Arc;
 
@@ -34,6 +35,9 @@ pub enum Event {
 #[async_trait::async_trait]
 pub trait Processor: Send {
     fn name(&self) -> &'static str;
+
+    /// Reference used for downcast.
+    fn as_any(&mut self) -> &mut dyn Any;
 
     fn event(&mut self) -> Result<Event>;
 
@@ -64,6 +68,11 @@ impl ProcessorPtr {
             id: Arc::new(UnsafeCell::new(node_index(0))),
             inner: Arc::new(UnsafeCell::new(inner)),
         }
+    }
+
+    /// # Safety
+    pub unsafe fn as_any(&mut self) -> &mut dyn Any {
+        (*self.inner.get()).as_any()
     }
 
     /// # Safety

@@ -114,33 +114,30 @@ async fn test_scatter_optimizer() -> Result<()> {
             name: "Large cluster table query",
             query: "SELECT number FROM numbers(100000000)",
             expect: "\
-            RedistributeStage[expr: 0]\
-            \n  Projection: number:UInt64\
-            \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000, partitions_scanned: 10001, partitions_total: 10001], push_downs: [projections: [0]]",
+            Projection: number:UInt64\
+            \n  ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000, partitions_scanned: 10001, partitions_total: 10001], push_downs: [projections: [0]]",
         },
         Test {
             name: "Large cluster table aggregate query with group by key",
             query: "SELECT SUM(number) FROM numbers(100000000) GROUP BY number % 3",
             expect: "\
-            RedistributeStage[expr: 0]\
-            \n  Projection: SUM(number):UInt64\
-            \n    AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]\
-            \n      RedistributeStage[expr: sipHash(_group_by_key)]\
-            \n        AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]\
-            \n          Expression: (number % 3):UInt8, number:UInt64 (Before GroupBy)\
-            \n            ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000, partitions_scanned: 10001, partitions_total: 10001], push_downs: [projections: [0]]",
+            Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]\
+            \n    RedistributeStage[expr: sipHash(_group_by_key)]\
+            \n      AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]\
+            \n        Expression: (number % 3):UInt8, number:UInt64 (Before GroupBy)\
+            \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000, partitions_scanned: 10001, partitions_total: 10001], push_downs: [projections: [0]]",
         },
         Test {
             name: "Large cluster table aggregate query with group by keys",
             query: "SELECT SUM(number) FROM numbers(100000000) GROUP BY number % 3, number % 2",
             expect: "\
-            RedistributeStage[expr: 0]\
-            \n  Projection: SUM(number):UInt64\
-            \n    AggregatorFinal: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM(number)]]\
-            \n      RedistributeStage[expr: sipHash(_group_by_key)]\
-            \n        AggregatorPartial: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM(number)]]\
-            \n          Expression: (number % 3):UInt8, (number % 2):UInt8, number:UInt64 (Before GroupBy)\
-            \n            ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000, partitions_scanned: 10001, partitions_total: 10001], push_downs: [projections: [0]]",
+            Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM(number)]]\
+            \n    RedistributeStage[expr: sipHash(_group_by_key)]\
+            \n      AggregatorPartial: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM(number)]]\
+            \n        Expression: (number % 3):UInt8, (number % 2):UInt8, number:UInt64 (Before GroupBy)\
+            \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000, partitions_scanned: 10001, partitions_total: 10001], push_downs: [projections: [0]]",
         },
         Test {
             name: "Large cluster table aggregate query without group by",
@@ -178,27 +175,25 @@ async fn test_scatter_optimizer() -> Result<()> {
             name: "Cluster query with standalone subquery",
             query: "SELECT * FROM numbers(1) WHERE EXISTS(SELECT * FROM numbers_local(1))",
             expect: "\
-            RedistributeStage[expr: 0]\
-            \n  Projection: number:UInt64\
-            \n    Filter: exists(subquery(_subquery_1))\
-            \n      Create sub queries sets: [_subquery_1]\
-            \n        Broadcast in cluster\
-            \n          Projection: number:UInt64\
-            \n            ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]\
-            \n        ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
+            Projection: number:UInt64\
+            \n  Filter: exists(subquery(_subquery_1))\
+            \n    Create sub queries sets: [_subquery_1]\
+            \n      Broadcast in cluster\
+            \n        Projection: number:UInt64\
+            \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]\
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
         },
         Test {
             name: "Cluster query with cluster subquery",
             query: "SELECT * FROM numbers(1) WHERE EXISTS(SELECT * FROM numbers(1))",
             expect: "\
-            RedistributeStage[expr: 0]\
-            \n  Projection: number:UInt64\
-            \n    Filter: exists(subquery(_subquery_1))\
-            \n      Create sub queries sets: [_subquery_1]\
-            \n        Broadcast in cluster\
-            \n          Projection: number:UInt64\
-            \n            ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]\
-            \n        ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
+            Projection: number:UInt64\
+            \n  Filter: exists(subquery(_subquery_1))\
+            \n    Create sub queries sets: [_subquery_1]\
+            \n      Broadcast in cluster\
+            \n        Projection: number:UInt64\
+            \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]\
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
         },
     ];
 

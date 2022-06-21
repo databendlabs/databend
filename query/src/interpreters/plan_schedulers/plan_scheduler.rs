@@ -176,13 +176,13 @@ impl PlanScheduler {
     }
 
     fn normal_remote_plan(&self, node_name: &str, action: &ShuffleAction) -> RemotePlan {
-        RemotePlan {
-            schema: action.plan.schema(),
-            query_id: action.query_id.clone(),
-            stage_id: action.stage_id.clone(),
-            stream_id: node_name.to_string(),
-            fetch_nodes: self.cluster_nodes.clone(),
-        }
+        RemotePlan::create_v1(
+            action.plan.schema(),
+            action.query_id.clone(),
+            action.stage_id.clone(),
+            node_name.to_string(),
+            self.cluster_nodes.clone(),
+        )
     }
 
     fn schedule_normal_tasks(&mut self, stage: &StagePlan, tasks: &mut Tasks) -> Result<()> {
@@ -216,13 +216,13 @@ impl PlanScheduler {
     }
 
     fn expansive_remote_plan(&self, node_name: &str, action: &ShuffleAction) -> PlanNode {
-        PlanNode::Remote(RemotePlan {
-            schema: action.plan.schema(),
-            query_id: action.query_id.clone(),
-            stage_id: action.stage_id.clone(),
-            stream_id: node_name.to_string(),
-            fetch_nodes: vec![self.cluster_nodes[self.local_pos].clone()],
-        })
+        PlanNode::Remote(RemotePlan::create_v1(
+            action.plan.schema(),
+            action.query_id.clone(),
+            action.stage_id.clone(),
+            node_name.to_string(),
+            vec![self.cluster_nodes[self.local_pos].clone()],
+        ))
     }
 
     fn schedule_expansive_tasks(&mut self, stage: &StagePlan, tasks: &mut Tasks) -> Result<()> {
@@ -259,13 +259,13 @@ impl PlanScheduler {
     }
 
     fn converge_remote_plan(&self, node_name: &str, stage: &StagePlan) -> RemotePlan {
-        RemotePlan {
-            schema: stage.schema(),
-            stage_id: self.stage_id.clone(),
-            query_id: self.query_context.get_id(),
-            stream_id: node_name.to_string(),
-            fetch_nodes: self.cluster_nodes.clone(),
-        }
+        RemotePlan::create_v1(
+            stage.schema(),
+            self.query_context.get_id(),
+            self.stage_id.clone(),
+            node_name.to_string(),
+            self.cluster_nodes.clone(),
+        )
     }
 
     fn schedule_converge_tasks(&mut self, stage: &StagePlan, tasks: &mut Tasks) -> Result<()> {
@@ -440,7 +440,7 @@ impl PlanScheduler {
         match stage.kind {
             StageKind::Normal => self.schedule_normal_tasks(stage, tasks),
             StageKind::Expansive => self.schedule_expansive_tasks(stage, tasks),
-            StageKind::Convergent => self.schedule_converge_tasks(stage, tasks),
+            StageKind::Merge => self.schedule_converge_tasks(stage, tasks),
         }
     }
 
@@ -468,13 +468,13 @@ impl PlanScheduler {
     }
 
     fn broadcast_remote(&self, node_name: &str, action: &BroadcastAction) -> RemotePlan {
-        RemotePlan {
-            schema: action.plan.schema(),
-            query_id: action.query_id.clone(),
-            stage_id: action.stage_id.clone(),
-            stream_id: node_name.to_string(),
-            fetch_nodes: self.cluster_nodes.clone(),
-        }
+        RemotePlan::create_v1(
+            action.plan.schema(),
+            action.query_id.clone(),
+            action.stage_id.clone(),
+            node_name.to_string(),
+            self.cluster_nodes.clone(),
+        )
     }
 
     fn visit_local_broadcast(&mut self, tasks: &mut Tasks) {
@@ -485,13 +485,13 @@ impl PlanScheduler {
 
         for index in 0..self.nodes_plan.len() {
             let node_name = &self.cluster_nodes[index];
-            self.nodes_plan[index] = PlanNode::Remote(RemotePlan {
-                schema: action.plan.schema(),
-                query_id: action.query_id.clone(),
-                stage_id: action.stage_id.clone(),
-                stream_id: node_name.to_string(),
-                fetch_nodes: vec![self.cluster_nodes[self.local_pos].clone()],
-            });
+            self.nodes_plan[index] = PlanNode::Remote(RemotePlan::create_v1(
+                action.plan.schema(),
+                action.query_id.clone(),
+                action.stage_id.clone(),
+                node_name.to_string(),
+                vec![self.cluster_nodes[self.local_pos].clone()],
+            ));
         }
     }
 
