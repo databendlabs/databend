@@ -148,11 +148,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             )),
         };
         if let Err(ref err) = res {
-            tracing::warn!(
-                "http request error: status={}, msg={}",
-                err.as_response().status(),
-                err,
-            );
+            tracing::warn!("http request error: {}", err);
         };
         res
     }
