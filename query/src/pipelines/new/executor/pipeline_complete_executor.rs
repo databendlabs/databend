@@ -43,6 +43,22 @@ impl PipelineCompleteExecutor {
         Ok(PipelineCompleteExecutor { executor })
     }
 
+    pub fn from_pipelines(
+        async_runtime: Arc<Runtime>,
+        pipelines: Vec<NewPipeline>,
+    ) -> Result<Arc<PipelineCompleteExecutor>> {
+        for pipeline in &pipelines {
+            if !pipeline.is_complete_pipeline()? {
+                return Err(ErrorCode::LogicalError(
+                    "Logical error, PipelineCompleteExecutor can only work on complete pipeline.",
+                ));
+            }
+        }
+
+        let executor = PipelineExecutor::from_pipelines(async_runtime, pipelines)?;
+        Ok(Arc::new(PipelineCompleteExecutor { executor }))
+    }
+
     pub fn finish(&self) -> Result<()> {
         self.executor.finish()
     }

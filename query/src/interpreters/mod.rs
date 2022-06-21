@@ -15,6 +15,7 @@
 mod access;
 // mod async_insert_queue_v2;
 mod async_insert_queue;
+mod fragments;
 mod interpreter;
 mod interpreter_call;
 mod interpreter_cluster_key_alter;
@@ -86,6 +87,8 @@ mod stream;
 
 pub use access::ManagementModeAccess;
 pub use async_insert_queue::AsyncInsertQueue;
+pub use fragments::QueryFragmentAction;
+pub use fragments::QueryFragmentsActions;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;

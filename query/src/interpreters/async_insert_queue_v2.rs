@@ -271,7 +271,7 @@ impl AsyncInsertQueue {
                     _ => unreachable!(),
                 };
 
-                let mut pipeline = select_interpreter?.create_new_pipeline()?;
+                let mut pipeline = select_interpreter?.create_new_pipeline().await?;
 
                 let mut sink_pipeline_builder = SinkPipeBuilder::create();
                 for _ in 0..pipeline.output_len() {

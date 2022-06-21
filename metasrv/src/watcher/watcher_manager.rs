@@ -27,9 +27,11 @@ use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::PbSeqV;
 use common_meta_types::SeqV;
 use common_tracing::tracing;
+use prost::Message;
 use tonic::Status;
 
 use super::WatcherStream;
+use crate::metrics::incr_meta_metrics_meta_sent_bytes;
 use crate::metrics::incr_meta_metrics_watchers;
 
 pub type WatcherId = i64;
@@ -154,6 +156,8 @@ impl WatcherManagerCore {
                     prev: prev.clone().map(PbSeqV::from),
                 }),
             };
+
+            incr_meta_metrics_meta_sent_bytes(resp.encoded_len() as u64);
 
             if let Err(err) = stream.send(resp).await {
                 tracing::info!(

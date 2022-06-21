@@ -305,6 +305,10 @@ CREATE FUNCTION notnull1 AS (p) -> not(is_null(p));
 SELECT notnull1(null);
 SELECT notnull1('null');
 
+drop function a_plus_3;
+drop function cal1;
+drop function notnull1;
+
 --set operator
 select '====Intersect Distinct===';
 create table t1(a int, b int);
@@ -338,6 +342,9 @@ drop table n;
 -- Subquery SemiJoin and AntiJoin
 select * from numbers(5) as t where exists (select * from numbers(3) where number = t.number);
 select * from numbers(5) as t where not exists (select * from numbers(3) where number = t.number);
+
+select * from numbers(5) as t where exists (select number as a from numbers(3) where number = t.number and number > 0 and t.number < 2);
+select * from numbers(5) as t where exists (select * from numbers(3) where number > t.number);
 
 set enable_planner_v2 = 0;
 

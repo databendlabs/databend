@@ -73,7 +73,7 @@ impl InsertInterpreterV2 {
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
-        let mut pipeline = self.create_new_pipeline()?;
+        let mut pipeline = self.create_new_pipeline().await?;
         let mut builder = SourcePipeBuilder::create();
 
         if self.async_insert {
@@ -119,7 +119,7 @@ impl InsertInterpreterV2 {
                         _ => unreachable!(),
                     };
 
-                    pipeline = select_interpreter?.create_new_pipeline()?;
+                    pipeline = select_interpreter?.create_new_pipeline().await?;
 
                     if self.check_schema_cast(plan)? {
                         let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
@@ -243,7 +243,7 @@ impl Interpreter for InsertInterpreterV2 {
         self.execute_new(input_stream).await
     }
 
-    fn create_new_pipeline(&self) -> Result<NewPipeline> {
+    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
         let insert_pipeline = NewPipeline::create();
         Ok(insert_pipeline)
     }

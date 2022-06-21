@@ -66,6 +66,8 @@ use common_planners::OptimizeTablePlan;
 use common_planners::RemoveUserStagePlan;
 use common_planners::RenameDatabasePlan;
 use common_planners::RenameTablePlan;
+use common_planners::RevokePrivilegePlan;
+use common_planners::RevokeRolePlan;
 use common_planners::ShowCreateDatabasePlan;
 use common_planners::ShowCreateTablePlan;
 // use common_planners::*;
@@ -147,19 +149,19 @@ pub enum Plan {
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
 
-    // Users
+    // Account
     ShowUsers,
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
-
-    // Roles
     ShowRoles,
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
     GrantPriv(Box<GrantPrivilegePlan>),
     ShowGrants(Box<ShowGrantsPlan>),
+    RevokePriv(Box<RevokePrivilegePlan>),
+    RevokeRole(Box<RevokeRolePlan>),
 
     // Stages
     ShowStages,
@@ -214,6 +216,8 @@ impl Display for Plan {
             Plan::GrantRole(_) => write!(f, "GrantRole"),
             Plan::GrantPriv(_) => write!(f, "GrantPriv"),
             Plan::ShowGrants(_) => write!(f, "ShowGrants"),
+            Plan::RevokePriv(_) => write!(f, "RevokePriv"),
+            Plan::RevokeRole(_) => write!(f, "RevokeRole"),
             Plan::Insert(_) => write!(f, "Insert"),
         }
     }
@@ -269,6 +273,8 @@ impl Plan {
             Plan::CreateStage(plan) => plan.schema(),
             Plan::DropStage(plan) => plan.schema(),
             Plan::RemoveStage(plan) => plan.schema(),
+            Plan::RevokePriv(_) => Arc::new(DataSchema::empty()),
+            Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
         }
     }

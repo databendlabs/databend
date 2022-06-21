@@ -93,7 +93,7 @@ impl Interpreter for SelectInterpreterV2 {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a NewPipeline
-    fn create_new_pipeline(&self) -> Result<NewPipeline> {
+    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
         let builder = PipelineBuilder::new(
             self.ctx.clone(),
             self.bind_context.result_columns(),

@@ -75,6 +75,8 @@ impl InterpreterFactoryV2 {
                 | DfStatement::GrantPrivilege(_)
                 | DfStatement::GrantRole(_)
                 | DfStatement::ShowGrants(_)
+                | DfStatement::RevokeRole(_)
+                | DfStatement::RevokePrivilege(_)
         )
     }
 
@@ -220,6 +222,12 @@ impl InterpreterFactoryV2 {
             }
             Plan::ShowGrants(show_grants) => {
                 ShowGrantsInterpreter::try_create(ctx.clone(), *show_grants.clone())
+            }
+            Plan::RevokePriv(revoke_priv) => {
+                RevokePrivilegeInterpreter::try_create(ctx.clone(), *revoke_priv.clone())
+            }
+            Plan::RevokeRole(revoke_role) => {
+                RevokeRoleInterpreter::try_create(ctx.clone(), *revoke_role.clone())
             }
         }?;
 

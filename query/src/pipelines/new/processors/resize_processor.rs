@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -58,7 +59,7 @@ impl ResizeProcessor {
         &self.outputs
     }
 
-    fn get_current_input(&mut self) -> Option<Arc<InputPort>> {
+    pub fn get_current_input(&mut self) -> Option<Arc<InputPort>> {
         let mut finished = true;
         let mut index = self.cur_input_index;
 
@@ -88,7 +89,7 @@ impl ResizeProcessor {
         }
     }
 
-    fn get_current_output(&mut self) -> Option<Arc<OutputPort>> {
+    pub fn get_current_output(&mut self) -> Option<Arc<OutputPort>> {
         let mut finished = true;
         let mut index = self.cur_output_index;
 
@@ -118,25 +119,25 @@ impl ResizeProcessor {
         }
     }
 
-    fn finish_inputs(&mut self) {
+    pub fn finish_inputs(&mut self) {
         for input in &self.inputs {
             input.finish();
         }
     }
 
-    fn inputs_need_data(&mut self) {
+    pub fn inputs_need_data(&mut self) {
         for input in &self.inputs {
             input.set_need_data();
         }
     }
 
-    fn inputs_not_need_data(&mut self) {
+    pub fn inputs_not_need_data(&mut self) {
         for input in &self.inputs {
             input.set_not_need_data();
         }
     }
 
-    fn finish_outputs(&mut self) {
+    pub fn finish_outputs(&mut self) {
         for output in &self.outputs {
             output.finish();
         }
@@ -147,6 +148,10 @@ impl ResizeProcessor {
 impl Processor for ResizeProcessor {
     fn name(&self) -> &'static str {
         "Resize"
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {
@@ -162,7 +167,8 @@ impl Processor for ResizeProcessor {
                     return Ok(Event::Finished);
                 }
 
-                cur_output.push_data(cur_input.pull_data().unwrap());
+                let data_block = cur_input.pull_data().unwrap();
+                cur_output.push_data(data_block);
                 return Ok(Event::NeedConsume);
             }
 

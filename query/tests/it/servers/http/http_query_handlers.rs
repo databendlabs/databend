@@ -684,7 +684,7 @@ async fn get_uri(ep: &EndpointType, uri: &str) -> Response {
             .finish(),
     )
     .await
-    .unwrap_or_else(|err| err.as_response())
+    .unwrap_or_else(|err| err.into_response())
 }
 
 async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, QueryResponse)> {
