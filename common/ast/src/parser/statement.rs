@@ -1055,7 +1055,7 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
             },
             |(location, credentials_opt, encryption_opt)| {
                 let parsed = Url::parse(&location)
-                    .map_err(|_| ErrorKind::Other("Unexpected invalid url"))?;
+                    .map_err(|_| ErrorKind::Other("invalid url"))?;
 
                 Ok(CopyUnit::UriLocation {
                     protocol: parsed.scheme().to_string(),
