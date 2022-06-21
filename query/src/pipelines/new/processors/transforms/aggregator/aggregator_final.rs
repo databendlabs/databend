@@ -228,9 +228,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 }
 
                 columns.extend_from_slice(&group_columns_builder.finish()?);
-                let block = DataBlock::create(self.params.schema.clone(), columns);
-                println!("agg final {:?}", block);
-                Ok(Some(block))
+                Ok(Some(DataBlock::create(self.params.schema.clone(), columns)))
             }
         }
     }
