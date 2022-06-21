@@ -1210,6 +1210,8 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
         rule! {
             "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #u64_to_string | #literal_string) )* ~ ")"
         },
-        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.clone(), v.clone()))),
+        |(_, opts, _)| {
+            BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))
+        },
     )(i)
 }

@@ -3044,7 +3044,7 @@ Query(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( FORMAT = 'CSV' compression = 'GZIP' record_delimiter = ',' )
+CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( compression = 'GZIP' format = 'CSV' record_delimiter = ',' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -3057,8 +3057,8 @@ CreateStage(
         },
         encryption_options: {},
         file_format_options: {
-            "FORMAT": "CSV",
             "compression": "GZIP",
+            "format": "CSV",
             "record_delimiter": ",",
         },
         on_error: "",
@@ -4095,7 +4095,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CREDENTIALS = ( AWS_KEY_ID='access_key' AWS_SECRET_KEY='secret_key' ) ENCRYPTION = ( MASTER_KEY='master_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+COPY INTO mytable FROM 's3://mybucket/data.csv' CREDENTIALS = ( aws_key_id='access_key' aws_secret_key='secret_key' ) ENCRYPTION = ( master_key='master_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
 ---------- AST ------------
 Copy(
@@ -4105,11 +4105,11 @@ Copy(
             name: "mybucket",
             path: "/data.csv",
             credentials: {
-                "AWS_KEY_ID": "access_key",
-                "AWS_SECRET_KEY": "secret_key",
+                "aws_key_id": "access_key",
+                "aws_secret_key": "secret_key",
             },
             encryption: {
-                "MASTER_KEY": "master_key",
+                "master_key": "master_key",
             },
         },
         dst: Table(
