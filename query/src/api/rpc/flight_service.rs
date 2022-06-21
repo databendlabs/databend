@@ -155,12 +155,28 @@ impl FlightService for DatabendQueryFlightService {
 
         let stream = req.into_inner();
         let exchange_manager = self.sessions.get_data_exchange_manager();
-        exchange_manager
+        let join_handler = exchange_manager
             .handle_do_put(&query_id, &source, stream)
-            .await?
-            .await
-            .unwrap()
-            .unwrap();
+            .await?;
+
+        if let Err(cause) = join_handler.await {
+            if !cause.is_panic() {
+                return Err(Status::internal("Put stream is canceled."));
+            }
+
+            if cause.is_panic() {
+                let panic_error = cause.into_panic();
+
+                if let Some(message) = panic_error.downcast_ref::<&'static str>() {
+                    return Err(Status::internal(format!("Put stream panic, {}", message)));
+                }
+
+                if let Some(message) = panic_error.downcast_ref::<String>() {
+                    return Err(Status::internal(format!("Put stream panic, {}", message)));
+                }
+            }
+        }
+
         Ok(RawResponse::new(Box::pin(tokio_stream::once(Ok(PutResult {
             app_metadata: vec![],
         }))) as FlightStream<PutResult>))

@@ -2,7 +2,7 @@
 #[derive(PartialEq)]
 pub enum PartitionState {
     Random,
-    Broadcast,
+    /*Broadcast,*/
     NotPartition,
     HashPartition,
     /*RangePartition,*/

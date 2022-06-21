@@ -24,9 +24,22 @@ impl DataPacket {
 
         match data.app_metadata[0] {
             0x01 => DataPacket::flight_data_packet(data),
+            0x02 => DataPacket::error_code(data),
             0x04 => DataPacket::fragment_end(data),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
+    }
+
+    fn error_code(data: FlightData) -> Result<DataPacket> {
+        if let Ok(slice) = data.data_header.try_into() {
+            let code = u16::from_be_bytes(slice);
+            let message = String::from_utf8(data.data_body)?;
+            return Ok(DataPacket::ErrorCode(ErrorCode::create(
+                code, message, None, None,
+            )));
+        }
+
+        Err(ErrorCode::BadBytes("Cannot parse inf usize."))
     }
 
     fn fragment_end(data: FlightData) -> Result<DataPacket> {

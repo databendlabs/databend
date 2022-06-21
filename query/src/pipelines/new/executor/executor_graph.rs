@@ -340,14 +340,12 @@ pub struct RunningGraph(ExecutingGraph);
 impl RunningGraph {
     pub fn create(pipeline: NewPipeline) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::create(pipeline)?;
-        println!("Create running graph:{:?}", graph_state);
         tracing::debug!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(graph_state))
     }
 
     pub fn from_pipelines(pipelines: Vec<NewPipeline>) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::from_pipelines(pipelines)?;
-        println!("Create running graph:{:?}", graph_state);
         tracing::debug!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(graph_state))
     }

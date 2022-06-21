@@ -5,7 +5,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
-use common_planners::BroadcastPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
@@ -21,7 +20,6 @@ use common_planners::StagePlan;
 
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
-use crate::interpreters::fragments::query_fragment_broadcast::BroadcastQueryFragment;
 use crate::interpreters::fragments::query_fragment_read_source::ReadDatasourceQueryFragment;
 use crate::interpreters::fragments::query_fragment_stage::StageQueryFragment;
 use crate::sessions::QueryContext;

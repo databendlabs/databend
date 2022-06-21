@@ -27,7 +27,7 @@ pub struct ExchangeReceiver {
 
     finished: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
-    worker_handler: Mutex<Option<JoinHandle<Result<()>>>>,
+    worker_handler: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl ExchangeReceiver {
@@ -74,12 +74,13 @@ impl ExchangeReceiver {
                         if let Ok(recv_data) = recv_data {
                             let txs = &mut fragments_receiver;
                             if let Err(cause) = this.on_packet(recv_data, txs).await {
-                                this.ctx
-                                    .get_exchange_manager()
-                                    .shutdown_query(&this.query_id)?;
-                                return Err(cause);
+                                if Self::send_error(&mut fragments_receiver, &cause).await {
+                                    Self::shutdown_query(&this, cause);
+                                }
+                                break;
                             }
                         } else {
+                            // This ok. we will close the channel when the data transmission is completed.
                             break;
                         }
                     }
@@ -88,14 +89,43 @@ impl ExchangeReceiver {
                     }
                 };
             }
-
-            Ok(())
         });
 
         let mut handler = self.worker_handler.lock();
         *handler = Some(worker_handler);
 
         Ok(())
+    }
+
+    async fn send_error(receivers: &mut [Option<FragmentReceiver>], cause: &ErrorCode) -> bool {
+        let mut need_shutdown = true;
+        for (fragment_id, fragment_receiver) in receivers.iter_mut().enumerate() {
+            if let Some(fragment_receiver) = fragment_receiver {
+                let error_code = cause.clone();
+                need_shutdown = false;
+                if let Err(_cause) = fragment_receiver.send(Err(error_code)).await {
+                    common_tracing::tracing::warn!(
+                        "Fragment {} flight channel is closed.",
+                        fragment_id
+                    );
+                }
+            }
+
+            // Stop all fragments if it's can be stopped
+            if let Some(tx) = fragment_receiver.take() {
+                tx.close();
+            }
+        }
+
+        need_shutdown
+    }
+
+    fn shutdown_query(this: &Arc<ExchangeReceiver>, cause: ErrorCode) {
+        let query_id = &this.query_id;
+        let exchange_manager = this.ctx.get_exchange_manager();
+        if let Err(cause) = exchange_manager.shutdown_query(query_id, Some(cause)) {
+            common_tracing::tracing::warn!("Cannot shutdown query, cause {:?}", cause);
+        }
     }
 
     pub fn shutdown(self: &Arc<Self>) {
@@ -105,7 +135,7 @@ impl ExchangeReceiver {
 
     pub async fn join(self: &Arc<Self>) -> Result<()> {
         match self.get_worker_handler()?.await {
-            Ok(res) => res,
+            Ok(_res) => Ok(()),
             Err(maybe_panic_error) => match maybe_panic_error.is_panic() {
                 false => Err(ErrorCode::TokioError("Tokio task has canceled.")),
                 true => {
@@ -122,7 +152,7 @@ impl ExchangeReceiver {
         }
     }
 
-    fn get_worker_handler(self: &Arc<Self>) -> Result<JoinHandle<Result<()>>> {
+    fn get_worker_handler(self: &Arc<Self>) -> Result<JoinHandle<()>> {
         match self.worker_handler.lock().take() {
             Some(handler) => Ok(handler),
             None => Err(ErrorCode::LogicalError(
