@@ -594,12 +594,11 @@ impl<'a> TypeChecker<'a> {
                 // with constant Literal::NULL arguments removed.
                 let mut args = Vec::with_capacity(exprs.len() * 2 + 1);
 
-                for expr in exprs.iter().filter(|expr| match expr {
-                    Expr::Literal {
+                for expr in exprs.iter().filter(|expr| {
+                    !matches!(expr, Expr::Literal {
                         span: _,
                         lit: Literal::Null,
-                    } => false,
-                    _ => true,
+                    })
                 }) {
                     let is_not_null_expr = Expr::IsNull {
                         span,
@@ -623,13 +622,14 @@ impl<'a> TypeChecker<'a> {
                     args.push(assume_not_null_expr);
                 }
                 args.push(Expr::Literal {
-                            span,
-                            lit: Literal::Null,
-                        });
+                    span,
+                    lit: Literal::Null,
+                });
                 let args_ref: Vec<&Expr> = args.iter().collect();
-                self.resolve_function(span, "multi_if", &args_ref, None).await?
+                self.resolve_function(span, "multi_if", &args_ref, None)
+                    .await?
             }
-            
+
             Expr::IfNull {
                 span, expr1, expr2, ..
             } => {
