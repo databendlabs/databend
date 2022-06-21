@@ -21,6 +21,7 @@ use common_tracing::tracing;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
+use poem::middleware::CatchPanic;
 use poem::middleware::NormalizePath;
 use poem::middleware::TrailingSlash;
 use poem::put;
@@ -101,6 +102,7 @@ impl HttpHandler {
             session_manager: self.session_manager.clone(),
         })
         .with(NormalizePath::new(TrailingSlash::Trim))
+        .with(CatchPanic::new())
         .boxed()
     }
 
