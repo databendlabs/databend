@@ -89,7 +89,7 @@ pub async fn parse_stage_location_v2(
     debug_assert!(path.starts_with('/'), "path should starts with '/'");
 
     let mgr = ctx.get_user_manager();
-    let stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
+    let stage = mgr.get_stage(&ctx.get_tenant(), name).await?;
 
     let prefix = stage.get_prefix();
     debug_assert!(prefix.ends_with('/'), "prefix should ends with '/'");
@@ -143,9 +143,9 @@ pub fn parse_uri_location(
     }
 
     parse_uri_location_v2(
-        uri.scheme_str().ok_or(Err(ErrorCode::SyntaxException(
+        uri.scheme_str().ok_or(ErrorCode::SyntaxException(
             "File location scheme must be specified",
-        )))?,
+        ))?,
         &bucket,
         &path,
         credential_options,
@@ -183,38 +183,33 @@ pub fn parse_uri_location_v2(
     };
 
     // File storage plan.
-    let (stage_storage, path) = match uri.scheme_str() {
-        None => Err(ErrorCode::SyntaxException(
-            "File location scheme must be specified",
+    let stage_storage = match protocol {
+        // AWS s3 plan.
+        "s3" => {
+            let cfg = StorageS3Config {
+                bucket: name.to_string(),
+                root: root.to_string(),
+                access_key_id: credentials.get("aws_key_id").cloned().unwrap_or_default(),
+                secret_access_key: credentials
+                    .get("aws_secret_key")
+                    .cloned()
+                    .unwrap_or_default(),
+                master_key: encryption.get("master_key").cloned().unwrap_or_default(),
+                disable_credential_loader: true,
+                ..Default::default()
+            };
+
+            Ok(StorageParams::S3(cfg))
+        }
+
+        // Others.
+        _ => Err(ErrorCode::SyntaxException(
+            "File location uri unsupported, must be one of [s3]",
         )),
-        Some(v) => match v {
-            // AWS s3 plan.
-            "s3" => {
-                let cfg = StorageS3Config {
-                    bucket,
-                    root: root.to_string(),
-                    access_key_id: credentials.get("aws_key_id").cloned().unwrap_or_default(),
-                    secret_access_key: credentials
-                        .get("aws_secret_key")
-                        .cloned()
-                        .unwrap_or_default(),
-                    master_key: encryption.get("master_key").cloned().unwrap_or_default(),
-                    disable_credential_loader: true,
-                    ..Default::default()
-                };
-
-                Ok((StorageParams::S3(cfg), path.to_string()))
-            }
-
-            // Others.
-            _ => Err(ErrorCode::SyntaxException(
-                "File location uri unsupported, must be one of [s3, @stage]",
-            )),
-        },
     }?;
 
     let stage = UserStageInfo {
-        stage_name: location.to_string(),
+        stage_name: format!("{protocol}://{name}{path}"),
         stage_type: StageType::External,
         stage_params: StageParams {
             storage: stage_storage,
@@ -222,7 +217,7 @@ pub fn parse_uri_location_v2(
         ..Default::default()
     };
 
-    Ok((stage, path))
+    Ok((stage, path.to_string()))
 }
 
 /// TODO(xuanwo): Move those logic into parser

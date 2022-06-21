@@ -34,9 +34,7 @@ use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 use crate::sql::plans::ValidationMode;
 use crate::sql::statements::parse_copy_file_format_options;
-use crate::sql::statements::parse_stage_location;
 use crate::sql::statements::parse_stage_location_v2;
-use crate::sql::statements::parse_uri_location;
 use crate::sql::statements::parse_uri_location_v2;
 use crate::sql::BindContext;
 
@@ -48,14 +46,14 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         match (&stmt.src, &stmt.dst) {
             (
-                &CopyTarget::StageLocation { name, path },
-                &CopyTarget::Table(catalog, database, table),
+                CopyTarget::StageLocation { name, path },
+                CopyTarget::Table(catalog, database, table),
             ) => {
                 let catalog_name = catalog
                     .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database_name = catalog
+                let database_name = database
                     .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| self.ctx.get_current_database());
@@ -73,20 +71,20 @@ impl<'a> Binder {
                 .await
             }
             (
-                &CopyTarget::UriLocation {
+                CopyTarget::UriLocation {
                     protocol,
                     name,
                     path,
                     credentials,
                     encryption,
                 },
-                &CopyTarget::Table(catalog, database, table),
+                CopyTarget::Table(catalog, database, table),
             ) => {
                 let catalog_name = catalog
                     .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database_name = catalog
+                let database_name = database
                     .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| self.ctx.get_current_database());
@@ -107,14 +105,14 @@ impl<'a> Binder {
                 .await
             }
             (
-                &CopyTarget::Table(catalog, database, table),
-                &CopyTarget::StageLocation { name, path },
+                CopyTarget::Table(catalog, database, table),
+                CopyTarget::StageLocation { name, path },
             ) => {
                 let catalog_name = catalog
                     .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database_name = catalog
+                let database_name = database
                     .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| self.ctx.get_current_database());
@@ -132,8 +130,8 @@ impl<'a> Binder {
                 .await
             }
             (
-                &CopyTarget::Table(catalog, database, table),
-                &CopyTarget::UriLocation {
+                CopyTarget::Table(catalog, database, table),
+                CopyTarget::UriLocation {
                     protocol,
                     name,
                     path,
@@ -145,7 +143,7 @@ impl<'a> Binder {
                     .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database_name = catalog
+                let database_name = database
                     .as_ref()
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| self.ctx.get_current_database());
@@ -165,13 +163,13 @@ impl<'a> Binder {
                 )
                 .await
             }
-            (&CopyTarget::Query(query), &CopyTarget::StageLocation { name, path }) => {
+            (CopyTarget::Query(query), CopyTarget::StageLocation { name, path }) => {
                 self.bind_copy_from_query_into_stage(bind_context, stmt, &query, &name, &path)
                     .await
             }
             (
-                &CopyTarget::Query(query),
-                &CopyTarget::UriLocation {
+                CopyTarget::Query(query),
+                CopyTarget::UriLocation {
                     protocol,
                     name,
                     path,
@@ -202,7 +200,7 @@ impl<'a> Binder {
     /// Bind COPY INFO <table> FROM <stage_location>
     async fn bind_copy_from_stage_into_table(
         &mut self,
-        bind_context: &BindContext,
+        _: &BindContext,
         stmt: &CopyStmt<'a>,
         src_stage: &str,
         src_path: &str,
@@ -220,12 +218,12 @@ impl<'a> Binder {
 
         let (mut stage_info, path) =
             parse_stage_location_v2(&self.ctx, src_stage, src_path).await?;
-        self.apply_stage_options(stmt, &mut stage_info);
+        self.apply_stage_options(stmt, &mut stage_info)?;
 
         let from = ReadDataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: SourceInfo::StageSource(StageTableInfo {
-                schema: table.schema.clone(),
+                schema: table.schema().clone(),
                 stage_info,
                 path,
                 files: vec![],
@@ -254,7 +252,7 @@ impl<'a> Binder {
     /// Bind COPY INFO <table> FROM <uri_location>
     async fn bind_copy_from_uri_into_table(
         &mut self,
-        bind_context: &BindContext,
+        _: &BindContext,
         stmt: &CopyStmt<'a>,
         src_protocol: &str,
         src_name: &str,
@@ -280,12 +278,12 @@ impl<'a> Binder {
             src_credentials,
             src_encryption,
         )?;
-        self.apply_stage_options(stmt, &mut stage_info);
+        self.apply_stage_options(stmt, &mut stage_info)?;
 
         let from = ReadDataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: SourceInfo::StageSource(StageTableInfo {
-                schema: table.schema.clone(),
+                schema: table.schema().clone(),
                 stage_info,
                 path,
                 files: vec![],
@@ -299,11 +297,11 @@ impl<'a> Binder {
         };
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoTable {
-            catalog_name,
-            database_name,
-            table_name,
-            table_id,
-            schema,
+            catalog_name: dst_catalog_name.to_string(),
+            database_name: dst_database_name.to_string(),
+            table_name: dst_table_name.to_string(),
+            table_id: table.get_id(),
+            schema: table.schema(),
             from: Box::new(from),
             files: stmt.files.clone(),
             pattern: stmt.pattern.clone(),
@@ -346,7 +344,7 @@ impl<'a> Binder {
 
         let (mut stage_info, path) =
             parse_stage_location_v2(&self.ctx, dst_stage, dst_path).await?;
-        self.apply_stage_options(stmt, &mut stage_info);
+        self.apply_stage_options(stmt, &mut stage_info)?;
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
             stage: Box::new(stage_info),
@@ -392,9 +390,14 @@ impl<'a> Binder {
         let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
 
-        let (mut stage_info, path) =
-            parse_stage_location_v2(&self.ctx, dst_stage, dst_path).await?;
-        self.apply_stage_options(stmt, &mut stage_info);
+        let (mut stage_info, path) = parse_uri_location_v2(
+            dst_protocol,
+            dst_name,
+            dst_path,
+            dst_credentials,
+            dst_encryption,
+        )?;
+        self.apply_stage_options(stmt, &mut stage_info)?;
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
             stage: Box::new(stage_info),
@@ -409,7 +412,7 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         stmt: &CopyStmt<'a>,
-        src_query: &Box<Query>,
+        src_query: &Box<Query<'_>>,
         dst_stage: &str,
         dst_path: &str,
     ) -> Result<Plan> {
@@ -423,7 +426,7 @@ impl<'a> Binder {
 
         let (mut stage_info, path) =
             parse_stage_location_v2(&self.ctx, dst_stage, dst_path).await?;
-        self.apply_stage_options(stmt, &mut stage_info);
+        self.apply_stage_options(stmt, &mut stage_info)?;
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
             stage: Box::new(stage_info),
@@ -438,7 +441,7 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         stmt: &CopyStmt<'a>,
-        src_query: &Box<Query>,
+        src_query: &Box<Query<'_>>,
         dst_protocol: &str,
         dst_name: &str,
         dst_path: &str,
@@ -460,7 +463,7 @@ impl<'a> Binder {
             dst_credentials,
             dst_encryption,
         )?;
-        self.apply_stage_options(stmt, &mut stage_info);
+        self.apply_stage_options(stmt, &mut stage_info)?;
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
             stage: Box::new(stage_info),
@@ -470,7 +473,11 @@ impl<'a> Binder {
         })))
     }
 
-    async fn apply_stage_options(&mut self, stmt: &CopyStmt<'a>, stage: &mut UserStageInfo) {
+    fn apply_stage_options(
+        &mut self,
+        stmt: &CopyStmt<'a>,
+        stage: &mut UserStageInfo,
+    ) -> Result<()> {
         if !stmt.file_format.is_empty() {
             stage.file_format_options = parse_copy_file_format_options(&stmt.file_format)?;
         }
@@ -489,5 +496,7 @@ impl<'a> Binder {
                 stage.copy_options.size_limit = stmt.size_limit;
             }
         }
+
+        Ok(())
     }
 }
