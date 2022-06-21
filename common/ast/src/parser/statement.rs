@@ -1023,7 +1023,7 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
 
     // Parse input like `mytable`
     let table = |i| {
-        map_res(
+        map(
             peroid_separated_idents_1_to_3,
             |(catalog, database, table)| {
                 Ok(CopyUnit::Table {
