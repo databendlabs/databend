@@ -3175,7 +3175,7 @@ Query(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( FORMAT = 'CSV' compression = 'GZIP' record_delimiter = ',' )
+CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( compression = 'GZIP' format = 'CSV' record_delimiter = ',' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -3188,8 +3188,8 @@ CreateStage(
         },
         encryption_options: {},
         file_format_options: {
-            "FORMAT": "CSV",
             "compression": "GZIP",
+            "format": "CSV",
             "record_delimiter": ",",
         },
         on_error: "",
@@ -4026,6 +4026,242 @@ Revoke(
                 hostname: "%",
             },
         ),
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {},
+            encryption: {},
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO 's3://mybucket/data.csv'
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(56..63),
+            },
+        },
+        dst: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {},
+            encryption: {},
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO @my_stage
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(41..48),
+            },
+        },
+        dst: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CREDENTIALS = (
+                    AWS_KEY_ID = 'access_key'
+                    AWS_SECRET_KEY = 'secret_key'
+                )
+                ENCRYPTION = (
+                    MASTER_KEY = 'master_key'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' CREDENTIALS = ( aws_key_id='access_key' aws_secret_key='secret_key' ) ENCRYPTION = ( master_key='master_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {
+                "aws_key_id": "access_key",
+                "aws_secret_key": "secret_key",
+            },
+            encryption: {
+                "master_key": "master_key",
+            },
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
     },
 )
 
