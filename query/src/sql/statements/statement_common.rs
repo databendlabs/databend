@@ -143,9 +143,8 @@ pub fn parse_uri_location(
     }
 
     parse_uri_location_v2(
-        uri.scheme_str().ok_or(ErrorCode::SyntaxException(
-            "File location scheme must be specified",
-        ))?,
+        uri.scheme_str()
+            .ok_or_else(|| ErrorCode::SyntaxException("File location scheme must be specified"))?,
         &bucket,
         &path,
         credential_options,

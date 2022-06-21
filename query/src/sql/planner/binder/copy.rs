@@ -198,6 +198,7 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INFO <table> FROM <stage_location>
+    #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_stage_into_table(
         &mut self,
         _: &BindContext,
@@ -250,6 +251,7 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INFO <table> FROM <uri_location>
+    #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_uri_into_table(
         &mut self,
         _: &BindContext,
@@ -310,6 +312,7 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INFO <stage_location> FROM <table>
+    #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_table_into_stage(
         &mut self,
         bind_context: &BindContext,
@@ -355,6 +358,7 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INFO <uri_location> FROM <table>
+    #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_table_into_uri(
         &mut self,
         bind_context: &BindContext,
@@ -412,12 +416,12 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         stmt: &CopyStmt<'a>,
-        src_query: &Box<Query<'_>>,
+        src_query: &Query<'_>,
         dst_stage: &str,
         dst_path: &str,
     ) -> Result<Plan> {
         let query = self
-            .bind_statement(bind_context, &Statement::Query(src_query.clone()))
+            .bind_statement(bind_context, &Statement::Query(Box::new(src_query.clone())))
             .await?;
 
         // Validation mode.
@@ -437,11 +441,12 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INFO <uri_location> FROM <query>
+    #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_query_into_uri(
         &mut self,
         bind_context: &BindContext,
         stmt: &CopyStmt<'a>,
-        src_query: &Box<Query<'_>>,
+        src_query: &Query<'_>,
         dst_protocol: &str,
         dst_name: &str,
         dst_path: &str,
@@ -449,7 +454,7 @@ impl<'a> Binder {
         dst_encryption: &BTreeMap<String, String>,
     ) -> Result<Plan> {
         let query = self
-            .bind_statement(bind_context, &Statement::Query(src_query.clone()))
+            .bind_statement(bind_context, &Statement::Query(Box::new(src_query.clone())))
             .await?;
 
         // Validation mode.
