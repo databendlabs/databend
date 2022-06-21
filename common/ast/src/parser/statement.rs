@@ -1003,22 +1003,20 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
 pub fn copy_target(i: Input) -> IResult<CopyUnit> {
     // Parse input like `@my_stage/path/to/dir`
     let stage_location = |i| {
-        map(at_string,
-            |location| {
-                let parsed = location.splitn(2, '/').collect::<Vec<_>>();
-                if parsed.len() == 1 {
-                    Ok(CopyUnit::StageLocation {
-                        name: parsed[0].to_string(),
-                        path: "/".to_string(),
-                    })
-                } else {
-                    Ok(CopyUnit::StageLocation {
-                        name: parsed[0].to_string(),
-                        path: format!("/{}", parsed[1]),
-                    })
-                }
-            },
-        )(i)
+        map(at_string, |location| {
+            let parsed = location.splitn(2, '/').collect::<Vec<_>>();
+            if parsed.len() == 1 {
+                Ok(CopyUnit::StageLocation {
+                    name: parsed[0].to_string(),
+                    path: "/".to_string(),
+                })
+            } else {
+                Ok(CopyUnit::StageLocation {
+                    name: parsed[0].to_string(),
+                    path: format!("/{}", parsed[1]),
+                })
+            }
+        })(i)
     };
 
     // Parse input like `mytable`
@@ -1037,12 +1035,9 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
 
     // Parse input like `( SELECT * from mytable )`
     let query = |i| {
-        map_res(
-            rule! {
-                #parenthesized_query
-            },
-            |query| Ok(CopyUnit::Query(Box::new(query))),
-        )(i)
+        map_res(parenthesized_query, |query| {
+            Ok(CopyUnit::Query(Box::new(query)))
+        })(i)
     };
 
     // Parse input like `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
@@ -1054,8 +1049,7 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
                 ~ (ENCRYPTION ~ "=" ~ #options)?
             },
             |(location, credentials_opt, encryption_opt)| {
-                let parsed = Url::parse(&location)
-                    .map_err(|_| ErrorKind::Other("invalid url"))?;
+                let parsed = Url::parse(&location).map_err(|_| ErrorKind::Other("invalid url"))?;
 
                 Ok(CopyUnit::UriLocation {
                     protocol: parsed.scheme().to_string(),
