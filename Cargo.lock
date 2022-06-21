@@ -2067,6 +2067,7 @@ dependencies = [
  "enum_dispatch",
  "enum_extract",
  "futures",
+ "futures-util",
  "goldenfile",
  "headers",
  "hex",
