@@ -1,0 +1,4 @@
+GRANT SELECT ON 'default'.'b'.* TO 'test'
+GRANT SELECT ON 'default'.'b'.* TO 'test'
+GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
+GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
