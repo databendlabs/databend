@@ -15,7 +15,6 @@
 mod meta_metrics;
 
 pub use meta_metrics::add_meta_metrics_meta_request_inflights;
-pub use meta_metrics::get_meta_metrics_node_is_health;
 pub use meta_metrics::incr_meta_metrics_active_peers;
 pub use meta_metrics::incr_meta_metrics_applying_snapshot;
 pub use meta_metrics::incr_meta_metrics_fail_connections_to_peer;
