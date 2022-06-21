@@ -22,6 +22,7 @@ use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
+use url::Url;
 
 use super::error::ErrorKind;
 use crate::ast::*;
@@ -618,6 +619,30 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
     );
 
+    let copy_into = map(
+        rule! {
+            COPY
+            ~ INTO ~ #copy_target
+            ~ FROM ~ #copy_target
+            ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")?
+            ~ ( PATTERN ~ "=" ~ #literal_string)?
+            ~ ( FILE_FORMAT ~ "=" ~ #options)?
+            ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
+            ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
+        },
+        |(_, _, dst, _, src, files, pattern, file_format, validation_mode, size_limit)| {
+            Statement::Copy(CopyStmt {
+                src,
+                dst,
+                files: files.map(|v| v.3).unwrap_or_default(),
+                pattern: pattern.map(|v| v.2).unwrap_or_default(),
+                file_format: file_format.map(|v| v.2).unwrap_or_default(),
+                validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
+                size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -674,6 +699,16 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
+        ),
+        rule! (
+            #copy_into: "`COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`"
         ),
         rule!(
             #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
@@ -960,6 +995,87 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     ))(i)
 }
 
+/// Parse input into `CopyTarget`
+///
+/// # Notes
+///
+/// It's required to parse stage location first. Or stage could be parsed as table.
+pub fn copy_target(i: Input) -> IResult<CopyUnit> {
+    // Parse input like `@my_stage/path/to/dir`
+    let stage_location = |i| {
+        map(at_string, |location| {
+            let parsed = location.splitn(2, '/').collect::<Vec<_>>();
+            if parsed.len() == 1 {
+                CopyUnit::StageLocation {
+                    name: parsed[0].to_string(),
+                    path: "/".to_string(),
+                }
+            } else {
+                CopyUnit::StageLocation {
+                    name: parsed[0].to_string(),
+                    path: format!("/{}", parsed[1]),
+                }
+            }
+        })(i)
+    };
+
+    // Parse input like `mytable`
+    let table = |i| {
+        map(
+            peroid_separated_idents_1_to_3,
+            |(catalog, database, table)| CopyUnit::Table {
+                catalog,
+                database,
+                table,
+            },
+        )(i)
+    };
+
+    // Parse input like `( SELECT * from mytable )`
+    let query = |i| {
+        map(parenthesized_query, |query| {
+            CopyUnit::Query(Box::new(query))
+        })(i)
+    };
+
+    // Parse input like `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
+    let uri_location = |i| {
+        map_res(
+            rule! {
+                #literal_string
+                ~ (CREDENTIALS ~ "=" ~ #options)?
+                ~ (ENCRYPTION ~ "=" ~ #options)?
+            },
+            |(location, credentials_opt, encryption_opt)| {
+                let parsed =
+                    Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
+
+                Ok(CopyUnit::UriLocation {
+                    protocol: parsed.scheme().to_string(),
+                    name: parsed
+                        .host_str()
+                        .ok_or(ErrorKind::Other("invalid uri location"))?
+                        .to_string(),
+                    path: if parsed.path().is_empty() {
+                        "/".to_string()
+                    } else {
+                        parsed.path().to_string()
+                    },
+                    credentials: credentials_opt.map(|v| v.2).unwrap_or_default(),
+                    encryption: encryption_opt.map(|v| v.2).unwrap_or_default(),
+                })
+            },
+        )(i)
+    };
+
+    rule!(
+       #stage_location: "@<stage_name> { <path> }"
+        | #uri_location: "'<protocol>://<name> {<path>} { CREDENTIALS = ({ AWS_ACCESS_KEY = 'aws_access_key' }) } '"
+        | #table: "{ { <catalog>. } <database>. }<table>"
+        | #query: "( <query> )"
+    )(i)
+}
+
 pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     let limit_like = map(
         rule! {
@@ -1077,6 +1193,8 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
         })(i)
     };
 
+    let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
+
     let ident_with_format = alt((
         ident_to_string,
         map(rule! { FORMAT }, |_| "FORMAT".to_string()),
@@ -1084,8 +1202,10 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     map(
         rule! {
-            "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #literal_string) )* ~ ")"
+            "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #u64_to_string | #literal_string) )* ~ ")"
         },
-        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.clone(), v.clone()))),
+        |(_, opts, _)| {
+            BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))
+        },
     )(i)
 }

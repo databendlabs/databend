@@ -33,6 +33,7 @@ nom-rule = "0.3.0"
 pratt = "0.3.0"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0.30"
+url = "2.2.2"
 
 [dev-dependencies]
 common-base = { path = "../base" }

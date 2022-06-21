@@ -250,3 +250,23 @@ error:
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
 
+---------- Input ----------
+COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
+---------- Output ---------
+error: 
+  --> SQL:1:38
+  |
+1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
+  |                                      ^^^^^^^^^^ expected `CREDENTIALS`, `ENCRYPTION`, `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, or 2 more ...
+
+
+---------- Input ----------
+COPY INTO mytable FROM @mystage CREDENTIALS = ();
+---------- Output ---------
+error: 
+  --> SQL:1:33
+  |
+1 | COPY INTO mytable FROM @mystage CREDENTIALS = ();
+  |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, or `;`
+
+
