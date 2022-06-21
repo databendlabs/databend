@@ -3922,15 +3922,15 @@ Copy(
             credentials: {},
             encryption: {},
         },
-        dst: Table(
-            None,
-            None,
-            Identifier {
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
                 name: "mytable",
                 quote: None,
                 span: Ident(10..17),
             },
-        ),
+        },
         files: [],
         pattern: "",
         file_format: {
@@ -3965,15 +3965,15 @@ Copy(
             name: "my_stage",
             path: "/",
         },
-        dst: Table(
-            None,
-            None,
-            Identifier {
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
                 name: "mytable",
                 quote: None,
                 span: Ident(10..17),
             },
-        ),
+        },
         files: [],
         pattern: "",
         file_format: {
@@ -4004,15 +4004,15 @@ COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter 
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: Table(
-            None,
-            None,
-            Identifier {
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
                 name: "mytable",
                 quote: None,
                 span: Ident(56..63),
             },
-        ),
+        },
         dst: UriLocation {
             protocol: "s3",
             name: "mybucket",
@@ -4050,15 +4050,15 @@ COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_d
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: Table(
-            None,
-            None,
-            Identifier {
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
                 name: "mytable",
                 quote: None,
                 span: Ident(41..48),
             },
-        ),
+        },
         dst: StageLocation {
             name: "my_stage",
             path: "/",
@@ -4112,15 +4112,15 @@ Copy(
                 "master_key": "master_key",
             },
         },
-        dst: Table(
-            None,
-            None,
-            Identifier {
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
                 name: "mytable",
                 quote: None,
                 span: Ident(10..17),
             },
-        ),
+        },
         files: [],
         pattern: "",
         file_format: {
