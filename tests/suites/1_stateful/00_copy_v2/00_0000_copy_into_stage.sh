@@ -18,8 +18,8 @@ for i in `seq 1 10`;do
     echo "insert into test_table (id,name,age) values(1,'2',3), (4, '5', 6);" | $MYSQL_CLIENT_CONNECT
 done
 
-echo "copy into @s2 from test_table FILE_FORMAT = (type = 'CSV');" | $MYSQL_CLIENT_CONNECT
-echo "copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
+echo "set enable_planner_v2 = 1; copy into @s2 from test_table FILE_FORMAT = (type = 'CSV');" | $MYSQL_CLIENT_CONNECT
+echo "set enable_planner_v2 = 1; copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
 echo "list @s2;" | $MYSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
 echo "drop STAGE s2;" | $MYSQL_CLIENT_CONNECT
 echo "drop table test_table;" | $MYSQL_CLIENT_CONNECT

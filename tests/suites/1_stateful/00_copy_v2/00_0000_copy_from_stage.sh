@@ -35,7 +35,7 @@ copy_from_stage_cases=(
 )
 
 for i in "${copy_from_stage_cases[@]}"; do
-  echo "$i" | $MYSQL_CLIENT_CONNECT
+  echo "set enable_planner_v2 = 1; $i" | $MYSQL_CLIENT_CONNECT
   echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
   echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 done
@@ -58,7 +58,7 @@ copy_from_named_external_stage_cases=(
 )
 
 for i in "${copy_from_named_external_stage_cases[@]}"; do
-  echo "$i" | $MYSQL_CLIENT_CONNECT
+  echo "set enable_planner_v2 = 1; $i" | $MYSQL_CLIENT_CONNECT
   echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
   echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 done
