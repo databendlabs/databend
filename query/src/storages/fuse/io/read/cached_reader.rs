@@ -100,6 +100,8 @@ where L: Loader<T> + HasTenantLabel
 
     async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
         let op = || async {
+            // Sine error conversion DO matters: retry depends on the conversion
+            // to distinguish transient errors from permanent ones.
             let v = self
                 .loader
                 .load(loc, len_hint, version)

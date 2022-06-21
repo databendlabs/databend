@@ -204,6 +204,9 @@ impl BlockReader {
         let handler = common_base::base::tokio::spawn(async move {
             let op = || async {
                 let mut chunk = vec![0; length as usize];
+                // Sine error conversion DO matters: retry depends on the conversion
+                // to distinguish transient errors from permanent ones.
+                // Explict error conversion is used here, to make the code easy to be followed
                 let mut r = o
                     .range_reader(offset..offset + length)
                     .await

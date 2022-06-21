@@ -64,7 +64,7 @@ async-channel = "1.6.1"
 async-compat = "0.2.1"
 async-recursion = "1.0.0"
 async-stream = "0.3.3"
-backoff = { version = "0.4.0", features = ["futures", "tokio"]}
+backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 backon = "0.0.2"
 base64 = "0.13.0"
 bit-vec = { version = "0.6.3", features = ["serde_std"] }
