@@ -323,8 +323,8 @@ fn test_expr() {
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
         r#"nullif(1, 1)"#,
         r#"nullif(a, b)"#,
-        //r#"coalesce(1, 2, 3)"#,
-        //r#"coalesce(a, b, c)"#,
+        r#"coalesce(1, 2, 3)"#,
+        r#"coalesce(a, b, c)"#,
         r#"ifnull(1, 1)"#,
         r#"ifnull(a, b)"#,
     ];

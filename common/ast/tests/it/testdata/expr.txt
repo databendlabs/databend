@@ -2599,6 +2599,108 @@ NullIf {
 
 
 ---------- Input ----------
+coalesce(1, 2, 3)
+---------- Output ---------
+COALESCE(1, 2, 3)
+---------- AST ------------
+Coalesce {
+    span: [
+        COALESCE(0..8),
+        LParen(8..9),
+        LiteralInteger(9..10),
+        Comma(10..11),
+        LiteralInteger(12..13),
+        Comma(13..14),
+        LiteralInteger(15..16),
+        RParen(16..17),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LiteralInteger(9..10),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralInteger(12..13),
+            ],
+            lit: Integer(
+                2,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralInteger(15..16),
+            ],
+            lit: Integer(
+                3,
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+coalesce(a, b, c)
+---------- Output ---------
+COALESCE(a, b, c)
+---------- AST ------------
+Coalesce {
+    span: [
+        COALESCE(0..8),
+        LParen(8..9),
+        Ident(9..10),
+        Comma(10..11),
+        Ident(12..13),
+        Comma(13..14),
+        Ident(15..16),
+        RParen(16..17),
+    ],
+    exprs: [
+        ColumnRef {
+            span: [
+                Ident(9..10),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(9..10),
+            },
+        },
+        ColumnRef {
+            span: [
+                Ident(12..13),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(12..13),
+            },
+        },
+        ColumnRef {
+            span: [
+                Ident(15..16),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(15..16),
+            },
+        },
+    ],
+}
+
+
+---------- Input ----------
 ifnull(1, 1)
 ---------- Output ---------
 IFNULL(1, 1)
