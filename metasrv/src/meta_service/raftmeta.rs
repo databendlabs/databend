@@ -155,12 +155,6 @@ impl MetaNodeBuilder {
             .await
             .set_subscriber(Box::new(watcher.subscriber.clone()));
 
-        let endpoint = if let Some(a) = self.endpoint.take() {
-            a
-        } else {
-            sto.get_node_endpoint(&node_id).await?
-        };
-
         let mn = Arc::new(MetaNode {
             sto: sto.clone(),
             watcher,
@@ -170,6 +164,12 @@ impl MetaNodeBuilder {
             join_handles: Mutex::new(Vec::new()),
             joined_tasks: AtomicI32::new(1),
         });
+
+        let endpoint = if let Some(a) = self.endpoint.take() {
+            a
+        } else {
+            sto.get_node_endpoint(&node_id).await?
+        };
 
         if self.monitor_metrics {
             tracing::info!("about to subscribe raft metrics");

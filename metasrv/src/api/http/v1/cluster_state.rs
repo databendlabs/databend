@@ -40,7 +40,7 @@ pub async fn nodes_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl
 pub async fn state_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
     let status = meta_node.get_status().await.map_err(|e| {
         poem::Error::from_string(
-            format!("failed to get leader: {}", e),
+            format!("failed to get status: {}", e),
             StatusCode::INTERNAL_SERVER_ERROR,
         )
     })?;
