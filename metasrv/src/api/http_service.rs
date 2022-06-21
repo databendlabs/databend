@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
 use poem::http::StatusCode;
+use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
 use poem::web::Json;
 use poem::Endpoint;
@@ -91,12 +92,10 @@ impl HttpService {
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
         let conf = config.clone();
-        let tls_cert = conf.admin_tls_server_cert;
-        let tls_key = conf.admin_tls_server_key;
-
-        let cfg = RustlsConfig::new()
-            .cert(std::fs::read(tls_cert.as_str())?)
-            .key(std::fs::read(tls_key.as_str())?);
+        let tls_cert = std::fs::read(conf.admin_tls_server_cert.as_str())?;
+        let tls_key = std::fs::read(conf.admin_tls_server_key)?;
+        let certificate = RustlsCertificate::new().cert(tls_cert).key(tls_key);
+        let cfg = RustlsConfig::new().fallback(certificate);
         Ok(cfg)
     }
 
