@@ -19,6 +19,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::storages::fuse::io::BlockCompactor;
+use databend_query::storages::fuse::io::BlockReader;
 use databend_query::storages::fuse::io::BlockStreamWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::meta::TableSnapshot;
@@ -320,5 +321,17 @@ fn test_meta_locations() -> Result<()> {
     let uuid = Uuid::new_v4();
     let snapshot_loc = locs.snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
     assert!(snapshot_loc.starts_with(test_prefix));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_column_reader_retry_should_return_original_error() -> Result<()> {
+    let ctx = create_query_context().await?;
+    let operator = ctx.get_storage_operator()?;
+    let reader = operator.object("not_exist");
+    let r = BlockReader::read_column(reader, 0, 100).await;
+    assert!(r.is_err());
+    let e = r.unwrap_err();
+    assert_eq!(ErrorCode::storage_not_found_code(), e.code());
     Ok(())
 }
