@@ -222,14 +222,43 @@ pub async fn clickhouse_handler_get(
 
     let sql = params.query();
 
-    let (plan, format) = PlanParser::parse_with_format(context.clone(), &sql)
-        .await
-        .map_err(BadRequest)?;
+    let (stmts, _) = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type())
+        .unwrap_or_else(|_| (vec![], vec![]));
 
-    context.attach_query_str(&sql);
-    execute(context, plan, format, None, params.compress())
-        .await
-        .map_err(InternalServerError)
+    let settings = context.get_settings();
+    if settings.get_enable_new_processor_framework().unwrap() != 0
+        && !context.get_config().query.management_mode
+        && context.get_cluster().is_empty()
+        && settings.get_enable_planner_v2().unwrap() != 0
+        && !stmts.is_empty()
+        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+    {
+        let mut planner = Planner::new(context.clone());
+        let (plan, _) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+
+        let format = match plan.clone() {
+            Plan::Query {
+                s_expr: _,
+                metadata: _,
+                bind_context,
+            } => bind_context.format.clone(),
+            _ => None,
+        };
+
+        context.attach_query_str(&sql);
+        execute_v2(context, plan, format, None, params.compress())
+            .await
+            .map_err(InternalServerError)
+    } else {
+        let (plan, format) = PlanParser::parse_with_format(context.clone(), &sql)
+            .await
+            .map_err(BadRequest)?;
+
+        context.attach_query_str(&sql);
+        execute(context, plan, format, None, params.compress())
+            .await
+            .map_err(InternalServerError)
+    }
 }
 
 #[poem::handler]
