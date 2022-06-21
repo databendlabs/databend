@@ -17,6 +17,7 @@ use common_exception::Result;
 use crate::sql::optimizer::rule::Rule;
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::Project;
@@ -56,8 +57,10 @@ impl Rule for RuleEliminateProject {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
-        let eval_scalar: Project = s_expr.plan().clone().try_into()?;
-        if eval_scalar.columns.is_empty() {
+        let project: Project = s_expr.plan().clone().try_into()?;
+        let rel_expr = RelExpr::with_s_expr(s_expr);
+        let prop = rel_expr.derive_relational_prop_child(0)?;
+        if project.columns == prop.output_columns {
             state.add_result(s_expr.child(0)?.clone());
         }
         Ok(())

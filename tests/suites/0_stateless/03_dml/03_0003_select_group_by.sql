@@ -77,4 +77,8 @@ INSERT INTO t_array VALUES(1, []),
 
 SELECT max(id), min(id), arr FROM t_array GROUP BY arr ORDER BY arr ASC;
 
+-- group by constant string
+select count() from numbers(10) group by 'ab';
+select count() from numbers(10) group by to_nullable('ab');
+
 DROP TABLE t_array;

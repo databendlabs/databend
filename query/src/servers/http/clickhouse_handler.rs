@@ -54,10 +54,30 @@ use crate::sql::DfParser;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
 
+// accept all clickhouse params, so they do not go to settings.
 #[derive(Serialize, Deserialize)]
 pub struct StatementHandlerParams {
     query: Option<String>,
+    #[allow(unused)]
+    query_id: Option<String>,
+    database: Option<String>,
     compress: Option<u8>,
+    #[allow(unused)]
+    decompress: Option<u8>,
+    #[allow(unused)]
+    buffer_size: Option<usize>,
+    #[allow(unused)]
+    max_result_bytes: Option<usize>,
+    #[allow(unused)]
+    wait_end_of_query: Option<u8>,
+    #[allow(unused)]
+    session_id: Option<String>,
+    #[allow(unused)]
+    session_check: Option<u8>,
+    #[allow(unused)]
+    session_timeout: Option<u64>, // in secs
+    #[allow(unused)]
+    with_stacktrace: Option<u8>,
     #[serde(flatten)]
     settings: HashMap<String, String>,
 }
@@ -77,7 +97,7 @@ async fn execute_v2(
     plan: Plan,
     format: Option<String>,
     _input_stream: Option<SendableDataBlockStream>,
-    compress: bool,
+    params: StatementHandlerParams,
 ) -> Result<WithContentType<Body>> {
     let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan.clone())?;
     let _ = interpreter
@@ -104,7 +124,7 @@ async fn execute_v2(
     let prefix = Ok(output_format.serialize_prefix()?);
 
     let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
-        if compress {
+        if params.compress() {
             match rb {
                 Ok(b) => compress_block(b),
                 Err(e) => Err(e),
@@ -130,8 +150,6 @@ async fn execute_v2(
             .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
     };
 
-    // let a = Body::from_bytes_stream(stream).with_content_type(fmt.get_content_type());
-
     Ok(Body::from_bytes_stream(stream).with_content_type(fmt.get_content_type()))
 }
 
@@ -140,7 +158,7 @@ async fn execute(
     plan: PlanNode,
     format: Option<String>,
     input_stream: Option<SendableDataBlockStream>,
-    compress: bool,
+    params: StatementHandlerParams,
 ) -> Result<WithContentType<Body>> {
     let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
     let _ = interpreter
@@ -174,7 +192,7 @@ async fn execute(
     let prefix = Ok(output_format.serialize_prefix()?);
 
     let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
-        if compress {
+        if params.compress() {
             match rb {
                 Ok(b) => compress_block(b),
                 Err(e) => Err(e),
@@ -210,6 +228,9 @@ pub async fn clickhouse_handler_get(
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<impl IntoResponse> {
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
+    if let Some(db) = &params.database {
+        session.set_current_database(db.clone());
+    }
     let context = session
         .create_query_context()
         .await
@@ -246,7 +267,7 @@ pub async fn clickhouse_handler_get(
         };
 
         context.attach_query_str(&sql);
-        execute_v2(context, plan, format, None, params.compress())
+        execute_v2(context, plan, format, None, params)
             .await
             .map_err(InternalServerError)
     } else {
@@ -255,7 +276,7 @@ pub async fn clickhouse_handler_get(
             .map_err(BadRequest)?;
 
         context.attach_query_str(&sql);
-        execute(context, plan, format, None, params.compress())
+        execute(context, plan, format, None, params)
             .await
             .map_err(InternalServerError)
     }
@@ -268,6 +289,9 @@ pub async fn clickhouse_handler_post(
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<impl IntoResponse> {
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
+    if let Some(db) = &params.database {
+        session.set_current_database(db.clone());
+    }
     let ctx = session
         .create_query_context()
         .await
@@ -305,7 +329,7 @@ pub async fn clickhouse_handler_post(
         };
 
         ctx.attach_query_str(&sql);
-        execute_v2(ctx, plan, format, None, params.compress())
+        execute_v2(ctx, plan, format, None, params)
             .await
             .map_err(InternalServerError)
     } else {
@@ -315,7 +339,7 @@ pub async fn clickhouse_handler_post(
             .map_err(BadRequest)?;
 
         ctx.attach_query_str(&sql);
-        execute(ctx, plan, format, None, params.compress())
+        execute(ctx, plan, format, None, params)
             .await
             .map_err(InternalServerError)
     }
