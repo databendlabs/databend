@@ -101,8 +101,6 @@ pub struct MetaRaftStore {
 
     /// The current snapshot.
     pub current_snapshot: RwLock<Option<Snapshot>>,
-
-    pub endpoint: Endpoint,
 }
 
 impl Opened for MetaRaftStore {
@@ -120,7 +118,6 @@ impl MetaRaftStore {
     #[tracing::instrument(level = "debug", skip(config,open,create), fields(config_id=%config.config_id))]
     pub async fn open_create(
         config: &RaftConfig,
-        endpoint: Endpoint,
         open: Option<()>,
         create: Option<()>,
     ) -> MetaResult<MetaRaftStore> {
@@ -155,7 +152,6 @@ impl MetaRaftStore {
             log,
             state_machine: sm,
             current_snapshot,
-            endpoint,
         })
     }
 

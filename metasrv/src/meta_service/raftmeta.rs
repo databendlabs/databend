@@ -322,13 +322,7 @@ impl MetaNode {
             config.no_sync = true;
         }
 
-        let sto = MetaRaftStore::open_create(
-            &config,
-            config.raft_api_listen_host_endpoint().clone(),
-            open,
-            create,
-        )
-        .await?;
+        let sto = MetaRaftStore::open_create(&config, open, create).await?;
         let is_open = sto.is_opened();
         let sto = Arc::new(sto);
 
@@ -644,6 +638,12 @@ impl MetaNode {
         let voters = self.get_voters().await?;
         let non_voters = self.get_non_voters().await?;
 
+        let endpoint = self
+            .sto
+            .get_node_endpoint(&self.sto.id)
+            .await
+            .map_err(|e| MetaError::MetaServiceError(format!("get self endpoint failed: {}", e)))?;
+
         let db_size = self
             .sto
             .db
@@ -651,28 +651,28 @@ impl MetaNode {
             .map_err(|_| MetaError::MetaServiceError("get db_size failed".to_string()))?;
 
         let metrics = self.raft.metrics().borrow().clone();
-        if let Some(leader_id) = metrics.current_leader {
-            Ok(MetaNodeStatus {
-                id: self.sto.id,
-                endpoint: self.sto.endpoint.to_string(),
-                db_size,
-                state: MetaNode::get_state_string(metrics.state),
-                is_leader: metrics.state == openraft::State::Leader,
-                current_term: metrics.current_term,
-                last_log_index: metrics.last_log_index.unwrap_or(0),
-                last_applied: match metrics.last_applied {
-                    Some(id) => id,
-                    None => LogId::new(0, 0),
-                },
-                leader: self.get_node(&leader_id).await?,
-                voters,
-                non_voters,
-            })
+
+        let leader = if let Some(leader_id) = metrics.current_leader {
+            self.get_node(&leader_id).await?
         } else {
-            Err(MetaError::MetaServiceError(
-                "failed to get leader".to_string(),
-            ))
-        }
+            None
+        };
+        Ok(MetaNodeStatus {
+            id: self.sto.id,
+            endpoint: endpoint.to_string(),
+            db_size,
+            state: MetaNode::get_state_string(metrics.state),
+            is_leader: metrics.state == openraft::State::Leader,
+            current_term: metrics.current_term,
+            last_log_index: metrics.last_log_index.unwrap_or(0),
+            last_applied: match metrics.last_applied {
+                Some(id) => id,
+                None => LogId::new(0, 0),
+            },
+            leader,
+            voters,
+            non_voters,
+        })
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
