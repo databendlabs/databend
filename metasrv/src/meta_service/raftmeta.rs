@@ -165,16 +165,16 @@ impl MetaNodeBuilder {
             joined_tasks: AtomicI32::new(1),
         });
 
+        if self.monitor_metrics {
+            tracing::info!("about to subscribe raft metrics");
+            MetaNode::subscribe_metrics(mn.clone(), metrics_rx).await;
+        }
+
         let endpoint = if let Some(a) = self.endpoint.take() {
             a
         } else {
             sto.get_node_endpoint(&node_id).await?
         };
-
-        if self.monitor_metrics {
-            tracing::info!("about to subscribe raft metrics");
-            MetaNode::subscribe_metrics(mn.clone(), metrics_rx).await;
-        }
 
         tracing::info!("about to start raft grpc on endpoint {}", endpoint);
 
