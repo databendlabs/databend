@@ -208,7 +208,7 @@ pub fn parse_uri_location_v2(
     }?;
 
     let stage = UserStageInfo {
-        stage_name: format!("{protocol}://{name}{path}"),
+        stage_name: format!("{protocol}://{name}{}{path}", root.trim_end_matches('/')),
         stage_type: StageType::External,
         stage_params: StageParams {
             storage: stage_storage,
