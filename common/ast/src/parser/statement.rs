@@ -1193,7 +1193,7 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
         })(i)
     };
 
-    let u64_to_string = |i| map_res(literal_u64, |v| Ok(v.to_string()))(i);
+    let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
 
     let ident_with_format = alt((
         ident_to_string,
