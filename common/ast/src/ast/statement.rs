@@ -380,11 +380,11 @@ pub enum CopyTarget<'a> {
     /// Table can be used in `INTO` or `FROM`.
     ///
     /// While table used as `FROM`, it will be rewrite as `(SELECT * FROM table)`
-    Table(
-        Option<Identifier<'a>>,
-        Option<Identifier<'a>>,
-        Identifier<'a>,
-    ),
+    Table {
+        catalog: Option<Identifier<'a>>,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+    },
     /// StageLocation (a.k.a internal and external stage) can be used
     /// in `INTO` or `FROM`.
     ///
@@ -420,7 +420,7 @@ pub enum CopyTarget<'a> {
 impl CopyTarget<'_> {
     pub fn target(&self) -> &'static str {
         match self {
-            CopyTarget::Table(_, _, _) => "Table",
+            CopyTarget::Table { .. } => "Table",
             CopyTarget::StageLocation { .. } => "StageLocation",
             CopyTarget::UriLocation { .. } => "UriLocation",
             CopyTarget::Query(_) => "Query",
@@ -732,7 +732,11 @@ impl Display for KillTarget {
 impl Display for CopyTarget<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CopyTarget::Table(catalog, database, table) => {
+            CopyTarget::Table {
+                catalog,
+                database,
+                table,
+            } => {
                 if let Some(catalog) = catalog {
                     write!(
                         f,

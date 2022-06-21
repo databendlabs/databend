@@ -1028,7 +1028,13 @@ pub fn copy_target(i: Input) -> IResult<CopyTarget> {
     let table = |i| {
         map_res(
             peroid_separated_idents_1_to_3,
-            |(catalog, database, table)| Ok(CopyTarget::Table(catalog, database, table)),
+            |(catalog, database, table)| {
+                Ok(CopyTarget::Table {
+                    catalog,
+                    database,
+                    table,
+                })
+            },
         )(i)
     };
 

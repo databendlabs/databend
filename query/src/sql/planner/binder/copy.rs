@@ -47,7 +47,11 @@ impl<'a> Binder {
         match (&stmt.src, &stmt.dst) {
             (
                 CopyTarget::StageLocation { name, path },
-                CopyTarget::Table(catalog, database, table),
+                CopyTarget::Table {
+                    catalog,
+                    database,
+                    table,
+                },
             ) => {
                 let catalog_name = catalog
                     .as_ref()
@@ -78,7 +82,11 @@ impl<'a> Binder {
                     credentials,
                     encryption,
                 },
-                CopyTarget::Table(catalog, database, table),
+                CopyTarget::Table {
+                    catalog,
+                    database,
+                    table,
+                },
             ) => {
                 let catalog_name = catalog
                     .as_ref()
@@ -105,7 +113,11 @@ impl<'a> Binder {
                 .await
             }
             (
-                CopyTarget::Table(catalog, database, table),
+                CopyTarget::Table {
+                    catalog,
+                    database,
+                    table,
+                },
                 CopyTarget::StageLocation { name, path },
             ) => {
                 let catalog_name = catalog
@@ -130,7 +142,11 @@ impl<'a> Binder {
                 .await
             }
             (
-                CopyTarget::Table(catalog, database, table),
+                CopyTarget::Table {
+                    catalog,
+                    database,
+                    table,
+                },
                 CopyTarget::UriLocation {
                     protocol,
                     name,
