@@ -1003,7 +1003,7 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
 pub fn copy_target(i: Input) -> IResult<CopyUnit> {
     // Parse input like `@my_stage/path/to/dir`
     let stage_location = |i| {
-        map(at_string, |location| {
+        map_res(at_string, |location| {
             let parsed = location.splitn(2, '/').collect::<Vec<_>>();
             if parsed.len() == 1 {
                 Ok(CopyUnit::StageLocation {
@@ -1021,7 +1021,7 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
 
     // Parse input like `mytable`
     let table = |i| {
-        map(
+        map_res(
             peroid_separated_idents_1_to_3,
             |(catalog, database, table)| {
                 Ok(CopyUnit::Table {
@@ -1049,13 +1049,14 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
                 ~ (ENCRYPTION ~ "=" ~ #options)?
             },
             |(location, credentials_opt, encryption_opt)| {
-                let parsed = Url::parse(&location).map_err(|_| ErrorKind::Other("invalid url"))?;
+                let parsed =
+                    Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
 
                 Ok(CopyUnit::UriLocation {
                     protocol: parsed.scheme().to_string(),
                     name: parsed
                         .host_str()
-                        .ok_or(ErrorKind::Other("Unexpected invalid url for name missing"))?
+                        .ok_or(ErrorKind::Other("invalid uri location"))?
                         .to_string(),
                     path: if parsed.path().is_empty() {
                         "/".to_string()
@@ -1194,7 +1195,7 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
         })(i)
     };
 
-    let u64_to_string = |i| map(literal_u64, u64::to_string)(i);
+    let u64_to_string = |i| map_res(literal_u64, |v| Ok(v.to_string()))(i);
 
     let ident_with_format = alt((
         ident_to_string,
