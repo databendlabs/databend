@@ -49,10 +49,30 @@ use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
 
+// accept all clickhouse params, so they do not go to settings.
 #[derive(Serialize, Deserialize)]
 pub struct StatementHandlerParams {
     query: Option<String>,
+    #[allow(unused)]
+    query_id: Option<String>,
+    database: Option<String>,
     compress: Option<u8>,
+    #[allow(unused)]
+    decompress: Option<u8>,
+    #[allow(unused)]
+    buffer_size: Option<usize>,
+    #[allow(unused)]
+    max_result_bytes: Option<usize>,
+    #[allow(unused)]
+    wait_end_of_query: Option<u8>,
+    #[allow(unused)]
+    session_id: Option<String>,
+    #[allow(unused)]
+    session_check: Option<u8>,
+    #[allow(unused)]
+    session_timeout: Option<u64>, // in secs
+    #[allow(unused)]
+    with_stacktrace: Option<u8>,
     #[serde(flatten)]
     settings: HashMap<String, String>,
 }
@@ -72,7 +92,7 @@ async fn execute(
     plan: PlanNode,
     format: Option<String>,
     input_stream: Option<SendableDataBlockStream>,
-    compress: bool,
+    params: StatementHandlerParams,
 ) -> Result<impl IntoResponse> {
     let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
     let _ = interpreter
@@ -106,7 +126,7 @@ async fn execute(
     let prefix = Ok(output_format.serialize_prefix()?);
 
     let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
-        if compress {
+        if params.compress() {
             match rb {
                 Ok(b) => compress_block(b),
                 Err(e) => Err(e),
@@ -158,7 +178,7 @@ pub async fn clickhouse_handler_get(
         .map_err(BadRequest)?;
 
     context.attach_query_str(&sql);
-    execute(context, plan, format, None, params.compress())
+    execute(context, plan, format, None, params)
         .await
         .map_err(InternalServerError)
 }
@@ -187,7 +207,7 @@ pub async fn clickhouse_handler_post(
         .map_err(BadRequest)?;
 
     ctx.attach_query_str(&sql);
-    execute(ctx, plan, format, None, params.compress())
+    execute(ctx, plan, format, None, params)
         .await
         .map_err(InternalServerError)
 }
