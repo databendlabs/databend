@@ -2804,6 +2804,137 @@ Query(
 
 
 ---------- Input ----------
+select 1 from numbers(1) where ((1 = 1) or 1)
+---------- Output ---------
+SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            LiteralInteger(7..8),
+            FROM(9..13),
+            Ident(14..21),
+            LParen(21..22),
+            LiteralInteger(22..23),
+            RParen(23..24),
+            WHERE(25..30),
+            LParen(31..32),
+            LParen(32..33),
+            LiteralInteger(33..34),
+            Eq(35..36),
+            LiteralInteger(37..38),
+            RParen(38..39),
+            OR(40..42),
+            LiteralInteger(43..44),
+            RParen(44..45),
+        ],
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    LiteralInteger(7..8),
+                    FROM(9..13),
+                    Ident(14..21),
+                    LParen(21..22),
+                    LiteralInteger(22..23),
+                    RParen(23..24),
+                    WHERE(25..30),
+                    LParen(31..32),
+                    LParen(32..33),
+                    LiteralInteger(33..34),
+                    Eq(35..36),
+                    LiteralInteger(37..38),
+                    RParen(38..39),
+                    OR(40..42),
+                    LiteralInteger(43..44),
+                    RParen(44..45),
+                ],
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: [
+                                LiteralInteger(7..8),
+                            ],
+                            lit: Integer(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        name: Identifier {
+                            name: "numbers",
+                            quote: None,
+                            span: Ident(14..21),
+                        },
+                        params: [
+                            Literal {
+                                span: [
+                                    LiteralInteger(22..23),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        ],
+                        alias: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: [
+                            OR(40..42),
+                        ],
+                        op: Or,
+                        left: BinaryOp {
+                            span: [
+                                Eq(35..36),
+                            ],
+                            op: Eq,
+                            left: Literal {
+                                span: [
+                                    LiteralInteger(33..34),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                            right: Literal {
+                                span: [
+                                    LiteralInteger(37..38),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: [
+                                LiteralInteger(43..44),
+                            ],
+                            lit: Integer(
+                                1,
+                            ),
+                        },
+                    },
+                ),
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);

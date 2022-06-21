@@ -357,7 +357,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
     let group = map(
         rule! {
            "("
-           ~ ^#set_operation
+           ~ #set_operation
            ~ ^")"
         },
         |(_, set_expr, _)| SetOperationElement::Group(set_expr),
