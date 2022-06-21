@@ -53,15 +53,17 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ #insert_source
         },
-        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| Statement::Insert {
-            catalog,
-            database,
-            table,
-            columns: opt_columns
-                .map(|(_, columns, _)| columns)
-                .unwrap_or_default(),
-            source,
-            overwrite: overwrite.kind == OVERWRITE,
+        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| {
+            Statement::Insert(InsertStmt {
+                catalog,
+                database,
+                table,
+                columns: opt_columns
+                    .map(|(_, columns, _)| columns)
+                    .unwrap_or_default(),
+                source,
+                overwrite: overwrite.kind == OVERWRITE,
+            })
         },
     );
     let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });

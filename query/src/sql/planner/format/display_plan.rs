@@ -65,6 +65,8 @@ impl Plan {
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
             Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
 
+            Plan::Insert(insert) => Ok(format!("{:?}", insert)),
+
             // Roles
             Plan::ShowRoles => Ok("SHOW ROLES".to_string()),
             Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),

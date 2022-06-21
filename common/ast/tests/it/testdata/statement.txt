@@ -2808,44 +2808,46 @@ insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
 ---------- AST ------------
-Insert {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(12..13),
-    },
-    columns: [
-        Identifier {
-            name: "c1",
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
             quote: None,
-            span: Ident(15..17),
+            span: Ident(12..13),
         },
-        Identifier {
-            name: "c2",
-            quote: None,
-            span: Ident(19..21),
-        },
-    ],
-    source: Values {
-        rest_tokens: [
-            LParen(30..31),
-            LiteralInteger(31..32),
-            Comma(32..33),
-            LiteralInteger(34..35),
-            RParen(35..36),
-            Comma(36..37),
-            LParen(38..39),
-            LiteralInteger(39..40),
-            Comma(40..41),
-            LiteralInteger(42..43),
-            RParen(43..44),
-            SemiColon(44..45),
+        columns: [
+            Identifier {
+                name: "c1",
+                quote: None,
+                span: Ident(15..17),
+            },
+            Identifier {
+                name: "c2",
+                quote: None,
+                span: Ident(19..21),
+            },
         ],
+        source: Values {
+            rest_tokens: [
+                LParen(30..31),
+                LiteralInteger(31..32),
+                Comma(32..33),
+                LiteralInteger(34..35),
+                RParen(35..36),
+                Comma(36..37),
+                LParen(38..39),
+                LiteralInteger(39..40),
+                Comma(40..41),
+                LiteralInteger(42..43),
+                RParen(43..44),
+                SemiColon(44..45),
+            ],
+        },
+        overwrite: false,
     },
-    overwrite: false,
-}
+)
 
 
 ---------- Input ----------
@@ -2853,23 +2855,25 @@ insert into table t format json;
 ---------- Output ---------
 INSERT INTO t FORMAT json ;
 ---------- AST ------------
-Insert {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(18..19),
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(18..19),
+        },
+        columns: [],
+        source: Streaming {
+            format: "json",
+            rest_tokens: [
+                SemiColon(31..32),
+            ],
+        },
+        overwrite: false,
     },
-    columns: [],
-    source: Streaming {
-        format: "json",
-        rest_tokens: [
-            SemiColon(31..32),
-        ],
-    },
-    overwrite: false,
-}
+)
 
 
 ---------- Input ----------
@@ -2877,65 +2881,67 @@ insert into table t select * from t2;
 ---------- Output ---------
 INSERT INTO t SELECT * FROM t2
 ---------- AST ------------
-Insert {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(18..19),
-    },
-    columns: [],
-    source: Select {
-        query: Query {
-            span: [
-                SELECT(20..26),
-                Multiply(27..28),
-                FROM(29..33),
-                Ident(34..36),
-            ],
-            body: Select(
-                SelectStmt {
-                    span: [
-                        SELECT(20..26),
-                        Multiply(27..28),
-                        FROM(29..33),
-                        Ident(34..36),
-                    ],
-                    distinct: false,
-                    select_list: [
-                        QualifiedName(
-                            [
-                                Star,
-                            ],
-                        ),
-                    ],
-                    from: [
-                        Table {
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                name: "t2",
-                                quote: None,
-                                span: Ident(34..36),
-                            },
-                            alias: None,
-                            travel_point: None,
-                        },
-                    ],
-                    selection: None,
-                    group_by: [],
-                    having: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            format: None,
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(18..19),
         },
+        columns: [],
+        source: Select {
+            query: Query {
+                span: [
+                    SELECT(20..26),
+                    Multiply(27..28),
+                    FROM(29..33),
+                    Ident(34..36),
+                ],
+                body: Select(
+                    SelectStmt {
+                        span: [
+                            SELECT(20..26),
+                            Multiply(27..28),
+                            FROM(29..33),
+                            Ident(34..36),
+                        ],
+                        distinct: false,
+                        select_list: [
+                            QualifiedName(
+                                [
+                                    Star,
+                                ],
+                            ),
+                        ],
+                        from: [
+                            Table {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "t2",
+                                    quote: None,
+                                    span: Ident(34..36),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: [],
+                        having: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                format: None,
+            },
+        },
+        overwrite: false,
     },
-    overwrite: false,
-}
+)
 
 
 ---------- Input ----------

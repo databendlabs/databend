@@ -44,15 +44,6 @@ pub enum Statement<'a> {
         query: Box<Statement<'a>>,
     },
 
-    Insert {
-        catalog: Option<Identifier<'a>>,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        columns: Vec<Identifier<'a>>,
-        source: InsertSource<'a>,
-        overwrite: bool,
-    },
-
     ShowSettings,
     ShowProcessList,
     ShowMetrics,
@@ -69,6 +60,8 @@ pub enum Statement<'a> {
         variable: Identifier<'a>,
         value: Literal,
     },
+
+    Insert(InsertStmt<'a>),
 
     // Databases
     ShowDatabases(ShowDatabasesStmt<'a>),
@@ -170,6 +163,15 @@ pub enum ExplainKind {
     Syntax,
     Graph,
     Pipeline,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct InsertStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub columns: Vec<Identifier<'a>>,
+    pub source: InsertSource<'a>,
+    pub overwrite: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)] // Databases
@@ -622,14 +624,14 @@ impl<'a> Display for Statement<'a> {
             Statement::Query(query) => {
                 write!(f, "{query}")?;
             }
-            Statement::Insert {
+            Statement::Insert(InsertStmt {
                 catalog,
                 database,
                 table,
                 columns,
                 source,
                 overwrite,
-            } => {
+            }) => {
                 write!(f, "INSERT ")?;
                 if *overwrite {
                     write!(f, "OVERWRITE ")?;

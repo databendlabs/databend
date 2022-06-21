@@ -24,6 +24,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use self::error::DisplayError;
+use self::expr::subexpr;
+use self::util::comma_separated_list0;
 use crate::ast::Expr;
 use crate::ast::Statement;
 use crate::parser::error::Backtrace;
@@ -68,5 +70,16 @@ pub fn parse_expr<'a>(
             Err(ErrorCode::SyntaxException(err.display_error(())))
         }
         Err(nom::Err::Incomplete(_)) => unreachable!(),
+    }
+}
+
+pub fn parse_comma_separated_exprs<'a>(
+    sql_tokens: &'a [Token<'a>],
+    backtrace: &'a Backtrace<'a>,
+) -> Result<Vec<Expr<'a>>> {
+    let mut comma_separated_exprs_parser = comma_separated_list0(subexpr(0));
+    match comma_separated_exprs_parser(Input(sql_tokens, backtrace)) {
+        Ok((_rest, exprs)) => Ok(exprs),
+        _ => todo!(),
     }
 }
