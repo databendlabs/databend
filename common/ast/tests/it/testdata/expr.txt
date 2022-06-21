@@ -752,6 +752,49 @@ MapAccess {
 
 
 ---------- Input ----------
+((1 = 1) or 1)
+---------- Output ---------
+1 = 1 OR 1
+---------- AST ------------
+BinaryOp {
+    span: [
+        OR(9..11),
+    ],
+    op: Or,
+    left: BinaryOp {
+        span: [
+            Eq(4..5),
+        ],
+        op: Eq,
+        left: Literal {
+            span: [
+                LiteralInteger(2..3),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+        right: Literal {
+            span: [
+                LiteralInteger(6..7),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+    },
+    right: Literal {
+        span: [
+            LiteralInteger(12..13),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+}
+
+
+---------- Input ----------
 typeof(1 + 2)
 ---------- Output ---------
 typeof(1 + 2)
