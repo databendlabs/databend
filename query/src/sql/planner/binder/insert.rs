@@ -100,9 +100,10 @@ impl<'a> Binder {
             }
             InsertSource::Values { rest_tokens } => {
                 let stream_str = self.analyze_streaming_intput(rest_tokens)?;
+                let str = stream_str.trim_end_matches(';');
                 self.analyze_stream_format(
                     bind_context,
-                    &stream_str,
+                    str,
                     Some("VALUES".to_string()),
                     schema.clone(),
                 )
