@@ -24,6 +24,7 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 
 use crate::meta_service::MetaNode;
+use crate::metrics::incr_meta_metrics_meta_request_result;
 
 pub struct ActionHandler {
     /// The raft-based meta data entry.
@@ -48,6 +49,7 @@ impl ActionHandler {
         match action {
             MetaGrpcWriteReq::UpsertKV(a) => {
                 let r = self.meta_node.upsert_kv(a).await;
+                incr_meta_metrics_meta_request_result(r.is_ok());
                 RaftReply::from(r)
             }
         }
@@ -59,25 +61,32 @@ impl ActionHandler {
         match action {
             MetaGrpcReadReq::GetKV(a) => {
                 let r = self.meta_node.get_kv(&a.key).await;
+                incr_meta_metrics_meta_request_result(r.is_ok());
                 RaftReply::from(r)
             }
             MetaGrpcReadReq::MGetKV(a) => {
                 let r = self.meta_node.mget_kv(&a.keys).await;
+                incr_meta_metrics_meta_request_result(r.is_ok());
                 RaftReply::from(r)
             }
             MetaGrpcReadReq::ListKV(a) => {
                 let r = self.meta_node.prefix_list_kv(&a.prefix).await;
+                incr_meta_metrics_meta_request_result(r.is_ok());
                 RaftReply::from(r)
             }
             MetaGrpcReadReq::PrefixListKV(a) => {
                 let r = self.meta_node.prefix_list_kv(&a.0).await;
+                incr_meta_metrics_meta_request_result(r.is_ok());
                 RaftReply::from(r)
             }
         }
     }
 
     pub async fn execute_txn(&self, req: TxnRequest) -> TxnReply {
-        match self.meta_node.transaction(req).await {
+        let ret = self.meta_node.transaction(req).await;
+        incr_meta_metrics_meta_request_result(ret.is_ok());
+
+        match ret {
             Ok(resp) => resp,
             Err(err) => TxnReply {
                 success: false,

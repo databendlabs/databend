@@ -65,12 +65,17 @@ impl InterpreterFactoryV2 {
                 | DfStatement::DropDatabase(_)
                 | DfStatement::ShowUsers(_)
                 | DfStatement::CreateUser(_)
+                | DfStatement::ShowRoles(_)
+                | DfStatement::AlterDatabase(_)
                 | DfStatement::DropUser(_)
                 | DfStatement::AlterUser(_)
-                | DfStatement::ShowRoles(_)
                 | DfStatement::CreateRole(_)
                 | DfStatement::DropRole(_)
-                | DfStatement::AlterDatabase(_)
+                | DfStatement::GrantPrivilege(_)
+                | DfStatement::GrantRole(_)
+                | DfStatement::ShowGrants(_)
+                | DfStatement::RevokeRole(_)
+                | DfStatement::RevokePrivilege(_)
         )
     }
 
@@ -202,6 +207,23 @@ impl InterpreterFactoryV2 {
             }
             Plan::DropStage(s) => DropUserStageInterpreter::try_create(ctx.clone(), *s.clone()),
             Plan::RemoveStage(s) => RemoveUserStageInterpreter::try_create(ctx.clone(), *s.clone()),
+
+            // Grant
+            Plan::GrantPriv(grant_priv) => {
+                GrantPrivilegeInterpreter::try_create(ctx.clone(), *grant_priv.clone())
+            }
+            Plan::GrantRole(grant_role) => {
+                GrantRoleInterpreter::try_create(ctx.clone(), *grant_role.clone())
+            }
+            Plan::ShowGrants(show_grants) => {
+                ShowGrantsInterpreter::try_create(ctx.clone(), *show_grants.clone())
+            }
+            Plan::RevokePriv(revoke_priv) => {
+                RevokePrivilegeInterpreter::try_create(ctx.clone(), *revoke_priv.clone())
+            }
+            Plan::RevokeRole(revoke_role) => {
+                RevokeRoleInterpreter::try_create(ctx.clone(), *revoke_role.clone())
+            }
         }?;
 
         Ok(Arc::new(InterceptorInterpreter::create(

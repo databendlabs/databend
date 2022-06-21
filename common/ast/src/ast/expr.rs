@@ -143,6 +143,8 @@ pub enum Expr<'a> {
     /// `EXISTS` expression
     Exists {
         span: &'a [Token<'a>],
+        /// Indicate if this is a `NOT EXISTS`
+        not: bool,
         subquery: Box<Query<'a>>,
     },
     /// Scalar subquery, which will only return a single row with a single column.

@@ -17,9 +17,11 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_meta_types::AuthType;
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 use common_meta_types::UserOptionFlag;
+use common_meta_types::UserPrivilegeType;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -99,13 +101,7 @@ pub enum Statement<'a> {
     // User
     ShowUsers,
     CreateUser(CreateUserStmt),
-    AlterUser {
-        // None means current user
-        user: Option<UserIdentity>,
-        // None means no change to make
-        auth_option: Option<AuthOption>,
-        role_options: Vec<RoleOption>,
-    },
+    AlterUser(AlterUserStmt),
     DropUser {
         if_exists: bool,
         user: UserIdentity,
@@ -119,6 +115,11 @@ pub enum Statement<'a> {
         if_exists: bool,
         role_name: String,
     },
+    Grant(AccountMgrStatement),
+    ShowGrants {
+        principal: Option<PrincipalIdentity>,
+    },
+    Revoke(AccountMgrStatement),
 
     // UDF
     CreateUDF {
@@ -452,6 +453,15 @@ pub struct CreateUserStmt {
     pub role_options: Vec<RoleOption>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterUserStmt {
+    // None means current user
+    pub user: Option<UserIdentity>,
+    // None means no change to make
+    pub auth_option: Option<AuthOption>,
+    pub role_options: Vec<RoleOption>,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AuthOption {
     pub auth_type: Option<AuthType>,
@@ -464,6 +474,33 @@ pub enum RoleOption {
     NoTenantSetting,
     ConfigReload,
     NoConfigReload,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AccountMgrStatement {
+    pub source: AccountMgrSource,
+    pub principal: PrincipalIdentity,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AccountMgrSource {
+    Role {
+        role: String,
+    },
+    Privs {
+        privileges: Vec<UserPrivilegeType>,
+        level: AccountMgrLevel,
+    },
+    ALL {
+        level: AccountMgrLevel,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AccountMgrLevel {
+    Global,
+    Database(Option<String>),
+    Table(Option<String>, String),
 }
 
 impl RoleOption {
@@ -528,6 +565,58 @@ impl Display for TableOption {
             TableOption::Engine(engine) => write!(f, "ENGINE = {engine}"),
             TableOption::Comment(comment) => write!(f, "COMMENT = {comment}"),
         }
+    }
+}
+
+impl Display for AccountMgrSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccountMgrSource::Role { role } => write!(f, " ROLE {role}")?,
+            AccountMgrSource::Privs { privileges, level } => {
+                write!(f, " ")?;
+                write_comma_separated_list(f, privileges.iter().map(|p| p.to_string()))?;
+                write!(f, " ON")?;
+                match level {
+                    AccountMgrLevel::Global => write!(f, " *.*")?,
+                    AccountMgrLevel::Database(database_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.*")?;
+                        } else {
+                            write!(f, " *")?;
+                        }
+                    }
+                    AccountMgrLevel::Table(database_name, table_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.{table_name}")?;
+                        } else {
+                            write!(f, " {table_name}")?;
+                        }
+                    }
+                }
+            }
+            AccountMgrSource::ALL { level, .. } => {
+                write!(f, " ALL PRIVILEGES")?;
+                write!(f, " ON")?;
+                match level {
+                    AccountMgrLevel::Global => write!(f, " *.*")?,
+                    AccountMgrLevel::Database(database_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.*")?;
+                        } else {
+                            write!(f, " *")?;
+                        }
+                    }
+                    AccountMgrLevel::Table(database_name, table_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.{table_name}")?;
+                        } else {
+                            write!(f, " {table_name}")?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -981,11 +1070,11 @@ impl<'a> Display for Statement<'a> {
                     }
                 }
             }
-            Statement::AlterUser {
+            Statement::AlterUser(AlterUserStmt {
                 user,
                 auth_option,
                 role_options,
-            } => {
+            }) => {
                 write!(f, "ALTER USER")?;
                 if let Some(user) = user {
                     write!(f, " {user}")?;
@@ -1034,6 +1123,27 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " IF EXISTS")?;
                 }
                 write!(f, " '{role}'")?;
+            }
+            Statement::Grant(AccountMgrStatement { source, principal }) => {
+                write!(f, "GRANT")?;
+                write!(f, "{source}")?;
+
+                write!(f, " TO")?;
+                write!(f, "{principal}")?;
+            }
+            Statement::ShowGrants { principal } => {
+                write!(f, "SHOW GRANTS")?;
+                if let Some(principal) = principal {
+                    write!(f, " FOR")?;
+                    write!(f, "{principal}")?;
+                }
+            }
+            Statement::Revoke(AccountMgrStatement { source, principal }) => {
+                write!(f, "REVOKE")?;
+                write!(f, "{source}")?;
+
+                write!(f, " FROM")?;
+                write!(f, "{principal}")?;
             }
             Statement::CreateUDF {
                 if_not_exists,

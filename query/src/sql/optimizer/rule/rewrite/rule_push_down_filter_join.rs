@@ -15,75 +15,19 @@
 use common_datavalues::type_coercion::merge_types;
 use common_exception::Result;
 
-use crate::sql::binder::satisfied_by;
 use crate::sql::binder::wrap_cast_if_needed;
+use crate::sql::binder::JoinCondition;
 use crate::sql::optimizer::rule::Rule;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::RelExpr;
-use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::ComparisonExpr;
-use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::RelOp;
-use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
-
-/// Predicate types to determine how to push down
-/// a predicate.
-/// Given a query: `SELECT * FROM t(a), t1(b) WHERE a = 1 AND b = 1 AND a = b AND a+b = 1`,
-/// the predicate types are:
-/// - Left: `a = 1`
-/// - Right: `b = 1`
-/// - Both: `a = b`
-/// - Other: `a+b = 1`
-enum Predicate<'a> {
-    Left(&'a Scalar),
-    Right(&'a Scalar),
-    Both { left: &'a Scalar, right: &'a Scalar },
-    Other(&'a Scalar),
-}
-
-impl<'a> Predicate<'a> {
-    pub fn new(
-        scalar: &'a Scalar,
-        left_prop: &RelationalProperty,
-        right_prop: &RelationalProperty,
-    ) -> Self {
-        if satisfied_by(scalar, left_prop) {
-            return Self::Left(scalar);
-        }
-
-        if satisfied_by(scalar, right_prop) {
-            return Self::Right(scalar);
-        }
-
-        if let Scalar::ComparisonExpr(ComparisonExpr {
-            op: ComparisonOp::Equal,
-            left,
-            right,
-            ..
-        }) = scalar
-        {
-            if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
-                return Self::Both { left, right };
-            }
-
-            if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
-                return Self::Both {
-                    left: right,
-                    right: left,
-                };
-            }
-        }
-
-        Self::Other(scalar)
-    }
-}
 
 pub struct RulePushDownFilterJoin {
     id: RuleID,
@@ -149,19 +93,19 @@ impl Rule for RulePushDownFilterJoin {
         let mut need_push = false;
 
         for predicate in filter.predicates.into_iter() {
-            let pred = Predicate::new(&predicate, &left_prop, &right_prop);
+            let pred = JoinCondition::new(&predicate, &left_prop, &right_prop);
             match pred {
-                Predicate::Left(_) => {
+                JoinCondition::Left(_) => {
                     need_push = true;
                     left_push_down.push(predicate);
                 }
-                Predicate::Right(_) => {
+                JoinCondition::Right(_) => {
                     need_push = true;
                     right_push_down.push(predicate);
                 }
-                Predicate::Other(_) => original_predicates.push(predicate),
+                JoinCondition::Other(_) => original_predicates.push(predicate),
 
-                Predicate::Both { left, right } => {
+                JoinCondition::Both { left, right } => {
                     let left_type = left.data_type();
                     let right_type = right.data_type();
                     let join_key_type = merge_types(&left_type, &right_type);

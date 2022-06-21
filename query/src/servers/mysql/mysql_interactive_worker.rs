@@ -406,7 +406,13 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             .map_err_to_code(ErrorCode::TokioError, || {
                 "Cannot join handle from context's runtime"
             })?;
-        query_result.map(|data| (data, Self::extra_info(context, instant)))
+        query_result.map(|data| {
+            if data.is_empty() {
+                (data, "".to_string())
+            } else {
+                (data, Self::extra_info(context, instant))
+            }
+        })
     }
 
     fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {
