@@ -62,8 +62,8 @@ impl<'a> Binder {
                 self.bind_copy_from_stage_into_table(
                     bind_context,
                     stmt,
-                    &name,
-                    &path,
+                    name,
+                    path,
                     &catalog_name,
                     &database_name,
                     &table,
@@ -93,11 +93,11 @@ impl<'a> Binder {
                 self.bind_copy_from_uri_into_table(
                     bind_context,
                     stmt,
-                    &protocol,
-                    &name,
-                    &path,
-                    &credentials,
-                    &encryption,
+                    protocol,
+                    name,
+                    path,
+                    credentials,
+                    encryption,
                     &catalog_name,
                     &database_name,
                     &table,
@@ -124,8 +124,8 @@ impl<'a> Binder {
                     &catalog_name,
                     &database_name,
                     &table,
-                    &name,
-                    &path,
+                    name,
+                    path,
                 )
                 .await
             }
@@ -155,16 +155,16 @@ impl<'a> Binder {
                     &catalog_name,
                     &database_name,
                     &table,
-                    &protocol,
-                    &name,
-                    &path,
-                    &credentials,
-                    &encryption,
+                    protocol,
+                    name,
+                    path,
+                    credentials,
+                    encryption,
                 )
                 .await
             }
             (CopyTarget::Query(query), CopyTarget::StageLocation { name, path }) => {
-                self.bind_copy_from_query_into_stage(bind_context, stmt, &query, &name, &path)
+                self.bind_copy_from_query_into_stage(bind_context, stmt, query, name, path)
                     .await
             }
             (
@@ -180,12 +180,12 @@ impl<'a> Binder {
                 self.bind_copy_from_query_into_uri(
                     bind_context,
                     stmt,
-                    &query,
-                    &protocol,
-                    &name,
-                    &path,
-                    &credentials,
-                    &encryption,
+                    query,
+                    protocol,
+                    name,
+                    path,
+                    credentials,
+                    encryption,
                 )
                 .await
             }
@@ -223,7 +223,7 @@ impl<'a> Binder {
         let from = ReadDataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: SourceInfo::StageSource(StageTableInfo {
-                schema: table.schema().clone(),
+                schema: table.schema(),
                 stage_info,
                 path,
                 files: vec![],
@@ -272,7 +272,7 @@ impl<'a> Binder {
             .await?;
 
         let (mut stage_info, path) = parse_uri_location_v2(
-            &src_protocol,
+            src_protocol,
             src_name,
             src_path,
             src_credentials,
@@ -283,7 +283,7 @@ impl<'a> Binder {
         let from = ReadDataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: SourceInfo::StageSource(StageTableInfo {
-                schema: table.schema().clone(),
+                schema: table.schema(),
                 stage_info,
                 path,
                 files: vec![],
