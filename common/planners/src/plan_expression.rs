@@ -343,9 +343,10 @@ impl Expression {
                 }
                 AggregateFunctionFactory::instance().get(&func_name, params.clone(), fields)
             }
-            _ => Err(ErrorCode::LogicalError(
-                "Expression must be aggregated function",
-            )),
+            _ => Err(ErrorCode::LogicalError(format!(
+                "Expression must be aggregated function, {:?}",
+                self
+            ))),
         }
     }
 
