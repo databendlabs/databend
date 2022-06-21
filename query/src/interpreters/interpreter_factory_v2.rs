@@ -19,6 +19,7 @@ use common_planners::EmptyPlan;
 use common_planners::PlanNode;
 
 use super::*;
+use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -95,6 +96,8 @@ impl InterpreterFactoryV2 {
             Plan::Explain { kind, plan } => {
                 ExplainInterpreterV2::try_create(ctx.clone(), *plan.clone(), kind.clone())
             }
+
+            Plan::Copy(copy_plan) => CopyInterpreterV2::try_create(ctx.clone(), *copy_plan.clone()),
 
             // Shows
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx.clone()),

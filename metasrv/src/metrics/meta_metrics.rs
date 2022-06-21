@@ -393,10 +393,6 @@ pub fn set_meta_metrics_node_is_health(is_health: bool) {
     NODE_IS_HEALTH.set(if is_health { 1 } else { 0 });
 }
 
-pub fn get_meta_metrics_node_is_health() -> bool {
-    NODE_IS_HEALTH.get() > 0
-}
-
 pub fn incr_meta_metrics_leader_change() {
     LEADER_CHANGES.inc();
 }
