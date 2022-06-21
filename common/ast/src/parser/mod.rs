@@ -80,6 +80,9 @@ pub fn parse_comma_separated_exprs<'a>(
     let mut comma_separated_exprs_parser = comma_separated_list0(subexpr(0));
     match comma_separated_exprs_parser(Input(sql_tokens, backtrace)) {
         Ok((_rest, exprs)) => Ok(exprs),
-        _ => todo!(),
+        Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
+            Err(ErrorCode::SyntaxException(err.display_error(())))
+        }
+        Err(nom::Err::Incomplete(_)) => unreachable!(),
     }
 }
