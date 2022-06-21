@@ -1,3 +1,4 @@
-select "desc hive.default.pokes";
-desc hive.default.pokes;
-select * from hive.default.pokes;
+select "desc hive.default.t_1";
+desc hive.default.t_1;
+set enable_new_processor_framework = 0;
+select * from hive.default.t_1;

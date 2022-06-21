@@ -125,6 +125,26 @@ fn test_statement() {
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE catalog.c RENAME TO a;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON * TO ROLE 'role1';"#,
+        r#"GRANT ALL ON *.* TO 'test-grant'@'localhost';"#,
+        r#"GRANT ALL ON *.* TO ROLE 'role2';"#,
+        r#"GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT ALL PRIVILEGES ON * TO ROLE 'role3';"#,
+        r#"GRANT ROLE 'test' TO 'test-user';"#,
+        r#"GRANT ROLE 'test' TO USER 'test-user';"#,
+        r#"GRANT ROLE 'test' TO ROLE 'test-user';"#,
+        r#"GRANT SELECT ON db01.* TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.* TO ROLE 'role1'"#,
+        r#"GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.tb1 TO ROLE 'role1';"#,
+        r#"SHOW GRANTS;"#,
+        r#"SHOW GRANTS FOR 'test-grant'@'localhost';"#,
+        r#"SHOW GRANTS FOR USER 'test-grant'@'localhost';"#,
+        r#"SHOW GRANTS FOR ROLE 'role1';"#,
     ];
 
     for case in cases {
@@ -161,6 +181,12 @@ fn test_statement_error() {
         r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
         r#"create role 'test'@'localhost';"#,
         r#"drop role 'test'@'localhost';"#,
+        r#"drop role role1;"#,
+        r#"GRANT ROLE test TO ROLE 'test-user';"#,
+        r#"GRANT ROLE 'test' TO ROLE test-user;"#,
+        r#"GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON *.c TO 'test-grant'@'localhost';"#,
+        r#"SHOW GRANT FOR ROLE role1;"#,
     ];
 
     for case in cases {

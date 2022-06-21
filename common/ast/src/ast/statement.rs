@@ -17,9 +17,11 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_meta_types::AuthType;
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 use common_meta_types::UserOptionFlag;
+use common_meta_types::UserPrivilegeType;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -118,6 +120,10 @@ pub enum Statement<'a> {
     DropRole {
         if_exists: bool,
         role_name: String,
+    },
+    Grant(GrantStatement),
+    ShowGrants {
+        principal: Option<PrincipalIdentity>,
     },
 
     // UDF
@@ -464,6 +470,33 @@ pub enum RoleOption {
     NoTenantSetting,
     ConfigReload,
     NoConfigReload,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrantStatement {
+    pub source: GrantSource,
+    pub principal: PrincipalIdentity,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GrantSource {
+    Role {
+        role: String,
+    },
+    Privs {
+        privileges: Vec<UserPrivilegeType>,
+        level: GrantLevel,
+    },
+    ALL {
+        level: GrantLevel,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GrantLevel {
+    Global,
+    Database(Option<String>),
+    Table(Option<String>, String),
 }
 
 impl RoleOption {
@@ -1034,6 +1067,72 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " IF EXISTS")?;
                 }
                 write!(f, " '{role}'")?;
+            }
+            Statement::Grant(GrantStatement { source, principal }) => {
+                write!(f, "GRANT")?;
+                match source {
+                    GrantSource::Role { role } => write!(f, " ROLE {role}")?,
+                    GrantSource::Privs { privileges, level } => {
+                        write!(
+                            f,
+                            " {}",
+                            privileges
+                                .iter()
+                                .map(|p| p.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )?;
+                        write!(f, " ON")?;
+                        match level {
+                            GrantLevel::Global => write!(f, " *.*")?,
+                            GrantLevel::Database(database_name) => {
+                                if let Some(database_name) = database_name {
+                                    write!(f, " {database_name}.*")?;
+                                }
+                            }
+                            GrantLevel::Table(database_name, table_name) => {
+                                if let Some(database_name) = database_name {
+                                    write!(f, " {database_name}.{table_name}")?;
+                                }
+                            }
+                        }
+                    }
+                    GrantSource::ALL { level, .. } => {
+                        write!(f, " ALL PRIVILEGES")?;
+                        write!(f, " ON")?;
+                        match level {
+                            GrantLevel::Global => write!(f, " *.*")?,
+                            GrantLevel::Database(database_name) => {
+                                if let Some(database_name) = database_name {
+                                    write!(f, " {database_name}.*")?;
+                                } else {
+                                    write!(f, " *")?;
+                                }
+                            }
+                            GrantLevel::Table(database_name, table_name) => {
+                                if let Some(database_name) = database_name {
+                                    write!(f, " {database_name}.{table_name}")?;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                write!(f, " TO")?;
+                match principal {
+                    PrincipalIdentity::User(user) => write!(f, " USER {user}")?,
+                    PrincipalIdentity::Role(role) => write!(f, " ROLE {role}")?,
+                }
+            }
+            Statement::ShowGrants { principal } => {
+                write!(f, "SHOW GRANTS")?;
+                if let Some(principal) = principal {
+                    write!(f, " FOR")?;
+                    match principal {
+                        PrincipalIdentity::User(user) => write!(f, " USER {user}")?,
+                        PrincipalIdentity::Role(role) => write!(f, " ROLE {role}")?,
+                    }
+                }
             }
             Statement::CreateUDF {
                 if_not_exists,
