@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use common_ast::ast::CopyStmt;
-use common_ast::ast::CopyTarget;
+use common_ast::ast::CopyUnit;
 use common_ast::ast::Query;
 use common_ast::ast::Statement;
 use common_ast::parser::error::Backtrace;
@@ -46,8 +46,8 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         match (&stmt.src, &stmt.dst) {
             (
-                CopyTarget::StageLocation { name, path },
-                CopyTarget::Table {
+                CopyUnit::StageLocation { name, path },
+                CopyUnit::Table {
                     catalog,
                     database,
                     table,
@@ -75,14 +75,14 @@ impl<'a> Binder {
                 .await
             }
             (
-                CopyTarget::UriLocation {
+                CopyUnit::UriLocation {
                     protocol,
                     name,
                     path,
                     credentials,
                     encryption,
                 },
-                CopyTarget::Table {
+                CopyUnit::Table {
                     catalog,
                     database,
                     table,
@@ -113,12 +113,12 @@ impl<'a> Binder {
                 .await
             }
             (
-                CopyTarget::Table {
+                CopyUnit::Table {
                     catalog,
                     database,
                     table,
                 },
-                CopyTarget::StageLocation { name, path },
+                CopyUnit::StageLocation { name, path },
             ) => {
                 let catalog_name = catalog
                     .as_ref()
@@ -142,12 +142,12 @@ impl<'a> Binder {
                 .await
             }
             (
-                CopyTarget::Table {
+                CopyUnit::Table {
                     catalog,
                     database,
                     table,
                 },
-                CopyTarget::UriLocation {
+                CopyUnit::UriLocation {
                     protocol,
                     name,
                     path,
@@ -179,13 +179,13 @@ impl<'a> Binder {
                 )
                 .await
             }
-            (CopyTarget::Query(query), CopyTarget::StageLocation { name, path }) => {
+            (CopyUnit::Query(query), CopyUnit::StageLocation { name, path }) => {
                 self.bind_copy_from_query_into_stage(bind_context, stmt, query, name, path)
                     .await
             }
             (
-                CopyTarget::Query(query),
-                CopyTarget::UriLocation {
+                CopyUnit::Query(query),
+                CopyUnit::UriLocation {
                     protocol,
                     name,
                     path,

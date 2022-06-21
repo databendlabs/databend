@@ -180,8 +180,8 @@ pub enum ExplainKind {
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct CopyStmt<'a> {
-    pub src: CopyTarget<'a>,
-    pub dst: CopyTarget<'a>,
+    pub src: CopyUnit<'a>,
+    pub dst: CopyUnit<'a>,
     pub files: Vec<String>,
     pub pattern: String,
     pub file_format: BTreeMap<String, String>,
@@ -374,9 +374,9 @@ pub enum DatabaseEngine {
     Github(String),
 }
 
-/// CopyTarget is the target that can be used in `COPY INTO`.
+/// CopyUnit is the unit that can be used in `COPY`.
 #[derive(Debug, Clone, PartialEq)]
-pub enum CopyTarget<'a> {
+pub enum CopyUnit<'a> {
     /// Table can be used in `INTO` or `FROM`.
     ///
     /// While table used as `FROM`, it will be rewrite as `(SELECT * FROM table)`
@@ -417,13 +417,13 @@ pub enum CopyTarget<'a> {
     Query(Box<Query<'a>>),
 }
 
-impl CopyTarget<'_> {
+impl CopyUnit<'_> {
     pub fn target(&self) -> &'static str {
         match self {
-            CopyTarget::Table { .. } => "Table",
-            CopyTarget::StageLocation { .. } => "StageLocation",
-            CopyTarget::UriLocation { .. } => "UriLocation",
-            CopyTarget::Query(_) => "Query",
+            CopyUnit::Table { .. } => "Table",
+            CopyUnit::StageLocation { .. } => "StageLocation",
+            CopyUnit::UriLocation { .. } => "UriLocation",
+            CopyUnit::Query(_) => "Query",
         }
     }
 }
@@ -729,10 +729,10 @@ impl Display for KillTarget {
     }
 }
 
-impl Display for CopyTarget<'_> {
+impl Display for CopyUnit<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CopyTarget::Table {
+            CopyUnit::Table {
                 catalog,
                 database,
                 table,
@@ -749,10 +749,10 @@ impl Display for CopyTarget<'_> {
                     write!(f, "{table}")
                 }
             }
-            CopyTarget::StageLocation { name, path } => {
+            CopyUnit::StageLocation { name, path } => {
                 write!(f, "@{name}{path}")
             }
-            CopyTarget::UriLocation {
+            CopyUnit::UriLocation {
                 protocol,
                 name,
                 path,
@@ -772,7 +772,7 @@ impl Display for CopyTarget<'_> {
                 }
                 Ok(())
             }
-            CopyTarget::Query(query) => {
+            CopyUnit::Query(query) => {
                 write!(f, "({query})")
             }
         }

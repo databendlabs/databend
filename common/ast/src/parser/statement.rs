@@ -1000,7 +1000,7 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
 /// # Notes
 ///
 /// It's required to parse stage location first. Or stage could be parsed as table.
-pub fn copy_target(i: Input) -> IResult<CopyTarget> {
+pub fn copy_target(i: Input) -> IResult<CopyUnit> {
     // Parse input like `@my_stage/path/to/dir`
     let stage_location = |i| {
         map_res(
@@ -1010,12 +1010,12 @@ pub fn copy_target(i: Input) -> IResult<CopyTarget> {
             |location| {
                 let parsed = location.splitn(2, '/').collect::<Vec<_>>();
                 if parsed.len() == 1 {
-                    Ok(CopyTarget::StageLocation {
+                    Ok(CopyUnit::StageLocation {
                         name: parsed[0].to_string(),
                         path: "/".to_string(),
                     })
                 } else {
-                    Ok(CopyTarget::StageLocation {
+                    Ok(CopyUnit::StageLocation {
                         name: parsed[0].to_string(),
                         path: format!("/{}", parsed[1]),
                     })
@@ -1029,7 +1029,7 @@ pub fn copy_target(i: Input) -> IResult<CopyTarget> {
         map_res(
             peroid_separated_idents_1_to_3,
             |(catalog, database, table)| {
-                Ok(CopyTarget::Table {
+                Ok(CopyUnit::Table {
                     catalog,
                     database,
                     table,
@@ -1044,7 +1044,7 @@ pub fn copy_target(i: Input) -> IResult<CopyTarget> {
             rule! {
                 #parenthesized_query
             },
-            |query| Ok(CopyTarget::Query(Box::new(query))),
+            |query| Ok(CopyUnit::Query(Box::new(query))),
         )(i)
     };
 
@@ -1060,7 +1060,7 @@ pub fn copy_target(i: Input) -> IResult<CopyTarget> {
                 let parsed = Url::parse(&location)
                     .map_err(|_| ErrorKind::Other("Unexpected invalid url"))?;
 
-                Ok(CopyTarget::UriLocation {
+                Ok(CopyUnit::UriLocation {
                     protocol: parsed.scheme().to_string(),
                     name: parsed
                         .host_str()
