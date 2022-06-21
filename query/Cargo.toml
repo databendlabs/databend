@@ -97,7 +97,7 @@ opensrv-mysql = "0.1.0"
 openssl = { version = "0.10", features = ["vendored"] }
 paste = "1.0.7"
 petgraph = "0.6.0"
-poem = { version = "=1.3.16", features = ["rustls", "multipart", "compression"] }
+poem = { version = "=1.3.31", features = ["rustls", "multipart", "compression"] }
 primitive-types = "0.6.2"
 prost = "=0.10.1"
 rand = "0.8.5"

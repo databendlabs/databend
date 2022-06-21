@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
+use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
 use poem::middleware::NormalizePath;
 use poem::middleware::TrailingSlash;
@@ -104,13 +105,14 @@ impl HttpHandler {
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
-        let mut cfg = RustlsConfig::new()
+        let certificate = RustlsCertificate::new()
             .cert(std::fs::read(
                 &config.query.http_handler_tls_server_cert.as_str(),
             )?)
             .key(std::fs::read(
                 &config.query.http_handler_tls_server_key.as_str(),
             )?);
+        let mut cfg = RustlsConfig::new().fallback(certificate);
         if Path::new(&config.query.http_handler_tls_server_root_ca_cert).exists() {
             cfg = cfg.client_auth_required(std::fs::read(
                 &config.query.http_handler_tls_server_root_ca_cert.as_str(),

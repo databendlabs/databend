@@ -49,7 +49,7 @@ futures = "0.3.21"
 lazy_static = "1.4.0"
 num = "0.4.0"
 once_cell = "1.10.0"
-poem = { version = "=1.3.16", features = ["rustls"] }
+poem = { version = "=1.3.31", features = ["rustls"] }
 prometheus = { version = "0.13.0", features = ["process"] }
 prost = "=0.10.1"
 semver = "1.0.9"
