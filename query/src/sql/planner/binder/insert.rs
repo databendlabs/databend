@@ -312,7 +312,6 @@ impl<'a> ValueSourceV2<'a> {
 
                 // Parse from expression and append all columns.
                 let buf = reader.get_checkpoint_buffer();
-                // let exprs = parse_exprs(buf, session_type)?;
 
                 let sql = std::str::from_utf8(buf).unwrap();
                 let tokens = tokenize_sql(sql)?;
@@ -328,6 +327,7 @@ impl<'a> ValueSourceV2<'a> {
                     metadata,
                 )
                 .await?;
+
                 reader.reset_checkpoint();
 
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {

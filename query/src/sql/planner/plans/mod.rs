@@ -70,7 +70,6 @@ use common_planners::RevokePrivilegePlan;
 use common_planners::RevokeRolePlan;
 use common_planners::ShowCreateDatabasePlan;
 use common_planners::ShowCreateTablePlan;
-// use common_planners::*;
 use common_planners::ShowDatabasesPlan;
 use common_planners::ShowGrantsPlan;
 use common_planners::ShowTablesPlan;
