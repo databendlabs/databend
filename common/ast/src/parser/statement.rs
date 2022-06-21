@@ -1027,9 +1027,7 @@ pub fn copy_target(i: Input) -> IResult<CopyTarget> {
     // Parse input like `mytable`
     let table = |i| {
         map_res(
-            rule! {
-                 #peroid_separated_idents_1_to_3
-            },
+            peroid_separated_idents_1_to_3,
             |(catalog, database, table)| Ok(CopyTarget::Table(catalog, database, table)),
         )(i)
     };
