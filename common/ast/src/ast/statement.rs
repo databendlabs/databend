@@ -418,7 +418,7 @@ pub enum CopyTarget<'a> {
 }
 
 impl CopyTarget<'_> {
-    pub fn target(&self) -> &str {
+    pub fn target(&self) -> &'static str {
         match self {
             CopyTarget::Table(_, _, _) => "Table",
             CopyTarget::StageLocation { .. } => "StageLocation",
