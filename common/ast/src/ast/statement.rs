@@ -32,6 +32,7 @@ use crate::ast::expr::TypeName;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::write_quoted_comma_separated_list;
+use crate::ast::write_space_seperated_map;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::parser::token::Token;
@@ -383,16 +384,31 @@ pub enum CopyTarget<'a> {
         Option<Identifier<'a>>,
         Identifier<'a>,
     ),
-    /// Location can be used in `INTO` or `FROM`.
+    /// StageLocation (a.k.a internal and external stage) can be used
+    /// in `INTO` or `FROM`.
     ///
-    /// Location could be
+    /// For examples:
     ///
     /// - internal stage: `@internal_stage/path/to/dir/`
     /// - external stage: `@s3_external_stage/path/to/dir/`
-    /// - external location: `s3://bucket/path/to/dir/`
+    StageLocation {
+        /// The name of the stage.
+        name: String,
+        path: String,
+    },
+    /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
     ///
-    /// We only parse them into `String` and leave the location parser in further.
-    Location(String),
+    /// For examples: `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
+    ///
+    /// TODO(xuanwo): Add endpoint_url support.
+    /// TODO(xuanwo): We can check if we support this protocol during parsing.
+    UriLocation {
+        protocol: String,
+        name: String,
+        path: String,
+        credentials: BTreeMap<String, String>,
+        encryption: BTreeMap<String, String>,
+    },
     /// Query can only be used as `FROM`.
     ///
     /// For example:`(SELECT field_a,field_b FROM table)`
@@ -716,8 +732,28 @@ impl Display for CopyTarget<'_> {
                     write!(f, "{table}")
                 }
             }
-            CopyTarget::Location(location) => {
-                write!(f, "{location}")
+            CopyTarget::StageLocation { name, path } => {
+                write!(f, "@{name}{path}")
+            }
+            CopyTarget::UriLocation {
+                protocol,
+                name,
+                path,
+                credentials,
+                encryption,
+            } => {
+                write!(f, "{protocol}://{name}{path}")?;
+                if !credentials.is_empty() {
+                    write!(f, " CREDENTIALS = ( ")?;
+                    write_space_seperated_map(f, credentials)?;
+                    write!(f, " )")?;
+                }
+                if !encryption.is_empty() {
+                    write!(f, " ENCRYPTION = ( ")?;
+                    write_space_seperated_map(f, encryption)?;
+                    write!(f, " )")?;
+                }
+                Ok(())
             }
             CopyTarget::Query(query) => {
                 write!(f, "({query})")

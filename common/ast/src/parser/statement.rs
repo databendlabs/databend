@@ -22,6 +22,7 @@ use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
+use url::Url;
 
 use super::error::ErrorKind;
 use crate::ast::*;
@@ -995,29 +996,89 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
 }
 
 /// Parse input into `CopyTarget`
+///
+/// # Notes
+///
+/// It's required to parse stage location first. Or stage could be parsed as table.
 pub fn copy_target(i: Input) -> IResult<CopyTarget> {
-    let table = map(
-        rule! {
-             #peroid_separated_idents_1_to_3
-        },
-        |(catalog, database, table)| CopyTarget::Table(catalog, database, table),
-    );
-    let query = map(
-        rule! {
-            #parenthesized_query
-        },
-        |query| CopyTarget::Query(Box::new(query)),
-    );
-    let location = map(
-        rule! {
-            #literal_string
-        },
-        // TODO(xuanwo): Maybe we can check the protocol during parse?
-        CopyTarget::Location,
-    );
+    // Parse input like `@my_stage/path/to/dir`
+    let stage_location = |i| {
+        map_res(
+            rule! {
+                #at_string
+            },
+            |location| {
+                let parsed = location.splitn(2, '/').collect::<Vec<_>>();
+                if parsed.len() == 1 {
+                    Ok(CopyTarget::StageLocation {
+                        name: parsed[0].to_string(),
+                        path: "/".to_string(),
+                    })
+                } else {
+                    Ok(CopyTarget::StageLocation {
+                        name: parsed[0].to_string(),
+                        path: format!("/{}", parsed[1]),
+                    })
+                }
+            },
+        )(i)
+    };
+
+    // Parse input like `mytable`
+    let table = |i| {
+        map_res(
+            rule! {
+                 #peroid_separated_idents_1_to_3
+            },
+            |(catalog, database, table)| Ok(CopyTarget::Table(catalog, database, table)),
+        )(i)
+    };
+
+    // Parse input like `( SELECT * from mytable )`
+    let query = |i| {
+        map_res(
+            rule! {
+                #parenthesized_query
+            },
+            |query| Ok(CopyTarget::Query(Box::new(query))),
+        )(i)
+    };
+
+    // Parse input like `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
+    let uri_location = |i| {
+        map_res(
+            rule! {
+                #literal_string
+                ~ (CREDENTIALS ~ "=" ~ #options)?
+                ~ (ENCRYPTION ~ "=" ~ #options)?
+            },
+            |(location, credentials_opt, encryption_opt)| {
+                let parsed = Url::parse(&location)
+                    .map_err(|_| ErrorKind::Other("Unexpected invalid url"))?;
+
+                Ok(CopyTarget::UriLocation {
+                    protocol: parsed.scheme().to_string(),
+                    name: parsed
+                        .host_str()
+                        .ok_or(ErrorKind::Other("Unexpected invalid url for name missing"))?
+                        .to_string(),
+                    path: if parsed.path().is_empty() {
+                        "/".to_string()
+                    } else {
+                        parsed.path().to_string()
+                    },
+                    credentials: credentials_opt.map(|v| v.2).unwrap_or_default(),
+                    encryption: encryption_opt.map(|v| v.2).unwrap_or_default(),
+                })
+            },
+        )(i)
+    };
 
     rule!(
-        #table | #query | #location
+       #stage_location: "@<stage_name> { <path> }"
+        | #uri_location: "'<protocol>://<name> {<path>} { CREDENTIALS = ({ AWS_ACCESS_KEY = 'aws_access_key' }) } '"
+        | #table: "{ { <catalog>. } <database>. }<table>"
+        | #query: "( <query> )"
     )(i)
 }
 

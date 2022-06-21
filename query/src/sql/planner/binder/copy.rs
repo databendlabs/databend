@@ -57,7 +57,7 @@ impl<'a> Binder {
                         ))
                     }
                     // TODO(xuanwo): we need to parse credential and encryption.
-                    CopyTarget::Location(location) => self.bind_stage(stmt, location).await?,
+                    CopyTarget::UriLocation(location) => self.bind_stage(stmt, location).await?,
                 };
 
                 let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
@@ -110,7 +110,7 @@ impl<'a> Binder {
                     validation_mode,
                 })))
             }
-            CopyTarget::Location(location) => {
+            CopyTarget::UriLocation(location) => {
                 let (stage_info, path) = self.bind_stage(stmt, location).await?;
                 let query = match &stmt.src {
                     CopyTarget::Table(catalog, database, table) => {
@@ -147,7 +147,7 @@ impl<'a> Binder {
                         self.bind_statement(bind_context, &Statement::Query(query.clone()))
                             .await?
                     }
-                    CopyTarget::Location(_) => {
+                    CopyTarget::UriLocation(_) => {
                         return Err(ErrorCode::SyntaxException(
                             "COPY INTO <location> FROM <location> is invalid",
                         ))

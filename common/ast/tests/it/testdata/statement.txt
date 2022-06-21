@@ -3915,9 +3915,13 @@ COPY INTO mytable FROM s3://mybucket/data.csv FILE_FORMAT = ( field_delimiter = 
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: Location(
-            "s3://mybucket/data.csv",
-        ),
+        src: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {},
+            encryption: {},
+        },
         dst: Table(
             None,
             None,
@@ -3952,20 +3956,15 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @my_stage FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: Table(
-            None,
-            None,
-            Identifier {
-                name: "@my_stage",
-                quote: None,
-                span: AtString(39..48),
-            },
-        ),
+        src: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
         dst: Table(
             None,
             None,
@@ -4014,9 +4013,13 @@ Copy(
                 span: Ident(56..63),
             },
         ),
-        dst: Location(
-            "s3://mybucket/data.csv",
-        ),
+        dst: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {},
+            encryption: {},
+        },
         files: [],
         pattern: "",
         file_format: {
@@ -4042,7 +4045,7 @@ COPY INTO @my_stage
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO @my_stage FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
 ---------- AST ------------
 Copy(
@@ -4056,15 +4059,10 @@ Copy(
                 span: Ident(41..48),
             },
         ),
-        dst: Table(
-            None,
-            None,
-            Identifier {
-                name: "@my_stage",
-                quote: None,
-                span: AtString(10..19),
-            },
-        ),
+        dst: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
         files: [],
         pattern: "",
         file_format: {
