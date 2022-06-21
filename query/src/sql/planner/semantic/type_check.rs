@@ -589,41 +589,47 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Coalesce { span, exprs } => {
-                // Rewrite COALESCE(expr1, expr2, ...) to IF(IS_NOT_NULL(expr1), expr1, expr2)   
-                let resolve_args = exprs.iter().filter(|expr| match expr {
-                    Expr::Literal {span: _, lit: Literal::Null} => false,
-                    _ => true,  
-                }).rev().fold(
-                    Expr::Literal {
-                        span,
-                        lit: Literal::Null,
-                    },
-                    |acc, item| {
-                        let function_call_args = vec![
-                            Expr::IsNull {
-                                span,
-                                expr: Box::new(item.clone()),
-                                not: true,
-                            },
-                            item.clone(),
-                            acc,
-                        ];
-                        Expr::FunctionCall {
-                            span,
-                            distinct: false,
-                            name: Identifier {
-                                name: "if".to_string(),
-                                quote: None,
-                                span: span[0].clone(),
-                            },
-                            args: function_call_args,
-                            params: vec![],
-                        }
-                    },
-                );
+                // coalesce(arg0, arg1, ..., argN) is essentially
+                // multiIf(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)
+                // with constant Literal::NULL arguments removed.
+                let mut args = Vec::with_capacity(exprs.len() * 2 + 1);
 
-                self.resolve(&resolve_args, None).await?
+                for expr in exprs.iter().filter(|expr| match expr {
+                    Expr::Literal {
+                        span: _,
+                        lit: Literal::Null,
+                    } => false,
+                    _ => true,
+                }) {
+                    let is_not_null_expr = Expr::IsNull {
+                        span,
+                        expr: Box::new(expr.clone()),
+                        not: true,
+                    };
+
+                    let assume_not_null_expr = Expr::FunctionCall {
+                        span,
+                        distinct: false,
+                        name: Identifier {
+                            name: "assume_not_null".to_string(),
+                            quote: None,
+                            span: span[0].clone(),
+                        },
+                        args: vec![expr.clone()],
+                        params: vec![],
+                    };
+
+                    args.push(is_not_null_expr);
+                    args.push(assume_not_null_expr);
+                }
+                args.push(Expr::Literal {
+                            span,
+                            lit: Literal::Null,
+                        });
+                let args_ref: Vec<&Expr> = args.iter().collect();
+                self.resolve_function(span, "multi_if", &args_ref, None).await?
             }
+            
             Expr::IfNull {
                 span, expr1, expr2, ..
             } => {
