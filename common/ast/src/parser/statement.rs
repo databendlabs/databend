@@ -1003,40 +1003,38 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
 pub fn copy_target(i: Input) -> IResult<CopyUnit> {
     // Parse input like `@my_stage/path/to/dir`
     let stage_location = |i| {
-        map_res(at_string, |location| {
+        map(at_string, |location| {
             let parsed = location.splitn(2, '/').collect::<Vec<_>>();
             if parsed.len() == 1 {
-                Ok(CopyUnit::StageLocation {
+                CopyUnit::StageLocation {
                     name: parsed[0].to_string(),
                     path: "/".to_string(),
-                })
+                }
             } else {
-                Ok(CopyUnit::StageLocation {
+                CopyUnit::StageLocation {
                     name: parsed[0].to_string(),
                     path: format!("/{}", parsed[1]),
-                })
+                }
             }
         })(i)
     };
 
     // Parse input like `mytable`
     let table = |i| {
-        map_res(
+        map(
             peroid_separated_idents_1_to_3,
-            |(catalog, database, table)| {
-                Ok(CopyUnit::Table {
-                    catalog,
-                    database,
-                    table,
-                })
+            |(catalog, database, table)| CopyUnit::Table {
+                catalog,
+                database,
+                table,
             },
         )(i)
     };
 
     // Parse input like `( SELECT * from mytable )`
     let query = |i| {
-        map_res(parenthesized_query, |query| {
-            Ok(CopyUnit::Query(Box::new(query)))
+        map(parenthesized_query, |query| {
+            CopyUnit::Query(Box::new(query))
         })(i)
     };
 
