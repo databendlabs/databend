@@ -91,7 +91,7 @@ pub struct MetaNodeStatus {
 
     pub last_applied: LogId,
 
-    pub leader: NodeId,
+    pub leader: Option<Node>,
 
     pub voters: Vec<Node>,
 
@@ -651,23 +651,28 @@ impl MetaNode {
             .map_err(|_| MetaError::MetaServiceError("get db_size failed".to_string()))?;
 
         let metrics = self.raft.metrics().borrow().clone();
-
-        Ok(MetaNodeStatus {
-            id: self.sto.id,
-            endpoint: self.sto.endpoint.to_string(),
-            db_size,
-            state: MetaNode::get_state_string(metrics.state),
-            is_leader: metrics.state == openraft::State::Leader,
-            current_term: metrics.current_term,
-            last_log_index: metrics.last_log_index.unwrap_or(0),
-            last_applied: match metrics.last_applied {
-                Some(id) => id,
-                None => LogId::new(0, 0),
-            },
-            leader: metrics.current_leader.unwrap_or(0),
-            voters,
-            non_voters,
-        })
+        if let Some(leader_id) = metrics.current_leader {
+            Ok(MetaNodeStatus {
+                id: self.sto.id,
+                endpoint: self.sto.endpoint.to_string(),
+                db_size,
+                state: MetaNode::get_state_string(metrics.state),
+                is_leader: metrics.state == openraft::State::Leader,
+                current_term: metrics.current_term,
+                last_log_index: metrics.last_log_index.unwrap_or(0),
+                last_applied: match metrics.last_applied {
+                    Some(id) => id,
+                    None => LogId::new(0, 0),
+                },
+                leader: self.get_node(&leader_id).await?,
+                voters,
+                non_voters,
+            })
+        } else {
+            Err(MetaError::MetaServiceError(
+                "failed to get leader".to_string(),
+            ))
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
