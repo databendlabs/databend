@@ -1,6 +1,5 @@
-RedistributeStage[expr: 0]
-  Projection: c:Nullable(Int32)
-    ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 4, read_bytes: 16, partitions_scanned: 2, partitions_total: 2], push_downs: [projections: [0]]
+Projection: c:Nullable(Int32)
+  ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 4, read_bytes: 16, partitions_scanned: 2, partitions_total: 2], push_downs: [projections: [0]]
 Limit: 1
   RedistributeStage[expr: 0]
     Projection: c:Nullable(Int32)

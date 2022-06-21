@@ -137,7 +137,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for FinalAggregator<true, Method>
 {
-    const NAME: &'static str = "";
+    const NAME: &'static str = "FinalAggregatorWithAggregateFunction";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
@@ -228,8 +228,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 }
 
                 columns.extend_from_slice(&group_columns_builder.finish()?);
-
-                Ok(Some(DataBlock::create(self.params.schema.clone(), columns)))
+                let block = DataBlock::create(self.params.schema.clone(), columns);
+                println!("agg final {:?}", block);
+                Ok(Some(block))
             }
         }
     }
