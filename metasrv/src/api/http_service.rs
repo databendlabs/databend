@@ -20,13 +20,18 @@ use common_base::base::Stoppable;
 use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
+use poem::http::StatusCode;
 use poem::listener::RustlsConfig;
+use poem::web::Json;
 use poem::Endpoint;
 use poem::EndpointExt;
+use poem::IntoResponse;
+use poem::Response;
 use poem::Route;
 
 use crate::configs::Config;
 use crate::meta_service::MetaNode;
+use crate::metrics::get_meta_metrics_node_is_health;
 
 pub struct HttpService {
     cfg: Config,
@@ -46,7 +51,7 @@ impl HttpService {
     fn build_router(&self) -> impl Endpoint {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
         let mut route = Route::new()
-            .at("/v1/health", get(super::http::v1::health::health_handler))
+            .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at(
                 "/v1/cluster/nodes",
@@ -128,4 +133,15 @@ impl Stoppable for HttpService {
     async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
         self.shutdown_handler.stop(force).await
     }
+}
+
+#[poem::handler]
+pub async fn health_handler() -> Response {
+    if !get_meta_metrics_node_is_health() {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
+    Json(super::http::v1::health::HealthCheckResponse {
+        status: super::http::v1::health::HealthCheckStatus::Pass,
+    })
+    .into_response()
 }

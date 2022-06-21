@@ -535,6 +535,8 @@ pub enum TokenKind {
     PRIVILEGES,
     #[token("REMOVE", ignore(ascii_case))]
     REMOVE,
+    #[token("REVOKE", ignore(ascii_case))]
+    REVOKE,
     #[token("GRANTS", ignore(ascii_case))]
     GRANTS,
     #[token("RIGHT", ignore(ascii_case))]

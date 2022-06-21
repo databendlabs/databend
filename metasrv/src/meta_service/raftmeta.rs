@@ -53,6 +53,7 @@ use openraft::Config;
 use openraft::Raft;
 use openraft::RaftMetrics;
 use openraft::SnapshotPolicy;
+use openraft::State;
 use tonic::Status;
 
 use crate::meta_service::meta_leader::MetaLeader;
@@ -63,6 +64,7 @@ use crate::metrics::incr_meta_metrics_leader_change;
 use crate::metrics::incr_meta_metrics_read_failed;
 use crate::metrics::set_meta_metrics_current_leader;
 use crate::metrics::set_meta_metrics_is_leader;
+use crate::metrics::set_meta_metrics_node_is_health;
 use crate::metrics::set_meta_metrics_proposals_applied;
 use crate::network::Network;
 use crate::store::MetaRaftStore;
@@ -379,6 +381,11 @@ impl MetaNode {
                         };
                         if changed.is_ok() {
                             let mm = metrics_rx.borrow().clone();
+
+                            set_meta_metrics_node_is_health(
+                                mm.state == State::Follower || mm.state == State::Leader,
+                            );
+
                             if let Some(cur) = mm.current_leader {
                                 // if current leader has changed?
                                 if let Some(leader) = current_leader {
