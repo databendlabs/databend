@@ -11,13 +11,13 @@ doctest = false
 test = false
 
 [dependencies]
-num-derive = "0.3"
-num-traits = "0.2"
-prost = "0.10.1"
-tonic = { version = "=0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+num-derive = "0.3.3"
+num-traits = "0.2.15"
+prost = "0.10.4"
+tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 
 [build-dependencies]
-prost-build = "0.10.1"
+prost-build = "0.10.4"
 tonic-build = "0.7.2"
 
 [dev-dependencies]

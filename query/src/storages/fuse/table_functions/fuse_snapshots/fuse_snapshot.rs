@@ -67,14 +67,14 @@ impl<'a> FuseSnapshot<'a> {
         let mut current_snapshot_version = latest_snapshot_version;
         let location_generator = &self.table.meta_location_generator;
         for s in snapshots {
-            snapshot_ids.push(s.snapshot_id.to_simple().to_string().into_bytes());
+            snapshot_ids.push(s.snapshot_id.simple().to_string().into_bytes());
             snapshot_locations.push(
                 location_generator
                     .snapshot_location_from_uuid(&s.snapshot_id, current_snapshot_version)?
                     .into_bytes(),
             );
             let (id, ver) = match s.prev_snapshot_id {
-                Some((id, v)) => (Some(id.to_simple().to_string().into_bytes()), v),
+                Some((id, v)) => (Some(id.simple().to_string().into_bytes()), v),
                 None => (None, 0),
             };
             prev_snapshot_ids.push(id);
