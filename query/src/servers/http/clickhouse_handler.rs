@@ -247,10 +247,16 @@ pub async fn clickhouse_handler_get(
         .unwrap_or_else(|_| (vec![], vec![]));
 
     let settings = context.get_settings();
-    if settings.get_enable_new_processor_framework().unwrap() != 0
+    if settings
+        .get_enable_new_processor_framework()
+        .map_err(InternalServerError)?
+        != 0
         && !context.get_config().query.management_mode
         && context.get_cluster().is_empty()
-        && settings.get_enable_planner_v2().unwrap() != 0
+        && settings
+            .get_enable_planner_v2()
+            .map_err(InternalServerError)?
+            != 0
         && !stmts.is_empty()
         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
     {
@@ -302,20 +308,27 @@ pub async fn clickhouse_handler_post(
         .set_batch_settings(&params.settings, false)
         .map_err(BadRequest)?;
 
-    let mut sql = params.query();
-
-    let (stmts, _) = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type())
+    let stmt_sql = params.query();
+    let (stmts, _) = DfParser::parse_sql(stmt_sql.as_str(), ctx.get_current_session().get_type())
         .unwrap_or_else(|_| (vec![], vec![]));
 
+    let mut sql = params.query();
+    sql.push_str(body.into_string().await?.as_str());
+
     let settings = ctx.get_settings();
-    if settings.get_enable_new_processor_framework().unwrap() != 0
+    if settings
+        .get_enable_new_processor_framework()
+        .map_err(InternalServerError)?
+        != 0
         && !ctx.get_config().query.management_mode
         && ctx.get_cluster().is_empty()
-        && settings.get_enable_planner_v2().unwrap() != 0
+        && settings
+            .get_enable_planner_v2()
+            .map_err(InternalServerError)?
+            != 0
         && !stmts.is_empty()
         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
     {
-        sql.push_str(body.into_string().await?.as_str());
         let mut planner = Planner::new(ctx.clone());
         let (plan, _) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
 
@@ -333,7 +346,6 @@ pub async fn clickhouse_handler_post(
             .await
             .map_err(InternalServerError)
     } else {
-        sql.push_str(body.into_string().await?.as_str());
         let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
             .await
             .map_err(BadRequest)?;
