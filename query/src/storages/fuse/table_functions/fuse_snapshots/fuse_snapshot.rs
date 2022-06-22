@@ -63,6 +63,7 @@ impl<'a> FuseSnapshot<'a> {
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
         let mut compressed: Vec<u64> = Vec::with_capacity(len);
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
+        let mut timestamps: Vec<Option<i64>> = Vec::with_capacity(len);
         let mut current_snapshot_version = latest_snapshot_version;
         let location_generator = &self.table.meta_location_generator;
         for s in snapshots {
@@ -83,6 +84,7 @@ impl<'a> FuseSnapshot<'a> {
             row_count.push(s.summary.row_count);
             compressed.push(s.summary.compressed_byte_size);
             uncompressed.push(s.summary.uncompressed_byte_size);
+            timestamps.push(s.timestamp.map(|dt| (dt.timestamp_micros()) as i64));
             current_snapshot_version = ver;
         }
 
@@ -96,6 +98,7 @@ impl<'a> FuseSnapshot<'a> {
             Series::from_data(row_count),
             Series::from_data(uncompressed),
             Series::from_data(compressed),
+            Series::from_data(timestamps),
         ]))
     }
 
@@ -110,6 +113,7 @@ impl<'a> FuseSnapshot<'a> {
             DataField::new("row_count", u64::to_data_type()),
             DataField::new("bytes_uncompressed", u64::to_data_type()),
             DataField::new("bytes_compressed", u64::to_data_type()),
+            DataField::new_nullable("timestamp", TimestampType::new_impl(6)),
         ])
     }
 }
