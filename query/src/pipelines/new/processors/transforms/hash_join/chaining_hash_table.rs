@@ -225,7 +225,8 @@ impl ChainingHashTable {
                     let build_block =
                         DataBlock::create(self.row_space.data_schema.clone(), columns);
                     let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                    results.push(self.merge_block(&build_block, &probe_block)?);
+                    let merged_block = self.merge_block(&build_block, &probe_block)?;
+                    results.push(self.filter_block(&probe_block, merged_block)?);
                 }
             }
             _ => unreachable!(),
@@ -246,42 +247,25 @@ impl ChainingHashTable {
             // **reserved side** is the left side in left join, and the right side in right join.
             result_block = DataBlock::filter_block(&result_block, &predicate_column)?;
         }
-        // Find filtered probe block in result block
-        let probe_block_columns_num = probe_block.columns().len();
-        let mut filtered_probe_block = DataBlock::empty();
-        for (col, field) in result_block.columns()[0..probe_block_columns_num]
-            .iter()
-            .zip(result_block.schema().fields().as_slice()[0..probe_block_columns_num].iter())
-        {
-            filtered_probe_block = filtered_probe_block.add_column(col.clone(), field.clone())?;
-        }
-        // Get the difference between filtered probe block and probe block
-        // If the difference is empty, we don't need to supplement NULL block for reserved side
-        let mut except_block = DataBlock::except_blocks(probe_block, &filtered_probe_block)?;
-        if except_block.is_empty() {
-            return Ok(result_block);
-        }
-        let data_schema_fields = self.row_space.data_schema.fields();
-        let mut columns = Vec::with_capacity(data_schema_fields.len());
-        for field in data_schema_fields.iter() {
-            let nullable_data_type = wrap_nullable(field.data_type());
-            columns.push(
-                nullable_data_type
-                    .create_constant_column(&DataValue::Null, except_block.num_rows())?,
-            );
-        }
-        let null_block = DataBlock::create(self.row_space.data_schema.clone(), columns);
-        for (col, field) in null_block
-            .columns()
-            .iter()
-            .zip(null_block.schema().fields().iter())
-        {
-            except_block = except_block.add_column(col.clone(), field.clone())?;
-        }
+        // If result_block is empty, we need to supply a NULL block for probe_block.
         if result_block.is_empty() {
-            return Ok(except_block);
+            result_block = probe_block.clone();
+            let data_schema_fields = self.row_space.data_schema.fields();
+            let mut columns = Vec::with_capacity(data_schema_fields.len());
+            for field in data_schema_fields.iter() {
+                let nullable_data_type = wrap_nullable(field.data_type());
+                columns.push(nullable_data_type.create_constant_column(&DataValue::Null, 1)?);
+            }
+            let null_block = DataBlock::create(self.row_space.data_schema.clone(), columns);
+            for (col, field) in null_block
+                .columns()
+                .iter()
+                .zip(null_block.schema().fields().iter())
+            {
+                result_block = result_block.add_column(col.clone(), field.clone())?;
+            }
         }
-        DataBlock::concat_blocks(&[result_block, except_block])
+        Ok(result_block)
     }
 
     // Merge build block and probe block
@@ -293,22 +277,15 @@ impl ChainingHashTable {
             replicated_probe_block = replicated_probe_block
                 .add_column(replicated_col, probe_block.schema().field(i).clone())?;
         }
-        let mut merged_block = replicated_probe_block.clone();
         for (col, field) in build_block
             .columns()
             .iter()
             .zip(build_block.schema().fields().iter())
         {
-            merged_block = merged_block.add_column(col.clone(), field.clone())?;
+            replicated_probe_block =
+                replicated_probe_block.add_column(col.clone(), field.clone())?;
         }
-        if self.join_type == JoinType::Left && !self.other_conditions.is_empty() {
-            // There is no equi-join conditions, directly use origin probe block
-            if self.probe_expressions.is_empty() {
-                return self.filter_block(probe_block, merged_block);
-            }
-            return self.filter_block(&replicated_probe_block, merged_block);
-        }
-        Ok(merged_block)
+        Ok(replicated_probe_block)
     }
 
     fn probe_cross_join(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
@@ -423,7 +400,8 @@ impl ChainingHashTable {
                             let build_block =
                                 DataBlock::create(self.row_space.data_schema.clone(), columns);
                             let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                            results.push(self.merge_block(&build_block, &probe_block)?);
+                            let merged_block = self.merge_block(&build_block, &probe_block)?;
+                            results.push(self.filter_block(&probe_block, merged_block)?);
                         }
                     }
                     _ => unreachable!(),
