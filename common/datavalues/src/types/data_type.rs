@@ -269,7 +269,7 @@ pub fn wrap_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
 
 pub fn remove_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
     if matches!(data_type.data_type_id(), TypeID::Nullable) {
-        let nullable = data_type.as_any().downcast_ref::<NullableType>().unwrap();
+        let nullable: NullableType = data_type.to_owned().try_into().unwrap();
         return nullable.inner_type().clone();
     }
     data_type.clone()
