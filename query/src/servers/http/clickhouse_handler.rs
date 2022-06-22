@@ -31,6 +31,7 @@ use poem::error::Result as PoemResult;
 use poem::get;
 use poem::post;
 use poem::web::Query;
+use poem::web::WithContentType;
 use poem::Body;
 use poem::Endpoint;
 use poem::EndpointExt;
@@ -41,13 +42,17 @@ use serde::Serialize;
 
 use crate::formats::output_format::OutputFormatType;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::InterpreterFactoryV2;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSource;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
+use crate::sql::plans::Plan;
+use crate::sql::DfParser;
 use crate::sql::PlanParser;
+use crate::sql::Planner;
 
 // accept all clickhouse params, so they do not go to settings.
 #[derive(Serialize, Deserialize)]
@@ -87,13 +92,74 @@ impl StatementHandlerParams {
     }
 }
 
+async fn execute_v2(
+    ctx: Arc<QueryContext>,
+    plan: Plan,
+    format: Option<String>,
+    _input_stream: Option<SendableDataBlockStream>,
+    params: StatementHandlerParams,
+) -> Result<WithContentType<Body>> {
+    let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan.clone())?;
+    let _ = interpreter
+        .start()
+        .await
+        .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+    let output_port = OutputPort::create();
+    let stream_source = StreamSource::create(ctx.clone(), None, output_port.clone())?;
+    let mut source_pipe_builder = SourcePipeBuilder::create();
+    source_pipe_builder.add_source(output_port, stream_source);
+    let _ = interpreter
+        .set_source_pipe_builder(Option::from(source_pipe_builder))
+        .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+    let data_stream = interpreter.execute(None).await?;
+
+    let mut data_stream = ctx.try_create_abortable(data_stream)?;
+    let format_setting = ctx.get_format_settings()?;
+    let mut fmt = OutputFormatType::TSV;
+    if let Some(format) = format {
+        fmt = OutputFormatType::from_str(format.as_str())?;
+    }
+
+    let mut output_format = fmt.create_format(plan.schema(), format_setting);
+    let prefix = Ok(output_format.serialize_prefix()?);
+
+    let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
+        if params.compress() {
+            match rb {
+                Ok(b) => compress_block(b),
+                Err(e) => Err(e),
+            }
+        } else {
+            rb
+        }
+    };
+    let stream = stream! {
+        yield compress_fn(prefix);
+        while let Some(block) = data_stream.next().await {
+            match block{
+                Ok(block) => {
+                    yield compress_fn(output_format.serialize_block(&block));
+                },
+                Err(err) => yield(Err(err)),
+            };
+        }
+        yield compress_fn(output_format.finalize());
+        let _ = interpreter
+            .finish()
+            .await
+            .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
+    };
+
+    Ok(Body::from_bytes_stream(stream).with_content_type(fmt.get_content_type()))
+}
+
 async fn execute(
     ctx: Arc<QueryContext>,
     plan: PlanNode,
     format: Option<String>,
     input_stream: Option<SendableDataBlockStream>,
     params: StatementHandlerParams,
-) -> Result<impl IntoResponse> {
+) -> Result<WithContentType<Body>> {
     let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
     let _ = interpreter
         .start()
@@ -146,6 +212,7 @@ async fn execute(
             };
         }
         yield compress_fn(output_format.finalize());
+
         let _ = interpreter
             .finish()
             .await
@@ -176,14 +243,49 @@ pub async fn clickhouse_handler_get(
 
     let sql = params.query();
 
-    let (plan, format) = PlanParser::parse_with_format(context.clone(), &sql)
-        .await
-        .map_err(BadRequest)?;
+    let (stmts, _) = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type())
+        .unwrap_or_else(|_| (vec![], vec![]));
 
-    context.attach_query_str(&sql);
-    execute(context, plan, format, None, params)
-        .await
-        .map_err(InternalServerError)
+    let settings = context.get_settings();
+    if settings
+        .get_enable_new_processor_framework()
+        .map_err(InternalServerError)?
+        != 0
+        && !context.get_config().query.management_mode
+        && context.get_cluster().is_empty()
+        && settings
+            .get_enable_planner_v2()
+            .map_err(InternalServerError)?
+            != 0
+        && !stmts.is_empty()
+        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+    {
+        let mut planner = Planner::new(context.clone());
+        let (plan, _) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+
+        let format = match plan.clone() {
+            Plan::Query {
+                s_expr: _,
+                metadata: _,
+                bind_context,
+            } => bind_context.format.clone(),
+            _ => None,
+        };
+
+        context.attach_query_str(&sql);
+        execute_v2(context, plan, format, None, params)
+            .await
+            .map_err(InternalServerError)
+    } else {
+        let (plan, format) = PlanParser::parse_with_format(context.clone(), &sql)
+            .await
+            .map_err(BadRequest)?;
+
+        context.attach_query_str(&sql);
+        execute(context, plan, format, None, params)
+            .await
+            .map_err(InternalServerError)
+    }
 }
 
 #[poem::handler]
@@ -206,16 +308,53 @@ pub async fn clickhouse_handler_post(
         .set_batch_settings(&params.settings, false)
         .map_err(BadRequest)?;
 
+    let stmt_sql = params.query();
+    let (stmts, _) = DfParser::parse_sql(stmt_sql.as_str(), ctx.get_current_session().get_type())
+        .unwrap_or_else(|_| (vec![], vec![]));
+
     let mut sql = params.query();
     sql.push_str(body.into_string().await?.as_str());
-    let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
-        .await
-        .map_err(BadRequest)?;
 
-    ctx.attach_query_str(&sql);
-    execute(ctx, plan, format, None, params)
-        .await
-        .map_err(InternalServerError)
+    let settings = ctx.get_settings();
+    if settings
+        .get_enable_new_processor_framework()
+        .map_err(InternalServerError)?
+        != 0
+        && !ctx.get_config().query.management_mode
+        && ctx.get_cluster().is_empty()
+        && settings
+            .get_enable_planner_v2()
+            .map_err(InternalServerError)?
+            != 0
+        && !stmts.is_empty()
+        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+    {
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+
+        let format = match plan.clone() {
+            Plan::Query {
+                s_expr: _,
+                metadata: _,
+                bind_context,
+            } => bind_context.format.clone(),
+            _ => None,
+        };
+
+        ctx.attach_query_str(&sql);
+        execute_v2(ctx, plan, format, None, params)
+            .await
+            .map_err(InternalServerError)
+    } else {
+        let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
+            .await
+            .map_err(BadRequest)?;
+
+        ctx.attach_query_str(&sql);
+        execute(ctx, plan, format, None, params)
+            .await
+            .map_err(InternalServerError)
+    }
 }
 
 #[poem::handler]
