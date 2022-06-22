@@ -24,7 +24,6 @@ use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
-use common_datavalues::remove_nullable;
 use common_datavalues::wrap_nullable;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
@@ -35,7 +34,6 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
-use common_datavalues::TypeID;
 use common_exception::Result;
 use common_planners::Expression;
 use nom::Slice;
@@ -52,11 +50,8 @@ use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
-use crate::sql::exec::decode_field_name;
-use crate::sql::exec::format_field_name;
 use crate::sql::planner::plans::JoinType;
 use crate::sql::plans::Scalar;
-use crate::sql::ScalarExpr;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
@@ -243,22 +238,13 @@ impl ChainingHashTable {
     }
 
     fn filter_block(&self, probe_block: &DataBlock, merged_block: DataBlock) -> Result<DataBlock> {
-        dbg!(probe_block.clone());
         let mut result_block = merged_block;
-        let mut removed_nullable_block = DataBlock::empty();
-        for (idx, column) in result_block.columns().iter().enumerate() {
-            let data_type = remove_nullable(&column.data_type());
-            let field = result_block.schema().field(idx);
-            removed_nullable_block = removed_nullable_block
-                .add_column(data_type.create_column(&column.to_values())?, field.clone())?;
-        }
         for scalar in self.other_conditions.iter() {
             let func_ctx = self.ctx.try_get_function_context()?;
             let eval = ScalarEvaluator::try_create(scalar)?;
-            let result = eval.eval(&func_ctx, &removed_nullable_block)?;
+            let result = eval.eval(&func_ctx, &result_block)?;
             result_block = DataBlock::filter_block(&result_block, result.vector())?;
         }
-        dbg!(result_block.clone());
         // add reserved side
         let mut part_result_block = DataBlock::empty();
         for (col, field) in result_block
@@ -276,7 +262,6 @@ impl ChainingHashTable {
         {
             part_result_block = part_result_block.add_column(col.clone(), field.clone())?;
         }
-        dbg!(part_result_block.clone());
         let mut except_block = DataBlock::except_blocks(probe_block, &part_result_block)?;
         if except_block.is_empty() {
             return Ok(result_block);
@@ -298,7 +283,6 @@ impl ChainingHashTable {
         {
             except_block = except_block.add_column(col.clone(), field.clone())?;
         }
-        dbg!(except_block.clone());
         if result_block.is_empty() {
             return Ok(except_block);
         }

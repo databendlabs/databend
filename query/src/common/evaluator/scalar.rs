@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::ColumnWithField;
+use common_datavalues::{ColumnWithField, wrap_nullable};
 use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
@@ -92,8 +92,8 @@ impl ScalarEvaluator {
                     Self::build_eval_tree(&comp.right)?,
                 ];
                 let func = FunctionFactory::instance().get(comp.op.to_func_name(), &[
-                    &comp.left.data_type(),
-                    &comp.right.data_type(),
+                    &wrap_nullable(&comp.left.data_type()),
+                    &wrap_nullable(&comp.right.data_type()),
                 ])?;
                 Ok(EvalNode::Function { func, args })
             }
