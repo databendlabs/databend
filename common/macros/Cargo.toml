@@ -15,3 +15,4 @@ proc-macro2 = "1.0.40"
 quote = "1.0.20"
 syn = { version = "1.0.98", features = ["full"] }
 synstructure = "0.12.6"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

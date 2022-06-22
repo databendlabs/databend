@@ -37,5 +37,6 @@ arrow = { package = "arrow2", git = "https://github.com/datafuse-extras/arrow2",
 arrow-format = { version = "0.6.0", features = ["flight-data", "flight-service", "ipc"] }
 futures = "0.3.21"
 parquet2 = { version = "0.13", default_features = false }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

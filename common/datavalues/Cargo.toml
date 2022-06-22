@@ -38,6 +38,7 @@ rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
 smallvec = { version = "1.8.0", features = ["write"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 criterion = "0.3.5"

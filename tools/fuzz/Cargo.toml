@@ -13,3 +13,4 @@ test = false
 [dependencies]
 databend-query = { path = "../../query" }
 honggfuzz = "0.5.54"
+workspace-hack = { version = "0.1", path = "../../common/workspace-hack" }

@@ -33,6 +33,7 @@ sha1 = "0.10.1"
 sha2 = "0.10.2"
 thiserror = "1.0.31"
 tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [build-dependencies]
 common-building = { path = "../../building" }

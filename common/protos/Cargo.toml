@@ -15,6 +15,7 @@ num-derive = "0.3.3"
 num-traits = "0.2.15"
 prost = "0.10.4"
 tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [build-dependencies]
 prost-build = "0.10.4"

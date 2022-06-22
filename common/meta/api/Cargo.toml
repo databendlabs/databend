@@ -30,3 +30,4 @@ serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
 thiserror = "1.0.31"
 tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }

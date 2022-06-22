@@ -25,6 +25,7 @@ common-tracing = { path = "../tracing" }
 filetime = "0.2.16"
 ritelinked = { version = "0.3.2", default-features = false, features = ["ahash", "inline-more"] }
 walkdir = "2.3.2"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 heapsize_ = { package = "heapsize", version = "0.4.2", optional = true }

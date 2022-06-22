@@ -29,6 +29,9 @@ members = [
     "common/streams",
     "common/tracing",
 
+    # Hakari
+    "common/workspace-hack",
+
     # Query
     "query",
 

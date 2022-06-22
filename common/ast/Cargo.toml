@@ -34,6 +34,7 @@ pratt = "0.3.0"
 serde = { version = "1.0.137", features = ["derive"] }
 thiserror = "1.0.31"
 url = "2.2.2"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 common-base = { path = "../base" }

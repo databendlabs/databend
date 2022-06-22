@@ -25,6 +25,7 @@ hive-it = []
 
 # Crates.io dependencies
 thrift = "0.15.0"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [build-dependencies]
 which = "4.2.5"

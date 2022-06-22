@@ -32,6 +32,7 @@ micromarshal = "0.1.0"
 opendal = { version = "0.9.0", features = ["retry"] }
 serde = { version = "1.0.137", features = ["derive"] }
 time = "0.3.10"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 rand = "0.8.5"

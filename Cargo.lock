@@ -910,6 +910,7 @@ dependencies = [
  "common-datavalues",
  "serde",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -951,6 +952,7 @@ dependencies = [
  "arrow2",
  "futures",
  "parquet2",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -978,6 +980,7 @@ dependencies = [
  "sqlparser",
  "thiserror",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1004,6 +1007,7 @@ dependencies = [
  "tokio",
  "toml",
  "uuid 1.1.2",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1016,6 +1020,7 @@ dependencies = [
  "common-tracing",
  "git2",
  "vergen",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1029,6 +1034,7 @@ dependencies = [
  "ritelinked",
  "tempfile",
  "walkdir",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1039,6 +1045,7 @@ dependencies = [
  "common-base",
  "opendal",
  "time 0.3.10",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1057,6 +1064,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1087,6 +1095,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1105,6 +1114,7 @@ dependencies = [
  "thiserror",
  "time 0.3.10",
  "tonic",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1149,6 +1159,7 @@ dependencies = [
  "strength_reduce",
  "twox-hash",
  "uuid 1.1.2",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1166,6 +1177,7 @@ dependencies = [
  "thiserror",
  "tonic",
  "trust-dns-resolver",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1174,6 +1186,7 @@ version = "0.1.0"
 dependencies = [
  "thrift",
  "which",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1192,6 +1205,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "time 0.3.10",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1202,6 +1216,7 @@ dependencies = [
  "quote",
  "syn",
  "synstructure",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1222,6 +1237,7 @@ dependencies = [
  "common-protos",
  "mockall",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1244,6 +1260,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tonic",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1276,6 +1293,7 @@ dependencies = [
  "thiserror",
  "tonic",
  "tonic-build",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1293,6 +1311,7 @@ dependencies = [
  "common-tracing",
  "once_cell",
  "tempfile",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1321,6 +1340,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tonic",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1348,6 +1368,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1365,6 +1386,7 @@ dependencies = [
  "serde_json",
  "sled",
  "tempfile",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1396,6 +1418,7 @@ dependencies = [
  "thiserror",
  "tonic",
  "tonic-build",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1411,6 +1434,7 @@ dependencies = [
  "prometheus-parse",
  "serde",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1430,6 +1454,7 @@ dependencies = [
  "serde",
  "serde_json",
  "typetag",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1447,6 +1472,7 @@ dependencies = [
  "num",
  "serde_json",
  "thiserror",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1459,6 +1485,7 @@ dependencies = [
  "prost-build",
  "tonic",
  "tonic-build",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1482,6 +1509,7 @@ dependencies = [
  "pin-project-lite",
  "serde_json",
  "tempfile",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1501,6 +1529,7 @@ dependencies = [
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1913,6 +1942,7 @@ version = "0.1.0"
 dependencies = [
  "databend-query",
  "honggfuzz",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1959,6 +1989,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-reflection",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1975,6 +2006,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio-stream",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1995,6 +2027,7 @@ dependencies = [
  "serde_json",
  "tokio-stream",
  "tonic",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2111,6 +2144,7 @@ dependencies = [
  "uuid 1.1.2",
  "walkdir",
  "wiremock",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7079,6 +7113,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "unicode-segmentation"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e8820f5d777f6224dc4be3632222971ac30164d4a258d595640799554ebfd99"
+
+[[package]]
 name = "unicode-width"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7444,6 +7484,82 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "arrayvec 0.4.12",
+ "arrow-format",
+ "arrow2",
+ "bitvec",
+ "bytes 1.1.0",
+ "cc",
+ "chrono",
+ "clap 3.2.5",
+ "crossbeam-utils",
+ "crunchy",
+ "digest 0.10.3",
+ "either",
+ "flate2",
+ "frunk_core",
+ "futures-channel",
+ "futures-executor",
+ "futures-io",
+ "futures-task",
+ "futures-util",
+ "generic-array",
+ "hashbrown 0.11.2",
+ "hashbrown 0.12.1",
+ "hex",
+ "indexmap",
+ "integer-encoding",
+ "itoa 0.4.8",
+ "lazy_static",
+ "libc",
+ "libz-sys",
+ "log",
+ "memchr",
+ "num-bigint",
+ "num-format",
+ "num-integer",
+ "num-iter",
+ "num-traits",
+ "parking_lot 0.11.2",
+ "petgraph",
+ "phf_shared",
+ "poem",
+ "proc-macro2",
+ "prost",
+ "prost-types",
+ "regex",
+ "regex-automata",
+ "regex-syntax",
+ "reqwest",
+ "ring",
+ "ritelinked",
+ "rust-embed-utils",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.9.9",
+ "smallvec",
+ "subtle",
+ "syn",
+ "tikv-jemalloc-sys",
+ "time 0.3.10",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "toml",
+ "tonic",
+ "tracing-core",
+ "tracing-futures",
+ "url",
+ "uuid 0.8.2",
+ "zeroize",
 ]
 
 [[package]]

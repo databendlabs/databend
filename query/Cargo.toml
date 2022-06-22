@@ -128,6 +128,7 @@ twox-hash = "1.6.3"
 typetag = "0.1.8"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
+workspace-hack = { version = "0.1", path = "../common/workspace-hack" }
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }

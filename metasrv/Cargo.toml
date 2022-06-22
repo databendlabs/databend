@@ -61,6 +61,7 @@ tempfile = "3.3.0"
 tokio-stream = "0.1.9"
 tonic = { version = "0.7.2", features = ["tls"] }
 tonic-reflection = "0.4.0"
+workspace-hack = { version = "0.1", path = "../common/workspace-hack" }
 
 [dev-dependencies]
 common-meta-api = { path = "../common/meta/api" }

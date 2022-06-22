@@ -30,3 +30,4 @@ serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
 tokio-stream = "0.1.9"
 tonic = "0.7.2"
+workspace-hack = { version = "0.1", path = "../../common/workspace-hack" }

@@ -48,6 +48,7 @@ tikv-jemalloc-sys = "0.5.0"
 tokio = { version = "1.19.2", features = ["full"] }
 toml = { version = "0.5.9", default-features = false }
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 anyhow = "1.0.58"

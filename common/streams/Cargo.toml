@@ -33,3 +33,4 @@ opendal = { version = "0.9.0", features = ["retry", "compress"] }
 pin-project-lite = "0.2.9"
 serde_json = { version = "1.0.81", default-features = false, features = ["preserve_order"] }
 tempfile = "3.3.0"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
