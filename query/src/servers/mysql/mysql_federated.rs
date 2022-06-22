@@ -17,10 +17,10 @@ use std::collections::HashMap;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchemaRefExt;
-use regex::RegexSet;
 
+use crate::servers::federated_helper::FederatedHelper;
+use crate::servers::federated_helper::LazyBlockFunc;
 use crate::servers::mysql::MYSQL_VERSION;
-type LazyBlockFunc = fn(&str) -> Option<DataBlock>;
 
 pub struct MySQLFederated {
     mysql_version: String,
@@ -76,45 +76,6 @@ impl MySQLFederated {
                 Series::from_data(vec![value]),
             ],
         ))
-    }
-
-    fn block_match_rule(
-        &self,
-        query: &str,
-        rules: Vec<(&str, Option<DataBlock>)>,
-    ) -> Option<DataBlock> {
-        let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
-        let regex_set = RegexSet::new(&regex_rules).unwrap();
-        let matches = regex_set.matches(query);
-        for (index, (_regex, data_block)) in rules.iter().enumerate() {
-            if matches.matched(index) {
-                return match data_block {
-                    None => Some(DataBlock::empty()),
-                    Some(data_block) => Some(data_block.clone()),
-                };
-            }
-        }
-
-        None
-    }
-
-    fn lazy_block_match_rule(
-        &self,
-        query: &str,
-        rules: Vec<(&str, LazyBlockFunc)>,
-    ) -> Option<DataBlock> {
-        let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
-        let regex_set = RegexSet::new(&regex_rules).unwrap();
-        let matches = regex_set.matches(query);
-        for (index, (_regex, func)) in rules.iter().enumerate() {
-            if matches.matched(index) {
-                return match func(query) {
-                    None => Some(DataBlock::empty()),
-                    Some(data_block) => Some(data_block),
-                };
-            }
-        }
-        None
     }
 
     // SELECT @@aa, @@bb as cc, @dd...
@@ -182,7 +143,7 @@ impl MySQLFederated {
                 Self::select_variable_data_block,
             ),
         ];
-        self.lazy_block_match_rule(query, rules)
+        FederatedHelper::lazy_block_match_rule(query, rules)
     }
 
     // Check SHOW VARIABLES LIKE.
@@ -202,7 +163,7 @@ impl MySQLFederated {
             ("(?i)^(show collation where(.*))", Self::show_variables_block("", "")),
             ("(?i)^(SHOW VARIABLES(.*))", Self::show_variables_block("", "")),
         ];
-        self.block_match_rule(query, rules)
+        FederatedHelper::block_match_rule(query, rules)
     }
 
     // Check for SET or others query, this is the final check of the federated query.
@@ -266,7 +227,7 @@ impl MySQLFederated {
 
         ];
 
-        self.block_match_rule(query, rules)
+        FederatedHelper::block_match_rule(query, rules)
     }
 
     // Check the query is a federated or driver setup command.
