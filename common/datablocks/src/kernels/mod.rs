@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod data_block_concat;
+mod data_block_except;
 mod data_block_filter;
 mod data_block_gather;
 mod data_block_group_by;

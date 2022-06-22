@@ -24,6 +24,7 @@ use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
+use common_datavalues::remove_nullable;
 use common_datavalues::wrap_nullable;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
@@ -34,8 +35,10 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
+use common_datavalues::TypeID;
 use common_exception::Result;
 use common_planners::Expression;
+use nom::Slice;
 use primitive_types::U256;
 use primitive_types::U512;
 
@@ -49,8 +52,11 @@ use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
+use crate::sql::exec::decode_field_name;
+use crate::sql::exec::format_field_name;
 use crate::sql::planner::plans::JoinType;
 use crate::sql::plans::Scalar;
+use crate::sql::ScalarExpr;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
@@ -236,6 +242,69 @@ impl ChainingHashTable {
         Ok(results)
     }
 
+    fn filter_block(&self, probe_block: &DataBlock, merged_block: DataBlock) -> Result<DataBlock> {
+        dbg!(probe_block.clone());
+        let mut result_block = merged_block;
+        let mut removed_nullable_block = DataBlock::empty();
+        for (idx, column) in result_block.columns().iter().enumerate() {
+            let data_type = remove_nullable(&column.data_type());
+            let field = result_block.schema().field(idx);
+            removed_nullable_block = removed_nullable_block
+                .add_column(data_type.create_column(&column.to_values())?, field.clone())?;
+        }
+        for scalar in self.other_conditions.iter() {
+            let func_ctx = self.ctx.try_get_function_context()?;
+            let eval = ScalarEvaluator::try_create(scalar)?;
+            let result = eval.eval(&func_ctx, &removed_nullable_block)?;
+            result_block = DataBlock::filter_block(&result_block, result.vector())?;
+        }
+        dbg!(result_block.clone());
+        // add reserved side
+        let mut part_result_block = DataBlock::empty();
+        for (col, field) in result_block
+            .columns()
+            .slice(0..probe_block.columns().len())
+            .iter()
+            .zip(
+                result_block
+                    .schema()
+                    .fields()
+                    .as_slice()
+                    .slice(0..probe_block.columns().len())
+                    .iter(),
+            )
+        {
+            part_result_block = part_result_block.add_column(col.clone(), field.clone())?;
+        }
+        dbg!(part_result_block.clone());
+        let mut except_block = DataBlock::except_blocks(probe_block, &part_result_block)?;
+        if except_block.is_empty() {
+            return Ok(result_block);
+        }
+        let data_schema_fields = self.row_space.data_schema.fields();
+        let mut columns = Vec::with_capacity(data_schema_fields.len());
+        for field in data_schema_fields.iter() {
+            let nullable_data_type = wrap_nullable(field.data_type());
+            columns.push(
+                nullable_data_type
+                    .create_constant_column(&DataValue::Null, except_block.num_rows())?,
+            );
+        }
+        let null_block = DataBlock::create(self.row_space.data_schema.clone(), columns);
+        for (col, field) in null_block
+            .columns()
+            .iter()
+            .zip(null_block.schema().fields().iter())
+        {
+            except_block = except_block.add_column(col.clone(), field.clone())?;
+        }
+        dbg!(except_block.clone());
+        if result_block.is_empty() {
+            return Ok(except_block);
+        }
+        DataBlock::concat_blocks(&[result_block, except_block])
+    }
+
     // Merge build block and probe block
     fn merge_block(&self, build_block: &DataBlock, probe_block: &DataBlock) -> Result<DataBlock> {
         let mut replicated_probe_block = DataBlock::empty();
@@ -245,6 +314,7 @@ impl ChainingHashTable {
             replicated_probe_block = replicated_probe_block
                 .add_column(replicated_col, probe_block.schema().field(i).clone())?;
         }
+        let complemented_probe_block = replicated_probe_block.clone();
         for (col, field) in build_block
             .columns()
             .iter()
@@ -252,6 +322,12 @@ impl ChainingHashTable {
         {
             replicated_probe_block =
                 replicated_probe_block.add_column(col.clone(), field.clone())?;
+        }
+        if self.join_type == JoinType::Left && !self.other_conditions.is_empty() {
+            if self.probe_expressions.is_empty() {
+                return Ok(self.filter_block(&probe_block, replicated_probe_block)?);
+            }
+            return Ok(self.filter_block(&complemented_probe_block, replicated_probe_block)?);
         }
         Ok(replicated_probe_block)
     }
@@ -468,7 +544,7 @@ impl HashJoinState for ChainingHashTable {
             JoinType::Cross => self.probe_cross_join(input),
             _ => unimplemented!("{} is unimplemented", self.join_type),
         }?;
-        if self.other_conditions.is_empty() {
+        if self.other_conditions.is_empty() || self.join_type == JoinType::Left {
             return Ok(data_blocks);
         }
         for scalar in self.other_conditions.iter() {

@@ -37,7 +37,15 @@ impl Series {
     /// # Safety
     /// Assumes that the `column` is  T.
     pub unsafe fn static_cast<T: Any>(column: &ColumnRef) -> &T {
-        let object = column.as_ref();
+        let mut object = column.as_ref();
+        if object.is_nullable() && !object.is_const() {
+            object = object
+                .as_any()
+                .downcast_ref::<NullableColumn>()
+                .unwrap()
+                .inner()
+                .as_ref();
+        }
         debug_assert!(object.as_any().is::<T>());
         &*(object as *const dyn Column as *const T)
     }
