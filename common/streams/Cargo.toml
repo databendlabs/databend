@@ -30,6 +30,6 @@ chrono-tz = "0.6.1"
 csv-async = "1.2.4"
 futures = "0.3.21"
 opendal = { version = "0.9.0", features = ["retry", "compress"] }
-pin-project-lite = "0.2.8"
-serde_json = { version = "1.0.79", default-features = false, features = ["preserve_order"] }
+pin-project-lite = "0.2.9"
+serde_json = { version = "1.0.81", default-features = false, features = ["preserve_order"] }
 tempfile = "3.3.0"
