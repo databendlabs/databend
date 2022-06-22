@@ -36,7 +36,7 @@ impl ResultLocations {
     }
 
     pub fn gen_block_location(&self) -> String {
-        let part_uuid = Uuid::new_v4().to_simple().to_string();
+        let part_uuid = Uuid::new_v4().simple().to_string();
         format!(
             "{}/_t/part-{}_v{}.parquet",
             &self.prefix,

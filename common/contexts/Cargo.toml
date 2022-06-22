@@ -13,4 +13,4 @@ common-base = { path = "../base" }
 
 async-trait = "0.1.56"
 opendal = { version = "0.9.0", features = ["retry"] }
-time = "0.3.9"
+time = "0.3.10"

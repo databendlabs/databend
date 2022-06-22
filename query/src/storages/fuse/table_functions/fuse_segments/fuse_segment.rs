@@ -52,7 +52,7 @@ impl<'a> FuseSegment<'a> {
             .await?;
 
         for snapshot in snapshots {
-            if snapshot.snapshot_id.to_simple().to_string() == self.snapshot_id {
+            if snapshot.snapshot_id.simple().to_string() == self.snapshot_id {
                 return self.segments_to_block(snapshot).await;
             }
         }
