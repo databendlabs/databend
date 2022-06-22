@@ -20,6 +20,7 @@ use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
 use common_datavalues::type_coercion::merge_types;
+use common_datavalues::wrap_nullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -54,11 +55,36 @@ impl<'a> Binder {
         check_duplicate_join_tables(&left_context, &right_context)?;
 
         let mut bind_context = bind_context.replace();
-        for column in left_context.all_column_bindings() {
-            bind_context.add_column_binding(column.clone());
-        }
-        for column in right_context.all_column_bindings() {
-            bind_context.add_column_binding(column.clone());
+
+        match &join.op {
+            JoinOperator::LeftOuter => {
+                for column in left_context.all_column_bindings() {
+                    bind_context.add_column_binding(column.clone());
+                }
+                for column in right_context.all_column_bindings().iter() {
+                    let mut nullable_column = column.clone();
+                    nullable_column.data_type = wrap_nullable(&column.data_type);
+                    bind_context.add_column_binding(nullable_column);
+                }
+            }
+            JoinOperator::RightOuter => {
+                for column in left_context.all_column_bindings() {
+                    let mut nullable_column = column.clone();
+                    nullable_column.data_type = wrap_nullable(&column.data_type);
+                    bind_context.add_column_binding(nullable_column);
+                }
+                for column in right_context.all_column_bindings().iter() {
+                    bind_context.add_column_binding(column.clone());
+                }
+            }
+            _ => {
+                for column in left_context.all_column_bindings() {
+                    bind_context.add_column_binding(column.clone());
+                }
+                for column in right_context.all_column_bindings() {
+                    bind_context.add_column_binding(column.clone());
+                }
+            }
         }
 
         match &join.op {
