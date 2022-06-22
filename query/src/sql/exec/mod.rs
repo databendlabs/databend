@@ -90,7 +90,6 @@ use crate::sql::plans::Limit;
 use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::Project;
-use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::Sort;
 use crate::sql::IndexType;
@@ -553,11 +552,8 @@ impl PipelineBuilder {
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
         let builder = DataSchemaBuilder::new(self.metadata.clone());
-        let output_schema = builder.build_join(
-            probe_schema.clone(),
-            build_schema.clone(),
-            &hash_join.join_type,
-        );
+        let output_schema =
+            builder.build_join(probe_schema, build_schema.clone(), &hash_join.join_type);
 
         let eb = ExpressionBuilder::create(self.metadata.clone());
         let build_expressions = hash_join
@@ -570,11 +566,15 @@ impl PipelineBuilder {
             .iter()
             .map(|scalar| eb.build(scalar))
             .collect::<Result<Vec<Expression>>>()?;
-
+        let filter_expressions = hash_join
+            .other_conditions
+            .iter()
+            .map(|scalar| eb.build(scalar))
+            .collect::<Result<Vec<Expression>>>()?;
         let hash_join_state = create_join_state(
             ctx.clone(),
             hash_join.join_type.clone(),
-            hash_join.other_conditions.clone(),
+            filter_expressions,
             build_expressions,
             probe_expressions,
             build_schema,
@@ -764,7 +764,7 @@ impl PipelineBuilder {
 fn create_join_state(
     ctx: Arc<QueryContext>,
     join_type: JoinType,
-    other_conditions: Vec<Scalar>,
+    other_conditions: Vec<Expression>,
     build_expressions: Vec<Expression>,
     probe_expressions: Vec<Expression>,
     build_schema: DataSchemaRef,

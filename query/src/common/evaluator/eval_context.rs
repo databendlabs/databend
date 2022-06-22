@@ -19,6 +19,8 @@ use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::sql::IndexType;
+
 pub trait EvalContext {
     type VectorID: PartialEq;
 
@@ -30,21 +32,23 @@ pub trait EvalContext {
 }
 
 impl EvalContext for DataBlock {
-    type VectorID = String;
+    type VectorID = IndexType;
 
-    fn get_vector(&self, id: &String) -> Result<TypedVector> {
-        let column = self.try_column_by_name(id)?;
-        let field = self.schema().field_with_name(id)?;
+    fn get_vector(&self, id: &IndexType) -> Result<TypedVector> {
+        let name = id.to_string();
+        let column = self.try_column_by_name(name.as_str())?;
+        let field = self.schema().field_with_name(name.as_str())?;
         Ok(TypedVector {
             vector: column.clone(),
             logical_type: field.data_type().clone(),
         })
     }
 
-    fn insert_vector(&mut self, id: String, vector: TypedVector) -> Result<()> {
+    fn insert_vector(&mut self, id: IndexType, vector: TypedVector) -> Result<()> {
+        let name = id.to_string();
         let result = self.clone().add_column(
             vector.vector,
-            DataField::new(id.as_str(), vector.logical_type),
+            DataField::new(name.as_str(), vector.logical_type),
         )?;
         *self = result;
         Ok(())
@@ -59,7 +63,7 @@ impl EvalContext for DataBlock {
 pub(super) struct EmptyEvalContext;
 
 impl EvalContext for EmptyEvalContext {
-    type VectorID = String;
+    type VectorID = IndexType;
 
     fn get_vector(&self, _id: &Self::VectorID) -> Result<TypedVector> {
         Err(ErrorCode::Ok("Try to get vector from an empty context"))

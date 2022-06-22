@@ -175,7 +175,7 @@ fn test_format() {
 
     let tree = s_expr.to_format_tree(&metadata_ref);
     let result = tree.format_indent().unwrap();
-    let expect = r#"HashJoin: INNER, build keys: [plus(col1, 123)], probe keys: [col2]
+    let expect = r#"HashJoin: INNER, build keys: [plus(col1, 123)], probe keys: [col2], join filters: []
     Filter: [true]
         Scan: catalog.database.table
     Scan: catalog.database.table

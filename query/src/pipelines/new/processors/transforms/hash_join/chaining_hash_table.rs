@@ -36,14 +36,12 @@ use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
 use common_exception::Result;
 use common_planners::Expression;
-use nom::Slice;
 use primitive_types::U256;
 use primitive_types::U512;
 
 use crate::common::ExpressionEvaluator;
 use crate::common::HashMap;
 use crate::common::HashTableKeyable;
-use crate::common::ScalarEvaluator;
 use crate::pipelines::new::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
@@ -51,7 +49,6 @@ use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
 use crate::sql::planner::plans::JoinType;
-use crate::sql::plans::Scalar;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
@@ -118,14 +115,14 @@ pub struct ChainingHashTable {
     hash_table: RwLock<HashTable>,
     row_space: RowSpace,
     join_type: JoinType,
-    other_conditions: Vec<Scalar>,
+    other_conditions: Vec<Expression>,
 }
 
 impl ChainingHashTable {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         join_type: JoinType,
-        other_conditions: Vec<Scalar>,
+        other_conditions: Vec<Expression>,
         hash_table: HashTable,
         build_expressions: Vec<Expression>,
         probe_expressions: Vec<Expression>,
@@ -239,31 +236,22 @@ impl ChainingHashTable {
     // Todo(xudong963): optimize the performance of this function
     fn filter_block(&self, probe_block: &DataBlock, merged_block: DataBlock) -> Result<DataBlock> {
         let mut result_block = merged_block;
-        for scalar in self.other_conditions.iter() {
+        for join_filter_expression in self.other_conditions.iter() {
             let func_ctx = self.ctx.try_get_function_context()?;
-            let eval = ScalarEvaluator::try_create(scalar)?;
-            // `predicate_vector` contains a column, which is a boolean column.
-            let predicate_vector = eval.eval(&func_ctx, &result_block)?;
-            // Here, we directly use `predicate_vector` to filter the result block.
+            // `predicate_column` contains a column, which is a boolean column.
+            let predicate_column =
+                ExpressionEvaluator::eval(&func_ctx, join_filter_expression, &result_block)?;
+            // Here, we directly use `predicate_column` to filter the result block.
             // But pay attention to the fact that **reserved side** may also be filtered.
             // **reserved side** is the left side in left join, and the right side in right join.
-            result_block = DataBlock::filter_block(&result_block, predicate_vector.vector())?;
+            result_block = DataBlock::filter_block(&result_block, &predicate_column)?;
         }
         // Find filtered probe block in result block
         let probe_block_columns_num = probe_block.columns().len();
         let mut filtered_probe_block = DataBlock::empty();
-        for (col, field) in result_block
-            .columns()
-            .slice(0..probe_block_columns_num)
+        for (col, field) in result_block.columns()[0..probe_block_columns_num]
             .iter()
-            .zip(
-                result_block
-                    .schema()
-                    .fields()
-                    .as_slice()
-                    .slice(0..probe_block_columns_num)
-                    .iter(),
-            )
+            .zip(result_block.schema().fields().as_slice()[0..probe_block_columns_num].iter())
         {
             filtered_probe_block = filtered_probe_block.add_column(col.clone(), field.clone())?;
         }
@@ -539,13 +527,13 @@ impl HashJoinState for ChainingHashTable {
             return Ok(data_blocks);
         }
         // Process other conditions for Inner/Semi/Anti join
-        for scalar in self.other_conditions.iter() {
+        for join_filter_expression in self.other_conditions.iter() {
             let func_ctx = self.ctx.try_get_function_context()?;
-            let eval = ScalarEvaluator::try_create(scalar)?;
             let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
             for block in data_blocks.iter() {
-                let predicate_vector = eval.eval(&func_ctx, block)?;
-                filtered_blocks.push(DataBlock::filter_block(block, predicate_vector.vector())?);
+                let predicate_column =
+                    ExpressionEvaluator::eval(&func_ctx, join_filter_expression, block)?;
+                filtered_blocks.push(DataBlock::filter_block(block, &predicate_column)?);
             }
             data_blocks = filtered_blocks;
         }

@@ -34,7 +34,7 @@ impl DataBlock {
         }
         first_block_rows.retain(|row| !second_block_rows.contains(row));
         if first_block_rows.is_empty() {
-            return Ok(DataBlock::empty());
+            return Ok(DataBlock::empty_with_schema(first_block.schema().clone()));
         }
         DataBlock::concat_blocks(&first_block_rows)
     }
