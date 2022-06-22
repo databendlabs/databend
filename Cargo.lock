@@ -689,7 +689,7 @@ dependencies = [
  "anyhow",
  "atty",
  "cargo_metadata",
- "clap 3.2.5",
+ "clap 3.2.6",
  "csv",
  "getopts",
  "semver",
@@ -819,9 +819,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.5"
+version = "3.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d53da17d37dba964b9b3ecb5c5a1f193a2762c700e6829201e645b9381c99dc7"
+checksum = "9f1fe12880bae935d142c8702d500c63a4e8634b6c3c57ad72bf978fc7b6249a"
 dependencies = [
  "atty",
  "bitflags",
@@ -836,9 +836,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "3.2.5"
+version = "3.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c11d40217d16aee8508cc8e5fde8b4ff24639758608e5374e731b53f85749fb9"
+checksum = "ed6db9e867166a43a53f7199b5e4d1f522a1e5bd626654be263c999ce59df39a"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -849,9 +849,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5538cd660450ebeb4234cfecf8f2284b844ffc4c50531e66d584ad5b91293613"
+checksum = "87eba3c8c7f42ef17f6c659fc7416d0f4758cd3e58861ee63c5fa4a4dde649e4"
 dependencies = [
  "os_str_bytes",
 ]
@@ -1038,7 +1038,7 @@ dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-base",
  "opendal",
- "time 0.3.10",
+ "time 0.3.11",
 ]
 
 [[package]]
@@ -1103,7 +1103,7 @@ dependencies = [
  "serde_json",
  "sqlparser",
  "thiserror",
- "time 0.3.10",
+ "time 0.3.11",
  "tonic",
 ]
 
@@ -1191,7 +1191,7 @@ dependencies = [
  "opendal",
  "rand 0.8.5",
  "serde",
- "time 0.3.10",
+ "time 0.3.11",
 ]
 
 [[package]]
@@ -1923,7 +1923,7 @@ dependencies = [
  "anyhow",
  "async-entry",
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "clap 3.2.5",
+ "clap 3.2.6",
  "common-arrow",
  "common-base",
  "common-building",
@@ -1965,7 +1965,7 @@ dependencies = [
 name = "databend-metabench"
 version = "0.1.0"
 dependencies = [
- "clap 3.2.5",
+ "clap 3.2.6",
  "common-base",
  "common-meta-api",
  "common-meta-app",
@@ -1982,7 +1982,7 @@ name = "databend-metactl"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.2.5",
+ "clap 3.2.6",
  "common-base",
  "common-meta-api",
  "common-meta-grpc",
@@ -2017,7 +2017,7 @@ dependencies = [
  "bytes 1.1.0",
  "chrono",
  "chrono-tz",
- "clap 3.2.5",
+ "clap 3.2.6",
  "clickhouse-driver",
  "common-arrow",
  "common-ast",
@@ -2100,7 +2100,7 @@ dependencies = [
  "thiserror",
  "threadpool",
  "thrift",
- "time 0.3.10",
+ "time 0.3.11",
  "tokio-rustls",
  "tokio-stream",
  "toml",
@@ -3270,9 +3270,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.9.0"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c6392766afd7964e2531940894cffe4bd8d7d17dbc3c1c4857040fd4b33bdb3"
+checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg 1.1.0",
  "hashbrown 0.12.1",
@@ -4085,7 +4085,7 @@ dependencies = [
  "smallvec",
  "subprocess",
  "thiserror",
- "time 0.3.10",
+ "time 0.3.11",
  "uuid 1.1.2",
 ]
 
@@ -4383,7 +4383,7 @@ dependencies = [
  "reqsign",
  "serde",
  "thiserror",
- "time 0.3.10",
+ "time 0.3.11",
  "tokio",
 ]
 
@@ -4397,7 +4397,7 @@ dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "byte-unit",
  "bytes 1.1.0",
- "clap 3.2.5",
+ "clap 3.2.6",
  "derive_more",
  "futures",
  "maplit",
@@ -4482,9 +4482,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-src"
-version = "111.20.0+1.1.1o"
+version = "111.21.0+1.1.1p"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92892c4f87d56e376e469ace79f1128fdaded07646ddf73aa0be4706ff712dec"
+checksum = "6d0a8313729211913936f1b95ca47a5fc7f2e04cd658c115388287f8a8361008"
 dependencies = [
  "cc",
 ]
@@ -4986,8 +4986,7 @@ dependencies = [
 [[package]]
 name = "pprof"
 version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a97149c0eacaa6b8f8cedea99f68bb3a0517fa20f8de8d8c24c1a810f38d235d"
+source = "git+https://github.com/datafuse-extras/pprof-rs?rev=78b890f#78b890feea2c71227ce8670549f46b53ada6b4f0"
 dependencies = [
  "backtrace",
  "cfg-if",
@@ -5062,9 +5061,9 @@ dependencies = [
 
 [[package]]
 name = "prettyplease"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3662417e650bd6af740f5b8b3501776aa10c3d5cbd10b40263ed250d3770884"
+checksum = "9e1516508b396cefe095485fdce673007422f5e48e82934b7b423dc26aa5e6a4"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -5503,7 +5502,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.2",
- "time 0.3.10",
+ "time 0.3.11",
 ]
 
 [[package]]
@@ -6112,7 +6111,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "thiserror",
- "time 0.3.10",
+ "time 0.3.11",
 ]
 
 [[package]]
@@ -6553,9 +6552,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.10"
+version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82501a4c1c0330d640a6e176a3d6a204f5ec5237aca029029d21864a902e27b0"
+checksum = "72c91f41dcb2f096c05f0873d667dceec1087ce5bcf984ec8ffb19acddbb3217"
 dependencies = [
  "itoa 1.0.2",
  "libc",
@@ -6825,7 +6824,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
 dependencies = [
  "crossbeam-channel",
- "time 0.3.10",
+ "time 0.3.11",
  "tracing-subscriber",
 ]
 
@@ -6850,7 +6849,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "time 0.3.10",
+ "time 0.3.11",
  "tracing",
  "tracing-core",
  "tracing-log",
@@ -7079,6 +7078,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "unicode-segmentation"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e8820f5d777f6224dc4be3632222971ac30164d4a258d595640799554ebfd99"
+
+[[package]]
 name = "unicode-width"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7161,7 +7166,7 @@ dependencies = [
  "rustversion",
  "sysinfo",
  "thiserror",
- "time 0.3.10",
+ "time 0.3.11",
 ]
 
 [[package]]
