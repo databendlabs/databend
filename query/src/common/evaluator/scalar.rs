@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::{ColumnWithField, wrap_nullable};
+use common_datavalues::wrap_nullable;
+use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;

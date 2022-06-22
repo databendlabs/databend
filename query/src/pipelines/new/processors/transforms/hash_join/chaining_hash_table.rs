@@ -237,32 +237,40 @@ impl ChainingHashTable {
         Ok(results)
     }
 
+    // Todo(xudong963): optimize the performance of this function
     fn filter_block(&self, probe_block: &DataBlock, merged_block: DataBlock) -> Result<DataBlock> {
         let mut result_block = merged_block;
         for scalar in self.other_conditions.iter() {
             let func_ctx = self.ctx.try_get_function_context()?;
             let eval = ScalarEvaluator::try_create(scalar)?;
-            let result = eval.eval(&func_ctx, &result_block)?;
-            result_block = DataBlock::filter_block(&result_block, result.vector())?;
+            // `predicate_vector` contains a column, which is a boolean column.
+            let predicate_vector = eval.eval(&func_ctx, &result_block)?;
+            // Here, we directly use `predicate_vector` to filter the result block.
+            // But pay attention to the fact that **reserved side** may also be filtered.
+            // **reserved side** is the left side in left join, and the right side in right join.
+            result_block = DataBlock::filter_block(&result_block, predicate_vector.vector())?;
         }
-        // add reserved side
-        let mut part_result_block = DataBlock::empty();
+        // Find filtered probe block in result block
+        let probe_block_columns_num = probe_block.columns().len();
+        let mut filtered_probe_block = DataBlock::empty();
         for (col, field) in result_block
             .columns()
-            .slice(0..probe_block.columns().len())
+            .slice(0..probe_block_columns_num)
             .iter()
             .zip(
                 result_block
                     .schema()
                     .fields()
                     .as_slice()
-                    .slice(0..probe_block.columns().len())
+                    .slice(0..probe_block_columns_num)
                     .iter(),
             )
         {
-            part_result_block = part_result_block.add_column(col.clone(), field.clone())?;
+            filtered_probe_block = filtered_probe_block.add_column(col.clone(), field.clone())?;
         }
-        let mut except_block = DataBlock::except_blocks(probe_block, &part_result_block)?;
+        // Get the difference between filtered probe block and probe block
+        // If the difference is empty, we don't need to supplement NULL block for reserved side
+        let mut except_block = DataBlock::except_blocks(probe_block, &filtered_probe_block)?;
         if except_block.is_empty() {
             return Ok(result_block);
         }
@@ -298,22 +306,22 @@ impl ChainingHashTable {
             replicated_probe_block = replicated_probe_block
                 .add_column(replicated_col, probe_block.schema().field(i).clone())?;
         }
-        let complemented_probe_block = replicated_probe_block.clone();
+        let mut merged_block = replicated_probe_block.clone();
         for (col, field) in build_block
             .columns()
             .iter()
             .zip(build_block.schema().fields().iter())
         {
-            replicated_probe_block =
-                replicated_probe_block.add_column(col.clone(), field.clone())?;
+            merged_block = merged_block.add_column(col.clone(), field.clone())?;
         }
         if self.join_type == JoinType::Left && !self.other_conditions.is_empty() {
+            // There is no equi-join conditions, directly use origin probe block
             if self.probe_expressions.is_empty() {
-                return Ok(self.filter_block(&probe_block, replicated_probe_block)?);
+                return Ok(self.filter_block(&probe_block, merged_block)?);
             }
-            return Ok(self.filter_block(&complemented_probe_block, replicated_probe_block)?);
+            return Ok(self.filter_block(&replicated_probe_block, merged_block)?);
         }
-        Ok(replicated_probe_block)
+        Ok(merged_block)
     }
 
     fn probe_cross_join(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
@@ -531,13 +539,14 @@ impl HashJoinState for ChainingHashTable {
         if self.other_conditions.is_empty() || self.join_type == JoinType::Left {
             return Ok(data_blocks);
         }
+        // Process other conditions for Inner/Semi/Anti join
         for scalar in self.other_conditions.iter() {
             let func_ctx = self.ctx.try_get_function_context()?;
             let eval = ScalarEvaluator::try_create(scalar)?;
             let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
             for block in data_blocks.iter() {
-                let result = eval.eval(&func_ctx, block)?;
-                filtered_blocks.push(DataBlock::filter_block(block, result.vector())?);
+                let predicate_vector = eval.eval(&func_ctx, block)?;
+                filtered_blocks.push(DataBlock::filter_block(block, predicate_vector.vector())?);
             }
             data_blocks = filtered_blocks;
         }

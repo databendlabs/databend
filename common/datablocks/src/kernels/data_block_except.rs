@@ -17,6 +17,7 @@ use common_exception::Result;
 
 use crate::DataBlock;
 
+// Compute the difference of two DataBlocks.
 impl DataBlock {
     pub fn except_blocks(first_block: &DataBlock, second_block: &DataBlock) -> Result<DataBlock> {
         if first_block.schema().ne(second_block.schema()) {
