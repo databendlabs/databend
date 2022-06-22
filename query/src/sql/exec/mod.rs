@@ -578,7 +578,6 @@ impl PipelineBuilder {
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?;
 
         // Build side
@@ -769,7 +768,6 @@ fn create_join_state(
     build_expressions: Vec<Expression>,
     probe_expressions: Vec<Expression>,
     build_schema: DataSchemaRef,
-    probe_schema: DataSchemaRef,
 ) -> Result<Arc<ChainingHashTable>> {
     let hash_key_types = build_expressions
         .iter()
@@ -789,7 +787,6 @@ fn create_join_state(
                 build_expressions,
                 probe_expressions,
                 build_schema,
-                probe_schema,
             )?)
         }
         HashMethodKind::KeysU8(hash_method) => Arc::new(ChainingHashTable::try_create(
@@ -803,7 +800,6 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU16(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
@@ -816,7 +812,6 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU32(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
@@ -829,7 +824,6 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU64(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
@@ -842,7 +836,6 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU128(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
@@ -855,7 +848,6 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU256(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
@@ -868,7 +860,6 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU512(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
@@ -881,7 +872,6 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
     })
 }

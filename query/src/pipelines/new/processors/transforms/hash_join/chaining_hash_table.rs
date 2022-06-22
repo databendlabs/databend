@@ -130,7 +130,6 @@ impl ChainingHashTable {
         build_expressions: Vec<Expression>,
         probe_expressions: Vec<Expression>,
         mut build_data_schema: DataSchemaRef,
-        _probe_data_schema: DataSchemaRef,
     ) -> Result<Self> {
         if join_type == JoinType::Left {
             let mut nullable_field = Vec::with_capacity(build_data_schema.fields().len());
@@ -317,9 +316,9 @@ impl ChainingHashTable {
         if self.join_type == JoinType::Left && !self.other_conditions.is_empty() {
             // There is no equi-join conditions, directly use origin probe block
             if self.probe_expressions.is_empty() {
-                return Ok(self.filter_block(&probe_block, merged_block)?);
+                return self.filter_block(probe_block, merged_block);
             }
-            return Ok(self.filter_block(&replicated_probe_block, merged_block)?);
+            return self.filter_block(&replicated_probe_block, merged_block);
         }
         Ok(merged_block)
     }
