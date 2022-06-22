@@ -38,6 +38,13 @@ pub enum Expr<'a> {
         expr: Box<Expr<'a>>,
         not: bool,
     },
+    /// `IS [NOT] DISTINCT` expression
+    IsDistinctFrom {
+        span: &'a [Token<'a>],
+        left: Box<Expr<'a>>,
+        right: Box<Expr<'a>>,
+        not: bool,
+    },
     /// `[ NOT ] IN (expr, ...)`
     InList {
         span: &'a [Token<'a>],
@@ -292,6 +299,7 @@ impl<'a> Expr<'a> {
         match self {
             Expr::ColumnRef { span, .. } => span,
             Expr::IsNull { span, .. } => span,
+            Expr::IsDistinctFrom { span, .. } => span,
             Expr::InList { span, .. } => span,
             Expr::InSubquery { span, .. } => span,
             Expr::Between { span, .. } => span,
@@ -557,6 +565,16 @@ impl<'a> Display for Expr<'a> {
                 }
                 write!(f, " NULL")?;
             }
+            Expr::IsDistinctFrom {
+                left, right, not, ..
+            } => {
+                write!(f, "{left} IS")?;
+                if *not {
+                    write!(f, " NOT")?;
+                }
+                write!(f, " DISTINCT FROM {right}")?;
+            }
+
             Expr::InList {
                 expr, list, not, ..
             } => {

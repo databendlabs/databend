@@ -161,6 +161,63 @@ impl<'a> TypeChecker<'a> {
                     .await?
             }
 
+            Expr::IsDistinctFrom {
+                span,
+                left,
+                right,
+                not,
+            } => {
+                let left_null_expr = Box::new(Expr::IsNull {
+                    span,
+                    expr: left.clone(),
+                    not: false,
+                });
+                let right_null_expr = Box::new(Expr::IsNull {
+                    span,
+                    expr: right.clone(),
+                    not: false,
+                });
+                let op = if *not {
+                    BinaryOperator::Eq
+                } else {
+                    BinaryOperator::NotEq
+                };
+                self.resolve_function(
+                    span,
+                    "multi_if",
+                    &[
+                        &Expr::BinaryOp {
+                            span,
+                            op: BinaryOperator::And,
+                            left: left_null_expr.clone(),
+                            right: right_null_expr.clone(),
+                        },
+                        &Expr::Literal {
+                            span,
+                            lit: Literal::Boolean(*not),
+                        },
+                        &Expr::BinaryOp {
+                            span,
+                            op: BinaryOperator::Or,
+                            left: left_null_expr.clone(),
+                            right: right_null_expr.clone(),
+                        },
+                        &Expr::Literal {
+                            span,
+                            lit: Literal::Boolean(!*not),
+                        },
+                        &Expr::BinaryOp {
+                            span,
+                            op,
+                            left: left.clone(),
+                            right: right.clone(),
+                        },
+                    ],
+                    required_type,
+                )
+                .await?
+            }
+
             Expr::InList {
                 span,
                 expr,

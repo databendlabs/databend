@@ -2672,3 +2672,103 @@ IfNull {
 }
 
 
+---------- Input ----------
+1 is distinct from 2
+---------- Output ---------
+1 IS DISTINCT FROM 2
+---------- AST ------------
+IsDistinctFrom {
+    span: [
+        IS(2..4),
+        DISTINCT(5..13),
+        FROM(14..18),
+    ],
+    left: Literal {
+        span: [
+            LiteralInteger(0..1),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+    right: Literal {
+        span: [
+            LiteralInteger(19..20),
+        ],
+        lit: Integer(
+            2,
+        ),
+    },
+    not: false,
+}
+
+
+---------- Input ----------
+a is distinct from b
+---------- Output ---------
+a IS DISTINCT FROM b
+---------- AST ------------
+IsDistinctFrom {
+    span: [
+        IS(2..4),
+        DISTINCT(5..13),
+        FROM(14..18),
+    ],
+    left: ColumnRef {
+        span: [
+            Ident(0..1),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(0..1),
+        },
+    },
+    right: ColumnRef {
+        span: [
+            Ident(19..20),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(19..20),
+        },
+    },
+    not: false,
+}
+
+
+---------- Input ----------
+1 is not distinct from null
+---------- Output ---------
+1 IS NOT DISTINCT FROM NULL
+---------- AST ------------
+IsDistinctFrom {
+    span: [
+        IS(2..4),
+        NOT(5..8),
+        DISTINCT(9..17),
+        FROM(18..22),
+    ],
+    left: Literal {
+        span: [
+            LiteralInteger(0..1),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+    right: Literal {
+        span: [
+            NULL(23..27),
+        ],
+        lit: Null,
+    },
+    not: true,
+}
+
+

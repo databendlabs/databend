@@ -144,11 +144,14 @@ pub enum ExprElement<'a> {
         table: Option<Identifier<'a>>,
         column: Identifier<'a>,
     },
-    /// `IS NULL` expression
+    /// `IS [NOT] NULL` expression
     IsNull {
         not: bool,
     },
-    /// `IS NOT NULL` expression
+    /// `IS [NOT] DISTINCT FROM` expression
+    IsDistinctFrom {
+        not: bool,
+    },
     /// `[ NOT ] IN (list, ...)`
     InList {
         list: Vec<Expr<'a>>,
@@ -291,6 +294,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
             ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(10)),
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
             ExprElement::Between { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
+            ExprElement::IsDistinctFrom { .. } => Affix::Infix(Precedence(20), Associativity::Left),
             ExprElement::InList { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::InSubquery { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::UnaryOp { op } => match op {
@@ -488,6 +492,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 op,
+            },
+            ExprElement::IsDistinctFrom { not } => Expr::IsDistinctFrom {
+                span: elem.span.0,
+                left: Box::new(lhs),
+                right: Box::new(rhs),
+                not,
             },
             _ => unreachable!(),
         };
@@ -852,6 +862,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, _, expr1, _, expr2, _)| ExprElement::IfNull { expr1, expr2 },
     );
+    let is_distinct_from = map(
+        rule! {IS~NOT?~DISTINCT~FROM
+        },
+        |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
+    );
     let (rest, (span, elem)) = consumed(alt((
         rule!(
             #is_null : "`... IS [NOT] NULL`"
@@ -873,6 +888,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #nullif: "`NULLIF(..., ...)`"
             | #ifnull: "`IFNULL(..., ...)`"
+            | #is_distinct_from :"`... IS [NOT] DISTINCT FROM ...`"
         ),
         rule!(
             #count_all : "COUNT(*)"

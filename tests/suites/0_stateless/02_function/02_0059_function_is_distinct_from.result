@@ -1,0 +1,40 @@
+==is_distinct_from_non_nullable_const_values==
+1
+0
+1
+0
+==is_not_distinct_from_non_nullable_const_values==
+0
+1
+0
+1
+==is_distinct_from_nullable_const_values==
+1
+1
+1
+1
+0
+==is_not_distinct_from_nullable_const_values==
+0
+0
+0
+0
+1
+==is_distinct_non_nullable_columns==
+0	0	0
+0	1	1
+1	0	1
+1	1	0
+==is_not_distinct_non_nullable_columns==
+0	0	1
+0	1	0
+1	0	0
+1	1	1
+==is_distinct_nullable_columns==
+0	NULL	1
+NULL	0	1
+NULL	NULL	0
+==is_distinct_nullable_columns==
+0	NULL	0
+NULL	0	0
+NULL	NULL	1
