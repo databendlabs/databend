@@ -18,6 +18,6 @@ mod optimizer;
 mod parsers;
 mod plan_parser;
 mod planner;
+mod sql_common;
 mod sql_parser;
 mod statements;
-mod sql_common;

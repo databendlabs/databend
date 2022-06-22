@@ -20,23 +20,23 @@ fn short_sql_test() {
         let sql = "select 1";
         assert_eq!(SQLCommon::short_sql(sql), sql);
     }
-    
+
     {
         let sql = "insert into a select xxxxxx1";
         assert_eq!(SQLCommon::short_sql(sql), sql);
     }
-    
+
     let size = "INSERT INTO ".len();
-    
+
     {
-        let sql = format!("INSERT INTO {}", "x".repeat(100)) ;
-        let expect = format!("INSERT INTO {}...", "x".repeat(64 - size)) ;
+        let sql = format!("INSERT INTO {}", "x".repeat(100));
+        let expect = format!("INSERT INTO {}...", "x".repeat(64 - size));
         assert_eq!(SQLCommon::short_sql(&sql), expect);
     }
-    
+
     {
-        let sql = format!("inSerT INTO {}", "x".repeat(100)) ;
-        let expect = format!("inSerT INTO {}...", "x".repeat(64 - size)) ;
+        let sql = format!("inSerT INTO {}", "x".repeat(100));
+        let expect = format!("inSerT INTO {}...", "x".repeat(64 - size));
         assert_eq!(SQLCommon::short_sql(&sql), expect);
     }
 }
