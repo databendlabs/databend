@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod access;
+// mod async_insert_queue_v2;
 mod async_insert_queue;
 mod fragments;
 mod interpreter;
@@ -34,6 +35,7 @@ mod interpreter_factory;
 mod interpreter_factory_interceptor;
 mod interpreter_factory_v2;
 mod interpreter_insert;
+mod interpreter_insert_v2;
 mod interpreter_insert_with_stream;
 mod interpreter_kill;
 mod interpreter_list;
@@ -106,6 +108,7 @@ pub use interpreter_factory::InterpreterFactory;
 pub use interpreter_factory_interceptor::InterceptorInterpreter;
 pub use interpreter_factory_v2::InterpreterFactoryV2;
 pub use interpreter_insert::InsertInterpreter;
+pub use interpreter_insert_v2::InsertInterpreterV2;
 pub use interpreter_kill::KillInterpreter;
 pub use interpreter_list::ListInterpreter;
 pub use interpreter_privilege_grant::GrantPrivilegeInterpreter;

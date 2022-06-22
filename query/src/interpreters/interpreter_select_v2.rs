@@ -23,6 +23,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
@@ -88,6 +89,19 @@ impl Interpreter for SelectInterpreterV2 {
         let (handler, stream) = ProcessorExecutorStream::create(executor)?;
         self.ctx.add_source_abort_handle(handler);
         Ok(Box::pin(Box::pin(stream)))
+    }
+
+    /// This method will create a new pipeline
+    /// The QueryPipelineBuilder will use the optimized plan to generate a NewPipeline
+    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
+        let builder = PipelineBuilder::new(
+            self.ctx.clone(),
+            self.bind_context.result_columns(),
+            self.metadata.clone(),
+            self.s_expr.clone(),
+        );
+        let new_pipeline = builder.spawn()?.0;
+        Ok(new_pipeline)
     }
 
     async fn start(&self) -> Result<()> {

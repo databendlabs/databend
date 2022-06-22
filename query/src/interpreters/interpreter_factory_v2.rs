@@ -64,6 +64,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowSettings(_)
                 | DfStatement::CreateDatabase(_)
                 | DfStatement::DropDatabase(_)
+                | DfStatement::InsertQuery(_)
                 | DfStatement::ShowUsers(_)
                 | DfStatement::CreateUser(_)
                 | DfStatement::ShowRoles(_)
@@ -188,6 +189,10 @@ impl InterpreterFactoryV2 {
             }
             Plan::AlterUser(alter_user) => {
                 AlterUserInterpreter::try_create(ctx.clone(), *alter_user.clone())
+            }
+
+            Plan::Insert(insert) => {
+                InsertInterpreterV2::try_create(ctx.clone(), *insert.clone(), false)
             }
 
             // Roles

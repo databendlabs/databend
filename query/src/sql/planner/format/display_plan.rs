@@ -61,6 +61,9 @@ impl Plan {
             Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),
             Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
 
+            // Insert
+            Plan::Insert(insert) => Ok(format!("{:?}", insert)),
+
             // Stages
             Plan::ShowStages => Ok("SHOW STAGES".to_string()),
             Plan::ListStage(s) => Ok(format!("{:?}", s)),
