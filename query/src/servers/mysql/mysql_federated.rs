@@ -226,6 +226,7 @@ impl MySQLFederated {
             ("(?i)^(SET AUTOCOMMIT(.*))", None),
             ("(?i)^(SET SQL_LOG_BIN(.*))", None),
             ("(?i)^(SET sql_mode(.*))", None),
+            ("(?i)^(SET SQL_SELECT_LIMIT(.*))", None),
             ("(?i)^(SET @@(.*))", None),
             // Now databend not support charset and collation
             // https://github.com/datafuselabs/databend/issues/5853
