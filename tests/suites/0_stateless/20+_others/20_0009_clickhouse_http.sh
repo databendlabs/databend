@@ -13,6 +13,8 @@ curl -s -u root: "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/ping"
 
 curl -s -u root: "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/replicas_status"
 
+curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" -d 'select version()'
+
 curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" -d 'drop database if exists db2'
 curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" -d 'create database db2'
 curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?database=db2" -d 'create table t2(a int)'

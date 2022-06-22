@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_stream::stream;
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -46,6 +47,7 @@ use crate::interpreters::InterpreterFactoryV2;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSource;
 use crate::pipelines::new::SourcePipeBuilder;
+use crate::servers::clickhouse::CLickHouseFederated;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
@@ -243,6 +245,11 @@ pub async fn clickhouse_handler_get(
 
     let sql = params.query();
 
+    if let Some(block) = CLickHouseFederated::check(&sql) {
+        return serialize_one_block(context.clone(), block, &sql, &params)
+            .map_err(InternalServerError);
+    }
+
     let (stmts, _) = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type())
         .unwrap_or_else(|_| (vec![], vec![]));
 
@@ -308,12 +315,16 @@ pub async fn clickhouse_handler_post(
         .set_batch_settings(&params.settings, false)
         .map_err(BadRequest)?;
 
+    let mut sql = params.query();
+    sql.push_str(body.into_string().await?.as_str());
+
+    if let Some(block) = CLickHouseFederated::check(&sql) {
+        return serialize_one_block(ctx.clone(), block, &sql, &params).map_err(InternalServerError);
+    }
+
     let stmt_sql = params.query();
     let (stmts, _) = DfParser::parse_sql(stmt_sql.as_str(), ctx.get_current_session().get_type())
         .unwrap_or_else(|_| (vec![], vec![]));
-
-    let mut sql = params.query();
-    sql.push_str(body.into_string().await?.as_str());
 
     let settings = ctx.get_settings();
     if settings
@@ -403,4 +414,26 @@ fn compress_block(input: Vec<u8>) -> Result<Vec<u8>> {
         output.extend_from_slice(&compressed_with_header);
         Ok(output)
     }
+}
+
+fn serialize_one_block(
+    ctx: Arc<QueryContext>,
+    block: DataBlock,
+    sql: &str,
+    params: &StatementHandlerParams,
+) -> Result<WithContentType<Body>> {
+    let format_setting = ctx.get_format_settings()?;
+    let fmt = match CLickHouseFederated::get_format(sql) {
+        Some(format) => OutputFormatType::from_str(format.as_str())?,
+        None => OutputFormatType::TSV,
+    };
+    let mut output_format = fmt.create_format(block.schema().clone(), format_setting);
+    let mut res = output_format.serialize_prefix()?;
+    let mut data = output_format.serialize_block(&block)?;
+    if params.compress() {
+        data = compress_block(data)?;
+    }
+    res.append(&mut data);
+    res.append(&mut output_format.finalize()?);
+    Ok(Body::from(res).with_content_type(fmt.get_content_type()))
 }
