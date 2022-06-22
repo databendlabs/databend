@@ -68,65 +68,65 @@ backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 backon = "0.0.2"
 base64 = "0.13.0"
 bit-vec = { version = "0.6.3", features = ["serde_std"] }
-bumpalo = "3.9.1"
+bumpalo = "3.10.0"
 byteorder = "1.4.3"
 bytes = "1.1.0"
 chrono = "0.4.19"
 chrono-tz = "0.6.1"
-clap = { version = "3.1.8", features = ["derive", "env"] }
-dyn-clone = "1.0.5"
+clap = { version = "3.2.5", features = ["derive", "env"] }
+dyn-clone = "1.0.6"
 enum_dispatch = "0.3.8"
 enum_extract = "0.1.1"
 futures = "0.3.21"
-futures-util = "0.3.2"
+futures-util = "0.3.21"
 headers = "0.3.7"
-http = "0.2.6"
+http = "0.2.8"
 itertools = "0.10.3"
 jwtk = "0.2.3"
 lazy_static = "1.4.0"
 lz4 = "1.23.3"
-metrics = "0.18.1"
+metrics = "0.19.0"
 naive-cityhash = "0.2.0"
 nom = "7.1.1"
 num = "0.4.0"
 num_cpus = "1.13.1"
-octocrab = "0.15.4"
-once_cell = "1.10.0"
+octocrab = "0.16.0"
+once_cell = "1.12.0"
 opendal = { version = "0.9.0", features = ["retry", "compress"] }
 opensrv-clickhouse = "0.1.0"
 opensrv-mysql = "0.1.0"
-openssl = { version = "0.10", features = ["vendored"] }
+openssl = { version = "0.10.40", features = ["vendored"] }
 paste = "1.0.7"
-petgraph = "0.6.0"
-poem = { version = "=1.3.31", features = ["rustls", "multipart", "compression"] }
-primitive-types = "0.6.2"
-prost = "=0.10.1"
+petgraph = "0.6.2"
+poem = { version = "1.3.31", features = ["rustls", "multipart", "compression"] }
+primitive-types = "0.11.1"
+prost = "0.10.4"
 rand = "0.8.5"
-regex = "1.5.5"
-reqwest = "0.11.10"
+regex = "1.5.6"
+reqwest = "0.11.11"
 rsa = "0.5.0"
 segment-tree = "2.0.0"
-semver = "1.0.9"
-serde = { version = "1.0.136", features = ["derive"] }
+semver = "1.0.10"
+serde = { version = "1.0.137", features = ["derive"] }
 serde-bridge = "0.0.3"
-serde_json = "1.0.79"
+serde_json = "1.0.81"
 serfig = "0.0.2"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
 smallvec = { version = "1.8.0", features = ["write"] }
-strum = "0.24"
-strum_macros = "0.24"
+strum = "0.24.1"
+strum_macros = "0.24.0"
 tempfile = { version = "3.3.0", optional = true }
-thiserror = "1.0.30"
+thiserror = "1.0.31"
 threadpool = "1.8.1"
-thrift = { version = "0.15", optional = true }
-time = "0.3.9"
-tokio-rustls = "0.23.3"
-tokio-stream = { version = "0.1.8", features = ["net"] }
-tonic = "=0.7.2"
-twox-hash = "1.6.2"
+thrift = { version = "0.15.0", optional = true }
+time = "0.3.10"
+tokio-rustls = "0.23.4"
+tokio-stream = { version = "0.1.9", features = ["net"] }
+tonic = "0.7.2"
+twox-hash = "1.6.3"
 typetag = "0.1.8"
-uuid = { version = "0.8.2", features = ["serde", "v4"] }
+uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 
 [dev-dependencies]
@@ -134,16 +134,16 @@ clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_drive
 criterion = "0.3.5"
 goldenfile = "1.3.0"
 hex = "0.4.3"
-jwt-simple = "0.10.9"
+jwt-simple = "0.11.0"
 maplit = "1.0.2"
-mysql_async = "0.29.0"
+mysql_async = "0.30.0"
 pretty_assertions = "1.2.1"
-reqwest = { version = "0.11.10", features = ["json", "native-tls"] }
+reqwest = { version = "0.11.11", features = ["json", "native-tls"] }
 temp-env = "0.2.0"
 tempfile = "3.3.0"
-toml = { version = "0.5.8", default-features = false }
+toml = { version = "0.5.9", default-features = false }
 url = "2.2.2"
-wiremock = "0.5.12"
+wiremock = "0.5.13"
 
 [build-dependencies]
 common-building = { path = "../common/building" }
