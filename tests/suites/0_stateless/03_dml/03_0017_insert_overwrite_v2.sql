@@ -4,8 +4,8 @@ DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
 
-CREATE TABLE IF NOT EXISTS t1(a Int8, b UInt32, c UInt64, d String) Engine = MEMORY;
-CREATE TABLE IF NOT EXISTS t2(a Int8, b UInt32, c UInt64, d String) Engine = MEMORY;
+CREATE TABLE IF NOT EXISTS t1(a Int8, b UInt32, c UInt64, d String) Engine = Fuse;
+CREATE TABLE IF NOT EXISTS t2(a Int8, b UInt32, c UInt64, d String) Engine = Fuse;
 
 INSERT INTO t1 (a,b,c,d) VALUES(1, 1, 1, 'origin'), (2, 2, 2, 'origin');
 INSERT INTO t2 (a,b,c,d) VALUES(3, 3, 3, 'change'), (4, 4, 4, 'change');

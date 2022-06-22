@@ -4,9 +4,9 @@ DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
 
-CREATE TABLE IF NOT EXISTS t1(a UInt8, b UInt64, c Int8, d Int64, e Date, f Date, g DateTime, h String) Engine = Memory;
-CREATE TABLE IF NOT EXISTS t2(a String, b String, c String, d String, e String, f String, g String, h String) Engine = Memory;
-CREATE TABLE IF NOT EXISTS t3(a String, b String, c String, d String) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(a UInt8, b UInt64, c Int8, d Int64, e Date, f Date, g DateTime, h String) Engine = Fuse;
+CREATE TABLE IF NOT EXISTS t2(a String, b String, c String, d String, e String, f String, g String, h String) Engine = Fuse;
+CREATE TABLE IF NOT EXISTS t3(a String, b String, c String, d String) Engine = Fuse;
 
 
 INSERT INTO t1 (a,b,c,d,e) select * from t3; -- {ErrorCode 1006}

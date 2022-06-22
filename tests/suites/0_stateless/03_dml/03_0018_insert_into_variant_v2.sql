@@ -6,7 +6,7 @@ USE db1;
 
 select '==Variant==';
 
-CREATE TABLE IF NOT EXISTS t1(id Int null, var Variant null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(id Int null, var Variant null) Engine = Fuse;
 
 INSERT INTO t1 (id, var) VALUES(1, null),
                                (2, true),
@@ -29,7 +29,7 @@ select * from t1 order by id asc;
 
 select '==Array==';
 
-CREATE TABLE IF NOT EXISTS t2(id Int null, arr Array null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t2(id Int null, arr Array null) Engine = Fuse;
 
 INSERT INTO t2 SELECT 1, parse_json('[1,2,3,["a","b","c"],{"k":"v"}]');
 
@@ -42,7 +42,7 @@ select arr[4][0] from t2;
 
 select '==Object==';
 
-CREATE TABLE IF NOT EXISTS t3(id Int null, obj Object null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t3(id Int null, obj Object null) Engine = Fuse;
 
 INSERT INTO t3 SELECT 1, parse_json('["a","b","c"]');  -- {ErrorCode 1010}
 INSERT INTO t3 SELECT 1, parse_json('{"a":1,"b":{"k":2},"c":[10,11,12]}');
@@ -62,7 +62,7 @@ select obj["c"][3] from t3;
 
 select '==Json==';
 
-CREATE TABLE IF NOT EXISTS t4(id Int null, j Json null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t4(id Int null, j Json null) Engine = Fuse;
 
 INSERT INTO t4 (id, j) VALUES(1, null),
                             (2, true),
@@ -85,7 +85,7 @@ select * from t4 order by id asc;
 
 select '==Map==';
 
-CREATE TABLE IF NOT EXISTS t5(id Int null, m Map null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t5(id Int null, m Map null) Engine = Fuse;
 
 INSERT INTO t5 SELECT 1, parse_json('["a","b","c"]');  -- {ErrorCode 1010}
 INSERT INTO t5 SELECT 1, parse_json('{"a":1,"b":{"k":2},"c":[10,11,12]}');
