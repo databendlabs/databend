@@ -315,7 +315,11 @@ impl MetaConfig {
             },
 
             timeout: Some(Duration::from_secs(self.client_timeout_in_second)),
-            auto_sync_interval: Duration::from_secs(self.auto_sync_interval),
+            auto_sync_interval: if self.auto_sync_interval > 0 {
+                Some(Duration::from_secs(self.auto_sync_interval))
+            } else {
+                None
+            },
         }
     }
 }
