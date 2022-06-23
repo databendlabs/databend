@@ -21,7 +21,6 @@ use common_meta_types::UserIdentity;
 use super::*;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
-use crate::ast::write_quoted_comma_separated_list;
 use crate::ast::write_space_seperated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -167,40 +166,8 @@ impl<'a> Display for Statement<'a> {
             Statement::Insert(insert) => {
                 write!(f, "{insert}")?;
             }
-            Statement::Copy(stmt) => {
-                write!(f, "COPY")?;
-                write!(f, " INTO {}", stmt.dst)?;
-                write!(f, " FROM {}", stmt.src)?;
-
-                if !stmt.file_format.is_empty() {
-                    write!(f, " FILE_FORMAT = (")?;
-                    for (k, v) in stmt.file_format.iter() {
-                        write!(f, " {} = '{}'", k, v)?;
-                    }
-                    write!(f, " )")?;
-                }
-
-                if !stmt.files.is_empty() {
-                    write!(f, " FILES = (")?;
-                    write_quoted_comma_separated_list(f, &stmt.files)?;
-                    write!(f, " )")?;
-                }
-
-                if !stmt.pattern.is_empty() {
-                    write!(f, " PATTERN = '{}'", stmt.pattern)?;
-                }
-
-                if stmt.size_limit != 0 {
-                    write!(f, " SIZE_LIMIT = {}", stmt.size_limit)?;
-                }
-
-                if !stmt.validation_mode.is_empty() {
-                    write!(f, "VALIDATION_MODE = {}", stmt.validation_mode)?;
-                }
-            }
-            Statement::ShowSettings => {
-                write!(f, "SHOW SETTINGS")?;
-            }
+            Statement::Copy(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowSettings => {}
             Statement::ShowProcessList => {
                 write!(f, "SHOW PROCESSLIST")?;
             }

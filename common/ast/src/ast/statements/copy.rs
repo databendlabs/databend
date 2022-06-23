@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use crate::ast::write_quoted_comma_separated_list;
 use crate::ast::write_space_seperated_map;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -37,6 +38,42 @@ pub struct CopyStmt<'a> {
     /// TODO(xuanwo): parse into validation_mode directly.
     pub validation_mode: String,
     pub size_limit: usize,
+}
+
+impl Display for CopyStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "COPY")?;
+        write!(f, " INTO {}", self.dst)?;
+        write!(f, " FROM {}", self.src)?;
+
+        if !self.file_format.is_empty() {
+            write!(f, " FILE_FORMAT = (")?;
+            for (k, v) in self.file_format.iter() {
+                write!(f, " {} = '{}'", k, v)?;
+            }
+            write!(f, " )")?;
+        }
+
+        if !self.files.is_empty() {
+            write!(f, " FILES = (")?;
+            write_quoted_comma_separated_list(f, &self.files)?;
+            write!(f, " )")?;
+        }
+
+        if !self.pattern.is_empty() {
+            write!(f, " PATTERN = '{}'", self.pattern)?;
+        }
+
+        if self.size_limit != 0 {
+            write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
+        }
+
+        if !self.validation_mode.is_empty() {
+            write!(f, "VALIDATION_MODE = {}", self.validation_mode)?;
+        }
+
+        Ok(())
+    }
 }
 
 /// CopyUnit is the unit that can be used in `COPY`.
