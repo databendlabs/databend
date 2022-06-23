@@ -34,20 +34,30 @@ pub struct PipelineExecutor {
     threads_num: usize,
     graph: RunningGraph,
     workers_condvar: Arc<WorkersCondvar>,
-    aborted: Arc<AtomicBool>,
+    query_need_abort: Arc<AtomicBool>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
 }
 
 impl PipelineExecutor {
-    pub fn create(async_rt: Arc<Runtime>, pipeline: NewPipeline) -> Result<Arc<PipelineExecutor>> {
+    pub fn create(
+        async_rt: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
+        pipeline: NewPipeline,
+    ) -> Result<Arc<PipelineExecutor>> {
         let threads_num = pipeline.get_max_threads();
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
-        Self::try_create(async_rt, RunningGraph::create(pipeline)?, threads_num)
+        Self::try_create(
+            async_rt,
+            query_need_abort,
+            RunningGraph::create(pipeline)?,
+            threads_num,
+        )
     }
 
     pub fn from_pipelines(
         async_rt: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
         pipelines: Vec<NewPipeline>,
     ) -> Result<Arc<PipelineExecutor>> {
         if pipelines.is_empty() {
@@ -63,6 +73,7 @@ impl PipelineExecutor {
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(
             async_rt,
+            query_need_abort,
             RunningGraph::from_pipelines(pipelines)?,
             threads_num,
         )
@@ -70,6 +81,7 @@ impl PipelineExecutor {
 
     fn try_create(
         async_rt: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
         graph: RunningGraph,
         threads_num: usize,
     ) -> Result<Arc<PipelineExecutor>> {
@@ -91,15 +103,9 @@ impl PipelineExecutor {
                 workers_condvar,
                 global_tasks_queue,
                 async_runtime: async_rt,
-                aborted: Arc::new(AtomicBool::new(false)),
+                query_need_abort,
             }))
         }
-    }
-
-    pub fn abort(&self) -> Result<()> {
-        self.finish()?;
-        self.aborted.store(true, Ordering::Release);
-        Ok(())
     }
 
     pub fn finish(&self) -> Result<()> {
@@ -182,13 +188,14 @@ impl PipelineExecutor {
         let workers_condvar = self.workers_condvar.clone();
         let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
 
-        while !self.global_tasks_queue.is_finished() {
+        while !self.global_tasks_queue.is_finished() && !self.need_abort() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.
             while !self.global_tasks_queue.is_finished() && !context.has_task() {
                 self.global_tasks_queue.steal_task_to_context(&mut context);
             }
 
-            while !self.global_tasks_queue.is_finished() && context.has_task() {
+            while !self.global_tasks_queue.is_finished() && !self.need_abort() && context.has_task()
+            {
                 if let Some(executed_pid) = context.execute_task(self)? {
                     // We immediately schedule the processor again.
                     let schedule_queue = self.graph.schedule_queue(executed_pid)?;
@@ -197,13 +204,18 @@ impl PipelineExecutor {
             }
         }
 
-        if self.aborted.load(Ordering::Relaxed) {
+        if self.need_abort() {
+            self.finish()?;
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed",
             ));
         }
 
         Ok(())
+    }
+
+    fn need_abort(&self) -> bool {
+        self.query_need_abort.load(Ordering::Relaxed)
     }
 }
 

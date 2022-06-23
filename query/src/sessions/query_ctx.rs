@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
@@ -97,10 +98,6 @@ impl QueryContext {
             precommit_blocks: Arc::new(RwLock::new(Vec::new())),
             fragment_id: Arc::new(AtomicUsize::new(0)),
         })
-    }
-
-    pub fn get_shared(&self) -> Arc<QueryContextShared> {
-        self.shared.clone()
     }
 
     /// Build a table instance the plan wants to operate on.
@@ -479,6 +476,10 @@ impl QueryContext {
 
     pub fn get_connection_id(&self) -> String {
         self.shared.get_connection_id()
+    }
+
+    pub fn query_need_abort(self: &Arc<Self>) -> Arc<AtomicBool> {
+        self.shared.query_need_abort()
     }
 }
 

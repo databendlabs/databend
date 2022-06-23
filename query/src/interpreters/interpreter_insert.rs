@@ -175,12 +175,12 @@ impl InsertInterpreter {
         table.append2(self.ctx.clone(), &mut pipeline)?;
 
         let async_runtime = self.ctx.get_storage_runtime();
+        let query_need_abort = self.ctx.query_need_abort();
 
         pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-        let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
-        self.ctx
-            .get_shared()
-            .add_pipeline_executor(executor.get_inner());
+        let executor =
+            PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+      
         executor.execute()?;
         drop(executor);
 

@@ -14,8 +14,10 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use chrono_tz::Tz;
 use common_base::base::Progress;
@@ -28,13 +30,11 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
-use crate::pipelines::new::executor::PipelineExecutor;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::SessionType;
@@ -70,7 +70,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<Cluster>,
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
-    pub(in crate::sessions) pipeline_executors: Arc<RwLock<Vec<Arc<PipelineExecutor>>>>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
@@ -80,6 +79,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
+
+    pub(in crate::sessions) query_need_abort: Arc<AtomicBool>,
 }
 
 impl QueryContextShared {
@@ -101,7 +102,6 @@ impl QueryContextShared {
             error: Arc::new(Mutex::new(None)),
             runtime: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
-            pipeline_executors: Arc::new(RwLock::new(vec![])),
             ref_count: Arc::new(AtomicUsize::new(0)),
             subquery_index: Arc::new(AtomicUsize::new(1)),
             running_query: Arc::new(RwLock::new(None)),
@@ -111,6 +111,7 @@ impl QueryContextShared {
             dal_ctx: Arc::new(Default::default()),
             user_manager: user_manager.clone(),
             auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
+            query_need_abort: Arc::new(AtomicBool::new(false)),
         }))
     }
 
@@ -119,22 +120,20 @@ impl QueryContextShared {
         *guard = Some(err);
     }
 
+    pub fn query_need_abort(self: &Arc<Self>) -> Arc<AtomicBool> {
+        self.query_need_abort.clone()
+    }
+
     pub fn kill(&self) {
         self.set_error(ErrorCode::AbortedQuery(
             "Aborted query, because the server is shutting down or the query was killed",
         ));
 
+        self.query_need_abort.store(true, Ordering::Release);
         let mut sources_abort_handle = self.sources_abort_handle.write();
 
         while let Some(source_abort_handle) = sources_abort_handle.pop() {
             source_abort_handle.abort();
-        }
-
-        let executors = self.pipeline_executors.read();
-        for executor in executors.iter() {
-            if let Err(err) = executor.abort() {
-                tracing::error!("Pipeline executor failed to finish :{:?}", err);
-            }
         }
         // TODO: Wait for the query to be processed (write out the last error)
     }
@@ -325,11 +324,6 @@ impl QueryContextShared {
 
     pub async fn reload_config(&self) -> Result<()> {
         self.session.session_mgr.reload_config().await
-    }
-
-    pub fn add_pipeline_executor(&self, executor: Arc<PipelineExecutor>) {
-        let mut pipeline_executors = self.pipeline_executors.write();
-        pipeline_executors.push(executor);
     }
 }
 

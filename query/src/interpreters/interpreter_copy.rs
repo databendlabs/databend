@@ -154,11 +154,9 @@ impl CopyInterpreter {
             pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
             let async_runtime = ctx.get_storage_runtime();
-            let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
-
-            self.ctx
-                .get_shared()
-                .add_pipeline_executor(executor.get_inner());
+            let query_need_abort = ctx.query_need_abort();
+            let executor =
+                PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
 
             executor.execute()?;
             return Ok(ctx.consume_precommit_blocks());
@@ -167,11 +165,10 @@ impl CopyInterpreter {
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
         let async_runtime = ctx.get_storage_runtime();
-        let executor = PipelinePullingExecutor::try_create(async_runtime, pipeline)?;
+        let query_need_abort = self.ctx.query_need_abort();
+        let executor =
+            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
 
-        self.ctx
-            .get_shared()
-            .add_pipeline_executor(executor.get_inner());
         let stream = ProcessorExecutorStream::create(executor)?;
 
         let operations = table
