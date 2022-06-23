@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::OptimizeTableAction;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
@@ -24,6 +23,13 @@ pub struct OptimizeTablePlan {
     pub database: String,
     pub table: String,
     pub action: OptimizeTableAction,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub enum OptimizeTableAction {
+    All,
+    Purge,
+    Compact,
 }
 
 impl OptimizeTablePlan {
