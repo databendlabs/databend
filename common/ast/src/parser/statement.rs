@@ -469,7 +469,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             GRANT ~ #grant_source ~ TO ~ #grant_option
         },
         |(_, source, _, grant_option)| {
-            Statement::Grant(AccountMgrStatement {
+            Statement::Grant(GrantStmt {
                 source,
                 principal: grant_option,
             })
@@ -488,7 +488,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             REVOKE ~ #grant_source ~ FROM ~ #grant_option
         },
         |(_, source, _, grant_option)| {
-            Statement::Revoke(AccountMgrStatement {
+            Statement::Revoke(RevokeStmt {
                 source,
                 principal: grant_option,
             })

@@ -225,6 +225,7 @@ pub use plan_table_describe::DescribeTablePlan;
 pub use plan_table_drop::DropTablePlan;
 pub use plan_table_drop_cluster_key::DropTableClusterKeyPlan;
 pub use plan_table_exists::ExistsTablePlan;
+pub use plan_table_optimize::OptimizeTableAction;
 pub use plan_table_optimize::OptimizeTablePlan;
 pub use plan_table_rename::RenameTableEntity;
 pub use plan_table_rename::RenameTablePlan;

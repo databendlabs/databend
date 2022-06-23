@@ -188,6 +188,14 @@ impl QueryFragmentsActions {
 
             if let Some(target_connections_info) = connections_info.get(node_id) {
                 for (target, fragments) in target_connections_info {
+                    if !nodes_info.contains_key(target) {
+                        return Err(ErrorCode::ClusterUnknownNode(format!(
+                            "Not found node {} in cluster. cluster nodes: {:?}",
+                            target,
+                            nodes_info.keys().cloned().collect::<Vec<_>>()
+                        )));
+                    }
+
                     target_2_fragments.insert(target.clone(), fragments.clone());
                     target_nodes_info.insert(target.clone(), nodes_info[target].clone());
                 }
@@ -310,7 +318,7 @@ impl QueryFragmentsActions {
                     fragment_actions.data_exchange.clone(),
                 );
 
-                match fragments_packets.entry(fragment_action.executor.to_owned()) {
+                match fragments_packets.entry(fragment_action.executor.clone()) {
                     Entry::Vacant(entry) => {
                         entry.insert(vec![fragment_packet]);
                     }
