@@ -236,7 +236,7 @@ impl Expression {
                 if *pg_style {
                     format!("{}::{}", expr.column_name(), data_type.sql_name())
                 } else if data_type.is_nullable() {
-                    let ty: &NullableType = data_type.as_any().downcast_ref().unwrap();
+                    let ty: NullableType = data_type.to_owned().try_into().unwrap();
                     format!(
                         "try_cast({} as {})",
                         expr.column_name(),
@@ -496,7 +496,7 @@ impl fmt::Debug for Expression {
                 if *pg_style {
                     write!(f, "{:?}::{}", expr, data_type.name())
                 } else if data_type.is_nullable() {
-                    let ty: &NullableType = data_type.as_any().downcast_ref().unwrap();
+                    let ty: NullableType = data_type.to_owned().try_into().unwrap();
                     write!(f, "try_cast({:?} as {})", expr, ty.inner_type().name())
                 } else {
                     write!(f, "cast({:?} as {})", expr, data_type.name())

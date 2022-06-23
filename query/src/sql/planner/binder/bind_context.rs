@@ -52,6 +52,9 @@ pub struct BindContext {
     /// non-grouping columns cannot be referenced outside aggregation
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
+
+    /// Format type of query output.
+    pub format: Option<String>,
 }
 
 impl BindContext {
@@ -65,6 +68,7 @@ impl BindContext {
             columns: vec![],
             aggregate_info: Default::default(),
             in_grouping: false,
+            format: None,
         }
     }
 
@@ -169,6 +173,14 @@ impl BindContext {
         }
     }
 
+    /// Get output format type.
+    /// For example, the output format type of query `SELECT 1,2 format CSV` is CSV.
+    /// Only used in Clickhouse http handler.
+    pub fn resolve_format(&mut self, format: String) -> Result<()> {
+        self.format = Some(format);
+        Ok(())
+    }
+
     /// Get result columns of current context in order.
     /// For example, a query `SELECT b, a AS b FROM t` has `[(index_of(b), "b"), index_of(a), "b"]` as
     /// its result columns.
@@ -180,5 +192,20 @@ impl BindContext {
             .iter()
             .map(|col| (col.index, col.column_name.clone()))
             .collect()
+    }
+
+    /// Return data scheme.
+    pub fn output_schema(&self) -> DataSchemaRef {
+        let fields = self
+            .columns
+            .iter()
+            .map(|column_binding| {
+                DataField::new(
+                    &column_binding.column_name,
+                    column_binding.data_type.clone(),
+                )
+            })
+            .collect();
+        DataSchemaRefExt::create(fields)
     }
 }

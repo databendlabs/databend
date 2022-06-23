@@ -35,7 +35,7 @@ Project: [number]
 select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [subquery_1], probe keys: [number]
+    HashJoin: INNER, build keys: [subquery_1], probe keys: [number], join filters: []
         Scan: default.system.numbers
         Max1Row
             Filter: [number = 0]
@@ -46,7 +46,7 @@ Project: [number]
 select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number]
+    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -55,7 +55,7 @@ Project: [number]
 select t.number from numbers(1) as t where not exists (select * from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: ANTI, build keys: [number], probe keys: [number]
+    HashJoin: ANTI, build keys: [number], probe keys: [number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -63,7 +63,7 @@ Project: [number]
 select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number]
+    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -72,7 +72,7 @@ Project: [number]
 select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and number = 0 and t.number < 10)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number]
+    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
         Filter: [number < 10]
             Scan: default.system.numbers
         Filter: [number = 0]
@@ -97,7 +97,7 @@ Project: [number]
 select t.number from numbers(1) as t where exists (select number as a, number as b, number as c from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number]
+    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -108,7 +108,7 @@ select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 
 Project: [number]
     Filter: [subquery_3]
         CrossApply
-            HashJoin: INNER, build keys: [number], probe keys: [number]
+            HashJoin: INNER, build keys: [number], probe keys: [number], join filters: []
                 Scan: default.system.numbers
                 Scan: default.system.numbers
             Max1Row

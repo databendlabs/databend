@@ -54,15 +54,17 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ #insert_source
         },
-        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| Statement::Insert {
-            catalog,
-            database,
-            table,
-            columns: opt_columns
-                .map(|(_, columns, _)| columns)
-                .unwrap_or_default(),
-            source,
-            overwrite: overwrite.kind == OVERWRITE,
+        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| {
+            Statement::Insert(InsertStmt {
+                catalog,
+                database,
+                table,
+                columns: opt_columns
+                    .map(|(_, columns, _)| columns)
+                    .unwrap_or_default(),
+                source,
+                overwrite: overwrite.kind == OVERWRITE,
+            })
         },
     );
     let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
@@ -321,6 +323,18 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 database,
                 table,
                 action,
+            })
+        },
+    );
+    let exists_table = map(
+        rule! {
+            EXISTS ~ TABLE ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, table))| {
+            Statement::ExistsTable(ExistsTableStmt {
+                catalog,
+                database,
+                table,
             })
         },
     );
@@ -674,6 +688,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
+            | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"

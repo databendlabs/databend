@@ -115,17 +115,18 @@ pub struct ChainingHashTable {
     hash_table: RwLock<HashTable>,
     row_space: RowSpace,
     join_type: JoinType,
+    other_conditions: Vec<Expression>,
 }
 
 impl ChainingHashTable {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         join_type: JoinType,
+        other_conditions: Vec<Expression>,
         hash_table: HashTable,
         build_expressions: Vec<Expression>,
         probe_expressions: Vec<Expression>,
         mut build_data_schema: DataSchemaRef,
-        _probe_data_schema: DataSchemaRef,
     ) -> Result<Self> {
         if join_type == JoinType::Left {
             let mut nullable_field = Vec::with_capacity(build_data_schema.fields().len());
@@ -146,6 +147,7 @@ impl ChainingHashTable {
             ctx,
             hash_table: RwLock::new(hash_table),
             join_type,
+            other_conditions,
         })
     }
 
@@ -223,12 +225,47 @@ impl ChainingHashTable {
                     let build_block =
                         DataBlock::create(self.row_space.data_schema.clone(), columns);
                     let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                    results.push(self.merge_block(&build_block, &probe_block)?);
+                    let merged_block = self.merge_block(&build_block, &probe_block)?;
+                    results.push(self.filter_block(&probe_block, merged_block)?);
                 }
             }
             _ => unreachable!(),
         }
         Ok(results)
+    }
+
+    // Todo(xudong963): optimize the performance of this function
+    fn filter_block(&self, probe_block: &DataBlock, merged_block: DataBlock) -> Result<DataBlock> {
+        let mut result_block = merged_block;
+        for join_filter_expression in self.other_conditions.iter() {
+            let func_ctx = self.ctx.try_get_function_context()?;
+            // `predicate_column` contains a column, which is a boolean column.
+            let predicate_column =
+                ExpressionEvaluator::eval(&func_ctx, join_filter_expression, &result_block)?;
+            // Here, we directly use `predicate_column` to filter the result block.
+            // But pay attention to the fact that **reserved side** may also be filtered.
+            // **reserved side** is the left side in left join, and the right side in right join.
+            result_block = DataBlock::filter_block(&result_block, &predicate_column)?;
+        }
+        // If result_block is empty, we need to supply a NULL block for probe_block.
+        if result_block.is_empty() {
+            result_block = probe_block.clone();
+            let data_schema_fields = self.row_space.data_schema.fields();
+            let mut columns = Vec::with_capacity(data_schema_fields.len());
+            for field in data_schema_fields.iter() {
+                let nullable_data_type = wrap_nullable(field.data_type());
+                columns.push(nullable_data_type.create_constant_column(&DataValue::Null, 1)?);
+            }
+            let null_block = DataBlock::create(self.row_space.data_schema.clone(), columns);
+            for (col, field) in null_block
+                .columns()
+                .iter()
+                .zip(null_block.schema().fields().iter())
+            {
+                result_block = result_block.add_column(col.clone(), field.clone())?;
+            }
+        }
+        Ok(result_block)
     }
 
     // Merge build block and probe block
@@ -363,7 +400,8 @@ impl ChainingHashTable {
                             let build_block =
                                 DataBlock::create(self.row_space.data_schema.clone(), columns);
                             let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                            results.push(self.merge_block(&build_block, &probe_block)?);
+                            let merged_block = self.merge_block(&build_block, &probe_block)?;
+                            results.push(self.filter_block(&probe_block, merged_block)?);
                         }
                     }
                     _ => unreachable!(),
@@ -456,13 +494,28 @@ impl HashJoinState for ChainingHashTable {
     }
 
     fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
-        match self.join_type {
+        let mut data_blocks = match self.join_type {
             JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left => {
                 self.probe_join(input)
             }
             JoinType::Cross => self.probe_cross_join(input),
             _ => unimplemented!("{} is unimplemented", self.join_type),
+        }?;
+        if self.other_conditions.is_empty() || self.join_type == JoinType::Left {
+            return Ok(data_blocks);
         }
+        // Process other conditions for Inner/Semi/Anti join
+        for join_filter_expression in self.other_conditions.iter() {
+            let func_ctx = self.ctx.try_get_function_context()?;
+            let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
+            for block in data_blocks.iter() {
+                let predicate_column =
+                    ExpressionEvaluator::eval(&func_ctx, join_filter_expression, block)?;
+                filtered_blocks.push(DataBlock::filter_block(block, &predicate_column)?);
+            }
+            data_blocks = filtered_blocks;
+        }
+        Ok(data_blocks)
     }
 
     fn attach(&self) -> Result<()> {

@@ -273,6 +273,9 @@ pub enum ExprElement<'a> {
         expr1: Expr<'a>,
         expr2: Expr<'a>,
     },
+    Coalesce {
+        exprs: Vec<Expr<'a>>,
+    },
     IfNull {
         expr1: Expr<'a>,
         expr2: Expr<'a>,
@@ -465,6 +468,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 span: elem.span.0,
                 expr1: Box::new(expr1),
                 expr2: Box::new(expr2),
+            },
+            ExprElement::Coalesce { exprs } => Expr::Coalesce {
+                span: elem.span.0,
+                exprs,
             },
             ExprElement::IfNull { expr1, expr2 } => Expr::IfNull {
                 span: elem.span.0,
@@ -841,6 +848,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, _, expr1, _, expr2, _)| ExprElement::NullIf { expr1, expr2 },
     );
+    let coalesce = map(
+        rule! {
+            COALESCE ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ^")"
+        },
+        |(_, _, exprs, _)| ExprElement::Coalesce { exprs },
+    );
     let ifnull = map(
         rule! {
             IFNULL
@@ -872,6 +885,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #nullif: "`NULLIF(..., ...)`"
+            | #coalesce: "`COALESCE (<expr>, ...)`"
             | #ifnull: "`IFNULL(..., ...)`"
         ),
         rule!(

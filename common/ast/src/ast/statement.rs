@@ -46,15 +46,6 @@ pub enum Statement<'a> {
         query: Box<Statement<'a>>,
     },
 
-    Insert {
-        catalog: Option<Identifier<'a>>,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        columns: Vec<Identifier<'a>>,
-        source: InsertSource<'a>,
-        overwrite: bool,
-    },
-
     Copy(CopyStmt<'a>),
 
     ShowSettings,
@@ -73,6 +64,8 @@ pub enum Statement<'a> {
         variable: Identifier<'a>,
         value: Literal,
     },
+
+    Insert(InsertStmt<'a>),
 
     // Databases
     ShowDatabases(ShowDatabasesStmt<'a>),
@@ -96,6 +89,7 @@ pub enum Statement<'a> {
     RenameTable(RenameTableStmt<'a>),
     TruncateTable(TruncateTableStmt<'a>),
     OptimizeTable(OptimizeTableStmt<'a>),
+    ExistsTable(ExistsTableStmt<'a>),
 
     // Views
     CreateView(CreateViewStmt<'a>),
@@ -169,6 +163,15 @@ pub enum ExplainKind {
     Syntax,
     Graph,
     Pipeline,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct InsertStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub columns: Vec<Identifier<'a>>,
+    pub source: InsertSource<'a>,
+    pub overwrite: bool,
 }
 
 /// CopyStmt is the parsed statement of `COPY`.
@@ -334,6 +337,13 @@ pub enum OptimizeTableAction {
     All,
     Purge,
     Compact,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExistsTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -805,14 +815,14 @@ impl<'a> Display for Statement<'a> {
             Statement::Query(query) => {
                 write!(f, "{query}")?;
             }
-            Statement::Insert {
+            Statement::Insert(InsertStmt {
                 catalog,
                 database,
                 table,
                 columns,
                 source,
                 overwrite,
-            } => {
+            }) => {
                 write!(f, "INSERT ")?;
                 if *overwrite {
                     write!(f, "OVERWRITE ")?;
@@ -1162,6 +1172,15 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " {action}")?;
                 }
             }
+            Statement::ExistsTable(ExistsTableStmt {
+                catalog,
+                database,
+                table,
+            }) => {
+                write!(f, "EXISTS TABLE ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+            }
+
             Statement::CreateView(CreateViewStmt {
                 if_not_exists,
                 catalog,

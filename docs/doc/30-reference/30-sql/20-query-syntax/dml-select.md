@@ -13,7 +13,7 @@ SELECT
     [INTO variable [, ...]]
     [ FROM table_references
     [WHERE expr]
-    [GROUP BY {{col_name | expr | position}, ...
+    [GROUP BY {{col_name | expr | col_alias | col_position}, ...
     | extended_grouping_expr}]
     [HAVING expr]
     [ORDER BY {col_name | expr | col_alias | col_position} [ASC | DESC], ...]
@@ -66,6 +66,7 @@ SELECT number FROM numbers(3) WHERE number > 1;
 ## GROUP BY Clause
 
 ```sql
+--Group the rows of the result set by column alias
 SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY c1, c2;
 +------+------+-------------+
 | c1   | c2   | MAX(number) |
@@ -77,6 +78,20 @@ SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY 
 |    0 |    0 |        9996 |
 |    1 |    0 |        9999 |
 +------+------+-------------+
+
+--Group the rows of the result set by column position in the SELECT list
+SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY 1, 2;
++------+------+-------------+
+| c1   | c2   | MAX(number) |
++------+------+-------------+
+|    1 |    2 |        9995 |
+|    1 |    1 |        9997 |
+|    0 |    2 |        9998 |
+|    0 |    1 |        9994 |
+|    0 |    0 |        9996 |
+|    1 |    0 |        9999 |
++------+------+-------------+
+
 ```
 
 ## HAVING Clause

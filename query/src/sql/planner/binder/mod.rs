@@ -27,6 +27,7 @@ use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
 use common_planners::ShowGrantsPlan;
+pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 
 use super::plans::Plan;
@@ -39,6 +40,7 @@ mod bind_context;
 mod copy;
 mod ddl;
 mod distinct;
+mod insert;
 mod join;
 mod limit;
 mod project;
@@ -131,6 +133,7 @@ impl<'a> Binder {
             Statement::RenameTable(stmt) => self.bind_rename_table(stmt).await?,
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(stmt).await?,
+            Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
@@ -184,6 +187,7 @@ impl<'a> Binder {
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
+            Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
 
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
 
@@ -199,7 +203,6 @@ impl<'a> Binder {
                 )))
             }
         };
-
         Ok(plan)
     }
 
