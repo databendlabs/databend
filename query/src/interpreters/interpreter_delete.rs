@@ -58,7 +58,7 @@ impl Interpreter for DeleteInterpreter {
     ) -> Result<SendableDataBlockStream> {
         // TODO
         // 1. check privilege
-        // 2. optimize the plan, at least constant folding
+        // 2. optimize the plan, at least constant folding?
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();

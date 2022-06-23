@@ -442,9 +442,8 @@ async fn test_block_writer_retry() -> Result<()> {
     });
     let mock = Arc::new(Mock::with_exception(errors));
     let op = Operator::new(mock.clone());
-    let schema = common_arrow::arrow::datatypes::Schema::default();
     let block = DataBlock::empty();
-    let r = write_block(&schema, block, op, "loc").await;
+    let r = write_block(block, &op, "loc").await;
     assert!(r.is_err());
     let e = r.unwrap_err();
     assert_eq!(ErrorCode::storage_other_code(), e.code());

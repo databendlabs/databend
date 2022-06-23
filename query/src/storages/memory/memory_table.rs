@@ -317,7 +317,7 @@ impl MemoryTableSource {
     fn projection(&self, data_block: DataBlock) -> Result<Option<DataBlock>> {
         if let Some(extras) = &self.extras {
             if let Some(projection) = &extras.projection {
-                let pruned_schema = data_block.schema().project(&projection);
+                let pruned_schema = data_block.schema().project(projection);
                 let raw_columns = data_block.columns();
                 let columns = projection
                     .iter()

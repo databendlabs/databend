@@ -80,13 +80,13 @@ fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
         Series::from_data(vec![1i32, 2, 3]),
         Series::from_data(vec!["123456", "234567", "345678"]),
     ]);
-    let stats = BlockStatistics::clusters_statistics(0, vec![0], blocks.clone())?;
+    let stats = BlockStatistics::clusters_statistics(0, vec![0], &blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::Int64(1)], stats.min);
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
-    let stats = BlockStatistics::clusters_statistics(1, vec![1], blocks)?;
+    let stats = BlockStatistics::clusters_statistics(1, vec![1], &blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::String(b"12345".to_vec())], stats.min);

@@ -198,7 +198,7 @@ class HttpConnector():
 
     def fetch_all(self, statement):
         resp_list = self.query_with_session(statement)
-        if len(resp_list) == 0 :
+        if len(resp_list) == 0:
             log.warning("fetch all with empty results")
             return None
         self._query_option = get_query_options(resp_list[0])  # record schema
