@@ -101,11 +101,11 @@ pub enum Statement<'a> {
         if_exists: bool,
         role_name: String,
     },
-    Grant(AccountMgrStatement),
+    Grant(AccountMgrStmt),
     ShowGrants {
         principal: Option<PrincipalIdentity>,
     },
-    Revoke(AccountMgrStatement),
+    Revoke(AccountMgrStmt),
 
     // UDF
     CreateUDF {
@@ -166,12 +166,8 @@ impl<'a> Display for Statement<'a> {
             }
             Statement::Copy(stmt) => write!(f, "{stmt}")?,
             Statement::ShowSettings => {}
-            Statement::ShowProcessList => {
-                write!(f, "SHOW PROCESSLIST")?;
-            }
-            Statement::ShowMetrics => {
-                write!(f, "SHOW METRICS")?;
-            }
+            Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,
+            Statement::ShowMetrics => write!(f, "SHOW METRICS")?,
             Statement::ShowFunctions { limit } => {
                 write!(f, "SHOW FUNCTIONS")?;
                 if let Some(limit) = limit {
@@ -189,17 +185,13 @@ impl<'a> Display for Statement<'a> {
                 }
                 write!(f, " {object_id}")?;
             }
-            Statement::SetVariable { variable, value } => {
-                write!(f, "SET {variable} = {value}")?;
-            }
+            Statement::SetVariable { variable, value } => write!(f, "SET {variable} = {value}")?,
             Statement::ShowDatabases(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::DropDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::AlterDatabase(stmt) => write!(f, "{stmt}")?,
-            Statement::UseDatabase { database } => {
-                write!(f, "USE {database}")?;
-            }
+            Statement::UseDatabase { database } => write!(f, "USE {database}")?,
             Statement::ShowTables(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeTable(stmt) => {
@@ -224,57 +216,8 @@ impl<'a> Display for Statement<'a> {
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
-            Statement::CreateUser(CreateUserStmt {
-                if_not_exists,
-                user,
-                auth_option,
-                role_options,
-            }) => {
-                write!(f, "CREATE USER")?;
-                if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
-                }
-                write!(f, " {user} IDENTIFIED")?;
-                if let Some(auth_type) = &auth_option.auth_type {
-                    write!(f, " WITH {}", auth_type.to_str())?;
-                }
-                if let Some(password) = &auth_option.password {
-                    write!(f, " BY '{password}'")?;
-                }
-                if !role_options.is_empty() {
-                    write!(f, " WITH")?;
-                    for role_option in role_options {
-                        write!(f, " {role_option}")?;
-                    }
-                }
-            }
-            Statement::AlterUser(AlterUserStmt {
-                user,
-                auth_option,
-                role_options,
-            }) => {
-                write!(f, "ALTER USER")?;
-                if let Some(user) = user {
-                    write!(f, " {user}")?;
-                } else {
-                    write!(f, " USER()")?;
-                }
-                if let Some(auth_option) = &auth_option {
-                    write!(f, " IDENTIFIED")?;
-                    if let Some(auth_type) = &auth_option.auth_type {
-                        write!(f, " WITH {}", auth_type.to_str())?;
-                    }
-                    if let Some(password) = &auth_option.password {
-                        write!(f, " BY '{password}'")?;
-                    }
-                }
-                if !role_options.is_empty() {
-                    write!(f, " WITH")?;
-                    for with_option in role_options {
-                        write!(f, " {with_option}")?;
-                    }
-                }
-            }
+            Statement::CreateUser(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterUser(stmt) => write!(f, "{stmt}")?,
             Statement::DropUser { if_exists, user } => {
                 write!(f, "DROP USER")?;
                 if *if_exists {
@@ -302,13 +245,7 @@ impl<'a> Display for Statement<'a> {
                 }
                 write!(f, " '{role}'")?;
             }
-            Statement::Grant(AccountMgrStatement { source, principal }) => {
-                write!(f, "GRANT")?;
-                write!(f, "{source}")?;
-
-                write!(f, " TO")?;
-                write!(f, "{principal}")?;
-            }
+            Statement::Grant(stmt) => write!(f, "{stmt}")?,
             Statement::ShowGrants { principal } => {
                 write!(f, "SHOW GRANTS")?;
                 if let Some(principal) = principal {
@@ -316,7 +253,7 @@ impl<'a> Display for Statement<'a> {
                     write!(f, "{principal}")?;
                 }
             }
-            Statement::Revoke(AccountMgrStatement { source, principal }) => {
+            Statement::Revoke(AccountMgrStmt { source, principal }) => {
                 write!(f, "REVOKE")?;
                 write!(f, "{source}")?;
 
