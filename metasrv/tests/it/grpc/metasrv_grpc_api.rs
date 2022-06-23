@@ -13,6 +13,7 @@
 // limitations under the License.
 
 //! Test arrow-grpc API of metasrv
+use std::collections::HashSet;
 
 use common_base::base::tokio;
 use common_base::base::Stoppable;
@@ -42,7 +43,14 @@ async fn test_restart() -> anyhow::Result<()> {
 
     let (mut tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr.clone()],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     tracing::info!("--- upsert kv");
     {
@@ -102,7 +110,14 @@ async fn test_restart() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(10_000)).await;
 
     // try to reconnect the restarted server.
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     tracing::info!("--- get kv");
     {
@@ -190,8 +205,22 @@ async fn test_join() -> anyhow::Result<()> {
     let addr0 = tc0.config.grpc_api_address.clone();
     let addr1 = tc1.config.grpc_api_address.clone();
 
-    let client0 = MetaGrpcClient::try_create(vec![addr0], "root", "xxx", None, None)?;
-    let client1 = MetaGrpcClient::try_create(vec![addr1], "root", "xxx", None, None)?;
+    let client0 = MetaGrpcClient::try_create(
+        vec![addr0],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
+    let client1 = MetaGrpcClient::try_create(
+        vec![addr1],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     let clients = vec![client0, client1];
 
@@ -241,6 +270,167 @@ async fn test_join() -> anyhow::Result<()> {
                 assert_eq!(k.into_bytes(), res.unwrap().data);
             }
         }
+    }
+
+    Ok(())
+}
+
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+async fn test_auto_sync_addr() -> anyhow::Result<()> {
+    // - Start 3 metasrv.
+    // - Join node-1, node-2 to node-0
+    // - Test meta client auto sync node endpoints
+    // - Terminal one node and check auto sync again
+    // - Restart terminated node and rejoin to meta cluster
+    // - Test auto sync again.
+
+    let mut tc0 = MetaSrvTestContext::new(0);
+    let mut tc1 = MetaSrvTestContext::new(1);
+    let mut tc2 = MetaSrvTestContext::new(2);
+
+    tc1.config.raft_config.single = false;
+    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+
+    tc2.config.raft_config.single = false;
+    tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+
+    start_metasrv_with_context(&mut tc0).await?;
+    start_metasrv_with_context(&mut tc1).await?;
+    start_metasrv_with_context(&mut tc2).await?;
+
+    let addr0 = tc0.config.grpc_api_address.clone();
+    let addr1 = tc1.config.grpc_api_address.clone();
+    let addr2 = tc2.config.grpc_api_address.clone();
+
+    let client = MetaGrpcClient::try_create(
+        vec![addr1.clone()],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(5),
+        None,
+    )?;
+
+    let addrs = HashSet::from([addr0, addr1, addr2]);
+
+    tracing::info!("--- upsert kv cluster");
+    {
+        let k = "join-k".to_string();
+
+        let res = client
+            .upsert_kv(UpsertKVReq::new(
+                k.as_str(),
+                MatchSeq::Any,
+                Operation::Update(k.clone().into_bytes()),
+                None,
+            ))
+            .await;
+
+        tracing::debug!("set kv res: {:?}", res);
+        let res = res?;
+        assert_eq!(
+            UpsertKVReply::new(
+                None,
+                Some(SeqV {
+                    seq: 1_u64,
+                    meta: None,
+                    data: k.into_bytes(),
+                })
+            ),
+            res,
+            "upsert kv to cluster",
+        );
+    }
+
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    tracing::info!("--- get kv from cluster");
+    {
+        let k = "join-k".to_string();
+
+        let res = client.get_kv(k.as_str()).await;
+
+        tracing::debug!("get kv {} from cluster, res: {:?}", k, res);
+        let res = res?;
+        assert_eq!(k.into_bytes(), res.unwrap().data);
+    }
+
+    tracing::info!("--- check endpoints are equal");
+    {
+        tokio::time::sleep(Duration::from_secs(20)).await;
+        let res = client.get_endpoints().await?;
+        let res: HashSet<String> = HashSet::from_iter(res.into_iter());
+
+        assert_eq!(addrs, res, "endpoints should be equal");
+    }
+
+    tracing::info!("--- endpoints should changed when node is down");
+    {
+        let g = tc1.grpc_srv.as_ref().unwrap();
+        let meta_node = g.get_meta_node();
+        let old_term = meta_node.raft.metrics().borrow().current_term;
+
+        let mut srv = tc0.grpc_srv.take().unwrap();
+        srv.stop(None).await?;
+
+        let metrics = meta_node
+            .raft
+            .wait(Some(Duration::from_millis(30_000)))
+            .metrics(
+                |m| m.current_leader.is_some() && m.current_term > old_term,
+                "a leader is observed",
+            )
+            .await?;
+
+        tracing::debug!("got leader, metrics: {:?}", metrics);
+
+        // wait for auto sync work.
+        tokio::time::sleep(Duration::from_secs(20)).await;
+
+        let res = client.get_endpoints().await?;
+        let res: HashSet<String> = HashSet::from_iter(res.into_iter());
+
+        assert_eq!(3, res.len());
+
+        // still can get kv from cluster
+        let k = "join-k".to_string();
+
+        let res = client.get_kv(k.as_str()).await;
+
+        let res = res?;
+        assert_eq!(k.into_bytes(), res.unwrap().data);
+    }
+
+    tracing::info!("--- endpoints should changed when add node");
+    {
+        let mut tc3 = MetaSrvTestContext::new(3);
+        tc3.config.raft_config.single = false;
+        tc3.config.raft_config.join = vec![
+            tc1.config.raft_config.raft_api_addr().await?.to_string(),
+            tc2.config.raft_config.raft_api_addr().await?.to_string(),
+        ];
+
+        start_metasrv_with_context(&mut tc3).await?;
+
+        let addr3 = tc3.config.grpc_api_address.clone();
+
+        tokio::time::sleep(Duration::from_secs(15)).await;
+
+        let res = client.get_endpoints().await?;
+        let res: HashSet<String> = HashSet::from_iter(res.into_iter());
+
+        assert!(
+            res.contains(&addr3),
+            "endpoints should contains new addr when add node"
+        );
+
+        // still can get kv from cluster
+        let k = "join-k".to_string();
+
+        let res = client.get_kv(k.as_str()).await;
+
+        let res = res?;
+        assert_eq!(k.into_bytes(), res.unwrap().data);
     }
 
     Ok(())

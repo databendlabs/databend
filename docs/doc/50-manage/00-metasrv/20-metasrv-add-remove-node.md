@@ -58,3 +58,30 @@ And it will block until the `leave` request is done or an error occur.
   See: `--raft-advertise-host`
 
 - `--leave-id` specifies the node id to leave. It can be any id in a cluster.
+
+## 3. Examine cluster members
+
+At every step of adding or removing a node, the cluster state should be checked to ensure everything goes well.
+
+The `admin-api-address` defined in the config provides a administration HTTP service to examine cluster state:
+E.g., `curl -s localhost:28101/v1/cluster/nodes` will display the members in a cluster:
+
+```json
+[
+  {
+    "name": "1",
+    "endpoint": {
+      "addr": "localhost",
+      "port": 28103
+    }
+  },
+  {
+    "name": "2",
+    "endpoint": {
+      "addr": "localhost",
+      "port": 28203
+    }
+  }
+]
+```
+

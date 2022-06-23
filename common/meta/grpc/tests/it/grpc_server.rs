@@ -105,12 +105,16 @@ impl MetaService for GrpcServiceForTestImpl {
 }
 
 pub fn start_grpc_server() -> String {
+    let service = GrpcServiceForTestImpl {};
+    start_grpc_server_with_service(service)
+}
+
+pub fn start_grpc_server_with_service(svc: impl MetaService) -> String {
     let mut rng = rand::thread_rng();
     let port = rng.gen_range(10000..20000);
     let addr = format!("127.0.0.1:{}", port).parse().unwrap();
-    let service = GrpcServiceForTestImpl {};
 
-    let svc = MetaServiceServer::new(service);
+    let svc = MetaServiceServer::new(svc);
 
     tokio::spawn(async move {
         Server::builder()

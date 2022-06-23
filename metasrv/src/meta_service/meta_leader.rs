@@ -100,6 +100,7 @@ impl<'a> MetaLeader<'a> {
     pub async fn join(&self, req: JoinRequest) -> Result<(), MetaError> {
         let node_id = req.node_id;
         let endpoint = req.endpoint;
+        let grpc_api_addr = req.grpc_api_addr;
         let metrics = self.meta_node.raft.metrics().borrow().clone();
         let membership = metrics.membership_config.membership.clone();
 
@@ -127,6 +128,7 @@ impl<'a> MetaLeader<'a> {
                         node: Node {
                             name: node_id.to_string(),
                             endpoint,
+                            grpc_api_addr: Some(grpc_api_addr),
                         },
                     },
                 };
