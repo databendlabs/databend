@@ -57,6 +57,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::RenameTable(_)
                 | DfStatement::TruncateTable(_)
                 | DfStatement::OptimizeTable(_)
+                | DfStatement::ExistsTable(_)
                 | DfStatement::DropView(_)
                 | DfStatement::ShowFunctions(_)
                 | DfStatement::ShowMetrics(_)
@@ -166,6 +167,9 @@ impl InterpreterFactoryV2 {
             }
             Plan::OptimizeTable(optimize_table) => {
                 OptimizeTableInterpreter::try_create(ctx.clone(), *optimize_table.clone())
+            }
+            Plan::ExistsTable(exists_table) => {
+                ExistsTableInterpreter::try_create(ctx.clone(), *exists_table.clone())
             }
 
             // Views

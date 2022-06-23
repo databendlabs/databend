@@ -47,6 +47,7 @@ use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::DropUserUDFInterpreter;
 use crate::interpreters::DropViewInterpreter;
 use crate::interpreters::EmptyInterpreter;
+use crate::interpreters::ExistsTableInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
 use crate::interpreters::GrantRoleInterpreter;
@@ -140,6 +141,7 @@ impl InterpreterFactory {
             PlanNode::RenameTable(v) => RenameTableInterpreter::try_create(ctx_clone, v),
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::ExistsTable(v) => ExistsTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
 

@@ -133,6 +133,7 @@ impl<'a> Binder {
             Statement::RenameTable(stmt) => self.bind_rename_table(stmt).await?,
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(stmt).await?,
+            Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,

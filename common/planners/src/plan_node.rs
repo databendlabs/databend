@@ -45,6 +45,7 @@ use crate::DropUserStagePlan;
 use crate::DropUserUDFPlan;
 use crate::DropViewPlan;
 use crate::EmptyPlan;
+use crate::ExistsTablePlan;
 use crate::ExplainPlan;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
@@ -139,6 +140,7 @@ pub enum PlanNode {
     RenameTable(RenameTablePlan),
     TruncateTable(TruncateTablePlan),
     OptimizeTable(OptimizeTablePlan),
+    ExistsTable(ExistsTablePlan),
     DescribeTable(DescribeTablePlan),
     ShowCreateTable(ShowCreateTablePlan),
 
@@ -240,6 +242,7 @@ impl PlanNode {
             PlanNode::RenameTable(v) => v.schema(),
             PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::OptimizeTable(v) => v.schema(),
+            PlanNode::ExistsTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
 
@@ -347,6 +350,7 @@ impl PlanNode {
             PlanNode::RenameTable(_) => "RenameTablePlan",
             PlanNode::TruncateTable(_) => "TruncateTablePlan",
             PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
+            PlanNode::ExistsTable(_) => "ExistsTablePlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
 
