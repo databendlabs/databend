@@ -63,6 +63,22 @@ jobs:
           target: ${{ matrix.target }}
           profile: debug
 
+  build_musl:
+    runs-on: [self-hosted, x64, Linux]
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_debug
+        with:
+          target: ${{ matrix.target }}
+
   test_unit:
     runs-on: [self-hosted, x64, Linux]
     steps:
