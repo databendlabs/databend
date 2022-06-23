@@ -164,44 +164,8 @@ impl<'a> Display for Statement<'a> {
             Statement::Query(query) => {
                 write!(f, "{query}")?;
             }
-            Statement::Insert(InsertStmt {
-                catalog,
-                database,
-                table,
-                columns,
-                source,
-                overwrite,
-            }) => {
-                write!(f, "INSERT ")?;
-                if *overwrite {
-                    write!(f, "OVERWRITE ")?;
-                } else {
-                    write!(f, "INTO ")?;
-                }
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
-                if !columns.is_empty() {
-                    write!(f, " (")?;
-                    write_comma_separated_list(f, columns)?;
-                    write!(f, ")")?;
-                }
-                match source {
-                    InsertSource::Streaming {
-                        format,
-                        rest_tokens,
-                    } => write!(
-                        f,
-                        " FORMAT {format} {}",
-                        &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
-                            ..rest_tokens.last().unwrap().span.end]
-                    )?,
-                    InsertSource::Values { rest_tokens } => write!(
-                        f,
-                        " VALUES {}",
-                        &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
-                            ..rest_tokens.last().unwrap().span.end]
-                    )?,
-                    InsertSource::Select { query } => write!(f, " {query}")?,
-                }
+            Statement::Insert(insert) => {
+                write!(f, "{insert}")?;
             }
             Statement::Copy(stmt) => {
                 write!(f, "COPY")?;
