@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateStageStmt {
@@ -28,4 +30,60 @@ pub struct CreateStageStmt {
     pub size_limit: usize,
     pub validation_mode: String,
     pub comments: String,
+}
+
+impl Display for CreateStageStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CREATE STAGE")?;
+        if self.if_not_exists {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        write!(f, " {}", self.stage_name)?;
+
+        if !self.location.is_empty() {
+            write!(f, " URL = '{}'", self.location)?;
+
+            if !self.credential_options.is_empty() {
+                write!(f, " CREDENTIALS = (")?;
+                for (k, v) in self.credential_options.iter() {
+                    write!(f, " {} = '{}'", k, v)?;
+                }
+                write!(f, " )")?;
+            }
+
+            if !self.encryption_options.is_empty() {
+                write!(f, " ENCRYPTION = (")?;
+                for (k, v) in self.encryption_options.iter() {
+                    write!(f, " {} = '{}'", k, v)?;
+                }
+                write!(f, " )")?;
+            }
+        }
+
+        if !self.file_format_options.is_empty() {
+            write!(f, " FILE_FORMAT = (")?;
+            for (k, v) in self.file_format_options.iter() {
+                write!(f, " {} = '{}'", k, v)?;
+            }
+            write!(f, " )")?;
+        }
+
+        if !self.on_error.is_empty() {
+            write!(f, " ON_ERROR = {}", self.on_error)?;
+        }
+
+        if self.size_limit != 0 {
+            write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
+        }
+
+        if !self.validation_mode.is_empty() {
+            write!(f, " VALIDATION_MODE = {}", self.validation_mode)?;
+        }
+
+        if !self.comments.is_empty() {
+            write!(f, " COMMENTS = '{}'", self.comments)?;
+        }
+
+        Ok(())
+    }
 }

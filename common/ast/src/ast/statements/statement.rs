@@ -301,66 +301,14 @@ impl<'a> Display for Statement<'a> {
                 }
                 write!(f, " {stage_name}")?;
             }
-            Statement::CreateStage(stmt) => {
-                write!(f, "CREATE STAGE")?;
-                if stmt.if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
-                }
-                write!(f, " {}", stmt.stage_name)?;
-
-                if !stmt.location.is_empty() {
-                    write!(f, " URL = '{}'", stmt.location)?;
-
-                    if !stmt.credential_options.is_empty() {
-                        write!(f, " CREDENTIALS = (")?;
-                        for (k, v) in stmt.credential_options.iter() {
-                            write!(f, " {} = '{}'", k, v)?;
-                        }
-                        write!(f, " )")?;
-                    }
-
-                    if !stmt.encryption_options.is_empty() {
-                        write!(f, " ENCRYPTION = (")?;
-                        for (k, v) in stmt.encryption_options.iter() {
-                            write!(f, " {} = '{}'", k, v)?;
-                        }
-                        write!(f, " )")?;
-                    }
-                }
-
-                if !stmt.file_format_options.is_empty() {
-                    write!(f, " FILE_FORMAT = (")?;
-                    for (k, v) in stmt.file_format_options.iter() {
-                        write!(f, " {} = '{}'", k, v)?;
-                    }
-                    write!(f, " )")?;
-                }
-
-                if !stmt.on_error.is_empty() {
-                    write!(f, " ON_ERROR = {}", stmt.on_error)?;
-                }
-
-                if stmt.size_limit != 0 {
-                    write!(f, " SIZE_LIMIT = {}", stmt.size_limit)?;
-                }
-
-                if !stmt.validation_mode.is_empty() {
-                    write!(f, " VALIDATION_MODE = {}", stmt.validation_mode)?;
-                }
-
-                if !stmt.comments.is_empty() {
-                    write!(f, " COMMENTS = '{}'", stmt.comments)?;
-                }
-            }
+            Statement::CreateStage(stmt) => write!(f, "{stmt}")?,
             Statement::RemoveStage { location, pattern } => {
                 write!(f, "REMOVE STAGE @{location}")?;
                 if !pattern.is_empty() {
                     write!(f, " PATTERN = '{pattern}'")?;
                 }
             }
-            Statement::DescribeStage { stage_name } => {
-                write!(f, "DESC STAGE {stage_name}")?;
-            }
+            Statement::DescribeStage { stage_name } => write!(f, "DESC STAGE {stage_name}")?,
         }
         Ok(())
     }
