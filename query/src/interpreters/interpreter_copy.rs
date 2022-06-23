@@ -28,7 +28,6 @@ use common_planners::StageTableInfo;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-
 use futures::TryStreamExt;
 use regex::Regex;
 

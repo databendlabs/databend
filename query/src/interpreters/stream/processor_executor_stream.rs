@@ -13,15 +13,11 @@
 // limitations under the License.
 
 use std::pin::Pin;
-
 use std::task::Context;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
-
 use common_exception::Result;
-
-
 use futures::Stream;
 
 use crate::pipelines::new::executor::PipelinePullingExecutor;
