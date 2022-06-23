@@ -77,17 +77,24 @@ impl Interpreter for SelectInterpreterV2 {
         }
         let (root_pipeline, pipelines, _) = pb.spawn()?;
         let async_runtime = self.ctx.get_storage_runtime();
+        let query_need_abort = self.ctx.query_need_abort();
 
         // Spawn sub-pipelines
         for pipeline in pipelines {
-            let executor = PipelineExecutor::create(async_runtime.clone(), pipeline)?;
+            let executor = PipelineExecutor::create(
+                async_runtime.clone(),
+                query_need_abort.clone(),
+                pipeline,
+            )?;
             executor.execute()?;
         }
 
         // Spawn root pipeline
-        let executor = PipelinePullingExecutor::try_create(async_runtime, root_pipeline)?;
-        let (handler, stream) = ProcessorExecutorStream::create(executor)?;
-        self.ctx.add_source_abort_handle(handler);
+        let executor =
+            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, root_pipeline)?;
+
+        let stream = ProcessorExecutorStream::create(executor)?;
+
         Ok(Box::pin(Box::pin(stream)))
     }
 
