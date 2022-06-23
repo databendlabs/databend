@@ -1,0 +1,12 @@
+limit 1 using new planner
+1
+limit 0 using new planner
+0
+limit 1 using new planner
+1
+limit 0 using new planner
+0
+limit 1 using new planner and stored procedure
+1
+limit 1 using new planner and stored procedure
+0
