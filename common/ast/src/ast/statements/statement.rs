@@ -20,7 +20,6 @@ use common_meta_types::UserIdentity;
 
 use super::*;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Literal;
@@ -220,48 +219,11 @@ impl<'a> Display for Statement<'a> {
             Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
 
-            Statement::CreateView(CreateViewStmt {
-                if_not_exists,
-                catalog,
-                database,
-                view,
-                query,
-            }) => {
-                write!(f, "CREATE VIEW ")?;
-                if *if_not_exists {
-                    write!(f, "IF NOT EXISTS ")?;
-                }
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
-                write!(f, " AS {query}")?;
-            }
-            Statement::AlterView(AlterViewStmt {
-                catalog,
-                database,
-                view,
-                query,
-            }) => {
-                write!(f, "ALTER VIEW ")?;
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
-                write!(f, " AS {query}")?;
-            }
-            Statement::DropView(DropViewStmt {
-                if_exists,
-                catalog,
-                database,
-                view,
-            }) => {
-                write!(f, "DROP VIEW ")?;
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
-                }
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
-            }
-            Statement::ShowUsers => {
-                write!(f, "SHOW USERS")?;
-            }
-            Statement::ShowRoles => {
-                write!(f, "SHOW ROLES")?;
-            }
+            Statement::CreateView(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterView(stmt) => write!(f, "{stmt}")?,
+            Statement::DropView(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowUsers => write!(f, "SHOW USERS")?,
+            Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(CreateUserStmt {
                 if_not_exists,
                 user,
