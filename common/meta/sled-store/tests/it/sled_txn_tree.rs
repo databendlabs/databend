@@ -46,6 +46,7 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
                 addr: "".to_string(),
                 port: 100,
             },
+            grpc_api_addr: Some("0.0.0.0:9191".to_string()),
         })?;
 
         assert!(got.is_none());
@@ -56,6 +57,7 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
                 addr: "".to_string(),
                 port: 100,
             },
+            grpc_api_addr: Some("0.0.0.0:9191".to_string()),
         })?;
 
         assert!(got.is_none());
@@ -69,6 +71,7 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
                     addr: "".to_string(),
                     port: 100,
                 },
+                grpc_api_addr: Some("0.0.0.0:9191".to_string()),
             }),
             got
         );
@@ -79,6 +82,7 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
                 addr: "".to_string(),
                 port: 101,
             },
+            grpc_api_addr: Some("0.0.0.0:9192".to_string()),
         })?;
 
         assert_eq!(
@@ -88,6 +92,7 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
                     addr: "".to_string(),
                     port: 100,
                 },
+                grpc_api_addr: Some("0.0.0.0:9191".to_string()),
             }),
             got
         );
@@ -103,6 +108,7 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
                 addr: "".to_string(),
                 port: 101,
             },
+            grpc_api_addr: Some("0.0.0.0:9192".to_string()),
         }),
         got
     );
@@ -115,6 +121,7 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
                 addr: "".to_string(),
                 port: 100,
             },
+            grpc_api_addr: Some("0.0.0.0:9191".to_string()),
         }),
         got
     );
@@ -145,6 +152,7 @@ async fn test_sled_txn_tree_key_space_remove() -> anyhow::Result<()> {
                 addr: "".to_string(),
                 port: 100,
             },
+            grpc_api_addr: Some("0.0.0.0:9191".to_string()),
         })?;
 
         let got = nodes_ks.get(&k)?;
@@ -156,6 +164,7 @@ async fn test_sled_txn_tree_key_space_remove() -> anyhow::Result<()> {
                     addr: "".to_string(),
                     port: 100,
                 },
+                grpc_api_addr: Some("0.0.0.0:9191".to_string()),
             }),
             got
         );
@@ -169,6 +178,7 @@ async fn test_sled_txn_tree_key_space_remove() -> anyhow::Result<()> {
                     addr: "".to_string(),
                     port: 100,
                 },
+                grpc_api_addr: Some("0.0.0.0:9191".to_string()),
             }),
             got
         );
@@ -210,6 +220,7 @@ async fn test_sled_txn_tree_key_space_update_and_fetch() -> anyhow::Result<()> {
                 Some(v) => Some(Node {
                     name: v.name + "a",
                     endpoint: v.endpoint,
+                    grpc_api_addr: v.grpc_api_addr,
                 }),
                 None => Some(Node::default()),
             })?;

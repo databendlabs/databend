@@ -51,11 +51,15 @@ async fn test_cluster_nodes() -> common_exception::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let meta_node = MetaNode::start(&tc0.config.raft_config).await?;
-    meta_node.join_cluster(&tc0.config.raft_config).await?;
+    let meta_node = MetaNode::start(&tc0.config).await?;
+    meta_node
+        .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
+        .await?;
 
-    let meta_node1 = MetaNode::start(&tc1.config.raft_config).await?;
-    meta_node1.join_cluster(&tc1.config.raft_config).await?;
+    let meta_node1 = MetaNode::start(&tc1.config).await?;
+    meta_node1
+        .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address)
+        .await?;
 
     let cluster_router = Route::new()
         .at("/cluster/nodes", get(nodes_handler))
@@ -87,11 +91,15 @@ async fn test_cluster_state() -> common_exception::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let meta_node = MetaNode::start(&tc0.config.raft_config).await?;
-    meta_node.join_cluster(&tc0.config.raft_config).await?;
+    let meta_node = MetaNode::start(&tc0.config).await?;
+    meta_node
+        .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
+        .await?;
 
-    let meta_node1 = MetaNode::start(&tc1.config.raft_config).await?;
-    meta_node1.join_cluster(&tc1.config.raft_config).await?;
+    let meta_node1 = MetaNode::start(&tc1.config).await?;
+    meta_node1
+        .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address)
+        .await?;
 
     let cluster_router = Route::new()
         .at("/cluster/state", get(state_handler))
@@ -134,11 +142,15 @@ async fn test_http_service_cluster_state() -> common_exception::Result<()> {
     tc1.config.admin_tls_server_key = TEST_SERVER_KEY.to_owned();
     tc1.config.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
-    let meta_node = MetaNode::start(&tc0.config.raft_config).await?;
-    meta_node.join_cluster(&tc0.config.raft_config).await?;
+    let meta_node = MetaNode::start(&tc0.config).await?;
+    meta_node
+        .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
+        .await?;
 
-    let meta_node1 = MetaNode::start(&tc1.config.raft_config).await?;
-    meta_node1.join_cluster(&tc1.config.raft_config).await?;
+    let meta_node1 = MetaNode::start(&tc1.config).await?;
+    meta_node1
+        .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address.clone())
+        .await?;
 
     let mut srv = HttpService::create(tc1.config, meta_node1);
 
