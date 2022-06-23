@@ -7,3 +7,4 @@ other rows should be kept
 1
 deleted unconditionally
 1
+delete works with planner v2, (but actually, it fallbacks to v1)

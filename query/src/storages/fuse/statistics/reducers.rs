@@ -22,7 +22,6 @@ use common_exception::Result;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::Statistics;
-use crate::storages::fuse::statistics::trim::Trim;
 use crate::storages::index::ColumnStatistics;
 use crate::storages::index::StatisticsOfColumns;
 
@@ -65,6 +64,10 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             }
 
             // TODO:
+
+            // for some data types, we shall balance the accuracy and the length
+            // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
+
             // In accumulator.rs, we use aggregation functions to get the min/max of `DataValue`s,
             // like this:
             //   `let maxs = eval_aggr("max", vec![], &[column_field], rows)?`
@@ -74,16 +77,14 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .filter(|s| !s.is_null())
                 .min_by(|&x, &y| x.cmp(y))
                 .cloned()
-                .unwrap_or(DataValue::Null)
-                .trim();
+                .unwrap_or(DataValue::Null);
 
             let max = max_stats
                 .iter()
                 .filter(|s| !s.is_null())
                 .max_by(|&x, &y| x.cmp(y))
                 .cloned()
-                .unwrap_or(DataValue::Null)
-                .trim();
+                .unwrap_or(DataValue::Null);
 
             acc.insert(*id, ColumnStatistics {
                 min,

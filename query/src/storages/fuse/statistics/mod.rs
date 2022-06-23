@@ -14,7 +14,6 @@
 
 pub mod accumulator;
 pub mod reducers;
-mod trim;
 
 pub use accumulator::PartiallyAccumulated;
 pub use accumulator::StatisticsAccumulator;
