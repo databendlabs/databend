@@ -44,3 +44,17 @@ be joined to.
 ```
 
 ## 2. Remove Node
+
+Remove a node with:
+`databend-meta --leave-id <node_id_to_remove> --leave-via <node_addr_1> <node_addr_2>...`
+
+This command can be used anywhere there is a `databend-meta` installed.
+It will send a `leave` request to the first `<node_addr_i>` it could connect to.
+And it will block until the `leave` request is done or an error occur.
+
+`databend-meta --leave-via` will quit at once when the `leave` RPC is done.
+
+- `--leave-via` specifies a list of the node `advertise` addresses to send the `leave` request to.
+  See: `--raft-advertise-host`
+
+- `--leave-id` specifies the node id to leave. It can be any id in a cluster.

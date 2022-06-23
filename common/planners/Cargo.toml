@@ -12,7 +12,6 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-ast = { path = "../ast" }
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
