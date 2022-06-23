@@ -223,6 +223,10 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
                         self.parse_list_cmd()
                     }
+                    Keyword::EXISTS => {
+                        self.parser.next_token();
+                        self.parse_exists()
+                    }
 
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
