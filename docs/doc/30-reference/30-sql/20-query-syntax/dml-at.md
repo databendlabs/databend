@@ -24,24 +24,44 @@ SELECT ... FROM ... { AT TIMESTAMP => <timestamp>}
 ## Examples
 
 ```sql
-select * from t12_0004 at ( TIMESTAMP => cast('2022-06-16 23:07:01.580417', timestamp) );
-+------+
-| c    |
-+------+
-|    3 |
-|    1 |
-|    2 |
-+------+
+-- Create a table
+create table demo(c varchar);
 
-select * from t12_0004 at ( TIMESTAMP => now() );
-+------+
-| c    |
-+------+
-|    1 |
-|    2 |
-|    3 |
-|    3 |
-|    3 |
-+------+
+-- Insert two rows
+insert into demo values('batch1.1'),('batch1.2');
+
+-- Insert another row
+insert into demo values('batch2.1');
+
+-- Show snapshot timestamps
+select timestamp from fuse_snapshot('default', 'demo'); 
++----------------------------+
+| timestamp                  |
++----------------------------+
+| 2022-06-22 08:58:54.509008 |
+| 2022-06-22 08:58:36.254458 |
++----------------------------+
+
+-- Enable the new Databend planner
+set enable_planner_v2 = 1;  
+
+-- Travel to the time when the last row was inserted
+select * from demo at (TIMESTAMP => '2022-06-22 08:58:54.509008'::TIMESTAMP); 
++----------+
+| c        |
++----------+
+| batch1.1 |
+| batch1.2 |
+| batch2.1 |
++----------+
+
+-- Travel to the time when the first two rows were inserted
+select * from demo at (TIMESTAMP => '2022-06-22 08:58:36.254458'::TIMESTAMP); 
++----------+
+| c        |
++----------+
+| batch1.1 |
+| batch1.2 |
++----------+
 
 ```
