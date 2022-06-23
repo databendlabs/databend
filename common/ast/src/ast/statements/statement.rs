@@ -101,11 +101,11 @@ pub enum Statement<'a> {
         if_exists: bool,
         role_name: String,
     },
-    Grant(AccountMgrStmt),
+    Grant(GrantStmt),
     ShowGrants {
         principal: Option<PrincipalIdentity>,
     },
-    Revoke(AccountMgrStmt),
+    Revoke(RevokeStmt),
 
     // UDF
     CreateUDF {
@@ -253,13 +253,7 @@ impl<'a> Display for Statement<'a> {
                     write!(f, "{principal}")?;
                 }
             }
-            Statement::Revoke(AccountMgrStmt { source, principal }) => {
-                write!(f, "REVOKE")?;
-                write!(f, "{source}")?;
-
-                write!(f, " FROM")?;
-                write!(f, "{principal}")?;
-            }
+            Statement::Revoke(stmt) => write!(f, "{stmt}")?,
             Statement::CreateUDF {
                 if_not_exists,
                 udf_name,

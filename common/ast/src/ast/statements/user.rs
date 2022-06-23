@@ -60,10 +60,10 @@ pub struct AuthOption {
 impl Display for AuthOption {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(auth_type) = &self.auth_type {
-            write!(f, "WITH {}", auth_type.to_str())?;
+            write!(f, "WITH {} ", auth_type.to_str())?;
         }
         if let Some(password) = &self.password {
-            write!(f, " BY '{password}'")?;
+            write!(f, "BY '{password}'")?;
         }
 
         Ok(())
@@ -102,17 +102,33 @@ impl Display for AlterUserStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AccountMgrStmt {
+pub struct GrantStmt {
     pub source: AccountMgrSource,
     pub principal: PrincipalIdentity,
 }
 
-impl Display for AccountMgrStmt {
+impl Display for GrantStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "GRANT")?;
         write!(f, "{}", self.source)?;
 
         write!(f, " TO")?;
+        write!(f, "{}", self.principal)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RevokeStmt {
+    pub source: AccountMgrSource,
+    pub principal: PrincipalIdentity,
+}
+
+impl Display for RevokeStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "REVOKE")?;
+        write!(f, "{}", self.source)?;
+
+        write!(f, " FROM")?;
         write!(f, "{}", self.principal)
     }
 }

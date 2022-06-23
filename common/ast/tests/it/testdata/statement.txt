@@ -3497,7 +3497,7 @@ GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
 GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3523,7 +3523,7 @@ GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
 GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3549,7 +3549,7 @@ GRANT SELECT, CREATE ON * TO ROLE 'role1';
 GRANT SELECT, CREATE ON * TO ROLE role1
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3572,7 +3572,7 @@ GRANT ALL ON *.* TO 'test-grant'@'localhost';
 GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: ALL {
             level: Global,
         },
@@ -3592,7 +3592,7 @@ GRANT ALL ON *.* TO ROLE 'role2';
 GRANT ALL PRIVILEGES ON *.* TO ROLE role2
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: ALL {
             level: Global,
         },
@@ -3609,7 +3609,7 @@ GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
 GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: ALL {
             level: Database(
                 None,
@@ -3631,7 +3631,7 @@ GRANT ALL PRIVILEGES ON * TO ROLE 'role3';
 GRANT ALL PRIVILEGES ON * TO ROLE role3
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: ALL {
             level: Database(
                 None,
@@ -3650,7 +3650,7 @@ GRANT ROLE 'test' TO 'test-user';
 GRANT ROLE test TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Role {
             role: "test",
         },
@@ -3670,7 +3670,7 @@ GRANT ROLE 'test' TO USER 'test-user';
 GRANT ROLE test TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Role {
             role: "test",
         },
@@ -3690,7 +3690,7 @@ GRANT ROLE 'test' TO ROLE 'test-user';
 GRANT ROLE test TO ROLE test-user
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Role {
             role: "test",
         },
@@ -3707,7 +3707,7 @@ GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
 GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3734,7 +3734,7 @@ GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';
 GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3761,7 +3761,7 @@ GRANT SELECT ON db01.* TO ROLE 'role1'
 GRANT SELECT ON db01.* TO ROLE role1
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3785,7 +3785,7 @@ GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
 GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3813,7 +3813,7 @@ GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';
 GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3841,7 +3841,7 @@ GRANT SELECT ON db01.tb1 TO ROLE 'role1';
 GRANT SELECT ON db01.tb1 TO ROLE role1
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3866,7 +3866,7 @@ GRANT SELECT ON tb1 TO ROLE 'role1';
 GRANT SELECT ON tb1 TO ROLE role1
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3889,7 +3889,7 @@ GRANT ALL ON tb1 TO 'u1';
 GRANT ALL PRIVILEGES ON tb1 TO USER 'u1'@'%'
 ---------- AST ------------
 Grant(
-    AccountMgrStatement {
+    GrantStmt {
         source: ALL {
             level: Table(
                 None,
@@ -3970,7 +3970,7 @@ REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';
 REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'localhost'
 ---------- AST ------------
 Revoke(
-    AccountMgrStatement {
+    RevokeStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3996,7 +3996,7 @@ REVOKE SELECT ON tb1 FROM ROLE 'role1';
 REVOKE SELECT ON tb1 FROM ROLE role1
 ---------- AST ------------
 Revoke(
-    AccountMgrStatement {
+    RevokeStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -4019,7 +4019,7 @@ REVOKE ALL ON tb1 FROM 'u1';
 REVOKE ALL PRIVILEGES ON tb1 FROM USER 'u1'@'%'
 ---------- AST ------------
 Revoke(
-    AccountMgrStatement {
+    RevokeStmt {
         source: ALL {
             level: Table(
                 None,
