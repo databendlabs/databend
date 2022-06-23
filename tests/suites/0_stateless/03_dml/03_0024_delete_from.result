@@ -1,1 +1,9 @@
-3	4
+selection not match, nothing deleted
+1
+delete one rows
+the row should be deleted
+1
+other rows should be kept
+1
+deleted unconditionally
+1
