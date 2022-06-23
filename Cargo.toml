@@ -69,6 +69,6 @@ rustc-demangle = { opt-level = 3 }
 parquet2 = { version = "0.13", optional = true, git = "https://github.com/datafuse-extras/parquet2", branch = "parquet2-0.13-patch2" }
 chrono = { git = "https://github.com/datafuse-extras/chrono", rev = "279f590" }
 # https://github.com/calder/rust-goldenfile/pull/7
-goldenfile = { git = "https://github.com/psiace/rust-goldenfile", rev = "16c5783" }
+goldenfile = { git = "https://github.com/datafuse-extras/rust-goldenfile", rev = "16c5783" }
 # https://github.com/tikv/pprof-rs/issues/138
 pprof = { git = "https://github.com/datafuse-extras/pprof-rs", rev = "78b890f" }
