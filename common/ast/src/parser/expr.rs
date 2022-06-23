@@ -863,7 +863,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, _, expr1, _, expr2, _)| ExprElement::IfNull { expr1, expr2 },
     );
     let is_distinct_from = map(
-        rule! {IS~NOT?~DISTINCT~FROM
+        rule! {
+            IS ~ NOT? ~ DISTINCT ~ FROM
         },
         |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
     );
