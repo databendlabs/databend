@@ -34,7 +34,7 @@ pub struct Filter {
 }
 
 impl Operator for Filter {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         RelOp::Filter
     }
 

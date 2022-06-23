@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -30,6 +31,7 @@ use common_tracing::tracing;
 use futures::future::AbortHandle;
 use futures::future::Abortable;
 use futures::StreamExt;
+use futures_util::FutureExt;
 use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
@@ -63,6 +65,23 @@ pub enum ExecuteStateKind {
     Succeeded,
 }
 
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
+pub struct Progresses {
+    pub scan_progress: ProgressValues,
+    pub write_progress: ProgressValues,
+    pub result_progress: ProgressValues,
+}
+
+impl Progresses {
+    fn from_context(ctx: &Arc<QueryContext>) -> Self {
+        Progresses {
+            scan_progress: ctx.get_scan_progress_value(),
+            write_progress: ctx.get_write_progress_value(),
+            result_progress: ctx.get_result_progress_value(),
+        }
+    }
+}
+
 pub enum ExecuteState {
     Running(ExecuteRunning),
     Stopped(ExecuteStopped),
@@ -89,7 +108,7 @@ pub struct ExecuteRunning {
 }
 
 pub struct ExecuteStopped {
-    progress: Option<ProgressValues>,
+    stats: Progresses,
     reason: Result<()>,
     stop_time: Instant,
 }
@@ -100,10 +119,10 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub(crate) fn get_progress(&self) -> Option<ProgressValues> {
+    pub(crate) fn get_progress(&self) -> Progresses {
         match &self.state {
-            Running(r) => Some(r.ctx.get_scan_progress_value()),
-            Stopped(f) => f.progress.clone(),
+            Running(r) => Progresses::from_context(&r.ctx),
+            Stopped(f) => f.stats.clone(),
         }
     }
 
@@ -118,7 +137,6 @@ impl Executor {
         let mut guard = this.write().await;
         if let Running(r) = &guard.state {
             // release session
-            let progress = Some(r.ctx.get_scan_progress_value());
             if kill {
                 r.session.force_kill_query();
             }
@@ -129,7 +147,7 @@ impl Executor {
                 .await
                 .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
-                progress,
+                stats: Progresses::from_context(&r.ctx),
                 reason: reason.clone(),
                 stop_time: Instant::now(),
             });
@@ -227,18 +245,29 @@ impl ExecuteState {
             let ctx_clone = ctx.clone();
             let block_buffer_clone = block_buffer.clone();
             ctx.try_spawn(async move {
-                if let Err(err) = execute(
+                let res = execute(
                     interpreter,
                     ctx_clone,
                     block_buffer,
                     executor_clone.clone(),
                     Arc::new(plan),
-                )
-                .await
-                {
-                    Executor::stop(&executor_clone, Err(err), false).await;
-                    block_buffer_clone.stop_push().await.unwrap();
-                };
+                );
+                match AssertUnwindSafe(res).catch_unwind().await {
+                    Ok(Err(err)) => {
+                        Executor::stop(&executor_clone, Err(err), false).await;
+                        block_buffer_clone.stop_push().await.unwrap();
+                    }
+                    Err(_) => {
+                        Executor::stop(
+                            &executor_clone,
+                            Err(ErrorCode::PanicError("interpreter panic!")),
+                            false,
+                        )
+                        .await;
+                        block_buffer_clone.stop_push().await.unwrap();
+                    }
+                    _ => {}
+                }
             })?;
 
             Ok(executor)
@@ -383,14 +412,15 @@ impl HttpQueryHandle {
             inputs_port: vec![input],
             processors: vec![sink],
         });
-        let pipeline_executor =
-            PipelineCompleteExecutor::try_create(async_runtime.clone(), root_pipeline)?;
+
         let async_runtime_clone = async_runtime.clone();
         let run = move || -> Result<()> {
             for pipeline in pipelines {
                 let executor = PipelineExecutor::create(async_runtime_clone.clone(), pipeline)?;
                 executor.execute()?;
             }
+            let pipeline_executor =
+                PipelineCompleteExecutor::try_create(async_runtime_clone, root_pipeline)?;
             pipeline_executor.execute()
         };
 

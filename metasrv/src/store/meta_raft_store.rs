@@ -80,7 +80,7 @@ pub struct MetaRaftStore {
     /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
     /// This db is also used to generate a locally unique id.
     /// Currently the id is used to create a unique snapshot id.
-    _db: sled::Db,
+    pub(crate) db: sled::Db,
 
     // Raft state includes:
     // id: NodeId,
@@ -147,7 +147,7 @@ impl MetaRaftStore {
             id: raft_state.id,
             config: config.clone(),
             is_opened: is_open,
-            _db: db,
+            db,
             raft_state,
             log,
             state_machine: sm,

@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use async_trait::unboxed_simple;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use futures::Future;
 
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::Event;
@@ -28,9 +29,6 @@ use crate::pipelines::new::processors::Processor;
 pub trait AsyncSink: Send {
     const NAME: &'static str;
 
-    type ConsumeFuture<'a>: Future<Output = Result<()>> + Send
-    where Self: 'a;
-
     async fn on_start(&mut self) -> Result<()> {
         Ok(())
     }
@@ -39,8 +37,8 @@ pub trait AsyncSink: Send {
         Ok(())
     }
 
-    /// We don't use async_trait for consume method, using GAT instead to make it more static dispatchable.
-    fn consume(&mut self, data_block: DataBlock) -> Self::ConsumeFuture<'_>;
+    #[unboxed_simple]
+    async fn consume(&mut self, data_block: DataBlock) -> Result<()>;
 }
 
 pub struct AsyncSinker<T: AsyncSink + 'static> {
@@ -67,6 +65,10 @@ impl<T: AsyncSink + 'static> AsyncSinker<T> {
 impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
     fn name(&self) -> &'static str {
         T::NAME
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

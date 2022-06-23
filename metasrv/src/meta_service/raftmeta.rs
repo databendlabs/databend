@@ -50,9 +50,11 @@ use common_meta_types::ToMetaError;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use openraft::Config;
+use openraft::LogId;
 use openraft::Raft;
 use openraft::RaftMetrics;
 use openraft::SnapshotPolicy;
+use openraft::State;
 use tonic::Status;
 
 use crate::meta_service::meta_leader::MetaLeader;
@@ -63,12 +65,38 @@ use crate::metrics::incr_meta_metrics_leader_change;
 use crate::metrics::incr_meta_metrics_read_failed;
 use crate::metrics::set_meta_metrics_current_leader;
 use crate::metrics::set_meta_metrics_is_leader;
+use crate::metrics::set_meta_metrics_node_is_health;
 use crate::metrics::set_meta_metrics_proposals_applied;
 use crate::network::Network;
 use crate::store::MetaRaftStore;
 use crate::watcher::WatcherManager;
 use crate::watcher::WatcherStreamSender;
 use crate::Opened;
+
+#[derive(serde::Serialize)]
+pub struct MetaNodeStatus {
+    pub id: NodeId,
+
+    pub endpoint: String,
+
+    pub db_size: u64,
+
+    pub state: String,
+
+    pub is_leader: bool,
+
+    pub current_term: u64,
+
+    pub last_log_index: u64,
+
+    pub last_applied: LogId,
+
+    pub leader: Option<Node>,
+
+    pub voters: Vec<Node>,
+
+    pub non_voters: Vec<Node>,
+}
 
 // MetaRaft is a impl of the generic Raft handling meta data R/W.
 pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaRaftStore>;
@@ -379,6 +407,10 @@ impl MetaNode {
                         };
                         if changed.is_ok() {
                             let mm = metrics_rx.borrow().clone();
+                            set_meta_metrics_node_is_health(
+                                mm.state == State::Follower || mm.state == State::Leader,
+                            );
+
                             if let Some(cur) = mm.current_leader {
                                 // if current leader has changed?
                                 if let Some(leader) = current_leader {
@@ -590,6 +622,57 @@ impl MetaNode {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.get_nodes()
+    }
+
+    fn get_state_string(state: openraft::State) -> String {
+        match state {
+            openraft::State::Learner => "Learner".to_string(),
+            openraft::State::Follower => "Follower".to_string(),
+            openraft::State::Candidate => "Candidate".to_string(),
+            openraft::State::Leader => "Leader".to_string(),
+            openraft::State::Shutdown => "Shutdown".to_string(),
+        }
+    }
+
+    pub async fn get_status(&self) -> MetaResult<MetaNodeStatus> {
+        let voters = self.get_voters().await?;
+        let non_voters = self.get_non_voters().await?;
+
+        let endpoint = self
+            .sto
+            .get_node_endpoint(&self.sto.id)
+            .await
+            .map_err(|e| MetaError::MetaServiceError(format!("get self endpoint failed: {}", e)))?;
+
+        let db_size = self
+            .sto
+            .db
+            .size_on_disk()
+            .map_err(|_| MetaError::MetaServiceError("get db_size failed".to_string()))?;
+
+        let metrics = self.raft.metrics().borrow().clone();
+
+        let leader = if let Some(leader_id) = metrics.current_leader {
+            self.get_node(&leader_id).await?
+        } else {
+            None
+        };
+        Ok(MetaNodeStatus {
+            id: self.sto.id,
+            endpoint: endpoint.to_string(),
+            db_size,
+            state: MetaNode::get_state_string(metrics.state),
+            is_leader: metrics.state == openraft::State::Leader,
+            current_term: metrics.current_term,
+            last_log_index: metrics.last_log_index.unwrap_or(0),
+            last_applied: match metrics.last_applied {
+                Some(id) => id,
+                None => LogId::new(0, 0),
+            },
+            leader,
+            voters,
+            non_voters,
+        })
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

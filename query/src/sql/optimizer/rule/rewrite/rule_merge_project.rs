@@ -66,13 +66,9 @@ impl Rule for RuleMergeProject {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
         let up_project: Project = s_expr.plan().clone().try_into()?;
-        let down_project: Project = s_expr.child(0)?.plan().clone().try_into()?;
-        let columns = up_project
-            .columns
-            .union(&down_project.columns)
-            .cloned()
-            .collect();
-        let merged = Project { columns };
+        let merged = Project {
+            columns: up_project.columns,
+        };
 
         let new_expr = SExpr::create_unary(merged.into(), s_expr.child(0)?.child(0)?.clone());
         state.add_result(new_expr);

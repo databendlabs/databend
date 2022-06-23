@@ -118,10 +118,11 @@ async fn test_list_stage_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+------+------+-----+---------------+---------+",
-            "| name | size | md5 | last_modified | creator |",
-            "+------+------+-----+---------------+---------+",
-            "+------+------+-----+---------------+---------+",
+            "+----------------+------+------+-------------------------------+-----------------+",
+            "| name           | size | md5  | last_modified                 | creator         |",
+            "+----------------+------+------+-------------------------------+-----------------+",
+            "| test/books.csv | 100  | NULL | 1970-01-01 00:00:00.000 +0000 | 'test_user'@'%' |",
+            "+----------------+------+------+-------------------------------+-----------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

@@ -68,17 +68,20 @@ impl<'a> GroupingChecker<'a> {
             Scalar::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.resolve(&scalar.left)?),
                 right: Box::new(self.resolve(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::OrExpr(scalar) => Ok(OrExpr {
                 left: Box::new(self.resolve(&scalar.left)?),
                 right: Box::new(self.resolve(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
                 left: Box::new(self.resolve(&scalar.left)?),
                 right: Box::new(self.resolve(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::FunctionCall(func) => {
@@ -95,7 +98,7 @@ impl<'a> GroupingChecker<'a> {
                 }
                 .into())
             }
-            Scalar::Cast(cast) => Ok(CastExpr {
+            Scalar::CastExpr(cast) => Ok(CastExpr {
                 argument: Box::new(self.resolve(&cast.argument)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),

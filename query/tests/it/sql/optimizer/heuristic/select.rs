@@ -22,7 +22,7 @@ use super::Suite;
 use crate::tests::create_query_context;
 
 #[tokio::test]
-pub async fn test_optimizer_select() -> Result<()> {
+pub async fn test_heuristic_optimizer_select() -> Result<()> {
     let mut mint = Mint::new("tests/it/sql/optimizer/heuristic/testdata/");
     let mut file = mint.new_goldenfile("select.test")?;
 
@@ -47,6 +47,41 @@ pub async fn test_optimizer_select() -> Result<()> {
         Suite {
             comment: "".to_string(),
             query: "select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "".to_string(),
+            query: "select * from numbers(1) where number = pow(1, 1 + 1)".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "".to_string(),
+            query: "select * from numbers(1) where TRUE and 1 = 1".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "".to_string(),
+            query: "select * from numbers(1) where number = 0 and false".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "".to_string(),
+            query: "select * from numbers(1) where number = 0 and null".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "# If there is only one conjunction and the value is null, then we won't rewrite it".to_string(),
+            query: "select * from numbers(1) where null".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "".to_string(),
+            query: "select a from (select number as a, number as b from numbers(1))".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
+        Suite {
+            comment: "".to_string(),
+            query: "select a from (select number as a, number+1 as b from numbers(1))".to_string(),
             rules: DEFAULT_REWRITE_RULES.clone(),
         },
     ];

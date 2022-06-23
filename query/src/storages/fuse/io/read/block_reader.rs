@@ -33,6 +33,7 @@ use common_exception::Result;
 use common_planners::PartInfoPtr;
 use common_tracing::tracing;
 use common_tracing::tracing::debug_span;
+use common_tracing::tracing::warn;
 use common_tracing::tracing::Instrument;
 use futures::AsyncReadExt;
 use futures::StreamExt;
@@ -42,6 +43,8 @@ use opendal::Operator;
 
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
+use crate::storages::fuse::io::retry;
+use crate::storages::fuse::io::retry::Retryable;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::Compression;
 
@@ -181,11 +184,9 @@ impl BlockReader {
             let column_meta = &part.columns_meta[index];
             let column_reader = self.operator.object(&part.location);
             let fut = async move {
-                // NOTE: move chunk inside future so that alloc only
-                // happen when future is ready to go.
-                let column_chunk = column_reader
-                    .range_read(column_meta.offset..column_meta.offset + column_meta.length)
-                    .await?;
+                let column_chunk =
+                    Self::read_column(column_reader, column_meta.offset, column_meta.length)
+                        .await?;
                 Ok::<_, ErrorCode>(column_chunk)
             }
             .instrument(debug_span!("read_col_chunk"));
@@ -265,11 +266,29 @@ impl BlockReader {
         futures::future::try_join_all(join_handlers).await
     }
 
-    async fn read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
+    pub async fn read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
         let handler = common_base::base::tokio::spawn(async move {
-            let mut chunk = vec![0; length as usize];
-            let mut r = o.range_reader(offset..offset + length).await?;
-            r.read_exact(&mut chunk).await?;
+            let op = || async {
+                let mut chunk = vec![0; length as usize];
+                // Sine error conversion DO matters: retry depends on the conversion
+                // to distinguish transient errors from permanent ones.
+                // Explict error conversion is used here, to make the code easy to be followed
+                let mut r = o
+                    .range_reader(offset..offset + length)
+                    .await
+                    .map_err(retry::from_io_error)?;
+                r.read_exact(&mut chunk).await?;
+                Ok(chunk)
+            };
+
+            let notify = |e: std::io::Error, duration| {
+                warn!(
+                    "transient error encountered while reading column, at duration {:?} : {}",
+                    duration, e,
+                )
+            };
+
+            let chunk = op.retry_with_notify(notify).await?;
             Ok(chunk)
         });
 

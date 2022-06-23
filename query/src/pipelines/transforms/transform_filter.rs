@@ -74,6 +74,10 @@ impl<const HAVING: bool> FilterTransform<HAVING> {
     }
 
     fn filter(executor: Arc<ExpressionExecutor>, data: DataBlock) -> Result<DataBlock> {
+        if data.num_columns() == 0 || data.num_rows() == 0 {
+            return Ok(data);
+        }
+
         let filter_block = executor.execute(&data)?;
         DataBlock::filter_block(data, filter_block.column(0))
     }

@@ -33,6 +33,7 @@ use crate::scalars::FunctionFeatures;
 #[derive(Clone)]
 pub struct RegexpInStrFunction {
     display_name: String,
+    return_type: DataTypeImpl,
 }
 
 impl RegexpInStrFunction {
@@ -53,8 +54,17 @@ impl RegexpInStrFunction {
             }
         }
 
+        let has_null = args.iter().any(|arg| arg.is_null());
+
+        let return_type = if has_null {
+            NullType::new_impl()
+        } else {
+            NullableType::new_impl(u64::to_data_type())
+        };
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
+            return_type,
         }))
     }
 
@@ -74,7 +84,7 @@ impl Function for RegexpInStrFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        NullableType::new_impl(u64::to_data_type())
+        self.return_type.clone()
     }
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr

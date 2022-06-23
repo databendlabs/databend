@@ -19,9 +19,7 @@ use common_exception::Result;
 use common_meta_types::UserIdentity;
 use databend_query::users::auth::jwt::CustomClaims;
 use databend_query::users::auth::jwt::EnsureUser;
-use databend_query::users::AuthMgr;
 use databend_query::users::Credential;
-use databend_query::users::UserApiProvider;
 use jwt_simple::prelude::*;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
@@ -53,9 +51,10 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let mut conf = crate::tests::ConfigBuilder::create().config();
-    conf.query.jwt_key_file = jwks_url;
-    let user_mgr = UserApiProvider::create_global(conf.clone()).await?;
-    let auth_mgr = AuthMgr::create(conf, user_mgr.clone()).await?;
+    conf.query.jwt_key_file = jwks_url.clone();
+    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
+    let user_mgr = ctx.get_user_manager();
+    let auth_mgr = ctx.get_auth_manager();
     let tenant = "test";
     let user_name = "test";
 
@@ -65,7 +64,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&Credential::Jwt {
+            .auth(&ctx, &Credential::Jwt {
                 token,
                 hostname: None,
             })
@@ -83,7 +82,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&Credential::Jwt {
+            .auth(&ctx, &Credential::Jwt {
                 token,
                 hostname: None,
             })
@@ -103,7 +102,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&Credential::Jwt {
+            .auth(&ctx, &Credential::Jwt {
                 token,
                 hostname: None,
             })
@@ -115,27 +114,6 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         );
     }
 
-    // with create user in other tenant
-    {
-        let tenant = "other";
-        let custom_claims = CustomClaims::new()
-            .with_tenant_id(tenant)
-            .with_ensure_user(EnsureUser::default());
-        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
-            .with_subject(user_name.to_string());
-        let token = key_pair.sign(claims)?;
-
-        let (currnet_tenant, user_info) = auth_mgr
-            .auth(&Credential::Jwt {
-                token,
-                hostname: None,
-            })
-            .await?;
-        assert!(currnet_tenant.is_some());
-        assert_eq!(currnet_tenant.unwrap(), tenant.to_string());
-        assert_eq!(user_info.grants.roles().len(), 0);
-    }
-
     // with create user
     {
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser::default());
@@ -143,12 +121,13 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let (_, user_info) = auth_mgr
-            .auth(&Credential::Jwt {
+        auth_mgr
+            .auth(&ctx, &Credential::Jwt {
                 token,
                 hostname: None,
             })
             .await?;
+        let user_info = ctx.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
@@ -161,12 +140,13 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let (_, user_info) = auth_mgr
-            .auth(&Credential::Jwt {
+        auth_mgr
+            .auth(&ctx, &Credential::Jwt {
                 token,
                 hostname: None,
             })
             .await?;
+        let user_info = ctx.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
@@ -182,7 +162,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&Credential::Jwt {
+            .auth(&ctx, &Credential::Jwt {
                 token,
                 hostname: None,
             })
@@ -204,7 +184,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&Credential::Jwt {
+            .auth(&ctx, &Credential::Jwt {
                 token,
                 hostname: Some("localhost".to_string()),
             })
@@ -218,7 +198,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&Credential::Jwt {
+            .auth(&ctx, &Credential::Jwt {
                 token,
                 hostname: Some("10.0.0.1".to_string()),
             })
@@ -228,6 +208,35 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             "Code: 2201, displayText = only accept root from localhost, current: 'root'@'%'.",
             res.err().unwrap().to_string()
         );
+    }
+
+    let mut conf = crate::tests::ConfigBuilder::create()
+        .with_management_mode()
+        .config();
+    conf.query.jwt_key_file = jwks_url;
+    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
+    let auth_mgr = ctx.get_auth_manager();
+
+    // with create user in other tenant
+    {
+        let tenant = "other";
+        let custom_claims = CustomClaims::new()
+            .with_tenant_id(tenant)
+            .with_ensure_user(EnsureUser::default());
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        auth_mgr
+            .auth(&ctx, &Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await?;
+        let user_info = ctx.get_current_user()?;
+        let current_tenant = ctx.get_tenant();
+        assert_eq!(current_tenant, tenant.to_string());
+        assert_eq!(user_info.grants.roles().len(), 0);
     }
     Ok(())
 }

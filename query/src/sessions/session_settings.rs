@@ -444,6 +444,20 @@ impl Settings {
 
         Ok(())
     }
+
+    pub fn set_batch_settings(
+        &self,
+        settings: &HashMap<String, String>,
+        is_global: bool,
+    ) -> Result<()> {
+        for (k, v) in settings.iter() {
+            if self.has_setting(k.as_str()) {
+                self.set_settings(k.to_string(), v.to_string(), is_global)?
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug)]

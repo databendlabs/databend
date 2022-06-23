@@ -18,27 +18,29 @@ pub use aggregate::AggregateInfo;
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
-use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::CreateRolePlan;
 use common_planners::DescribeUserStagePlan;
+use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
+use common_planners::ShowGrantsPlan;
+pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 
-use self::subquery::SubqueryRewriter;
 use super::plans::Plan;
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::planner::metadata::MetadataRef;
-use crate::storages::NavigationPoint;
-use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod copy;
 mod ddl;
 mod distinct;
+mod insert;
 mod join;
 mod limit;
 mod project;
@@ -46,8 +48,8 @@ mod scalar;
 mod scalar_common;
 mod scalar_visitor;
 mod select;
+mod show;
 mod sort;
-mod subquery;
 mod table;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
@@ -78,8 +80,7 @@ impl<'a> Binder {
 
     pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<Plan> {
         let init_bind_context = BindContext::new();
-        let plan = self.bind_statement(&init_bind_context, stmt).await?;
-        Ok(plan)
+        self.bind_statement(&init_bind_context, stmt).await
     }
 
     #[async_recursion::async_recursion]
@@ -88,131 +89,121 @@ impl<'a> Binder {
         bind_context: &BindContext,
         stmt: &Statement<'a>,
     ) -> Result<Plan> {
-        match stmt {
+        let plan = match stmt {
             Statement::Query(query) => {
-                let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
-                let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
-                s_expr = rewriter.rewrite(&s_expr)?;
-                Ok(Plan::Query {
+                let (s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                Plan::Query {
                     s_expr,
                     metadata: self.metadata.clone(),
                     bind_context: Box::new(bind_context),
-                })
+                }
             }
 
-            Statement::Explain { query, kind } => {
-                let plan = self.bind_statement(bind_context, query).await?;
-                Ok(Plan::Explain {
-                    kind: kind.clone(),
-                    plan: Box::new(plan),
-                })
+            Statement::Explain { query, kind } => Plan::Explain {
+                kind: kind.clone(),
+                plan: Box::new(self.bind_statement(bind_context, query).await?),
+            },
+
+            Statement::ShowFunctions { limit } => {
+                self.bind_show_functions(bind_context, limit).await?
             }
 
-            Statement::ShowMetrics => Ok(Plan::ShowMetrics),
-            Statement::ShowProcessList => Ok(Plan::ShowProcessList),
-            Statement::ShowSettings => Ok(Plan::ShowSettings),
+            Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
+
+            Statement::ShowMetrics => Plan::ShowMetrics,
+            Statement::ShowProcessList => Plan::ShowProcessList,
+            Statement::ShowSettings => Plan::ShowSettings,
 
             // Databases
-            Statement::CreateDatabase(stmt) => {
-                let plan = self.bind_create_database(stmt).await?;
-                Ok(plan)
-            }
-            Statement::DropDatabase(stmt) => {
-                let plan = self.bind_drop_database(stmt).await?;
-                Ok(plan)
-            }
-            Statement::AlterDatabase(stmt) => {
-                let plan = self.bind_alter_database(stmt).await?;
-                Ok(plan)
-            }
+            Statement::ShowDatabases(stmt) => self.bind_show_databases(stmt).await?,
+            Statement::ShowCreateDatabase(stmt) => self.bind_show_create_database(stmt).await?,
+            Statement::CreateDatabase(stmt) => self.bind_create_database(stmt).await?,
+            Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
+            Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
 
             // Tables
-            Statement::CreateTable(stmt) => {
-                let plan = self.bind_create_table(stmt).await?;
-                Ok(plan)
-            }
+            Statement::ShowTables(stmt) => self.bind_show_tables(stmt).await?,
+            Statement::ShowCreateTable(stmt) => self.bind_show_create_table(stmt).await?,
+            Statement::DescribeTable(stmt) => self.bind_describe_table(stmt).await?,
+            Statement::ShowTablesStatus(stmt) => self.bind_show_tables_status(stmt).await?,
+            Statement::CreateTable(stmt) => self.bind_create_table(stmt).await?,
+            Statement::DropTable(stmt) => self.bind_drop_table(stmt).await?,
+            Statement::UndropTable(stmt) => self.bind_undrop_table(stmt).await?,
+            Statement::AlterTable(stmt) => self.bind_alter_table(stmt).await?,
+            Statement::RenameTable(stmt) => self.bind_rename_table(stmt).await?,
+            Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
+            Statement::OptimizeTable(stmt) => self.bind_optimize_table(stmt).await?,
+            Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
             // Views
-            Statement::CreateView(stmt) => {
-                let plan = self.bind_create_view(stmt).await?;
-                Ok(plan)
-            }
-            Statement::AlterView(stmt) => {
-                let plan = self.bind_alter_view(stmt).await?;
-                Ok(plan)
-            }
+            Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
+            Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
+            Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
 
             // Users
-            Statement::CreateUser(stmt) => {
-                let plan = self.bind_create_user(stmt).await?;
-                Ok(plan)
-            }
-            Statement::DropUser { if_exists, user } => {
-                let plan = DropUserPlan {
-                    if_exists: *if_exists,
-                    user: user.clone(),
-                };
-                Ok(Plan::DropUser(Box::new(plan)))
-            }
-            Statement::AlterUser {
-                user,
-                auth_option,
-                role_options,
-            } => {
-                let plan = self
-                    .bind_alter_user(user, auth_option, role_options)
-                    .await?;
-                Ok(plan)
-            }
+            Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,
+            Statement::DropUser { if_exists, user } => Plan::DropUser(Box::new(DropUserPlan {
+                if_exists: *if_exists,
+                user: user.clone(),
+            })),
+            Statement::ShowUsers => Plan::ShowUsers,
+            Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
+
+            // Roles
+            Statement::ShowRoles => Plan::ShowRoles,
+            Statement::CreateRole {
+                if_not_exists,
+                role_name,
+            } => Plan::CreateRole(Box::new(CreateRolePlan {
+                if_not_exists: *if_not_exists,
+                role_name: role_name.to_string(),
+            })),
+            Statement::DropRole {
+                if_exists,
+                role_name,
+            } => Plan::DropRole(Box::new(DropRolePlan {
+                if_exists: *if_exists,
+                role_name: role_name.to_string(),
+            })),
 
             // Stages
-            Statement::ShowStages => Ok(Plan::ShowStages),
+            Statement::ShowStages => Plan::ShowStages,
             Statement::ListStage { location, pattern } => {
-                self.bind_list_stage(location, pattern).await
+                self.bind_list_stage(location, pattern).await?
             }
             Statement::DescribeStage { stage_name } => {
-                Ok(Plan::DescribeStage(Box::new(DescribeUserStagePlan {
+                Plan::DescribeStage(Box::new(DescribeUserStagePlan {
                     name: stage_name.clone(),
-                })))
+                }))
             }
-            Statement::CreateStage(stmt) => {
-                let plan = self.bind_create_stage(stmt).await?;
-                Ok(plan)
-            }
+            Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,
             Statement::DropStage {
                 stage_name,
                 if_exists,
-            } => Ok(Plan::DropStage(Box::new(DropUserStagePlan {
+            } => Plan::DropStage(Box::new(DropUserStagePlan {
                 if_exists: *if_exists,
                 name: stage_name.clone(),
-            }))),
+            })),
             Statement::RemoveStage { location, pattern } => {
-                self.bind_remove_stage(location, pattern).await
+                self.bind_remove_stage(location, pattern).await?
             }
+            Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
 
-            _ => Err(ErrorCode::UnImplement(format!(
-                "UnImplemented stmt {stmt} in binder"
-            ))),
-        }
-    }
+            Statement::Grant(stmt) => self.bind_grant(stmt).await?,
 
-    async fn resolve_data_source(
-        &self,
-        tenant: &str,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-        travel_point: &Option<TimeTravelPoint>,
-    ) -> Result<Arc<dyn Table>> {
-        // Resolve table with catalog
-        let catalog = self.catalogs.get_catalog(catalog_name)?;
-        let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
-        if let Some(TimeTravelPoint::Snapshot(s)) = travel_point {
-            table_meta = table_meta
-                .navigate_to(self.ctx.clone(), &NavigationPoint::SnapshotID(s.to_owned()))
-                .await?;
-        }
-        Ok(table_meta)
+            Statement::ShowGrants { principal } => Plan::ShowGrants(Box::new(ShowGrantsPlan {
+                principal: principal.clone(),
+            })),
+
+            Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
+
+            _ => {
+                return Err(ErrorCode::UnImplement(format!(
+                    "UnImplemented stmt {stmt} in binder"
+                )))
+            }
+        };
+        Ok(plan)
     }
 
     /// Create a new ColumnBinding with assigned index

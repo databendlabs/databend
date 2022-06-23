@@ -45,6 +45,7 @@ use crate::DropUserStagePlan;
 use crate::DropUserUDFPlan;
 use crate::DropViewPlan;
 use crate::EmptyPlan;
+use crate::ExistsTablePlan;
 use crate::ExplainPlan;
 use crate::Expression;
 use crate::ExpressionPlan;
@@ -176,6 +177,7 @@ pub trait PlanVisitor {
             PlanNode::RenameTable(plan) => self.visit_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
+            PlanNode::ExistsTable(plan) => self.visit_exists_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
 
@@ -398,6 +400,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_optimize_table(&mut self, _: &OptimizeTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_exists_table(&mut self, _: &ExistsTablePlan) -> Result<()> {
         Ok(())
     }
 

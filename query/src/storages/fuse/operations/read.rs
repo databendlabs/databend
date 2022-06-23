@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_base::base::Progress;
@@ -166,6 +167,10 @@ impl FuseTableSource {
 impl Processor for FuseTableSource {
     fn name(&self) -> &'static str {
         "FuseEngineSource"
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

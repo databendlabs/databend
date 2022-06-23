@@ -1045,12 +1045,12 @@ select '====Correlated Subquery====';
 ----  
 ====Correlated Subquery====
 
-statement query I 
-select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
+# statement query I
+# select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
 
-----  
-0
-1
+# ----
+# 0
+# 1
 
 statement query I 
 select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;
@@ -1085,7 +1085,7 @@ explain select t1.a from t1 where a > 0;
 ----  mysql
 Project: [a]
     Filter: [a > 0]
-        PhysicalScan: default.default.t1
+        Scan: default.default.t1
 
 
 ----  http

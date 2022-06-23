@@ -102,6 +102,10 @@ impl Transform for TransformFilterImpl<true> {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
+        if data.num_columns() == 0 || data.num_rows() == 0 {
+            return Ok(data);
+        }
+
         let filter_block = self.executor.execute(&data)?;
         self.correct_with_schema(DataBlock::filter_block(data, filter_block.column(0))?)
     }
@@ -113,6 +117,10 @@ impl Transform for TransformFilterImpl<false> {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
+        if data.num_columns() == 0 || data.num_rows() == 0 {
+            return Ok(data);
+        }
+
         let filter_block = self.executor.execute(&data)?;
         self.correct_with_schema(DataBlock::filter_block(data, filter_block.column(0))?)
     }

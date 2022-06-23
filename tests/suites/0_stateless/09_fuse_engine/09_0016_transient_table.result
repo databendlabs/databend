@@ -1,0 +1,8 @@
+-- create transient table
+-- 3 insertions
+-- check ingestion
+1
+2
+3
+-- check history count, there should be only one snapshot left
+1

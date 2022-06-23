@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -91,6 +92,10 @@ impl FuseTableSink {
 impl Processor for FuseTableSink {
     fn name(&self) -> &'static str {
         "FuseSink"
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

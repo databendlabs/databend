@@ -17,9 +17,11 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_meta_types::AuthType;
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 use common_meta_types::UserOptionFlag;
+use common_meta_types::UserPrivilegeType;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -29,6 +31,8 @@ use crate::ast::expr::Literal;
 use crate::ast::expr::TypeName;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
+use crate::ast::write_quoted_comma_separated_list;
+use crate::ast::write_space_seperated_map;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::parser::token::Token;
@@ -42,14 +46,7 @@ pub enum Statement<'a> {
         query: Box<Statement<'a>>,
     },
 
-    Insert {
-        catalog: Option<Identifier<'a>>,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        columns: Vec<Identifier<'a>>,
-        source: InsertSource<'a>,
-        overwrite: bool,
-    },
+    Copy(CopyStmt<'a>),
 
     Delete {
         catalog: Option<Identifier<'a>>,
@@ -75,6 +72,8 @@ pub enum Statement<'a> {
         value: Literal,
     },
 
+    Insert(InsertStmt<'a>),
+
     // Databases
     ShowDatabases(ShowDatabasesStmt<'a>),
     ShowCreateDatabase(ShowCreateDatabaseStmt<'a>),
@@ -97,30 +96,35 @@ pub enum Statement<'a> {
     RenameTable(RenameTableStmt<'a>),
     TruncateTable(TruncateTableStmt<'a>),
     OptimizeTable(OptimizeTableStmt<'a>),
+    ExistsTable(ExistsTableStmt<'a>),
 
     // Views
     CreateView(CreateViewStmt<'a>),
-    DropView {
-        if_exists: bool,
-        catalog: Option<Identifier<'a>>,
-        database: Option<Identifier<'a>>,
-        view: Identifier<'a>,
-    },
     AlterView(AlterViewStmt<'a>),
+    DropView(DropViewStmt<'a>),
 
     // User
+    ShowUsers,
     CreateUser(CreateUserStmt),
-    AlterUser {
-        // None means current user
-        user: Option<UserIdentity>,
-        // None means no change to make
-        auth_option: Option<AuthOption>,
-        role_options: Vec<RoleOption>,
-    },
+    AlterUser(AlterUserStmt),
     DropUser {
         if_exists: bool,
         user: UserIdentity,
     },
+    ShowRoles,
+    CreateRole {
+        if_not_exists: bool,
+        role_name: String,
+    },
+    DropRole {
+        if_exists: bool,
+        role_name: String,
+    },
+    Grant(AccountMgrStatement),
+    ShowGrants {
+        principal: Option<PrincipalIdentity>,
+    },
+    Revoke(AccountMgrStatement),
 
     // UDF
     CreateUDF {
@@ -166,6 +170,34 @@ pub enum ExplainKind {
     Syntax,
     Graph,
     Pipeline,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct InsertStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+    pub columns: Vec<Identifier<'a>>,
+    pub source: InsertSource<'a>,
+    pub overwrite: bool,
+}
+
+/// CopyStmt is the parsed statement of `COPY`.
+///
+/// ## Examples
+///
+/// ```sql
+/// COPY INTO table from s3://bucket/path/to/x.csv
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct CopyStmt<'a> {
+    pub src: CopyUnit<'a>,
+    pub dst: CopyUnit<'a>,
+    pub files: Vec<String>,
+    pub pattern: String,
+    pub file_format: BTreeMap<String, String>,
+    /// TODO(xuanwo): parse into validation_mode directly.
+    pub validation_mode: String,
+    pub size_limit: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)] // Databases
@@ -235,6 +267,7 @@ pub struct CreateTableStmt<'a> {
     pub cluster_by: Vec<Expr<'a>>,
     pub as_query: Option<Box<Query<'a>>>,
     pub comment: Option<String>,
+    pub transient: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -314,6 +347,13 @@ pub enum OptimizeTableAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ExistsTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum TableOption {
     Engine(Engine),
     Comment(String),
@@ -351,6 +391,60 @@ pub enum DatabaseEngine {
     Github(String),
 }
 
+/// CopyUnit is the unit that can be used in `COPY`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyUnit<'a> {
+    /// Table can be used in `INTO` or `FROM`.
+    ///
+    /// While table used as `FROM`, it will be rewrite as `(SELECT * FROM table)`
+    Table {
+        catalog: Option<Identifier<'a>>,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+    },
+    /// StageLocation (a.k.a internal and external stage) can be used
+    /// in `INTO` or `FROM`.
+    ///
+    /// For examples:
+    ///
+    /// - internal stage: `@internal_stage/path/to/dir/`
+    /// - external stage: `@s3_external_stage/path/to/dir/`
+    StageLocation {
+        /// The name of the stage.
+        name: String,
+        path: String,
+    },
+    /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
+    ///
+    /// For examples: `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
+    ///
+    /// TODO(xuanwo): Add endpoint_url support.
+    /// TODO(xuanwo): We can check if we support this protocol during parsing.
+    /// TODO(xuanwo): Maybe we can introduce more strict (friendly) report for credentials and encryption, like parsed into StorageConfig?
+    UriLocation {
+        protocol: String,
+        name: String,
+        path: String,
+        credentials: BTreeMap<String, String>,
+        encryption: BTreeMap<String, String>,
+    },
+    /// Query can only be used as `FROM`.
+    ///
+    /// For example:`(SELECT field_a,field_b FROM table)`
+    Query(Box<Query<'a>>),
+}
+
+impl CopyUnit<'_> {
+    pub fn target(&self) -> &'static str {
+        match self {
+            CopyUnit::Table { .. } => "Table",
+            CopyUnit::StageLocation { .. } => "StageLocation",
+            CopyUnit::UriLocation { .. } => "UriLocation",
+            CopyUnit::Query(_) => "Query",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateViewStmt<'a> {
     pub if_not_exists: bool,
@@ -366,6 +460,14 @@ pub struct AlterViewStmt<'a> {
     pub database: Option<Identifier<'a>>,
     pub view: Identifier<'a>,
     pub query: Box<Query<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropViewStmt<'a> {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub view: Identifier<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -386,6 +488,7 @@ pub struct ColumnDefinition<'a> {
     pub data_type: TypeName,
     pub nullable: bool,
     pub default_expr: Option<Box<Expr<'a>>>,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -424,9 +527,16 @@ pub enum KillTarget {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InsertSource<'a> {
-    Streaming { format: String },
-    Values { values_tokens: &'a [Token<'a>] },
-    Select { query: Box<Query<'a>> },
+    Streaming {
+        format: String,
+        rest_tokens: &'a [Token<'a>],
+    },
+    Values {
+        rest_tokens: &'a [Token<'a>],
+    },
+    Select {
+        query: Box<Query<'a>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -434,6 +544,15 @@ pub struct CreateUserStmt {
     pub if_not_exists: bool,
     pub user: UserIdentity,
     pub auth_option: AuthOption,
+    pub role_options: Vec<RoleOption>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterUserStmt {
+    // None means current user
+    pub user: Option<UserIdentity>,
+    // None means no change to make
+    pub auth_option: Option<AuthOption>,
     pub role_options: Vec<RoleOption>,
 }
 
@@ -449,6 +568,33 @@ pub enum RoleOption {
     NoTenantSetting,
     ConfigReload,
     NoConfigReload,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AccountMgrStatement {
+    pub source: AccountMgrSource,
+    pub principal: PrincipalIdentity,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AccountMgrSource {
+    Role {
+        role: String,
+    },
+    Privs {
+        privileges: Vec<UserPrivilegeType>,
+        level: AccountMgrLevel,
+    },
+    ALL {
+        level: AccountMgrLevel,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AccountMgrLevel {
+    Global,
+    Database(Option<String>),
+    Table(Option<String>, String),
 }
 
 impl RoleOption {
@@ -490,6 +636,9 @@ impl<'a> Display for ColumnDefinition<'a> {
         if let Some(default_expr) = &self.default_expr {
             write!(f, " DEFAULT {default_expr}")?;
         }
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT '{comment}'")?;
+        }
         Ok(())
     }
 }
@@ -510,6 +659,58 @@ impl Display for TableOption {
             TableOption::Engine(engine) => write!(f, "ENGINE = {engine}"),
             TableOption::Comment(comment) => write!(f, "COMMENT = {comment}"),
         }
+    }
+}
+
+impl Display for AccountMgrSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccountMgrSource::Role { role } => write!(f, " ROLE {role}")?,
+            AccountMgrSource::Privs { privileges, level } => {
+                write!(f, " ")?;
+                write_comma_separated_list(f, privileges.iter().map(|p| p.to_string()))?;
+                write!(f, " ON")?;
+                match level {
+                    AccountMgrLevel::Global => write!(f, " *.*")?,
+                    AccountMgrLevel::Database(database_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.*")?;
+                        } else {
+                            write!(f, " *")?;
+                        }
+                    }
+                    AccountMgrLevel::Table(database_name, table_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.{table_name}")?;
+                        } else {
+                            write!(f, " {table_name}")?;
+                        }
+                    }
+                }
+            }
+            AccountMgrSource::ALL { level, .. } => {
+                write!(f, " ALL PRIVILEGES")?;
+                write!(f, " ON")?;
+                match level {
+                    AccountMgrLevel::Global => write!(f, " *.*")?,
+                    AccountMgrLevel::Database(database_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.*")?;
+                        } else {
+                            write!(f, " *")?;
+                        }
+                    }
+                    AccountMgrLevel::Table(database_name, table_name) => {
+                        if let Some(database_name) = database_name {
+                            write!(f, " {database_name}.{table_name}")?;
+                        } else {
+                            write!(f, " {table_name}")?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -545,6 +746,56 @@ impl Display for KillTarget {
     }
 }
 
+impl Display for CopyUnit<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CopyUnit::Table {
+                catalog,
+                database,
+                table,
+            } => {
+                if let Some(catalog) = catalog {
+                    write!(
+                        f,
+                        "{catalog}.{}.{table}",
+                        database.as_ref().expect("database must be valid")
+                    )
+                } else if let Some(database) = database {
+                    write!(f, "{database}.{table}")
+                } else {
+                    write!(f, "{table}")
+                }
+            }
+            CopyUnit::StageLocation { name, path } => {
+                write!(f, "@{name}{path}")
+            }
+            CopyUnit::UriLocation {
+                protocol,
+                name,
+                path,
+                credentials,
+                encryption,
+            } => {
+                write!(f, "'{protocol}://{name}{path}'")?;
+                if !credentials.is_empty() {
+                    write!(f, " CREDENTIALS = ( ")?;
+                    write_space_seperated_map(f, credentials)?;
+                    write!(f, " )")?;
+                }
+                if !encryption.is_empty() {
+                    write!(f, " ENCRYPTION = ( ")?;
+                    write_space_seperated_map(f, encryption)?;
+                    write!(f, " )")?;
+                }
+                Ok(())
+            }
+            CopyUnit::Query(query) => {
+                write!(f, "({query})")
+            }
+        }
+    }
+}
+
 impl Display for RoleOption {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -571,14 +822,14 @@ impl<'a> Display for Statement<'a> {
             Statement::Query(query) => {
                 write!(f, "{query}")?;
             }
-            Statement::Insert {
+            Statement::Insert(InsertStmt {
                 catalog,
                 database,
                 table,
                 columns,
                 source,
                 overwrite,
-            } => {
+            }) => {
                 write!(f, "INSERT ")?;
                 if *overwrite {
                     write!(f, "OVERWRITE ")?;
@@ -592,12 +843,20 @@ impl<'a> Display for Statement<'a> {
                     write!(f, ")")?;
                 }
                 match source {
-                    InsertSource::Streaming { format } => write!(f, " FORMAT {format}")?,
-                    InsertSource::Values { values_tokens } => write!(
+                    InsertSource::Streaming {
+                        format,
+                        rest_tokens,
+                    } => write!(
+                        f,
+                        " FORMAT {format} {}",
+                        &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
+                            ..rest_tokens.last().unwrap().span.end]
+                    )?,
+                    InsertSource::Values { rest_tokens } => write!(
                         f,
                         " VALUES {}",
-                        &values_tokens[0].source[values_tokens.first().unwrap().span.start
-                            ..values_tokens.last().unwrap().span.end]
+                        &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
+                            ..rest_tokens.last().unwrap().span.end]
                     )?,
                     InsertSource::Select { query } => write!(f, " {query}")?,
                 }
@@ -612,6 +871,37 @@ impl<'a> Display for Statement<'a> {
                 write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
                 if let Some(conditions) = selection {
                     write!(f, "WHERE {conditions} ")?;
+                }
+            }
+            Statement::Copy(stmt) => {
+                write!(f, "COPY")?;
+                write!(f, " INTO {}", stmt.dst)?;
+                write!(f, " FROM {}", stmt.src)?;
+
+                if !stmt.file_format.is_empty() {
+                    write!(f, " FILE_FORMAT = (")?;
+                    for (k, v) in stmt.file_format.iter() {
+                        write!(f, " {} = '{}'", k, v)?;
+                    }
+                    write!(f, " )")?;
+                }
+
+                if !stmt.files.is_empty() {
+                    write!(f, " FILES = (")?;
+                    write_quoted_comma_separated_list(f, &stmt.files)?;
+                    write!(f, " )")?;
+                }
+
+                if !stmt.pattern.is_empty() {
+                    write!(f, " PATTERN = '{}'", stmt.pattern)?;
+                }
+
+                if stmt.size_limit != 0 {
+                    write!(f, " SIZE_LIMIT = {}", stmt.size_limit)?;
+                }
+
+                if !stmt.validation_mode.is_empty() {
+                    write!(f, "VALIDATION_MODE = {}", stmt.validation_mode)?;
                 }
             }
             Statement::ShowSettings => {
@@ -760,8 +1050,13 @@ impl<'a> Display for Statement<'a> {
                 comment,
                 cluster_by,
                 as_query,
+                transient,
             }) => {
-                write!(f, "CREATE TABLE ")?;
+                write!(f, "CREATE ")?;
+                if *transient {
+                    write!(f, "TRANSIENT ")?;
+                }
+                write!(f, "TABLE ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
@@ -896,6 +1191,15 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " {action}")?;
                 }
             }
+            Statement::ExistsTable(ExistsTableStmt {
+                catalog,
+                database,
+                table,
+            }) => {
+                write!(f, "EXISTS TABLE ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+            }
+
             Statement::CreateView(CreateViewStmt {
                 if_not_exists,
                 catalog,
@@ -920,17 +1224,23 @@ impl<'a> Display for Statement<'a> {
                 write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
                 write!(f, " AS {query}")?;
             }
-            Statement::DropView {
+            Statement::DropView(DropViewStmt {
                 if_exists,
                 catalog,
                 database,
                 view,
-            } => {
+            }) => {
                 write!(f, "DROP VIEW ")?;
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;
                 }
                 write_period_separated_list(f, catalog.iter().chain(database).chain(Some(view)))?;
+            }
+            Statement::ShowUsers => {
+                write!(f, "SHOW USERS")?;
+            }
+            Statement::ShowRoles => {
+                write!(f, "SHOW ROLES")?;
             }
             Statement::CreateUser(CreateUserStmt {
                 if_not_exists,
@@ -956,11 +1266,11 @@ impl<'a> Display for Statement<'a> {
                     }
                 }
             }
-            Statement::AlterUser {
+            Statement::AlterUser(AlterUserStmt {
                 user,
                 auth_option,
                 role_options,
-            } => {
+            }) => {
                 write!(f, "ALTER USER")?;
                 if let Some(user) = user {
                     write!(f, " {user}")?;
@@ -989,6 +1299,47 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " IF EXISTS")?;
                 }
                 write!(f, " {user}")?;
+            }
+            Statement::CreateRole {
+                if_not_exists,
+                role_name: role,
+            } => {
+                write!(f, "CREATE ROLE")?;
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " '{role}'")?;
+            }
+            Statement::DropRole {
+                if_exists,
+                role_name: role,
+            } => {
+                write!(f, "DROP ROLE")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " '{role}'")?;
+            }
+            Statement::Grant(AccountMgrStatement { source, principal }) => {
+                write!(f, "GRANT")?;
+                write!(f, "{source}")?;
+
+                write!(f, " TO")?;
+                write!(f, "{principal}")?;
+            }
+            Statement::ShowGrants { principal } => {
+                write!(f, "SHOW GRANTS")?;
+                if let Some(principal) = principal {
+                    write!(f, " FOR")?;
+                    write!(f, "{principal}")?;
+                }
+            }
+            Statement::Revoke(AccountMgrStatement { source, principal }) => {
+                write!(f, "REVOKE")?;
+                write!(f, "{source}")?;
+
+                write!(f, " FROM")?;
+                write!(f, "{principal}")?;
             }
             Statement::CreateUDF {
                 if_not_exists,

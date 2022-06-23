@@ -20,6 +20,7 @@ use common_base::base::Stoppable;
 use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
+use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
 use poem::Endpoint;
 use poem::EndpointExt;
@@ -44,7 +45,8 @@ impl HttpService {
     }
 
     fn build_router(&self) -> impl Endpoint {
-        Route::new()
+        #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
+        let mut route = Route::new()
             .at("/v1/health", get(super::http::v1::health::health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at(
@@ -66,19 +68,29 @@ impl HttpService {
             .at(
                 "/debug/pprof/profile",
                 get(super::http::debug::pprof::debug_pprof_handler),
-            )
-            .data(self.meta_node.clone())
-            .data(self.cfg.clone())
+            );
+
+        #[cfg(feature = "memory-profiling")]
+        {
+            route = route.at(
+                // to follow the conversions of jepref, we arrange the path in
+                // this way, so that jeprof could be invoked like:
+                //   `jeprof ./target/debug/databend-meta http://localhost:28002/debug/mem`
+                // and jeprof will translate the above url into sth like:
+                //    "http://localhost:28002/debug/mem/pprof/profile?seconds=30"
+                "/debug/mem/pprof/profile",
+                get(super::http::debug::jeprof::debug_jeprof_dump_handler),
+            );
+        };
+        route.data(self.meta_node.clone()).data(self.cfg.clone())
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
         let conf = config.clone();
-        let tls_cert = conf.admin_tls_server_cert;
-        let tls_key = conf.admin_tls_server_key;
-
-        let cfg = RustlsConfig::new()
-            .cert(std::fs::read(tls_cert.as_str())?)
-            .key(std::fs::read(tls_key.as_str())?);
+        let tls_cert = std::fs::read(conf.admin_tls_server_cert.as_str())?;
+        let tls_key = std::fs::read(conf.admin_tls_server_key)?;
+        let certificate = RustlsCertificate::new().cert(tls_cert).key(tls_key);
+        let cfg = RustlsConfig::new().fallback(certificate);
         Ok(cfg)
     }
 

@@ -132,40 +132,6 @@ DescribeTable(
 
 
 ---------- Input ----------
-describe a; describe b
----------- Output ---------
-DESCRIBE a
----------- AST ------------
-DescribeTable(
-    DescribeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "a",
-            quote: None,
-            span: Ident(9..10),
-        },
-    },
-)
-
-
----------- Output ---------
-DESCRIBE b
----------- AST ------------
-DescribeTable(
-    DescribeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "b",
-            quote: None,
-            span: Ident(21..22),
-        },
-    },
-)
-
-
----------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
@@ -207,6 +173,7 @@ CreateTable(
                                 ),
                             },
                         ),
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -217,6 +184,7 @@ CreateTable(
                         data_type: String,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -225,6 +193,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -271,6 +240,7 @@ CreateTable(
                                 ),
                             },
                         ),
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -281,6 +251,7 @@ CreateTable(
                         data_type: String,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -336,6 +307,7 @@ CreateTable(
             },
         ),
         comment: None,
+        transient: false,
     },
 )
 
@@ -382,6 +354,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -420,6 +393,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -699,6 +673,7 @@ CreateTable(
                         },
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -713,6 +688,7 @@ CreateTable(
                         },
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -721,6 +697,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -957,6 +934,25 @@ AlterView(
 
 
 ---------- Input ----------
+drop view v;
+---------- Output ---------
+DROP VIEW v
+---------- AST ------------
+DropView(
+    DropViewStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v",
+            quote: None,
+            span: Ident(10..11),
+        },
+    },
+)
+
+
+---------- Input ----------
 rename table d.t to e.s;
 ---------- Output ---------
 RENAME TABLE d.t TO e.s
@@ -1105,6 +1101,7 @@ CreateTable(
                         data_type: Int32,
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1115,6 +1112,7 @@ CreateTable(
                         data_type: Int64,
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1125,6 +1123,7 @@ CreateTable(
                         data_type: String,
                         nullable: true,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -1133,6 +1132,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -1164,6 +1164,7 @@ CreateTable(
                         data_type: Int32,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1174,6 +1175,7 @@ CreateTable(
                         data_type: Int64,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1184,6 +1186,7 @@ CreateTable(
                         data_type: String,
                         nullable: false,
                         default_expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -1192,6 +1195,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -1232,6 +1236,7 @@ CreateTable(
                                 ),
                             },
                         ),
+                        comment: None,
                     },
                 ],
             ),
@@ -1240,6 +1245,7 @@ CreateTable(
         cluster_by: [],
         as_query: None,
         comment: None,
+        transient: false,
     },
 )
 
@@ -2798,68 +2804,207 @@ Query(
 
 
 ---------- Input ----------
+select 1 from numbers(1) where ((1 = 1) or 1)
+---------- Output ---------
+SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            LiteralInteger(7..8),
+            FROM(9..13),
+            Ident(14..21),
+            LParen(21..22),
+            LiteralInteger(22..23),
+            RParen(23..24),
+            WHERE(25..30),
+            LParen(31..32),
+            LParen(32..33),
+            LiteralInteger(33..34),
+            Eq(35..36),
+            LiteralInteger(37..38),
+            RParen(38..39),
+            OR(40..42),
+            LiteralInteger(43..44),
+            RParen(44..45),
+        ],
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    LiteralInteger(7..8),
+                    FROM(9..13),
+                    Ident(14..21),
+                    LParen(21..22),
+                    LiteralInteger(22..23),
+                    RParen(23..24),
+                    WHERE(25..30),
+                    LParen(31..32),
+                    LParen(32..33),
+                    LiteralInteger(33..34),
+                    Eq(35..36),
+                    LiteralInteger(37..38),
+                    RParen(38..39),
+                    OR(40..42),
+                    LiteralInteger(43..44),
+                    RParen(44..45),
+                ],
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: [
+                                LiteralInteger(7..8),
+                            ],
+                            lit: Integer(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        name: Identifier {
+                            name: "numbers",
+                            quote: None,
+                            span: Ident(14..21),
+                        },
+                        params: [
+                            Literal {
+                                span: [
+                                    LiteralInteger(22..23),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        ],
+                        alias: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: [
+                            OR(40..42),
+                        ],
+                        op: Or,
+                        left: BinaryOp {
+                            span: [
+                                Eq(35..36),
+                            ],
+                            op: Eq,
+                            left: Literal {
+                                span: [
+                                    LiteralInteger(33..34),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                            right: Literal {
+                                span: [
+                                    LiteralInteger(37..38),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: [
+                                LiteralInteger(43..44),
+                            ],
+                            lit: Integer(
+                                1,
+                            ),
+                        },
+                    },
+                ),
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
-INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
+INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
 ---------- AST ------------
-Insert {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(12..13),
-    },
-    columns: [
-        Identifier {
-            name: "c1",
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
             quote: None,
-            span: Ident(15..17),
+            span: Ident(12..13),
         },
-        Identifier {
-            name: "c2",
-            quote: None,
-            span: Ident(19..21),
-        },
-    ],
-    source: Values {
-        values_tokens: [
-            LParen(30..31),
-            LiteralInteger(31..32),
-            Comma(32..33),
-            LiteralInteger(34..35),
-            RParen(35..36),
-            Comma(36..37),
-            LParen(38..39),
-            LiteralInteger(39..40),
-            Comma(40..41),
-            LiteralInteger(42..43),
-            RParen(43..44),
+        columns: [
+            Identifier {
+                name: "c1",
+                quote: None,
+                span: Ident(15..17),
+            },
+            Identifier {
+                name: "c2",
+                quote: None,
+                span: Ident(19..21),
+            },
         ],
+        source: Values {
+            rest_tokens: [
+                LParen(30..31),
+                LiteralInteger(31..32),
+                Comma(32..33),
+                LiteralInteger(34..35),
+                RParen(35..36),
+                Comma(36..37),
+                LParen(38..39),
+                LiteralInteger(39..40),
+                Comma(40..41),
+                LiteralInteger(42..43),
+                RParen(43..44),
+                SemiColon(44..45),
+            ],
+        },
+        overwrite: false,
     },
-    overwrite: false,
-}
+)
 
 
 ---------- Input ----------
 insert into table t format json;
 ---------- Output ---------
-INSERT INTO t FORMAT json
+INSERT INTO t FORMAT json ;
 ---------- AST ------------
-Insert {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(18..19),
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(18..19),
+        },
+        columns: [],
+        source: Streaming {
+            format: "json",
+            rest_tokens: [
+                SemiColon(31..32),
+            ],
+        },
+        overwrite: false,
     },
-    columns: [],
-    source: Streaming {
-        format: "json",
-    },
-    overwrite: false,
-}
+)
 
 
 ---------- Input ----------
@@ -2867,65 +3012,67 @@ insert into table t select * from t2;
 ---------- Output ---------
 INSERT INTO t SELECT * FROM t2
 ---------- AST ------------
-Insert {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(18..19),
-    },
-    columns: [],
-    source: Select {
-        query: Query {
-            span: [
-                SELECT(20..26),
-                Multiply(27..28),
-                FROM(29..33),
-                Ident(34..36),
-            ],
-            body: Select(
-                SelectStmt {
-                    span: [
-                        SELECT(20..26),
-                        Multiply(27..28),
-                        FROM(29..33),
-                        Ident(34..36),
-                    ],
-                    distinct: false,
-                    select_list: [
-                        QualifiedName(
-                            [
-                                Star,
-                            ],
-                        ),
-                    ],
-                    from: [
-                        Table {
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                name: "t2",
-                                quote: None,
-                                span: Ident(34..36),
-                            },
-                            alias: None,
-                            travel_point: None,
-                        },
-                    ],
-                    selection: None,
-                    group_by: [],
-                    having: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            format: None,
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(18..19),
         },
+        columns: [],
+        source: Select {
+            query: Query {
+                span: [
+                    SELECT(20..26),
+                    Multiply(27..28),
+                    FROM(29..33),
+                    Ident(34..36),
+                ],
+                body: Select(
+                    SelectStmt {
+                        span: [
+                            SELECT(20..26),
+                            Multiply(27..28),
+                            FROM(29..33),
+                            Ident(34..36),
+                        ],
+                        distinct: false,
+                        select_list: [
+                            QualifiedName(
+                                [
+                                    Star,
+                                ],
+                            ),
+                        ],
+                        from: [
+                            Table {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "t2",
+                                    quote: None,
+                                    span: Ident(34..36),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: [],
+                        having: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                format: None,
+            },
+        },
+        overwrite: false,
     },
-    overwrite: false,
-}
+)
 
 
 ---------- Input ----------
@@ -3034,7 +3181,7 @@ Query(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( FORMAT = 'CSV' compression = 'GZIP' record_delimiter = ',' )
+CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( compression = 'GZIP' format = 'CSV' record_delimiter = ',' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -3047,8 +3194,8 @@ CreateStage(
         },
         encryption_options: {},
         file_format_options: {
-            "FORMAT": "CSV",
             "compression": "GZIP",
+            "format": "CSV",
             "record_delimiter": ",",
         },
         on_error: "",
@@ -3112,22 +3259,46 @@ alter user 'test-e'@'localhost' identified by 'new-password';
 ---------- Output ---------
 ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password'
 ---------- AST ------------
-AlterUser {
-    user: Some(
-        UserIdentity {
-            username: "test-e",
-            hostname: "localhost",
-        },
-    ),
-    auth_option: Some(
-        AuthOption {
-            auth_type: None,
-            password: Some(
-                "new-password",
-            ),
-        },
-    ),
-    role_options: [],
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "test-e",
+                hostname: "localhost",
+            },
+        ),
+        auth_option: Some(
+            AuthOption {
+                auth_type: None,
+                password: Some(
+                    "new-password",
+                ),
+            },
+        ),
+        role_options: [],
+    },
+)
+
+
+---------- Input ----------
+create role 'test'
+---------- Output ---------
+CREATE ROLE 'test'
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "test",
+}
+
+
+---------- Input ----------
+drop role if exists 'test'
+---------- Output ---------
+DROP ROLE IF EXISTS 'test'
+---------- AST ------------
+DropRole {
+    if_exists: true,
+    role_name: "test",
 }
 
 
@@ -3269,6 +3440,834 @@ AlterDatabase(
                 span: Ident(35..36),
             },
         },
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
+---------- Output ---------
+CREATE TABLE t (a Int32 NOT NULL COMMENT 'col comment')COMMENT = table comment
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(16..17),
+                        },
+                        data_type: Int32,
+                        nullable: false,
+                        default_expr: None,
+                        comment: Some(
+                            "col comment",
+                        ),
+                    },
+                ],
+            ),
+        ),
+        table_options: [
+            Comment(
+                "table comment",
+            ),
+        ],
+        cluster_by: [],
+        as_query: None,
+        comment: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT, CREATE ON * TO ROLE role1
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON *.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: ALL {
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON *.* TO ROLE 'role2';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON *.* TO ROLE role2
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: ALL {
+            level: Global,
+        },
+        principal: Role(
+            "role2",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: ALL {
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL PRIVILEGES ON * TO ROLE 'role3';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON * TO ROLE role3
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: ALL {
+            level: Database(
+                None,
+            ),
+        },
+        principal: Role(
+            "role3",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO 'test-user';
+---------- Output ---------
+GRANT ROLE test TO USER 'test-user'@'%'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Role {
+            role: "test",
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-user",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO USER 'test-user';
+---------- Output ---------
+GRANT ROLE test TO USER 'test-user'@'%'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Role {
+            role: "test",
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-user",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO ROLE 'test-user';
+---------- Output ---------
+GRANT ROLE test TO ROLE test-user
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Role {
+            role: "test",
+        },
+        principal: Role(
+            "test-user",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO ROLE 'role1'
+---------- Output ---------
+GRANT SELECT ON db01.* TO ROLE role1
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO ROLE role1
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON tb1 TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT ON tb1 TO ROLE role1
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON tb1 TO 'u1';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON tb1 TO USER 'u1'@'%'
+---------- AST ------------
+Grant(
+    AccountMgrStatement {
+        source: ALL {
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS;
+---------- Output ---------
+SHOW GRANTS
+---------- AST ------------
+ShowGrants {
+    principal: None,
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR 'test-grant'@'localhost';
+---------- Output ---------
+SHOW GRANTS FOR USER 'test-grant'@'localhost'
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR USER 'test-grant'@'localhost';
+---------- Output ---------
+SHOW GRANTS FOR USER 'test-grant'@'localhost'
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR ROLE 'role1';
+---------- Output ---------
+SHOW GRANTS FOR ROLE role1
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        Role(
+            "role1",
+        ),
+    ),
+}
+
+
+---------- Input ----------
+REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';
+---------- Output ---------
+REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'localhost'
+---------- AST ------------
+Revoke(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE SELECT ON tb1 FROM ROLE 'role1';
+---------- Output ---------
+REVOKE SELECT ON tb1 FROM ROLE role1
+---------- AST ------------
+Revoke(
+    AccountMgrStatement {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE ALL ON tb1 FROM 'u1';
+---------- Output ---------
+REVOKE ALL PRIVILEGES ON tb1 FROM USER 'u1'@'%'
+---------- AST ------------
+Revoke(
+    AccountMgrStatement {
+        source: ALL {
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {},
+            encryption: {},
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO 's3://mybucket/data.csv'
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(56..63),
+            },
+        },
+        dst: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {},
+            encryption: {},
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO @my_stage
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(41..48),
+            },
+        },
+        dst: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CREDENTIALS = (
+                    AWS_KEY_ID = 'access_key'
+                    AWS_SECRET_KEY = 'secret_key'
+                )
+                ENCRYPTION = (
+                    MASTER_KEY = 'master_key'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' CREDENTIALS = ( aws_key_id='access_key' aws_secret_key='secret_key' ) ENCRYPTION = ( master_key='master_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {
+                "aws_key_id": "access_key",
+                "aws_secret_key": "secret_key",
+            },
+            encryption: {
+                "master_key": "master_key",
+            },
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
     },
 )
 

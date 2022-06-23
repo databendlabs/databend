@@ -1,30 +1,68 @@
 select * from numbers(1)
 ----
-Project: [number]
-    PhysicalScan: default.system.numbers
+Scan: default.system.numbers
 
 
 select * from (select * from numbers(1)) as t1 where number = 1
 ----
-Project: [number]
-    Filter: [number = 1]
-        PhysicalScan: default.system.numbers
+Filter: [number = 1]
+    Scan: default.system.numbers
 
 
 # `b = 1` can not be pushed down
 select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1 and b = 1
 ----
-Project: [number,b]
-    Filter: [a = 1, b = 1]
-        EvalScalar: [+(number, 1)]
-            PhysicalScan: default.system.numbers
+Filter: [a = 1, b = 1]
+    EvalScalar: [+(number, 1)]
+        Scan: default.system.numbers
 
 
 select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1
 ----
-Project: [number,b]
+EvalScalar: [+(number, 1)]
+    Filter: [a = 1]
+        Scan: default.system.numbers
+
+
+select * from numbers(1) where number = pow(1, 1 + 1)
+----
+Filter: [number = 1]
+    Scan: default.system.numbers
+
+
+select * from numbers(1) where TRUE and 1 = 1
+----
+Scan: default.system.numbers
+
+
+select * from numbers(1) where number = 0 and false
+----
+Filter: [false]
+    Scan: default.system.numbers
+
+
+select * from numbers(1) where number = 0 and null
+----
+Filter: [false]
+    Scan: default.system.numbers
+
+
+# If there is only one conjunction and the value is null, then we won't rewrite it
+select * from numbers(1) where null
+----
+Filter: [NULL]
+    Scan: default.system.numbers
+
+
+select a from (select number as a, number as b from numbers(1))
+----
+Scan: default.system.numbers
+
+
+select a from (select number as a, number+1 as b from numbers(1))
+----
+Project: [number]
     EvalScalar: [+(number, 1)]
-        Filter: [a = 1]
-            PhysicalScan: default.system.numbers
+        Scan: default.system.numbers
 
 

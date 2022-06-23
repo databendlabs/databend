@@ -15,12 +15,16 @@
 mod condvar;
 mod exit_guard;
 mod mutex;
+mod remutex;
+mod remutex_guard;
 mod rwlock;
 mod rwlock_upgrade_read;
 
 pub use condvar::Condvar;
 pub use exit_guard::ExitGuard;
 pub use mutex::Mutex;
+pub use remutex::ReentrantMutex;
+pub use remutex_guard::ReentrantMutexGuard;
 pub use rwlock::RwLock;
 pub use rwlock_upgrade_read::RwLockUpgradableReadGuard;
 

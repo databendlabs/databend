@@ -15,6 +15,7 @@
 use common_exception::Result;
 
 use super::rewrite::RuleEliminateEvalScalar;
+use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
 use super::rewrite::RulePushDownFilterProject;
@@ -23,6 +24,7 @@ use crate::sql::optimizer::rule::rewrite::RuleEliminateProject;
 use crate::sql::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::sql::optimizer::rule::rewrite::RuleMergeFilter;
 use crate::sql::optimizer::rule::rewrite::RuleMergeProject;
+use crate::sql::optimizer::rule::rewrite::RulePushDownFilterCrossApply;
 use crate::sql::optimizer::rule::rule_implement_get::RuleImplementGet;
 use crate::sql::optimizer::rule::rule_implement_hash_join::RuleImplementHashJoin;
 use crate::sql::optimizer::rule::RuleID;
@@ -43,11 +45,13 @@ impl RuleFactory {
             RuleID::PushDownFilterProject => Ok(Box::new(RulePushDownFilterProject::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new())),
+            RuleID::PushDownFilterCrossApply => Ok(Box::new(RulePushDownFilterCrossApply::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
             RuleID::EliminateProject => Ok(Box::new(RuleEliminateProject::new())),
             RuleID::MergeProject => Ok(Box::new(RuleMergeProject::new())),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
+            RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
         }
     }
 }

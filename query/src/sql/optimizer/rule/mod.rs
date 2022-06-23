@@ -43,9 +43,12 @@ pub trait Rule {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RuleID {
+    // Rewrite rules
+    NormalizeScalarFilter,
     PushDownFilterProject,
     PushDownFilterEvalScalar,
     PushDownFilterJoin,
+    PushDownFilterCrossApply,
     EliminateEvalScalar,
     EliminateFilter,
     EliminateProject,
@@ -53,6 +56,7 @@ pub enum RuleID {
     MergeEvalScalar,
     MergeFilter,
 
+    // Implementation rules
     ImplementGet,
     ImplementHashJoin,
 }
@@ -65,12 +69,14 @@ impl Display for RuleID {
             RuleID::PushDownFilterProject => write!(f, "PushDownFilterProject"),
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
+            RuleID::PushDownFilterCrossApply => write!(f, "PushDownFilterCrossApply"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
             RuleID::EliminateProject => write!(f, "EliminateProject"),
             RuleID::MergeProject => write!(f, "MergeProject"),
             RuleID::MergeEvalScalar => write!(f, "MergeEvalScalar"),
             RuleID::MergeFilter => write!(f, "MergeFilter"),
+            RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
         }
     }
 }

@@ -47,7 +47,7 @@ pub fn block_to_json_value_columns(
         let field = block.schema().field(col_index);
         let data_type = field.data_type();
         let serializer = data_type.create_serializer(&column)?;
-        col_table.push(serializer.serialize_json(format).map_err(|e| {
+        col_table.push(serializer.serialize_json_values(format).map_err(|e| {
             ErrorCode::UnexpectedError(format!(
                 "fail to serialize filed {}, error = {}",
                 field.name(),

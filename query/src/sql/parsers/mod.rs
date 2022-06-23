@@ -16,6 +16,7 @@ mod parser_call;
 mod parser_copy;
 mod parser_database;
 mod parser_delete;
+mod parser_exists;
 mod parser_explain;
 mod parser_insert;
 mod parser_kill;

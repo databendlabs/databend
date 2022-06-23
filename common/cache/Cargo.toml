@@ -22,7 +22,7 @@ common-tracing = { path = "../tracing" }
 # Github dependencies
 
 # Crates.io dependencies
-filetime = "0.2.15"
+filetime = "0.2.16"
 ritelinked = { version = "0.3.2", default-features = false, features = ["ahash", "inline-more"] }
 walkdir = "2.3.2"
 

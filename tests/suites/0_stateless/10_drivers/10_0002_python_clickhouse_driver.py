@@ -21,7 +21,7 @@ sqls = """
 DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
-CREATE TABLE IF NOT EXISTS t1(a String, b String, c String, d String, e String, f String, g String, h String) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(a String, b String, c String, d String, e String, f String, g String, h String) Engine = Fuse;
 """
 
 client1.run(sqls)

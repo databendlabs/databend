@@ -20,6 +20,7 @@ use common_datavalues::prelude::*;
 use databend_query::storages::fuse::statistics::accumulator;
 use databend_query::storages::fuse::statistics::reducers;
 
+use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
@@ -66,5 +67,30 @@ fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     }
     assert_eq!(10, stats_acc.blocks_statistics.len());
     // TODO more cases here pls
+    Ok(())
+}
+
+#[test]
+fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", i32::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
+    ]);
+    let blocks = DataBlock::create(schema, vec![
+        Series::from_data(vec![1i32, 2, 3]),
+        Series::from_data(vec!["123456", "234567", "345678"]),
+    ]);
+    let stats = BlockStatistics::clusters_statistics(0, vec![0], blocks.clone())?;
+    assert!(stats.is_some());
+    let stats = stats.unwrap();
+    assert_eq!(vec![DataValue::Int64(1)], stats.min);
+    assert_eq!(vec![DataValue::Int64(3)], stats.max);
+
+    let stats = BlockStatistics::clusters_statistics(1, vec![1], blocks)?;
+    assert!(stats.is_some());
+    let stats = stats.unwrap();
+    assert_eq!(vec![DataValue::String(b"12345".to_vec())], stats.min);
+    assert_eq!(vec![DataValue::String(b"34567".to_vec())], stats.max);
+
     Ok(())
 }

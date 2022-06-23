@@ -20,7 +20,7 @@ use common_exception::Result;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::TypeChecker;
-use crate::sql::plans::LimitPlan;
+use crate::sql::plans::Limit;
 use crate::sql::BindContext;
 
 impl<'a> Binder {
@@ -57,7 +57,7 @@ impl<'a> Binder {
             0
         };
 
-        let limit_plan = LimitPlan {
+        let limit_plan = Limit {
             limit: limit_cnt,
             offset: offset_cnt,
         };

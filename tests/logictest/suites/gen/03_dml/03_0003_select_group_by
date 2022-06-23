@@ -29,18 +29,6 @@ SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 ord
 1
 2
 
-statement query IT 
-SELECT count(*), name FROM system.credits WHERE name='ahash' GROUP BY name;
-
-----  
-1 ahash
-
-statement query IT 
-SELECT count(1), name FROM system.credits WHERE name='ahash' GROUP BY name;
-
-----  
-1 ahash
-
 statement query T 
 SELECT '==GROUP BY Strings==';
 

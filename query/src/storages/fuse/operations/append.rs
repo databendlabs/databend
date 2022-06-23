@@ -34,6 +34,7 @@ use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::operations::FuseTableSink;
@@ -87,10 +88,7 @@ impl FuseTable {
                 let log_entry_res = match segment {
                     Ok(seg) => {
                         let seg_loc = locs.gen_segment_info_location();
-                        let bytes = serde_json::to_vec(&seg)?;
-                        da.object(&seg_loc)
-                        .write(bytes)
-                        .await?;
+                        write_meta(&da, &seg_loc, &seg).await?;
                         let seg = Arc::new(seg);
                         let log_entry = AppendOperationLogEntry::new(seg_loc.clone(), seg.clone());
                         if let Some(ref cache) = segment_info_cache {

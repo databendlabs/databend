@@ -219,6 +219,10 @@ impl FuseTable {
             }
         }
     }
+
+    pub fn transient(&self) -> bool {
+        self.table_info.meta.options.contains_key("TRANSIENT")
+    }
 }
 
 #[async_trait::async_trait]
@@ -297,7 +301,7 @@ impl Table for FuseTable {
         }
 
         let mut new_table_meta = self.get_table_info().meta.clone();
-        new_table_meta.cluster_key = None;
+        new_table_meta.default_cluster_key = None;
         new_table_meta.default_cluster_key_id = None;
 
         let schema = self.schema().as_ref().clone();
@@ -427,11 +431,14 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         point: &NavigationPoint,
     ) -> Result<Arc<dyn Table>> {
-        let NavigationPoint::SnapshotID(snapshot_id) = point;
-        let res = self
-            .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
-            .await?;
-        Ok(res)
+        match point {
+            NavigationPoint::SnapshotID(snapshot_id) => Ok(self
+                .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
+                .await?),
+            NavigationPoint::TimePoint(time_point) => {
+                Ok(self.navigate_to_time_point(&ctx, *time_point).await?)
+            }
+        }
     }
 
     async fn delete(&self, ctx: Arc<QueryContext>, delete_plan: DeletePlan) -> Result<()> {

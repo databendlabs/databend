@@ -102,6 +102,7 @@ secret_access_key = ""
 bucket = ""
 root = ""
 master_key = ""
+enable_virtual_host_style = false
 
 [storage.azblob]
 account_name = ""

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::future::Future;
 use std::sync::Arc;
 
 use common_base::infallible::Mutex;
@@ -259,12 +258,12 @@ impl StageSource {
     }
 }
 
+#[async_trait::async_trait]
 impl AsyncSource for StageSource {
     const NAME: &'static str = "StageSource";
 
-    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
-
-    fn generate(&mut self) -> Self::BlockFuture<'_> {
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let file_name = if !self.initialized {
             let mut files_guard = self.files.lock();
             let file_name = files_guard.pop_front();
@@ -275,25 +274,23 @@ impl AsyncSource for StageSource {
             self.current_file.clone()
         };
 
-        async move {
-            if !self.initialized {
-                if file_name.is_none() {
-                    return Ok(None);
-                }
-                self.initialize(file_name.unwrap()).await?;
-                self.initialized = true;
+        if !self.initialized {
+            if file_name.is_none() {
+                return Ok(None);
             }
+            self.initialize(file_name.unwrap()).await?;
+            self.initialized = true;
+        }
 
-            match &mut self.source {
-                None => Err(ErrorCode::LogicalError("Please init source first!")),
-                Some(source) => match source.read().await? {
-                    None => {
-                        self.initialized = false;
-                        Ok(Some(DataBlock::empty_with_schema(self.schema.clone())))
-                    }
-                    Some(data) => Ok(Some(data)),
-                },
-            }
+        match &mut self.source {
+            None => Err(ErrorCode::LogicalError("Please init source first!")),
+            Some(source) => match source.read().await? {
+                None => {
+                    self.initialized = false;
+                    Ok(Some(DataBlock::empty_with_schema(self.schema.clone())))
+                }
+                Some(data) => Ok(Some(data)),
+            },
         }
     }
 }

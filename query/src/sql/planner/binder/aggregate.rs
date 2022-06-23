@@ -31,8 +31,8 @@ use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::planner::semantic::GroupingChecker;
+use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
-use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
@@ -95,17 +95,20 @@ impl<'a> AggregateRewriter<'a> {
             Scalar::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::OrExpr(scalar) => Ok(OrExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::FunctionCall(func) => {
@@ -124,7 +127,7 @@ impl<'a> AggregateRewriter<'a> {
                 }
                 .into())
             }
-            Scalar::Cast(cast) => Ok(CastExpr {
+            Scalar::CastExpr(cast) => Ok(CastExpr {
                 argument: Box::new(self.visit(&cast.argument)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),
@@ -294,7 +297,7 @@ impl<'a> Binder {
             new_expr = SExpr::create_unary(eval_scalar.into(), new_expr);
         }
 
-        let aggregate_plan = AggregatePlan {
+        let aggregate_plan = Aggregate {
             group_items: bind_context.aggregate_info.group_items.clone(),
             aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
             from_distinct: false,
@@ -409,7 +412,7 @@ impl<'a> Binder {
         let index = index as usize - 1;
         if index >= select_list.items.len() {
             return Err(ErrorCode::SemanticError(expr.span().display_error(
-                format!("GROUP BY position {} is not in select list", index),
+                format!("GROUP BY position {} is not in select list", index + 1),
             )));
         }
         let item = select_list

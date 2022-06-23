@@ -752,6 +752,49 @@ MapAccess {
 
 
 ---------- Input ----------
+((1 = 1) or 1)
+---------- Output ---------
+1 = 1 OR 1
+---------- AST ------------
+BinaryOp {
+    span: [
+        OR(9..11),
+    ],
+    op: Or,
+    left: BinaryOp {
+        span: [
+            Eq(4..5),
+        ],
+        op: Eq,
+        left: Literal {
+            span: [
+                LiteralInteger(2..3),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+        right: Literal {
+            span: [
+                LiteralInteger(6..7),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+    },
+    right: Literal {
+        span: [
+            LiteralInteger(12..13),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+}
+
+
+---------- Input ----------
 typeof(1 + 2)
 ---------- Output ---------
 typeof(1 + 2)
@@ -2565,6 +2608,182 @@ NULLIF(a, b)
 NullIf {
     span: [
         NULLIF(0..6),
+        LParen(6..7),
+        Ident(7..8),
+        Comma(8..9),
+        Ident(10..11),
+        RParen(11..12),
+    ],
+    expr1: ColumnRef {
+        span: [
+            Ident(7..8),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(7..8),
+        },
+    },
+    expr2: ColumnRef {
+        span: [
+            Ident(10..11),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(10..11),
+        },
+    },
+}
+
+
+---------- Input ----------
+coalesce(1, 2, 3)
+---------- Output ---------
+COALESCE(1, 2, 3)
+---------- AST ------------
+Coalesce {
+    span: [
+        COALESCE(0..8),
+        LParen(8..9),
+        LiteralInteger(9..10),
+        Comma(10..11),
+        LiteralInteger(12..13),
+        Comma(13..14),
+        LiteralInteger(15..16),
+        RParen(16..17),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LiteralInteger(9..10),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralInteger(12..13),
+            ],
+            lit: Integer(
+                2,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralInteger(15..16),
+            ],
+            lit: Integer(
+                3,
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+coalesce(a, b, c)
+---------- Output ---------
+COALESCE(a, b, c)
+---------- AST ------------
+Coalesce {
+    span: [
+        COALESCE(0..8),
+        LParen(8..9),
+        Ident(9..10),
+        Comma(10..11),
+        Ident(12..13),
+        Comma(13..14),
+        Ident(15..16),
+        RParen(16..17),
+    ],
+    exprs: [
+        ColumnRef {
+            span: [
+                Ident(9..10),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(9..10),
+            },
+        },
+        ColumnRef {
+            span: [
+                Ident(12..13),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(12..13),
+            },
+        },
+        ColumnRef {
+            span: [
+                Ident(15..16),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(15..16),
+            },
+        },
+    ],
+}
+
+
+---------- Input ----------
+ifnull(1, 1)
+---------- Output ---------
+IFNULL(1, 1)
+---------- AST ------------
+IfNull {
+    span: [
+        IFNULL(0..6),
+        LParen(6..7),
+        LiteralInteger(7..8),
+        Comma(8..9),
+        LiteralInteger(10..11),
+        RParen(11..12),
+    ],
+    expr1: Literal {
+        span: [
+            LiteralInteger(7..8),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+    expr2: Literal {
+        span: [
+            LiteralInteger(10..11),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+}
+
+
+---------- Input ----------
+ifnull(a, b)
+---------- Output ---------
+IFNULL(a, b)
+---------- AST ------------
+IfNull {
+    span: [
+        IFNULL(0..6),
         LParen(6..7),
         Ident(7..8),
         Comma(8..9),

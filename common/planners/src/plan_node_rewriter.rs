@@ -52,6 +52,7 @@ use crate::DropUserStagePlan;
 use crate::DropUserUDFPlan;
 use crate::DropViewPlan;
 use crate::EmptyPlan;
+use crate::ExistsTablePlan;
 use crate::ExplainPlan;
 use crate::Expression;
 use crate::ExpressionPlan;
@@ -164,6 +165,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::RenameTable(plan) => self.rewrite_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
+            PlanNode::ExistsTable(plan) => self.rewrite_exists_table(plan),
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
 
@@ -388,6 +390,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_optimize_table(&mut self, plan: &OptimizeTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::OptimizeTable(plan.clone()))
+    }
+
+    fn rewrite_exists_table(&mut self, plan: &ExistsTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ExistsTable(plan.clone()))
     }
 
     fn rewrite_create_view(&mut self, plan: &CreateViewPlan) -> Result<PlanNode> {

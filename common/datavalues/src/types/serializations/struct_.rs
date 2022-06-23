@@ -45,7 +45,7 @@ impl<'a> TypeSerializer<'a> for StructSerializer<'a> {
         buf.push(b')');
     }
 
-    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let column = self.column;
         let mut result = Vec::with_capacity(column.len());
         for i in 0..column.len() {

@@ -25,11 +25,12 @@ use crate::sql::plans::Scalar;
 pub struct PhysicalHashJoin {
     pub build_keys: Vec<Scalar>,
     pub probe_keys: Vec<Scalar>,
+    pub other_conditions: Vec<Scalar>,
     pub join_type: JoinType,
 }
 
 impl Operator for PhysicalHashJoin {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         RelOp::PhysicalHashJoin
     }
 

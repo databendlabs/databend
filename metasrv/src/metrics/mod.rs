@@ -14,10 +14,14 @@
 
 mod meta_metrics;
 
+pub use meta_metrics::add_meta_metrics_meta_request_inflights;
 pub use meta_metrics::incr_meta_metrics_active_peers;
 pub use meta_metrics::incr_meta_metrics_applying_snapshot;
 pub use meta_metrics::incr_meta_metrics_fail_connections_to_peer;
 pub use meta_metrics::incr_meta_metrics_leader_change;
+pub use meta_metrics::incr_meta_metrics_meta_recv_bytes;
+pub use meta_metrics::incr_meta_metrics_meta_request_result;
+pub use meta_metrics::incr_meta_metrics_meta_sent_bytes;
 pub use meta_metrics::incr_meta_metrics_proposals_failed;
 pub use meta_metrics::incr_meta_metrics_proposals_pending;
 pub use meta_metrics::incr_meta_metrics_read_failed;
@@ -37,4 +41,5 @@ pub use meta_metrics::sample_meta_metrics_snapshot_recv;
 pub use meta_metrics::sample_meta_metrics_snapshot_sent;
 pub use meta_metrics::set_meta_metrics_current_leader;
 pub use meta_metrics::set_meta_metrics_is_leader;
+pub use meta_metrics::set_meta_metrics_node_is_health;
 pub use meta_metrics::set_meta_metrics_proposals_applied;

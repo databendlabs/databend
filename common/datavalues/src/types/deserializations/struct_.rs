@@ -20,14 +20,14 @@ use crate::prelude::*;
 
 pub struct StructDeserializer {
     pub builder: MutableStructColumn,
-    pub inner: Vec<TypeDeserializerImpl>,
+    pub inners: Vec<TypeDeserializerImpl>,
 }
 
 impl TypeDeserializer for StructDeserializer {
     #[allow(clippy::uninit_vec)]
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
-        let mut values = Vec::with_capacity(self.inner.len());
-        for inner in self.inner.iter_mut() {
+        let mut values = Vec::with_capacity(self.inners.len());
+        for inner in self.inners.iter_mut() {
             inner.de_binary(reader, format)?;
             values.push(inner.pop_data_value().unwrap());
         }
@@ -47,9 +47,9 @@ impl TypeDeserializer for StructDeserializer {
     ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
-            let mut values = Vec::with_capacity(self.inner.len());
+            let mut values = Vec::with_capacity(self.inners.len());
 
-            for inner in self.inner.iter_mut() {
+            for inner in self.inners.iter_mut() {
                 inner.de_binary(&mut reader, format)?;
                 values.push(inner.pop_data_value().unwrap());
             }
@@ -58,18 +58,44 @@ impl TypeDeserializer for StructDeserializer {
         Ok(())
     }
 
-    fn de_json(&mut self, _value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        Err(ErrorCode::UnImplement("Unimplement error"))
+    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
+        match value {
+            serde_json::Value::Object(obj) => {
+                if self.inners.len() != obj.len() {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "Incorrect json value, expect {} values, but get {} values",
+                        self.inners.len(),
+                        obj.len()
+                    )));
+                }
+                let mut values = Vec::with_capacity(self.inners.len());
+                for (inner, item) in self.inners.iter_mut().zip(obj.iter()) {
+                    let (_, val) = item;
+                    inner.de_json(val, format)?;
+                    values.push(inner.pop_data_value()?);
+                }
+                self.builder.append_value(StructValue::new(values));
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be object")),
+        }
     }
 
     fn de_text<R: BufferRead>(&mut self, reader: &mut R, format: &FormatSettings) -> Result<()> {
-        let mut values = Vec::with_capacity(self.inner.len());
-
-        for inner in self.inner.iter_mut() {
-            inner.de_text(reader, format)?;
-            values.push(inner.pop_data_value().unwrap());
+        reader.must_ignore_byte(b'(')?;
+        let mut values = Vec::with_capacity(self.inners.len());
+        for (idx, inner) in self.inners.iter_mut().enumerate() {
+            let _ = reader.ignore_white_spaces()?;
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces()?;
+            inner.de_text_quoted(reader, format)?;
+            values.push(inner.pop_data_value()?);
         }
-        self.builder.append_data_value(DataValue::Struct(values))
+        reader.must_ignore_byte(b')')?;
+        self.builder.append_value(StructValue::new(values));
+        Ok(())
     }
 
     fn de_text_csv<R: BufferRead>(
