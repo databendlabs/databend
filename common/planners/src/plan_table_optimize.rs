@@ -31,7 +31,7 @@ impl OptimizeTablePlan {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, PartialEq)]
 pub enum OptimizeTableAction {
     All,
     Purge,
