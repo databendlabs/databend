@@ -29,7 +29,7 @@ impl<'a> Binder {
         limit: &Option<ShowLimit<'a>>,
     ) -> Result<Plan> {
         // rewrite show functions to select * from system.functions ...
-        let query = format!("SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions {} ORDER BY name", 
+        let query = format!("SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions {} ORDER BY name",
             match limit {
                 None => {
                     "".to_string()
