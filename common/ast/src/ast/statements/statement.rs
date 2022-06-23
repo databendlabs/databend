@@ -158,12 +158,8 @@ impl<'a> Display for Statement<'a> {
                 }
                 write!(f, " {query}")?;
             }
-            Statement::Query(query) => {
-                write!(f, "{query}")?;
-            }
-            Statement::Insert(insert) => {
-                write!(f, "{insert}")?;
-            }
+            Statement::Query(query) => write!(f, "{query}")?,
+            Statement::Insert(insert) => write!(f, "{insert}")?,
             Statement::Copy(stmt) => write!(f, "{stmt}")?,
             Statement::ShowSettings => {}
             Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,
@@ -194,15 +190,9 @@ impl<'a> Display for Statement<'a> {
             Statement::UseDatabase { database } => write!(f, "USE {database}")?,
             Statement::ShowTables(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
-            Statement::DescribeTable(stmt) => {
-                write!(f, "{stmt}")?;
-            }
-            Statement::ShowTablesStatus(stmt) => {
-                write!(f, "{stmt}")?;
-            }
-            Statement::CreateTable(stmt) => {
-                write!(f, "{stmt}")?;
-            }
+            Statement::DescribeTable(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowTablesStatus(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateTable(stmt) => write!(f, "{stmt}")?,
             Statement::DropTable(stmt) => write!(f, "{stmt}")?,
             Statement::UndropTable(stmt) => write!(f, "{stmt}")?,
             Statement::AlterTable(stmt) => write!(f, "{stmt}")?,
@@ -210,7 +200,6 @@ impl<'a> Display for Statement<'a> {
             Statement::TruncateTable(stmt) => write!(f, "{stmt}")?,
             Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
-
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
@@ -301,9 +290,7 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " PATTERN = '{pattern}'")?;
                 }
             }
-            Statement::ShowStages => {
-                write!(f, "SHOW STAGES")?;
-            }
+            Statement::ShowStages => write!(f, "SHOW STAGES")?,
             Statement::DropStage {
                 if_exists,
                 stage_name,
