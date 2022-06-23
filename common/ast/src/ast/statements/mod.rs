@@ -14,7 +14,6 @@
 
 mod copy;
 mod database;
-mod delete;
 mod explain;
 mod insert;
 mod kill;

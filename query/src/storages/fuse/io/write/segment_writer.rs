@@ -20,6 +20,7 @@ use common_exception::Result;
 use opendal::Operator;
 
 use crate::storages::fuse::cache::SegmentInfoCache;
+use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -46,12 +47,7 @@ impl<'a> SegmentWriter<'a> {
     pub async fn write_segment(&self, segment: SegmentInfo) -> Result<Location> {
         let segment_path = self.location_generator.gen_segment_info_location();
         let segment_location = (segment_path, SegmentInfo::VERSION);
-
-        let bytes = serde_json::to_vec(&segment)?;
-        self.data_accessor
-            .object(segment_location.0.as_str())
-            .write(bytes)
-            .await?;
+        write_meta(self.data_accessor, segment_location.0.as_str(), &segment).await?;
 
         if let Some(ref cache) = self.cache {
             let cache = &mut cache.write().await;

@@ -15,7 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use sqlparser::ast::Statement;
+use sqlparser::keywords::Keyword;
 use sqlparser::parser::ParserError;
 
 use crate::sql::statements::DfDeleteStatement;
@@ -26,18 +26,18 @@ impl<'a> DfParser<'a> {
     // DELETE.
     pub(crate) fn parse_delete(&mut self) -> Result<DfStatement<'a>, ParserError> {
         self.parser.next_token();
-        let native_query = self.parser.parse_delete()?;
-        match native_query {
-            Statement::Delete {
-                table_name,
-                selection,
-            } => Ok(DfStatement::Delete(Box::new(DfDeleteStatement {
-                name: table_name,
-                selection,
-            }))),
-            _ => {
-                todo!()
-            }
-        }
+        let parser = &mut self.parser;
+        parser.expect_keyword(Keyword::FROM)?;
+        let table_name = parser.parse_object_name()?;
+        let selection = if parser.parse_keyword(Keyword::WHERE) {
+            Some(parser.parse_expr()?)
+        } else {
+            None
+        };
+
+        Ok(DfStatement::Delete(Box::new(DfDeleteStatement {
+            name: table_name,
+            selection,
+        })))
     }
 }

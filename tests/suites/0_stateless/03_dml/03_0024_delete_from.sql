@@ -23,4 +23,9 @@ select 'deleted unconditionally';
 delete from t;
 select count(*) = 0 from t;
 
+
+select 'delete works with planner v2, (but actually, it fallbacks to v1)';
+set enable_planner_v2 = 1;
+delete from t;
+
 DROP DATABASE db1;

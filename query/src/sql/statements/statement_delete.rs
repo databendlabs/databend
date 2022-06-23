@@ -101,9 +101,7 @@ impl AnalyzableStatement for DfDeleteStatement {
             }
         }
 
-        // Parallel / Distributed execution of deletion not supported till
-        // the new parser, new planner and new pipeline are settled down.
-
+        // Parallel / Distributed execution of deletion not supported yet
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Delete(
             DeletePlan {
                 catalog_name,
