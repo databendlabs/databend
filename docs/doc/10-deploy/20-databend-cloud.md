@@ -1,7 +1,7 @@
 ---
-title: Databend Cloud (beta)
-sidebar_label: Databend Cloud (beta)
-description: Databend Cloud (beta)
+title: Databend Cloud (Beta)
+sidebar_label: Databend Cloud (Beta)
+description: Databend Cloud (Beta)
 ---
 
 [Databend Cloud](https://app.databend.com) is a powerful data cloud for everyone, which is built on top of the open-source project Databend with **Simplicity**, **Elasticity**, **Security**, and **Low Cost**.
@@ -9,11 +9,11 @@ description: Databend Cloud (beta)
 
 ## Create a Databend Cloud Account
 
-Databend Cloud is now in private beta, and we invite you to participate in the Databend Cloud beta here(for free): https://www.databend.com/apply
+Databend Cloud is now in private beta. To create a Databend Cloud account, go to https://www.databend.com/apply to apply for beta access.
 
-## Log In to Your Account
+## Log in to Your Account
 
-https://app.databend.com
+To log in to your account, go to https://app.databend.com.
 
 <img src="/img/cloud/databend_cloud_login.png"/>
 
@@ -22,34 +22,34 @@ https://app.databend.com
 
 ### Warehouses
 
-Your virtual warehouse, warehouses can be automatically suspended when there's no activity after a specified period of time.
+Virtual warehouses can be automatically suspended in case of no activities for a specific period.
 
 <img src="/img/cloud/databend_cloud_warehouse.png"/>
 
 ### Databases
 
-Your database list.
+This page shows a list of your databases:
 
 <img src="/img/cloud/databend_cloud_database.png"/>
 
 ### Stages
 
-The location of the data is stored in is known as a stage, and you can upload CSV/JSON/Parquet files from your local file system to Databend Cloud, and do data analysis.
+The stage is the location where your data is stored. You can upload your local CSV, JSON, or Parquet files for data analytics.
 
 <img src="/img/cloud/databend_cloud_stage.png"/>
 
 <img src="/img/cloud/databend_cloud_stage_file.png"/>
 
-
 ### Worksheets
 
-Worksheets is a powerful SQL editor for running your SQL queries. For example, you can do [Conversion Funnel Analysis](../90-learn/04-analyze-funnel-with-databend.md) online.
+Worksheets is a powerful SQL editor where you can run SQL queries. For example, you can now do [Conversion Funnel Analysis](../90-learn/04-analyze-funnel-with-databend.md) online.
 
 <img src="/img/cloud/databend_cloud_worksheet_demo.png"/>
 
-### Connect to a Serverless Warehouse
+### Connect to a Serverless Warehouse on Databend Cloud
 
-Databend Cloud also provides a connection string for your applications to connect to it:
+Databend Cloud provides a connection string for your applications to connect to it:
+
 ```shell
 https://<tenant>--<warehouse>.ch.aws-us-east-2.default.databend.com/
 ```
