@@ -105,7 +105,7 @@ impl OuterRefRewriter {
                     *scalar = self.rewrite_scalar(scalar)?;
                 }
 
-                Ok(SExpr::create_binary(plan.into(), build_side, probe_side))
+                Ok(SExpr::create_binary(plan.into(), probe_side, build_side))
             }
 
             RelOperator::Max1Row(_)
