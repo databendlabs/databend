@@ -86,8 +86,12 @@ impl Interpreter for SelectInterpreterV2 {
 
         // Spawn root pipeline
         let executor = PipelinePullingExecutor::try_create(async_runtime, root_pipeline)?;
-        let (handler, stream) = ProcessorExecutorStream::create(executor)?;
-        self.ctx.add_source_abort_handle(handler);
+
+        self.ctx
+            .get_shared()
+            .add_pipeline_executor(executor.get_inner());
+        let stream = ProcessorExecutorStream::create(executor)?;
+
         Ok(Box::pin(Box::pin(stream)))
     }
 

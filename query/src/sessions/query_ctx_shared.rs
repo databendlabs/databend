@@ -132,7 +132,7 @@ impl QueryContextShared {
 
         let executors = self.pipeline_executors.read();
         for executor in executors.iter() {
-            if let Err(err) = executor.finish() {
+            if let Err(err) = executor.abort() {
                 tracing::error!("Pipeline executor failed to finish :{:?}", err);
             }
         }

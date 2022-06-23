@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
@@ -32,6 +34,7 @@ pub struct PipelineExecutor {
     threads_num: usize,
     graph: RunningGraph,
     workers_condvar: Arc<WorkersCondvar>,
+    aborted: Arc<AtomicBool>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
 }
@@ -88,8 +91,15 @@ impl PipelineExecutor {
                 workers_condvar,
                 global_tasks_queue,
                 async_runtime: async_rt,
+                aborted: Arc::new(AtomicBool::new(false)),
             }))
         }
+    }
+
+    pub fn abort(&self) -> Result<()> {
+        self.finish()?;
+        self.aborted.store(true, Ordering::Release);
+        Ok(())
     }
 
     pub fn finish(&self) -> Result<()> {
@@ -185,6 +195,12 @@ impl PipelineExecutor {
                     schedule_queue.schedule(&self.global_tasks_queue, &mut context);
                 }
             }
+        }
+
+        if self.aborted.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed",
+            ));
         }
 
         Ok(())
