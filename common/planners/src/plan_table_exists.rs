@@ -12,20 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod parser_call;
-mod parser_copy;
-mod parser_database;
-mod parser_exists;
-mod parser_explain;
-mod parser_insert;
-mod parser_kill;
-mod parser_optimize;
-mod parser_query;
-mod parser_set;
-mod parser_show;
-mod parser_stage;
-mod parser_table;
-mod parser_udf;
-mod parser_use;
-mod parser_user;
-mod parser_view;
+use std::sync::Arc;
+
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::ToDataType;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct ExistsTablePlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl ExistsTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![DataField::new(
+            "result",
+            u8::to_data_type(),
+        )]))
+    }
+}

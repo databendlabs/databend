@@ -326,6 +326,18 @@ pub fn statement(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let exists_table = map(
+        rule! {
+            EXISTS ~ TABLE ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, table))| {
+            Statement::ExistsTable(ExistsTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
     let create_view = map(
         rule! {
             CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
@@ -676,6 +688,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
+            | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"

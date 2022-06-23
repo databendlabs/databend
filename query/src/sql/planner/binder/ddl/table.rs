@@ -521,6 +521,33 @@ impl<'a> Binder {
         })))
     }
 
+    pub(in crate::sql::planner::binder) async fn bind_exists_table(
+        &mut self,
+        stmt: &ExistsTableStmt<'a>,
+    ) -> Result<Plan> {
+        let ExistsTableStmt {
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table = table.name.to_lowercase();
+
+        Ok(Plan::ExistsTable(Box::new(ExistsTablePlan {
+            catalog,
+            database,
+            table,
+        })))
+    }
+
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource<'a>,

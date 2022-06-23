@@ -55,6 +55,7 @@ impl Plan {
             }
             Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
             Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
+            Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
 
             // Views
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
