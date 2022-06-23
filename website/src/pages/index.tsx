@@ -15,17 +15,20 @@ function HomepageHeader() {
           <div className={clsx('container', styles.container)}>
             <h1 className={clsx('hero__title', styles.heroTitle)}><Texty>{siteConfig.title}</Texty></h1>
             <p className={clsx('hero__subtitle', styles.heroSubTitle)}>{siteConfig.tagline}</p>
+
             <Link
               className={clsx("button button--secondary button--lg", styles.link)}
-              to="/doc">
-                Documentation
+              to="https://databend.com/">
+                Databend Cloud
             </Link>
-            <Link
-              className={clsx("button button--secondary button--lg", styles.link)}
-              to="/doc/performance">
-                Performance
-            </Link>
-            {/* <ArrowDownSvg className={styles.arrow}></ArrowDownSvg> */}
+
+              <Link
+                  className={clsx("button button--secondary button--lg", styles.link)}
+                  to="/doc">
+                  Documentation
+              </Link>
+
+              {/* <ArrowDownSvg className={styles.arrow}></ArrowDownSvg> */}
           </div>
         </section>
       </>
