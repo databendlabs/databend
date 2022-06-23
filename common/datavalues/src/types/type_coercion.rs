@@ -273,8 +273,8 @@ pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Res
             (TypeID::Date, _) => Ok(rhs_type.clone()),
             (_, TypeID::Date) => Ok(lhs_type.clone()),
             (TypeID::Timestamp, TypeID::Timestamp) => {
-                let lhs: &TimestampType = lhs_type.as_any().downcast_ref().unwrap();
-                let rhs: &TimestampType = rhs_type.as_any().downcast_ref().unwrap();
+                let lhs: TimestampType = lhs_type.to_owned().try_into()?;
+                let rhs: TimestampType = rhs_type.to_owned().try_into()?;
                 let precision = cmp::max(lhs.precision(), rhs.precision());
                 Ok(TimestampType::new_impl(precision))
             }
@@ -329,15 +329,15 @@ pub fn merge_types(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Result<D
         (_, Null) => Ok(wrap_nullable(lhs_type)),
 
         (Array, Array) => {
-            let a = lhs_type.as_any().downcast_ref::<ArrayType>().unwrap();
-            let b = rhs_type.as_any().downcast_ref::<ArrayType>().unwrap();
+            let a: ArrayType = lhs_type.to_owned().try_into()?;
+            let b: ArrayType = rhs_type.to_owned().try_into()?;
 
             let typ = merge_types(a.inner_type(), b.inner_type())?;
             Ok(DataTypeImpl::Array(ArrayType::create(typ)))
         }
         (Struct, Struct) => {
-            let a = lhs_type.as_any().downcast_ref::<StructType>().unwrap();
-            let b = rhs_type.as_any().downcast_ref::<StructType>().unwrap();
+            let a: StructType = lhs_type.to_owned().try_into()?;
+            let b: StructType = rhs_type.to_owned().try_into()?;
             if a.names() != b.names() {
                 return Err(ErrorCode::BadArguments(
                     "Can't merge structs with different names or sizes".to_string(),
