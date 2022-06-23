@@ -10,5 +10,11 @@ limit 1 using stored procedure
 1
 limit 0 using stored procedure
 0
+limit 0 using stored procedure, limit as string
+0
 no limits using stored procedure, expects 2
 2
+invalid limit, negative value
+0
+invalid limit, no numeric
+0

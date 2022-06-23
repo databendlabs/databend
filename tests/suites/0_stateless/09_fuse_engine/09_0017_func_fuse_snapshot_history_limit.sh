@@ -24,7 +24,13 @@ echo "limit 1 using stored procedure"
 echo "call system\$fuse_snapshot('default', 't09_0017', 1)" | $MYSQL_CLIENT_CONNECT | wc -l
 echo "limit 0 using stored procedure"
 echo "call system\$fuse_snapshot('default', 't09_0017', 0)" | $MYSQL_CLIENT_CONNECT | wc -l
+echo "limit 0 using stored procedure, limit as string"
+echo "call system\$fuse_snapshot('default', 't09_0017', '0')" | $MYSQL_CLIENT_CONNECT | wc -l
 echo "no limits using stored procedure, expects 2"
 echo "call system\$fuse_snapshot('default', 't09_0017')" | $MYSQL_CLIENT_CONNECT | wc -l
+echo "invalid limit, negative value"
+echo "call system\$fuse_snapshot('default', 't09_0017', -1)" | $MYSQL_CLIENT_CONNECT
+echo "invalid limit, no numeric"
+echo "call system\$fuse_snapshot('default', 't09_0017', "a")" | $MYSQL_CLIENT_CONNECT
 ## Drop table.
 echo "drop table  t09_0017" | $MYSQL_CLIENT_CONNECT
