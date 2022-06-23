@@ -125,7 +125,7 @@ impl FuseTable {
                 {
                     Some(d) => {
                         let name = tbl.table_info.name.clone();
-                        tracing::warn!(
+                        tracing::debug!(
                                 "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                                 d.as_millis(),
                                 name.as_str(),
