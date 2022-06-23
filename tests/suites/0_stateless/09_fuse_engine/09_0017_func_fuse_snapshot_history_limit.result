@@ -2,11 +2,13 @@ limit 1 using new planner
 1
 limit 0 using new planner
 0
-limit 1 using new planner
+limit 1 using old planner
 1
-limit 0 using new planner
+limit 0 using old planner
 0
-limit 1 using new planner and stored procedure
+limit 1 using stored procedure
 1
-limit 1 using new planner and stored procedure
+limit 0 using stored procedure
 0
+no limits using stored procedure, expects 2
+2
