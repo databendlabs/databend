@@ -182,6 +182,10 @@ impl InsertInterpreterV2 {
 
         pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
         let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
+        self.ctx
+            .get_shared()
+            .add_pipeline_executor(executor.get_inner());
+
         executor.execute()?;
         drop(executor);
 

@@ -155,8 +155,12 @@ impl CopyInterpreter {
 
             let async_runtime = ctx.get_storage_runtime();
             let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
+            
+            self.ctx
+            .get_shared()
+            .add_pipeline_executor(executor.get_inner());
+            
             executor.execute()?;
-
             return Ok(ctx.consume_precommit_blocks());
         }
 

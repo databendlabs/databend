@@ -93,6 +93,10 @@ impl PipelinePullingExecutor {
         std::thread::spawn(thread_function);
     }
 
+    pub fn get_inner(&self) -> Arc<PipelineExecutor> {
+        self.executor.clone()
+    }
+
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
         move || {
             if let Err(cause) = executor.execute() {

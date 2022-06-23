@@ -33,6 +33,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 
+use super::stream::ProcessorExecutorStream;
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
 use crate::interpreters::plan_schedulers::InsertWithPlan;
 use crate::interpreters::Interpreter;
@@ -178,6 +179,9 @@ impl InsertInterpreter {
 
         pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
         let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
+        self.ctx
+            .get_shared()
+            .add_pipeline_executor(executor.get_inner());
         executor.execute()?;
         drop(executor);
 

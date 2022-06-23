@@ -55,6 +55,7 @@ use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
+use crate::pipelines::new::executor::PipelineExecutor;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
@@ -97,6 +98,10 @@ impl QueryContext {
             precommit_blocks: Arc::new(RwLock::new(Vec::new())),
             fragment_id: Arc::new(AtomicUsize::new(0)),
         })
+    }
+
+    pub fn get_shared(&self) -> Arc<QueryContextShared> {
+        self.shared.clone()
     }
 
     /// Build a table instance the plan wants to operate on.

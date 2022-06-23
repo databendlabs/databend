@@ -123,6 +123,10 @@ impl PipelinePushingExecutor {
         }
     }
 
+    pub fn get_inner(&self) -> Arc<PipelineExecutor> {
+        self.executor.clone()
+    }
+
     pub fn finish(&self) -> Result<()> {
         self.state.finished.store(true, Ordering::Release);
         self.executor.finish()

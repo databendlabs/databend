@@ -59,6 +59,10 @@ impl PipelineCompleteExecutor {
         Ok(Arc::new(PipelineCompleteExecutor { executor }))
     }
 
+    pub fn get_inner(&self) -> Arc<PipelineExecutor> {
+        self.executor.clone()
+    }
+
     pub fn finish(&self) -> Result<()> {
         self.executor.finish()
     }
