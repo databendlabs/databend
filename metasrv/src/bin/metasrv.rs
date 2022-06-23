@@ -50,14 +50,15 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     conf.raft_config.check()?;
 
+    // Leave cluster and quit if `--leave-via` and `--leave-id` is specified.
+    let has_left = MetaNode::leave_cluster(&conf.raft_config).await?;
+    if has_left {
+        tracing::info!("node {:?} has left cluster", conf.raft_config.leave_id);
+        return Ok(());
+    }
+
     init_sled_db(conf.raft_config.raft_dir.clone());
     init_meta_metrics_recorder();
-
-    tracing::info!(
-        "Starting MetaNode single: {} with config: {:?}",
-        conf.raft_config.single,
-        conf
-    );
 
     let meta_node = MetaNode::start(&conf.raft_config).await?;
 
@@ -83,7 +84,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         stop_handler.push(Box::new(srv));
     }
 
-    // join raft cluster after all service started
+    // Join a raft cluster only after all service started.
     meta_node.join_cluster(&conf.raft_config).await?;
 
     stop_handler.wait_to_terminate(stop_tx).await;

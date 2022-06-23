@@ -19,7 +19,7 @@ use common_base::base::Stoppable;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::MatchSeq;
-use common_meta_types::MetaRaftError;
+use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReply;
@@ -141,11 +141,10 @@ async fn test_retry_join() -> anyhow::Result<()> {
 
         tc1.config.raft_config.join = vec![bad_addr.clone()];
         let ret = start_metasrv_with_context(&mut tc1).await;
-        let expect: anyhow::Error = MetaRaftError::JoinClusterFail(format!(
-            "join cluster accross addrs {:?} fail",
+        let expect = MetaError::MetaServiceError(format!(
+            "join cluster via {:?} fail",
             tc1.config.raft_config.join
-        ))
-        .into();
+        ));
 
         match ret {
             Ok(_) => panic!("must return JoinClusterFail"),
