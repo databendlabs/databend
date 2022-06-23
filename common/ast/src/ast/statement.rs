@@ -89,6 +89,7 @@ pub enum Statement<'a> {
     RenameTable(RenameTableStmt<'a>),
     TruncateTable(TruncateTableStmt<'a>),
     OptimizeTable(OptimizeTableStmt<'a>),
+    ExistsTable(ExistsTableStmt<'a>),
 
     // Views
     CreateView(CreateViewStmt<'a>),
@@ -336,6 +337,13 @@ pub enum OptimizeTableAction {
     All,
     Purge,
     Compact,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExistsTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1164,6 +1172,15 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " {action}")?;
                 }
             }
+            Statement::ExistsTable(ExistsTableStmt {
+                catalog,
+                database,
+                table,
+            }) => {
+                write!(f, "EXISTS TABLE ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+            }
+
             Statement::CreateView(CreateViewStmt {
                 if_not_exists,
                 catalog,
