@@ -889,7 +889,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #nullif: "`NULLIF(..., ...)`"
             | #ifnull: "`IFNULL(..., ...)`"
-            | #is_distinct_from : "`... IS [NOT] DISTINCT FROM ...`"
+            | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
         ),
         rule!(
             #count_all : "COUNT(*)"
