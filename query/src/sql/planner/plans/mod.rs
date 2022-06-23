@@ -60,6 +60,7 @@ use common_planners::DropTablePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
 use common_planners::DropViewPlan;
+use common_planners::ExistsTablePlan;
 use common_planners::GrantPrivilegePlan;
 use common_planners::GrantRolePlan;
 use common_planners::ListPlan;
@@ -146,6 +147,7 @@ pub enum Plan {
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     TruncateTable(Box<TruncateTablePlan>),
     OptimizeTable(Box<OptimizeTablePlan>),
+    ExistsTable(Box<ExistsTablePlan>),
 
     // Insert
     Insert(Box<Insert>),
@@ -204,6 +206,7 @@ impl Display for Plan {
             Plan::DropTableClusterKey(_) => write!(f, "DropTableClusterKey"),
             Plan::TruncateTable(_) => write!(f, "TruncateTable"),
             Plan::OptimizeTable(_) => write!(f, "OptimizeTable"),
+            Plan::ExistsTable(_) => write!(f, "ExistsTable"),
             Plan::CreateView(_) => write!(f, "CreateView"),
             Plan::AlterView(_) => write!(f, "AlterView"),
             Plan::DropView(_) => write!(f, "DropView"),
@@ -262,6 +265,7 @@ impl Plan {
             Plan::DropTableClusterKey(plan) => plan.schema(),
             Plan::TruncateTable(plan) => plan.schema(),
             Plan::OptimizeTable(plan) => plan.schema(),
+            Plan::ExistsTable(plan) => plan.schema(),
             Plan::CreateView(plan) => plan.schema(),
             Plan::AlterView(plan) => plan.schema(),
             Plan::DropView(plan) => plan.schema(),
