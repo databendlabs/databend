@@ -16,6 +16,9 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use crate::ast::statements::show::ShowLimit;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_period_separated_list;
+use crate::ast::write_space_seperated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -29,6 +32,27 @@ pub struct ShowTablesStmt<'a> {
     pub with_history: bool,
 }
 
+impl Display for ShowTablesStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SHOW")?;
+        if self.full {
+            write!(f, " FULL")?;
+        }
+        write!(f, " TABLES")?;
+        if self.with_history {
+            write!(f, " HISTORY")?;
+        }
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShowCreateTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
@@ -36,10 +60,37 @@ pub struct ShowCreateTableStmt<'a> {
     pub table: Identifier<'a>,
 }
 
+impl Display for ShowCreateTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SHOW CREATE TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShowTablesStatusStmt<'a> {
     pub database: Option<Identifier<'a>>,
     pub limit: Option<ShowLimit<'a>>,
+}
+
+impl Display for ShowTablesStatusStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SHOW TABLE STATUS")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,11 +107,44 @@ pub struct CreateTableStmt<'a> {
     pub transient: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct DescribeTableStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
+impl Display for CreateTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CREATE ")?;
+        if self.transient {
+            write!(f, "TRANSIENT ")?;
+        }
+        write!(f, "TABLE ")?;
+        if self.if_not_exists {
+            write!(f, "IF NOT EXISTS ")?;
+        }
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+
+        if let Some(source) = &self.source {
+            write!(f, " {source}")?;
+        }
+
+        // Format table options
+        write_space_seperated_list(f, self.table_options.iter())?;
+
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT = {comment}")?;
+        }
+        if !self.cluster_by.is_empty() {
+            write!(f, " CLUSTER BY ")?;
+            write_comma_separated_list(f, &self.cluster_by)?;
+        }
+        if let Some(as_query) = &self.as_query {
+            write!(f, " AS {as_query}")?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -73,6 +157,45 @@ pub enum CreateTableSource<'a> {
     },
 }
 
+impl Display for CreateTableSource<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CreateTableSource::Columns(columns) => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, columns)?;
+                write!(f, ")")
+            }
+            CreateTableSource::Like {
+                catalog,
+                database,
+                table,
+            } => {
+                write!(f, "LIKE ")?;
+                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DescribeTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+}
+
+impl Display for DescribeTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DESCRIBE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(self.database.iter().chain(Some(&self.table))),
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropTableStmt<'a> {
     pub if_exists: bool,
@@ -82,11 +205,45 @@ pub struct DropTableStmt<'a> {
     pub all: bool,
 }
 
+impl Display for DropTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DROP TABLE ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        if self.all {
+            write!(f, " ALL")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct UndropTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub table: Identifier<'a>,
+}
+
+impl Display for UndropTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UNDROP TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -96,6 +253,47 @@ pub struct AlterTableStmt<'a> {
     pub database: Option<Identifier<'a>>,
     pub table: Identifier<'a>,
     pub action: AlterTableAction<'a>,
+}
+
+impl Display for AlterTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ALTER TABLE ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        write!(f, " {}", self.action)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTableAction<'a> {
+    RenameTable { new_table: Identifier<'a> },
+    AlterTableClusterKey { cluster_by: Vec<Expr<'a>> },
+    DropTableClusterKey,
+}
+
+impl Display for AlterTableAction<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AlterTableAction::RenameTable { new_table } => {
+                write!(f, "RENAME TO {new_table}")
+            }
+            AlterTableAction::AlterTableClusterKey { cluster_by } => {
+                write!(f, "CLUSTER BY ")?;
+                write_comma_separated_list(f, cluster_by)
+            }
+            AlterTableAction::DropTableClusterKey => {
+                write!(f, "DROP CLUSTER KEY")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,12 +307,54 @@ pub struct RenameTableStmt<'a> {
     pub new_table: Identifier<'a>,
 }
 
+impl Display for RenameTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RENAME TABLE ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        write!(f, " TO ")?;
+        write_period_separated_list(
+            f,
+            self.new_catalog
+                .iter()
+                .chain(&self.new_database)
+                .chain(Some(&self.new_table)),
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TruncateTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub table: Identifier<'a>,
     pub purge: bool,
+}
+
+impl Display for TruncateTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TRUNCATE TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        if self.purge {
+            write!(f, " PURGE")?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -125,11 +365,42 @@ pub struct OptimizeTableStmt<'a> {
     pub action: Option<OptimizeTableAction>,
 }
 
+impl Display for OptimizeTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OPTIMIZE TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        if let Some(action) = &self.action {
+            write!(f, " {action}")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExistsTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub table: Identifier<'a>,
+}
+
+impl Display for ExistsTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "EXISTS TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -210,13 +481,6 @@ pub struct ColumnDefinition<'a> {
     pub nullable: bool,
     pub default_expr: Option<Box<Expr<'a>>>,
     pub comment: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum AlterTableAction<'a> {
-    RenameTable { new_table: Identifier<'a> },
-    AlterTableClusterKey { cluster_by: Vec<Expr<'a>> },
-    DropTableClusterKey,
 }
 
 impl<'a> Display for ColumnDefinition<'a> {

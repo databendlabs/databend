@@ -21,7 +21,6 @@ use common_meta_types::UserIdentity;
 use super::*;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
-use crate::ast::write_space_seperated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Literal;
@@ -202,214 +201,24 @@ impl<'a> Display for Statement<'a> {
             Statement::UseDatabase { database } => {
                 write!(f, "USE {database}")?;
             }
-            Statement::ShowTables(ShowTablesStmt {
-                database,
-                full,
-                limit,
-                with_history,
-            }) => {
-                write!(f, "SHOW")?;
-                if *full {
-                    write!(f, " FULL")?;
-                }
-                write!(f, " TABLES")?;
-                if *with_history {
-                    write!(f, " HISTORY")?;
-                }
-                if let Some(database) = database {
-                    write!(f, " FROM {database}")?;
-                }
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
-                }
+            Statement::ShowTables(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeTable(stmt) => {
+                write!(f, "{stmt}")?;
             }
-            Statement::ShowCreateTable(ShowCreateTableStmt {
-                catalog,
-                database,
-                table,
-            }) => {
-                write!(f, "SHOW CREATE TABLE ")?;
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+            Statement::ShowTablesStatus(stmt) => {
+                write!(f, "{stmt}")?;
             }
-            Statement::DescribeTable(DescribeTableStmt {
-                catalog,
-                database,
-                table,
-            }) => {
-                write!(f, "DESCRIBE ")?;
-                write_period_separated_list(
-                    f,
-                    catalog.iter().chain(database.iter().chain(Some(table))),
-                )?;
+            Statement::CreateTable(stmt) => {
+                write!(f, "{stmt}")?;
             }
-            Statement::ShowTablesStatus(ShowTablesStatusStmt { database, limit }) => {
-                write!(f, "SHOW TABLE STATUS")?;
-                if let Some(database) = database {
-                    write!(f, " FROM {database}")?;
-                }
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
-                }
-            }
-            Statement::CreateTable(CreateTableStmt {
-                if_not_exists,
-                catalog,
-                database,
-                table,
-                source,
-                table_options,
-                comment,
-                cluster_by,
-                as_query,
-                transient,
-            }) => {
-                write!(f, "CREATE ")?;
-                if *transient {
-                    write!(f, "TRANSIENT ")?;
-                }
-                write!(f, "TABLE ")?;
-                if *if_not_exists {
-                    write!(f, "IF NOT EXISTS ")?;
-                }
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
-                match source {
-                    Some(CreateTableSource::Columns(columns)) => {
-                        write!(f, " (")?;
-                        write_comma_separated_list(f, columns)?;
-                        write!(f, ")")?;
-                    }
-                    Some(CreateTableSource::Like {
-                        catalog,
-                        database,
-                        table,
-                    }) => {
-                        write!(f, " LIKE ")?;
-                        write_period_separated_list(
-                            f,
-                            catalog.iter().chain(database).chain(Some(table)),
-                        )?;
-                    }
-                    None => (),
-                }
-
-                // Format table options
-                write_space_seperated_list(f, table_options.iter())?;
-
-                if let Some(comment) = comment {
-                    write!(f, " COMMENT = {comment}")?;
-                }
-                if !cluster_by.is_empty() {
-                    write!(f, " CLUSTER BY ")?;
-                    write_comma_separated_list(f, cluster_by)?;
-                }
-                if let Some(as_query) = as_query {
-                    write!(f, " AS {as_query}")?;
-                }
-            }
-            Statement::DropTable(DropTableStmt {
-                if_exists,
-                catalog,
-                database,
-                table,
-                all,
-            }) => {
-                write!(f, "DROP TABLE ")?;
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
-                }
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
-                if *all {
-                    write!(f, " ALL")?;
-                }
-            }
-            Statement::UndropTable(UndropTableStmt {
-                catalog,
-                database,
-                table,
-            }) => {
-                write!(f, "UNDROP TABLE ")?;
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
-            }
-            Statement::AlterTable(AlterTableStmt {
-                if_exists,
-                catalog,
-                database,
-                table,
-                action,
-            }) => {
-                write!(f, "ALTER TABLE ")?;
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
-                }
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
-                match action {
-                    AlterTableAction::RenameTable { new_table } => {
-                        write!(f, " RENAME TO {new_table}")?;
-                    }
-                    AlterTableAction::AlterTableClusterKey { cluster_by } => {
-                        write!(f, " CLUSTER BY ")?;
-                        write_comma_separated_list(f, cluster_by)?;
-                    }
-                    AlterTableAction::DropTableClusterKey => {
-                        write!(f, " DROP CLUSTER KEY")?;
-                    }
-                }
-            }
-            Statement::RenameTable(RenameTableStmt {
-                if_exists,
-                catalog,
-                database,
-                table,
-                new_catalog,
-                new_database,
-                new_table,
-            }) => {
-                write!(f, "RENAME TABLE ")?;
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
-                }
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
-                write!(f, " TO ")?;
-                write_period_separated_list(
-                    f,
-                    new_catalog
-                        .iter()
-                        .chain(new_database)
-                        .chain(Some(new_table)),
-                )?;
-            }
-            Statement::TruncateTable(TruncateTableStmt {
-                catalog,
-                database,
-                table,
-                purge,
-            }) => {
-                write!(f, "TRUNCATE TABLE ")?;
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
-                if *purge {
-                    write!(f, " PURGE")?;
-                }
-            }
-            Statement::OptimizeTable(OptimizeTableStmt {
-                catalog,
-                database,
-                table,
-                action,
-            }) => {
-                write!(f, "OPTIMIZE TABLE ")?;
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
-                if let Some(action) = action {
-                    write!(f, " {action}")?;
-                }
-            }
-            Statement::ExistsTable(ExistsTableStmt {
-                catalog,
-                database,
-                table,
-            }) => {
-                write!(f, "EXISTS TABLE ")?;
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
-            }
+            Statement::DropTable(stmt) => write!(f, "{stmt}")?,
+            Statement::UndropTable(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterTable(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameTable(stmt) => write!(f, "{stmt}")?,
+            Statement::TruncateTable(stmt) => write!(f, "{stmt}")?,
+            Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
+            Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
 
             Statement::CreateView(CreateViewStmt {
                 if_not_exists,
