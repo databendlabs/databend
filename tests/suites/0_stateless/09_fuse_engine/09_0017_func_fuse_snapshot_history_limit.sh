@@ -29,8 +29,8 @@ echo "call system\$fuse_snapshot('default', 't09_0017', '0')" | $MYSQL_CLIENT_CO
 echo "no limits using stored procedure, expects 2"
 echo "call system\$fuse_snapshot('default', 't09_0017')" | $MYSQL_CLIENT_CONNECT | wc -l
 echo "invalid limit, negative value"
-echo "call system\$fuse_snapshot('default', 't09_0017', -1)" | $MYSQL_CLIENT_CONNECT
+echo "call system\$fuse_snapshot('default', 't09_0017', -1)" | $MYSQL_CLIENT_CONNECT 2>&1
 echo "invalid limit, no numeric"
-echo "call system\$fuse_snapshot('default', 't09_0017', "a")" | $MYSQL_CLIENT_CONNECT
+echo "call system\$fuse_snapshot('default', 't09_0017', "a")" | $MYSQL_CLIENT_CONNECT 2>&1
 ## Drop table.
 echo "drop table  t09_0017" | $MYSQL_CLIENT_CONNECT

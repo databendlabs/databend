@@ -15,6 +15,6 @@ limit 0 using stored procedure, limit as string
 no limits using stored procedure, expects 2
 2
 invalid limit, negative value
-0
+ERROR 1105 (HY000) at line 1: Code: 1005, displayText = sql parser error: Expected a value, found: -.
 invalid limit, no numeric
-0
+ERROR 1105 (HY000) at line 1: Code: 1002, displayText = invalid digit found in string.
