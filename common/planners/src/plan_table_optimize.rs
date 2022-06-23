@@ -25,15 +25,15 @@ pub struct OptimizeTablePlan {
     pub action: OptimizeTableAction,
 }
 
+impl OptimizeTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum OptimizeTableAction {
     All,
     Purge,
     Compact,
-}
-
-impl OptimizeTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
