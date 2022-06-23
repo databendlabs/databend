@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use std::pin::Pin;
-use std::sync::Arc;
+
 use std::task::Context;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
+
 use common_exception::Result;
-use futures::stream::AbortHandle;
-use futures::stream::Abortable;
+
+
 use futures::Stream;
 
 use crate::pipelines::new::executor::PipelinePullingExecutor;
