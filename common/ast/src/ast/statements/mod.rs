@@ -12,28 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+mod copy;
+mod database;
+mod explain;
+mod insert;
+mod kill;
+mod show;
+mod stage;
+mod statement;
+mod table;
+mod user;
+mod view;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct OptimizeTablePlan {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub action: OptimizeTableAction,
-}
-
-impl OptimizeTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, PartialEq)]
-pub enum OptimizeTableAction {
-    All,
-    Purge,
-    Compact,
-}
+pub use copy::*;
+pub use database::*;
+pub use explain::*;
+pub use insert::*;
+pub use kill::*;
+pub use show::*;
+pub use stage::*;
+pub use statement::*;
+pub use table::*;
+pub use user::*;
+pub use view::*;
