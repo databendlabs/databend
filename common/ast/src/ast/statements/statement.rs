@@ -194,61 +194,11 @@ impl<'a> Display for Statement<'a> {
             Statement::SetVariable { variable, value } => {
                 write!(f, "SET {variable} = {value}")?;
             }
-            Statement::ShowDatabases(ShowDatabasesStmt { limit }) => {
-                write!(f, "SHOW DATABASES")?;
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
-                }
-            }
-            Statement::ShowCreateDatabase(ShowCreateDatabaseStmt { catalog, database }) => {
-                write!(f, "SHOW CREATE DATABASE ")?;
-                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
-            }
-            Statement::CreateDatabase(CreateDatabaseStmt {
-                if_not_exists,
-                catalog,
-                database,
-                engine,
-                ..
-            }) => {
-                write!(f, "CREATE DATABASE ")?;
-                if *if_not_exists {
-                    write!(f, "IF NOT EXISTS ")?;
-                }
-                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
-                if let Some(engine) = engine {
-                    write!(f, " ENGINE = {engine}")?;
-                }
-                // TODO(leiysky): display rest information
-            }
-            Statement::DropDatabase(DropDatabaseStmt {
-                if_exists,
-                catalog,
-                database,
-            }) => {
-                write!(f, "DROP DATABASE ")?;
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
-                }
-                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
-            }
-            Statement::AlterDatabase(AlterDatabaseStmt {
-                if_exists,
-                catalog,
-                database,
-                action,
-            }) => {
-                write!(f, "ALTER DATABASE ")?;
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
-                }
-                write_period_separated_list(f, catalog.iter().chain(Some(database)))?;
-                match action {
-                    AlterDatabaseAction::RenameDatabase { new_db } => {
-                        write!(f, " RENAME TO {new_db}")?;
-                    }
-                }
-            }
+            Statement::ShowDatabases(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowCreateDatabase(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateDatabase(stmt) => write!(f, "{stmt}")?,
+            Statement::DropDatabase(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::UseDatabase { database } => {
                 write!(f, "USE {database}")?;
             }
