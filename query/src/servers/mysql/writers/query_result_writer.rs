@@ -144,8 +144,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                             row_writer.write_col(v.to_date(&tz).naive_local())?
                                         }
                                         (TypeID::Timestamp, DataValue::Int64(v)) => {
-                                            let data_type: &TimestampType =
-                                                data_type.as_any().downcast_ref().unwrap();
+                                            let data_type: TimestampType = data_type.try_into()?;
 
                                             row_writer.write_col(
                                                 v.to_timestamp(&tz)
