@@ -14,14 +14,14 @@
 
 mod expr;
 mod query;
-mod statement;
+mod statements;
 
 use std::fmt::Display;
 use std::fmt::Formatter;
 
 pub use expr::*;
 pub use query::*;
-pub use statement::*;
+pub use statements::*;
 
 use crate::parser::token::Token;
 
