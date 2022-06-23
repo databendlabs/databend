@@ -43,11 +43,13 @@ impl<'a> FuseSegment<'a> {
         let snapshot_location = tbl.snapshot_loc();
         let snapshot_version = tbl.snapshot_format_version();
         let reader = MetaReaders::table_snapshot_reader(self.ctx.as_ref());
+        let limit = None;
         let snapshots = reader
             .read_snapshot_history(
                 snapshot_location,
                 snapshot_version,
                 tbl.meta_location_generator().clone(),
+                limit,
             )
             .await?;
 
