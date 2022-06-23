@@ -2,7 +2,7 @@
 title: AT
 ---
 
-The SELECT statement can include an AT clause to query previous versions of your data at a specific time in the past.
+The SELECT statement can include an AT clause to query previous versions of your data with a specific timestamp.
 
 This is part of the Databend's Time Travel feature that allows you to query, back up, and restore from a previous version of your data within the retention period.
 
