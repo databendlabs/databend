@@ -62,7 +62,7 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
                     0,
                 ),
                 TypeID::Timestamp => {
-                    let ts = args[0].as_any().downcast_ref::<TimestampType>().unwrap();
+                    let ts: TimestampType = args[0].to_owned().try_into()?;
                     let precision = ts.precision();
                     IntervalFunction::<i64, $R, i64, _>::try_create_func(
                         display_name,

@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_stream::stream;
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -24,6 +25,7 @@ use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::StreamExt;
+use http::HeaderMap;
 use naive_cityhash::cityhash128;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
@@ -46,6 +48,7 @@ use crate::interpreters::InterpreterFactoryV2;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSource;
 use crate::pipelines::new::SourcePipeBuilder;
+use crate::servers::clickhouse::CLickHouseFederated;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
@@ -61,6 +64,7 @@ pub struct StatementHandlerParams {
     #[allow(unused)]
     query_id: Option<String>,
     database: Option<String>,
+    default_format: Option<String>,
     compress: Option<u8>,
     #[allow(unused)]
     decompress: Option<u8>,
@@ -95,7 +99,7 @@ impl StatementHandlerParams {
 async fn execute_v2(
     ctx: Arc<QueryContext>,
     plan: Plan,
-    format: Option<String>,
+    format: OutputFormatType,
     _input_stream: Option<SendableDataBlockStream>,
     params: StatementHandlerParams,
 ) -> Result<WithContentType<Body>> {
@@ -115,12 +119,8 @@ async fn execute_v2(
 
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
-    let mut fmt = OutputFormatType::TSV;
-    if let Some(format) = format {
-        fmt = OutputFormatType::from_str(format.as_str())?;
-    }
 
-    let mut output_format = fmt.create_format(plan.schema(), format_setting);
+    let mut output_format = format.create_format(plan.schema(), format_setting);
     let prefix = Ok(output_format.serialize_prefix()?);
 
     let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
@@ -150,13 +150,13 @@ async fn execute_v2(
             .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
     };
 
-    Ok(Body::from_bytes_stream(stream).with_content_type(fmt.get_content_type()))
+    Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
 }
 
 async fn execute(
     ctx: Arc<QueryContext>,
     plan: PlanNode,
-    format: Option<String>,
+    format: OutputFormatType,
     input_stream: Option<SendableDataBlockStream>,
     params: StatementHandlerParams,
 ) -> Result<WithContentType<Body>> {
@@ -183,12 +183,7 @@ async fn execute(
         };
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
-    let mut fmt = OutputFormatType::TSV;
-    if let Some(format) = format {
-        fmt = OutputFormatType::from_str(format.as_str())?;
-    }
-
-    let mut output_format = fmt.create_format(plan.schema(), format_setting);
+    let mut output_format = format.create_format(plan.schema(), format_setting);
     let prefix = Ok(output_format.serialize_prefix()?);
 
     let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
@@ -219,14 +214,15 @@ async fn execute(
             .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
     };
 
-    Ok(Body::from_bytes_stream(stream).with_content_type(fmt.get_content_type()))
+    Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
 }
 
 #[poem::handler]
 pub async fn clickhouse_handler_get(
     ctx: &HttpQueryContext,
     Query(params): Query<StatementHandlerParams>,
-) -> PoemResult<impl IntoResponse> {
+    headers: &HeaderMap,
+) -> PoemResult<WithContentType<Body>> {
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     if let Some(db) = &params.database {
         session.set_current_database(db.clone());
@@ -241,7 +237,12 @@ pub async fn clickhouse_handler_get(
         .set_batch_settings(&params.settings, false)
         .map_err(BadRequest)?;
 
+    let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
     let sql = params.query();
+    if let Some(block) = CLickHouseFederated::check(&sql) {
+        return serialize_one_block(context.clone(), block, &sql, &params, default_format)
+            .map_err(InternalServerError);
+    }
 
     let (stmts, _) = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type())
         .unwrap_or_else(|_| (vec![], vec![]));
@@ -263,15 +264,7 @@ pub async fn clickhouse_handler_get(
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
 
-        let format = match plan.clone() {
-            Plan::Query {
-                s_expr: _,
-                metadata: _,
-                bind_context,
-            } => bind_context.format.clone(),
-            _ => None,
-        };
-
+        let format = get_format_from_plan(&plan, default_format)?;
         context.attach_query_str(&sql);
         execute_v2(context, plan, format, None, params)
             .await
@@ -282,6 +275,7 @@ pub async fn clickhouse_handler_get(
             .map_err(BadRequest)?;
 
         context.attach_query_str(&sql);
+        let format = get_format_with_default(format, default_format)?;
         execute(context, plan, format, None, params)
             .await
             .map_err(InternalServerError)
@@ -293,6 +287,7 @@ pub async fn clickhouse_handler_post(
     ctx: &HttpQueryContext,
     body: Body,
     Query(params): Query<StatementHandlerParams>,
+    headers: &HeaderMap,
 ) -> PoemResult<impl IntoResponse> {
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     if let Some(db) = &params.database {
@@ -308,12 +303,18 @@ pub async fn clickhouse_handler_post(
         .set_batch_settings(&params.settings, false)
         .map_err(BadRequest)?;
 
+    let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
+    let mut sql = params.query();
+    sql.push_str(body.into_string().await?.as_str());
+
+    if let Some(block) = CLickHouseFederated::check(&sql) {
+        return serialize_one_block(ctx.clone(), block, &sql, &params, default_format)
+            .map_err(InternalServerError);
+    }
+
     let stmt_sql = params.query();
     let (stmts, _) = DfParser::parse_sql(stmt_sql.as_str(), ctx.get_current_session().get_type())
         .unwrap_or_else(|_| (vec![], vec![]));
-
-    let mut sql = params.query();
-    sql.push_str(body.into_string().await?.as_str());
 
     let settings = ctx.get_settings();
     if settings
@@ -331,16 +332,7 @@ pub async fn clickhouse_handler_post(
     {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
-
-        let format = match plan.clone() {
-            Plan::Query {
-                s_expr: _,
-                metadata: _,
-                bind_context,
-            } => bind_context.format.clone(),
-            _ => None,
-        };
-
+        let format = get_format_from_plan(&plan, default_format)?;
         ctx.attach_query_str(&sql);
         execute_v2(ctx, plan, format, None, params)
             .await
@@ -351,6 +343,9 @@ pub async fn clickhouse_handler_post(
             .map_err(BadRequest)?;
 
         ctx.attach_query_str(&sql);
+
+        let format = get_format_with_default(format, default_format)?;
+
         execute(ctx, plan, format, None, params)
             .await
             .map_err(InternalServerError)
@@ -402,5 +397,69 @@ fn compress_block(input: Vec<u8>) -> Result<Vec<u8>> {
         output.extend_from_slice(&checksum.hi.to_le_bytes());
         output.extend_from_slice(&compressed_with_header);
         Ok(output)
+    }
+}
+
+fn serialize_one_block(
+    ctx: Arc<QueryContext>,
+    block: DataBlock,
+    sql: &str,
+    params: &StatementHandlerParams,
+    default_format: OutputFormatType,
+) -> Result<WithContentType<Body>> {
+    let format_setting = ctx.get_format_settings()?;
+    let fmt = match CLickHouseFederated::get_format(sql) {
+        Some(format) => OutputFormatType::from_str(format.as_str())?,
+        None => default_format,
+    };
+    let mut output_format = fmt.create_format(block.schema().clone(), format_setting);
+    let mut res = output_format.serialize_prefix()?;
+    let mut data = output_format.serialize_block(&block)?;
+    if params.compress() {
+        data = compress_block(data)?;
+    }
+    res.append(&mut data);
+    res.append(&mut output_format.finalize()?);
+    Ok(Body::from(res).with_content_type(fmt.get_content_type()))
+}
+
+fn get_default_format(
+    params: &StatementHandlerParams,
+    headers: &HeaderMap,
+) -> Result<OutputFormatType> {
+    let name = match &params.default_format {
+        None => match headers.get("X-CLICKHOUSE-FORMAT") {
+            None => "TSV",
+            Some(v) => v.to_str().map_err_to_code(ErrorCode::BadBytes, || {
+                "value of X-CLICKHOUSE-FORMAT is not string"
+            })?,
+        },
+        Some(s) => s,
+    };
+    OutputFormatType::from_str(name)
+}
+
+fn get_format_from_plan(
+    plan: &Plan,
+    default_format: OutputFormatType,
+) -> PoemResult<OutputFormatType> {
+    let format = match plan.clone() {
+        Plan::Query {
+            s_expr: _,
+            metadata: _,
+            bind_context,
+        } => bind_context.format.clone(),
+        _ => None,
+    };
+    get_format_with_default(format, default_format)
+}
+
+fn get_format_with_default(
+    format: Option<String>,
+    default_format: OutputFormatType,
+) -> PoemResult<OutputFormatType> {
+    match format {
+        None => Ok(default_format),
+        Some(name) => OutputFormatType::from_str(&name).map_err(BadRequest),
     }
 }
