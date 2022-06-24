@@ -13,8 +13,12 @@
 // limitations under the License.
 
 mod eval_context;
+mod eval_node;
+mod physical_scalar;
 mod scalar;
 
 pub use eval_context::EvalContext;
 pub use eval_context::TypedVector;
-pub use scalar::ScalarEvaluator;
+pub use eval_node::EvalNode;
+
+pub struct Evaluator;

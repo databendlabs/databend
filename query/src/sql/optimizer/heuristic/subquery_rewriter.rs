@@ -148,7 +148,6 @@ impl SubqueryRewriter {
                 } else {
                     (
                         CrossApply {
-                            subquery_output: prop.output_columns,
                             correlated_columns: subquery.outer_columns.clone(),
                         }
                         .into(),
@@ -271,7 +270,6 @@ impl SubqueryRewriter {
                 } else {
                     (
                         CrossApply {
-                            subquery_output: prop.output_columns,
                             correlated_columns: subquery.outer_columns.clone(),
                         }
                         .into(),

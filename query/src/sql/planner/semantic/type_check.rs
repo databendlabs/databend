@@ -48,7 +48,7 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 
-use crate::common::ScalarEvaluator;
+use crate::common::Evaluator;
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::RelExpr;
@@ -108,10 +108,12 @@ impl<'a> TypeChecker<'a> {
         data_type: &DataTypeImpl,
     ) -> Result<(Scalar, DataTypeImpl)> {
         // Try constant folding
-        if let Ok((value, value_type)) = ScalarEvaluator::try_create(scalar).and_then(|evaluator| {
-            let func_ctx = self.ctx.try_get_function_context()?;
-            evaluator.try_eval_const(&func_ctx)
-        }) {
+        if let Ok((value, value_type)) =
+            Evaluator::eval_scalar::<String>(scalar).and_then(|evaluator| {
+                let func_ctx = self.ctx.try_get_function_context()?;
+                evaluator.try_eval_const(&func_ctx)
+            })
+        {
             Ok((
                 ConstantExpr {
                     value,
@@ -254,8 +256,11 @@ impl<'a> TypeChecker<'a> {
                 expr, target_type, ..
             } => {
                 let (scalar, data_type) = self.resolve(expr, required_type).await?;
-                let cast_func =
-                    CastFunction::create("", target_type.to_string().as_str(), data_type.clone())?;
+                let cast_func = CastFunction::create_try(
+                    "",
+                    target_type.to_string().as_str(),
+                    data_type.clone(),
+                )?;
                 (
                     CastExpr {
                         argument: Box::new(scalar),

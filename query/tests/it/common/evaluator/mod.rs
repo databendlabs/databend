@@ -22,7 +22,7 @@ use common_datavalues::Int32Type;
 use common_datavalues::Int64Type;
 use common_datavalues::PrimitiveColumn;
 use common_exception::Result;
-use databend_query::common::ScalarEvaluator;
+use databend_query::common::Evaluator;
 use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::FunctionCall;
@@ -100,7 +100,7 @@ async fn test_scalar_evaluator() -> Result<()> {
     )?;
 
     let func_ctx = create_query_context().await?.try_get_function_context()?;
-    let eval = ScalarEvaluator::try_create(&scalar)?;
+    let eval = Evaluator::eval_scalar::<String>(&scalar)?;
     let result = eval.eval(&func_ctx, &block)?;
 
     assert_eq!(result.vector().get(0), DataValue::Float64(-4.0));
@@ -144,7 +144,7 @@ async fn test_eval_const() -> Result<()> {
     });
 
     let func_ctx = create_query_context().await?.try_get_function_context()?;
-    let eval = ScalarEvaluator::try_create(&scalar)?;
+    let eval = Evaluator::eval_scalar::<String>(&scalar)?;
     let (result, result_type) = eval.try_eval_const(&func_ctx)?;
 
     assert_eq!(result, DataValue::Float64(16.0));

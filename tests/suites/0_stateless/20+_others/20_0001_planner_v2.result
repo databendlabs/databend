@@ -324,14 +324,13 @@ Project: [a]
     Filter: [a > 0]
         Scan: default.default.t1
 ===Explain Pipeline===
-ProjectionTransform × 1 processor
-  ProjectionTransform × 1 processor
-    TransformHashJoin × 1 processor
-      ProjectionTransform × 1 processor
-        FuseEngineSource × 1 processor
+Project × 1 processor
+  TransformHashJoin × 1 processor
+    Rename × 1 processor
+      FuseEngineSource × 1 processor
 
 BuildHashTable × 1 processor
-  ProjectionTransform × 1 processor
+  Rename × 1 processor
     FuseEngineSource × 1 processor
 ===Position Function===
 4
@@ -355,6 +354,7 @@ BuildHashTable × 1 processor
 3	4	2	2
 3	4	3	5
 3	4	7	8
+3	4
 ====UDF====
 5
 6.0

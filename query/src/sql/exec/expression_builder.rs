@@ -165,27 +165,4 @@ impl ExpressionBuilder {
             args: arg_exprs,
         })
     }
-
-    // Transform aggregator expression to column expression
-    pub(crate) fn normalize_aggr_to_col(&self, expr: Expression) -> Result<Expression> {
-        match expr.clone() {
-            Expression::BinaryExpression { left, op, right } => Ok(Expression::BinaryExpression {
-                left: Box::new(self.normalize_aggr_to_col(*left)?),
-                op,
-                right: Box::new(self.normalize_aggr_to_col(*right)?),
-            }),
-            Expression::AggregateFunction { .. } => {
-                let col_name = expr.column_name();
-                Ok(Expression::Column(col_name))
-            }
-            Expression::ScalarFunction { op, args } => Ok(Expression::ScalarFunction {
-                op,
-                args: args
-                    .iter()
-                    .map(|arg| self.normalize_aggr_to_col(arg.clone()))
-                    .collect::<Result<Vec<Expression>>>()?,
-            }),
-            _ => Ok(expr),
-        }
-    }
 }
