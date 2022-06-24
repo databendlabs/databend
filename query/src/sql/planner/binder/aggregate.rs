@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::SelectTarget;
-use common_ast::parser::error::DisplayError;
+use common_ast::DisplayError;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
