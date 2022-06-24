@@ -29,10 +29,11 @@ runs:
       shell: bash
       run: |
         if [[ -z "${{ inputs.path }}"]]; then
-          echo "::set-output name=path::./target/${{ inputs.profile }}"
+          path="./target/${{ inputs.profile }}"
         else
-          echo "::set-output name=path::${{ inputs.path }}"
+          path="${{ inputs.path }}"
         fi
+        echo "::set-output name=path::${path}"
 
     - uses: actions/download-artifact@v2
       if: inputs.source == 'github'
