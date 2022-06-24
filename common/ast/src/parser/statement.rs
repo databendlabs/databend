@@ -24,13 +24,13 @@ use nom::combinator::value;
 use nom::Slice;
 use url::Url;
 
-use super::error::ErrorKind;
 use crate::ast::*;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
+use crate::ErrorKind;
 
 pub fn statement(i: Input) -> IResult<Statement> {
     let explain = map(

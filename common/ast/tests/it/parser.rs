@@ -14,8 +14,6 @@
 
 use std::io::Write;
 
-use common_ast::parser::error::Backtrace;
-use common_ast::parser::error::DisplayError as _;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
@@ -23,6 +21,8 @@ use common_ast::parser::token::*;
 use common_ast::parser::tokenize_sql;
 use common_ast::parser::util::Input;
 use common_ast::rule;
+use common_ast::Backtrace;
+use common_ast::DisplayError;
 use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;

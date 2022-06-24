@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod error;
+pub use error::Backtrace;
+pub use error::DisplayError;
+pub use error::Error;
+pub use error::ErrorKind;
+
 pub mod ast;
 pub mod parser;
 pub mod udfs;
