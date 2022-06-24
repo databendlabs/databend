@@ -32,5 +32,5 @@ runs:
       shell: bash
       run: |
         for line in $(ls ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*); do
-          aws s3 cp $line s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/
+          aws s3 cp $line s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ --no-progress
         done

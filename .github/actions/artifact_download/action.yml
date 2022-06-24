@@ -46,7 +46,7 @@ runs:
       run: |
         aws s3 cp \
           s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
-          ${{ steps.path.outputs.path }}/ --recursive --exclude "*" --include "databend-*"
+          ${{ steps.path.outputs.path }}/ --recursive --exclude "*" --include "databend-*" --no-progress
 
     - name: make artifacts excutable
       shell: bash
