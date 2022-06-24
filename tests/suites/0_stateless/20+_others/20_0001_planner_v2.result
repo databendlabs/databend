@@ -327,11 +327,13 @@ Project: [a]
 Project × 1 processor
   TransformHashJoin × 1 processor
     Rename × 1 processor
-      FuseEngineSource × 1 processor
+      Project × 1 processor
+        FuseEngineSource × 1 processor
 
 BuildHashTable × 1 processor
   Rename × 1 processor
-    FuseEngineSource × 1 processor
+    Project × 1 processor
+      FuseEngineSource × 1 processor
 ===Position Function===
 4
 0
