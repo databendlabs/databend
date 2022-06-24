@@ -19,7 +19,7 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
-use common_base::base::tokio::time::interval;
+use common_base::base::tokio::time::interval_at;
 use common_base::base::tokio::time::Duration;
 use common_base::base::tokio::time::Instant;
 use common_base::base::ProgressValues;
@@ -223,22 +223,32 @@ impl AsyncInsertQueue {
         // busy timeout
         let busy_timeout = self_arc.busy_timeout;
         self_arc.clone().runtime.as_ref().inner().spawn(async move {
-            let mut intv = interval(busy_timeout);
+            let mut intv = interval_at(Instant::now() + busy_timeout, busy_timeout);
             loop {
                 intv.tick().await;
+                if self_arc.queue.read().is_empty() {
+                    continue;
+                }
                 let timeout = self_arc.clone().busy_check();
-                intv = interval(timeout);
+                if timeout != busy_timeout {
+                    intv = interval_at(Instant::now() + timeout, timeout);
+                }
             }
         });
         // stale timeout
         let stale_timeout = self.stale_timeout;
         if !stale_timeout.is_zero() {
             self.clone().runtime.as_ref().inner().spawn(async move {
-                let mut intv = interval(stale_timeout);
+                let mut intv = interval_at(Instant::now() + stale_timeout, stale_timeout);
                 loop {
                     intv.tick().await;
+                    if self.queue.read().is_empty() {
+                        continue;
+                    }
                     let timeout = self.clone().stale_check();
-                    intv = interval(timeout)
+                    if timeout != busy_timeout {
+                        intv = interval_at(Instant::now() + timeout, timeout);
+                    }
                 }
             });
         }
@@ -350,8 +360,7 @@ impl AsyncInsertQueue {
         let entry = self.get_entry(&query_id)?;
         let e = entry.clone();
         self.runtime.as_ref().inner().spawn(async move {
-            let mut intv = interval(time_out);
-            intv.tick().await;
+            let mut intv = interval_at(Instant::now() + time_out, time_out);
             intv.tick().await;
             e.finish_with_timeout();
         });
