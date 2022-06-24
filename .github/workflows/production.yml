@@ -5,8 +5,11 @@ on:
     branches:
       - main
     paths-ignore:
-      - 'docs/**'
-      - 'website/**'
+      - "docs/**"
+      - "website/**"
+      - "**.md"
+      - "scripts/setup/**"
+      - ".devcontainer/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -36,13 +39,13 @@ jobs:
         with:
           # fetch all tags,  metasrv and metaclient need tag as its version.
           fetch-depth: 0
-      - uses: ./.github/actions/build_release
+      - uses: ./.github/actions/build_macos
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ matrix.target }}
+          profile: release
 
   build_linux:
-    runs-on: [self-hosted, x64, Linux]
+    runs-on: [self-hosted, x64, Linux, internal]
     strategy:
       matrix:
         target:
@@ -53,9 +56,10 @@ jobs:
         with:
           # fetch all tags,  metasrv and metaclient need tag as its version.
           fetch-depth: 0
-      - uses: ./.github/actions/build_release
+      - uses: ./.github/actions/build_linux
         with:
           target: ${{ matrix.target }}
+          profile: release
 
   test_unit:
     runs-on: [self-hosted, x64, Linux]
@@ -69,13 +73,10 @@ jobs:
           codecov_token: ${{ secrets.CODECOV_TOKEN }}
 
   test_stateless_standalone_linux:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux, internal]
     needs: build_linux
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_standalone_linux
         with:
           profile: release
@@ -90,13 +91,10 @@ jobs:
   #         profile: release
 
   test_stateless_cluster_linux:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux, internal]
     needs: build_linux
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_cluster_linux
         with:
           profile: release
@@ -106,22 +104,16 @@ jobs:
     needs: build_macos
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_cluster_macos
         with:
           profile: release
 
-  test_stateful_standalone:
-    runs-on: ubuntu-latest
+  test_stateful_standalone_linux:
+    runs-on: [self-hosted, x64, Linux, internal]
     needs: build_linux
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/test_stateful_standalone
+      - uses: ./.github/actions/test_stateful_standalone_linux
         with:
           profile: release
 
@@ -130,44 +122,15 @@ jobs:
     needs: build_macos
     steps:
       - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/test_sqllogic_standalone_macos
         with:
           profile: release
 
   test_sqllogic_standalone_linux:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux, internal]
     needs: build_linux
     steps:
       - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         with:
           profile: release
-
-  publish_image:
-    runs-on: ubuntu-latest
-    # Release after all tests have been passed.
-    needs:
-      - test_unit
-      - test_stateless_standalone_linux
-      - test_stateless_cluster_linux
-      - test_stateful_standalone
-      - test_sqllogic_standalone_linux
-    strategy:
-      matrix:
-        config:
-          - { target: x86_64-unknown-linux-gnu, platform: linux/amd64 }
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/publish_image
-        with:
-          dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
-          target: ${{ matrix.config.target }}
-          platform: ${{ matrix.config.platform }}

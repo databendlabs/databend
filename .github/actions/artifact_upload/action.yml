@@ -1,0 +1,36 @@
+name: "Upload Artifacts"
+description: "Upload build Result Binaries"
+inputs:
+  profile:
+    description: "debug/release"
+    required: true
+  sha:
+    description: "git sha"
+    required: true
+  target:
+    description: ""
+    required: true
+  source:
+    description: "github/s3"
+    required: true
+  category:
+    description: "default/hive"
+    required: false
+    default: default
+runs:
+  using: "composite"
+  steps:
+    - name: Upload artifact to github
+      if: inputs.source == 'github'
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
+        path: ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*
+
+    - name: Upload artifacts to s3
+      if: inputs.source == 's3'
+      shell: bash
+      run: |
+        for line in $(ls ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*); do
+          aws s3 cp $line s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/
+        done
