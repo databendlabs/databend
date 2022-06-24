@@ -195,7 +195,7 @@ run_test() {
         )
         suite_path="old_suite/tests/suites"
     fi
-    ./tests/databend-test --suites "$suite_path" --mode 'standalone' --run-dir 0_stateless -- 05_
+    ./tests/databend-test --suites "$suite_path" --mode 'standalone' --run-dir 0_stateless -- '^05_*'
 }
 
 # -- main --
