@@ -20,6 +20,7 @@ use std::sync::Once;
 use once_cell::sync::Lazy;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
+use sentry_tracing::EventFilter;
 use tracing::Event;
 use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -104,6 +105,16 @@ pub fn init_global_tracing(
         jaeger_layer = Some(tracing_opentelemetry::layer().with_tracer(tracer));
     }
 
+    // Sentry Layer.
+    let mut sentry_layer = None;
+    let fuse_sentry_env = env::var("DATABEND_SENTRY").unwrap_or_else(|_| "".to_string());
+    if !fuse_sentry_env.is_empty() {
+        sentry_layer = Some(sentry_tracing::layer().event_filter(|md| match md.level() {
+            &tracing::Level::ERROR => EventFilter::Event,
+            _ => EventFilter::Ignore,
+        }));
+    }
+
     let stdout_layer = if enable_stdout == Some(false) {
         None
     } else {
@@ -119,7 +130,8 @@ pub fn init_global_tracing(
         .with(env_filter)
         .with(JsonStorageLayer)
         .with(file_logging_layer)
-        .with(jaeger_layer);
+        .with(jaeger_layer)
+        .with(sentry_layer);
 
     // For tokio-console
     #[cfg(feature = "console")]
