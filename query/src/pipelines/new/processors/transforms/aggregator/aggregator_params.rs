@@ -95,6 +95,34 @@ impl AggregatorParams {
             offsets_aggregate_states: states_offsets,
         }))
     }
+
+    pub fn try_create_v2(
+        output_schema: DataSchemaRef,
+        before_schema: DataSchemaRef,
+        group_by: &[DataField],
+        agg_funcs: &[AggregateFunctionRef],
+        agg_output_names: &[String],
+        agg_args: &[Vec<String>],
+    ) -> Result<Arc<AggregatorParams>> {
+        let mut states_offsets: Vec<usize> = Vec::with_capacity(agg_funcs.len());
+        let mut states_layout = None;
+        if !agg_funcs.is_empty() {
+            states_offsets = Vec::with_capacity(agg_funcs.len());
+            states_layout = Some(get_layout_offsets(agg_funcs, &mut states_offsets)?);
+        }
+
+        Ok(Arc::new(AggregatorParams {
+            schema: output_schema,
+            before_schema,
+            group_columns_name: group_by.iter().map(|field| field.name().clone()).collect(),
+            group_data_fields: group_by.to_vec(),
+            aggregate_functions: agg_funcs.to_vec(),
+            aggregate_functions_column_name: agg_output_names.to_vec(),
+            aggregate_functions_arguments_name: agg_args.to_vec(),
+            layout: states_layout,
+            offsets_aggregate_states: states_offsets,
+        }))
+    }
 }
 
 pub struct AggregatorTransformParams {

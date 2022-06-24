@@ -21,6 +21,8 @@ use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
@@ -45,9 +47,12 @@ use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::NewPipe;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sql::exec::PhysicalPlan;
 use crate::sql::exec::PipelineBuilder;
+use crate::sql::ColumnBinding;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
@@ -383,15 +388,31 @@ impl HttpQueryHandle {
     pub async fn execute(
         self,
         ctx: Arc<QueryContext>,
-        pb: PipelineBuilder,
+        physical_plan: &PhysicalPlan,
+        result_columns: &[ColumnBinding],
     ) -> Result<SendableDataBlockStream> {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
-        let (mut root_pipeline, pipelines, schema) = pb.spawn()?;
+        let mut pb = PipelineBuilder::new();
+        let mut root_pipeline = NewPipeline::create();
+        pb.build_pipeline(ctx.clone(), physical_plan, &mut root_pipeline)?;
+        let mut pipelines = pb.pipelines;
         let async_runtime = ctx.get_storage_runtime();
+
+        root_pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+        for pipeline in pipelines.iter_mut() {
+            pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+        }
 
         root_pipeline.resize(1)?;
         let input = InputPort::create();
+
+        let schema = DataSchemaRefExt::create(
+            result_columns
+                .iter()
+                .map(|v| DataField::new(&v.column_name, v.data_type.clone()))
+                .collect(),
+        );
 
         let query_info = ResultQueryInfo {
             query_id: ctx.get_id(),

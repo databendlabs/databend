@@ -23,6 +23,7 @@ use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
+use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::wrap_nullable;
 use common_datavalues::Column;
@@ -32,14 +33,15 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
 use common_exception::Result;
-use common_planners::Expression;
 use primitive_types::U256;
 use primitive_types::U512;
 
-use crate::common::ExpressionEvaluator;
+use crate::common::EvalNode;
+use crate::common::Evaluator;
 use crate::common::HashMap;
 use crate::common::HashTableKeyable;
 use crate::pipelines::new::processors::transforms::hash_join::row::Chunk;
@@ -48,6 +50,8 @@ use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
+use crate::sql::exec::ColumnID;
+use crate::sql::exec::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
 
 pub struct SerializerHashTable {
@@ -106,8 +110,8 @@ pub struct ChainingHashTable {
     ref_count: Mutex<usize>,
     is_finished: Mutex<bool>,
 
-    build_expressions: Vec<Expression>,
-    probe_expressions: Vec<Expression>,
+    build_keys: Vec<EvalNode<ColumnID>>,
+    probe_keys: Vec<EvalNode<ColumnID>>,
 
     ctx: Arc<QueryContext>,
 
@@ -115,17 +119,130 @@ pub struct ChainingHashTable {
     hash_table: RwLock<HashTable>,
     row_space: RowSpace,
     join_type: JoinType,
-    other_conditions: Vec<Expression>,
+    other_conditions: Vec<EvalNode<ColumnID>>,
 }
 
 impl ChainingHashTable {
+    pub fn create_join_state(
+        ctx: Arc<QueryContext>,
+        join_type: JoinType,
+        build_keys: &[PhysicalScalar],
+        probe_keys: &[PhysicalScalar],
+        other_conditions: &[PhysicalScalar],
+        build_schema: DataSchemaRef,
+    ) -> Result<Arc<ChainingHashTable>> {
+        let hash_key_types: Vec<DataTypeImpl> =
+            build_keys.iter().map(|expr| expr.data_type()).collect();
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
+        Ok(match method {
+            HashMethodKind::SingleString(_) | HashMethodKind::Serializer(_) => {
+                Arc::new(ChainingHashTable::try_create(
+                    ctx,
+                    join_type,
+                    HashTable::SerializerHashTable(SerializerHashTable {
+                        hash_table: HashMap::<KeysRef, Vec<RowPtr>>::create(),
+                        hash_method: HashMethodSerializer::default(),
+                    }),
+                    build_keys,
+                    probe_keys,
+                    other_conditions,
+                    build_schema,
+                )?)
+            }
+            HashMethodKind::KeysU8(hash_method) => Arc::new(ChainingHashTable::try_create(
+                ctx,
+                join_type,
+                HashTable::KeyU8HashTable(KeyU8HashTable {
+                    hash_table: HashMap::<u8, Vec<RowPtr>>::create(),
+                    hash_method,
+                }),
+                build_keys,
+                probe_keys,
+                other_conditions,
+                build_schema,
+            )?),
+            HashMethodKind::KeysU16(hash_method) => Arc::new(ChainingHashTable::try_create(
+                ctx,
+                join_type,
+                HashTable::KeyU16HashTable(KeyU16HashTable {
+                    hash_table: HashMap::<u16, Vec<RowPtr>>::create(),
+                    hash_method,
+                }),
+                build_keys,
+                probe_keys,
+                other_conditions,
+                build_schema,
+            )?),
+            HashMethodKind::KeysU32(hash_method) => Arc::new(ChainingHashTable::try_create(
+                ctx,
+                join_type,
+                HashTable::KeyU32HashTable(KeyU32HashTable {
+                    hash_table: HashMap::<u32, Vec<RowPtr>>::create(),
+                    hash_method,
+                }),
+                build_keys,
+                probe_keys,
+                other_conditions,
+                build_schema,
+            )?),
+            HashMethodKind::KeysU64(hash_method) => Arc::new(ChainingHashTable::try_create(
+                ctx,
+                join_type,
+                HashTable::KeyU64HashTable(KeyU64HashTable {
+                    hash_table: HashMap::<u64, Vec<RowPtr>>::create(),
+                    hash_method,
+                }),
+                build_keys,
+                probe_keys,
+                other_conditions,
+                build_schema,
+            )?),
+            HashMethodKind::KeysU128(hash_method) => Arc::new(ChainingHashTable::try_create(
+                ctx,
+                join_type,
+                HashTable::KeyU128HashTable(KeyU128HashTable {
+                    hash_table: HashMap::<u128, Vec<RowPtr>>::create(),
+                    hash_method,
+                }),
+                build_keys,
+                probe_keys,
+                other_conditions,
+                build_schema,
+            )?),
+            HashMethodKind::KeysU256(hash_method) => Arc::new(ChainingHashTable::try_create(
+                ctx,
+                join_type,
+                HashTable::KeyU256HashTable(KeyU256HashTable {
+                    hash_table: HashMap::<U256, Vec<RowPtr>>::create(),
+                    hash_method,
+                }),
+                build_keys,
+                probe_keys,
+                other_conditions,
+                build_schema,
+            )?),
+            HashMethodKind::KeysU512(hash_method) => Arc::new(ChainingHashTable::try_create(
+                ctx,
+                join_type,
+                HashTable::KeyU512HashTable(KeyU512HashTable {
+                    hash_table: HashMap::<U512, Vec<RowPtr>>::create(),
+                    hash_method,
+                }),
+                build_keys,
+                probe_keys,
+                other_conditions,
+                build_schema,
+            )?),
+        })
+    }
+
     pub fn try_create(
         ctx: Arc<QueryContext>,
         join_type: JoinType,
-        other_conditions: Vec<Expression>,
         hash_table: HashTable,
-        build_expressions: Vec<Expression>,
-        probe_expressions: Vec<Expression>,
+        build_keys: &[PhysicalScalar],
+        probe_keys: &[PhysicalScalar],
+        other_conditions: &[PhysicalScalar],
         mut build_data_schema: DataSchemaRef,
     ) -> Result<Self> {
         if join_type == JoinType::Left {
@@ -142,12 +259,21 @@ impl ChainingHashTable {
             row_space: RowSpace::new(build_data_schema),
             ref_count: Mutex::new(0),
             is_finished: Mutex::new(false),
-            build_expressions,
-            probe_expressions,
+            build_keys: build_keys
+                .iter()
+                .map(Evaluator::eval_physical_scalar)
+                .collect::<Result<_>>()?,
+            probe_keys: probe_keys
+                .iter()
+                .map(Evaluator::eval_physical_scalar)
+                .collect::<Result<_>>()?,
+            other_conditions: other_conditions
+                .iter()
+                .map(Evaluator::eval_physical_scalar)
+                .collect::<Result<_>>()?,
             ctx,
             hash_table: RwLock::new(hash_table),
             join_type,
-            other_conditions,
         })
     }
 
@@ -237,15 +363,14 @@ impl ChainingHashTable {
     // Todo(xudong963): optimize the performance of this function
     fn filter_block(&self, probe_block: &DataBlock, merged_block: DataBlock) -> Result<DataBlock> {
         let mut result_block = merged_block;
-        for join_filter_expression in self.other_conditions.iter() {
+        for filter in self.other_conditions.iter() {
             let func_ctx = self.ctx.try_get_function_context()?;
             // `predicate_column` contains a column, which is a boolean column.
-            let predicate_column =
-                ExpressionEvaluator::eval(&func_ctx, join_filter_expression, &result_block)?;
+            let filter_vector = filter.eval(&func_ctx, &result_block)?;
             // Here, we directly use `predicate_column` to filter the result block.
             // But pay attention to the fact that **reserved side** may also be filtered.
             // **reserved side** is the left side in left join, and the right side in right join.
-            result_block = DataBlock::filter_block(&result_block, &predicate_column)?;
+            result_block = DataBlock::filter_block(&result_block, filter_vector.vector())?;
         }
         // If result_block is empty, we need to supply a NULL block for probe_block.
         if result_block.is_empty() {
@@ -306,9 +431,9 @@ impl ChainingHashTable {
     fn probe_join(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let probe_keys = self
-            .probe_expressions
+            .probe_keys
             .iter()
-            .map(|expr| ExpressionEvaluator::eval(&func_ctx, expr, input))
+            .map(|expr| Ok(expr.eval(&func_ctx, input)?.vector().clone()))
             .collect::<Result<Vec<ColumnRef>>>()?;
         let probe_keys = probe_keys.iter().collect::<Vec<&ColumnRef>>();
         let mut results: Vec<DataBlock> = vec![];
@@ -472,9 +597,9 @@ impl HashJoinState for ChainingHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let build_cols = self
-            .build_expressions
+            .build_keys
             .iter()
-            .map(|expr| ExpressionEvaluator::eval(&func_ctx, expr, &input))
+            .map(|expr| Ok(expr.eval(&func_ctx, &input)?.vector().clone()))
             .collect::<Result<Vec<ColumnRef>>>()?;
 
         match &*self.hash_table.read() {
@@ -505,13 +630,12 @@ impl HashJoinState for ChainingHashTable {
             return Ok(data_blocks);
         }
         // Process other conditions for Inner/Semi/Anti join
-        for join_filter_expression in self.other_conditions.iter() {
+        for filter in self.other_conditions.iter() {
             let func_ctx = self.ctx.try_get_function_context()?;
             let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
             for block in data_blocks.iter() {
-                let predicate_column =
-                    ExpressionEvaluator::eval(&func_ctx, join_filter_expression, block)?;
-                filtered_blocks.push(DataBlock::filter_block(block, &predicate_column)?);
+                let filter_vector = filter.eval(&func_ctx, block)?;
+                filtered_blocks.push(DataBlock::filter_block(block, filter_vector.vector())?);
             }
             data_blocks = filtered_blocks;
         }
