@@ -107,8 +107,8 @@ pub fn init_global_tracing(
 
     // Sentry Layer.
     let mut sentry_layer = None;
-    let fuse_sentry_env = env::var("DATABEND_SENTRY").unwrap_or_else(|_| "".to_string());
-    if !fuse_sentry_env.is_empty() {
+    let bend_sentry_env = env::var("DATABEND_SENTRY").unwrap_or_else(|_| "".to_string());
+    if !bend_sentry_env.is_empty() {
         sentry_layer = Some(sentry_tracing::layer().event_filter(|md| match md.level() {
             &tracing::Level::ERROR => EventFilter::Event,
             _ => EventFilter::Ignore,

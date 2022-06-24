@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -37,6 +38,11 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     if run_cmd(&conf) {
         return Ok(());
+    }
+
+    let bend_sentry_env = env::var("DATABEND_SENTRY").unwrap_or_else(|_| "".to_string());
+    if !bend_sentry_env.is_empty() {
+        let _guard = sentry::init(sentry::ClientOptions::default());
     }
 
     let _guards = init_global_tracing(
