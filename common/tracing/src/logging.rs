@@ -104,10 +104,10 @@ pub fn init_global_tracing(
         jaeger_layer = Some(tracing_opentelemetry::layer().with_tracer(tracer));
     }
 
-    let stdout_layer = if enable_stdout == Some(true) {
-        Some(fmt::layer().with_ansi(atty::is(atty::Stream::Stdout)))
-    } else {
+    let stdout_layer = if enable_stdout == Some(false) {
         None
+    } else {
+        Some(fmt::layer().with_ansi(atty::is(atty::Stream::Stdout)))
     };
 
     // Use env RUST_LOG to initialize log if present.
