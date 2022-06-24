@@ -293,7 +293,7 @@ fn test_env_config_fs() -> Result<()> {
 /// Test whether override works as expected.
 #[test]
 fn test_override_config() -> Result<()> {
-    let file_path = temp_dir().join("databend_config.toml");
+    let file_path = temp_dir().join("databend_test_config.toml");
 
     let mut f = fs::File::create(&file_path)?;
     f.write_all(
@@ -410,6 +410,9 @@ protocol = "binary"
             assert_eq!("s3", cfg.storage.storage_type);
         },
     );
+
+    // remove temp file
+    fs::remove_file(file_path)?;
 
     Ok(())
 }
