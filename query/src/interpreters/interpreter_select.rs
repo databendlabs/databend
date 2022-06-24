@@ -77,9 +77,14 @@ impl Interpreter for SelectInterpreter {
         if settings.get_enable_new_processor_framework()? != 0 {
             let query_pipeline = self.create_new_pipeline().await?;
             let async_runtime = self.ctx.get_storage_runtime();
-            let executor = PipelinePullingExecutor::try_create(async_runtime, query_pipeline)?;
-            let (handler, stream) = ProcessorExecutorStream::create(executor)?;
-            self.ctx.add_source_abort_handle(handler);
+            let query_need_abort = self.ctx.query_need_abort();
+            let executor = PipelinePullingExecutor::try_create(
+                async_runtime,
+                query_need_abort,
+                query_pipeline,
+            )?;
+            let stream = ProcessorExecutorStream::create(executor)?;
+
             return Ok(Box::pin(stream));
         } else {
             let optimized_plan = self.rewrite_plan()?;

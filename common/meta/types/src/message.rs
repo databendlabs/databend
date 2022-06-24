@@ -47,6 +47,7 @@ pub enum RetryableError {
 pub struct JoinRequest {
     pub node_id: NodeId,
     pub endpoint: Endpoint,
+    pub grpc_api_addr: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

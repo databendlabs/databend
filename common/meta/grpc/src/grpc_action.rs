@@ -42,6 +42,7 @@ use tonic::Request;
 
 use crate::grpc_client::AuthInterceptor;
 use crate::message::ExportReq;
+use crate::message::GetEndpoints;
 use crate::message::MakeClient;
 
 /// Bind a request type to its corresponding response type.
@@ -158,6 +159,10 @@ impl RequestFor for ExportReq {
 
 impl RequestFor for MakeClient {
     type Reply = MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>;
+}
+
+impl RequestFor for GetEndpoints {
+    type Reply = Vec<String>;
 }
 
 // -- share

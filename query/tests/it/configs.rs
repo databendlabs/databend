@@ -84,6 +84,7 @@ endpoints = []
 username = "root"
 password = ""
 client_timeout_in_second = 10
+auto_sync_interval = 10
 rpc_tls_meta_server_root_ca_cert = ""
 rpc_tls_meta_service_domain_name = "localhost"
 

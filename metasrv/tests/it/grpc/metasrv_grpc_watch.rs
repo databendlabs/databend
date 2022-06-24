@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common_base::base::tokio;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
@@ -27,7 +29,14 @@ use common_tracing::tracing;
 use crate::init_meta_ut;
 
 async fn upsert_kv_client_main(addr: String, updates: Vec<UpsertKVReq>) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     // update some kv
     for update in updates.iter() {
@@ -43,7 +52,14 @@ async fn test_watch_main(
     mut watch_events: Vec<Event>,
     updates: Vec<UpsertKVReq>,
 ) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr.clone()],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     // let mut grpc_client = client.make_conn().await?;
 

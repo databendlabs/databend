@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use common_base::base::tokio;
@@ -37,7 +38,15 @@ impl KVApiBuilder<Arc<ClientHandle>> for Builder {
     async fn build(&self) -> Arc<ClientHandle> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
-        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).unwrap();
+        let client = MetaGrpcClient::try_create(
+            vec![addr],
+            "root",
+            "xxx",
+            None,
+            Duration::from_secs(10),
+            None,
+        )
+        .unwrap();
 
         {
             let mut tcs = self.test_contexts.lock().unwrap();

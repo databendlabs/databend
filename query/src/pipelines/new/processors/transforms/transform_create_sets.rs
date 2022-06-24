@@ -194,11 +194,12 @@ impl SubQueriesPuller {
         let schema = plan.schema();
         let subquery_ctx = QueryContext::create_from(self.ctx.clone());
         let async_runtime = subquery_ctx.get_storage_runtime();
+        let query_need_abort = subquery_ctx.query_need_abort();
 
         let interpreter = SelectInterpreter::try_create(subquery_ctx, plan)?;
         let query_pipeline = interpreter.create_new_pipeline().await?;
         let mut query_executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_pipeline)?;
+            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
 
         let mut columns = Vec::with_capacity(schema.fields().len());
 
@@ -232,12 +233,13 @@ impl SubQueriesPuller {
         let schema = plan.schema();
         let subquery_ctx = QueryContext::create_from(self.ctx.clone());
         let async_runtime = subquery_ctx.get_storage_runtime();
+        let query_need_abort = subquery_ctx.query_need_abort();
 
         let interpreter = SelectInterpreter::try_create(subquery_ctx, plan)?;
         let query_pipeline = interpreter.create_new_pipeline().await?;
 
         let mut query_executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_pipeline)?;
+            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
 
         query_executor.start();
         match query_executor.pull_data()? {

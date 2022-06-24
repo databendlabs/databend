@@ -50,6 +50,13 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     conf.raft_config.check()?;
 
+    // Leave cluster and quit if `--leave-via` and `--leave-id` is specified.
+    let has_left = MetaNode::leave_cluster(&conf.raft_config).await?;
+    if has_left {
+        tracing::info!("node {:?} has left cluster", conf.raft_config.leave_id);
+        return Ok(());
+    }
+
     init_sled_db(conf.raft_config.raft_dir.clone());
     init_meta_metrics_recorder();
 
@@ -59,7 +66,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         conf
     );
 
-    let meta_node = MetaNode::start(&conf.raft_config).await?;
+    let meta_node = MetaNode::start(&conf).await?;
 
     let mut stop_handler = StopHandle::create();
     let stop_tx = StopHandle::install_termination_handle();
@@ -77,14 +84,16 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let mut srv = GrpcServer::create(conf.clone(), meta_node.clone());
         tracing::info!(
             "Databend meta server listening on {}",
-            conf.grpc_api_address
+            conf.grpc_api_address.clone()
         );
         srv.start().await.expect("Databend meta service error");
         stop_handler.push(Box::new(srv));
     }
 
-    // join raft cluster after all service started
-    meta_node.join_cluster(&conf.raft_config).await?;
+    // Join a raft cluster only after all service started.
+    meta_node
+        .join_cluster(&conf.raft_config, conf.grpc_api_address)
+        .await?;
 
     stop_handler.wait_to_terminate(stop_tx).await;
     tracing::info!("Databend-meta is done shutting down");
