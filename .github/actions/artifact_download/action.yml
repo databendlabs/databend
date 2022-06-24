@@ -18,7 +18,7 @@ inputs:
     required: false
     default: default
   path:
-    description: "default to ./target/${{ inputs.profile }}/"
+    description: "default to ./target/{inputs.profile}/"
     required: false
     default: ""
 runs:
