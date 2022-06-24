@@ -256,11 +256,8 @@ impl<'a> TypeChecker<'a> {
                 expr, target_type, ..
             } => {
                 let (scalar, data_type) = self.resolve(expr, required_type).await?;
-                let cast_func = CastFunction::create_try(
-                    "",
-                    target_type.to_string().as_str(),
-                    data_type.clone(),
-                )?;
+                let cast_func =
+                    CastFunction::create("", target_type.to_string().as_str(), data_type.clone())?;
                 (
                     CastExpr {
                         argument: Box::new(scalar),
