@@ -16,6 +16,7 @@
 //!
 //! It is used by raft for log and state machine storage.
 pub use db::get_sled_db;
+pub use db::init_cluster;
 pub use db::init_sled_db;
 pub use db::init_temp_sled_db;
 pub use openraft;
