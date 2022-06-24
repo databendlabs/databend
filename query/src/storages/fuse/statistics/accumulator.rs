@@ -168,7 +168,7 @@ impl BlockStatistics {
 
     pub fn clusters_statistics(
         cluster_key_id: u32,
-        cluster_key_index: Vec<usize>,
+        cluster_key_index: &[usize],
         block: &DataBlock,
     ) -> Result<Option<ClusterStatistics>> {
         if cluster_key_index.is_empty() {

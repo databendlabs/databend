@@ -52,7 +52,7 @@ impl<'a> BlockWriter<'a> {
             data_accessor,
         }
     }
-    pub async fn write_block(&self, block: DataBlock) -> Result<BlockMeta> {
+    pub async fn write(&self, block: DataBlock) -> Result<BlockMeta> {
         let location = self.location_generator.gen_block_location();
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;

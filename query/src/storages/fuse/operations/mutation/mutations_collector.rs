@@ -68,7 +68,6 @@ impl<'a> DeletionCollector<'a> {
     }
 
     pub async fn into_new_snapshot(self) -> Result<(TableSnapshot, String)> {
-        // TODO docs!!!
         let snapshot = self.base_snapshot;
         let mut new_snapshot = TableSnapshot::from_previous(snapshot);
         let segment_reader = MetaReaders::segment_info_reader(self.ctx);
@@ -112,7 +111,6 @@ impl<'a> DeletionCollector<'a> {
                 }
             }
 
-            // TODO test this (in UT)
             if new_segment.blocks.is_empty() {
                 // remove the segment if no blocks there
                 new_snapshot.segments.remove(seg_idx);
@@ -162,7 +160,7 @@ impl<'a> DeletionCollector<'a> {
             None
         } else {
             let block_writer = BlockWriter::new(&self.data_accessor, self.location_generator);
-            Some(block_writer.write_block(replace_with).await?)
+            Some(block_writer.write(replace_with).await?)
         };
         let original_block_loc = location_of_block_to_be_replaced;
         self.mutations

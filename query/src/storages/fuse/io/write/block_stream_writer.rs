@@ -137,7 +137,7 @@ impl BlockStreamWriter {
         let mut block = data_block;
         if let Some(v) = self.cluster_key_info.as_mut() {
             let input_schema = block.schema().clone();
-            let cluster_key_index = if v.cluster_key_index.is_empty() {
+            if v.cluster_key_index.is_empty() {
                 let fields = input_schema.fields().clone();
                 let index = v
                     .exprs
@@ -147,14 +147,14 @@ impl BlockStreamWriter {
                         fields.iter().position(|f| f.name() == &cname).unwrap()
                     })
                     .collect::<Vec<_>>();
-                v.cluster_key_index = index.clone();
-                index
-            } else {
-                v.cluster_key_index.clone()
+                v.cluster_key_index = index;
             };
 
-            cluster_stats =
-                BlockStatistics::clusters_statistics(v.cluster_key_id, cluster_key_index, &block)?;
+            cluster_stats = BlockStatistics::clusters_statistics(
+                v.cluster_key_id,
+                &v.cluster_key_index,
+                &block,
+            )?;
 
             // Remove unused columns before serialize
             if v.data_schema != input_schema {
