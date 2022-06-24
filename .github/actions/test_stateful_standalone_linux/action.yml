@@ -18,7 +18,6 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        source: s3
 
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash

@@ -18,7 +18,6 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        source: s3
         category: hive
 
     - name: Checkout java env
@@ -56,10 +55,10 @@ runs:
 
     - name: Run Stateful Tests with Standalone mode
       shell: bash
-      run: |
-        bash ./scripts/ci/ci-run-stateful-hive-tests-standalone-embed-meta.sh
       env:
         LD_LIBRARY_PATH: ${{ env.JAVA_HOME }}/lib/server:${{ env.LD_LIBRARY_PATH }}
+      run: |
+        bash ./scripts/ci/ci-run-stateful-hive-tests-standalone-embed-meta.sh
 
     - name: Stop containers
       if: always()
