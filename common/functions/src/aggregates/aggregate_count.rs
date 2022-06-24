@@ -120,7 +120,7 @@ impl AggregateFunction for AggregateCountFunction {
             }
             None => {
                 for place in places {
-                    let state = place.get::<AggregateCountState>();
+                    let state = place.next(offset).get::<AggregateCountState>();
                     state.count += 1;
                 }
             }
@@ -143,7 +143,6 @@ impl AggregateFunction for AggregateCountFunction {
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         state.count = deserialize_from_slice(reader)?;
-
         Ok(())
     }
 
