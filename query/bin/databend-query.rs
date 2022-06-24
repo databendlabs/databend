@@ -54,9 +54,13 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         conf.query.cluster_id, conf.query.mysql_handler_host, conf.query.mysql_handler_port
     );
 
+    let mut _sentry_guard = None;
     let bend_sentry_env = env::var("DATABEND_SENTRY").unwrap_or_else(|_| "".to_string());
     if !bend_sentry_env.is_empty() {
-        let _guard = sentry::init(sentry::ClientOptions::default());
+        _sentry_guard = Some(sentry::init((bend_sentry_env, sentry::ClientOptions {
+            release: sentry::release_name!(),
+            ..Default::default()
+        })));
     }
 
     //let _guards = init_tracing_with_file(
