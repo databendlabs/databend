@@ -109,8 +109,7 @@ impl ClusterApi for ClusterMgr {
         for (node_key, value) in values {
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
 
-            let node_key = unescape_for_key(&node_key)?;
-            node_info.id = node_key[self.cluster_prefix.len() + 1..].to_string();
+            node_info.id = unescape_for_key(&node_key[self.cluster_prefix.len() + 1..])?;
             nodes_info.push(node_info);
         }
 

@@ -147,7 +147,7 @@ pub struct MetaGrpcClient {
     token: RwLock<Option<Vec<u8>>>,
     current_endpoint: Arc<Mutex<Option<String>>>,
     unhealthy_endpoints: Mutex<TtlHashMap<String, ()>>,
-    auto_sync_interval: Duration,
+    auto_sync_interval: Option<Duration>,
 
     /// Dedicated runtime to support meta client background tasks.
     ///
@@ -271,7 +271,7 @@ impl MetaGrpcClient {
         username: &str,
         password: &str,
         timeout: Option<Duration>,
-        auto_sync_interval: Duration,
+        auto_sync_interval: Option<Duration>,
         conf: Option<RpcClientTlsConfig>,
     ) -> Result<Arc<ClientHandle>> {
         Self::endpoints_non_empty(&endpoints)?;
@@ -604,18 +604,17 @@ impl MetaGrpcClient {
     }
 
     async fn auto_sync_endpoints(self: Arc<Self>, mut cancel_tx: OneSend<()>) {
-        if self.auto_sync_interval == Duration::from_secs(0) {
-            return;
-        }
-        loop {
-            select! {
-                _ = cancel_tx.closed() => {
-                    return;
-                }
-                _ = sleep(self.auto_sync_interval) => {
-                    let r = self.sync_endpoints().await;
-                    if let Err(e) = r {
-                        tracing::warn!("auto sync endpoints failed: {:?}", e);
+        if let Some(interval) = self.auto_sync_interval {
+            loop {
+                select! {
+                    _ = cancel_tx.closed() => {
+                        return;
+                    }
+                    _ = sleep(interval) => {
+                        let r = self.sync_endpoints().await;
+                        if let Err(e) = r {
+                            tracing::warn!("auto sync endpoints failed: {:?}", e);
+                        }
                     }
                 }
             }

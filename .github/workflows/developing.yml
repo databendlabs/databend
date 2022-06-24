@@ -1,22 +1,13 @@
 name: Developing
 
 on:
-  push:
-    branches-ignore:
-      - main
-    paths-ignore:
-      - 'docs/**'
-      - 'website/**'
-      - '**.md'
-      - 'scripts/setup/**'
-      - '.devcontainer/**'
   pull_request:
     paths-ignore:
-      - 'docs/**'
-      - 'website/**'
-      - '**.md'
-      - 'scripts/setup/**'
-      - '.devcontainer/**'
+      - "docs/**"
+      - "website/**"
+      - "**.md"
+      - "scripts/setup/**"
+      - ".devcontainer/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -47,13 +38,13 @@ jobs:
         with:
           # fetch all tags,  metasrv and metaclient need tag as its version.
           fetch-depth: 0
-      - uses: ./.github/actions/build_debug
+      - uses: ./.github/actions/build_macos
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ matrix.target }}
+          profile: debug
 
   build_linux:
-    runs-on: [self-hosted, x64, Linux]
+    runs-on: [self-hosted, x64, Linux, development]
     strategy:
       matrix:
         target:
@@ -64,9 +55,10 @@ jobs:
         with:
           # fetch all tags,  metasrv and metaclient need tag as its version.
           fetch-depth: 0
-      - uses: ./.github/actions/build_debug
+      - uses: ./.github/actions/build_linux
         with:
           target: ${{ matrix.target }}
+          profile: debug
 
   test_unit:
     runs-on: [self-hosted, x64, Linux]
@@ -80,43 +72,31 @@ jobs:
           codecov_token: ${{ secrets.CODECOV_TOKEN }}
 
   test_metactl:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux, development]
     needs: build_linux
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
       - uses: ./.github/actions/test_metactl
 
   test_compat:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux, development]
     needs: build_linux
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
       - uses: ./.github/actions/test_compat
 
   test_meta_cluster:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux, development]
     needs: build_linux
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
       - uses: ./.github/actions/test_meta_cluster
 
   test_stateless_standalone_linux:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux, development]
     needs: build_linux
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_standalone_linux
 
   # https://github.com/datafuselabs/databend/issues/5287
@@ -128,13 +108,10 @@ jobs:
   #    - uses: ./.github/actions/test_stateless_standalone_macos
 
   test_stateless_cluster_linux:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux, development]
     needs: build_linux
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_cluster_linux
 
   test_stateless_cluster_macos:
@@ -143,9 +120,6 @@ jobs:
     needs: build_macos
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
       - uses: ./.github/actions/test_stateless_cluster_macos
 
   test_sqllogic_standalone_macos:
@@ -154,50 +128,38 @@ jobs:
     needs: build_macos
     steps:
       - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/test_sqllogic_standalone_macos
 
   test_sqllogic_standalone_linux:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux, development]
     needs: build_linux
     steps:
       - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/test_sqllogic_standalone_linux
 
-  test_stateful_standalone:
-    runs-on: ubuntu-latest
+  test_stateful_standalone_linux:
+    runs-on: [self-hosted, x64, Linux, development]
     needs: build_linux
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/test_stateful_standalone
+      - uses: ./.github/actions/test_stateful_standalone_linux
 
   build_linux_hive:
-    runs-on: [ self-hosted, x64, Linux ]
+    runs-on: [self-hosted, x64, Linux, development]
     strategy:
       matrix:
         target:
           - x86_64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/build_debug_hive
+      - uses: ./.github/actions/build_linux_hive
         with:
           target: ${{ matrix.target }}
+          profile: debug
 
   test_stateful_hive_standalone:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, x64, Linux, development]
     needs: build_linux_hive
     steps:
       - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
       - uses: ./.github/actions/test_stateful_hive_standalone

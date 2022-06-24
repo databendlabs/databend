@@ -1,4 +1,4 @@
-name: "Test Stateless Cluster"
+name: "Test Stateless Cluster Linux"
 description: "Running stateless tests in cluster mode"
 inputs:
   profile:
@@ -12,41 +12,26 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Maximize build space
-      uses: ./.github/actions/cleanup
-
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
-
-    - uses: actions/download-artifact@v2
       with:
-        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
-        path: ./target/debug
+        registry: public.ecr.aws/i7g1w5q7
 
-    - name: Set up file as executable
-      shell: bash
-      run: |
-        chmod +x ./target/debug/databend-*
-
-    - name: Install python dependences
-      shell: bash
-      run: |
-        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql sqlalchemy clickhouse_driver
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        source: s3
 
     - name: Run Stateless Tests with Cluster mode
       shell: bash
       run: |
         build-tool bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v2
+    - name: Upload failure
       if: failure()
+      uses: ./.github/actions/artifact_failure
       with:
-        path: |
-          _local_fs/
-          _logs*/
-          _meta*/
-          metasrv/_logs*/
-          query/_logs*/
-          store/_logs*/
-          nohup.out
+        name: test-stateless-cluster-linux

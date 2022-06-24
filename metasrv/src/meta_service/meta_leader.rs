@@ -59,6 +59,8 @@ impl<'a> MetaLeader<'a> {
         tracing::debug!("handle_forwardable_req: {:?}", req);
 
         match req.body {
+            ForwardRequestBody::Ping => Ok(ForwardResponse::Pong),
+
             ForwardRequestBody::Join(join_req) => {
                 self.join(join_req).await?;
                 Ok(ForwardResponse::Join(()))
