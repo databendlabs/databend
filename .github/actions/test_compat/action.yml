@@ -23,13 +23,11 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        source: s3
         path: ./bins/current
 
     - name: Test compatibility
       shell: bash
       run: |
-        chmod +x ./tests/compat/test-compat.sh
         build-tool bash ./tests/compat/test-compat.sh
 
     - name: Upload failure

@@ -18,7 +18,6 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        source: s3
 
     - name: Install python dependences
       shell: bash
