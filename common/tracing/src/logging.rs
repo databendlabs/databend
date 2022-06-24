@@ -48,7 +48,12 @@ pub fn init_default_ut_tracing() {
 
     START.call_once(|| {
         let mut g = GLOBAL_UT_LOG_GUARD.as_ref().lock().unwrap();
-        *g = Some(init_global_tracing("unittest", "_logs_unittest", "DEBUG"));
+        *g = Some(init_global_tracing(
+            "unittest",
+            "_logs_unittest",
+            "DEBUG",
+            None,
+        ));
     });
 }
 
@@ -67,7 +72,12 @@ static GLOBAL_UT_LOG_GUARD: Lazy<Arc<Mutex<Option<Vec<WorkerGuard>>>>> =
 /// DATABEND_JAEGER=on RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
 ///
 // TODO(xp): use DATABEND_JAEGER to assign jaeger server address.
-pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<WorkerGuard> {
+pub fn init_global_tracing(
+    app_name: &str,
+    dir: &str,
+    level: &str,
+    enable_stdout: Option<bool>,
+) -> Vec<WorkerGuard> {
     let mut guards = vec![];
 
     // Enable log compatible layer to convert log record to tracing span.
@@ -94,12 +104,18 @@ pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<Worker
         jaeger_layer = Some(tracing_opentelemetry::layer().with_tracer(tracer));
     }
 
+    let stdout_layer = if enable_stdout == Some(true) {
+        Some(fmt::layer().with_ansi(atty::is(atty::Stream::Stdout)))
+    } else {
+        None
+    };
+
     // Use env RUST_LOG to initialize log if present.
     // Otherwise, use the specified level.
     let directives = env::var(EnvFilter::DEFAULT_ENV).unwrap_or_else(|_x| level.to_string());
     let env_filter = EnvFilter::new(directives);
     let subscriber = Registry::default()
-        .with(fmt::layer().with_ansi(atty::is(atty::Stream::Stdout)))
+        .with(stdout_layer)
         .with(env_filter)
         .with(JsonStorageLayer)
         .with(file_logging_layer)

@@ -186,7 +186,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
     let raft_config = &config.raft_config;
 
-    let _guards = init_global_tracing("metactl", "./_metactl_log", &config.log_level);
+    let _guards = init_global_tracing("metactl", "./_metactl_log", &config.log_level, Some(false));
 
     eprintln!();
     eprintln!("███╗   ███╗███████╗████████╗ █████╗        ██████╗████████╗██╗     ");

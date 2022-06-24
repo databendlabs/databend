@@ -534,6 +534,7 @@ impl MetaNode {
         )))
     }
 
+    /// Join an existent cluster if `--join` is specified and this meta node is just created, i.e., not opening an already initialized store.
     #[tracing::instrument(level = "info", skip(conf, self))]
     pub async fn join_cluster(&self, conf: &RaftConfig, grpc_api_addr: String) -> MetaResult<()> {
         if conf.join.is_empty() {
@@ -549,6 +550,7 @@ impl MetaNode {
         }
 
         let addrs = &conf.join;
+
         // Joining cluster has to use advertise host instead of listen host.
         let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
         #[allow(clippy::never_loop)]
