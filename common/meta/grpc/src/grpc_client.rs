@@ -604,18 +604,17 @@ impl MetaGrpcClient {
     }
 
     async fn auto_sync_endpoints(self: Arc<Self>, mut cancel_tx: OneSend<()>) {
-        if self.auto_sync_interval.is_none() {
-            return;
-        }
-        loop {
-            select! {
-                _ = cancel_tx.closed() => {
-                    return;
-                }
-                _ = sleep(self.auto_sync_interval.unwrap()) => {
-                    let r = self.sync_endpoints().await;
-                    if let Err(e) = r {
-                        tracing::warn!("auto sync endpoints failed: {:?}", e);
+        if let Some(interval) = self.auto_sync_interval {
+            loop {
+                select! {
+                    _ = cancel_tx.closed() => {
+                        return;
+                    }
+                    _ = sleep(interval) => {
+                        let r = self.sync_endpoints().await;
+                        if let Err(e) = r {
+                            tracing::warn!("auto sync endpoints failed: {:?}", e);
+                        }
                     }
                 }
             }
