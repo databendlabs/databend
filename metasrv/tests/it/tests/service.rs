@@ -156,7 +156,7 @@ impl MetaSrvTestContext {
             "root",
             "xxx",
             None,
-            Duration::from_secs(10),
+            Some(Duration::from_secs(10)),
             None,
         )?;
         Ok(client)
