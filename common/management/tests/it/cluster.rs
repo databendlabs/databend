@@ -155,7 +155,11 @@ fn create_test_node_info() -> NodeInfo {
 
 async fn new_cluster_api() -> Result<(Arc<MetaEmbedded>, ClusterMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let cluster_manager =
-        ClusterMgr::create(test_api.clone(), "admin", "", Duration::from_secs(60))?;
+    let cluster_manager = ClusterMgr::create(
+        test_api.clone(),
+        "test-tenant-id",
+        "test-cluster-id",
+        Duration::from_secs(60),
+    )?;
     Ok((test_api, cluster_manager))
 }
