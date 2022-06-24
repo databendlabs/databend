@@ -194,6 +194,11 @@ pub enum Expr<'a> {
         expr1: Box<Expr<'a>>,
         expr2: Box<Expr<'a>>,
     },
+    // Coalesce(<expr>, <expr>, ...)
+    Coalesce {
+        span: &'a [Token<'a>],
+        exprs: Vec<Expr<'a>>,
+    },
     /// IFNULL(<expr>, <expr>)
     IfNull {
         span: &'a [Token<'a>],
@@ -324,6 +329,7 @@ impl<'a> Expr<'a> {
             Expr::DateAdd { span, .. } => span,
             Expr::DateSub { span, .. } => span,
             Expr::NullIf { span, .. } => span,
+            Expr::Coalesce { span, .. } => span,
             Expr::IfNull { span, .. } => span,
         }
     }
@@ -765,6 +771,11 @@ impl<'a> Display for Expr<'a> {
             }
             Expr::NullIf { expr1, expr2, .. } => {
                 write!(f, "NULLIF({expr1}, {expr2})")?;
+            }
+            Expr::Coalesce { exprs, .. } => {
+                write!(f, "COALESCE(")?;
+                write_comma_separated_list(f, exprs)?;
+                write!(f, ")")?;
             }
             Expr::IfNull { expr1, expr2, .. } => {
                 write!(f, "IFNULL({expr1}, {expr2})")?;

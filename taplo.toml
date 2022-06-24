@@ -1,4 +1,4 @@
-## https://taplo.tamasfe.dev/configuration/#configuration-file
+## https://taplo.tamasfe.dev/configuration/file.html
 
 include = ["**/Cargo.toml"]
 

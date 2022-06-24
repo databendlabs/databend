@@ -18,7 +18,6 @@ pub use aggregate::AggregateInfo;
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
-use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,19 +27,20 @@ use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
 use common_planners::ShowGrantsPlan;
+pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 
 use super::plans::Plan;
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::planner::metadata::MetadataRef;
-use crate::storages::NavigationPoint;
-use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod copy;
 mod ddl;
 mod distinct;
+mod insert;
 mod join;
 mod limit;
 mod project;
@@ -108,6 +108,8 @@ impl<'a> Binder {
                 self.bind_show_functions(bind_context, limit).await?
             }
 
+            Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
+
             Statement::ShowMetrics => Plan::ShowMetrics,
             Statement::ShowProcessList => Plan::ShowProcessList,
             Statement::ShowSettings => Plan::ShowSettings,
@@ -131,6 +133,7 @@ impl<'a> Binder {
             Statement::RenameTable(stmt) => self.bind_rename_table(stmt).await?,
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(stmt).await?,
+            Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
@@ -184,6 +187,7 @@ impl<'a> Binder {
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
+            Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
 
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
 
@@ -199,27 +203,7 @@ impl<'a> Binder {
                 )))
             }
         };
-
         Ok(plan)
-    }
-
-    async fn resolve_data_source(
-        &self,
-        tenant: &str,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-        travel_point: &Option<TimeTravelPoint>,
-    ) -> Result<Arc<dyn Table>> {
-        // Resolve table with catalog
-        let catalog = self.catalogs.get_catalog(catalog_name)?;
-        let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
-        if let Some(TimeTravelPoint::Snapshot(s)) = travel_point {
-            table_meta = table_meta
-                .navigate_to(self.ctx.clone(), &NavigationPoint::SnapshotID(s.to_owned()))
-                .await?;
-        }
-        Ok(table_meta)
     }
 
     /// Create a new ColumnBinding with assigned index

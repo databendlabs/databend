@@ -4,7 +4,7 @@ ENV TERM=dumb
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -yq && \
-    apt-get install -yq locales sudo && \
+    apt-get install -yq locales sudo unzip file && \
     printf 'en_US.UTF-8 UTF-8\n' > /etc/locale.gen && \
     locale-gen && \
     rm -rf /var/lib/apt/lists/*

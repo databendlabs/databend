@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use common_base::base::tokio;
@@ -41,8 +42,9 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    let mn = MetaNode::start(&tc.config.raft_config).await?;
-    mn.join_cluster(&tc.config.raft_config).await?;
+    let mn = MetaNode::start(&tc.config).await?;
+    mn.join_cluster(&tc.config.raft_config, tc.config.grpc_api_address.clone())
+        .await?;
     let mut srv = GrpcServer::create(tc.config.clone(), mn);
     srv.start().await?;
     tc.grpc_srv = Some(Box::new(srv));
@@ -148,7 +150,14 @@ impl MetaSrvTestContext {
     pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle>> {
         let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+        let client = MetaGrpcClient::try_create(
+            vec![addr],
+            "root",
+            "xxx",
+            None,
+            Duration::from_secs(10),
+            None,
+        )?;
         Ok(client)
     }
 

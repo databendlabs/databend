@@ -107,7 +107,7 @@ impl MetaStoreProvider {
             );
 
             // NOTE: This can only be used for test: data will be removed when program quit.
-            let meta_store = common_meta_embedded::MetaEmbedded::get_meta().await?;
+            let meta_store = MetaEmbedded::get_meta().await?;
             Ok(MetaStore::L(meta_store))
         } else {
             tracing::info!(conf = debug(&self.rpc_conf), "use remote meta");

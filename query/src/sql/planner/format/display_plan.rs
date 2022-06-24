@@ -27,6 +27,8 @@ impl Plan {
                 Ok(format!("{:?}:\n{}", kind, result))
             }
 
+            Plan::Copy(plan) => Ok(format!("{:?}", plan)),
+
             // Databases
             Plan::ShowDatabases(show_databases) => Ok(format!("{:?}", show_databases)),
             Plan::ShowCreateDatabase(show_create_database) => {
@@ -53,11 +55,15 @@ impl Plan {
             }
             Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
             Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
+            Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
 
             // Views
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
             Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),
             Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
+
+            // Insert
+            Plan::Insert(insert) => Ok(format!("{:?}", insert)),
 
             // Stages
             Plan::ShowStages => Ok("SHOW STAGES".to_string()),

@@ -37,6 +37,7 @@ use uuid::Uuid;
 use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
+use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::meta::ClusterKey;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -124,7 +125,7 @@ impl FuseTable {
                 {
                     Some(d) => {
                         let name = tbl.table_info.name.clone();
-                        tracing::warn!(
+                        tracing::debug!(
                                 "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                                 d.as_millis(),
                                 name.as_str(),
@@ -202,9 +203,8 @@ impl FuseTable {
         let snapshot_loc = self
             .meta_location_generator()
             .snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
-        let bytes = serde_json::to_vec(&new_snapshot)?;
         let operator = ctx.get_storage_operator()?;
-        operator.object(&snapshot_loc).write(bytes).await?;
+        write_meta(&operator, &snapshot_loc, &new_snapshot).await?;
 
         let result = Self::commit_to_meta_server(
             ctx,

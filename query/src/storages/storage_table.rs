@@ -16,6 +16,8 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -195,6 +197,7 @@ pub trait Table: Sync + Send {
 
 pub enum NavigationPoint {
     SnapshotID(String),
+    TimePoint(DateTime<Utc>),
 }
 
 #[derive(Debug)]

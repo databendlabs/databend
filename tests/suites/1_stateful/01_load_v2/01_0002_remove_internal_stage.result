@@ -1,0 +1,18 @@
+=== List files in internal stage ===
+dir/ontime_200.csv
+dir/ontime_200.csv.gz
+dir/ontime_200.csv.zst
+ontime_200.csv
+ontime_200.csv.gz
+ontime_200.csv.zst
+=== Test remove internal stage file ===
+dir/ontime_200.csv
+dir/ontime_200.csv.zst
+dir/ontime_200.csv
+dir/ontime_200.csv.zst
+ontime_200.csv
+ontime_200.csv.zst
+=== Test remove internal stage file with pattern ===
+dir/ontime_200.csv
+ontime_200.csv
+ontime_200.csv.zst

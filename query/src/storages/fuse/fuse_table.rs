@@ -429,10 +429,13 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         point: &NavigationPoint,
     ) -> Result<Arc<dyn Table>> {
-        let NavigationPoint::SnapshotID(snapshot_id) = point;
-        let res = self
-            .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
-            .await?;
-        Ok(res)
+        match point {
+            NavigationPoint::SnapshotID(snapshot_id) => Ok(self
+                .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
+                .await?),
+            NavigationPoint::TimePoint(time_point) => {
+                Ok(self.navigate_to_time_point(&ctx, *time_point).await?)
+            }
+        }
     }
 }

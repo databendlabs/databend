@@ -51,7 +51,7 @@ impl FuseTable {
         self.find(ctx, |snapshot| {
             snapshot
                 .snapshot_id
-                .to_simple()
+                .simple()
                 .to_string()
                 .as_str()
                 .starts_with(snapshot_id)

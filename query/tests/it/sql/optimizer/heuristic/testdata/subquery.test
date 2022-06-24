@@ -27,62 +27,56 @@ Project: [number]
             Filter: [subquery_3]
                 EvalScalar: [count(*) > 0]
                     Aggregate: group items: [], aggregate functions: [count(*)]
-                        Project: [number]
-                            Filter: [number = 0]
-                                Scan: default.system.numbers
+                        Filter: [number = 0]
+                            Scan: default.system.numbers
 
 
 # Uncorrelated subquery
 select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [subquery_1], probe keys: [number]
+    HashJoin: INNER, build keys: [subquery_1], probe keys: [number], join filters: []
         Scan: default.system.numbers
         Max1Row
-            Project: [number]
-                Filter: [number = 0]
-                    Scan: default.system.numbers
+            Filter: [number = 0]
+                Scan: default.system.numbers
 
 
 # Correlated subquery can be translated to SemiJoin
 select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number]
+    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
         Scan: default.system.numbers
-        Project: [number]
-            Scan: default.system.numbers
+        Scan: default.system.numbers
 
 
 # Correlated subquery can be translated to AntiJoin
 select t.number from numbers(1) as t where not exists (select * from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: ANTI, build keys: [number], probe keys: [number]
+    HashJoin: ANTI, build keys: [number], probe keys: [number], join filters: []
         Scan: default.system.numbers
-        Project: [number]
-            Scan: default.system.numbers
+        Scan: default.system.numbers
 
 
 select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number]
+    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
         Scan: default.system.numbers
-        Project: [number]
-            Scan: default.system.numbers
+        Scan: default.system.numbers
 
 
 # Exists with different kinds of predicate
 select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and number = 0 and t.number < 10)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number]
+    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
         Filter: [number < 10]
             Scan: default.system.numbers
-        Project: [number]
-            Filter: [number = 0]
-                Scan: default.system.numbers
+        Filter: [number = 0]
+            Scan: default.system.numbers
 
 
 # Exists with non-equi predicate
@@ -95,19 +89,17 @@ Project: [number]
             Project: [subquery]
                 EvalScalar: [count(*) > 0]
                     Aggregate: group items: [], aggregate functions: [count(*)]
-                        Project: [number]
-                            Filter: [number = number, number < number]
-                                Scan: default.system.numbers
+                        Filter: [number = number, number < number]
+                            Scan: default.system.numbers
 
 
 # Exists project required columns
 select t.number from numbers(1) as t where exists (select number as a, number as b, number as c from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number]
+    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
         Scan: default.system.numbers
-        Project: [number]
-            Scan: default.system.numbers
+        Scan: default.system.numbers
 
 
 # Push down filter through CrossApply
@@ -116,7 +108,7 @@ select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 
 Project: [number]
     Filter: [subquery_3]
         CrossApply
-            HashJoin: INNER, build keys: [number], probe keys: [number]
+            HashJoin: INNER, build keys: [number], probe keys: [number], join filters: []
                 Scan: default.system.numbers
                 Scan: default.system.numbers
             Max1Row

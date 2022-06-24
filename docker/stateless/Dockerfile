@@ -12,6 +12,8 @@ COPY --from=builder /app/tests /tests
 RUN apt-get update -y \
     && env DEBIAN_FRONTEND=noninteractive \
         apt-get install --yes --no-install-recommends \
+            apt-transport-https \
+            ca-certificates \
             brotli \
             expect \
             zstd \

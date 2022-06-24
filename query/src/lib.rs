@@ -17,6 +17,7 @@
 #![feature(arbitrary_self_types)]
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
+#![feature(assert_matches)]
 
 pub mod api;
 pub mod catalogs;

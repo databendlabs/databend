@@ -19,6 +19,7 @@ use common_planners::EmptyPlan;
 use common_planners::PlanNode;
 
 use super::*;
+use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -56,6 +57,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::RenameTable(_)
                 | DfStatement::TruncateTable(_)
                 | DfStatement::OptimizeTable(_)
+                | DfStatement::ExistsTable(_)
                 | DfStatement::DropView(_)
                 | DfStatement::ShowFunctions(_)
                 | DfStatement::ShowMetrics(_)
@@ -63,6 +65,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowSettings(_)
                 | DfStatement::CreateDatabase(_)
                 | DfStatement::DropDatabase(_)
+                | DfStatement::InsertQuery(_)
                 | DfStatement::ShowUsers(_)
                 | DfStatement::CreateUser(_)
                 | DfStatement::ShowRoles(_)
@@ -94,6 +97,8 @@ impl InterpreterFactoryV2 {
             Plan::Explain { kind, plan } => {
                 ExplainInterpreterV2::try_create(ctx.clone(), *plan.clone(), kind.clone())
             }
+
+            Plan::Copy(copy_plan) => CopyInterpreterV2::try_create(ctx.clone(), *copy_plan.clone()),
 
             // Shows
             Plan::ShowMetrics => ShowMetricsInterpreter::try_create(ctx.clone()),
@@ -163,6 +168,9 @@ impl InterpreterFactoryV2 {
             Plan::OptimizeTable(optimize_table) => {
                 OptimizeTableInterpreter::try_create(ctx.clone(), *optimize_table.clone())
             }
+            Plan::ExistsTable(exists_table) => {
+                ExistsTableInterpreter::try_create(ctx.clone(), *exists_table.clone())
+            }
 
             // Views
             Plan::CreateView(create_view) => {
@@ -185,6 +193,10 @@ impl InterpreterFactoryV2 {
             }
             Plan::AlterUser(alter_user) => {
                 AlterUserInterpreter::try_create(ctx.clone(), *alter_user.clone())
+            }
+
+            Plan::Insert(insert) => {
+                InsertInterpreterV2::try_create(ctx.clone(), *insert.clone(), false)
             }
 
             // Roles

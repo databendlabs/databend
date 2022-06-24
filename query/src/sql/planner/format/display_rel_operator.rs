@@ -191,6 +191,12 @@ pub fn format_hash_join(
         .map(|scalar| format_scalar(metadata, scalar))
         .collect::<Vec<String>>()
         .join(", ");
+    let join_filters = op
+        .other_conditions
+        .iter()
+        .map(|scalar| format_scalar(metadata, scalar))
+        .collect::<Vec<String>>()
+        .join(", ");
     match op.join_type {
         JoinType::Cross => {
             write!(f, "CrossJoin")
@@ -198,8 +204,8 @@ pub fn format_hash_join(
         _ => {
             write!(
                 f,
-                "HashJoin: {}, build keys: [{}], probe keys: [{}]",
-                &op.join_type, build_keys, probe_keys
+                "HashJoin: {}, build keys: [{}], probe keys: [{}], join filters: [{}]",
+                &op.join_type, build_keys, probe_keys, join_filters,
             )
         }
     }

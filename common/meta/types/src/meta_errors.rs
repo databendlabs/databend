@@ -79,7 +79,7 @@ pub enum MetaError {
     Fatal(AnyError),
 }
 
-pub type MetaResult<T> = std::result::Result<T, MetaError>;
+pub type MetaResult<T> = Result<T, MetaError>;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[error("InvalidMembership")]

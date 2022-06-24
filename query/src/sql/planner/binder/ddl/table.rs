@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 
+use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::*;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
@@ -25,6 +26,7 @@ use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableMeta;
+use common_planners::OptimizeTableAction;
 use common_planners::*;
 
 use crate::sql::binder::scalar::ScalarBinder;
@@ -511,13 +513,46 @@ impl<'a> Binder {
             .map(|ident| ident.name.to_lowercase())
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = table.name.to_lowercase();
-        let action = action.unwrap_or(OptimizeTableAction::Purge);
+        let action = action
+            .map(|v| match v {
+                AstOptimizeTableAction::All => OptimizeTableAction::All,
+                AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
+                AstOptimizeTableAction::Compact => OptimizeTableAction::Compact,
+            })
+            .unwrap_or(OptimizeTableAction::Purge);
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
             catalog,
             database,
             table,
             action,
+        })))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_exists_table(
+        &mut self,
+        stmt: &ExistsTableStmt<'a>,
+    ) -> Result<Plan> {
+        let ExistsTableStmt {
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table = table.name.to_lowercase();
+
+        Ok(Plan::ExistsTable(Box::new(ExistsTablePlan {
+            catalog,
+            database,
+            table,
         })))
     }
 

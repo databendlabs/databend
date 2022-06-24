@@ -151,6 +151,7 @@ pub fn try_decorrelate_subquery(input: &SExpr, subquery: &SubqueryExpr) -> Resul
     let semi_join = LogicalInnerJoin {
         left_conditions,
         right_conditions,
+        other_conditions: vec![],
         join_type: match &subquery.typ {
             SubqueryType::Any | SubqueryType::All | SubqueryType::Scalar => {
                 return Ok(None);

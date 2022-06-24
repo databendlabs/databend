@@ -160,9 +160,10 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         self.base.do_execute(id, param, writer).await
     }
 
-    async fn on_close<'a>(&'a mut self, id: u32)
+    /// https://dev.mysql.com/doc/internals/en/com-stmt-close.html
+    async fn on_close<'a>(&'a mut self, stmt_id: u32)
     where W: 'async_trait {
-        self.base.do_close(id).await;
+        self.base.do_close(stmt_id).await;
     }
 
     async fn on_query<'a>(

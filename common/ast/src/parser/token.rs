@@ -671,6 +671,8 @@ pub enum TokenKind {
     YEAR,
     #[token("NULLIF", ignore(ascii_case))]
     NULLIF,
+    #[token("COALESCE", ignore(ascii_case))]
+    COALESCE,
     #[token("RANDOM", ignore(ascii_case))]
     RANDOM,
     #[token("IFNULL", ignore(ascii_case))]
@@ -752,7 +754,7 @@ impl TokenKind {
             | TokenKind::CASE
             | TokenKind::CAST
             // | TokenKind::CHECK
-            // | TokenKind::COALESCE
+            | TokenKind::COALESCE
             // | TokenKind::COLLATE
             // | TokenKind::COLUMN
             // | TokenKind::CONSTRAINT
@@ -969,7 +971,7 @@ impl TokenKind {
             | TokenKind::OFFSET
             | TokenKind::ON
             | TokenKind::ORDER
-            // | TokenKind::OVERLAPS 
+            // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
             | TokenKind::TO

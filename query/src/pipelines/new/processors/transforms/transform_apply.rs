@@ -105,7 +105,7 @@ impl OuterRefRewriter {
                     *scalar = self.rewrite_scalar(scalar)?;
                 }
 
-                Ok(SExpr::create_binary(plan.into(), build_side, probe_side))
+                Ok(SExpr::create_binary(plan.into(), probe_side, build_side))
             }
 
             RelOperator::Max1Row(_)
@@ -296,13 +296,16 @@ impl TransformApply {
         }
 
         let runtime = self.ctx.get_storage_runtime();
+        let query_need_abort = self.ctx.query_need_abort();
         // Spawn sub-pipelines
         for pipeline in children {
-            let executor = PipelineExecutor::create(runtime.clone(), pipeline)?;
+            let executor =
+                PipelineExecutor::create(runtime.clone(), query_need_abort.clone(), pipeline)?;
             executor.execute()?;
         }
 
-        let mut executor = PipelinePullingExecutor::try_create(runtime, pipeline)?;
+        let mut executor =
+            PipelinePullingExecutor::try_create(runtime, query_need_abort, pipeline)?;
         executor.start();
         let mut results = vec![];
         while let Some(result) = executor.pull_data()? {

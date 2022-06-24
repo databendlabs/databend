@@ -186,6 +186,8 @@ select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is nu
 );
 select case when number >= 2 then 'ge2' WHEN number >= 1 then 'ge1' ELSE null end from numbers(3);
 select case when 1 = 3 then null when 1 = 2 then 20.0 when 1 = 1 then 1 ELSE null END;
+
+select COALESCE(NULL, NULL, 1, 2);
 -- subquery in from
 select '=== Test Subquery In From ===';
 create table t(a int, b int);
@@ -329,6 +331,12 @@ insert into t1 values(1, 2), (3 ,4), (7, 8);
 insert into t2 values(1, 4), (2, 3), (6, 8);
 select * from t1 right join t2 on t1.a = t2.c;
 select * from t1 left join t2 on t1.a = t2.c;
+select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3;
+select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4;
+select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3;
+select * from t1 left outer join t2 on t1.a > 3;
+select * from t1 left outer join t2 on t2.c > 4;
+select * from t1 left outer join t2 on t1.a > t2.c;
 drop table t1;
 drop table t2;
 

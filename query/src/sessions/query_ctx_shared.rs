@@ -14,7 +14,9 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
@@ -77,6 +79,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
+
+    pub(in crate::sessions) query_need_abort: Arc<AtomicBool>,
 }
 
 impl QueryContextShared {
@@ -107,6 +111,7 @@ impl QueryContextShared {
             dal_ctx: Arc::new(Default::default()),
             user_manager: user_manager.clone(),
             auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
+            query_need_abort: Arc::new(AtomicBool::new(false)),
         }))
     }
 
@@ -115,17 +120,21 @@ impl QueryContextShared {
         *guard = Some(err);
     }
 
+    pub fn query_need_abort(self: &Arc<Self>) -> Arc<AtomicBool> {
+        self.query_need_abort.clone()
+    }
+
     pub fn kill(&self) {
         self.set_error(ErrorCode::AbortedQuery(
             "Aborted query, because the server is shutting down or the query was killed",
         ));
 
+        self.query_need_abort.store(true, Ordering::Release);
         let mut sources_abort_handle = self.sources_abort_handle.write();
 
         while let Some(source_abort_handle) = sources_abort_handle.pop() {
             source_abort_handle.abort();
         }
-
         // TODO: Wait for the query to be processed (write out the last error)
     }
 

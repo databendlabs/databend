@@ -143,7 +143,7 @@ async fn test_statement_copy() -> Result<()> {
         encryption=(master_key = 'my_master_key')
         file_format = (type = csv field_delimiter = '|' skip_header = 1)",
             expect: "",
-            err: "Code: 1005, displayText = File location uri unsupported, must be one of [s3, @stage].",
+            err: "Code: 1005, displayText = File location uri unsupported, must be one of [s3].",
         },
         TestCase {
             name: "copy-internal-ok",

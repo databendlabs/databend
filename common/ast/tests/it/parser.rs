@@ -108,6 +108,7 @@ fn test_statement() {
         r#"select * from a right outer join b using(a);"#,
         r#"select * from a full outer join b using(a);"#,
         r#"select * from a inner join b using(a);"#,
+        r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
@@ -150,6 +151,58 @@ fn test_statement() {
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
         r#"REVOKE ALL ON tb1 FROM 'u1';"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO 's3://mybucket/data.csv'
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO @my_stage
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CREDENTIALS = (
+                    AWS_KEY_ID = 'access_key'
+                    AWS_SECRET_KEY = 'secret_key'
+                )
+                ENCRYPTION = (
+                    MASTER_KEY = 'master_key'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
     ];
 
     for case in cases {
@@ -194,6 +247,8 @@ fn test_statement_error() {
         r#"SHOW GRANT FOR ROLE role1;"#,
         r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';"#,
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
+        r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
     ];
 
     for case in cases {
@@ -289,6 +344,7 @@ fn test_expr() {
         r#"[[1]]"#,
         r#"[[1],[2]]"#,
         r#"[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]"#,
+        r#"((1 = 1) or 1)"#,
         r#"typeof(1 + 2)"#,
         r#"- - + + - 1 + + - 2"#,
         r#"0XFF + 0xff + 0xa + x'ffff'"#,
@@ -323,6 +379,8 @@ fn test_expr() {
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
         r#"nullif(1, 1)"#,
         r#"nullif(a, b)"#,
+        r#"coalesce(1, 2, 3)"#,
+        r#"coalesce(a, b, c)"#,
         r#"ifnull(1, 1)"#,
         r#"ifnull(a, b)"#,
         r#"1 is distinct from 2"#,
