@@ -40,9 +40,11 @@ impl DataBlock {
                 .data_type_id()
                 .to_physical_type()
                 == c.data_type().data_type_id().to_physical_type()),
-            "Schema: {:?}, columns: {:?}",
-            &schema,
+            "Schema: {schema:?}, column types: {:?}",
             &columns
+                .iter()
+                .map(|c| c.data_type())
+                .collect::<Vec<DataTypeImpl>>()
         );
         DataBlock { schema, columns }
     }
