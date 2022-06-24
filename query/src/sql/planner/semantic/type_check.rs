@@ -184,37 +184,46 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     BinaryOperator::NotEq
                 };
-                self.resolve_function(
+                let (scalar, data_type) = self
+                    .resolve_function(
+                        span,
+                        "multi_if",
+                        &[
+                            &Expr::BinaryOp {
+                                span,
+                                op: BinaryOperator::And,
+                                left: left_null_expr.clone(),
+                                right: right_null_expr.clone(),
+                            },
+                            &Expr::Literal {
+                                span,
+                                lit: Literal::Boolean(*not),
+                            },
+                            &Expr::BinaryOp {
+                                span,
+                                op: BinaryOperator::Or,
+                                left: left_null_expr.clone(),
+                                right: right_null_expr.clone(),
+                            },
+                            &Expr::Literal {
+                                span,
+                                lit: Literal::Boolean(!*not),
+                            },
+                            &Expr::BinaryOp {
+                                span,
+                                op,
+                                left: left.clone(),
+                                right: right.clone(),
+                            },
+                        ],
+                        None,
+                    )
+                    .await?;
+                self.resolve_scalar_function_call(
                     span,
-                    "multi_if",
-                    &[
-                        &Expr::BinaryOp {
-                            span,
-                            op: BinaryOperator::And,
-                            left: left_null_expr.clone(),
-                            right: right_null_expr.clone(),
-                        },
-                        &Expr::Literal {
-                            span,
-                            lit: Literal::Boolean(*not),
-                        },
-                        &Expr::BinaryOp {
-                            span,
-                            op: BinaryOperator::Or,
-                            left: left_null_expr.clone(),
-                            right: right_null_expr.clone(),
-                        },
-                        &Expr::Literal {
-                            span,
-                            lit: Literal::Boolean(!*not),
-                        },
-                        &Expr::BinaryOp {
-                            span,
-                            op,
-                            left: left.clone(),
-                            right: right.clone(),
-                        },
-                    ],
+                    "assume_not_null",
+                    vec![scalar],
+                    vec![data_type],
                     required_type,
                 )
                 .await?
@@ -744,6 +753,31 @@ impl<'a> TypeChecker<'a> {
                 arguments: args,
                 func_name: func_name.to_string(),
                 arg_types: arg_types.to_vec(),
+                return_type: func.return_type(),
+            }
+            .into(),
+            func.return_type(),
+        ))
+    }
+
+    pub async fn resolve_scalar_function_call(
+        &mut self,
+        span: &[Token<'_>],
+        func_name: &str,
+        arguments: Vec<Scalar>,
+        arguments_types: Vec<DataTypeImpl>,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        let arg_types_ref: Vec<&DataTypeImpl> = arguments_types.iter().collect();
+        let func = FunctionFactory::instance()
+            .get(func_name, &arg_types_ref)
+            .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
+
+        Ok((
+            FunctionCall {
+                arguments,
+                func_name: func_name.to_string(),
+                arg_types: arguments_types.to_vec(),
                 return_type: func.return_type(),
             }
             .into(),

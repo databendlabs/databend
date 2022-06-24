@@ -297,7 +297,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
             ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(10)),
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
             ExprElement::Between { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
-            ExprElement::IsDistinctFrom { .. } => Affix::Infix(Precedence(20), Associativity::Left),
+            ExprElement::IsDistinctFrom { .. } => {
+                Affix::Infix(Precedence(BETWEEN_PREC), Associativity::Left)
+            }
             ExprElement::InList { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::InSubquery { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::UnaryOp { op } => match op {
