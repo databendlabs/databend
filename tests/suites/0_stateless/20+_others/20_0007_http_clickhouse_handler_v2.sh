@@ -60,4 +60,4 @@ curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_POR
 curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_planner_v2=1" -d "drop table a"
 
 
-rm /tmp/*.txt
+rm /tmp/csv.txt /tmp/csv_names.txt /tmp/csv_names_and_types.txt /tmp/tsv_names_and_types.txt /tmp/values.txt
