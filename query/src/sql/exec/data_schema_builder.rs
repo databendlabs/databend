@@ -108,14 +108,23 @@ impl DataSchemaBuilder {
         for field in left.fields().iter() {
             fields.push(field.clone());
         }
-        if join_type == &JoinType::Left {
-            for field in right.fields().iter() {
-                let nullable_field = DataField::new(field.name(), wrap_nullable(field.data_type()));
-                fields.push(nullable_field);
+        match join_type {
+            JoinType::Left => {
+                for field in right.fields().iter() {
+                    let nullable_field =
+                        DataField::new(field.name(), wrap_nullable(field.data_type()));
+                    fields.push(nullable_field);
+                }
             }
-        } else {
-            for field in right.fields().iter() {
-                fields.push(field.clone());
+
+            JoinType::Semi | JoinType::Anti => {
+                // Empty right output schema for Semi and Anti join
+            }
+
+            _ => {
+                for field in right.fields().iter() {
+                    fields.push(field.clone());
+                }
             }
         }
         DataSchemaRefExt::create(fields)

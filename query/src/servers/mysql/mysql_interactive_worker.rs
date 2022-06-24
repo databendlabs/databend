@@ -160,9 +160,10 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         self.base.do_execute(id, param, writer).await
     }
 
-    async fn on_close<'a>(&'a mut self, id: u32)
+    /// https://dev.mysql.com/doc/internals/en/com-stmt-close.html
+    async fn on_close<'a>(&'a mut self, stmt_id: u32)
     where W: 'async_trait {
-        self.base.do_close(id).await;
+        self.base.do_close(stmt_id).await;
     }
 
     async fn on_query<'a>(
@@ -406,7 +407,13 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             .map_err_to_code(ErrorCode::TokioError, || {
                 "Cannot join handle from context's runtime"
             })?;
-        query_result.map(|data| (data, Self::extra_info(context, instant)))
+        query_result.map(|data| {
+            if data.is_empty() {
+                (data, "".to_string())
+            } else {
+                (data, Self::extra_info(context, instant))
+            }
+        })
     }
 
     fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {

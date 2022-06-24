@@ -259,7 +259,7 @@ impl AsyncInsertQueue {
                     input: Arc::new((**plan).clone()),
                 })?;
 
-                let mut pipeline = select_interpreter.create_new_pipeline()?;
+                let mut pipeline = select_interpreter.create_new_pipeline().await?;
 
                 let mut sink_pipeline_builder = SinkPipeBuilder::create();
                 for _ in 0..pipeline.output_len() {
@@ -270,8 +270,14 @@ impl AsyncInsertQueue {
                     );
                 }
                 pipeline.add_pipe(sink_pipeline_builder.finalize());
-                let executor =
-                    PipelineCompleteExecutor::try_create(self.runtime.clone(), pipeline).unwrap();
+
+                let query_need_abort = ctx.query_need_abort();
+                let executor = PipelineCompleteExecutor::try_create(
+                    self.runtime.clone(),
+                    query_need_abort,
+                    pipeline,
+                )
+                .unwrap();
                 executor.execute()?;
                 drop(executor);
                 let blocks = ctx.consume_precommit_blocks();

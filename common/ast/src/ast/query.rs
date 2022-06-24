@@ -122,8 +122,9 @@ pub enum Indirection<'a> {
 
 /// Time Travel specification
 #[derive(Debug, Clone, PartialEq)]
-pub enum TimeTravelPoint {
+pub enum TimeTravelPoint<'a> {
     Snapshot(String),
+    Timestamp(Box<Expr<'a>>),
 }
 
 /// A table name or a parenthesized subquery with an optional alias
@@ -135,7 +136,7 @@ pub enum TableReference<'a> {
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
         alias: Option<TableAlias<'a>>,
-        travel_point: Option<TimeTravelPoint>,
+        travel_point: Option<TimeTravelPoint<'a>>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
@@ -234,6 +235,10 @@ impl<'a> Display for TableReference<'a> {
 
                 if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
                     write!(f, " AT (SNAPSHOT => {sid})")?;
+                }
+
+                if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
+                    write!(f, " AT (TIMESTAMP => {ts})")?;
                 }
 
                 if let Some(alias) = alias {

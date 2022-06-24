@@ -43,8 +43,8 @@ impl<'a> TypeSerializer<'a> for ConstSerializer<'a> {
         self.inner.write_field(0, buf, format)
     }
 
-    fn serialize_json(&self, format: &FormatSettings) -> Result<Vec<Value>> {
-        Ok(self.repeat(self.inner.serialize_json(format)?))
+    fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {
+        Ok(self.repeat(self.inner.serialize_json_values(format)?))
     }
 
     fn serialize_clickhouse_column(

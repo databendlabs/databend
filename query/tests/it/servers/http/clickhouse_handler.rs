@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_base::base::tokio;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
@@ -248,7 +250,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
     {
         let (status, body) = server.get(r#"select * from t1 order by a"#).await;
         assert_ok!(status, body);
-        assert_eq!(&body, "0\ta\n1\tb\n2\tNULL\n");
+        assert_eq!(&body, "0\ta\n1\tb\n2\t\\N\n");
     }
 
     {
@@ -260,6 +262,59 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_error!(body, "column a");
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_settings() -> PoemResult<()> {
+    let server = Server::new();
+
+    // unknown setting
+    {
+        let sql = "select value from system.settings where name = 'max_block_size'";
+        let (status, _body) = server
+            .get_response(
+                QueryBuilder::new(sql)
+                    .settings(HashMap::from([("a".to_string(), "1".to_string())]))
+                    .build(),
+            )
+            .await;
+
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    {
+        let sql = "select value from system.settings where name = 'max_block_size'";
+        let (status, body) = server
+            .get_response(
+                QueryBuilder::new(sql)
+                    .settings(HashMap::from([(
+                        "max_block_size".to_string(),
+                        "1000".to_string(),
+                    )]))
+                    .build(),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(&body, "1000\n");
+    }
+
+    {
+        let sql = "select value from system.settings where name = 'max_block_size' or name = 'enable_async_insert' order by value";
+        let (status, body) = server
+            .get_response(
+                QueryBuilder::new(sql)
+                    .settings(HashMap::from([
+                        ("max_block_size".to_string(), "1000".to_string()),
+                        ("enable_async_insert".to_string(), "1".to_string()),
+                    ]))
+                    .build(),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(&body, "1\n1000\n");
+    }
+
     Ok(())
 }
 
@@ -297,6 +352,7 @@ async fn test_multi_partition() -> PoemResult<()> {
 struct QueryBuilder {
     sql: String,
     body: Option<Body>,
+    settings: HashMap<String, String>,
     compress: bool,
 }
 
@@ -305,6 +361,7 @@ impl QueryBuilder {
         QueryBuilder {
             sql: sql.to_string(),
             body: None,
+            settings: HashMap::new(),
             compress: false,
         }
     }
@@ -320,13 +377,21 @@ impl QueryBuilder {
         Self { compress, ..self }
     }
 
+    pub fn settings(self, settings: HashMap<String, String>) -> Self {
+        Self { settings, ..self }
+    }
+
     pub fn build(self) -> Request {
         let mut uri = url::form_urlencoded::Serializer::new(String::new());
         uri.append_pair("query", &self.sql);
         if self.compress {
             uri.append_pair("compress", "1");
         }
+        for (k, v) in self.settings.iter() {
+            uri.append_pair(k, v);
+        }
         let uri = uri.finish();
+
         let uri = "/?".to_string() + &uri;
         let uri = uri.parse::<Uri>().unwrap();
         let (method, body) = match self.body {

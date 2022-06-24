@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS t;
 DROP TABLE IF EXISTS t2;
 DROP TABLE IF EXISTS t3;
 DROP TABLE IF EXISTS t4;
+DROP TABLE IF EXISTS column_comment_test;
 
 CREATE TABLE t(c1 int) ENGINE = Null;
 
@@ -73,8 +74,18 @@ SELECT '====CREATE ALL DATA TYPE TABLE====';
 create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
 desc db2.test7;
 
+
+SELECT '====CREATE TRANSIENT TABLE====';
+create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
+desc db2.test8;
+
 -- clean up test databases
 DROP DATABASE db1;
 DROP DATABASE db2;
 
 CREATE TABLE system.test; -- {ErrorCode 1002}
+
+-- create table with column comment
+-- SELECT '====CREATE TABLE WITH COLUMN COMMENT====';
+-- CREATE TABLE column_comment_test (a INT COMMENT 'comment for a', b FLOAT NULL DEFAULT 0 COMMENT 'comment for b');
+-- DROP TABLE column_comment_test;

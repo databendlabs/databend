@@ -155,6 +155,9 @@ build_exceptions! {
 
     // Async insert error codes
     AsyncInsertTimeoutError(1105),
+
+    TableInfoError(1106),
+    ReadTableDataError(1107),
 }
 
 // Metasvr errors [2001, 3000].

@@ -5,7 +5,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a.b (c integer not null 1, b float(10))
-  | ------                               ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, or `,`
+  | ------                               ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, `COMMENT`, or `,`
   | |                                     
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -17,7 +17,7 @@ error:
   --> SQL:1:24
   |
 1 | create table a (c float(10))
-  | ------                 ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, or `,`
+  | ------                 ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, `COMMENT`, or `,`
   | |                       
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -33,7 +33,7 @@ error:
   | |               | |
   | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 25 more ...
   | |               | while parsing type name
-  | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`
+  | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -151,5 +151,122 @@ error:
   |
 1 | drop role 'test'@'localhost';
   |                 ^ expected `;`
+
+
+---------- Input ----------
+drop role role1;
+---------- Output ---------
+error: 
+  --> SQL:1:11
+  |
+1 | drop role role1;
+  | ----      ^^^^^ expected <QuotedString> or `IF`
+  | |          
+  | while parsing `DROP ROLE [IF EXISTS] '<role_name>'`
+
+
+---------- Input ----------
+GRANT ROLE test TO ROLE 'test-user';
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | GRANT ROLE test TO ROLE 'test-user';
+  | ----- ---- ^^^^ expected <QuotedString>
+  | |     |     
+  | |     while parsing ROLE <role_name>
+  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO ROLE test-user;
+---------- Output ---------
+error: 
+  --> SQL:1:27
+  |
+1 | GRANT ROLE 'test' TO ROLE test-user;
+  | -----                     ^^^^ expected <QuotedString>
+  | |                          
+  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'localhost';
+  | ----- ------  ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE`, or 5 more ...
+  | |     |        
+  | |     while parsing <privileges> ON <privileges_level>
+  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON *.c TO 'test-grant'@'localhost';
+---------- Output ---------
+error: 
+  --> SQL:1:27
+  |
+1 | GRANT SELECT, CREATE ON *.c TO 'test-grant'@'localhost';
+  | -----                     ^ expected `TO` or `*`
+  | |                          
+  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+SHOW GRANT FOR ROLE role1;
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | SHOW GRANT FOR ROLE role1;
+  |      ^^^^^ expected `SETTINGS`, `STAGES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, `DATABASES`, or 8 more ...
+
+
+---------- Input ----------
+REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';
+---------- Output ---------
+error: 
+  --> SQL:1:24
+  |
+1 | REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';
+  | ------ ------          ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE`, or 5 more ...
+  | |      |                
+  | |      while parsing <privileges> ON <privileges_level>
+  | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+error: 
+  --> SQL:1:28
+  |
+1 | REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';
+  | ------                     ^^ expected `FROM` or `.`
+  | |                           
+  | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
+---------- Output ---------
+error: 
+  --> SQL:1:38
+  |
+1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
+  |                                      ^^^^^^^^^^ expected `CREDENTIALS`, `ENCRYPTION`, `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, or 2 more ...
+
+
+---------- Input ----------
+COPY INTO mytable FROM @mystage CREDENTIALS = ();
+---------- Output ---------
+error: 
+  --> SQL:1:33
+  |
+1 | COPY INTO mytable FROM @mystage CREDENTIALS = ();
+  |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, or `;`
 
 

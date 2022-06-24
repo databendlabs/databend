@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -126,6 +127,10 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
             OFFSET_AND_LIMIT => "OffsetAndLimitTransform",
             _ => unreachable!(),
         }
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

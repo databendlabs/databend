@@ -20,17 +20,65 @@ use common_ast::ast::CreateDatabaseStmt;
 use common_ast::ast::DatabaseEngine;
 use common_ast::ast::DropDatabaseStmt;
 use common_ast::ast::SQLProperty;
+use common_ast::ast::ShowCreateDatabaseStmt;
+use common_ast::ast::ShowDatabasesStmt;
+use common_ast::ast::ShowLimit;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::ToDataType;
+use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::PlanShowKind;
 use common_planners::RenameDatabaseEntity;
 use common_planners::RenameDatabasePlan;
+use common_planners::ShowCreateDatabasePlan;
+use common_planners::ShowDatabasesPlan;
 
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
 
 impl<'a> Binder {
+    pub(in crate::sql::planner::binder) async fn bind_show_databases(
+        &self,
+        stmt: &ShowDatabasesStmt<'a>,
+    ) -> Result<Plan> {
+        let ShowDatabasesStmt { limit } = stmt;
+
+        let kind = match limit {
+            Some(ShowLimit::Like { pattern }) => PlanShowKind::Like(pattern.clone()),
+            Some(ShowLimit::Where { selection }) => PlanShowKind::Like(selection.to_string()),
+            None => PlanShowKind::All,
+        };
+
+        Ok(Plan::ShowDatabases(Box::new(ShowDatabasesPlan { kind })))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_show_create_database(
+        &self,
+        stmt: &ShowCreateDatabaseStmt<'a>,
+    ) -> Result<Plan> {
+        let ShowCreateDatabaseStmt { catalog, database } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database.name.to_lowercase();
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("Database", Vu8::to_data_type()),
+            DataField::new("Create Database", Vu8::to_data_type()),
+        ]);
+
+        Ok(Plan::ShowCreateDatabase(Box::new(ShowCreateDatabasePlan {
+            catalog,
+            database,
+            schema,
+        })))
+    }
+
     pub(in crate::sql::planner::binder) async fn bind_alter_database(
         &self,
         stmt: &AlterDatabaseStmt<'a>,

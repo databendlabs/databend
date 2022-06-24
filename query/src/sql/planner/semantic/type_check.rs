@@ -14,9 +14,11 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::vec;
 
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
+use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
@@ -65,6 +67,7 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
 use crate::sql::BindContext;
+use crate::sql::ScalarExpr;
 
 /// A helper for type checking.
 ///
@@ -192,26 +195,19 @@ impl<'a> TypeChecker<'a> {
                 if !*not {
                     // Rewrite `expr BETWEEN low AND high`
                     // into `expr >= low AND expr <= high`
-                    let (ge_func, _) = self
-                        .resolve_function(
-                            span,
-                            ">=",
-                            &[&**expr, &**low],
-                            Some(BooleanType::new_impl()),
-                        )
+                    let (ge_func, left_type) = self
+                        .resolve_function(span, ">=", &[&**expr, &**low], None)
                         .await?;
-                    let (le_func, _) = self
-                        .resolve_function(
-                            span,
-                            "<=",
-                            &[&**expr, &**high],
-                            Some(BooleanType::new_impl()),
-                        )
+                    let (le_func, right_type) = self
+                        .resolve_function(span, "<=", &[&**expr, &**high], None)
                         .await?;
+                    let func =
+                        FunctionFactory::instance().get("and", &[&left_type, &right_type])?;
                     (
                         AndExpr {
                             left: Box::new(ge_func),
                             right: Box::new(le_func),
+                            return_type: func.return_type(),
                         }
                         .into(),
                         BooleanType::new_impl(),
@@ -219,26 +215,18 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
-                    let (lt_func, _) = self
-                        .resolve_function(
-                            span,
-                            "<",
-                            &[&**expr, &**low],
-                            Some(BooleanType::new_impl()),
-                        )
+                    let (lt_func, left_type) = self
+                        .resolve_function(span, "<", &[&**expr, &**low], None)
                         .await?;
-                    let (gt_func, _) = self
-                        .resolve_function(
-                            span,
-                            ">",
-                            &[&**expr, &**high],
-                            Some(BooleanType::new_impl()),
-                        )
+                    let (gt_func, right_type) = self
+                        .resolve_function(span, ">", &[&**expr, &**high], None)
                         .await?;
+                    let func = FunctionFactory::instance().get("or", &[&left_type, &right_type])?;
                     (
                         OrExpr {
                             left: Box::new(lt_func),
                             right: Box::new(gt_func),
+                            return_type: func.return_type(),
                         }
                         .into(),
                         BooleanType::new_impl(),
@@ -277,6 +265,32 @@ impl<'a> TypeChecker<'a> {
                     .into(),
                     cast_func.return_type(),
                 )
+            }
+
+            Expr::Case {
+                span,
+                conditions,
+                results,
+                else_result,
+                ..
+            } => {
+                let mut arguments = Vec::with_capacity(conditions.len() * 2 + 1);
+                for (c, r) in conditions.iter().zip(results.iter()) {
+                    arguments.push(c);
+                    arguments.push(r);
+                }
+                let null_arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::Null,
+                };
+
+                if let Some(expr) = else_result {
+                    arguments.push(&**expr);
+                } else {
+                    arguments.push(&null_arg)
+                }
+                self.resolve_function(span, "multi_if", &arguments, required_type)
+                    .await?
             }
 
             Expr::Substring {
@@ -418,9 +432,18 @@ impl<'a> TypeChecker<'a> {
                 )
             }
 
-            Expr::Exists { subquery, .. } => {
-                self.resolve_subquery(SubqueryType::Exists, subquery, true, None)
-                    .await?
+            Expr::Exists { subquery, not, .. } => {
+                self.resolve_subquery(
+                    if *not {
+                        SubqueryType::NotExists
+                    } else {
+                        SubqueryType::Exists
+                    },
+                    subquery,
+                    true,
+                    None,
+                )
+                .await?
             }
 
             Expr::Subquery { subquery, .. } => {
@@ -496,6 +519,26 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_date_add(span, date, interval, unit, required_type)
                     .await?
             }
+            Expr::DateSub {
+                span,
+                date,
+                interval,
+                unit,
+                ..
+            } => {
+                self.resolve_date_add(
+                    span,
+                    date,
+                    &Expr::UnaryOp {
+                        span,
+                        op: UnaryOperator::Minus,
+                        expr: interval.clone(),
+                    },
+                    unit,
+                    required_type,
+                )
+                .await?
+            }
             Expr::Trim {
                 span,
                 expr,
@@ -538,6 +581,69 @@ impl<'a> TypeChecker<'a> {
                             span,
                             lit: Literal::Null,
                         },
+                        expr1.as_ref(),
+                    ],
+                    None,
+                )
+                .await?
+            }
+
+            Expr::Coalesce { span, exprs } => {
+                // coalesce(arg0, arg1, ..., argN) is essentially
+                // multiIf(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)
+                // with constant Literal::NULL arguments removed.
+                let mut args = Vec::with_capacity(exprs.len() * 2 + 1);
+
+                for expr in exprs.iter().filter(|expr| {
+                    !matches!(expr, Expr::Literal {
+                        span: _,
+                        lit: Literal::Null,
+                    })
+                }) {
+                    let is_not_null_expr = Expr::IsNull {
+                        span,
+                        expr: Box::new(expr.clone()),
+                        not: true,
+                    };
+
+                    let assume_not_null_expr = Expr::FunctionCall {
+                        span,
+                        distinct: false,
+                        name: Identifier {
+                            name: "assume_not_null".to_string(),
+                            quote: None,
+                            span: span[0].clone(),
+                        },
+                        args: vec![expr.clone()],
+                        params: vec![],
+                    };
+
+                    args.push(is_not_null_expr);
+                    args.push(assume_not_null_expr);
+                }
+                args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
+                let args_ref: Vec<&Expr> = args.iter().collect();
+                self.resolve_function(span, "multi_if", &args_ref, None)
+                    .await?
+            }
+
+            Expr::IfNull {
+                span, expr1, expr2, ..
+            } => {
+                // Rewrite IFNULL(expr1, expr2) to IF(ISNULL(expr1), expr2, expr1)
+                self.resolve_function(
+                    span,
+                    "if",
+                    &[
+                        &Expr::IsNull {
+                            span,
+                            expr: expr1.clone(),
+                            not: false,
+                        },
+                        expr2.as_ref(),
                         expr1.as_ref(),
                     ],
                     None,
@@ -629,25 +735,29 @@ impl<'a> TypeChecker<'a> {
                 let op = ComparisonOp::try_from(op)?;
                 let (left, _) = self.resolve(left, None).await?;
                 let (right, _) = self.resolve(right, None).await?;
-
+                let func = FunctionFactory::instance()
+                    .get(op.to_func_name(), &[&left.data_type(), &right.data_type()])?;
                 Ok((
                     ComparisonExpr {
                         op,
                         left: Box::new(left),
                         right: Box::new(right),
+                        return_type: func.return_type(),
                     }
                     .into(),
-                    BooleanType::new_impl(),
+                    func.return_type(),
                 ))
             }
             BinaryOperator::And => {
                 let (left, _) = self.resolve(left, Some(BooleanType::new_impl())).await?;
                 let (right, _) = self.resolve(right, Some(BooleanType::new_impl())).await?;
-
+                let func = FunctionFactory::instance()
+                    .get("and", &[&left.data_type(), &right.data_type()])?;
                 Ok((
                     AndExpr {
                         left: Box::new(left),
                         right: Box::new(right),
+                        return_type: func.return_type(),
                     }
                     .into(),
                     BooleanType::new_impl(),
@@ -656,11 +766,13 @@ impl<'a> TypeChecker<'a> {
             BinaryOperator::Or => {
                 let (left, _) = self.resolve(left, Some(BooleanType::new_impl())).await?;
                 let (right, _) = self.resolve(right, Some(BooleanType::new_impl())).await?;
-
+                let func = FunctionFactory::instance()
+                    .get("or", &[&left.data_type(), &right.data_type()])?;
                 Ok((
                     OrExpr {
                         left: Box::new(left),
                         right: Box::new(right),
+                        return_type: func.return_type(),
                     }
                     .into(),
                     BooleanType::new_impl(),

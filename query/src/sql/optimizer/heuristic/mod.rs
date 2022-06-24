@@ -12,17 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod decorrelate;
 mod implement;
 mod rule_list;
+mod subquery_rewriter;
+
+use std::sync::Arc;
 
 use common_exception::Result;
 use lazy_static::lazy_static;
 
 use super::rule::RuleID;
+use crate::sessions::QueryContext;
+use crate::sql::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::sql::optimizer::heuristic::implement::HeuristicImplementor;
 pub use crate::sql::optimizer::heuristic::rule_list::RuleList;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
+use crate::sql::MetadataRef;
 
 lazy_static! {
     pub static ref DEFAULT_REWRITE_RULES: Vec<RuleID> = vec![
@@ -36,6 +43,7 @@ lazy_static! {
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterProject,
         RuleID::PushDownFilterJoin,
+        RuleID::PushDownFilterCrossApply,
     ];
 }
 
@@ -44,19 +52,37 @@ lazy_static! {
 pub struct HeuristicOptimizer {
     rules: RuleList,
     implementor: HeuristicImplementor,
+
+    _ctx: Arc<QueryContext>,
+    metadata: MetadataRef,
 }
 
 impl HeuristicOptimizer {
-    pub fn new(rules: RuleList) -> Self {
+    pub fn new(ctx: Arc<QueryContext>, metadata: MetadataRef, rules: RuleList) -> Self {
         HeuristicOptimizer {
             rules,
             implementor: HeuristicImplementor::new(),
+
+            _ctx: ctx,
+            metadata,
         }
     }
 
-    pub fn optimize(&mut self, expression: SExpr) -> Result<SExpr> {
-        let optimized = self.optimize_expression(&expression)?;
-        let result = self.implement_expression(&optimized)?;
+    fn pre_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        let result = decorrelate_subquery(self.metadata.clone(), s_expr)?;
+
+        Ok(result)
+    }
+
+    fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        Ok(s_expr)
+    }
+
+    pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        let pre_optimized = self.pre_optimize(s_expr)?;
+        let optimized = self.optimize_expression(&pre_optimized)?;
+        let post_optimized = self.post_optimize(optimized)?;
+        let result = self.implement_expression(&post_optimized)?;
         Ok(result)
     }
 

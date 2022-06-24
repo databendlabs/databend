@@ -54,7 +54,7 @@ error:
   --> SQL:1:10
   |
 1 | CAST(col1)
-  | ----     ^ expected `AS`, `,`, `(`, `.`, `IS`, `NOT`, or 50 more ...
+  | ----     ^ expected `AS`, `,`, `(`, `.`, `IS`, `NOT`, or 53 more ...
   | |         
   | while parsing `CAST(... AS ...)`
   | while parsing expression

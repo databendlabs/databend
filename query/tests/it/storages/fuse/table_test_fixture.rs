@@ -69,7 +69,7 @@ impl TestFixture {
             .unwrap();
 
         let tenant = ctx.get_tenant();
-        let random_prefix: String = Uuid::new_v4().to_simple().to_string();
+        let random_prefix: String = Uuid::new_v4().simple().to_string();
         // prepare a randomly named default database
         let db_name = gen_db_name(&random_prefix);
         let plan = CreateDatabasePlan {
@@ -134,7 +134,7 @@ impl TestFixture {
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
                 .into(),
-                current_cluster_key: Some("(id)".to_string()),
+                default_cluster_key: Some("(id)".to_string()),
                 cluster_keys: vec!["(id)".to_string()],
                 default_cluster_key_id: Some(0),
                 ..Default::default()

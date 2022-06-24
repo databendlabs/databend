@@ -27,9 +27,7 @@ impl Plan {
                 Ok(format!("{:?}:\n{}", kind, result))
             }
 
-            Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
-            Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
-            Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
+            Plan::Copy(plan) => Ok(format!("{:?}", plan)),
 
             // Databases
             Plan::ShowDatabases(show_databases) => Ok(format!("{:?}", show_databases)),
@@ -57,20 +55,15 @@ impl Plan {
             }
             Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
             Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
+            Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
 
             // Views
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
             Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),
             Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
 
-            // Users
-            Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
-            Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
-            Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
-
-            // Roles
-            Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
-            Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
+            // Insert
+            Plan::Insert(insert) => Ok(format!("{:?}", insert)),
 
             // Stages
             Plan::ShowStages => Ok("SHOW STAGES".to_string()),
@@ -79,6 +72,25 @@ impl Plan {
             Plan::CreateStage(create_stage) => Ok(format!("{:?}", create_stage)),
             Plan::DropStage(s) => Ok(format!("{:?}", s)),
             Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
+
+            // Shows
+            Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
+            Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
+            Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
+
+            // Account
+            Plan::GrantRole(grant_role) => Ok(format!("{:?}", grant_role)),
+            Plan::GrantPriv(grant_priv) => Ok(format!("{:?}", grant_priv)),
+            Plan::ShowGrants(show_grants) => Ok(format!("{:?}", show_grants)),
+            Plan::RevokePriv(revoke_priv) => Ok(format!("{:?}", revoke_priv)),
+            Plan::RevokeRole(revoke_role) => Ok(format!("{:?}", revoke_role)),
+            Plan::ShowUsers => Ok("SHOW USERS".to_string()),
+            Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
+            Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
+            Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
+            Plan::ShowRoles => Ok("SHOW ROLES".to_string()),
+            Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
+            Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
         }
     }
 }

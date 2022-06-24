@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
@@ -32,18 +34,61 @@ pub struct PipelineExecutor {
     threads_num: usize,
     graph: RunningGraph,
     workers_condvar: Arc<WorkersCondvar>,
+    query_need_abort: Arc<AtomicBool>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
 }
 
 impl PipelineExecutor {
-    pub fn create(async_rt: Arc<Runtime>, pipeline: NewPipeline) -> Result<Arc<PipelineExecutor>> {
+    pub fn create(
+        async_rt: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
+        pipeline: NewPipeline,
+    ) -> Result<Arc<PipelineExecutor>> {
+        let threads_num = pipeline.get_max_threads();
+        assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
+        Self::try_create(
+            async_rt,
+            query_need_abort,
+            RunningGraph::create(pipeline)?,
+            threads_num,
+        )
+    }
+
+    pub fn from_pipelines(
+        async_rt: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
+        pipelines: Vec<NewPipeline>,
+    ) -> Result<Arc<PipelineExecutor>> {
+        if pipelines.is_empty() {
+            return Err(ErrorCode::LogicalError("Executor Pipelines is empty."));
+        }
+
+        let threads_num = pipelines
+            .iter()
+            .map(|x| x.get_max_threads())
+            .max()
+            .unwrap_or(0);
+
+        assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
+        Self::try_create(
+            async_rt,
+            query_need_abort,
+            RunningGraph::from_pipelines(pipelines)?,
+            threads_num,
+        )
+    }
+
+    fn try_create(
+        async_rt: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
+        graph: RunningGraph,
+        threads_num: usize,
+    ) -> Result<Arc<PipelineExecutor>> {
         unsafe {
-            let threads_num = pipeline.get_max_threads();
             let workers_condvar = WorkersCondvar::create(threads_num);
             let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
 
-            let graph = RunningGraph::create(pipeline)?;
             let mut init_schedule_queue = graph.init_schedule_queue()?;
 
             let mut tasks = VecDeque::new();
@@ -58,6 +103,7 @@ impl PipelineExecutor {
                 workers_condvar,
                 global_tasks_queue,
                 async_runtime: async_rt,
+                query_need_abort,
             }))
         }
     }
@@ -142,13 +188,14 @@ impl PipelineExecutor {
         let workers_condvar = self.workers_condvar.clone();
         let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
 
-        while !self.global_tasks_queue.is_finished() {
+        while !self.global_tasks_queue.is_finished() && !self.need_abort() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.
             while !self.global_tasks_queue.is_finished() && !context.has_task() {
                 self.global_tasks_queue.steal_task_to_context(&mut context);
             }
 
-            while !self.global_tasks_queue.is_finished() && context.has_task() {
+            while !self.global_tasks_queue.is_finished() && !self.need_abort() && context.has_task()
+            {
                 if let Some(executed_pid) = context.execute_task(self)? {
                     // We immediately schedule the processor again.
                     let schedule_queue = self.graph.schedule_queue(executed_pid)?;
@@ -157,7 +204,18 @@ impl PipelineExecutor {
             }
         }
 
+        if self.need_abort() {
+            self.finish()?;
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed",
+            ));
+        }
+
         Ok(())
+    }
+
+    fn need_abort(&self) -> bool {
+        self.query_need_abort.load(Ordering::Relaxed)
     }
 }
 

@@ -172,7 +172,7 @@ impl<'a> Binder {
         bind_context: &BindContext,
         query: &Query<'_>,
     ) -> Result<(SExpr, BindContext)> {
-        let (mut s_expr, bind_context) = match query.body {
+        let (mut s_expr, mut bind_context) = match query.body {
             SetExpr::Select(_) | SetExpr::Query(_) => {
                 self.bind_set_expr(bind_context, &query.body, &query.order_by)
                     .await?
@@ -208,6 +208,10 @@ impl<'a> Binder {
             s_expr = self
                 .bind_limit(&bind_context, s_expr, None, &query.offset)
                 .await?;
+        }
+
+        if let Some(format) = &query.format {
+            bind_context.resolve_format(format.clone())?
         }
 
         Ok((s_expr, bind_context))
@@ -348,6 +352,7 @@ impl<'a> Binder {
             join_type,
             left_conditions,
             right_conditions,
+            vec![],
             left_expr,
             right_expr,
         )?;

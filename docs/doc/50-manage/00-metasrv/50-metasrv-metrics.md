@@ -21,6 +21,7 @@ These metrics describe the status of the `metasrv`. All these metrics are prefix
 | ----------------- | ------------------------------------------------- | ------- |
 | current_leader_id | Current leader id of cluster, 0 means no leader.  | IntGauge   |
 | is_leader         | Whether or not this node is current leader.       | Gauge   |
+| node_is_health    | Whether or not this node is health.               | IntGauge |
 | leader_changes    | Number of leader changes seen.                    | Counter |
 | applying_snapshot | Whether or not statemachine is applying snapshot. | Gauge   |
 | proposals_applied | Total number of consensus proposals applied.      | Gauge   |
@@ -32,6 +33,8 @@ These metrics describe the status of the `metasrv`. All these metrics are prefix
 
 `is_leader` indicate if this `metasrv` currently is the leader of cluster, and `leader_changes` show the total number of leader changes since start.If change leader too frequently, it will impact the performance of `metasrv`, also it signal that the cluster is unstable.
 
+If and only if the node state is `Follower` or `Leader` , `node_is_health` is 1, otherwise is 0.
+
 `proposals_applied` records the total number of applied write requests.
 
 `proposals_pending` indicates how many proposals are queued to commit currently.Rising pending proposals suggests there is a high client load or the member cannot commit proposals.
@@ -40,9 +43,9 @@ These metrics describe the status of the `metasrv`. All these metrics are prefix
 
 `watchers` show the total number of active watchers currently.
 
-### Network
+### Raft Network
 
-These metrics describe the network status of the `metasrv`. All these metrics are prefixed with `metasrv_network_`.
+These metrics describe the network status of raft nodes in the `metasrv`. All these metrics are prefixed with `metasrv_raft_network_`.
 
 | Name                    | Description                                       | Labels                            | Type          |
 | ----------------------- | ------------------------------------------------- | --------------------------------- | ------------- |
@@ -71,3 +74,15 @@ These metrics describe the network status of the `metasrv`. All these metrics ar
 `snapshot_recv_success` and `snapshot_recv_failures` indicates the success and fail number of receive snapshot.`snapshot_recv_inflights` indicate the inflight receiving snapshot, each time receive a snapshot, this field will increment by one, after receiving snapshot is done, this field will decrement by one.
 
 `snapshot_recv_seconds` indicate the total latency distributions of snapshot receives.
+
+### Meta Network
+
+These metrics describe the network status of meta service in the `metasrv`. All these metrics are prefixed with `metasrv_meta_network_`.
+
+| Name             | Description                                            | Type       |
+| ---------------- | ------------------------------------------------------ | ---------- |
+| meta_sent_bytes  | Total number of sent bytes to meta grpc client.        | IntCounter |
+| meta_recv_bytes  | Total number of recv bytes from meta grpc client.      | IntCounter |
+| meta_inflights   | Total number of inflight meta grpc requests.           | IntGauge   |
+| meta_req_success | Total number of success request from meta grpc client. | IntCounter |
+| meta_req_failed  | Total number of fail request from meta grpc client.    | IntCounter |

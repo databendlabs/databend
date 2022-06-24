@@ -21,6 +21,7 @@ use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
 
 use crate::prelude::*;
+use crate::types::serializations::helper::escape::write_escaped_string;
 
 #[derive(Clone)]
 pub struct StringSerializer<'a> {
@@ -38,11 +39,26 @@ impl<'a> TypeSerializer<'a> for StringSerializer<'a> {
     fn need_quote(&self) -> bool {
         true
     }
+
     fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
         buf.extend_from_slice(unsafe { self.column.value_unchecked(row_index) });
     }
 
-    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn write_field_escaped(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        _format: &FormatSettings,
+        quote: u8,
+    ) {
+        write_escaped_string(
+            unsafe { self.column.value_unchecked(row_index) },
+            buf,
+            quote,
+        )
+    }
+
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = self
             .column
             .iter()

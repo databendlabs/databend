@@ -51,7 +51,8 @@ jobs:
           cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-query.toml
           cp ./scripts/ci/deploy/config/databend-meta-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-meta.toml
           cp ./.github/actions/publish_binary/databend-release-readme.txt release/${{ steps.target.outputs.target }}/readme.txt
-          gtar -C ./release/${{ steps.target.outputs.target }} -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz bin configs readme.txt
+          cp -r ./.github/actions/publish_binary/databend-scripts-for-release release/${{ steps.target.outputs.target }}/scripts
+          gtar -C ./release/${{ steps.target.outputs.target }} -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz bin configs scripts readme.txt
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         with:
@@ -112,7 +113,8 @@ jobs:
           cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-query.toml
           cp ./scripts/ci/deploy/config/databend-meta-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-meta.toml
           cp ./.github/actions/publish_binary/databend-release-readme.txt release/${{ steps.target.outputs.target }}/readme.txt
-          tar -C ./release/${{ steps.target.outputs.target }} -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz bin configs readme.txt
+          cp -r ./.github/actions/publish_binary/databend-scripts-for-release release/${{ steps.target.outputs.target }}/scripts
+          tar -C ./release/${{ steps.target.outputs.target }} -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ steps.target.outputs.target }}.tar.gz bin configs scripts readme.txt
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         with:

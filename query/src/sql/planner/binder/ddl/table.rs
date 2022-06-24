@@ -14,15 +14,19 @@
 
 use std::collections::BTreeMap;
 
+use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::*;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::NullableType;
+use common_datavalues::ToDataType;
 use common_datavalues::TypeFactory;
+use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableMeta;
+use common_planners::OptimizeTableAction;
 use common_planners::*;
 
 use crate::sql::binder::scalar::ScalarBinder;
@@ -35,110 +39,116 @@ use crate::sql::ScalarExpr;
 use crate::sql::OPT_KEY_DATABASE_ID;
 
 impl<'a> Binder {
-    /// Basically copied from `DfCreateTable::table_meta `
-    async fn analyze_create_table_schema(
-        &self,
-        source: &CreateTableSource<'a>,
-    ) -> Result<DataSchemaRef> {
-        let bind_context = BindContext::new();
-        match source {
-            CreateTableSource::Columns(columns) => {
-                let mut scalar_binder =
-                    ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone());
-                let mut fields = Vec::with_capacity(columns.len());
-                for column in columns.iter() {
-                    let name = column.name.name.clone();
-                    let mut data_type = TypeFactory::instance()
-                        .get(column.data_type.to_string())?
-                        .clone();
-                    if column.nullable {
-                        data_type = NullableType::new_impl(data_type);
-                    }
-                    let field = DataField::new(&name, data_type).with_default_expr({
-                        if let Some(default_expr) = &column.default_expr {
-                            scalar_binder.bind(default_expr).await?;
-                            Some(default_expr.to_string())
-                        } else {
-                            None
-                        }
-                    });
-                    fields.push(field);
-                }
-                Ok(DataSchemaRefExt::create(fields))
-            }
-            CreateTableSource::Like {
-                catalog,
-                database,
-                table,
-            } => {
-                let catalog = catalog
-                    .as_ref()
-                    .map(|catalog| catalog.name.to_lowercase())
-                    .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database = database.as_ref().map_or_else(
-                    || self.ctx.get_current_catalog(),
-                    |ident| ident.name.to_lowercase(),
-                );
-                let table_name = table.name.to_lowercase();
-                let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
-                Ok(table.schema())
-            }
-        }
-    }
-
-    fn insert_table_option_with_validation(
-        &self,
-        options: &mut BTreeMap<String, String>,
-        key: String,
-        value: String,
-    ) -> Result<()> {
-        if is_reserved_opt_key(&key) {
-            Err(ErrorCode::BadOption(format!("the following table options are reserved, please do not specify them in the CREATE TABLE statement: {}",
-                        key
-                        )))
-        } else if options.insert(key.clone(), value).is_some() {
-            Err(ErrorCode::BadOption(format!(
-                "Duplicated table option: {key}"
-            )))
-        } else {
-            Ok(())
-        }
-    }
-
-    async fn analyze_cluster_keys(
+    pub(in crate::sql::planner::binder) async fn bind_show_tables(
         &mut self,
-        cluster_by: &[Expr<'a>],
-        schema: DataSchemaRef,
-    ) -> Result<Vec<String>> {
-        // Build a temporary BindContext to resolve the expr
-        let mut bind_context = BindContext::new();
-        for field in schema.fields() {
-            let column = ColumnBinding {
-                table_name: None,
-                column_name: field.name().clone(),
-                // A dummy index is fine, since we won't actually evaluate the expression
-                index: 0,
-                data_type: field.data_type().clone(),
-                visible_in_unqualified_wildcard: false,
-            };
-            bind_context.columns.push(column);
-        }
-        let mut scalar_binder =
-            ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone());
+        stmt: &ShowTablesStmt<'a>,
+    ) -> Result<Plan> {
+        let ShowTablesStmt {
+            database,
+            full,
+            limit,
+            with_history,
+        } = stmt;
 
-        let mut cluster_keys = Vec::with_capacity(cluster_by.len());
-        for cluster_by in cluster_by.iter() {
-            let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            if !cluster_key.is_deterministic() {
-                return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "Cluster by expression `{:#}` is not deterministic",
-                    cluster_by
-                )));
-            }
-            cluster_keys.push(format!("{:#}", cluster_by));
-        }
+        let database = database.as_ref().map(|ident| ident.name.to_lowercase());
+        let kind = match limit {
+            Some(ShowLimit::Like { pattern }) => PlanShowKind::Like(pattern.clone()),
+            Some(ShowLimit::Where { selection }) => PlanShowKind::Like(selection.to_string()),
+            None => PlanShowKind::All,
+        };
 
-        Ok(cluster_keys)
+        Ok(Plan::ShowTables(Box::new(ShowTablesPlan {
+            kind,
+            showfull: *full,
+            fromdb: database,
+            with_history: *with_history,
+        })))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_show_create_table(
+        &mut self,
+        stmt: &ShowCreateTableStmt<'a>,
+    ) -> Result<Plan> {
+        let ShowCreateTableStmt {
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table = table.name.to_lowercase();
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("Table", Vu8::to_data_type()),
+            DataField::new("Create Table", Vu8::to_data_type()),
+        ]);
+
+        Ok(Plan::ShowCreateTable(Box::new(ShowCreateTablePlan {
+            catalog,
+            database,
+            table,
+            schema,
+        })))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_describe_table(
+        &mut self,
+        stmt: &DescribeTableStmt<'a>,
+    ) -> Result<Plan> {
+        let DescribeTableStmt {
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table = table.name.to_lowercase();
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("Field", Vu8::to_data_type()),
+            DataField::new("Type", Vu8::to_data_type()),
+            DataField::new("Null", Vu8::to_data_type()),
+            DataField::new("Default", Vu8::to_data_type()),
+            DataField::new("Extra", Vu8::to_data_type()),
+        ]);
+
+        Ok(Plan::DescribeTable(Box::new(DescribeTablePlan {
+            catalog,
+            database,
+            table,
+            schema,
+        })))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_show_tables_status(
+        &mut self,
+        stmt: &ShowTablesStatusStmt<'a>,
+    ) -> Result<Plan> {
+        let ShowTablesStatusStmt { database, limit } = stmt;
+
+        let database = database.as_ref().map(|ident| ident.name.to_lowercase());
+        let kind = match limit {
+            Some(ShowLimit::Like { pattern }) => PlanShowKind::Like(pattern.clone()),
+            Some(ShowLimit::Where { selection }) => PlanShowKind::Like(selection.to_string()),
+            None => PlanShowKind::All,
+        };
+
+        Ok(Plan::ShowTablesStatus(Box::new(ShowTablesStatusPlan {
+            kind,
+            fromdb: database,
+        })))
     }
 
     pub(in crate::sql::planner::binder) async fn bind_create_table(
@@ -155,6 +165,7 @@ impl<'a> Binder {
             cluster_by,
             as_query,
             comment: _,
+            transient,
         } = stmt;
 
         let catalog = catalog
@@ -183,8 +194,13 @@ impl<'a> Binder {
             }
         }
 
+        // If table is TRANSIENT, set a flag in table option
+        if *transient {
+            options.insert("TRANSIENT".to_owned(), "T".to_owned());
+        }
+
         // Build table schema
-        let schema = match (&source, &as_query) {
+        let (schema, field_comments) = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
                 self.analyze_create_table_schema(source).await?
@@ -203,7 +219,7 @@ impl<'a> Binder {
                         )
                     })
                     .collect();
-                DataSchemaRefExt::create(fields)
+                (DataSchemaRefExt::create(fields), vec![])
             }
             // TODO(leiysky): Support `CREATE TABLE AS SELECT` with specified column definitions
             _ => Err(ErrorCode::UnImplement("Unsupported CREATE TABLE statement"))?,
@@ -213,6 +229,7 @@ impl<'a> Binder {
             schema: schema.clone(),
             engine: engine.to_string(),
             options: options.clone(),
+            field_comments,
             ..Default::default()
         };
 
@@ -496,7 +513,13 @@ impl<'a> Binder {
             .map(|ident| ident.name.to_lowercase())
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = table.name.to_lowercase();
-        let action = action.unwrap_or(OptimizeTableAction::Purge);
+        let action = action
+            .map(|v| match v {
+                AstOptimizeTableAction::All => OptimizeTableAction::All,
+                AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
+                AstOptimizeTableAction::Compact => OptimizeTableAction::Compact,
+            })
+            .unwrap_or(OptimizeTableAction::Purge);
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
             catalog,
@@ -504,5 +527,139 @@ impl<'a> Binder {
             table,
             action,
         })))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_exists_table(
+        &mut self,
+        stmt: &ExistsTableStmt<'a>,
+    ) -> Result<Plan> {
+        let ExistsTableStmt {
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table = table.name.to_lowercase();
+
+        Ok(Plan::ExistsTable(Box::new(ExistsTablePlan {
+            catalog,
+            database,
+            table,
+        })))
+    }
+
+    async fn analyze_create_table_schema(
+        &self,
+        source: &CreateTableSource<'a>,
+    ) -> Result<(DataSchemaRef, Vec<String>)> {
+        let bind_context = BindContext::new();
+        match source {
+            CreateTableSource::Columns(columns) => {
+                let mut scalar_binder =
+                    ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone());
+                let mut fields = Vec::with_capacity(columns.len());
+                let mut fields_comments = Vec::with_capacity(columns.len());
+                for column in columns.iter() {
+                    let name = column.name.name.clone();
+                    let mut data_type = TypeFactory::instance()
+                        .get(column.data_type.to_string())?
+                        .clone();
+                    if column.nullable {
+                        data_type = NullableType::new_impl(data_type);
+                    }
+                    let field = DataField::new(&name, data_type).with_default_expr({
+                        if let Some(default_expr) = &column.default_expr {
+                            scalar_binder.bind(default_expr).await?;
+                            Some(default_expr.to_string())
+                        } else {
+                            None
+                        }
+                    });
+                    fields.push(field);
+                    fields_comments.push(column.comment.clone().unwrap_or_default());
+                }
+                Ok((DataSchemaRefExt::create(fields), fields_comments))
+            }
+            CreateTableSource::Like {
+                catalog,
+                database,
+                table,
+            } => {
+                let catalog = catalog
+                    .as_ref()
+                    .map(|catalog| catalog.name.to_lowercase())
+                    .unwrap_or_else(|| self.ctx.get_current_catalog());
+                let database = database.as_ref().map_or_else(
+                    || self.ctx.get_current_catalog(),
+                    |ident| ident.name.to_lowercase(),
+                );
+                let table_name = table.name.to_lowercase();
+                let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
+                Ok((table.schema(), table.field_comments().clone()))
+            }
+        }
+    }
+
+    fn insert_table_option_with_validation(
+        &self,
+        options: &mut BTreeMap<String, String>,
+        key: String,
+        value: String,
+    ) -> Result<()> {
+        if is_reserved_opt_key(&key) {
+            Err(ErrorCode::BadOption(format!("the following table options are reserved, please do not specify them in the CREATE TABLE statement: {}",
+                        key
+                        )))
+        } else if options.insert(key.clone(), value).is_some() {
+            Err(ErrorCode::BadOption(format!(
+                "Duplicated table option: {key}"
+            )))
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn analyze_cluster_keys(
+        &mut self,
+        cluster_by: &[Expr<'a>],
+        schema: DataSchemaRef,
+    ) -> Result<Vec<String>> {
+        // Build a temporary BindContext to resolve the expr
+        let mut bind_context = BindContext::new();
+        for field in schema.fields() {
+            let column = ColumnBinding {
+                table_name: None,
+                column_name: field.name().clone(),
+                // A dummy index is fine, since we won't actually evaluate the expression
+                index: 0,
+                data_type: field.data_type().clone(),
+                visible_in_unqualified_wildcard: false,
+            };
+            bind_context.columns.push(column);
+        }
+        let mut scalar_binder =
+            ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone());
+
+        let mut cluster_keys = Vec::with_capacity(cluster_by.len());
+        for cluster_by in cluster_by.iter() {
+            let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
+            if !cluster_key.is_deterministic() {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "Cluster by expression `{:#}` is not deterministic",
+                    cluster_by
+                )));
+            }
+            cluster_keys.push(format!("{:#}", cluster_by));
+        }
+
+        Ok(cluster_keys)
     }
 }

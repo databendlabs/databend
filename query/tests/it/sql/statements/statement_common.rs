@@ -116,7 +116,7 @@ fn test_parse_uri_location() -> Result<()> {
             ]),
             BTreeMap::from([("master_key".into(), "test_master_key".into())]),
             UserStageInfo {
-                stage_name: "s3://test".to_string(),
+                stage_name: "s3://test/".to_string(),
                 stage_type: StageType::External,
                 stage_params: StageParams {
                     storage: StorageParams::S3(StorageS3Config {

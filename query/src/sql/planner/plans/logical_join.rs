@@ -69,6 +69,7 @@ impl Display for JoinType {
 pub struct LogicalInnerJoin {
     pub left_conditions: Vec<Scalar>,
     pub right_conditions: Vec<Scalar>,
+    pub other_conditions: Vec<Scalar>,
     pub join_type: JoinType,
 }
 

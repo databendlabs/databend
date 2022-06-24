@@ -223,6 +223,10 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
                         self.parse_list_cmd()
                     }
+                    Keyword::EXISTS => {
+                        self.parser.next_token();
+                        self.parse_exists()
+                    }
 
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
@@ -252,17 +256,33 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => {
                 //TODO:make stage to sql parser keyword
                 match w.keyword {
-                    Keyword::TABLE => self.parse_create_table(),
+                    Keyword::TABLE => self.parse_create_table(false),
                     Keyword::DATABASE | Keyword::SCHEMA => self.parse_create_database(),
                     Keyword::USER => self.parse_create_user(),
                     Keyword::ROLE => self.parse_create_role(),
                     Keyword::FUNCTION => self.parse_create_udf(),
                     Keyword::STAGE => self.parse_create_stage(),
                     Keyword::VIEW => self.parse_create_view(),
+                    Keyword::NoKeyword if w.value.as_str().to_uppercase() == "TRANSIENT" => {
+                        self.parse_create_transient_table()
+                    }
                     _ => self.expected("create statement", Token::Word(w)),
                 }
             }
             unexpected => self.expected("create statement", unexpected),
+        }
+    }
+
+    fn parse_create_transient_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let next_token = self.parser.next_token();
+        if let Token::Word(word) = next_token {
+            if word.keyword == Keyword::TABLE {
+                self.parse_create_table(true)
+            } else {
+                self.expected("create transient TABLE", Token::Word(word))
+            }
+        } else {
+            self.expected("create transient TABLE", next_token)
         }
     }
 

@@ -67,7 +67,6 @@ fn test_statement() {
         r#"show create table a.b;"#,
         r#"explain pipeline select a from b;"#,
         r#"describe a;"#,
-        r#"describe a; describe b"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table a.b like c.d;"#,
@@ -109,6 +108,7 @@ fn test_statement() {
         r#"select * from a right outer join b using(a);"#,
         r#"select * from a full outer join b using(a);"#,
         r#"select * from a inner join b using(a);"#,
+        r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
@@ -125,52 +125,97 @@ fn test_statement() {
         r#"ALTER DATABASE IF EXISTS catalog.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE catalog.c RENAME TO a;"#,
+        r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON * TO ROLE 'role1';"#,
+        r#"GRANT ALL ON *.* TO 'test-grant'@'localhost';"#,
+        r#"GRANT ALL ON *.* TO ROLE 'role2';"#,
+        r#"GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT ALL PRIVILEGES ON * TO ROLE 'role3';"#,
+        r#"GRANT ROLE 'test' TO 'test-user';"#,
+        r#"GRANT ROLE 'test' TO USER 'test-user';"#,
+        r#"GRANT ROLE 'test' TO ROLE 'test-user';"#,
+        r#"GRANT SELECT ON db01.* TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.* TO ROLE 'role1'"#,
+        r#"GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.tb1 TO ROLE 'role1';"#,
+        r#"GRANT SELECT ON tb1 TO ROLE 'role1';"#,
+        r#"GRANT ALL ON tb1 TO 'u1';"#,
+        r#"SHOW GRANTS;"#,
+        r#"SHOW GRANTS FOR 'test-grant'@'localhost';"#,
+        r#"SHOW GRANTS FOR USER 'test-grant'@'localhost';"#,
+        r#"SHOW GRANTS FOR ROLE 'role1';"#,
+        r#"REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';"#,
+        r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
+        r#"REVOKE ALL ON tb1 FROM 'u1';"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO 's3://mybucket/data.csv'
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO @my_stage
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CREDENTIALS = (
+                    AWS_KEY_ID = 'access_key'
+                    AWS_SECRET_KEY = 'secret_key'
+                )
+                ENCRYPTION = (
+                    MASTER_KEY = 'master_key'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let backtrace = Backtrace::new();
-        let stmts = parse_sql(&tokens, &backtrace).unwrap();
+        let stmt = parse_sql(&tokens, &backtrace).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
-        for stmt in stmts {
-            writeln!(file, "---------- Output ---------").unwrap();
-            writeln!(file, "{}", stmt).unwrap();
-            writeln!(file, "---------- AST ------------").unwrap();
-            writeln!(file, "{:#?}", stmt).unwrap();
-            writeln!(file, "\n").unwrap();
-        }
-    }
-}
-
-// TODO(andylokandy): remove this test once the new optimizer has been being tested on suites
-#[test]
-fn test_statements_in_legacy_suites() {
-    for entry in glob::glob("../../tests/suites/**/*.sql").unwrap() {
-        let file_content = std::fs::read(entry.unwrap()).unwrap();
-        let file_str = String::from_utf8_lossy(&file_content).into_owned();
-
-        // Remove error cases
-        let file_str = regex::Regex::new(".+ErrorCode.+\n")
-            .unwrap()
-            .replace_all(&file_str, "")
-            .into_owned();
-
-        // TODO(andylokandy): support all cases eventually
-        // Remove currently unimplemented cases
-        let file_str = regex::Regex::new(
-            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES|UNDROP|OVER|CHARSET|COLLATION).*\n",
-        )
-        .unwrap()
-        .replace_all(&file_str, "")
-        .into_owned();
-
-        let tokens = tokenize_sql(&file_str).unwrap();
-        let backtrace = Backtrace::new();
-        parse_sql(&tokens, &backtrace).expect(
-            "Parser error should not exist in integration suites. \
-            Please add parser error cases to `common/ast/tests/it/parser.rs`",
-        );
+        writeln!(file, "---------- Output ---------").unwrap();
+        writeln!(file, "{}", stmt).unwrap();
+        writeln!(file, "---------- AST ------------").unwrap();
+        writeln!(file, "{:#?}", stmt).unwrap();
+        writeln!(file, "\n").unwrap();
     }
 }
 
@@ -194,6 +239,16 @@ fn test_statement_error() {
         r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
         r#"create role 'test'@'localhost';"#,
         r#"drop role 'test'@'localhost';"#,
+        r#"drop role role1;"#,
+        r#"GRANT ROLE test TO ROLE 'test-user';"#,
+        r#"GRANT ROLE 'test' TO ROLE test-user;"#,
+        r#"GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON *.c TO 'test-grant'@'localhost';"#,
+        r#"SHOW GRANT FOR ROLE role1;"#,
+        r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';"#,
+        r#"REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
+        r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
     ];
 
     for case in cases {
@@ -289,6 +344,7 @@ fn test_expr() {
         r#"[[1]]"#,
         r#"[[1],[2]]"#,
         r#"[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]"#,
+        r#"((1 = 1) or 1)"#,
         r#"typeof(1 + 2)"#,
         r#"- - + + - 1 + + - 2"#,
         r#"0XFF + 0xff + 0xa + x'ffff'"#,
@@ -323,6 +379,10 @@ fn test_expr() {
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
         r#"nullif(1, 1)"#,
         r#"nullif(a, b)"#,
+        r#"coalesce(1, 2, 3)"#,
+        r#"coalesce(a, b, c)"#,
+        r#"ifnull(1, 1)"#,
+        r#"ifnull(a, b)"#,
     ];
 
     for case in cases {

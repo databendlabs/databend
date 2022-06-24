@@ -90,9 +90,22 @@ type StateLockGuard = ExecutingGraph;
 
 impl ExecutingGraph {
     pub fn create(pipeline: NewPipeline) -> Result<ExecutingGraph> {
-        // let (nodes_size, edges_size) = pipeline.graph_size();
+        let mut graph = StableGraph::new();
+        Self::init_graph(&pipeline, &mut graph);
+        Ok(ExecutingGraph { graph })
+    }
+
+    pub fn from_pipelines(pipelines: Vec<NewPipeline>) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
 
+        for pipeline in &pipelines {
+            Self::init_graph(pipeline, &mut graph);
+        }
+
+        Ok(ExecutingGraph { graph })
+    }
+
+    fn init_graph(pipeline: &NewPipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
         let mut node_stack = Vec::new();
         let mut edge_stack: Vec<Arc<OutputPort>> = Vec::new();
         for query_pipe in &pipeline.pipes {
@@ -179,7 +192,6 @@ impl ExecutingGraph {
 
         // Assert no output.
         assert_eq!(node_stack.len(), 0);
-        Ok(ExecutingGraph { graph })
     }
 
     /// # Safety
@@ -328,6 +340,12 @@ pub struct RunningGraph(ExecutingGraph);
 impl RunningGraph {
     pub fn create(pipeline: NewPipeline) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::create(pipeline)?;
+        tracing::debug!("Create running graph:{:?}", graph_state);
+        Ok(RunningGraph(graph_state))
+    }
+
+    pub fn from_pipelines(pipelines: Vec<NewPipeline>) -> Result<RunningGraph> {
+        let graph_state = ExecutingGraph::from_pipelines(pipelines)?;
         tracing::debug!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(graph_state))
     }

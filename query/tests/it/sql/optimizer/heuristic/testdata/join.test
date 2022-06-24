@@ -2,7 +2,7 @@
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [number], probe keys: [number]
+    HashJoin: INNER, build keys: [number], probe keys: [number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -10,7 +10,7 @@ Project: [number]
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number and t.number = t1.number + 1
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [number, +(number, 1)], probe keys: [number, number]
+    HashJoin: INNER, build keys: [number, +(number, 1)], probe keys: [number, number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -49,7 +49,7 @@ Project: [number]
 select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2 where t1.number = t2.number and t.number = 1
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [number], probe keys: [number]
+    HashJoin: INNER, build keys: [number], probe keys: [number], join filters: []
         CrossJoin
             Filter: [number = 1]
                 Scan: default.system.numbers

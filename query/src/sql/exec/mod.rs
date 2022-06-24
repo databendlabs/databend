@@ -30,10 +30,12 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionFactory;
 use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
 use common_planners::RewriteHelper;
+pub use expression_builder::ExpressionBuilder;
 use primitive_types::U256;
 use primitive_types::U512;
 pub use util::decode_field_name;
@@ -77,7 +79,6 @@ use crate::pipelines::transforms::get_sort_descriptions;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
-use crate::sql::exec::expression_builder::ExpressionBuilder;
 use crate::sql::exec::util::check_physical;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
@@ -334,9 +335,13 @@ impl PipelineBuilder {
         let eb = ExpressionBuilder::create(self.metadata.clone());
         let scalars = &filter.predicates;
         let pred = scalars.iter().cloned().reduce(|acc, v| {
+            let func = FunctionFactory::instance()
+                .get("and", &[&acc.data_type(), &v.data_type()])
+                .unwrap();
             AndExpr {
                 left: Box::new(acc),
                 right: Box::new(v),
+                return_type: func.return_type(),
             }
             .into()
         });
@@ -547,11 +552,8 @@ impl PipelineBuilder {
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
         let builder = DataSchemaBuilder::new(self.metadata.clone());
-        let output_schema = builder.build_join(
-            probe_schema.clone(),
-            build_schema.clone(),
-            &hash_join.join_type,
-        );
+        let output_schema =
+            builder.build_join(probe_schema, build_schema.clone(), &hash_join.join_type);
 
         let eb = ExpressionBuilder::create(self.metadata.clone());
         let build_expressions = hash_join
@@ -564,14 +566,18 @@ impl PipelineBuilder {
             .iter()
             .map(|scalar| eb.build(scalar))
             .collect::<Result<Vec<Expression>>>()?;
-
+        let filter_expressions = hash_join
+            .other_conditions
+            .iter()
+            .map(|scalar| eb.build(scalar))
+            .collect::<Result<Vec<Expression>>>()?;
         let hash_join_state = create_join_state(
             ctx.clone(),
             hash_join.join_type.clone(),
+            filter_expressions,
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?;
 
         // Build side
@@ -758,10 +764,10 @@ impl PipelineBuilder {
 fn create_join_state(
     ctx: Arc<QueryContext>,
     join_type: JoinType,
+    other_conditions: Vec<Expression>,
     build_expressions: Vec<Expression>,
     probe_expressions: Vec<Expression>,
     build_schema: DataSchemaRef,
-    probe_schema: DataSchemaRef,
 ) -> Result<Arc<ChainingHashTable>> {
     let hash_key_types = build_expressions
         .iter()
@@ -773,6 +779,7 @@ fn create_join_state(
             Arc::new(ChainingHashTable::try_create(
                 ctx,
                 join_type,
+                other_conditions,
                 HashTable::SerializerHashTable(SerializerHashTable {
                     hash_table: HashMap::<KeysRef, Vec<RowPtr>>::create(),
                     hash_method: HashMethodSerializer::default(),
@@ -780,12 +787,12 @@ fn create_join_state(
                 build_expressions,
                 probe_expressions,
                 build_schema,
-                probe_schema,
             )?)
         }
         HashMethodKind::KeysU8(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU8HashTable(KeyU8HashTable {
                 hash_table: HashMap::<u8, Vec<RowPtr>>::create(),
                 hash_method,
@@ -793,11 +800,11 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU16(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU16HashTable(KeyU16HashTable {
                 hash_table: HashMap::<u16, Vec<RowPtr>>::create(),
                 hash_method,
@@ -805,11 +812,11 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU32(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU32HashTable(KeyU32HashTable {
                 hash_table: HashMap::<u32, Vec<RowPtr>>::create(),
                 hash_method,
@@ -817,11 +824,11 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU64(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU64HashTable(KeyU64HashTable {
                 hash_table: HashMap::<u64, Vec<RowPtr>>::create(),
                 hash_method,
@@ -829,11 +836,11 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU128(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU128HashTable(KeyU128HashTable {
                 hash_table: HashMap::<u128, Vec<RowPtr>>::create(),
                 hash_method,
@@ -841,11 +848,11 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU256(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU256HashTable(KeyU256HashTable {
                 hash_table: HashMap::<U256, Vec<RowPtr>>::create(),
                 hash_method,
@@ -853,11 +860,11 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
         HashMethodKind::KeysU512(hash_method) => Arc::new(ChainingHashTable::try_create(
             ctx,
             join_type,
+            other_conditions,
             HashTable::KeyU512HashTable(KeyU512HashTable {
                 hash_table: HashMap::<U512, Vec<RowPtr>>::create(),
                 hash_method,
@@ -865,7 +872,6 @@ fn create_join_state(
             build_expressions,
             probe_expressions,
             build_schema,
-            probe_schema,
         )?),
     })
 }

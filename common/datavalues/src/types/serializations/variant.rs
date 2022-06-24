@@ -45,7 +45,7 @@ impl<'a> TypeSerializer<'a> for VariantSerializer<'a> {
         Ok(self.values[row_index].to_string())
     }
 
-    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = self.values.iter().map(|v| v.as_ref().to_owned()).collect();
         Ok(result)
     }

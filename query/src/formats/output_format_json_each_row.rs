@@ -21,16 +21,34 @@ use common_io::prelude::FormatSettings;
 use crate::formats::output_format::OutputFormat;
 
 #[derive(Default)]
-pub struct JsonEachRowOutputFormat {}
+pub struct JsonEachRowOutputFormat {
+    format_settings: FormatSettings,
+}
 
 impl JsonEachRowOutputFormat {
-    pub fn create(_schema: DataSchemaRef) -> Self {
-        Self {}
+    pub fn create(_schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
+        let format_settings = if format_settings.json_quote_denormals {
+            FormatSettings {
+                null_bytes: vec![b'n', b'u', b'l', b'l'],
+                inf_bytes: vec![b'\"', b'i', b'n', b'f', b'\"'],
+                nan_bytes: vec![b'\"', b'n', b'a', b'n', b'\"'],
+                ..format_settings
+            }
+        } else {
+            FormatSettings {
+                null_bytes: vec![b'n', b'u', b'l', b'l'],
+                inf_bytes: vec![b'n', b'u', b'l', b'l'],
+                nan_bytes: vec![b'n', b'u', b'l', b'l'],
+                ..format_settings
+            }
+        };
+
+        Self { format_settings }
     }
 }
 
 impl OutputFormat for JsonEachRowOutputFormat {
-    fn serialize_block(&mut self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.column(0).len();
 
         let mut buf = Vec::with_capacity(block.memory_size());
@@ -55,7 +73,7 @@ impl OutputFormat for JsonEachRowOutputFormat {
                 buf.push(b'"');
 
                 buf.push(b':');
-                serializer.write_field_quoted(row_index, &mut buf, format, b'\"');
+                serializer.write_field_json(row_index, &mut buf, &self.format_settings);
             }
             buf.extend_from_slice("}\n".as_bytes());
         }

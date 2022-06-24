@@ -15,6 +15,8 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
@@ -50,6 +52,7 @@ use common_tracing::tracing;
 use futures::future::AbortHandle;
 use opendal::Operator;
 
+use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
@@ -74,6 +77,7 @@ pub struct QueryContext {
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
+    fragment_id: Arc<AtomicUsize>,
 }
 
 impl QueryContext {
@@ -92,6 +96,7 @@ impl QueryContext {
             version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
             shared,
             precommit_blocks: Arc::new(RwLock::new(Vec::new())),
+            fragment_id: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -235,6 +240,10 @@ impl QueryContext {
 
     pub fn get_cluster(&self) -> Arc<Cluster> {
         self.shared.get_cluster()
+    }
+
+    pub fn get_fragment_id(&self) -> usize {
+        self.fragment_id.fetch_add(1, Ordering::Release)
     }
 
     pub fn get_catalogs(&self) -> Arc<CatalogManager> {
@@ -440,6 +449,9 @@ impl QueryContext {
         self.shared.session.session_mgr.get_query_logger()
     }
 
+    pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
+        self.shared.session.session_mgr.get_data_exchange_manager()
+    }
     pub fn push_precommit_block(&self, block: DataBlock) {
         let mut blocks = self.precommit_blocks.write();
         blocks.push(block);
@@ -464,6 +476,10 @@ impl QueryContext {
 
     pub fn get_connection_id(&self) -> String {
         self.shared.get_connection_id()
+    }
+
+    pub fn query_need_abort(self: &Arc<Self>) -> Arc<AtomicBool> {
+        self.shared.query_need_abort()
     }
 }
 

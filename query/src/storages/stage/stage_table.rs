@@ -33,6 +33,7 @@ use common_streams::SendableDataBlockStream;
 use super::StageSource;
 use crate::formats::output_format::OutputFormatType;
 use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::TransformLimit;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
@@ -118,6 +119,19 @@ impl Table for StageTable {
         }
 
         pipeline.add_pipe(builder.finalize());
+
+        let limit = self.table_info.stage_info.copy_options.size_limit;
+        if limit > 0 {
+            pipeline.resize(1)?;
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformLimit::try_create(
+                    Some(limit),
+                    0,
+                    transform_input_port,
+                    transform_output_port,
+                )
+            })?;
+        }
         Ok(())
     }
 
@@ -152,7 +166,6 @@ impl Table for StageTable {
         let op = StageSource::get_op(&ctx, &self.table_info.stage_info).await?;
 
         let fmt = OutputFormatType::from_str(format_name.as_str())?;
-        let mut output_format = fmt.create_format(self.table_info.schema());
         let mut format_settings = ctx.get_format_settings()?;
 
         let format_options = &self.table_info.stage_info.file_format_options;
@@ -167,13 +180,14 @@ impl Table for StageTable {
                     format_options.record_delimiter.as_bytes().to_vec();
             }
         }
+        let mut output_format = fmt.create_format(self.table_info.schema(), format_settings);
 
-        let prefix = output_format.serialize_prefix(&format_settings)?;
+        let prefix = output_format.serialize_prefix()?;
         let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
         let mut bytes = Vec::with_capacity(written_bytes + prefix.len());
         bytes.extend_from_slice(&prefix);
         for block in operations {
-            let bs = output_format.serialize_block(&block, &format_settings)?;
+            let bs = output_format.serialize_block(&block)?;
             bytes.extend_from_slice(bs.as_slice());
         }
 

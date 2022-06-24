@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::OptimizeTableAction;
 use common_exception::Result;
+use common_planners::OptimizeTableAction;
 use databend_query::sql::statements::DfOptimizeTable;
 use databend_query::sql::*;
 use sqlparser::ast::*;
@@ -71,8 +71,7 @@ fn optimize_table() -> Result<()> {
         let sql = "optimize TABLE t1 unacceptable";
         expect_parse_err(
             sql,
-            "sql parser error: Expected one of PURGE, COMPACT, ALL, found: unacceptable"
-                .to_string(),
+            "sql parser error: Expected one of PURGE, COMPACT, ALL, found: unacceptable",
         )?;
     }
 
@@ -80,8 +79,7 @@ fn optimize_table() -> Result<()> {
         let sql = "optimize TABLE t1 (";
         expect_parse_err(
             sql,
-            "sql parser error: Expected Nothing, or one of PURGE, COMPACT, ALL, found: ("
-                .to_string(),
+            "sql parser error: Expected Nothing, or one of PURGE, COMPACT, ALL, found: (",
         )?;
     }
 

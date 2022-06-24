@@ -80,7 +80,7 @@ impl InsertInterpreter {
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
-        let mut pipeline = self.create_new_pipeline()?;
+        let mut pipeline = self.create_new_pipeline().await?;
         let mut builder = SourcePipeBuilder::create();
 
         if self.async_insert {
@@ -116,7 +116,7 @@ impl InsertInterpreter {
                         SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
                             input: Arc::new((**plan).clone()),
                         })?;
-                    pipeline = select_interpreter.create_new_pipeline()?;
+                    pipeline = select_interpreter.create_new_pipeline().await?;
 
                     if self.check_schema_cast(plan)? {
                         let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
@@ -175,9 +175,12 @@ impl InsertInterpreter {
         table.append2(self.ctx.clone(), &mut pipeline)?;
 
         let async_runtime = self.ctx.get_storage_runtime();
+        let query_need_abort = self.ctx.query_need_abort();
 
         pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-        let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
+        let executor =
+            PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+
         executor.execute()?;
         drop(executor);
 
@@ -239,8 +242,7 @@ impl Interpreter for InsertInterpreter {
         let settings = self.ctx.get_settings();
 
         // Use insert in new processor
-        if settings.get_enable_new_processor_framework()? != 0 && self.ctx.get_cluster().is_empty()
-        {
+        if settings.get_enable_new_processor_framework()? != 0 {
             return self.execute_new(input_stream).await;
         }
 
@@ -330,7 +332,7 @@ impl Interpreter for InsertInterpreter {
         )))
     }
 
-    fn create_new_pipeline(&self) -> Result<NewPipeline> {
+    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
         let insert_pipeline = NewPipeline::create();
         Ok(insert_pipeline)
     }

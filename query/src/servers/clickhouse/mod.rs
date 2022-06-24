@@ -14,6 +14,7 @@
 
 mod writers;
 
+mod clickhouse_federated;
 mod clickhouse_handler;
 mod clickhouse_metrics;
 mod clickhouse_session;
@@ -21,5 +22,11 @@ mod interactive_worker;
 mod interactive_worker_base;
 mod reject_connection;
 
+pub use clickhouse_federated::CLickHouseFederated;
 pub use clickhouse_handler::ClickHouseHandler;
 pub use writers::from_clickhouse_block;
+
+// from clickhouse-sqlalchemy:
+//  supports_update = version >= (18, 12, 14)
+//  supports_engine_reflection = version >= (18, 16, 0)
+const CLICKHOUSE_VERSION: &str = "8.12.14";

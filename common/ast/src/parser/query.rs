@@ -120,11 +120,17 @@ pub fn aliased_table(i: Input) -> IResult<TableReference> {
 }
 
 pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
-    map(
-        rule! {
-            AT ~ "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")"
-        },
+    let at_snapshot = map(
+        rule! { AT ~ "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
         |(_, _, _, _, s, _)| TimeTravelPoint::Snapshot(s),
+    );
+    let at_timestamp = map(
+        rule! { AT ~ "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
+    );
+
+    rule!(
+        #at_snapshot | #at_timestamp
     )(i)
 }
 
@@ -357,7 +363,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
     let group = map(
         rule! {
            "("
-           ~ ^#set_operation
+           ~ #set_operation
            ~ ^")"
         },
         |(_, set_expr, _)| SetOperationElement::Group(set_expr),

@@ -25,6 +25,7 @@ pub use self::mysql::MySQLFederated;
 pub use self::mysql::MySQLHandler;
 
 pub(crate) mod clickhouse;
+pub(crate) mod federated_helper;
 pub mod http;
 mod mysql;
 pub(crate) mod server;

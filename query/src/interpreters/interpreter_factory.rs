@@ -47,6 +47,7 @@ use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::DropUserUDFInterpreter;
 use crate::interpreters::DropViewInterpreter;
 use crate::interpreters::EmptyInterpreter;
+use crate::interpreters::ExistsTableInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
 use crate::interpreters::GrantRoleInterpreter;
@@ -120,12 +121,8 @@ impl InterpreterFactory {
             PlanNode::Show(ShowPlan::ShowSettings(_)) => {
                 ShowSettingsInterpreter::try_create(ctx_clone)
             }
-            PlanNode::Show(ShowPlan::ShowUsers(v)) => {
-                ShowUsersInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::Show(ShowPlan::ShowRoles(v)) => {
-                ShowRolesInterpreter::try_create(ctx_clone, v)
-            }
+            PlanNode::Show(ShowPlan::ShowUsers(_)) => ShowUsersInterpreter::try_create(ctx_clone),
+            PlanNode::Show(ShowPlan::ShowRoles(_)) => ShowRolesInterpreter::try_create(ctx_clone),
             PlanNode::Show(ShowPlan::ShowStages) => ShowStagesInterpreter::try_create(ctx_clone),
 
             // Database related transforms.
@@ -144,6 +141,7 @@ impl InterpreterFactory {
             PlanNode::RenameTable(v) => RenameTableInterpreter::try_create(ctx_clone, v),
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::ExistsTable(v) => ExistsTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
 
@@ -200,6 +198,9 @@ impl InterpreterFactory {
                 plan.name()
             ))),
         }?;
-        Ok(Arc::new(InterceptorInterpreter::create(ctx, inner, plan)))
+        let query_kind = plan.name().to_string();
+        Ok(Arc::new(InterceptorInterpreter::create(
+            ctx, inner, plan, query_kind,
+        )))
     }
 }

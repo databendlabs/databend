@@ -49,6 +49,9 @@ use tonic::Streaming;
 use crate::executor::ActionHandler;
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
+use crate::metrics::add_meta_metrics_meta_request_inflights;
+use crate::metrics::incr_meta_metrics_meta_recv_bytes;
+use crate::metrics::incr_meta_metrics_meta_sent_bytes;
 use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
 use crate::version::METASRV_SEMVER;
@@ -147,10 +150,20 @@ impl MetaService for MetaServiceImpl {
         self.check_token(request.metadata())?;
         common_tracing::extract_remote_span_as_parent(&request);
 
+        incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
+
         let action: MetaGrpcWriteReq = request.try_into()?;
+
+        add_meta_metrics_meta_request_inflights(1);
+
         tracing::info!("Receive write_action: {:?}", action);
 
         let body = self.action_handler.execute_write(action).await;
+
+        add_meta_metrics_meta_request_inflights(-1);
+
+        incr_meta_metrics_meta_sent_bytes(body.encoded_len() as u64);
+
         Ok(Response::new(body))
     }
 
@@ -158,10 +171,19 @@ impl MetaService for MetaServiceImpl {
         self.check_token(request.metadata())?;
         common_tracing::extract_remote_span_as_parent(&request);
 
+        incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
+
         let action: MetaGrpcReadReq = request.try_into()?;
+
+        add_meta_metrics_meta_request_inflights(1);
+
         tracing::info!("Receive read_action: {:?}", action);
 
         let res = self.action_handler.execute_read(action).await;
+
+        add_meta_metrics_meta_request_inflights(-1);
+
+        incr_meta_metrics_meta_sent_bytes(res.encoded_len() as u64);
 
         Ok(Response::new(res))
     }
@@ -210,6 +232,9 @@ impl MetaService for MetaServiceImpl {
         request: Request<TxnRequest>,
     ) -> Result<Response<TxnReply>, Status> {
         self.check_token(request.metadata())?;
+        incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
+        add_meta_metrics_meta_request_inflights(1);
+
         common_tracing::extract_remote_span_as_parent(&request);
 
         let request = request.into_inner();
@@ -217,18 +242,27 @@ impl MetaService for MetaServiceImpl {
         tracing::info!("Receive txn_request: {:?}", request);
 
         let body = self.action_handler.execute_txn(request).await;
+        add_meta_metrics_meta_request_inflights(-1);
+
+        incr_meta_metrics_meta_sent_bytes(body.encoded_len() as u64);
+
         Ok(Response::new(body))
     }
 
     async fn member_list(
         &self,
-        _request: Request<MemberListRequest>,
+        request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
+        self.check_token(request.metadata())?;
         let meta_node = &self.action_handler.meta_node;
         let members = meta_node.get_meta_addrs().await.map_err(|e| {
             Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
         })?;
-        Ok(Response::new(MemberListReply { data: members }))
+
+        let resp = MemberListReply { data: members };
+        incr_meta_metrics_meta_sent_bytes(resp.encoded_len() as u64);
+
+        Ok(Response::new(resp))
     }
 }
 

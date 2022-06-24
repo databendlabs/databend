@@ -37,6 +37,7 @@ pub struct RpcClientConf {
 
     /// Timeout for an RPC
     pub timeout: Option<Duration>,
+    pub auto_sync_interval: Duration,
 }
 
 impl RpcClientConf {
