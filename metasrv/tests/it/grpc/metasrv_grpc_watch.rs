@@ -34,7 +34,7 @@ async fn upsert_kv_client_main(addr: String, updates: Vec<UpsertKVReq>) -> anyho
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -57,7 +57,7 @@ async fn test_watch_main(
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 

@@ -33,7 +33,7 @@ async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> 
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -51,7 +51,7 @@ async fn test_meta_grpc_client_database_create_get_drop_in_diff_tenant() -> anyh
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -69,7 +69,7 @@ async fn test_meta_grpc_client_database_list() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -85,7 +85,7 @@ async fn test_meta_grpc_client_database_list_in_diff_tenant() -> anyhow::Result<
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -103,7 +103,7 @@ async fn test_meta_grpc_client_database_rename() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -119,7 +119,7 @@ async fn test_meta_grpc_client_database_drop_undrop_list_history() -> anyhow::Re
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -137,7 +137,7 @@ async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -155,7 +155,7 @@ async fn test_meta_grpc_client_table_rename() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -171,7 +171,7 @@ async fn test_meta_grpc_client_table_upsert_option() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -189,7 +189,7 @@ async fn test_meta_grpc_client_table_drop_undrop_list_history() -> anyhow::Resul
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -207,7 +207,7 @@ async fn test_meta_grpc_client_table_list() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -226,7 +226,7 @@ async fn test_meta_gpc_client_table_drop_out_of_retention_time_history() -> anyh
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -247,7 +247,7 @@ async fn test_meta_gpc_client_database_drop_out_of_retention_time_history() -> a
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -268,7 +268,7 @@ async fn test_meta_gpc_client_database_gc_out_of_retention_time() -> anyhow::Res
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -289,7 +289,7 @@ async fn test_meta_gpc_client_table_gc_out_of_retention_time() -> anyhow::Result
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
