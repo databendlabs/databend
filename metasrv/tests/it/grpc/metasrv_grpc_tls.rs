@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_grpc::RpcClientTlsConfig;
@@ -46,7 +48,14 @@ async fn test_tls_server() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, Some(tls_conf))?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        Some(tls_conf),
+    )?;
 
     let r = client
         .get_table(("do not care", "do not care", "do not care").into())
@@ -80,6 +89,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
+        Duration::from_secs(10),
         Some(tls_conf),
     )
     .unwrap();

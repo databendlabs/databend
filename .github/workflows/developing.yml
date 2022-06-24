@@ -99,6 +99,16 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/test_compat
 
+  test_meta_cluster:
+    runs-on: ubuntu-latest
+    needs: build_linux
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/test_meta_cluster
+
   test_stateless_standalone_linux:
     runs-on: ubuntu-latest
     needs: build_linux

@@ -13,6 +13,9 @@
 // limitations under the License.
 
 mod pool;
+mod ttlhmap;
 
 pub use pool::ItemManager;
 pub use pool::Pool;
+pub use ttlhmap::CleanPolicy;
+pub use ttlhmap::TtlHashMap;

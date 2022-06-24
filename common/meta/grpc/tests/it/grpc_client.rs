@@ -31,7 +31,15 @@ async fn test_grpc_client_action_timeout() {
     // server's handshake impl will sleep 2secs.
     let timeout = Duration::from_secs(3);
 
-    let client = MetaGrpcClient::try_create(vec![srv_addr], "", "", Some(timeout), None).unwrap();
+    let client = MetaGrpcClient::try_create(
+        vec![srv_addr],
+        "",
+        "",
+        Some(timeout),
+        Duration::from_secs(0),
+        None,
+    )
+    .unwrap();
 
     let res = client
         .get_database(GetDatabaseReq::new("tenant1", "xx"))
@@ -42,12 +50,21 @@ async fn test_grpc_client_action_timeout() {
     assert_eq!(got, expect);
 }
 
+#[ignore]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_grpc_client_handshake_timeout() {
     let srv_addr = start_grpc_server();
 
-    let timeout = Duration::from_secs(1);
-    let res = MetaGrpcClient::try_create(vec![srv_addr], "", "", Some(timeout), None).unwrap();
+    let timeout = Duration::from_secs(2);
+    let res = MetaGrpcClient::try_create(
+        vec![srv_addr],
+        "",
+        "",
+        Some(timeout),
+        Duration::from_secs(0),
+        None,
+    )
+    .unwrap();
 
     let client = res.make_client().await;
     let got = client.unwrap_err();

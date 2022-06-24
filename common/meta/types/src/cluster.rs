@@ -38,11 +38,21 @@ pub struct Slot {
 pub struct Node {
     pub name: String,
     pub endpoint: Endpoint,
+    pub grpc_api_addr: Option<String>,
 }
 
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}={}", self.name, self.endpoint)
+        let grpc_addr_display = if let Some(grpc_addr) = &self.grpc_api_addr {
+            grpc_addr.to_string()
+        } else {
+            "".to_string()
+        };
+        write!(
+            f,
+            "{}= raft: {}, grpc: {}",
+            self.name, self.endpoint, grpc_addr_display
+        )
     }
 }
 

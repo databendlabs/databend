@@ -414,13 +414,22 @@ impl HttpQueryHandle {
         });
 
         let async_runtime_clone = async_runtime.clone();
+        let query_need_abort = ctx.query_need_abort();
+
         let run = move || -> Result<()> {
             for pipeline in pipelines {
-                let executor = PipelineExecutor::create(async_runtime_clone.clone(), pipeline)?;
+                let executor = PipelineExecutor::create(
+                    async_runtime_clone.clone(),
+                    query_need_abort.clone(),
+                    pipeline,
+                )?;
                 executor.execute()?;
             }
-            let pipeline_executor =
-                PipelineCompleteExecutor::try_create(async_runtime_clone, root_pipeline)?;
+            let pipeline_executor = PipelineCompleteExecutor::try_create(
+                async_runtime_clone,
+                query_need_abort.clone(),
+                root_pipeline,
+            )?;
             pipeline_executor.execute()
         };
 

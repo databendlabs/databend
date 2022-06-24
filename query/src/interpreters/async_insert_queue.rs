@@ -269,8 +269,14 @@ impl AsyncInsertQueue {
                     );
                 }
                 pipeline.add_pipe(sink_pipeline_builder.finalize());
-                let executor =
-                    PipelineCompleteExecutor::try_create(self.runtime.clone(), pipeline).unwrap();
+
+                let query_need_abort = ctx.query_need_abort();
+                let executor = PipelineCompleteExecutor::try_create(
+                    self.runtime.clone(),
+                    query_need_abort,
+                    pipeline,
+                )
+                .unwrap();
                 executor.execute()?;
                 drop(executor);
                 let blocks = ctx.consume_precommit_blocks();

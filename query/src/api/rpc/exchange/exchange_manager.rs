@@ -459,7 +459,9 @@ impl QueryCoordinator {
         }
 
         let async_runtime = self.ctx.get_storage_runtime();
-        let executor = PipelineCompleteExecutor::from_pipelines(async_runtime, pipelines)?;
+        let query_need_abort = self.ctx.query_need_abort();
+        let executor =
+            PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
         self.executor = Some(executor.clone());
         let receivers = self.receivers.clone();
         let shutdown_cause = self.shutdown_cause.clone();

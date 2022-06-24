@@ -306,6 +306,18 @@ pub async fn clickhouse_handler_post(
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
     let mut sql = params.query();
     sql.push_str(body.into_string().await?.as_str());
+    let n = 100;
+    // other parts of the request already logged in middleware
+    let msg = if sql.len() > n {
+        format!(
+            "{}...(omit {} bytes)",
+            &sql[0..n].to_string(),
+            sql.len() - n
+        )
+    } else {
+        sql.to_string()
+    };
+    tracing::info!("receive clickhouse http post, (query + body) = {}", &msg);
 
     if let Some(block) = CLickHouseFederated::check(&sql) {
         return serialize_one_block(ctx.clone(), block, &sql, &params, default_format)
