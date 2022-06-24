@@ -26,7 +26,7 @@ use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
     Inner,
     Left,

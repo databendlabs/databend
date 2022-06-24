@@ -26,10 +26,10 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::Identifier;
-use crate::parser::error::Backtrace;
-use crate::parser::error::Error;
-use crate::parser::error::ErrorKind;
 use crate::parser::token::*;
+use crate::Backtrace;
+use crate::Error;
+use crate::ErrorKind;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 

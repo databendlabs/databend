@@ -4,6 +4,7 @@
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../.." || exit
+BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 killall databend-query
 killall databend-meta
@@ -16,15 +17,13 @@ for bin in databend-query databend-meta; do
 	fi
 done
 
-BIN=${1:-debug}
-
 echo 'Start databend-meta...'
-nohup target/${BIN}/databend-meta --single --log-level=ERROR &
+nohup target/${BUILD_PROFILE}/databend-meta --single --log-level=ERROR &
 echo "Waiting on databend-meta 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
 echo 'Start databend-query...'
-nohup target/${BIN}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml &
+nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml &
 
 echo "Waiting on databend-query 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
