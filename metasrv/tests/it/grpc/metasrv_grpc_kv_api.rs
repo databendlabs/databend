@@ -43,7 +43,7 @@ impl KVApiBuilder<Arc<ClientHandle>> for Builder {
             "root",
             "xxx",
             None,
-            Duration::from_secs(10),
+            Some(Duration::from_secs(10)),
             None,
         )
         .unwrap();

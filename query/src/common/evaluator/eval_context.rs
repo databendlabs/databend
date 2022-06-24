@@ -12,46 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
-use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sql::IndexType;
-
-pub trait EvalContext {
-    type VectorID: PartialEq;
+pub trait EvalContext: Debug {
+    type VectorID: PartialEq + Eq + Clone + Debug;
 
     fn get_vector(&self, id: &Self::VectorID) -> Result<TypedVector>;
-
-    fn insert_vector(&mut self, id: Self::VectorID, vector: TypedVector) -> Result<()>;
 
     fn tuple_count(&self) -> usize;
 }
 
 impl EvalContext for DataBlock {
-    type VectorID = IndexType;
+    type VectorID = String;
 
-    fn get_vector(&self, id: &IndexType) -> Result<TypedVector> {
-        let name = id.to_string();
-        let column = self.try_column_by_name(name.as_str())?;
-        let field = self.schema().field_with_name(name.as_str())?;
+    fn get_vector(&self, id: &String) -> Result<TypedVector> {
+        let column = self.try_column_by_name(id.as_str())?;
+        let field = self.schema().field_with_name(id.as_str())?;
         Ok(TypedVector {
             vector: column.clone(),
             logical_type: field.data_type().clone(),
         })
-    }
-
-    fn insert_vector(&mut self, id: IndexType, vector: TypedVector) -> Result<()> {
-        let name = id.to_string();
-        let result = self.clone().add_column(
-            vector.vector,
-            DataField::new(name.as_str(), vector.logical_type),
-        )?;
-        *self = result;
-        Ok(())
     }
 
     fn tuple_count(&self) -> usize {
@@ -60,17 +46,26 @@ impl EvalContext for DataBlock {
 }
 
 // An empty EvalContext, should only be used in constant folding
-pub(super) struct EmptyEvalContext;
+#[derive(Debug)]
+pub(super) struct EmptyEvalContext<T> {
+    _phantom: std::marker::PhantomData<T>,
+}
 
-impl EvalContext for EmptyEvalContext {
-    type VectorID = IndexType;
+impl<T> EmptyEvalContext<T> {
+    pub fn new() -> Self {
+        Self {
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<T> EvalContext for EmptyEvalContext<T>
+where T: PartialEq + Eq + Clone + Debug
+{
+    type VectorID = T;
 
     fn get_vector(&self, _id: &Self::VectorID) -> Result<TypedVector> {
         Err(ErrorCode::Ok("Try to get vector from an empty context"))
-    }
-
-    fn insert_vector(&mut self, _id: Self::VectorID, _vector: TypedVector) -> Result<()> {
-        Err(ErrorCode::Ok("Try to insert vector into an empty context"))
     }
 
     fn tuple_count(&self) -> usize {
@@ -80,8 +75,8 @@ impl EvalContext for EmptyEvalContext {
 
 #[derive(Clone, Debug)]
 pub struct TypedVector {
-    vector: ColumnRef,
-    logical_type: DataTypeImpl,
+    pub(super) vector: ColumnRef,
+    pub(super) logical_type: DataTypeImpl,
 }
 
 impl TypedVector {

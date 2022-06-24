@@ -48,7 +48,7 @@ async fn test_restart() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -115,7 +115,7 @@ async fn test_restart() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -210,7 +210,7 @@ async fn test_join() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
     let client1 = MetaGrpcClient::try_create(
@@ -218,7 +218,7 @@ async fn test_join() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
@@ -307,7 +307,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(5),
+        Some(Duration::from_secs(5)),
         None,
     )?;
 

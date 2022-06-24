@@ -1,5 +1,5 @@
 ---
-title: Databend Cloud (Beta)
+title: Try Databend Cloud (Beta) Free
 sidebar_label: Databend Cloud (Beta)
 description: Databend Cloud (Beta)
 ---
@@ -58,3 +58,11 @@ Run `SELECT 1` query with curl:
 ```shell
 curl --header 'X-Clickhouse-User: <sql-user>' --header 'X-Clickhouse-Key: <sql-user-password>' https://<tenant>--<warehouse>.ch.aws-us-east-2.default.databend.com/?query=SELECT%201
 ```
+
+## Community
+
+- [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
+- [Github](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
+- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
+- [Weekly](https://weekly.databend.rs/) (A weekly newsletter about Databend)
+- [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)

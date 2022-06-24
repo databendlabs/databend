@@ -23,7 +23,8 @@ use common_meta_grpc::ClientHandle;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
-use common_meta_types::protobuf::GetRequest;
+use common_meta_types::ForwardRequest;
+use common_meta_types::ForwardRequestBody;
 use common_tracing::tracing;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
@@ -155,7 +156,7 @@ impl MetaSrvTestContext {
             "root",
             "xxx",
             None,
-            Duration::from_secs(10),
+            Some(Duration::from_secs(10)),
             None,
         )?;
         Ok(client)
@@ -184,11 +185,12 @@ impl MetaSrvTestContext {
     pub async fn assert_raft_server_connection(&self) -> anyhow::Result<()> {
         let mut client = self.raft_client().await?;
 
-        let req = tonic::Request::new(GetRequest {
-            key: "ensure-connection".into(),
-        });
-        let rst = client.get(req).await?.into_inner();
-        assert_eq!("", rst.value, "connected");
+        let req = ForwardRequest {
+            forward_to_leader: 0,
+            body: ForwardRequestBody::Ping,
+        };
+
+        client.forward(req).await?;
         Ok(())
     }
 }

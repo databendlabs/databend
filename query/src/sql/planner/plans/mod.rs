@@ -33,7 +33,7 @@ mod sort;
 use std::fmt::Display;
 use std::sync::Arc;
 
-pub use aggregate::Aggregate;
+pub use aggregate::*;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_datavalues::DataField;
@@ -78,7 +78,6 @@ use common_planners::ShowTablesPlan;
 use common_planners::ShowTablesStatusPlan;
 use common_planners::TruncateTablePlan;
 use common_planners::UndropTablePlan;
-// use common_planners::*;
 pub use copy_v2::CopyPlanV2;
 pub use copy_v2::ValidationMode;
 pub use eval_scalar::EvalScalar;

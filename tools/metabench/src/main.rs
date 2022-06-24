@@ -15,7 +15,6 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Arc;
-use std::time::Duration;
 use std::time::Instant;
 
 use clap::Parser;
@@ -76,14 +75,8 @@ async fn main() {
         let typ = config.rpc.clone();
 
         let handle = tokio::spawn(async move {
-            let client = MetaGrpcClient::try_create(
-                vec![addr.to_string()],
-                "root",
-                "xxx",
-                None,
-                Duration::from_secs(0),
-                None,
-            );
+            let client =
+                MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None);
             if client.is_err() {
                 return;
             }
