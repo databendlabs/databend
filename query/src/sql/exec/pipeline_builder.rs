@@ -80,7 +80,13 @@ impl PipelineBuilder {
                 name_mapping,
                 source,
                 ..
-            } => self.build_table_scan(context, name_mapping, source, pipeline),
+            } => self.build_table_scan(
+                context,
+                plan.output_schema()?,
+                name_mapping,
+                source,
+                pipeline,
+            ),
             PhysicalPlan::Filter { input, predicates } => {
                 self.build_pipeline(context.clone(), input, pipeline)?;
                 self.build_filter(context, predicates, pipeline)
@@ -212,6 +218,7 @@ impl PipelineBuilder {
     pub fn build_table_scan(
         &mut self,
         context: Arc<QueryContext>,
+        output_schema: DataSchemaRef,
         name_mapping: &BTreeMap<String, ColumnID>,
         source: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
@@ -219,31 +226,22 @@ impl PipelineBuilder {
         let table = context.build_table_from_source_plan(source)?;
         context.try_set_partitions(source.parts.clone())?;
         table.read2(context.clone(), source, pipeline)?;
-        let schema = DataSchemaRefExt::create(
-            source
-                .schema()
-                .fields()
-                .iter()
-                .map(|field| {
-                    Ok(DataField::new(
-                        name_mapping
-                            .get(field.name())
-                            .cloned()
-                            .ok_or_else(|| {
-                                ErrorCode::LogicalError(format!(
-                                    "Column {} is not in the output schema of the table scan",
-                                    field.name()
-                                ))
-                            })?
-                            .as_str(),
-                        field.data_type().clone(),
-                    ))
-                })
-                .collect::<Result<_>>()?,
-        );
+        let schema = source.schema();
+        let projections = name_mapping
+            .iter()
+            .map(|(name, _)| schema.index_of(name.as_str()))
+            .collect::<Result<Vec<usize>>>()?;
 
         pipeline.add_transform(|input, output| {
-            Ok(TransformRename::create(input, output, schema.clone()))
+            Ok(TransformProject::create(input, output, projections.clone()))
+        })?;
+
+        pipeline.add_transform(|input, output| {
+            Ok(TransformRename::create(
+                input,
+                output,
+                output_schema.clone(),
+            ))
         })?;
 
         Ok(())
