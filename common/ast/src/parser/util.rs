@@ -19,7 +19,11 @@ use std::ops::RangeTo;
 
 use nom::branch::alt;
 use nom::combinator::map;
-use nom::Slice as _;
+use nom::Offset;
+use nom::Slice;
+use pratt::PrattError;
+use pratt::PrattParser;
+use pratt::Precedence;
 
 use crate::ast::Identifier;
 use crate::parser::error::Backtrace;
@@ -126,6 +130,41 @@ fn non_reserved_keyword(
             ErrorKind::ExpectToken(Ident),
         ))),
     }
+}
+
+/// Parse one two two idents seperated by a peroid, fulfilling from the right.
+///
+/// Example: `table.column`
+pub fn peroid_separated_idents_1_to_2<'a>(
+    i: Input<'a>,
+) -> IResult<'a, (Option<Identifier>, Identifier)> {
+    map(
+        rule! {
+           #ident ~ ("." ~ #ident)?
+        },
+        |res| match res {
+            (ident1, None) => (None, ident1),
+            (ident0, Some((_, ident1))) => (Some(ident0), ident1),
+        },
+    )(i)
+}
+
+/// Parse one two three idents seperated by a peroid, fulfilling from the right.
+///
+/// Example: `db.table.column`
+pub fn peroid_separated_idents_1_to_3<'a>(
+    i: Input<'a>,
+) -> IResult<'a, (Option<Identifier>, Option<Identifier>, Identifier)> {
+    map(
+        rule! {
+            #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
+        },
+        |res| match res {
+            (ident2, None) => (None, None, ident2),
+            (ident1, Some((_, ident2, None))) => (None, Some(ident1), ident2),
+            (ident0, Some((_, ident1, Some((_, ident2))))) => (Some(ident0), Some(ident1), ident2),
+        },
+    )(i)
 }
 
 pub fn comma_separated_list0<'a, T>(
@@ -317,5 +356,45 @@ impl<'a> nom::Slice<RangeFrom<usize>> for Input<'a> {
 impl<'a> nom::Slice<RangeFull> for Input<'a> {
     fn slice(&self, _: RangeFull) -> Self {
         *self
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct WithSpan<'a, T> {
+    pub(crate) span: Input<'a>,
+    pub(crate) elem: T,
+}
+
+pub fn run_pratt_parser<'a, I, P, E>(
+    mut parser: P,
+    iter: &mut I,
+    rest: Input<'a>,
+    input: Input<'a>,
+) -> IResult<'a, P::Output>
+where
+    E: std::fmt::Debug,
+    P: PrattParser<I, Input = WithSpan<'a, E>>,
+    I: Iterator<Item = P::Input>,
+    ErrorKind: From<PrattError<WithSpan<'a, E>, <P as PrattParser<I>>::Error>>,
+{
+    let mut iter = iter.peekable();
+    let expr = parser
+        .parse_input(&mut iter, Precedence(0))
+        .map_err(|err| {
+            Error::from_error_kind(
+                iter.next()
+                    .map(|elem| elem.span)
+                    // It's safe to slice one more token because EOI is always added.
+                    .unwrap_or_else(|| rest.slice(..1)),
+                ErrorKind::from(err),
+            )
+        })
+        .map_err(nom::Err::Error)?;
+    if let Some(elem) = iter.peek() {
+        // Rollback parsing footprint on unused expr elements.
+        input.1.clear();
+        Ok((input.slice(input.offset(&elem.span)..), expr))
+    } else {
+        Ok((rest, expr))
     }
 }

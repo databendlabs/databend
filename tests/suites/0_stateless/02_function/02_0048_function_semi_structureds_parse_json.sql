@@ -45,7 +45,7 @@ DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
 
-CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Fuse;
 
 insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}');
 
@@ -54,12 +54,11 @@ select parse_json(v), v from t1;
 select '==try_parse_json from table==';
 select try_parse_json(v), v from t1;
 
-CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Fuse;
 
 insert into t2 values ('abc'),('[1,');
 
 select '==parse_json from table invalid json==';
-select parse_json(v), v from t2; -- {ErrorCode 1010}
 select '==try_parse_json from table invalid json==';
 select try_parse_json(v), v from t2;
 

@@ -1,0 +1,23 @@
+==ifnull_const_values==
+1
+2
+1
+1
+1
+a
+a
+b
+a
+a
+NULL
+==ifnull_non_nullable_columns==
+0	0	0
+0	1	0
+1	0	1
+1	1	1
+==ifnull_nullable_columns==
+0	NULL	0
+1	NULL	1
+NULL	0	0
+NULL	1	1
+NULL	NULL	NULL

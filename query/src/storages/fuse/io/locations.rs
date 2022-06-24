@@ -44,7 +44,7 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_block_location(&self) -> String {
-        let part_uuid = Uuid::new_v4().to_simple().to_string();
+        let part_uuid = Uuid::new_v4().simple().to_string();
         format!(
             "{}/{}/{}_v{}.parquet",
             &self.prefix,
@@ -55,7 +55,7 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_segment_info_location(&self) -> String where {
-        let segment_uuid = Uuid::new_v4().to_simple().to_string();
+        let segment_uuid = Uuid::new_v4().simple().to_string();
         format!(
             "{}/{}/{}_v{}.json",
             &self.prefix,
@@ -90,7 +90,7 @@ impl SnapshotLocationCreator for SnapshotVersion {
             "{}/{}/{}{}",
             prefix.as_ref(),
             FUSE_TBL_SNAPSHOT_PREFIX,
-            id.to_simple(),
+            id.simple(),
             self.suffix(),
         )
     }

@@ -19,12 +19,12 @@ use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::UserInfo;
 
+use crate::sessions::QueryContext;
 use crate::users::auth::jwt::JwtAuthenticator;
 use crate::users::UserApiProvider;
 pub use crate::Config;
 
 pub struct AuthMgr {
-    tenant: String,
     user_mgr: Arc<UserApiProvider>,
     jwt: Option<JwtAuthenticator>,
 }
@@ -45,13 +45,13 @@ impl AuthMgr {
     pub async fn create(cfg: Config, user_mgr: Arc<UserApiProvider>) -> Result<Self> {
         Ok(AuthMgr {
             user_mgr,
-            tenant: cfg.query.tenant_id.clone(),
             jwt: JwtAuthenticator::try_create(cfg).await?,
         })
     }
 
-    pub async fn auth(&self, credential: &Credential) -> Result<(Option<String>, UserInfo)> {
-        match credential {
+    pub async fn auth(&self, ctx: &Arc<QueryContext>, credential: &Credential) -> Result<()> {
+        let ctx_tenant = ctx.get_tenant();
+        let user_info = match credential {
             Credential::Jwt {
                 token: t,
                 hostname: h,
@@ -66,7 +66,10 @@ impl AuthMgr {
                     .extra
                     .tenant_id
                     .clone()
-                    .unwrap_or_else(|| self.tenant.clone());
+                    .unwrap_or_else(|| ctx_tenant.clone());
+                if tenant != ctx_tenant {
+                    ctx.set_current_tenant(tenant.clone());
+                }
                 if let Some(ref ensure_user) = claims.extra.ensure_user {
                     let mut user_info = UserInfo::new(user_name, "%", AuthInfo::JWT);
                     if let Some(ref roles) = ensure_user.roles {
@@ -79,15 +82,13 @@ impl AuthMgr {
                         .add_user(&tenant, user_info.clone(), true)
                         .await?;
                 }
-                let user = self
-                    .user_mgr
+                self.user_mgr
                     .get_user_with_client_ip(
                         &tenant,
                         user_name,
                         h.as_ref().unwrap_or(&"%".to_string()),
                     )
-                    .await?;
-                Ok((Some(tenant.clone()), user))
+                    .await?
             }
             Credential::Password {
                 name: n,
@@ -96,13 +97,9 @@ impl AuthMgr {
             } => {
                 let user = self
                     .user_mgr
-                    .get_user_with_client_ip(
-                        &self.tenant,
-                        n,
-                        h.as_ref().unwrap_or(&"%".to_string()),
-                    )
+                    .get_user_with_client_ip(&ctx_tenant, n, h.as_ref().unwrap_or(&"%".to_string()))
                     .await?;
-                let user_info = match &user.auth_info {
+                match &user.auth_info {
                     AuthInfo::None => Ok(user),
                     AuthInfo::Password {
                         hash_value: h,
@@ -118,9 +115,10 @@ impl AuthMgr {
                         }
                     },
                     _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
-                }?;
-                Ok((None, user_info))
+                }?
             }
-        }
+        };
+        ctx.set_current_user(user_info);
+        Ok(())
     }
 }

@@ -36,6 +36,7 @@ use futures::future::Either;
 use futures::StreamExt;
 use opendal::Operator;
 
+use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::AsyncInsertQueue;
@@ -55,6 +56,7 @@ pub struct SessionManager {
     pub(in crate::sessions) discovery: RwLock<Arc<ClusterDiscovery>>,
     pub(in crate::sessions) catalogs: RwLock<Arc<CatalogManager>>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
+    pub(in crate::sessions) data_exchange_manager: Arc<DataExchangeManager>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -112,6 +114,7 @@ impl SessionManager {
         let user_api_provider = UserApiProvider::create_global(conf.clone()).await?;
         let role_cache_manager = Arc::new(RoleCacheMgr::new(user_api_provider.clone()));
 
+        let exchange_manager = DataExchangeManager::create(conf.clone());
         let storage_runtime = Arc::new(storage_runtime);
 
         let async_insert_queue =
@@ -130,6 +133,7 @@ impl SessionManager {
             http_query_manager,
             max_sessions,
             active_sessions,
+            data_exchange_manager: exchange_manager,
             storage_cache_manager: RwLock::new(storage_cache_manager),
             query_logger: RwLock::new(query_logger),
             status,
@@ -166,6 +170,10 @@ impl SessionManager {
 
     pub fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
         self.storage_cache_manager.read().clone()
+    }
+
+    pub fn get_data_exchange_manager(&self) -> Arc<DataExchangeManager> {
+        self.data_exchange_manager.clone()
     }
 
     pub fn get_storage_runtime(&self) -> Arc<Runtime> {

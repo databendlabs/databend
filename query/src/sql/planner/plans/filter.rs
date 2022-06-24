@@ -27,14 +27,14 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 
 #[derive(Clone, Debug)]
-pub struct FilterPlan {
+pub struct Filter {
     pub predicates: Vec<Scalar>,
     // True if the plan represents having, else the plan represents where
     pub is_having: bool,
 }
 
-impl Operator for FilterPlan {
-    fn plan_type(&self) -> RelOp {
+impl Operator for Filter {
+    fn rel_op(&self) -> RelOp {
         RelOp::Filter
     }
 
@@ -55,13 +55,13 @@ impl Operator for FilterPlan {
     }
 }
 
-impl PhysicalPlan for FilterPlan {
+impl PhysicalPlan for Filter {
     fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
         todo!()
     }
 }
 
-impl LogicalPlan for FilterPlan {
+impl LogicalPlan for Filter {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
         let output_columns = input_prop.output_columns;

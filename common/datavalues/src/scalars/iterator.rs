@@ -93,6 +93,25 @@ impl<'a> Iterator for ArrayViewer<'a> {
     }
 }
 
+impl<'a> Iterator for StructViewer<'a> {
+    type Item = <StructValue as Scalar>::RefType<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos >= self.size {
+            return None;
+        }
+
+        let old = self.pos;
+        self.pos += 1;
+
+        Some(self.col.get_data(old & self.non_const_mask))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.size - self.pos, Some(self.size - self.pos))
+    }
+}
+
 /// Some trait impls to improve the performance of iteration
 
 impl<'a, T> ExactSizeIterator for PrimitiveViewer<'a, T>
@@ -169,3 +188,11 @@ impl<'a> ExactSizeIterator for ArrayViewer<'a> {
 }
 
 unsafe impl<'a> TrustedLen for ArrayViewer<'a> {}
+
+impl<'a> ExactSizeIterator for StructViewer<'a> {
+    fn len(&self) -> usize {
+        self.size - self.pos
+    }
+}
+
+unsafe impl<'a> TrustedLen for StructViewer<'a> {}

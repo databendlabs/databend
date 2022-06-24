@@ -27,7 +27,7 @@ pub struct ParquetOutputFormat {
 }
 
 impl ParquetOutputFormat {
-    pub fn create(schema: DataSchemaRef) -> Self {
+    pub fn create(schema: DataSchemaRef, _format_setting: FormatSettings) -> Self {
         Self {
             schema,
             data_blocks: vec![],
@@ -36,7 +36,7 @@ impl ParquetOutputFormat {
 }
 
 impl OutputFormat for ParquetOutputFormat {
-    fn serialize_block(&mut self, block: &DataBlock, _format: &FormatSettings) -> Result<Vec<u8>> {
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         self.data_blocks.push(block.clone());
         Ok(vec![])
     }

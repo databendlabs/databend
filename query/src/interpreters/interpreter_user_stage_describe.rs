@@ -14,18 +14,19 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::Series;
-use common_datavalues::SeriesFrom;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DescribeUserStagePlan;
-use common_streams::DataBlockStream;
+use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
+use crate::sql::PlanParser;
 
 #[derive(Debug)]
 pub struct DescribeUserStageInterpreter {
@@ -40,6 +41,10 @@ impl DescribeUserStageInterpreter {
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(DescribeUserStageInterpreter { ctx, plan }))
     }
+
+    fn build_query(&self, name: &str) -> Result<String> {
+        Ok(format!("SELECT * FROM system.stages WHERE name = '{name}'"))
+    }
 }
 
 #[async_trait::async_trait]
@@ -48,30 +53,24 @@ impl Interpreter for DescribeUserStageInterpreter {
         "DescribeUserStageInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "info", skip(self, input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
-        _input_stream: Option<SendableDataBlockStream>,
+        input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
+        let tenant = self.ctx.get_tenant();
+        user_mgr.get_stage(&tenant, &self.plan.name).await?;
 
-        let stage = user_mgr.get_stage(&tenant, self.plan.name.as_str()).await?;
-        let columns = vec![
-            Series::from_data(vec![stage.stage_name.as_str()]),
-            Series::from_data(vec![format!("{:?}", stage.stage_type)]),
-            Series::from_data(vec![format!("{:?}", stage.stage_params)]),
-            Series::from_data(vec![format!("{:?}", stage.copy_options)]),
-            Series::from_data(vec![format!("{:?}", stage.file_format_options)]),
-            Series::from_data(vec![stage.comment.as_str()]),
-        ];
+        let query = self.build_query(&self.plan.name)?;
+        let plan = PlanParser::parse(self.ctx.clone(), &query).await?;
+        let optimized = Optimizers::create(self.ctx.clone()).optimize(&plan)?;
 
-        let block = DataBlock::create(self.plan.schema(), columns);
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![block],
-        )))
+        if let PlanNode::Select(plan) = optimized {
+            let interpreter = SelectInterpreter::try_create(self.ctx.clone(), plan)?;
+            interpreter.execute(input_stream).await
+        } else {
+            return Err(ErrorCode::LogicalError("Describe stage build query error"));
+        }
     }
 }

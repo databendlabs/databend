@@ -77,7 +77,7 @@ async fn test_async_insert_queue() -> Result<()> {
                 .wait_for_processing_insert(
                     ctx.get_id(),
                     tokio::time::Duration::from_secs(
-                        ctx.get_config().query.wait_for_async_insert_timeout,
+                        ctx.get_settings().get_wait_for_async_insert_timeout()?,
                     ),
                 )
                 .await?;
@@ -128,7 +128,9 @@ async fn test_async_insert_queue() -> Result<()> {
                 .wait_for_processing_insert(
                     context1.get_id(),
                     tokio::time::Duration::from_secs(
-                        context1.get_config().query.wait_for_async_insert_timeout,
+                        context1
+                            .get_settings()
+                            .get_wait_for_async_insert_timeout()?,
                     ),
                 )
                 .await
@@ -156,7 +158,9 @@ async fn test_async_insert_queue() -> Result<()> {
                 .wait_for_processing_insert(
                     context2.get_id(),
                     tokio::time::Duration::from_secs(
-                        context2.get_config().query.wait_for_async_insert_timeout,
+                        context2
+                            .get_settings()
+                            .get_wait_for_async_insert_timeout()?,
                     ),
                 )
                 .await

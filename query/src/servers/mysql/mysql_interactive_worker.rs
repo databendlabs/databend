@@ -84,7 +84,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         "mysql_native_password"
     }
 
-    fn auth_plugin_for_username(&self, _user: &[u8]) -> &str {
+    async fn auth_plugin_for_username(&self, _user: &[u8]) -> &str {
         "mysql_native_password"
     }
 
@@ -160,9 +160,10 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         self.base.do_execute(id, param, writer).await
     }
 
-    async fn on_close<'a>(&'a mut self, id: u32)
+    /// https://dev.mysql.com/doc/internals/en/com-stmt-close.html
+    async fn on_close<'a>(&'a mut self, stmt_id: u32)
     where W: 'async_trait {
-        self.base.do_close(id).await;
+        self.base.do_close(stmt_id).await;
     }
 
     async fn on_query<'a>(
@@ -291,11 +292,13 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
                 let settings = context.get_settings();
 
-                let (stmts, hints) =
-                    DfParser::parse_sql(query, context.get_current_session().get_type())?;
-
-                let interpreter: Result<Arc<dyn Interpreter>> =
-                    if settings.get_enable_new_processor_framework()? != 0
+                let stmts_hints =
+                    DfParser::parse_sql(query, context.get_current_session().get_type());
+                let mut hints = vec![];
+                let interpreter: Result<Arc<dyn Interpreter>>;
+                if let Ok((stmts, h)) = stmts_hints {
+                    hints = h;
+                    interpreter = if settings.get_enable_new_processor_framework()? != 0
                         && context.get_cluster().is_empty()
                         && settings.get_enable_planner_v2()? != 0
                         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
@@ -309,6 +312,18 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
                         plan.and_then(|v| InterpreterFactory::get(context.clone(), v))
                     };
+                } else if settings.get_enable_planner_v2()? != 0 {
+                    // If old parser failed, try new planner
+                    let mut planner = Planner::new(context.clone());
+                    interpreter = planner
+                        .plan_sql(query)
+                        .await
+                        .and_then(|v| InterpreterFactoryV2::get(context.clone(), &v.0));
+                } else {
+                    return Err(stmts_hints
+                        .err()
+                        .ok_or_else(|| ErrorCode::LogicalError("stmts_hints must be error"))?);
+                }
 
                 let hint = hints
                     .iter()
@@ -392,7 +407,13 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             .map_err_to_code(ErrorCode::TokioError, || {
                 "Cannot join handle from context's runtime"
             })?;
-        query_result.map(|data| (data, Self::extra_info(context, instant)))
+        query_result.map(|data| {
+            if data.is_empty() {
+                (data, "".to_string())
+            } else {
+                (data, Self::extra_info(context, instant))
+            }
+        })
     }
 
     fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {

@@ -16,6 +16,7 @@ mod array;
 mod boolean;
 mod const_;
 mod date;
+mod helper;
 mod null;
 mod nullable;
 mod number;
@@ -50,6 +51,17 @@ pub trait TypeSerializer<'a>: Send + Sync {
         false
     }
     fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings);
+
+    fn write_field_escaped(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _quote: u8,
+    ) {
+        self.write_field(row_index, buf, format);
+    }
+
     fn write_field_quoted(
         &self,
         row_index: usize,
@@ -60,11 +72,15 @@ pub trait TypeSerializer<'a>: Send + Sync {
         let need_quote = self.need_quote();
         if need_quote {
             buf.push(quote);
-        }
-        self.write_field(row_index, buf, format);
-        if need_quote {
+            self.write_field_escaped(row_index, buf, format, quote);
             buf.push(quote);
+        } else {
+            self.write_field(row_index, buf, format);
         }
+    }
+
+    fn write_field_json(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        self.write_field_quoted(row_index, buf, format, b'\"');
     }
 
     fn serialize_field(&self, row_index: usize, format: &FormatSettings) -> Result<String> {
@@ -73,7 +89,7 @@ pub trait TypeSerializer<'a>: Send + Sync {
         String::from_utf8(buf).map_err_to_code(ErrorCode::BadBytes, || "fail to serialize field")
     }
 
-    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         unimplemented!()
     }
 

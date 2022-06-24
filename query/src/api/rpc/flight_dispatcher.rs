@@ -26,6 +26,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_planners::Expression;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use common_tracing::tracing::Span;
@@ -102,8 +103,20 @@ impl DatabendQueryFlightDispatcher {
             0 => Err(ErrorCode::LogicalError("")),
             1 => self.one_sink_action(session, &action).await,
             _ => {
-                self.action_with_scatter::<BroadcastFlightScatter>(session, &action)
-                    .await
+                self.action_with_scatter(
+                    session,
+                    &action,
+                    |ctx: Arc<QueryContext>,
+                     schema: DataSchemaRef,
+                     expr: Option<Expression>,
+                     num: usize|
+                     -> Result<Box<dyn FlightScatter>> {
+                        Ok(Box::new(BroadcastFlightScatter::try_create(
+                            ctx, schema, expr, num,
+                        )?))
+                    },
+                )
+                .await
             }
         }
     }
@@ -120,8 +133,20 @@ impl DatabendQueryFlightDispatcher {
             0 => Err(ErrorCode::LogicalError("")),
             1 => self.one_sink_action(session, &action).await,
             _ => {
-                self.action_with_scatter::<HashFlightScatter>(session, &action)
-                    .await
+                self.action_with_scatter(
+                    session,
+                    &action,
+                    |ctx: Arc<QueryContext>,
+                     schema: DataSchemaRef,
+                     expr: Option<Expression>,
+                     num: usize|
+                     -> Result<Box<dyn FlightScatter>> {
+                        Ok(Box::new(HashFlightScatter::try_create(
+                            ctx, schema, expr, num,
+                        )?))
+                    },
+                )
+                .await
             }
         }
     }
@@ -180,9 +205,15 @@ impl DatabendQueryFlightDispatcher {
         &self,
         session: SessionRef,
         action: &FlightAction,
+        fun: T,
     ) -> Result<()>
     where
-        T: FlightScatter + Send + 'static,
+        T: Fn(
+            Arc<QueryContext>,
+            DataSchemaRef,
+            Option<Expression>,
+            usize,
+        ) -> Result<Box<dyn FlightScatter>>,
     {
         let query_context = session.create_query_context().await?;
         let action_context = QueryContext::create_from(query_context.clone());
@@ -209,7 +240,7 @@ impl DatabendQueryFlightDispatcher {
                         return Err(ErrorCode::NotFoundStream(format!(
                             "Not found stream {}",
                             stream_name
-                        )))
+                        )));
                     }
                 }
             }
@@ -220,7 +251,7 @@ impl DatabendQueryFlightDispatcher {
         let stage_name = format!("{}/{}", action_query_id, action_stage_id);
         let stages_notify = self.stages_notify.clone();
 
-        let flight_scatter = T::try_create(
+        let flight_scatter = fun(
             query_context.clone(),
             action.get_plan().schema(),
             action.get_scatter_expression(),
@@ -236,7 +267,7 @@ impl DatabendQueryFlightDispatcher {
                 let forward_blocks = async move {
                     let mut abortable_stream = pipeline.execute().await?;
                     while let Some(item) = abortable_stream.next().await {
-                        let forward_blocks = flight_scatter.execute(&item?)?;
+                        let forward_blocks = flight_scatter.execute(&item?, 0)?;
 
                         assert_eq!(forward_blocks.len(), sinks_tx_ref.len());
 

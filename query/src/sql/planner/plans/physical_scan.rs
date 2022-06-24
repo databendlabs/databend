@@ -28,7 +28,7 @@ pub struct PhysicalScan {
 }
 
 impl Operator for PhysicalScan {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         RelOp::PhysicalScan
     }
 

@@ -15,6 +15,7 @@
 // https://github.com/rust-lang/rustfmt/blob/e1ab878ccb24cda1b9e1c48865b375230385fede/build.rs
 
 use std::env;
+use std::fs;
 use std::io::Result;
 use std::path::Path;
 
@@ -26,11 +27,9 @@ fn build_proto() -> Result<()> {
     let pwd = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env variable unset");
     let proto_path = Path::new(&pwd).join("proto");
 
-    let proto_defs = [
-        &Path::new(&proto_path).join(Path::new("datatype.proto")),
-        &Path::new(&proto_path).join(Path::new("metadata.proto")),
-        &Path::new(&proto_path).join(Path::new("user.proto")),
-    ];
+    let proto_defs = fs::read_dir(&proto_path)?
+        .map(|v| proto_path.join(v.expect("read dir must success").path()))
+        .collect::<Vec<_>>();
 
     for proto in proto_defs.iter() {
         println!("cargo:rerun-if-changed={}", proto.to_str().unwrap());
@@ -50,5 +49,5 @@ fn build_proto() -> Result<()> {
             "#[derive(num_derive::FromPrimitive)]",
         )
         .type_attribute("StageType", "#[derive(num_derive::FromPrimitive)]")
-        .compile_with_config(config, &proto_defs, &[&proto_path])
+        .compile_with_config(config, &proto_defs, &[proto_path])
 }

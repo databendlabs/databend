@@ -51,8 +51,9 @@ pub fn expect_synonym_parse_eq(sql: &str, sql2: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn expect_parse_err(sql: &str, expected: String) -> Result<()> {
+pub fn expect_parse_err(sql: &str, expected: impl AsRef<str>) -> Result<()> {
     let result = DfParser::parse_sql(sql, SessionType::Dummy);
+    let expected = expected.as_ref();
     assert!(result.is_err(), "'{}' SHOULD BE '{}'", sql, expected);
     assert_eq!(
         result.unwrap_err().message(),

@@ -39,12 +39,12 @@ level = "INFO"
 dir = "./.databend/logs"
 
 [meta]
-# To enable embedded meta-store, set meta_address to ""
-meta_embedded_dir = "_meta_embedded_1"
-meta_address = "0.0.0.0:9191"
-meta_username = "root"
-meta_password = "root"
-meta_client_timeout_in_second = 60
+# To enable embedded meta-store, set address to ""
+embedded_dir = "_meta_embedded_1"
+address = "0.0.0.0:9191"
+username = "root"
+password = "root"
+client_timeout_in_second = 60
 
 # Storage config.
 [storage]

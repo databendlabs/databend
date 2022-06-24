@@ -71,7 +71,7 @@ impl Procedure for TenantTablesProcedure {
     fn schema(&self) -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
             DataField::new("tenant_id", Vu8::to_data_type()),
-            DataField::new("table_count", u32::to_data_type()),
+            DataField::new("table_count", u64::to_data_type()),
         ])
     }
 }

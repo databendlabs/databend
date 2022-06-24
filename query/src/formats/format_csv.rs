@@ -48,8 +48,8 @@ impl InputState for CsvInputState {
 pub struct CsvInputFormat {
     schema: DataSchemaRef,
     field_delimiter: u8,
-    need_skip_header: bool,
-    row_delimiter: Option<u8>,
+    skip_rows: usize,
+    record_delimiter: Option<u8>,
     min_accepted_rows: usize,
     min_accepted_bytes: usize,
     settings: FormatSettings,
@@ -57,20 +57,37 @@ pub struct CsvInputFormat {
 
 impl CsvInputFormat {
     pub fn register(factory: &mut FormatFactory) {
-        factory.register_input(
-            "csv",
-            Box::new(
-                |name: &str, schema: DataSchemaRef, settings: FormatSettings| {
-                    CsvInputFormat::try_create(name, schema, settings, 8192, 10 * 1024 * 1024)
-                },
-            ),
-        )
+        macro_rules! register {
+            ($name: expr, $skip_rows: expr) => {
+                factory.register_input(
+                    $name,
+                    Box::new(
+                        |name: &str, schema: DataSchemaRef, settings: FormatSettings| {
+                            CsvInputFormat::try_create(
+                                name,
+                                schema,
+                                settings,
+                                $skip_rows,
+                                8192,
+                                10 * 1024 * 1024,
+                            )
+                        },
+                    ),
+                );
+            };
+        }
+
+        // TODO validate Names & Types
+        register! { "Csv", 0 }
+        register! { "CsvWithNames", 1 }
+        register! { "CsvWithNamesAndTypes", 2 }
     }
 
     pub fn try_create(
         _name: &str,
         schema: DataSchemaRef,
         settings: FormatSettings,
+        skip_rows: usize,
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
     ) -> Result<Box<dyn InputFormat>> {
@@ -79,23 +96,21 @@ impl CsvInputFormat {
             _ => b',',
         };
 
-        let mut row_delimiter = None;
+        let mut record_delimiter = None;
 
         if !settings.record_delimiter.is_empty()
             && settings.record_delimiter[0] != b'\n'
             && settings.record_delimiter[0] != b'\r'
         {
-            row_delimiter = Some(settings.record_delimiter[0]);
+            record_delimiter = Some(settings.record_delimiter[0]);
         }
-
-        let need_skip_header = settings.skip_header;
 
         Ok(Box::new(CsvInputFormat {
             schema,
             settings,
-            row_delimiter,
+            skip_rows,
             field_delimiter,
-            need_skip_header,
+            record_delimiter,
             min_accepted_rows,
             min_accepted_bytes,
         }))
@@ -113,7 +128,7 @@ impl CsvInputFormat {
     }
 
     fn find_delimiter(&self, buf: &[u8], pos: usize, state: &mut CsvInputState) -> usize {
-        if let Some(b) = &self.row_delimiter {
+        if let Some(b) = &self.record_delimiter {
             for index in pos..buf.len() {
                 if buf[index] == b'"' || buf[index] == b'\'' {
                     state.quotes = buf[index];
@@ -215,7 +230,7 @@ impl InputFormat for CsvInputFormat {
 
             memory_reader.ignore_white_spaces_and_byte(self.field_delimiter)?;
 
-            if let Some(delimiter) = &self.row_delimiter {
+            if let Some(delimiter) = &self.record_delimiter {
                 if !memory_reader.ignore_white_spaces_and_byte(*delimiter)?
                     && !memory_reader.eof()?
                 {
@@ -273,7 +288,7 @@ impl InputFormat for CsvInputFormat {
     }
 
     fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
-        if self.need_skip_header {
+        if self.skip_rows > 0 {
             let mut index = 0;
             let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
 
@@ -283,14 +298,11 @@ impl InputFormat for CsvInputFormat {
                     false => self.find_delimiter(buf, index, state),
                 };
 
-                if state.accepted_rows == 1 {
+                if state.accepted_rows == self.skip_rows {
                     return Ok(index);
                 }
             }
-
-            return Ok(buf.len());
         }
-
         Ok(0)
     }
 }

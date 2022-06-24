@@ -17,9 +17,9 @@ use std::mem::MaybeUninit;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use micromarshal::Unmarshal;
 
 use crate::stat_buffer::StatBuffer;
-use crate::unmarshal::Unmarshal;
 
 const MAX_STACK_BUFFER_LEN: usize = 1024;
 
@@ -58,7 +58,13 @@ where T: io::Read
     where V: Unmarshal<V> + StatBuffer {
         let mut buffer = V::buffer();
         self.read_exact(buffer.as_mut())?;
-        V::try_unmarshal(buffer.as_ref())
+        match V::try_unmarshal(buffer.as_ref()) {
+            Ok(bits) => Ok(bits),
+            Err(_) => Err(ErrorCode::UnmarshalError(format!(
+                "try unmarshal u32 to char failed: {}",
+                u32::from_le_bytes(buffer.as_ref().try_into().unwrap())
+            ))),
+        }
     }
 
     fn read_opt_scalar<V>(&mut self) -> Result<Option<V>>

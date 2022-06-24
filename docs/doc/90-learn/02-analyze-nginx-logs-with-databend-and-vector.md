@@ -307,6 +307,8 @@ mysql -h127.0.0.1 -uroot -P3307
 - __Top 10 Request Status__
 ```sql
 SELECT count() AS count, status FROM nginx.access_logs GROUP BY status LIMIT 10;
+```
+```sql
 +-----------+--------+
 | count     | status |
 +-----------+--------+
@@ -317,6 +319,9 @@ SELECT count() AS count, status FROM nginx.access_logs GROUP BY status LIMIT 10;
 - __Top 10 Request Method__ 
 ```sql
 SELECT count() AS count, request_method FROM nginx.access_logs GROUP BY request_method LIMIT 10;
+```
+
+```sql
 +-----------+----------------+
 | count     | request_method |
 +-----------+----------------+
@@ -326,7 +331,10 @@ SELECT count() AS count, request_method FROM nginx.access_logs GROUP BY request_
 
 - __Top 10 Request IPs__
 ```sql
-SELECT count(*) AS Count, remote_addr AS client FROM nginx.access_logs GROUP BY client ORDER BY count DESC LIMIT 10;
+SELECT count(*) AS count, remote_addr AS client FROM nginx.access_logs GROUP BY client ORDER BY count DESC LIMIT 10;
+```
+
+```sql
 +----------+-----------+
 | count    | client    |
 +----------+-----------+
@@ -338,6 +346,10 @@ SELECT count(*) AS Count, remote_addr AS client FROM nginx.access_logs GROUP BY 
 - __Top 10 Request Pages__
 ```sql
 SELECT count(*) AS count, request_uri AS uri FROM nginx.access_logs GROUP BY uri ORDER BY count DESC LIMIT 10;
+
+```
+
+```sql
 +----------+--------------------+
 | count    | uri                |
 +----------+--------------------+
@@ -352,6 +364,9 @@ SELECT count(*) AS count, request_uri AS uri FROM nginx.access_logs GROUP BY uri
 - __Top 10 HTTP 404 Pages__
 ```sql
 SELECT count_if(status=404) AS count, request_uri AS uri FROM nginx.access_logs GROUP BY uri ORDER BY count DESC LIMIT 10;
+```
+
+```sql
 +----------+--------------------+
 | count    | uri                |
 +----------+--------------------+
@@ -365,6 +380,9 @@ SELECT count_if(status=404) AS count, request_uri AS uri FROM nginx.access_logs 
 - __Top 10 Requests__
 ```sql
 SELECT count(*) AS count, request_uri AS request FROM nginx.access_logs GROUP BY request ORDER BY count DESC LIMIT 10;
+```
+
+```sql
 +--------+-----------------------------------------------------------------------------------------------------+
 | count  | request                                                                                             |
 +--------+-----------------------------------------------------------------------------------------------------+

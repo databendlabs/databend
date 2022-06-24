@@ -38,6 +38,7 @@ async fn test_show_engines_interpreter() -> Result<()> {
             "| GITHUB | GITHUB Storage Engine       |",
             "| MEMORY | MEMORY Storage Engine       |",
             "| NULL   | NULL Storage Engine         |",
+            "| RANDOM | RANDOM Storage Engine       |",
             "| VIEW   | VIEW STORAGE (LOGICAL VIEW) |",
             "+--------+-----------------------------+",
         ];

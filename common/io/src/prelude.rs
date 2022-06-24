@@ -33,9 +33,9 @@ pub use crate::configs::StorageFsConfig;
 pub use crate::configs::StorageHdfsConfig;
 pub use crate::configs::StorageParams;
 pub use crate::configs::StorageS3Config;
+pub use crate::configs::AWS_S3_ENDPOINT;
 pub use crate::format_settings::Compression;
 pub use crate::format_settings::FormatSettings;
-pub use crate::marshal::Marshal;
 pub use crate::operator::init_azblob_operator;
 pub use crate::operator::init_fs_operator;
 #[cfg(feature = "storage-hdfs")]
@@ -47,5 +47,4 @@ pub use crate::options_deserializer::OptionsDeserializer;
 pub use crate::options_deserializer::OptionsDeserializerError;
 pub use crate::position::*;
 pub use crate::stat_buffer::StatBuffer;
-pub use crate::unmarshal::Unmarshal;
 pub use crate::utils::*;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::SyncSender;
@@ -72,13 +73,14 @@ impl PipelinePullingExecutor {
 
     pub fn try_create(
         async_runtime: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
         mut pipeline: NewPipeline,
     ) -> Result<PipelinePullingExecutor> {
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
         let state = State::create(sender.clone());
 
         Self::wrap_pipeline(&mut pipeline, sender)?;
-        let executor = PipelineExecutor::create(async_runtime, pipeline)?;
+        let executor = PipelineExecutor::create(async_runtime, query_need_abort, pipeline)?;
         Ok(PipelinePullingExecutor {
             receiver,
             state,
@@ -91,6 +93,10 @@ impl PipelinePullingExecutor {
         let threads_executor = self.executor.clone();
         let thread_function = Self::thread_function(state, threads_executor);
         std::thread::spawn(thread_function);
+    }
+
+    pub fn get_inner(&self) -> Arc<PipelineExecutor> {
+        self.executor.clone()
     }
 
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
@@ -122,19 +128,29 @@ impl PipelinePullingExecutor {
 
     pub fn try_pull_data<F>(&mut self, f: F) -> Result<Option<DataBlock>>
     where F: Fn() -> bool {
-        while !f() && !self.executor.is_finished() {
-            return match self.receiver.recv_timeout(Duration::from_millis(100)) {
+        if !self.executor.is_finished() {
+            while !f() {
+                return match self.receiver.recv_timeout(Duration::from_millis(100)) {
+                    Ok(data_block) => data_block,
+                    Err(RecvTimeoutError::Timeout) => {
+                        continue;
+                    }
+                    Err(RecvTimeoutError::Disconnected) => {
+                        Err(ErrorCode::LogicalError("Logical error, receiver error."))
+                    }
+                };
+            }
+            Ok(None)
+        } else {
+            return match self.receiver.try_recv() {
                 Ok(data_block) => data_block,
-                Err(RecvTimeoutError::Timeout) => {
-                    continue;
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    Err(ErrorCode::LogicalError("Logical error, receiver error."))
-                }
+                // puller will not pull again once it received a None
+                Err(err) => Err(ErrorCode::LogicalError(format!(
+                    "Logical error, try receiver error. after executor finish {}",
+                    err
+                ))),
             };
         }
-
-        Ok(None)
     }
 }
 

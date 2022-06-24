@@ -133,7 +133,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Desc stage.
-    pub(crate) fn parse_desc_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
+    pub(crate) fn parse_describe_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let table_name = self.parser.parse_object_name()?;
         let desc = DfDescribeUserStage { name: table_name };
         Ok(DfStatement::DescribeStage(desc))

@@ -15,7 +15,11 @@
 use std::sync::Arc;
 
 use common_datavalues::chrono::Utc;
+use common_datavalues::type_primitive::Int16Type;
 use common_datavalues::type_primitive::Int32Type;
+use common_datavalues::type_primitive::Int64Type;
+use common_datavalues::type_primitive::Int8Type;
+use common_datavalues::type_string::StringType;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
@@ -33,6 +37,7 @@ use common_meta_app::schema::TableMeta;
 use super::hive_database::HiveDatabase;
 use super::hive_database::HIVE_DATABASE_ENGIE;
 use super::hive_table::HIVE_TABLE_ENGIE;
+use super::hive_table_options::HiveTableOptions;
 
 ///! Skeleton of mappers
 impl From<hms::Database> for HiveDatabase {
@@ -59,9 +64,34 @@ pub fn try_into_table_info(
     fields: Vec<hms::FieldSchema>,
 ) -> Result<TableInfo> {
     let schema = Arc::new(try_into_schema(fields)?);
+    let partition_keys = if let Some(partitions) = &hms_table.partition_keys {
+        let r = partitions
+            .iter()
+            .filter_map(|field| field.name.clone())
+            .collect();
+        Some(r)
+    } else {
+        None
+    };
+
+    let location = if let Some(storage) = &hms_table.sd {
+        storage
+            .location
+            .as_ref()
+            .map(|location| location.to_string())
+    } else {
+        None
+    };
+
+    let table_options = HiveTableOptions {
+        partition_keys,
+        location,
+    };
+
     let meta = TableMeta {
         schema,
         engine: HIVE_TABLE_ENGIE.to_owned(),
+        engine_options: table_options.into(),
         created_on: Utc::now(),
         ..Default::default()
     };
@@ -91,14 +121,24 @@ fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<DataSchema> {
 }
 
 fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<DataTypeImpl> {
-    let name = type_name.as_ref();
+    let name = type_name.as_ref().to_uppercase();
     // TODO more mappings goes here
     // https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Types
-    match name.to_uppercase().as_str() {
-        "INT" => Ok(DataTypeImpl::Int32(Int32Type::default())),
-        _ => Err(ErrorCode::IllegalDataType(format!(
-            "unknown hive data type [{}]",
-            name
-        ))),
+
+    // Hive string data type could be varchar(n), where n is the maximum number of characters
+    if name.starts_with("VARCHAR") {
+        Ok(DataTypeImpl::String(StringType::default()))
+    } else {
+        match name.as_str() {
+            "TINYINT" => Ok(DataTypeImpl::Int8(Int8Type::default())),
+            "SMALLINT" => Ok(DataTypeImpl::Int16(Int16Type::default())),
+            "INT" => Ok(DataTypeImpl::Int32(Int32Type::default())),
+            "BIGINT" => Ok(DataTypeImpl::Int64(Int64Type::default())),
+            "BINARY" | "STRING" => Ok(DataTypeImpl::String(StringType::default())),
+            _ => Err(ErrorCode::IllegalDataType(format!(
+                "unknown hive data type [{}]",
+                name
+            ))),
+        }
     }
 }

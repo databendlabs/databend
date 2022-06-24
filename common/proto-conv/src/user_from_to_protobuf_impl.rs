@@ -19,6 +19,8 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 use common_io::prelude::*;
 use common_meta_types as mt;
 use common_protos::pb;
@@ -273,6 +275,27 @@ impl FromToProto<pb::UserInfo> for mt::UserInfo {
             grants: Some(mt::UserGrantSet::to_pb(&self.grants)?),
             quota: Some(mt::UserQuota::to_pb(&self.quota)?),
             option: Some(mt::UserOption::to_pb(&self.option)?),
+        })
+    }
+}
+
+impl FromToProto<pb::UserIdentity> for mt::UserIdentity {
+    fn from_pb(p: pb::UserIdentity) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.ver, p.min_compatible)?;
+
+        Ok(mt::UserIdentity {
+            username: p.username.clone(),
+            hostname: p.hostname,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::UserIdentity, Incompatible> {
+        Ok(pb::UserIdentity {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            username: self.username.clone(),
+            hostname: self.hostname.clone(),
         })
     }
 }
@@ -567,6 +590,11 @@ impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
                 }
             })?)?,
             comment: p.comment,
+            number_of_files: p.number_of_files,
+            creator: match p.creator {
+                Some(c) => Some(mt::UserIdentity::from_pb(c)?),
+                None => None,
+            },
         })
     }
 
@@ -580,6 +608,43 @@ impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
             file_format_options: Some(mt::FileFormatOptions::to_pb(&self.file_format_options)?),
             copy_options: Some(mt::CopyOptions::to_pb(&self.copy_options)?),
             comment: self.comment.clone(),
+            number_of_files: self.number_of_files,
+            creator: match &self.creator {
+                Some(c) => Some(mt::UserIdentity::to_pb(c)?),
+                None => None,
+            },
+        })
+    }
+}
+
+impl FromToProto<pb::StageFile> for mt::StageFile {
+    fn from_pb(p: pb::StageFile) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.ver, p.min_compatible)?;
+        Ok(mt::StageFile {
+            path: p.path.clone(),
+            size: p.size,
+            md5: p.md5.clone(),
+            last_modified: DateTime::<Utc>::from_pb(p.last_modified)?,
+            creator: match p.creator {
+                Some(c) => Some(mt::UserIdentity::from_pb(c)?),
+                None => None,
+            },
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::StageFile, Incompatible> {
+        Ok(pb::StageFile {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            path: self.path.clone(),
+            size: self.size,
+            md5: self.md5.clone(),
+            last_modified: self.last_modified.to_pb()?,
+            creator: match &self.creator {
+                Some(c) => Some(mt::UserIdentity::to_pb(c)?),
+                None => None,
+            },
         })
     }
 }

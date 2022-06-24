@@ -1,5 +1,6 @@
 compression	None	None	SESSION	Format compression, default value: None	String
 empty_as_default	1	1	SESSION	Format empty_as_default, default value: 1	UInt64
+enable_async_insert	0	0	SESSION	Whether the client open async insert mode, default value: 0	UInt64
 enable_new_processor_framework	1	1	SESSION	Enable new processor framework if value != 0, default value: 1	UInt64
 enable_planner_v2	0	0	SESSION	Enable planner v2 by setting this variable to 1, default value: 0	UInt64
 field_delimiter	,	,	SESSION	Format field delimiter, default value: ,	String
@@ -11,3 +12,5 @@ record_delimiter	\n	\n	SESSION	Format record_delimiter, default value: \n	String
 skip_header	0	0	SESSION	Whether to skip the input header, default value: 0	UInt64
 storage_read_buffer_size	1048576	1048576	SESSION	The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.	UInt64
 timezone	UTC	UTC	SESSION	Timezone, default value: UTC,	String
+wait_for_async_insert	1	1	SESSION	Whether the client wait for the reply of async insert, default value: 1	UInt64
+wait_for_async_insert_timeout	100	100	SESSION	The timeout in seconds for waiting for processing of async insert, default value: 100	UInt64

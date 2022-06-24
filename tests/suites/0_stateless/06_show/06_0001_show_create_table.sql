@@ -12,7 +12,15 @@ SHOW CREATE TABLE `test`.`b`;
 CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3);
 SHOW CREATE TABLE `test`.`c`;
 
+-- SELECT '====SHOW CREATE TABLE WITH COLUMN COMMENT====';
+-- set enable_planner_v2 = 1;
+-- CREATE TABLE `test`.`d` (a INT COMMENT 'comment for a', b FLOAT NULL DEFAULT 0 COMMENT 'comment for b');
+-- SHOW CREATE TABLE `test`.`d`;
+-- set enable_planner_v2 = 0;
+
+
 DROP TABLE `test`.`a`;
 DROP TABLE `test`.`b`;
 DROP TABLE `test`.`c`;
+-- DROP TABLE `test`.`d`;
 DROP DATABASE `test`;

@@ -14,6 +14,7 @@
 
 use std::convert::TryInto;
 
+use async_channel::Receiver;
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::data::Ticket;
@@ -24,6 +25,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use tonic::metadata::MetadataKey;
+use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Streaming;
@@ -31,6 +34,8 @@ use tonic::Streaming;
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_client_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
+use crate::api::rpc::packet::DataPacket;
+use crate::api::rpc::packet::DataPacketStream;
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
@@ -55,6 +60,34 @@ impl FlightClient {
 
     pub async fn execute_action(&mut self, action: FlightAction, timeout: u64) -> Result<()> {
         self.do_action(action, timeout).await?;
+        Ok(())
+    }
+
+    fn set_metadata<T>(request: &mut Request<T>, name: &'static str, value: &str) -> Result<()> {
+        match MetadataValue::try_from(value) {
+            Ok(metadata_value) => {
+                let metadata_key = MetadataKey::from_static(name);
+                request.metadata_mut().insert(metadata_key, metadata_value);
+                Ok(())
+            }
+            Err(cause) => Err(ErrorCode::BadBytes(format!(
+                "Cannot parse query id to MetadataValue, {:?}",
+                cause
+            ))),
+        }
+    }
+
+    pub async fn do_put(
+        &mut self,
+        query_id: &str,
+        source: &str,
+        rx: Receiver<DataPacket>,
+    ) -> Result<()> {
+        let mut request = Request::new(Box::pin(DataPacketStream::create(rx)));
+
+        Self::set_metadata(&mut request, "x-source", source)?;
+        Self::set_metadata(&mut request, "x-query-id", query_id)?;
+        self.inner.do_put(request).await?;
         Ok(())
     }
 

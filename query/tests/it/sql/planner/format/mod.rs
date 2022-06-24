@@ -28,7 +28,7 @@ use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
-use databend_query::sql::plans::FilterPlan;
+use databend_query::sql::plans::Filter;
 use databend_query::sql::plans::FunctionCall;
 use databend_query::sql::plans::PhysicalHashJoin;
 use databend_query::sql::plans::PhysicalScan;
@@ -140,11 +140,12 @@ fn test_format() {
                 },
             }
             .into()],
-            join_type: JoinType::InnerJoin,
+            other_conditions: vec![],
+            join_type: JoinType::Inner,
         }
         .into(),
         SExpr::create_unary(
-            FilterPlan {
+            Filter {
                 predicates: vec![ConstantExpr {
                     value: DataValue::Boolean(true),
                     data_type: BooleanType::new_impl(),
@@ -174,10 +175,10 @@ fn test_format() {
 
     let tree = s_expr.to_format_tree(&metadata_ref);
     let result = tree.format_indent().unwrap();
-    let expect = r#"PhysicalHashJoin: build keys: [plus(col1, 123)], probe keys: [col2]
+    let expect = r#"HashJoin: INNER, build keys: [plus(col1, 123)], probe keys: [col2], join filters: []
     Filter: [true]
-        PhysicalScan: catalog.database.table
-    PhysicalScan: catalog.database.table
+        Scan: catalog.database.table
+    Scan: catalog.database.table
 "#;
     assert_eq!(result.as_str(), expect);
 }

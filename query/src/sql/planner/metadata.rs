@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
@@ -37,6 +38,16 @@ pub struct TableEntry {
     pub source: ReadDataSourcePlan,
 }
 
+impl Debug for TableEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TableEntry {{ index: {:?}, name: {:?}, catalog: {:?}, database: {:?} }}",
+            self.index, self.name, self.catalog, self.database
+        )
+    }
+}
+
 impl TableEntry {
     pub fn new(
         index: IndexType,
@@ -57,7 +68,7 @@ impl TableEntry {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ColumnEntry {
     pub column_index: IndexType,
     pub name: String,
@@ -86,7 +97,7 @@ impl ColumnEntry {
 /// Metadata stores information about columns and tables used in a query.
 /// Tables and columns are identified with its unique index, notice that index value of a column can
 /// be same with that of a table.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Metadata {
     tables: Vec<TableEntry>,
     columns: Vec<ColumnEntry>,

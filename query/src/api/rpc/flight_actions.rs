@@ -21,6 +21,9 @@ use common_planners::Expression;
 use common_planners::PlanNode;
 use tonic::Status;
 
+use crate::api::ExecutorPacket;
+use crate::api::PrepareChannel;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ShuffleAction {
     pub query_id: String,
@@ -115,11 +118,73 @@ impl TryInto<Vec<u8>> for CancelAction {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct PreparePipeline {
+    pub executor_packet: ExecutorPacket,
+}
+
+impl TryInto<PreparePipeline> for Vec<u8> {
+    type Error = Status;
+
+    fn try_into(self) -> Result<PreparePipeline, Self::Error> {
+        match std::str::from_utf8(&self) {
+            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            Ok(utf8_body) => match serde_json::from_str::<PreparePipeline>(utf8_body) {
+                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+                Ok(action) => Ok(action),
+            },
+        }
+    }
+}
+
+impl TryInto<Vec<u8>> for PreparePipeline {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
+        serde_json::to_vec(&self).map_err_to_code(ErrorCode::LogicalError, || {
+            "Logical error: cannot serialize PrepareExecutor."
+        })
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct PreparePublisher {
+    pub publisher_packet: PrepareChannel,
+}
+
+impl TryInto<PreparePublisher> for Vec<u8> {
+    type Error = Status;
+
+    fn try_into(self) -> Result<PreparePublisher, Self::Error> {
+        match std::str::from_utf8(&self) {
+            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            Ok(utf8_body) => match serde_json::from_str::<PreparePublisher>(utf8_body) {
+                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+                Ok(action) => Ok(action),
+            },
+        }
+    }
+}
+
+impl TryInto<Vec<u8>> for PreparePublisher {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
+        serde_json::to_vec(&self).map_err_to_code(ErrorCode::LogicalError, || {
+            "Logical error: cannot serialize PreparePublisher."
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum FlightAction {
     PrepareShuffleAction(ShuffleAction),
     BroadcastAction(BroadcastAction),
     CancelAction(CancelAction),
+    PreparePipeline(PreparePipeline),
+    PreparePublisher(PreparePublisher),
+    ExecutePipeline(String),
+    // ShutdownQuery(String),
 }
 
 impl FlightAction {
@@ -172,6 +237,16 @@ impl TryInto<FlightAction> for Action {
             "PrepareShuffleAction" => Ok(FlightAction::PrepareShuffleAction(self.body.try_into()?)),
             "BroadcastAction" => Ok(FlightAction::BroadcastAction(self.body.try_into()?)),
             "CancelAction" => Ok(FlightAction::CancelAction(self.body.try_into()?)),
+            "PreparePipeline" => Ok(FlightAction::PreparePipeline(self.body.try_into()?)),
+            "PreparePublisher" => Ok(FlightAction::PreparePublisher(self.body.try_into()?)),
+            "ExecutePipeline" => match String::from_utf8(self.body.to_owned()) {
+                Ok(query_id) => Ok(FlightAction::ExecutePipeline(query_id)),
+                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            },
+            // "ShutdownQuery" => match String::from_utf8(self.body.to_owned()) {
+            //     Ok(query_id) => Ok(FlightAction::ShutdownQuery(query_id)),
+            //     Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            // },
             un_implemented => Err(Status::unimplemented(format!(
                 "UnImplement action {}",
                 un_implemented
@@ -196,6 +271,18 @@ impl TryInto<Action> for FlightAction {
             FlightAction::CancelAction(cancel_action) => Ok(Action {
                 r#type: String::from("CancelAction"),
                 body: cancel_action.try_into()?,
+            }),
+            FlightAction::PreparePipeline(prepare_pipeline) => Ok(Action {
+                r#type: String::from("PreparePipeline"),
+                body: prepare_pipeline.try_into()?,
+            }),
+            FlightAction::PreparePublisher(publisher) => Ok(Action {
+                r#type: String::from("PreparePublisher"),
+                body: publisher.try_into()?,
+            }),
+            FlightAction::ExecutePipeline(query_id) => Ok(Action {
+                r#type: String::from("ExecutePipeline"),
+                body: query_id.into_bytes(),
             }),
         }
     }

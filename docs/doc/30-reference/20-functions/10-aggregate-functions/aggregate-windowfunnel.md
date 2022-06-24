@@ -20,7 +20,7 @@ The function works according to the algorithm:
 -   If the data has multiple event chains at varying completion points, the function will only output the size of the longest chain.
 
 
-``` sql
+```sql
 WINDOW_FUNNEL( <window> )( <timestamp>, <cond1>, <cond2>, ..., <condN> )
 ```
 
@@ -71,7 +71,7 @@ INSERT INTO events VALUES(100126, 'visit', '2022-05-15 12:01:00');
 
 Input table:
 
-``` sql
+```sql
 +---------+------------+----------------------------+
 | user_id | event_name | event_timestamp            |
 +---------+------------+----------------------------+
@@ -91,7 +91,7 @@ Find out how far the user `user_id` could get through the chain in an hour windo
 
 Query:
 
-``` sql
+```sql
 SELECT
     level,
     count() AS count
@@ -114,7 +114,7 @@ The `event_timestamp` type is timestamp, `3600000000` is a hour time window.
 
 Result:
 
-``` sql
+```sql
 +-------+-------+
 | level | count |
 +-------+-------+

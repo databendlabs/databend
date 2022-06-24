@@ -16,6 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use lexical_core::FromLexical;
+use micromarshal::Unmarshal;
 
 use crate::prelude::*;
 

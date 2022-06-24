@@ -18,7 +18,7 @@ fmt:
 
 lint:
 	cargo fmt
-	cargo clippy --all -- -D warnings
+	cargo clippy --workspace --all-targets -- -D warnings
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt
 	# Python file formatter(make setup to install)
@@ -84,10 +84,6 @@ stateless-test: build-debug
 sqllogic-test: build-debug
 	rm -rf ./_meta*/
 	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh
-
-management-test: build-debug
-	rm -rf ./_meta*/
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-management-mode.sh
 
 stateless-cluster-test: build-debug
 	rm -rf ./_meta*/

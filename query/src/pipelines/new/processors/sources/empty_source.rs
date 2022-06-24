@@ -12,45 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
 use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::sessions::QueryContext;
+use crate::pipelines::new::processors::Processor;
 
 pub struct EmptySource {
-    finish: bool,
-    schema: DataSchemaRef,
+    output: Arc<OutputPort>,
 }
 
 impl EmptySource {
-    pub fn create(
-        ctx: Arc<QueryContext>,
-        output: Arc<OutputPort>,
-        schema: DataSchemaRef,
-    ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, EmptySource {
-            finish: false,
-            schema,
-        })
+    pub fn create(output: Arc<OutputPort>) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(EmptySource { output })))
     }
 }
 
-impl SyncSource for EmptySource {
-    const NAME: &'static str = "EmptySource";
+impl Processor for EmptySource {
+    fn name(&self) -> &'static str {
+        "EmptySource"
+    }
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.finish {
-            return Ok(None);
-        }
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
 
-        self.finish = true;
-        Ok(Some(DataBlock::empty_with_schema(self.schema.clone())))
+    fn event(&mut self) -> Result<Event> {
+        self.output.finish();
+        Ok(Event::Finished)
     }
 }

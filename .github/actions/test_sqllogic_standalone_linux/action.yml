@@ -12,18 +12,13 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Maximize build space
-      uses: ./.github/actions/cleanup
-
-    - uses: actions/download-artifact@v2
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
       with:
-        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
-        path: ./target/debug
-
-    - name: Set up file as executable
-      shell: bash
-      run: |
-        chmod +x ./target/debug/databend-*
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        source: s3
 
     - name: Install python dependences
       shell: bash
@@ -35,15 +30,8 @@ runs:
       run: |
         bash ./scripts/ci/ci-run-sqllogic-tests.sh
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v2
+    - name: Upload failure
       if: failure()
+      uses: ./.github/actions/artifact_failure
       with:
-        path: |
-          _local_fs/
-          _logs*/
-          _meta*/
-          metasrv/_logs*/
-          query/_logs*/
-          store/_logs*/
-          nohup.out
+        name: test-sqllogic-standalone-linux

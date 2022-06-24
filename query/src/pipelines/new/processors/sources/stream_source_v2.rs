@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future::Future;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -39,11 +38,12 @@ impl StreamSourceV2 {
     }
 }
 
+#[async_trait::async_trait]
 impl AsyncSource for StreamSourceV2 {
     const NAME: &'static str = "stream source";
-    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
-    fn generate(&mut self) -> Self::BlockFuture<'_> {
-        async move { self.s.read().await }
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        self.s.read().await
     }
 }

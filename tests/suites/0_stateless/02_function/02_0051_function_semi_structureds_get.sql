@@ -41,19 +41,19 @@ DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
 
-CREATE TABLE IF NOT EXISTS t1(id Int null, arr Array null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(id Int null, arr Array null) Engine = Fuse;
 
 insert into t1 select 1, parse_json('[1,2,3,["a","b","c"]]');
 
-CREATE TABLE IF NOT EXISTS t2(id Int null, obj Object null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t2(id Int null, obj Object null) Engine = Fuse;
 
 insert into t2 select 1, parse_json('{"a":1,"b":{"c":2}}');
 
-CREATE TABLE IF NOT EXISTS t3(id Int null, str String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t3(id Int null, str String null) Engine = Fuse;
 
 insert into t3 values(1, '[1,2,3,["a","b","c"]]'), (2, '{"a":1,"b":{"c":2}}');
 
-CREATE TABLE IF NOT EXISTS t4(id Int null, arr Array(Int64) null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t4(id Int null, arr Array(Int64) null) Engine = Fuse;
 
 insert into t4 values(1, [10,20,30,40]), (2, [50,60,70,80]);
 

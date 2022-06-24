@@ -139,6 +139,8 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number d
 SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s;
 create table t3(a int, b int);
 insert into t3 values(1,2),(2,3);
+select * from t3 order by 2 desc;
+select a from t3 order by 1 desc;
 drop table t;
 drop table t1;
 drop table t2;
@@ -176,6 +178,16 @@ insert into temp values (1);
 select a from temp;
 drop table temp;
 
+
+-- CASE WHEN
+select '=== Test CASE-WHEN ===';
+select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is null) from (
+	SELECT (CASE WHEN number % 4 = 1 THEN '1' WHEN number % 4 = 2 THEN '2' WHEN number % 4 = 3 THEN '3' END) as a FROM numbers(100)
+);
+select case when number >= 2 then 'ge2' WHEN number >= 1 then 'ge1' ELSE null end from numbers(3);
+select case when 1 = 3 then null when 1 = 2 then 20.0 when 1 = 1 then 1 ELSE null END;
+
+select COALESCE(NULL, NULL, 1, 2);
 -- subquery in from
 select '=== Test Subquery In From ===';
 create table t(a int, b int);
@@ -295,4 +307,52 @@ CREATE FUNCTION notnull1 AS (p) -> not(is_null(p));
 SELECT notnull1(null);
 SELECT notnull1('null');
 
+drop function a_plus_3;
+drop function cal1;
+drop function notnull1;
+
+--set operator
+select '====Intersect Distinct===';
+create table t1(a int, b int);
+create table t2(c int, d int);
+insert into t1 values(1, 2), (2, 3), (3 ,4), (2, 3);
+insert into t2 values(2,2), (3, 5), (7 ,8), (2, 3), (3, 4);
+select * from t1 intersect select * from t2;
+select '====Except Distinct===';
+select * from t1 except select * from t2;
+drop table t1;
+drop table t2;
+
+--outer join
+select '====Outer Join====';
+create table t1(a int, b int);
+create table t2(c int, d int);
+insert into t1 values(1, 2), (3 ,4), (7, 8);
+insert into t2 values(1, 4), (2, 3), (6, 8);
+select * from t1 right join t2 on t1.a = t2.c;
+select * from t1 left join t2 on t1.a = t2.c;
+select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3;
+select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4;
+select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3;
+select * from t1 left outer join t2 on t1.a > 3;
+select * from t1 left outer join t2 on t2.c > 4;
+select * from t1 left outer join t2 on t1.a > t2.c;
+drop table t1;
+drop table t2;
+
+-- NULL
+select '====NULL====';
+create table n( a int null, b int null) ;
+insert into n select  if (number % 3, null, number), if (number % 2, null, number) from numbers(10);
+select a + b, a and b, a - b, a or b from n;
+drop table n;
+
+-- Subquery SemiJoin and AntiJoin
+select * from numbers(5) as t where exists (select * from numbers(3) where number = t.number);
+select * from numbers(5) as t where not exists (select * from numbers(3) where number = t.number);
+
+select * from numbers(5) as t where exists (select number as a from numbers(3) where number = t.number and number > 0 and t.number < 2);
+select * from numbers(5) as t where exists (select * from numbers(3) where number > t.number);
+
 set enable_planner_v2 = 0;
+

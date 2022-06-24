@@ -57,9 +57,9 @@ impl ExpressionBuilder {
             Scalar::ConstantExpr(ConstantExpr { value, data_type }) => {
                 self.build_literal(value, data_type)
             }
-            Scalar::ComparisonExpr(ComparisonExpr { op, left, right }) => {
-                self.build_binary_operator(left, right, op.to_func_name())
-            }
+            Scalar::ComparisonExpr(ComparisonExpr {
+                op, left, right, ..
+            }) => self.build_binary_operator(left, right, op.to_func_name()),
             Scalar::AggregateFunction(AggregateFunction {
                 func_name,
                 distinct,
@@ -67,7 +67,7 @@ impl ExpressionBuilder {
                 args,
                 ..
             }) => self.build_aggr_function(func_name.clone(), *distinct, params.clone(), args),
-            Scalar::AndExpr(AndExpr { left, right }) => {
+            Scalar::AndExpr(AndExpr { left, right, .. }) => {
                 let left = self.build(&**left)?;
                 let right = self.build(&**right)?;
                 Ok(Expression::BinaryExpression {
@@ -76,7 +76,7 @@ impl ExpressionBuilder {
                     right: Box::new(right),
                 })
             }
-            Scalar::OrExpr(OrExpr { left, right }) => {
+            Scalar::OrExpr(OrExpr { left, right, .. }) => {
                 let left = self.build(&**left)?;
                 let right = self.build(&**right)?;
                 Ok(Expression::BinaryExpression {
@@ -99,7 +99,7 @@ impl ExpressionBuilder {
                     args,
                 })
             }
-            Scalar::Cast(CastExpr {
+            Scalar::CastExpr(CastExpr {
                 argument,
                 target_type,
                 ..

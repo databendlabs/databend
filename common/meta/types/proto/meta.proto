@@ -19,12 +19,6 @@ package meta;
 import "request.proto";
 
 message Empty {}
-message GetRequest { string key = 1; }
-
-message GetReply {
-  bool ok = 1;
-  string value = 2;
-}
 
 message RaftRequest { string data = 1; }
 
@@ -113,6 +107,7 @@ message TxnOp {
     TxnGetRequest get = 1;
     TxnPutRequest put = 2;
     TxnDeleteRequest delete = 3;
+    TxnDeleteByPrefixRequest delete_by_prefix = 4;
   }
 }
 
@@ -121,6 +116,7 @@ message TxnOpResponse {
     TxnGetResponse get = 1;
     TxnPutResponse put = 2;
     TxnDeleteResponse delete = 3;
+    TxnDeleteByPrefixResponse delete_by_prefix = 4;
   }
 }
 
@@ -148,7 +144,6 @@ message TxnReply {
 service RaftService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
-  rpc Get(GetRequest) returns (GetReply) {}
 
   /// Forward a request to other
   rpc Forward(RaftRequest) returns (RaftReply) {}

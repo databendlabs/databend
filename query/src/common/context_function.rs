@@ -37,15 +37,17 @@ impl ContextFunction {
         }
 
         Ok(match name.to_lowercase().as_str() {
-            "database" => vec![Expression::create_literal(DataValue::String(
-                ctx.get_current_database().into_bytes(),
-            ))],
+            "database" | "currentdatabase" | "current_database" => {
+                vec![Expression::create_literal(DataValue::String(
+                    ctx.get_current_database().into_bytes(),
+                ))]
+            }
             "version" => vec![Expression::create_literal(DataValue::String(
                 ctx.get_fuse_version().into_bytes(),
             ))],
-            "current_user" | "user" => vec![Expression::create_literal(DataValue::String(
-                ctx.get_current_user()?.identity().to_string().into_bytes(),
-            ))],
+            "user" | "currentuser" | "current_user" => vec![Expression::create_literal(
+                DataValue::String(ctx.get_current_user()?.identity().to_string().into_bytes()),
+            )],
             "connection_id" => vec![Expression::create_literal(DataValue::String(
                 ctx.get_connection_id().into_bytes(),
             ))],

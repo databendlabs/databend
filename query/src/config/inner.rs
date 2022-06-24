@@ -148,12 +148,9 @@ pub struct QueryConfig {
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     pub management_mode: bool,
     pub jwt_key_file: String,
-    pub enable_async_insert: bool,
     pub async_insert_max_data_size: u64,
     pub async_insert_busy_timeout: u64,
     pub async_insert_stale_timeout: u64,
-    pub wait_for_async_insert: bool,
-    pub wait_for_async_insert_timeout: u64,
 }
 
 impl Default for QueryConfig {
@@ -198,12 +195,9 @@ impl Default for QueryConfig {
             table_disk_cache_mb_size: 1024,
             management_mode: false,
             jwt_key_file: "".to_string(),
-            enable_async_insert: false,
             async_insert_max_data_size: 10000,
             async_insert_busy_timeout: 200,
             async_insert_stale_timeout: 0,
-            wait_for_async_insert: true,
-            wait_for_async_insert_timeout: 100,
         }
     }
 }
@@ -271,6 +265,9 @@ pub struct MetaConfig {
     pub password: String,
     /// Timeout for each client request, in seconds
     pub client_timeout_in_second: u64,
+    /// AutoSyncInterval is the interval to update endpoints with its latest members.
+    /// 0 disables auto-sync. By default auto-sync is disabled.
+    pub auto_sync_interval: u64,
     /// Certificate for client to identify meta rpc serve
     pub rpc_tls_meta_server_root_ca_cert: String,
     pub rpc_tls_meta_service_domain_name: String,
@@ -285,6 +282,7 @@ impl Default for MetaConfig {
             username: "root".to_string(),
             password: "".to_string(),
             client_timeout_in_second: 10,
+            auto_sync_interval: 10,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
         }
@@ -317,6 +315,7 @@ impl MetaConfig {
             },
 
             timeout: Some(Duration::from_secs(self.client_timeout_in_second)),
+            auto_sync_interval: Duration::from_secs(self.auto_sync_interval),
         }
     }
 }
@@ -330,6 +329,7 @@ impl Debug for MetaConfig {
             .field("password", &mask_string(&self.password, 3))
             .field("embedded_dir", &self.embedded_dir)
             .field("client_timeout_in_second", &self.client_timeout_in_second)
+            .field("auto_sync_interval", &self.auto_sync_interval)
             .field(
                 "rpc_tls_meta_server_root_ca_cert",
                 &self.rpc_tls_meta_server_root_ca_cert,

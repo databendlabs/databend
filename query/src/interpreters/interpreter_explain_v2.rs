@@ -100,7 +100,8 @@ impl ExplainInterpreterV2 {
 
     pub async fn explain_syntax(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
         let result = plan.format_indent()?;
-        let formatted_plan = Series::from_data(vec![result]);
+        let line_splitted_result: Vec<&str> = result.lines().collect();
+        let formatted_plan = Series::from_data(line_splitted_result);
         Ok(vec![DataBlock::create(self.schema.clone(), vec![
             formatted_plan,
         ])])

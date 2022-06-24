@@ -38,6 +38,7 @@ impl FromToProto<pb::S3StorageConfig> for StorageParams {
             root: p.root,
             master_key: p.master_key,
             disable_credential_loader: p.disable_credential_loader,
+            enable_virtual_host_style: p.enable_virtual_host_style,
         }))
     }
 
@@ -54,6 +55,7 @@ impl FromToProto<pb::S3StorageConfig> for StorageParams {
                 root: v.root.clone(),
                 master_key: v.master_key.clone(),
                 disable_credential_loader: v.disable_credential_loader,
+                enable_virtual_host_style: v.enable_virtual_host_style,
             })
         } else {
             Err(Incompatible {

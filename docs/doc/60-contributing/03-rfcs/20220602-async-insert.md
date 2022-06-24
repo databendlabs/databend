@@ -110,7 +110,7 @@ impl AsyncInsertQueue {
 - `queue`: the buffer to cache batch inserts which is a `HashMap` because we need to distinguish different inserts.
 - `current_processing_insert`: inserts which are processing and clients wait for the processing result. We use `QueryId` as the key to distinguish different clients.
 
-When `databend-query` starts, `AsyncInsertQueue` starts according to a config `enable_async_insert`. If `enable_async_insert` is true, the queue will call `start` method. Every insert will call `push` method with `InsertPlan` and `QueryContext` as inputs and call `wait_for_processing_insert` to waiting. The queue receives many inserts and two ticker task `busy_check` and `stale_check` runs in the background. When specific condition is triggered, the queue will call `schedule` to schedule the task of batch inserts and the data will be `process`ed by the runtime executor.
+When `databend-query` starts, `AsyncInsertQueue` starts. The queue will call `start` method. Every insert will call `push` method with `InsertPlan` and `QueryContext` as inputs and call `wait_for_processing_insert` to waiting. The queue receives many inserts and two ticker task `busy_check` and `stale_check` runs in the background. When specific condition is triggered, the queue will call `schedule` to schedule the task of batch inserts and the data will be `process`ed by the runtime executor.
 
 # Some Details
 
@@ -120,10 +120,13 @@ The method arguments of `AsyncInsertQueue` is `Arc<Self>` because tokio runtime 
 
 # Configs
 
-- `enable_async_insert`: Enable the async insert mode int http protocol
 - `async_insert_max_data_size`: The maximum memory size of the buffered data collected per insert before being inserted.
 - `async_insert_busy_timeout`: The maximum timeout in milliseconds since the first insert before inserting collected data.
 - `async_insert_stale_timeout`: The maximum timeout in milliseconds since the last insert before inserting collected data.
+
+# Settings
+
+- `enable_async_insert`: Client open async insert mode.
 - `wait_for_async_insert`: Enable waiting for processing of async insert.
 - `wait_for_async_insert_timeout`: The timeout in seconds for waiting for processing of async insert.
 

@@ -27,7 +27,11 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing::warn;
 use opendal::Operator;
+
+use crate::storages::fuse::io::retry;
+use crate::storages::fuse::io::retry::Retryable;
 
 pub async fn write_block(
     _arrow_schema: &ArrowSchema,
@@ -41,7 +45,23 @@ pub async fn write_block(
     let schema = block.schema().clone();
     let result = serialize_data_blocks(vec![block], &schema, &mut buf)?;
 
-    data_accessor.object(location).write(buf).await?;
+    let bytes = buf.as_slice();
+    let op = || async {
+        data_accessor
+            .object(location)
+            .write(bytes)
+            .await
+            .map_err(retry::from_io_error)
+    };
+
+    let notify = |e: std::io::Error, duration| {
+        warn!(
+            "transient error encountered while write block, location {}, at duration {:?} : {}",
+            location, duration, e,
+        )
+    };
+
+    op.retry_with_notify(notify).await?;
 
     Ok(result)
 }

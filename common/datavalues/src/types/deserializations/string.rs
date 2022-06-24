@@ -108,50 +108,16 @@ impl TypeDeserializer for StringDeserializer {
         settings: &FormatSettings,
     ) -> Result<()> {
         let mut read_buffer = reader.fill_buf()?;
-
         if read_buffer.is_empty() {
             return Err(ErrorCode::BadBytes("Read string after eof."));
         }
 
         let maybe_quote = read_buffer[0];
         if maybe_quote == b'\'' || maybe_quote == b'"' {
-            let mut index = 1;
-            let mut bytes = 0;
-
-            loop {
-                let begin = index;
-                while index < read_buffer.len() {
-                    if read_buffer[index] == maybe_quote {
-                        self.builder
-                            .values_mut()
-                            .extend_from_slice(&read_buffer[begin..index]);
-                        self.builder.add_offset(bytes + index - begin);
-
-                        reader.consume(index + 1);
-                        return Ok(());
-                    }
-
-                    index += 1;
-                }
-
-                bytes += index - begin;
-                self.builder
-                    .values_mut()
-                    .extend_from_slice(&read_buffer[begin..]);
-                reader.consume(index);
-
-                index = 0;
-                read_buffer = reader.fill_buf()?;
-
-                if read_buffer.is_empty() {
-                    break;
-                }
-            }
-
-            Err(ErrorCode::BadBytes(format!(
-                "Not found '{}' before eof in parse string.",
-                maybe_quote as char
-            )))
+            self.buffer.clear();
+            reader.read_quoted_text(&mut self.buffer, maybe_quote)?;
+            self.builder.append_value(self.buffer.as_slice());
+            Ok(())
         } else {
             // Unquoted case. Look for field_delimiter or record_delimiter.
             let mut field_delimiter = b',';

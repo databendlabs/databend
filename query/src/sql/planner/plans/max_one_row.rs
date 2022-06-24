@@ -27,7 +27,7 @@ use crate::sql::plans::RelOp;
 pub struct Max1Row;
 
 impl Operator for Max1Row {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         RelOp::Max1Row
     }
 

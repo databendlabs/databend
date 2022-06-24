@@ -45,6 +45,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
+use crate::formats::FormatFactory;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSourceV2;
@@ -161,7 +162,7 @@ pub async fn streaming_load(
         }
     }
 
-    let plan = PlanParser::parse(context.clone(), insert_sql)
+    let mut plan = PlanParser::parse(context.clone(), insert_sql)
         .await
         .map_err(InternalServerError)?;
     context.attach_query_str(insert_sql);
@@ -181,12 +182,17 @@ pub async fn streaming_load(
         != 0
         && context.get_cluster().is_empty()
     {
-        let source_pipe_builder = match &plan {
-            PlanNode::Insert(insert) => match &insert.source {
+        let source_pipe_builder = match &mut plan {
+            PlanNode::Insert(insert) => match &mut insert.source {
                 InsertInputSource::StreamingWithFormat(format) => {
-                    if format.to_lowercase().as_str() == "csv"
-                        || format.to_lowercase().as_str() == "parquet"
-                    {
+                    if FormatFactory::instance().has_input(format.as_str()) {
+                        let new_format = format!("{}WithNames", format);
+                        if format_settings.skip_header
+                            && FormatFactory::instance().has_input(new_format.as_str())
+                        {
+                            *format = new_format;
+                        }
+
                         return match new_processor_format(&context, &plan, multipart).await {
                             Ok(res) => Ok(res),
                             Err(cause) => Err(InternalServerError(cause)),
@@ -225,6 +231,7 @@ pub async fn streaming_load(
         let _ = interpreter
             .set_source_pipe_builder(Option::from(source_pipe_builder))
             .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+        interpreter.start().await.map_err(InternalServerError)?;
         let mut data_stream = interpreter
             .execute(None)
             .await

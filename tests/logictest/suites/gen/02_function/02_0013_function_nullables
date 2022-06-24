@@ -2,7 +2,7 @@ statement ok
 DROP TABLE IF EXISTS nullable_test;
 
 statement ok
-CREATE TABLE nullable_test (a UInt32 null, b UInt32 null) engine=Memory;
+CREATE TABLE nullable_test (a UInt32 null, b UInt32 null) Engine = Fuse;
 
 statement ok
 INSERT INTO nullable_test VALUES(1, Null), (Null, 2), (3, 3);

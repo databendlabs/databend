@@ -16,29 +16,33 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use common_ast::ast::Expr;
+use common_ast::ast::Literal;
 use common_ast::ast::OrderByExpr;
 use common_ast::parser::error::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::GroupingChecker;
+use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
+use crate::sql::plans::Sort;
 use crate::sql::plans::SortItem;
-use crate::sql::plans::SortPlan;
 use crate::sql::BindContext;
 use crate::sql::IndexType;
 
-pub struct OrderItems<'a> {
-    items: Vec<OrderItem<'a>>,
+pub struct OrderItems {
+    items: Vec<OrderItem>,
 }
 
-pub struct OrderItem<'a> {
-    pub order_expr: &'a OrderByExpr<'a>,
+pub struct OrderItem {
+    pub asc: Option<bool>,
+    pub nulls_first: Option<bool>,
     pub index: IndexType,
     pub name: String,
     // True if item reference a alias scalar expression in select list
@@ -53,7 +57,7 @@ impl<'a> Binder {
         projections: &[ColumnBinding],
         order_by: &'a [OrderByExpr<'a>],
         distinct: bool,
-    ) -> Result<OrderItems<'a>> {
+    ) -> Result<OrderItems> {
         let mut order_items = Vec::with_capacity(order_by.len());
         for order in order_by {
             if let Expr::ColumnRef {
@@ -68,7 +72,8 @@ impl<'a> Binder {
                 for item in projections.iter() {
                     if item.column_name == ident.name {
                         order_items.push(OrderItem {
-                            order_expr: order,
+                            asc: order.asc,
+                            nulls_first: order.nulls_first,
                             index: item.index,
                             name: item.column_name.clone(),
                             need_project: scalar_items.get(&item.index).map_or(
@@ -97,9 +102,28 @@ impl<'a> Binder {
                     }
                 })?;
                 order_items.push(OrderItem {
-                    order_expr: order,
+                    asc: order.asc,
+                    nulls_first: order.nulls_first,
                     name: column.column_name.clone(),
                     index: column.index,
+                    need_project: false,
+                });
+            } else if let Expr::Literal {
+                lit: Literal::Integer(index),
+                ..
+            } = &order.expr
+            {
+                let index = *index as usize - 1;
+                if index >= projections.len() {
+                    return Err(ErrorCode::SemanticError(order.expr.span().display_error(
+                        format!("ORDER BY position {} is not in select list", index + 1),
+                    )));
+                }
+                order_items.push(OrderItem {
+                    asc: order.asc,
+                    nulls_first: order.nulls_first,
+                    name: projections[index].column_name.clone(),
+                    index: projections[index].index,
                     need_project: false,
                 });
             } else {
@@ -117,7 +141,7 @@ impl<'a> Binder {
     pub(super) async fn bind_order_by(
         &mut self,
         from_context: &BindContext,
-        order_by: OrderItems<'a>,
+        order_by: OrderItems,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
@@ -138,8 +162,8 @@ impl<'a> Binder {
             }
             let order_by_item = SortItem {
                 index: order.index,
-                asc: order.order_expr.asc,
-                nulls_first: order.order_expr.nulls_first,
+                asc: order.asc,
+                nulls_first: order.nulls_first,
             };
             order_by_items.push(order_by_item);
         }
@@ -151,10 +175,53 @@ impl<'a> Binder {
             child
         };
 
-        let sort_plan = SortPlan {
+        let sort_plan = Sort {
             items: order_by_items,
         };
         new_expr = SExpr::create_unary(sort_plan.into(), new_expr);
         Ok(new_expr)
+    }
+
+    pub(crate) async fn bind_order_by_for_set_operation(
+        &mut self,
+        bind_context: &BindContext,
+        child: SExpr,
+        order_by: &[OrderByExpr<'_>],
+    ) -> Result<SExpr> {
+        let mut scalar_binder =
+            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
+        let mut order_by_items = Vec::with_capacity(order_by.len());
+        for order in order_by.iter() {
+            match order.expr {
+                Expr::ColumnRef { .. } => {
+                    let scalar = scalar_binder.bind(&order.expr).await?.0;
+                    match scalar {
+                        Scalar::BoundColumnRef(BoundColumnRef { column }) => {
+                            let order_by_item = SortItem {
+                                index: column.index,
+                                asc: order.asc,
+                                nulls_first: order.nulls_first,
+                            };
+                            order_by_items.push(order_by_item);
+                        }
+                        _ => {
+                            return Err(ErrorCode::LogicalError("scalar should be BoundColumnRef"));
+                        }
+                    }
+                }
+                _ => {
+                    return Err(ErrorCode::SemanticError(
+                        order
+                            .expr
+                            .span()
+                            .display_error("can only order by column".to_string()),
+                    ));
+                }
+            }
+        }
+        let sort_plan = Sort {
+            items: order_by_items,
+        };
+        Ok(SExpr::create_unary(sort_plan.into(), child))
     }
 }

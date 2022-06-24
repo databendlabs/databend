@@ -2,9 +2,10 @@
 <div align="center">
  
 <h4 align="center">
+  <a href="https://databend.rs/doc/deploy/databend-cloud">Databend Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
   <a href="https://perf.databend.rs">Benchmarking</a>  |
-  <a href="https://github.com/datafuselabs/databend/issues/4591">Roadmap(v0.8)</a>
+  <a href="https://github.com/datafuselabs/databend/issues/4591">Roadmap (v0.8)</a>
 
 </h4>
 
@@ -48,6 +49,11 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 - __Blazing Performance__
 
   Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering blazing performance data analytics.
+  
+  
+- __Git-like Storage__
+
+  Databend stores data with snapshots. It's easy to query, clone, and restore historical data in tables.
 
 - __Support for Semi-Structured Data__
 
@@ -103,6 +109,7 @@ Let's run some [benchmark queries](https://databend.rs/doc/performance/local-vec
 - [How to Deploy Databend With QingCloud QingStore](https://databend.rs/doc/deploy/qingstore)
 - [How to Deploy a Databend Local Cluster With MinIO](https://databend.rs/doc/deploy/local)
 - [How to Deploy a Databend K8s Cluster With MinIO](https://databend.rs/doc/deploy/cluster-minio)
+- [Databend Cloud (beta)](https://databend.rs/doc/deploy/databend-cloud)
  
 ### Connect
 
@@ -199,3 +206,5 @@ Databend is licensed under [Apache 2.0](LICENSE).
 
 - Databend is inspired by [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture), its computing model is based on [apache-arrow](https://arrow.apache.org/).
 - The [documentation website](https://databend.rs) hosted by [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
+- Thanks to [Mergify](https://mergify.com/) for sponsoring advanced features like Batch Merge.
+- Thanks to [QingCloud](https://qingcloud.com) for sponsoring CI resources.

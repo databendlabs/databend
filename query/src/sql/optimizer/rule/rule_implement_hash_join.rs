@@ -29,7 +29,7 @@ pub struct RuleImplementHashJoin {
 }
 
 impl RuleImplementHashJoin {
-    pub fn create() -> Self {
+    pub fn new() -> Self {
         RuleImplementHashJoin {
             id: RuleID::ImplementHashJoin,
             pattern: SExpr::create_binary(
@@ -67,6 +67,7 @@ impl Rule for RuleImplementHashJoin {
             PhysicalHashJoin {
                 build_keys: logical_join.right_conditions,
                 probe_keys: logical_join.left_conditions,
+                other_conditions: logical_join.other_conditions,
                 join_type: logical_join.join_type,
             }
             .into(),

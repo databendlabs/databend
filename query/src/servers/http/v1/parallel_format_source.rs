@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::mem::replace;
 use std::sync::Arc;
 
@@ -235,6 +236,10 @@ impl ParallelInputFormatSource {
 impl Processor for ParallelInputFormatSource {
     fn name(&self) -> &'static str {
         "ParallelInputFormatSource"
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

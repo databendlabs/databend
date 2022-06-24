@@ -141,11 +141,11 @@ async fn test_memorytable() -> Result<()> {
     // overwrite
     {
         let block = DataBlock::create(schema.clone(), vec![
-            Series::from_data(vec![5u64, 6]),
+            Series::from_data(vec![5u32, 6]),
             Series::from_data(vec![55u64, 66]),
         ]);
         let block2 = DataBlock::create(schema.clone(), vec![
-            Series::from_data(vec![7u64, 8]),
+            Series::from_data(vec![7u32, 8]),
             Series::from_data(vec![77u64, 88]),
         ]);
         let blocks = vec![Ok(block), Ok(block2)];

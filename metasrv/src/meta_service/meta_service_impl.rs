@@ -21,8 +21,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_meta_types::protobuf::raft_service_server::RaftService;
-use common_meta_types::protobuf::GetReply;
-use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::AppliedState;
@@ -107,23 +105,6 @@ impl RaftService for RaftServiceImpl {
 
         let raft_reply = RaftReply::from(res);
         return Ok(tonic::Response::new(raft_reply));
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    async fn get(
-        &self,
-        request: tonic::Request<GetRequest>,
-    ) -> Result<tonic::Response<GetReply>, tonic::Status> {
-        // TODO(xp): this method should be removed along with DFS
-        common_tracing::extract_remote_span_as_parent(&request);
-
-        // let req = request.into_inner();
-        let rst = GetReply {
-            ok: false,
-            value: "".into(),
-        };
-
-        Ok(tonic::Response::new(rst))
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

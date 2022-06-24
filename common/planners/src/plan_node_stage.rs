@@ -23,7 +23,7 @@ use crate::PlanNode;
 pub enum StageKind {
     Normal,
     Expansive,
-    Convergent,
+    Merge,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]

@@ -12,13 +12,13 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Maximize build space
-      uses: ./.github/actions/cleanup
-
-    - uses: actions/download-artifact@v2
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
       with:
-        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
-        path: ./target/debug
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        source: s3
 
     - name: Test metactl
       shell: bash

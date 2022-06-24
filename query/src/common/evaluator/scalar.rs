@@ -103,7 +103,7 @@ impl ScalarEvaluator {
                 let func = FunctionFactory::instance().get(func.func_name.as_str(), &arg_types)?;
                 Ok(EvalNode::Function { func, args })
             }
-            Scalar::Cast(cast) => {
+            Scalar::CastExpr(cast) => {
                 let arg = Self::build_eval_tree(&cast.argument)?;
                 let func = CastFunction::create_try(
                     "",

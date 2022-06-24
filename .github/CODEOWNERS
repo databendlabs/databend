@@ -23,7 +23,8 @@
 # MetaSrv
 /metasrv/              @datafuselabs/databend-meta-reviewer
 /common/meta/          @datafuselabs/databend-meta-reviewer
-common/grpc/           @datafuselabs/databend-meta-reviewer
+/common/grpc/          @datafuselabs/databend-meta-reviewer
+/common/protos/proto   @drmingdrmer
 
 # Storage
 /common/cache/         @datafuselabs/databend-storage-reviewer

@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct UserIdentity {
     pub username: String,
     pub hostname: String,

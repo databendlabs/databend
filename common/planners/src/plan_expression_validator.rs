@@ -110,3 +110,35 @@ pub fn validate_expression(expr: &Expression, schema: &DataSchemaRef) -> Result<
         None => Ok(()),
     }
 }
+
+fn check_deterministic(op: &str) -> Result<()> {
+    let features = FunctionFactory::instance().get_features(op)?;
+    if !features.is_deterministic {
+        return Err(ErrorCode::InvalidClusterKeys(format!(
+            "Function `{}` is not valid for clustering",
+            op
+        )));
+    }
+    Ok(())
+}
+
+pub fn validate_clustering(expr: &Expression) -> Result<()> {
+    let validator = ExpressionValidator::new(&|expr: &Expression| match expr {
+        Expression::Literal { .. } => Ok(()),
+        Expression::Column { .. } => Ok(()),
+        Expression::Cast { .. } => Ok(()),
+        Expression::UnaryExpression { op, .. } => check_deterministic(op),
+        Expression::BinaryExpression { op, .. } => check_deterministic(op),
+        Expression::ScalarFunction { op, .. } => check_deterministic(op),
+        _ => Err(ErrorCode::InvalidClusterKeys(format!(
+            "Function `{}` is not valid for clustering",
+            expr.column_name()
+        ))),
+    });
+
+    let validator = expr.accept(validator)?;
+    match validator.error {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
+}

@@ -24,10 +24,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use self::error::DisplayError;
+use self::expr::subexpr;
+use self::util::comma_separated_list0;
 use crate::ast::Expr;
 use crate::ast::Statement;
 use crate::parser::error::Backtrace;
-use crate::parser::statement::statements;
+use crate::parser::statement::statement;
 use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
@@ -41,8 +43,8 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 pub fn parse_sql<'a>(
     sql_tokens: &'a [Token<'a>],
     backtrace: &'a Backtrace<'a>,
-) -> Result<Vec<Statement<'a>>> {
-    match statements(Input(sql_tokens, backtrace)) {
+) -> Result<Statement<'a>> {
+    match statement(Input(sql_tokens, backtrace)) {
         Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok(stmts),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
             rest[0].display_error("unable to parse rest of the sql".to_string()),
@@ -64,6 +66,20 @@ pub fn parse_expr<'a>(
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
             rest[0].display_error("unable to parse rest of the sql".to_string()),
         )),
+        Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
+            Err(ErrorCode::SyntaxException(err.display_error(())))
+        }
+        Err(nom::Err::Incomplete(_)) => unreachable!(),
+    }
+}
+
+pub fn parse_comma_separated_exprs<'a>(
+    sql_tokens: &'a [Token<'a>],
+    backtrace: &'a Backtrace<'a>,
+) -> Result<Vec<Expr<'a>>> {
+    let mut comma_separated_exprs_parser = comma_separated_list0(subexpr(0));
+    match comma_separated_exprs_parser(Input(sql_tokens, backtrace)) {
+        Ok((_rest, exprs)) => Ok(exprs),
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
             Err(ErrorCode::SyntaxException(err.display_error(())))
         }

@@ -32,7 +32,7 @@ pub struct CrossApply {
 }
 
 impl Operator for CrossApply {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         RelOp::CrossApply
     }
 

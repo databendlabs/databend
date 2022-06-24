@@ -15,6 +15,5 @@
 mod binary_read;
 mod binary_write;
 mod buffer;
-mod marshal;
 mod options_deserializer;
 mod utils;

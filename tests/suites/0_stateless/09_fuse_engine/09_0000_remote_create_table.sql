@@ -3,7 +3,7 @@ DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
 
-CREATE TABLE IF NOT EXISTS t1(a int, b varchar) Engine = fuse;
+CREATE TABLE IF NOT EXISTS t1(a int, b varchar) Engine = fuse cluster by(a);
 SELECT * FROM system.tables WHERE database='db1';
 
 DROP TABLE t1;

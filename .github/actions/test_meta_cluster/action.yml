@@ -1,0 +1,38 @@
+name: "Test databend-meta cluster"
+description: "Download binaries, setup cluster by joining and leaving"
+inputs:
+  profile:
+    description: ""
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+      with:
+        registry: public.ecr.aws/i7g1w5q7
+
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        source: s3
+
+    - name: Test databend-meta cluster
+      shell: bash
+      run: |
+        chmod +x ./tests/meta-cluster/test-meta-cluster.sh
+        build-tool bash ./tests/meta-cluster/test-meta-cluster.sh
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: test-meta-cluster

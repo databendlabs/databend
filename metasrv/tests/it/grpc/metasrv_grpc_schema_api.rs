@@ -14,6 +14,8 @@
 
 //! Test metasrv SchemaApi on a single node.
 
+use std::time::Duration;
+
 use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_grpc::MetaGrpcClient;
@@ -26,7 +28,14 @@ use crate::tests::start_metasrv;
 async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .database_create_get_drop(client.as_ref())
@@ -37,7 +46,14 @@ async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> 
 async fn test_meta_grpc_client_database_create_get_drop_in_diff_tenant() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .database_create_get_drop_in_diff_tenant(client.as_ref())
@@ -48,7 +64,14 @@ async fn test_meta_grpc_client_database_create_get_drop_in_diff_tenant() -> anyh
 async fn test_meta_grpc_client_database_list() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}.database_list(client.as_ref()).await
 }
@@ -57,7 +80,14 @@ async fn test_meta_grpc_client_database_list() -> anyhow::Result<()> {
 async fn test_meta_grpc_client_database_list_in_diff_tenant() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .database_list_in_diff_tenant(client.as_ref())
@@ -68,7 +98,14 @@ async fn test_meta_grpc_client_database_list_in_diff_tenant() -> anyhow::Result<
 async fn test_meta_grpc_client_database_rename() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}.database_rename(&client).await
 }
@@ -77,7 +114,14 @@ async fn test_meta_grpc_client_database_rename() -> anyhow::Result<()> {
 async fn test_meta_grpc_client_database_drop_undrop_list_history() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .database_drop_undrop_list_history(client.as_ref())
@@ -88,7 +132,14 @@ async fn test_meta_grpc_client_database_drop_undrop_list_history() -> anyhow::Re
 async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .table_create_get_drop(client.as_ref())
@@ -99,7 +150,14 @@ async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
 async fn test_meta_grpc_client_table_rename() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}.table_rename(client.as_ref()).await
 }
@@ -108,7 +166,14 @@ async fn test_meta_grpc_client_table_rename() -> anyhow::Result<()> {
 async fn test_meta_grpc_client_table_upsert_option() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .table_upsert_option(client.as_ref())
@@ -119,7 +184,14 @@ async fn test_meta_grpc_client_table_upsert_option() -> anyhow::Result<()> {
 async fn test_meta_grpc_client_table_drop_undrop_list_history() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .table_drop_undrop_list_history(client.as_ref())
@@ -130,7 +202,14 @@ async fn test_meta_grpc_client_table_drop_undrop_list_history() -> anyhow::Resul
 async fn test_meta_grpc_client_table_list() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}.table_list(client.as_ref()).await
 }
@@ -142,7 +221,14 @@ async fn test_meta_gpc_client_table_drop_out_of_retention_time_history() -> anyh
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .table_drop_out_of_retention_time_history(client.as_ref(), client.as_ref())
@@ -156,7 +242,14 @@ async fn test_meta_gpc_client_database_drop_out_of_retention_time_history() -> a
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .database_drop_out_of_retention_time_history(client.as_ref(), client.as_ref())
@@ -170,7 +263,14 @@ async fn test_meta_gpc_client_database_gc_out_of_retention_time() -> anyhow::Res
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .database_gc_out_of_retention_time(client.as_ref(), client.as_ref())
@@ -184,7 +284,14 @@ async fn test_meta_gpc_client_table_gc_out_of_retention_time() -> anyhow::Result
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     SchemaApiTestSuite {}
         .table_gc_out_of_retention_time(client.as_ref(), client.as_ref())

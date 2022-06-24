@@ -85,6 +85,7 @@ fn test_user_stage_info() -> mt::UserStageInfo {
             size_limit: 1038,
         },
         comment: "test".to_string(),
+        ..Default::default()
     }
 }
 

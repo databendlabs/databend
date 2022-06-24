@@ -33,7 +33,7 @@ impl<'a> FuseSnapshot<'a> {
         Self { ctx, table }
     }
 
-    pub async fn get_history(&self) -> Result<DataBlock> {
+    pub async fn get_history(&self, limit: Option<usize>) -> Result<DataBlock> {
         let tbl = self.table;
         let snapshot_location = tbl.snapshot_loc();
         let snapshot_version = tbl.snapshot_format_version();
@@ -43,6 +43,7 @@ impl<'a> FuseSnapshot<'a> {
                 snapshot_location,
                 snapshot_version,
                 tbl.meta_location_generator().clone(),
+                limit,
             )
             .await?;
         self.snapshots_to_block(snapshots, snapshot_version)
@@ -63,17 +64,18 @@ impl<'a> FuseSnapshot<'a> {
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
         let mut compressed: Vec<u64> = Vec::with_capacity(len);
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
+        let mut timestamps: Vec<Option<i64>> = Vec::with_capacity(len);
         let mut current_snapshot_version = latest_snapshot_version;
         let location_generator = &self.table.meta_location_generator;
         for s in snapshots {
-            snapshot_ids.push(s.snapshot_id.to_simple().to_string().into_bytes());
+            snapshot_ids.push(s.snapshot_id.simple().to_string().into_bytes());
             snapshot_locations.push(
                 location_generator
                     .snapshot_location_from_uuid(&s.snapshot_id, current_snapshot_version)?
                     .into_bytes(),
             );
             let (id, ver) = match s.prev_snapshot_id {
-                Some((id, v)) => (Some(id.to_simple().to_string().into_bytes()), v),
+                Some((id, v)) => (Some(id.simple().to_string().into_bytes()), v),
                 None => (None, 0),
             };
             prev_snapshot_ids.push(id);
@@ -83,6 +85,7 @@ impl<'a> FuseSnapshot<'a> {
             row_count.push(s.summary.row_count);
             compressed.push(s.summary.compressed_byte_size);
             uncompressed.push(s.summary.uncompressed_byte_size);
+            timestamps.push(s.timestamp.map(|dt| (dt.timestamp_micros()) as i64));
             current_snapshot_version = ver;
         }
 
@@ -96,6 +99,7 @@ impl<'a> FuseSnapshot<'a> {
             Series::from_data(row_count),
             Series::from_data(uncompressed),
             Series::from_data(compressed),
+            Series::from_data(timestamps),
         ]))
     }
 
@@ -110,6 +114,7 @@ impl<'a> FuseSnapshot<'a> {
             DataField::new("row_count", u64::to_data_type()),
             DataField::new("bytes_uncompressed", u64::to_data_type()),
             DataField::new("bytes_compressed", u64::to_data_type()),
+            DataField::new_nullable("timestamp", TimestampType::new_impl(6)),
         ])
     }
 }

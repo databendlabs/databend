@@ -26,7 +26,7 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_min_max_index() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new_nullable("name", Vu8::to_data_type()),
+        DataField::new("name", Vu8::to_data_type()),
         DataField::new("age", i32::to_data_type()),
     ]);
 

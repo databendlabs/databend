@@ -105,7 +105,7 @@ impl OuterRefRewriter {
                     *scalar = self.rewrite_scalar(scalar)?;
                 }
 
-                Ok(SExpr::create_binary(plan.into(), build_side, probe_side))
+                Ok(SExpr::create_binary(plan.into(), probe_side, build_side))
             }
 
             RelOperator::Max1Row(_)
@@ -150,12 +150,14 @@ impl OuterRefRewriter {
             Scalar::AndExpr(expr) => Ok(AndExpr {
                 left: Box::new(self.rewrite_scalar(&expr.left)?),
                 right: Box::new(self.rewrite_scalar(&expr.right)?),
+                return_type: expr.return_type.clone(),
             }
             .into()),
 
             Scalar::OrExpr(expr) => Ok(OrExpr {
                 left: Box::new(self.rewrite_scalar(&expr.left)?),
                 right: Box::new(self.rewrite_scalar(&expr.right)?),
+                return_type: expr.return_type.clone(),
             }
             .into()),
 
@@ -163,6 +165,7 @@ impl OuterRefRewriter {
                 op: expr.op.clone(),
                 left: Box::new(self.rewrite_scalar(&expr.left)?),
                 right: Box::new(self.rewrite_scalar(&expr.right)?),
+                return_type: expr.return_type.clone(),
             }
             .into()),
 
@@ -204,7 +207,7 @@ impl OuterRefRewriter {
                 Ok(expr)
             }
 
-            Scalar::Cast(cast) => Ok(CastExpr {
+            Scalar::CastExpr(cast) => Ok(CastExpr {
                 argument: Box::new(self.rewrite_scalar(&cast.argument)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),
@@ -293,13 +296,16 @@ impl TransformApply {
         }
 
         let runtime = self.ctx.get_storage_runtime();
+        let query_need_abort = self.ctx.query_need_abort();
         // Spawn sub-pipelines
         for pipeline in children {
-            let executor = PipelineExecutor::create(runtime.clone(), pipeline)?;
+            let executor =
+                PipelineExecutor::create(runtime.clone(), query_need_abort.clone(), pipeline)?;
             executor.execute()?;
         }
 
-        let mut executor = PipelinePullingExecutor::try_create(runtime, pipeline)?;
+        let mut executor =
+            PipelinePullingExecutor::try_create(runtime, query_need_abort, pipeline)?;
         executor.start();
         let mut results = vec![];
         while let Some(result) = executor.pull_data()? {

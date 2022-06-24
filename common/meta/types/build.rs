@@ -60,6 +60,10 @@ fn build_proto() {
             "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
         )
         .type_attribute(
+            "TxnDeleteByPrefixRequest",
+            "#[derive(Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
             "TxnCondition.ConditionResult",
             "#[derive(serde::Serialize, serde::Deserialize, num_derive::FromPrimitive)]",
         )
@@ -93,6 +97,10 @@ fn build_proto() {
         )
         .type_attribute(
             "TxnDeleteResponse",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnDeleteByPrefixResponse",
             "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
         )
         .type_attribute(

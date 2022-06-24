@@ -21,16 +21,18 @@ use common_io::prelude::FormatSettings;
 use crate::formats::output_format::OutputFormat;
 
 #[derive(Default)]
-pub struct ValuesOutputFormat {}
+pub struct ValuesOutputFormat {
+    format_settings: FormatSettings,
+}
 
 impl ValuesOutputFormat {
-    pub fn create(_schema: DataSchemaRef) -> Self {
-        Self {}
+    pub fn create(_schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
+        Self { format_settings }
     }
 }
 
 impl OutputFormat for ValuesOutputFormat {
-    fn serialize_block(&mut self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.column(0).len();
 
         let mut buf = Vec::with_capacity(block.memory_size());
@@ -45,7 +47,7 @@ impl OutputFormat for ValuesOutputFormat {
                 if i != 0 {
                     buf.push(b',');
                 }
-                serializer.write_field(row_index, &mut buf, format);
+                serializer.write_field_quoted(row_index, &mut buf, &self.format_settings, b'\'');
             }
             buf.push(b')');
         }

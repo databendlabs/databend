@@ -20,13 +20,13 @@ use std::time::Instant;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
-use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use serde::Deserialize;
 
 use super::HttpQueryContext;
+use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
 use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
@@ -123,7 +123,7 @@ impl Default for HttpSession {
 #[derive(Debug, Clone)]
 pub struct ResponseState {
     pub running_time_ms: f64,
-    pub scan_progress: Option<ProgressValues>,
+    pub progresses: Progresses,
     pub state: ExecuteStateKind,
     pub error: Option<ErrorCode>,
 }
@@ -255,7 +255,7 @@ impl HttpQuery {
         let (exe_state, err) = state.state.extract();
         ResponseState {
             running_time_ms: state.elapsed().as_secs_f64() * 1000.0,
-            scan_progress: state.get_progress(),
+            progresses: state.get_progress(),
             state: exe_state,
             error: err,
         }

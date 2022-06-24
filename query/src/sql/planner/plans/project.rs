@@ -30,7 +30,7 @@ pub struct Project {
 }
 
 impl Operator for Project {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         RelOp::Project
     }
 

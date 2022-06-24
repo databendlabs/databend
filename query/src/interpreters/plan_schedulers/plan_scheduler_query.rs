@@ -19,11 +19,17 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use common_tracing::tracing::debug;
 
+use crate::interpreters::fragments::QueryFragmentsActions;
+use crate::interpreters::fragments::QueryFragmentsBuilder;
+use crate::interpreters::fragments::RootQueryFragment;
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::plan_schedulers::Scheduled;
 use crate::interpreters::plan_schedulers::ScheduledStream;
 use crate::interpreters::PlanScheduler;
+use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::QueryPipelineBuilder;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::QueryContext;
 
@@ -59,4 +65,32 @@ pub async fn schedule_query(
             Err(error)
         }
     }
+}
+
+async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
+    let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
+    let root_query_fragments = RootQueryFragment::create(query_fragments, ctx.clone(), plan)?;
+
+    if !root_query_fragments.distribute_query()? {
+        return QueryPipelineBuilder::create(ctx.clone()).finalize(plan);
+    }
+
+    let exchange_manager = ctx.get_exchange_manager();
+    let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
+    root_query_fragments.finalize(&mut fragments_actions)?;
+
+    debug!("QueryFragments actions: {:?}", fragments_actions);
+
+    // TODO: move commit into pipeline processor(e.g CommitActionProcessor). It can help us make
+    // Interpreter::execute as sync method
+    exchange_manager
+        .commit_actions(ctx, fragments_actions)
+        .await
+}
+
+pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
+    let settings = ctx.get_settings();
+    let mut pipeline = schedule_query_impl(ctx, plan).await?;
+    pipeline.set_max_threads(settings.get_max_threads()? as usize);
+    Ok(pipeline)
 }

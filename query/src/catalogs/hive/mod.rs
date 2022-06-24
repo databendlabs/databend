@@ -15,7 +15,10 @@
 mod converters;
 mod hive_catalog;
 mod hive_database;
+mod hive_partition;
 mod hive_table;
+mod hive_table_options;
 
 pub use hive_catalog::HiveCatalog;
+pub use hive_partition::HivePartInfo;
 pub use hive_table::HiveTable;

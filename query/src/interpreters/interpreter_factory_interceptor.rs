@@ -39,12 +39,17 @@ pub struct InterceptorInterpreter {
 }
 
 impl InterceptorInterpreter {
-    pub fn create(ctx: Arc<QueryContext>, inner: InterpreterPtr, plan: PlanNode) -> Self {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        inner: InterpreterPtr,
+        plan: PlanNode,
+        query_kind: String,
+    ) -> Self {
         InterceptorInterpreter {
             ctx: ctx.clone(),
-            plan: plan.clone(),
+            plan,
             inner,
-            query_log: InterpreterQueryLog::create(ctx.clone(), Some(plan)),
+            query_log: InterpreterQueryLog::create(ctx.clone(), query_kind),
             source_pipe_builder: Mutex::new(None),
             management_mode_access: ManagementModeAccess::create(ctx),
         }

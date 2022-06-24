@@ -25,7 +25,7 @@ use crate::sql::plans::RelOp;
 use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
-pub struct SortPlan {
+pub struct Sort {
     pub items: Vec<SortItem>,
 }
 
@@ -36,8 +36,8 @@ pub struct SortItem {
     pub nulls_first: Option<bool>,
 }
 
-impl Operator for SortPlan {
-    fn plan_type(&self) -> RelOp {
+impl Operator for Sort {
+    fn rel_op(&self) -> RelOp {
         RelOp::Sort
     }
 
@@ -58,13 +58,13 @@ impl Operator for SortPlan {
     }
 }
 
-impl PhysicalPlan for SortPlan {
+impl PhysicalPlan for Sort {
     fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
         todo!()
     }
 }
 
-impl LogicalPlan for SortPlan {
+impl LogicalPlan for Sort {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         rel_expr.derive_relational_prop_child(0)
     }

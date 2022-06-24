@@ -20,6 +20,8 @@ use serde::Serialize;
 
 use super::utils::mask_string;
 
+pub static AWS_S3_ENDPOINT: &str = "https://s3.amazonaws.com";
+
 /// Config for storage backend.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct StorageConfig {
@@ -107,12 +109,17 @@ pub struct StorageS3Config {
     /// This flag is used internally to control whether or not databend load
     /// credentials from environment like env, profile and web token.
     pub disable_credential_loader: bool,
+    /// Enable this flag to send API in virtual host style.
+    ///
+    /// - Virtual Host Style: `https://bucket.s3.amazonaws.com`
+    /// - Path Style: `https://s3.amazonaws.com/bucket`
+    pub enable_virtual_host_style: bool,
 }
 
 impl Default for StorageS3Config {
     fn default() -> Self {
         StorageS3Config {
-            endpoint_url: "https://s3.amazonaws.com".to_string(),
+            endpoint_url: AWS_S3_ENDPOINT.to_string(),
             region: "".to_string(),
             bucket: "".to_string(),
             access_key_id: "".to_string(),
@@ -120,6 +127,7 @@ impl Default for StorageS3Config {
             master_key: "".to_string(),
             root: "".to_string(),
             disable_credential_loader: false,
+            enable_virtual_host_style: false,
         }
     }
 }
@@ -132,6 +140,7 @@ impl Debug for StorageS3Config {
             .field("bucket", &self.bucket)
             .field("root", &self.root)
             .field("disable_credential_loader", &self.disable_credential_loader)
+            .field("enable_virtual_host_style", &self.enable_virtual_host_style)
             .field("access_key_id", &mask_string(&self.access_key_id, 3))
             .field(
                 "secret_access_key",

@@ -115,15 +115,9 @@ impl ClickHouseSession for InteractiveWorker {
         let ctx = self.session.create_query_context().await;
         match ctx {
             Ok(c) => {
-                let user_info_auth = c.get_auth_manager().auth(&credential).await;
+                let user_info_auth = c.get_auth_manager().auth(&c, &credential).await;
                 match user_info_auth {
-                    Ok((tenant_id, user_info)) => {
-                        self.session.set_current_user(user_info);
-                        if let Some(tenant_id) = tenant_id {
-                            self.session.set_current_tenant(tenant_id);
-                        }
-                        true
-                    }
+                    Ok(_) => true,
                     Err(failure) => {
                         tracing::error!(
                             "ClickHouse handler authenticate failed, \
