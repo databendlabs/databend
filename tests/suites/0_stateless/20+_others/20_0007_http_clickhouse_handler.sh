@@ -60,4 +60,4 @@ curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_POR
 curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "drop table a"
 
 
-# rm /tmp/*.txt
+rm /tmp/*.txt

@@ -411,5 +411,8 @@ protocol = "binary"
         },
     );
 
+    // remove temp file
+    fs::remove_file(file_path)?;
+
     Ok(())
 }
