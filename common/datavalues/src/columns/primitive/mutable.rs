@@ -146,6 +146,10 @@ where
     fn push(&mut self, value: <T as Scalar>::RefType<'_>) {
         self.values.push(value);
     }
+    
+    fn pushs(&mut self, value:  <T as Scalar>::RefType<'_>, size: usize) {
+        self.values.extend(std::iter::repeat(value).take(size))
+    }
 
     fn finish(&mut self) -> Self::ColumnType {
         self.shrink_to_fit();

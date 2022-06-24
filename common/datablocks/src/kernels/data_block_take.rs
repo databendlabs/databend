@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::{array::{Array, ArrayRef, growable::make_growable}, compute::merge_sort::MergeSlice};
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
@@ -33,4 +34,74 @@ impl DataBlock {
 
         Ok(DataBlock::create(raw.schema().clone(), columns))
     }
+    
+    pub fn block_take_by_chunk_indices(
+        blocks: &[DataBlock],
+        slices: &[ChunkRowIndex],
+    ) -> Result<ColumnRef> {
+        debug_assert!(!blocks.is_empty());
+        
+        let schema = blocks[0].schema();
+        let columns = schema.fields()
+            .iter()
+            .map(|f| {
+                let column = raw.try_column_by_name(f.name())?;
+                Series::take(column, indices)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(DataBlock::create(raw.schema().clone(), columns))
+    }
+    
+    
+    
+    pub fn take_columns_by_slices_limit(
+        data_type: &DataTypeImpl,
+        columns: &[ColumnRef],
+        slices: &[MergeSlice],
+        limit: Option<usize>
+    ) -> Result<ColumnRef> {
+        let arrays: Vec<ArrayRef> = columns.iter().map(|c| c.as_arrow_array()).collect();
+        let arrays: Vec<&dyn Array> = arrays.iter().map(|c| c.as_ref()).collect();
+        let taked =  Self::take_arrays_by_slices_limit(&arrays, &slices, limit);
+        
+        match data_type.is_nullable() {
+            false => Ok(taked.into_column()),
+            true => Ok(taked.into_nullable_column()),
+        }
+    }
+    
+     // TODO use ColumnBuilder to static dispath the extend
+    pub fn take_arrays_by_slices_limit(
+        arrays: &[&dyn Array],
+        slices: &[MergeSlice],
+        limit: Option<usize>,
+    ) -> Box<dyn Array> {
+        let slices = slices.iter();
+        let len = arrays.iter().map(|array| array.len()).sum();
+
+        let limit = limit.unwrap_or(len);
+        let limit = limit.min(len);
+        let mut growable = make_growable(arrays, false, limit);
+
+        if limit != len {
+            let mut current_len = 0;
+            for (index, start, len) in slices {
+                if len + current_len >= limit {
+                    growable.extend(*index, *start, limit - current_len);
+                    break;
+                } else {
+                    growable.extend(*index, *start, *len);
+                    current_len += len;
+                }
+            }
+        } else {
+            for (index, start, len) in slices {
+                growable.extend(*index, *start, *len);
+            }
+        }
+
+        growable.as_box()
+    }
+
 }
