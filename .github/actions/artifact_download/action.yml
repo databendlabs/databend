@@ -28,7 +28,7 @@ runs:
       id: path
       shell: bash
       run: |
-        if [[ -z "${{ inputs.path }}"]]; then
+        if [[ -z "${{ inputs.path }}" ]]; then
           path="./target/${{ inputs.profile }}"
         else
           path="${{ inputs.path }}"
