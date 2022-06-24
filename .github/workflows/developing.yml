@@ -1,15 +1,6 @@
 name: Developing
 
 on:
-  push:
-    branches-ignore:
-      - main
-    paths-ignore:
-      - "docs/**"
-      - "website/**"
-      - "**.md"
-      - "scripts/setup/**"
-      - ".devcontainer/**"
   pull_request:
     paths-ignore:
       - "docs/**"
