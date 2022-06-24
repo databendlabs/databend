@@ -11,7 +11,8 @@ queue_rules:
       - check-success=test_metactl
       - check-success=test_stateless_standalone_linux
       - check-success=test_stateless_cluster_linux
-      - check-success=test_stateful_standalone
+      - check-success=test_stateful_standalone_linux
+      - check-success=test_sqllogic_standalone_linux
 
 pull_request_rules:
   - name: put bug fix pr to queue

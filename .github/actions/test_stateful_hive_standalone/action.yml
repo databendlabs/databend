@@ -12,29 +12,20 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Maximize build space
-      uses: ./.github/actions/cleanup
-
-    - name: Setup Build Tool
-      uses: ./.github/actions/setup_build_tool
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
       with:
-        image: ${{ inputs.target }}
-
-    - uses: actions/download-artifact@v2
-      with:
-        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}-hive
-        path: ./target/debug
-
-    - name: Set up file as executable
-      shell: bash
-      run: |
-        chmod +x ./target/debug/databend-*
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        source: s3
+        category: hive
 
     - name: Checkout java env
       uses: actions/setup-java@v3
       with:
         distribution: temurin
-        java-version: '11'
+        java-version: "11"
 
     # hive cluster setup
     - name: Hive Cluster Setup
@@ -69,7 +60,6 @@ runs:
         bash ./scripts/ci/ci-run-stateful-hive-tests-standalone-embed-meta.sh
       env:
         LD_LIBRARY_PATH: ${{ env.JAVA_HOME }}/lib/server:${{ env.LD_LIBRARY_PATH }}
-
 
     - name: Stop containers
       if: always()

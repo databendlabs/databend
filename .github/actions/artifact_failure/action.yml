@@ -1,0 +1,23 @@
+name: "Upload failure Artifacts"
+description: "Upload failure Artifacts"
+inputs:
+  name:
+    description: ""
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/upload-artifact@v3
+      with:
+        name: ${{ inputs.name }}
+        path: |
+          _local_fs/
+          _logs*/
+          _meta*/
+          metasrv/_logs*/
+          query/_logs*/
+          store/_logs*/
+          .databend/
+          query.log
+          metasrv.log
+          nohup.out
