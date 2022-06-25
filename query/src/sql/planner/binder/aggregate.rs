@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::SelectTarget;
+use common_ast::parser::token::Token;
 use common_ast::DisplayError;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
@@ -228,12 +229,12 @@ impl<'a> Binder {
         &mut self,
         bind_context: &mut BindContext,
         having: &Expr<'a>,
-    ) -> Result<Scalar> {
+    ) -> Result<(Scalar, &'a [Token<'a>])> {
         let mut scalar_binder =
             ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
         let (scalar, _) = scalar_binder.bind(having).await?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-        rewriter.visit(&scalar)
+        Ok((rewriter.visit(&scalar)?, having.span()))
     }
 
     /// We have supported three kinds of `group by` items:
@@ -311,10 +312,11 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         having: Scalar,
+        span: &'a [Token<'a>],
         child: SExpr,
     ) -> Result<SExpr> {
         let mut grouping_checker = GroupingChecker::new(bind_context);
-        let scalar = grouping_checker.resolve(&having)?;
+        let scalar = grouping_checker.resolve(&having, Some(span))?;
 
         let predicates = split_conjunctions(&scalar);
 
