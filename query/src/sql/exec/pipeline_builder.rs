@@ -491,7 +491,7 @@ impl PipelineBuilder {
             Result::<Option<PhysicalScalar>>::Ok(None),
             |acc, next| {
                 if let Ok(None) = acc {
-                    Ok(Some(next.clone()))
+                    Ok(Some(next))
                 } else if let Ok(Some(prev)) = acc {
                     let left_type = prev.data_type();
                     let right_type = next.data_type();
