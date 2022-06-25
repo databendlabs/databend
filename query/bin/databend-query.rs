@@ -55,10 +55,12 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     );
 
     let mut _sentry_guard = None;
-    let bend_sentry_env = env::var("DATABEND_SENTRY").unwrap_or_else(|_| "".to_string());
+    let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());
     if !bend_sentry_env.is_empty() {
+        // NOTE: `traces_sample_rate` in sentry client option is 0.0 by default, which disable sentry
+        // tracing. Here we just use sentry-log feature.
         _sentry_guard = Some(sentry::init((bend_sentry_env, sentry::ClientOptions {
-            release: sentry::release_name!(),
+            release: common_tracing::databend_semver!(),
             ..Default::default()
         })));
     }
