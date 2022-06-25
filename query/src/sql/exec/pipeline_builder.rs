@@ -167,13 +167,19 @@ impl PipelineBuilder {
                 )?;
                 Ok(())
             }
-            PhysicalPlan::CrossApply {
+            v @ PhysicalPlan::CrossApply {
                 input,
                 subquery,
                 correlated_columns,
             } => {
                 self.build_pipeline(context.clone(), input, pipeline)?;
-                self.build_apply(context, subquery, correlated_columns, pipeline)
+                self.build_apply(
+                    context,
+                    subquery,
+                    correlated_columns,
+                    v.output_schema()?,
+                    pipeline,
+                )
             }
             PhysicalPlan::Max1Row { input } => {
                 self.build_pipeline(context, input, pipeline)?;
@@ -541,6 +547,7 @@ impl PipelineBuilder {
         context: Arc<QueryContext>,
         subquery: &PhysicalPlan,
         outer_columns: &BTreeSet<ColumnID>,
+        output_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
@@ -549,6 +556,7 @@ impl PipelineBuilder {
                 output,
                 context.clone(),
                 outer_columns.clone(),
+                output_schema.clone(),
                 subquery.clone(),
             ))
         })?;
