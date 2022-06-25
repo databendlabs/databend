@@ -15,7 +15,7 @@
 use std::sync::Once;
 
 use common_meta_types::NodeId;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use prometheus::exponential_buckets;
 use prometheus::CounterVec;
 use prometheus::Gauge;
@@ -34,232 +34,334 @@ pub const SERVER_SUBSYSTEM: &str = "server";
 pub const RAFT_NETWORK_SUBSYSTEM: &str = "raft_network";
 pub const META_NETWORK_SUBSYSTEM: &str = "meta_network";
 
-lazy_static! {
-    pub static ref REGISTRY: Registry = Registry::new();
+pub static REGISTRY: Lazy<Registry> = Lazy::new(Registry::new);
 
-    // server metrics
-    pub static ref CURRENT_LEADER: IntGauge = IntGauge::with_opts(
-        Opts::new("current_leader_id", "Current leader id of cluster, 0 means no leader.")
-            .namespace(META_NAMESPACE)
-            .subsystem(SERVER_SUBSYSTEM)
+// server metrics
+pub static CURRENT_LEADER: Lazy<IntGauge> = Lazy::new(|| {
+    IntGauge::with_opts(
+        Opts::new(
+            "current_leader_id",
+            "Current leader id of cluster, 0 means no leader.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(SERVER_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref IS_LEADER: IntGauge = IntGauge::with_opts(
+pub static IS_LEADER: Lazy<IntGauge> = Lazy::new(|| {
+    IntGauge::with_opts(
         Opts::new("is_leader", "Whether or not this node is current leader.")
             .namespace(META_NAMESPACE)
-            .subsystem(SERVER_SUBSYSTEM)
+            .subsystem(SERVER_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref NODE_IS_HEALTH: IntGauge = IntGauge::with_opts(
+pub static NODE_IS_HEALTH: Lazy<IntGauge> = Lazy::new(|| {
+    IntGauge::with_opts(
         Opts::new("node_is_health", "Whether or not this node is health.")
             .namespace(META_NAMESPACE)
-            .subsystem(SERVER_SUBSYSTEM)
+            .subsystem(SERVER_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref LEADER_CHANGES: IntCounter = IntCounter::with_opts(
+pub static LEADER_CHANGES: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::with_opts(
         Opts::new("leader_changes", "Number of leader changes seen.")
             .namespace(META_NAMESPACE)
-            .subsystem(SERVER_SUBSYSTEM)
+            .subsystem(SERVER_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref APPLYING_SNAPSHOT: IntGauge = IntGauge::with_opts(
+pub static APPLYING_SNAPSHOT: Lazy<IntGauge> = Lazy::new(|| {
+    IntGauge::with_opts(
         Opts::new(
             "applying_snapshot",
-            "Whether or not statemachine is applying snapshot."
+            "Whether or not statemachine is applying snapshot.",
         )
         .namespace(META_NAMESPACE)
-        .subsystem(SERVER_SUBSYSTEM)
+        .subsystem(SERVER_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref PROPOSALS_APPLIED: Gauge = Gauge::with_opts(
+pub static PROPOSALS_APPLIED: Lazy<Gauge> = Lazy::new(|| {
+    Gauge::with_opts(
         Opts::new(
             "proposals_applied",
-            "Total number of consensus proposals applied."
+            "Total number of consensus proposals applied.",
         )
         .namespace(META_NAMESPACE)
-        .subsystem(SERVER_SUBSYSTEM)
+        .subsystem(SERVER_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref PROPOSALS_PENDING: IntGauge = IntGauge::with_opts(
+pub static PROPOSALS_PENDING: Lazy<IntGauge> = Lazy::new(|| {
+    IntGauge::with_opts(
         Opts::new("proposals_pending", "Total number of pending proposals.")
             .namespace(META_NAMESPACE)
-            .subsystem(SERVER_SUBSYSTEM)
+            .subsystem(SERVER_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref PROPOSALS_FAILED: IntCounter = IntCounter::with_opts(
+pub static PROPOSALS_FAILED: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::with_opts(
         Opts::new("proposals_failed", "Total number of failed proposals.")
             .namespace(META_NAMESPACE)
-            .subsystem(SERVER_SUBSYSTEM)
+            .subsystem(SERVER_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref READ_FAILED: IntCounter = IntCounter::with_opts(
+pub static READ_FAILED: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::with_opts(
         Opts::new("read_failed", "Total number of failed read request.")
             .namespace(META_NAMESPACE)
-            .subsystem(SERVER_SUBSYSTEM)
+            .subsystem(SERVER_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref WATCHERS: IntGauge = IntGauge::with_opts(
+pub static WATCHERS: Lazy<IntGauge> = Lazy::new(|| {
+    IntGauge::with_opts(
         Opts::new("watchers", "Total number of active watchers.")
             .namespace(META_NAMESPACE)
-            .subsystem(SERVER_SUBSYSTEM)
+            .subsystem(SERVER_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    // network metrics
-    pub static ref ACTIVE_PEERS: GaugeVec = GaugeVec::new(
-        Opts::new("active_peers", "Current number of active connections to peers.")
-            .namespace(META_NAMESPACE)
-            .subsystem(RAFT_NETWORK_SUBSYSTEM),
+// network metrics
+pub static ACTIVE_PEERS: Lazy<GaugeVec> = Lazy::new(|| {
+    GaugeVec::new(
+        Opts::new(
+            "active_peers",
+            "Current number of active connections to peers.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["id", "address"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref CONNECT_TO_PEER_FAIL: CounterVec = CounterVec::new(
-        Opts::new("fail_connect_to_peer", "Total number of fail connections to peers.")
-            .namespace(META_NAMESPACE)
-            .subsystem(RAFT_NETWORK_SUBSYSTEM),
+pub static CONNECT_TO_PEER_FAIL: Lazy<CounterVec> = Lazy::new(|| {
+    CounterVec::new(
+        Opts::new(
+            "fail_connect_to_peer",
+            "Total number of fail connections to peers.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["id", "address"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref SENT_BYTES: CounterVec = CounterVec::new(
+pub static SENT_BYTES: Lazy<CounterVec> = Lazy::new(|| {
+    CounterVec::new(
         Opts::new("sent_bytes", "Total number of sent bytes to peers.")
             .namespace(META_NAMESPACE)
             .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["to"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref RECV_BYTES: CounterVec = CounterVec::new(
+pub static RECV_BYTES: Lazy<CounterVec> = Lazy::new(|| {
+    CounterVec::new(
         Opts::new("recv_bytes", "Total number of received bytes from peers.")
             .namespace(META_NAMESPACE)
             .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["from"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref SENT_FAILURES: CounterVec = CounterVec::new(
+pub static SENT_FAILURES: Lazy<CounterVec> = Lazy::new(|| {
+    CounterVec::new(
         Opts::new("sent_failures", "Total number of send failures to peers.")
             .namespace(META_NAMESPACE)
             .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["to"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref SNAPSHOT_SEND_SUCCESS: IntCounterVec = IntCounterVec::new(
-        Opts::new("snapshot_send_success", "Total number of successful snapshot sends.")
-            .namespace(META_NAMESPACE)
-            .subsystem(RAFT_NETWORK_SUBSYSTEM),
+pub static SNAPSHOT_SEND_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
+        Opts::new(
+            "snapshot_send_success",
+            "Total number of successful snapshot sends.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["to"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref SNAPSHOT_SEND_FAILURES: IntCounterVec = IntCounterVec::new(
-        Opts::new("snapshot_send_failures", "Total number of snapshot send failures.")
-            .namespace(META_NAMESPACE)
-            .subsystem(RAFT_NETWORK_SUBSYSTEM),
+pub static SNAPSHOT_SEND_FAILURES: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
+        Opts::new(
+            "snapshot_send_failures",
+            "Total number of snapshot send failures.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["to"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref SNAPSHOT_SEND_INFLIGHTS: IntGaugeVec = IntGaugeVec::new(
-        Opts::new("snapshot_send_inflights", "Total number of inflight snapshot sends.")
-            .namespace(META_NAMESPACE)
-            .subsystem(RAFT_NETWORK_SUBSYSTEM),
+pub static SNAPSHOT_SEND_INFLIGHTS: Lazy<IntGaugeVec> = Lazy::new(|| {
+    IntGaugeVec::new(
+        Opts::new(
+            "snapshot_send_inflights",
+            "Total number of inflight snapshot sends.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["to"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref SNAPSHOT_SENT_SECONDS: HistogramVec = HistogramVec::new(
-        HistogramOpts::new("snapshot_sent_seconds", "Total latency distributions of snapshot sends.")
-            .namespace(META_NAMESPACE)
-            .subsystem(RAFT_NETWORK_SUBSYSTEM)
-            // lowest bucket start of upper bound 0.1 sec (100 ms) with factor 2
-            // highest bucket start of 0.1 sec * 2^9 == 51.2 sec
-            .buckets(exponential_buckets(0.1, 2.0, 10).unwrap()),
+pub static SNAPSHOT_SENT_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
+    HistogramVec::new(
+        HistogramOpts::new(
+            "snapshot_sent_seconds",
+            "Total latency distributions of snapshot sends.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_NETWORK_SUBSYSTEM)
+        // lowest bucket start of upper bound 0.1 sec (100 ms) with factor 2
+        // highest bucket start of 0.1 sec * 2^9 == 51.2 sec
+        .buckets(exponential_buckets(0.1, 2.0, 10).unwrap()),
         &["to"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref SNAPSHOT_RECV_INFLIGHTS: IntGaugeVec = IntGaugeVec::new(
-        Opts::new("snapshot_recv_inflights", "Total number of inflight snapshot receives.")
-            .namespace(META_NAMESPACE)
-            .subsystem(RAFT_NETWORK_SUBSYSTEM),
+pub static SNAPSHOT_RECV_INFLIGHTS: Lazy<IntGaugeVec> = Lazy::new(|| {
+    IntGaugeVec::new(
+        Opts::new(
+            "snapshot_recv_inflights",
+            "Total number of inflight snapshot receives.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["from"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref SNAPSHOT_RECV_FAILURES: IntCounterVec = IntCounterVec::new(
-        Opts::new("snapshot_recv_failures", "Total number of snapshot receive failures.")
-            .namespace(META_NAMESPACE)
-            .subsystem(RAFT_NETWORK_SUBSYSTEM),
+pub static SNAPSHOT_RECV_FAILURES: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
+        Opts::new(
+            "snapshot_recv_failures",
+            "Total number of snapshot receive failures.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["from"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref SNAPSHOT_RECV_SUCCESS: IntCounterVec = IntCounterVec::new(
-        Opts::new("snapshot_recv_success", "Total number of successful receive snapshot.")
-            .namespace(META_NAMESPACE)
-            .subsystem(RAFT_NETWORK_SUBSYSTEM),
+pub static SNAPSHOT_RECV_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
+        Opts::new(
+            "snapshot_recv_success",
+            "Total number of successful receive snapshot.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_NETWORK_SUBSYSTEM),
         &["from"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref SNAPSHOT_RECV_SECONDS: HistogramVec = HistogramVec::new(
-        HistogramOpts::new("snapshot_recv_seconds", "Total latency distributions of snapshot receives.")
-            .namespace(META_NAMESPACE)
-            .subsystem(RAFT_NETWORK_SUBSYSTEM)
-            // lowest bucket start of upper bound 0.1 sec (100 ms) with factor 2
-            // highest bucket start of 0.1 sec * 2^9 == 51.2 sec
-            .buckets(exponential_buckets(0.1, 2.0, 10).unwrap()),
+pub static SNAPSHOT_RECV_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
+    HistogramVec::new(
+        HistogramOpts::new(
+            "snapshot_recv_seconds",
+            "Total latency distributions of snapshot receives.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_NETWORK_SUBSYSTEM)
+        // lowest bucket start of upper bound 0.1 sec (100 ms) with factor 2
+        // highest bucket start of 0.1 sec * 2^9 == 51.2 sec
+        .buckets(exponential_buckets(0.1, 2.0, 10).unwrap()),
         &["from"],
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref META_SERVICE_SENT_BYTES: IntCounter = IntCounter::with_opts(
-        Opts::new("sent_bytes", "Total number of sent bytes to meta grpc client.")
-            .namespace(META_NAMESPACE)
-            .subsystem(META_NETWORK_SUBSYSTEM)
+pub static META_SERVICE_SENT_BYTES: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::with_opts(
+        Opts::new(
+            "sent_bytes",
+            "Total number of sent bytes to meta grpc client.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(META_NETWORK_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref META_SERVICE_RECV_BYTES: IntCounter = IntCounter::with_opts(
-        Opts::new("recv_bytes", "Total number of recv bytes from meta grpc client.")
-            .namespace(META_NAMESPACE)
-            .subsystem(META_NETWORK_SUBSYSTEM)
+pub static META_SERVICE_RECV_BYTES: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::with_opts(
+        Opts::new(
+            "recv_bytes",
+            "Total number of recv bytes from meta grpc client.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(META_NETWORK_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref META_REQUEST_INFLIGHTS: IntGauge = IntGauge::with_opts(
-        Opts::new("req_inflights", "Total number of inflight meta grpc requests.")
-            .namespace(META_NAMESPACE)
-            .subsystem(META_NETWORK_SUBSYSTEM)
+pub static META_REQUEST_INFLIGHTS: Lazy<IntGauge> = Lazy::new(|| {
+    IntGauge::with_opts(
+        Opts::new(
+            "req_inflights",
+            "Total number of inflight meta grpc requests.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(META_NETWORK_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref META_SERVICE_SUCCESS: IntCounter = IntCounter::with_opts(
-        Opts::new("req_success", "Total number of success request from meta grpc client.")
-            .namespace(META_NAMESPACE)
-            .subsystem(META_NETWORK_SUBSYSTEM)
+pub static META_SERVICE_SUCCESS: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::with_opts(
+        Opts::new(
+            "req_success",
+            "Total number of success request from meta grpc client.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(META_NETWORK_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
+    .expect("meta metric cannot be created")
+});
 
-    pub static ref META_SERVICE_FAILED: IntCounter = IntCounter::with_opts(
-        Opts::new("req_failed", "Total number of fail request from meta grpc client.")
-            .namespace(META_NAMESPACE)
-            .subsystem(META_NETWORK_SUBSYSTEM)
+pub static META_SERVICE_FAILED: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::with_opts(
+        Opts::new(
+            "req_failed",
+            "Total number of fail request from meta grpc client.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(META_NETWORK_SUBSYSTEM),
     )
-    .expect("meta metric cannot be created");
-}
+    .expect("meta metric cannot be created")
+});
 
 pub fn init_meta_metrics_recorder() {
     static START: Once = Once::new();
