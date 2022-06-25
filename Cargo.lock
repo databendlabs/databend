@@ -2055,7 +2055,6 @@ dependencies = [
  "itertools",
  "jwt-simple",
  "jwtk",
- "lazy_static",
  "lz4",
  "maplit",
  "metrics",

@@ -20,7 +20,7 @@ mod subquery_rewriter;
 use std::sync::Arc;
 
 use common_exception::Result;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use super::rule::RuleID;
 use crate::sessions::QueryContext;
@@ -31,8 +31,8 @@ use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
 use crate::sql::MetadataRef;
 
-lazy_static! {
-    pub static ref DEFAULT_REWRITE_RULES: Vec<RuleID> = vec![
+pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
+    vec![
         RuleID::NormalizeScalarFilter,
         RuleID::EliminateFilter,
         RuleID::EliminateEvalScalar,
@@ -44,8 +44,8 @@ lazy_static! {
         RuleID::PushDownFilterProject,
         RuleID::PushDownFilterJoin,
         RuleID::PushDownFilterCrossApply,
-    ];
-}
+    ]
+});
 
 /// A heuristic query optimizer. It will apply specific transformation rules in order and
 /// implement the logical plans with default implementation rules.
