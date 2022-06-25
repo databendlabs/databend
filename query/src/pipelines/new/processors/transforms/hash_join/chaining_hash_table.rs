@@ -291,6 +291,9 @@ impl ChainingHashTable {
         let keys = method.build_keys(&probe_keys, input.num_rows())?;
         match self.join_type {
             JoinType::Inner => {
+                let mut probe_indexs = Vec::with_capacity(keys.len());
+                let mut build_indexs = Vec::with_capacity(keys.len());
+
                 for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
                     let probe_result_ptr = hash_table.find_key(key);
                     if probe_result_ptr.is_none() {
@@ -298,10 +301,17 @@ impl ChainingHashTable {
                         continue;
                     }
                     let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-                    let build_block = self.row_space.gather(probe_result_ptrs)?;
-                    let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                    results.push(self.merge_block(&build_block, &probe_block)?);
+                    probe_indexs.extend_from_slice(probe_result_ptrs);
+                    
+                    for _ in probe_result_ptrs {
+                        build_indexs.push(i as u32);
+                    }
                 }
+
+                let build_block = self.row_space.gather(&probe_indexs)?;
+                let probe_block = DataBlock::block_take_by_indices(input, &build_indexs)?;
+
+                results.push(self.merge_eq_block(&build_block, &probe_block)?);
             }
             JoinType::Semi => {
                 for (i, key) in keys.iter().enumerate().take(input.num_rows()) {
@@ -392,6 +402,21 @@ impl ChainingHashTable {
         }
         Ok(result_block)
     }
+    
+     // Merge build block and probe block
+    fn merge_eq_block(&self, build_block: &DataBlock, probe_block: &DataBlock) -> Result<DataBlock> {
+        let mut probe_block = probe_block.clone();
+        for (col, field) in build_block
+            .columns()
+            .iter()
+            .zip(build_block.schema().fields().iter())
+        {
+            probe_block =
+                probe_block.add_column(col.clone(), field.clone())?;
+        }
+        Ok(probe_block)
+    }
+    
 
     // Merge build block and probe block
     fn merge_block(&self, build_block: &DataBlock, probe_block: &DataBlock) -> Result<DataBlock> {

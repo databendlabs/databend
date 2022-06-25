@@ -63,7 +63,7 @@ impl Series {
             })
         }
     }
-    
+
     pub fn take_row_indices(column: &ColumnRef, indices: &[RowIndex]) -> Result<ColumnRef> {
         if column.is_const() || column.is_null() {
             Ok(column.slice(0, indices.len()))
@@ -74,8 +74,9 @@ impl Series {
             let values = nullable_c.ensure_validity();
             let bool_column = BooleanColumn::from_arrow_data(values.clone()).arc();
             let bool_column_result = Self::take_row_indices(&bool_column, indices)?;
-            let bool_column_result: &BooleanColumn =  unsafe { Series::static_cast(&bool_column_result) };
-          
+            let bool_column_result: &BooleanColumn =
+                unsafe { Series::static_cast(&bool_column_result) };
+
             Ok(NullableColumn::wrap_inner(
                 inner_result,
                 Some(bool_column_result.values().clone()),
@@ -107,27 +108,30 @@ impl Series {
             })
         }
     }
-    
-    
-    pub fn take_chunk_indices(columns: &[ColumnRef], indices: &[ChunkRowIndex]) -> Result<ColumnRef> {
+
+    pub fn take_chunk_indices(
+        columns: &[ColumnRef],
+        indices: &[ChunkRowIndex],
+    ) -> Result<ColumnRef> {
         debug_assert!(!columns.is_empty());
         let columns: Vec<ColumnRef> = columns.iter().map(|c| c.convert_full_column()).collect();
-        
+
         if columns[0].is_nullable() {
             let mut nonull_cols = Vec::with_capacity(columns.len());
             let mut bool_cols = Vec::with_capacity(columns.len());
-            
+
             for col in columns.iter() {
                 let nullable_c: &NullableColumn = unsafe { Series::static_cast(col) };
                 nonull_cols.push(nullable_c.inner().clone());
-                
+
                 let values = nullable_c.ensure_validity();
                 let bool_column = BooleanColumn::from_arrow_data(values.clone()).arc();
                 bool_cols.push(bool_column);
             }
-            let inner_result = Self::take_chunk_indices( &nonull_cols, indices)?;
-            let bool_column_result = Self::take_chunk_indices( &bool_cols, indices)?;
-            let bool_column_result: &BooleanColumn =  unsafe { Series::static_cast(&bool_column_result) };
+            let inner_result = Self::take_chunk_indices(&nonull_cols, indices)?;
+            let bool_column_result = Self::take_chunk_indices(&bool_cols, indices)?;
+            let bool_column_result: &BooleanColumn =
+                unsafe { Series::static_cast(&bool_column_result) };
 
             Ok(NullableColumn::wrap_inner(
                 inner_result,
@@ -141,7 +145,7 @@ impl Series {
                     let col: &<$T as Scalar>::ColumnType = Series::check_get(col)?;
                     cols.push(col);
                 }
-                
+
                 type Builder = <<$T as Scalar>::ColumnType as ScalarColumn>::Builder;
                 let mut builder = Builder::with_capacity_meta(indices.len(), columns[0].column_meta());
 

@@ -86,40 +86,32 @@ impl RowSpace {
         Ok(())
     }
 
-    pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataBlock> {
-        let mut data_blocks = vec![];
-        let mut indices = vec![];
+    pub fn datablocks(&self) -> Vec<DataBlock> {
+        let chunks = self.chunks.read().unwrap();
+        chunks.iter().map(|c| c.data_block.clone()).collect()
+    }
 
-        {
-            // Acquire read lock in current scope
-            let chunks = self.chunks.read().unwrap();
-            for row_ptr in row_ptrs.iter() {
-                assert!((row_ptr.chunk_index as usize) < chunks.len());
-                let block = self.gather_single_chunk(&chunks[row_ptr.chunk_index as usize], &[
-                    row_ptr.row_index,
-                ])?;
-                if !block.is_empty() {
-                    indices.push((data_blocks.len(), 0));
-                    data_blocks.push(block);
-                }
-            }
+    pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataBlock> {
+        let data_blocks = self.datablocks();
+        let mut indices = Vec::with_capacity(row_ptrs.len());
+
+        for row_ptr in row_ptrs.iter() {
+            indices.push((
+                row_ptr.chunk_index as usize,
+                row_ptr.row_index as usize,
+                1usize,
+            ));
         }
 
         // If build_key doesn't have duplicated columns, the length of row_ptrs will be one.
         // So we don't need to `gather_blocks`, directly return.
-        if data_blocks.len() == 1 {
-            return Ok(data_blocks[0].clone());
-        }
 
         if !data_blocks.is_empty() {
-            let data_block = DataBlock::gather_blocks(&data_blocks, indices.as_slice())?;
+            let data_block =
+                DataBlock::block_take_by_chunk_indices(&data_blocks, indices.as_slice())?;
             Ok(data_block)
         } else {
             Ok(DataBlock::empty_with_schema(self.data_schema.clone()))
         }
-    }
-
-    fn gather_single_chunk(&self, chunk: &Chunk, indices: &[u32]) -> Result<DataBlock> {
-        DataBlock::block_take_by_indices(&chunk.data_block, indices)
     }
 }

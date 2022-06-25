@@ -17,6 +17,7 @@ use std::iter::once;
 use common_arrow::arrow::array::ord as arrow_ord;
 use common_arrow::arrow::array::ord::DynComparator;
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::compute::merge_sort::*;
 use common_arrow::arrow::compute::sort as arrow_sort;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -60,7 +61,8 @@ impl DataBlock {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let indices = arrow_sort::lexsort_to_indices_impl(&order_arrays, limit, &build_compare)?;
+        let indices: PrimitiveArray<u32> =
+            arrow_sort::lexsort_to_indices_impl(&order_arrays, limit, &build_compare)?;
         DataBlock::block_take_by_indices(block, indices.values())
     }
 
@@ -125,14 +127,18 @@ impl DataBlock {
             .map(|f| {
                 let left = lhs.try_column_by_name(f.name())?;
                 let right = rhs.try_column_by_name(f.name())?;
-               Self::take_columns_by_slices_limit(f.data_type(), &[left.clone(), right.clone()], &slices, limit)
+                Self::take_columns_by_slices_limit(
+                    f.data_type(),
+                    &[left.clone(), right.clone()],
+                    &slices,
+                    limit,
+                )
             })
             .collect::<Result<Vec<_>>>()?;
 
         Ok(DataBlock::create(lhs.schema().clone(), columns))
     }
-    
-    
+
     pub fn merge_sort_blocks(
         blocks: &[DataBlock],
         sort_columns_descriptions: &[SortColumnDescription],

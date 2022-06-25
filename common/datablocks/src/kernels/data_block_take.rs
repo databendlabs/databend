@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::{array::{Array, ArrayRef, growable::make_growable}, compute::merge_sort::MergeSlice};
+use common_arrow::arrow::array::growable::make_growable;
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::compute::merge_sort::MergeSlice;
+use common_arrow::arrow::types::Index;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::DataBlock;
 
 impl DataBlock {
-    pub fn block_take_by_indices(raw: &DataBlock, indices: &[u32]) -> Result<DataBlock> {
+    pub fn block_take_by_indices<I: Index>(raw: &DataBlock, indices: &[I]) -> Result<DataBlock> {
         if indices.is_empty() {
             return Ok(DataBlock::empty_with_schema(raw.schema().clone()));
         }
@@ -34,44 +38,46 @@ impl DataBlock {
 
         Ok(DataBlock::create(raw.schema().clone(), columns))
     }
-    
+
     pub fn block_take_by_chunk_indices(
         blocks: &[DataBlock],
         slices: &[ChunkRowIndex],
-    ) -> Result<ColumnRef> {
+    ) -> Result<DataBlock> {
         debug_assert!(!blocks.is_empty());
-        
-        let schema = blocks[0].schema();
-        let columns = schema.fields()
-            .iter()
-            .map(|f| {
-                let column = raw.try_column_by_name(f.name())?;
-                Series::take(column, indices)
-            })
-            .collect::<Result<Vec<_>>>()?;
 
-        Ok(DataBlock::create(raw.schema().clone(), columns))
+        let schema = blocks[0].schema();
+        let mut result_columns = Vec::with_capacity(schema.num_fields());
+
+        for index in 0..schema.num_fields() {
+            let mut columns = Vec::with_capacity(blocks.len());
+
+            for block in blocks {
+                columns.push(block.column(index).clone());
+            }
+            let column = Series::take_chunk_indices(&columns, slices)?;
+            result_columns.push(column);
+        }
+
+        Ok(DataBlock::create(schema.clone(), result_columns))
     }
-    
-    
-    
+
     pub fn take_columns_by_slices_limit(
         data_type: &DataTypeImpl,
         columns: &[ColumnRef],
         slices: &[MergeSlice],
-        limit: Option<usize>
+        limit: Option<usize>,
     ) -> Result<ColumnRef> {
         let arrays: Vec<ArrayRef> = columns.iter().map(|c| c.as_arrow_array()).collect();
         let arrays: Vec<&dyn Array> = arrays.iter().map(|c| c.as_ref()).collect();
-        let taked =  Self::take_arrays_by_slices_limit(&arrays, &slices, limit);
-        
+        let taked = Self::take_arrays_by_slices_limit(&arrays, &slices, limit);
+
         match data_type.is_nullable() {
             false => Ok(taked.into_column()),
             true => Ok(taked.into_nullable_column()),
         }
     }
-    
-     // TODO use ColumnBuilder to static dispath the extend
+
+    // TODO use ColumnBuilder to static dispath the extend
     pub fn take_arrays_by_slices_limit(
         arrays: &[&dyn Array],
         slices: &[MergeSlice],
@@ -103,5 +109,4 @@ impl DataBlock {
 
         growable.as_box()
     }
-
 }

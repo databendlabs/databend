@@ -146,8 +146,8 @@ where
     fn push(&mut self, value: <T as Scalar>::RefType<'_>) {
         self.values.push(value);
     }
-    
-    fn pushs(&mut self, value:  <T as Scalar>::RefType<'_>, size: usize) {
+
+    fn pushs(&mut self, value: <T as Scalar>::RefType<'_>, size: usize) {
         self.values.extend(std::iter::repeat(value).take(size))
     }
 

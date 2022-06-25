@@ -82,7 +82,7 @@ pub trait ScalarColumnBuilder: MutableColumn {
 
     /// Append a value to builder.
     fn push(&mut self, value: <Self::ColumnType as ScalarColumn>::RefItem<'_>);
-    
+
     fn pushs(&mut self, value: <Self::ColumnType as ScalarColumn>::RefItem<'_>, size: usize) {
         for _ in 0..size {
             self.push(value)
