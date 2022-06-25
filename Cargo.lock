@@ -1936,7 +1936,6 @@ dependencies = [
  "common-tracing",
  "env_logger",
  "futures",
- "lazy_static",
  "maplit",
  "num",
  "once_cell",
