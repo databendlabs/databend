@@ -281,7 +281,6 @@ impl ChainingHashTable {
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         keys: Vec<Key>,
-        probe_keys: Vec<&ColumnRef>,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
@@ -476,49 +475,49 @@ impl ChainingHashTable {
                     .map(|key| KeysRef::create(key.as_ptr() as usize, key.len()))
                     .collect();
 
-                return self.result_blocks(&table.hash_table, keys, probe_keys, input);
+                self.result_blocks(&table.hash_table, keys, input)
             }
             HashTable::KeyU8HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                return self.result_blocks(&table.hash_table, keys, probe_keys, input);
+                self.result_blocks(&table.hash_table, keys, input)
             }
             HashTable::KeyU16HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                return self.result_blocks(&table.hash_table, keys, probe_keys, input);
+                self.result_blocks(&table.hash_table, keys, input)
             }
             HashTable::KeyU32HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                return self.result_blocks(&table.hash_table, keys, probe_keys, input);
+                self.result_blocks(&table.hash_table, keys, input)
             }
             HashTable::KeyU64HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                return self.result_blocks(&table.hash_table, keys, probe_keys, input);
+                self.result_blocks(&table.hash_table, keys, input)
             }
             HashTable::KeyU128HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, probe_keys, input)
+                self.result_blocks(&table.hash_table, keys, input)
             }
             HashTable::KeyU256HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, probe_keys, input)
+                self.result_blocks(&table.hash_table, keys, input)
             }
             HashTable::KeyU512HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, probe_keys, input)
+                self.result_blocks(&table.hash_table, keys, input)
             }
         }
     }
