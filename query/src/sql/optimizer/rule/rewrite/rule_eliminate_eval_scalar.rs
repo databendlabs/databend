@@ -21,6 +21,8 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::RelOp;
+use crate::sql::plans::Scalar;
+use crate::sql::plans::ScalarItem;
 
 pub struct RuleEliminateEvalScalar {
     id: RuleID,
@@ -57,8 +59,33 @@ impl Rule for RuleEliminateEvalScalar {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
         let eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
+
+        // Eliminate empty EvalScalar
         if eval_scalar.items.is_empty() {
             state.add_result(s_expr.child(0)?.clone());
+            return Ok(());
+        }
+
+        // TODO(leiysky): Use another rule to do this.
+        // Remove trivial column reference scalar.
+        if eval_scalar
+            .items
+            .iter()
+            .any(|item| matches!(&item.scalar, Scalar::BoundColumnRef(_)))
+        {
+            let new_items = eval_scalar
+                .items
+                .into_iter()
+                .filter(|item| !matches!(&item.scalar, Scalar::BoundColumnRef(_)))
+                .collect::<Vec<ScalarItem>>();
+            if new_items.is_empty() {
+                state.add_result(s_expr.child(0)?.clone());
+            } else {
+                state.add_result(SExpr::create_unary(
+                    EvalScalar { items: new_items }.into(),
+                    s_expr.child(0)?.clone(),
+                ));
+            }
         }
         Ok(())
     }
