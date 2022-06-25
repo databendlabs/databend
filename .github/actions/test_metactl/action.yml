@@ -18,9 +18,8 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        source: s3
 
     - name: Test metactl
       shell: bash
       run: |
-        make metactl-test
+        bash ./tests/metactl/test-metactl.sh

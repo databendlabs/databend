@@ -7,40 +7,37 @@ echo " === SCRIPT_PATH: $SCRIPT_PATH"
 cd "$SCRIPT_PATH/../../"
 pwd
 
+BUILD_PROFILE="${BUILD_PROFILE:-debug}"
+
 query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
 query_test_path="tests/suites/0_stateless/05_ddl"
 bend_repo_url="https://github.com/datafuselabs/databend"
 
-usage()
-{
+usage() {
     echo " === test latest query being compatible with minimal compatible metasrv"
     echo " === test latest metasrv being compatible with minimal compatible query"
     echo " === Expect ./bins/current contains current binaries"
     echo " === Usage: $0"
 }
 
-binary_url()
-{
+binary_url() {
     local ver="$1"
     echo "https://github.com/datafuselabs/databend/releases/download/v${ver}-nightly/databend-v${ver}-nightly-x86_64-unknown-linux-gnu.tar.gz"
 }
 
 # output: 0.7.58
 # Without prefix `v` and `-nightly`
-find_min_query_ver()
-{
-    ./bins/current/databend-meta --single --cmd ver | grep min-compatible-client-version |  awk '{print $2}'
+find_min_query_ver() {
+    ./bins/current/databend-meta --single --cmd ver | grep min-compatible-client-version | awk '{print $2}'
 }
 
-find_min_metasrv_ver()
-{
-    ./bins/current/databend-query --cmd ver | grep min-compatible-metasrv-version |  awk '{print $2}'
+find_min_metasrv_ver() {
+    ./bins/current/databend-query --cmd ver | grep min-compatible-metasrv-version | awk '{print $2}'
 }
 
 # download a specific version of databend, untar it to folder `./bins/$ver`
 # `ver` is semver without prefix `v` or `-nightly`
-download_binary()
-{
+download_binary() {
     local ver="$1"
 
     local url="$(binary_url $ver)"
@@ -58,7 +55,7 @@ download_binary()
         echo " === Download binary ver: $ver"
         echo " === Download binary url: $url"
 
-        curl -L "$url" > "$fn"
+        curl -L "$url" >"$fn"
         # or:
         # wget -q "$url" -o "$fn"
     fi
@@ -70,8 +67,7 @@ download_binary()
 }
 
 # Clone only specified dir or file in the specified commit
-git_partial_clone()
-{
+git_partial_clone() {
     local repo_url="$1"
     local branch="$2"
     local worktree_path="$3"
@@ -84,8 +80,8 @@ git_partial_clone()
 
     git clone \
         -b "$branch" \
-        --depth 1  \
-        --filter=blob:none  \
+        --depth 1 \
+        --filter=blob:none \
         --sparse \
         "$repo_url" \
         "$local_path"
@@ -99,10 +95,8 @@ git_partial_clone()
 
 }
 
-
 # Download test suite for a specific version of query.
-download_test_suite()
-{
+download_test_suite() {
     local ver="$1"
 
     echo " === Download test suites from $ver:$query_test_path"
@@ -111,8 +105,7 @@ download_test_suite()
 }
 
 # Download config.toml for a specific version of query.
-download_query_config()
-{
+download_query_config() {
     local ver="$1"
     local local_dir="$2"
 
@@ -121,8 +114,7 @@ download_query_config()
     git_partial_clone "$bend_repo_url" "v$ver-nightly" "$query_config_path" "$local_dir"
 }
 
-kill_proc()
-{
+kill_proc() {
     local name="$1"
 
     echo " === Kill $name ..."
@@ -143,8 +135,7 @@ kill_proc()
 }
 
 # Test specified version of query and meta
-run_test()
-{
+run_test() {
     local query_ver="$1"
     local metasrv_ver="$2"
 
@@ -185,7 +176,7 @@ run_test()
         config_path="$query_config_path"
     else
         (
-            download_query_config "$query_ver" old_config;
+            download_query_config "$query_ver" old_config
         )
         config_path="old_config/$query_config_path"
     fi
@@ -200,11 +191,11 @@ run_test()
     else
         (
             # download suites into ./old_suite
-            download_test_suite $query_ver;
+            download_test_suite $query_ver
         )
         suite_path="old_suite/tests/suites"
     fi
-    ./tests/databend-test --suites "$suite_path" --mode 'standalone' --run-dir 0_stateless -- 05_
+    ./tests/databend-test --suites "$suite_path" --mode 'standalone' --run-dir 0_stateless -- '^05_*'
 }
 
 # -- main --
@@ -223,7 +214,7 @@ echo " === min metasrv ver: $old_metasrv_ver"
 download_binary "$old_metasrv_ver"
 download_binary "$old_query_ver"
 
-mkdir -p ./target/debug/
+mkdir -p ./target/${BUILD_PROFILE}/
 
-run_test current        $old_metasrv_ver
+run_test current $old_metasrv_ver
 run_test $old_query_ver current

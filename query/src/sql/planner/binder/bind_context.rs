@@ -14,7 +14,7 @@
 
 use common_ast::ast::Identifier;
 use common_ast::ast::TableAlias;
-use common_ast::parser::error::DisplayError as _;
+use common_ast::DisplayError;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;

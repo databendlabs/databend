@@ -23,7 +23,9 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
+use crate::sql::exec::PhysicalPlanBuilder;
 use crate::sql::exec::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Plan;
@@ -110,16 +112,15 @@ impl ExplainInterpreterV2 {
     pub async fn explain_pipeline(
         &self,
         s_expr: SExpr,
-        bind_context: BindContext,
+        _bind_context: BindContext,
         metadata: MetadataRef,
     ) -> Result<Vec<DataBlock>> {
-        let pb = PipelineBuilder::new(
-            self.ctx.clone(),
-            bind_context.result_columns(),
-            metadata,
-            s_expr,
-        );
-        let (root_pipeline, pipelines, _) = pb.spawn()?;
+        let builder = PhysicalPlanBuilder::new(metadata);
+        let plan = builder.build(&s_expr)?;
+        let mut pb = PipelineBuilder::new();
+        let mut root_pipeline = NewPipeline::create();
+        pb.build_pipeline(self.ctx.clone(), &plan, &mut root_pipeline)?;
+        let pipelines = pb.pipelines;
         let mut blocks = vec![];
         // Format root pipeline
         blocks.push(DataBlock::create(self.schema.clone(), vec![
