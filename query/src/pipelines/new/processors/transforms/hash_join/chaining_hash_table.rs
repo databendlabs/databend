@@ -119,7 +119,7 @@ pub struct ChainingHashTable {
     hash_table: RwLock<HashTable>,
     row_space: RowSpace,
     join_type: JoinType,
-    other_conditions: Vec<EvalNode<ColumnID>>,
+    other_predicate: Option<EvalNode<ColumnID>>,
 }
 
 impl ChainingHashTable {
@@ -128,7 +128,7 @@ impl ChainingHashTable {
         join_type: JoinType,
         build_keys: &[PhysicalScalar],
         probe_keys: &[PhysicalScalar],
-        other_conditions: &[PhysicalScalar],
+        other_predicate: Option<&PhysicalScalar>,
         build_schema: DataSchemaRef,
     ) -> Result<Arc<ChainingHashTable>> {
         let hash_key_types: Vec<DataTypeImpl> =
@@ -145,7 +145,7 @@ impl ChainingHashTable {
                     }),
                     build_keys,
                     probe_keys,
-                    other_conditions,
+                    other_predicate,
                     build_schema,
                 )?)
             }
@@ -158,7 +158,7 @@ impl ChainingHashTable {
                 }),
                 build_keys,
                 probe_keys,
-                other_conditions,
+                other_predicate,
                 build_schema,
             )?),
             HashMethodKind::KeysU16(hash_method) => Arc::new(ChainingHashTable::try_create(
@@ -170,7 +170,7 @@ impl ChainingHashTable {
                 }),
                 build_keys,
                 probe_keys,
-                other_conditions,
+                other_predicate,
                 build_schema,
             )?),
             HashMethodKind::KeysU32(hash_method) => Arc::new(ChainingHashTable::try_create(
@@ -182,7 +182,7 @@ impl ChainingHashTable {
                 }),
                 build_keys,
                 probe_keys,
-                other_conditions,
+                other_predicate,
                 build_schema,
             )?),
             HashMethodKind::KeysU64(hash_method) => Arc::new(ChainingHashTable::try_create(
@@ -194,7 +194,7 @@ impl ChainingHashTable {
                 }),
                 build_keys,
                 probe_keys,
-                other_conditions,
+                other_predicate,
                 build_schema,
             )?),
             HashMethodKind::KeysU128(hash_method) => Arc::new(ChainingHashTable::try_create(
@@ -206,7 +206,7 @@ impl ChainingHashTable {
                 }),
                 build_keys,
                 probe_keys,
-                other_conditions,
+                other_predicate,
                 build_schema,
             )?),
             HashMethodKind::KeysU256(hash_method) => Arc::new(ChainingHashTable::try_create(
@@ -218,7 +218,7 @@ impl ChainingHashTable {
                 }),
                 build_keys,
                 probe_keys,
-                other_conditions,
+                other_predicate,
                 build_schema,
             )?),
             HashMethodKind::KeysU512(hash_method) => Arc::new(ChainingHashTable::try_create(
@@ -230,7 +230,7 @@ impl ChainingHashTable {
                 }),
                 build_keys,
                 probe_keys,
-                other_conditions,
+                other_predicate,
                 build_schema,
             )?),
         })
@@ -242,7 +242,7 @@ impl ChainingHashTable {
         hash_table: HashTable,
         build_keys: &[PhysicalScalar],
         probe_keys: &[PhysicalScalar],
-        other_conditions: &[PhysicalScalar],
+        other_predicate: Option<&PhysicalScalar>,
         mut build_data_schema: DataSchemaRef,
     ) -> Result<Self> {
         if join_type == JoinType::Left {
@@ -267,10 +267,9 @@ impl ChainingHashTable {
                 .iter()
                 .map(Evaluator::eval_physical_scalar)
                 .collect::<Result<_>>()?,
-            other_conditions: other_conditions
-                .iter()
+            other_predicate: other_predicate
                 .map(Evaluator::eval_physical_scalar)
-                .collect::<Result<_>>()?,
+                .transpose()?,
             ctx,
             hash_table: RwLock::new(hash_table),
             join_type,
@@ -363,7 +362,7 @@ impl ChainingHashTable {
     // Todo(xudong963): optimize the performance of this function
     fn filter_block(&self, probe_block: &DataBlock, merged_block: DataBlock) -> Result<DataBlock> {
         let mut result_block = merged_block;
-        for filter in self.other_conditions.iter() {
+        for filter in self.other_predicate.iter() {
             let func_ctx = self.ctx.try_get_function_context()?;
             // `predicate_column` contains a column, which is a boolean column.
             let filter_vector = filter.eval(&func_ctx, &result_block)?;
@@ -469,11 +468,32 @@ impl ChainingHashTable {
                         {
                             let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
                             let probe_result_ptr = table.hash_table.find_key(&keys_ref);
-                            if probe_result_ptr.is_none() {
-                                // No matched row for current probe row
-                                continue;
+                            match (probe_result_ptr, &self.other_predicate) {
+                                (Some(ptrs), Some(pred)) => {
+                                    let build_block = self.row_space.gather(ptrs.get_value())?;
+                                    let probe_block =
+                                        DataBlock::block_take_by_indices(input, &[i as u32])?;
+                                    let merged = self.merge_block(&build_block, &probe_block)?;
+                                    let func_ctx = self.ctx.try_get_function_context()?;
+                                    let filter_vector = pred.eval(&func_ctx, &merged)?;
+                                    let filtered_block =
+                                        DataBlock::filter_block(&merged, filter_vector.vector())?;
+                                    if !filtered_block.is_empty() {
+                                        results.push(DataBlock::block_take_by_indices(input, &[
+                                            i as u32,
+                                        ])?);
+                                    }
+                                }
+                                (Some(_), None) => {
+                                    // No other conditions and has matched result
+                                    results.push(DataBlock::block_take_by_indices(input, &[
+                                        i as u32
+                                    ])?);
+                                }
+                                (None, _) => {
+                                    // No matched row for current probe row
+                                }
                             }
-                            results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
                         }
                     }
                     JoinType::Anti => {
@@ -484,9 +504,31 @@ impl ChainingHashTable {
                         {
                             let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
                             let probe_result_ptr = table.hash_table.find_key(&keys_ref);
-                            if probe_result_ptr.is_none() {
-                                // No matched row for current probe row
-                                results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
+                            match (probe_result_ptr, &self.other_predicate) {
+                                (Some(ptrs), Some(pred)) => {
+                                    let build_block = self.row_space.gather(ptrs.get_value())?;
+                                    let probe_block =
+                                        DataBlock::block_take_by_indices(input, &[i as u32])?;
+                                    let merged = self.merge_block(&build_block, &probe_block)?;
+                                    let func_ctx = self.ctx.try_get_function_context()?;
+                                    let filter_vector = pred.eval(&func_ctx, &merged)?;
+                                    let filtered_block =
+                                        DataBlock::filter_block(&merged, filter_vector.vector())?;
+                                    if filtered_block.is_empty() {
+                                        results.push(DataBlock::block_take_by_indices(input, &[
+                                            i as u32,
+                                        ])?);
+                                    }
+                                }
+                                (Some(_), None) => {
+                                    // No other conditions and has matched result
+                                }
+                                (None, _) => {
+                                    // No matched row for current probe row
+                                    results.push(DataBlock::block_take_by_indices(input, &[
+                                        i as u32
+                                    ])?);
+                                }
                             }
                         }
                     }
@@ -626,11 +668,15 @@ impl HashJoinState for ChainingHashTable {
             JoinType::Cross => self.probe_cross_join(input),
             _ => unimplemented!("{} is unimplemented", self.join_type),
         }?;
-        if self.other_conditions.is_empty() || self.join_type == JoinType::Left {
+        if self.other_predicate.is_none()
+            || self.join_type == JoinType::Left
+            || self.join_type == JoinType::Anti
+            || self.join_type == JoinType::Semi
+        {
             return Ok(data_blocks);
         }
         // Process other conditions for Inner/Semi/Anti join
-        for filter in self.other_conditions.iter() {
+        if let Some(filter) = &self.other_predicate {
             let func_ctx = self.ctx.try_get_function_context()?;
             let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
             for block in data_blocks.iter() {

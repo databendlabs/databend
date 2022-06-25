@@ -487,12 +487,35 @@ impl PipelineBuilder {
         mut child_pipeline: NewPipeline,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
+        let predicate = other_conditions.iter().cloned().fold(
+            Result::<Option<PhysicalScalar>>::Ok(None),
+            |acc, next| {
+                if let Ok(None) = acc {
+                    Ok(Some(next))
+                } else if let Ok(Some(prev)) = acc {
+                    let left_type = prev.data_type();
+                    let right_type = next.data_type();
+                    let data_types = vec![&left_type, &right_type];
+                    let func = FunctionFactory::instance().get("and", &data_types)?;
+                    Ok(Some(PhysicalScalar::Function {
+                        name: "and".to_string(),
+                        args: vec![
+                            (prev.clone(), prev.data_type()),
+                            (next.clone(), next.data_type()),
+                        ],
+                        return_type: func.return_type(),
+                    }))
+                } else {
+                    acc
+                }
+            },
+        )?;
         let hash_join_state = ChainingHashTable::create_join_state(
             ctx.clone(),
             join_type,
             build_keys,
             probe_keys,
-            other_conditions,
+            predicate.as_ref(),
             build_schema,
         )?;
 
