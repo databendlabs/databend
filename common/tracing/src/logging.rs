@@ -22,6 +22,7 @@ use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use sentry_tracing::EventFilter;
 use tracing::Event;
+use tracing::Level;
 use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
@@ -109,10 +110,19 @@ pub fn init_global_tracing(
     let mut sentry_layer = None;
     let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());
     if !bend_sentry_env.is_empty() {
-        sentry_layer = Some(sentry_tracing::layer().event_filter(|md| match md.level() {
-            &tracing::Level::ERROR | &tracing::Level::WARN => EventFilter::Event,
-            _ => EventFilter::Ignore,
-        }));
+        sentry_layer = Some(
+            sentry_tracing::layer()
+                .event_filter(|metadata| match metadata.level() {
+                    &Level::ERROR | &Level::WARN => EventFilter::Event,
+                    &Level::INFO | &Level::DEBUG | &Level::TRACE => EventFilter::Breadcrumb,
+                })
+                .span_filter(|metadata| {
+                    matches!(
+                        metadata.level(),
+                        &Level::ERROR | &Level::WARN | &Level::INFO | &Level::DEBUG
+                    )
+                }),
+        );
     }
 
     let stdout_layer = if enable_stdout == Some(false) {
