@@ -19,7 +19,7 @@ use logos::Logos;
 use logos::Span;
 
 pub use self::TokenKind::*;
-use crate::parser::error::DisplayError;
+use crate::DisplayError;
 
 #[derive(Clone, PartialEq)]
 pub struct Token<'a> {

@@ -1,0 +1,38 @@
+name: "Build Linux Hive"
+description: "Build with hive on linux"
+inputs:
+  target:
+    description: ""
+    required: true
+  profile:
+    description: "debug/release"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+      with:
+        registry: public.ecr.aws/i7g1w5q7
+        image: ${{ inputs.target }}
+
+    - name: Build Debug
+      if: inputs.profile == 'debug'
+      shell: bash
+      run: cargo build --target ${{ inputs.target }} --bin databend-query --features hive
+
+    - name: Build Release
+      if: inputs.profile == 'release'
+      shell: bash
+      run: cargo build --target ${{ inputs.target }} --bin databend-query --features hive --release
+
+    - shell: bash
+      run: readelf -p .comment ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-query
+
+    - name: Upload artifact
+      uses: ./.github/actions/artifact_upload
+      with:
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        category: hive

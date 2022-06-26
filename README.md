@@ -206,3 +206,5 @@ Databend is licensed under [Apache 2.0](LICENSE).
 
 - Databend is inspired by [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture), its computing model is based on [apache-arrow](https://arrow.apache.org/).
 - The [documentation website](https://databend.rs) hosted by [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
+- Thanks to [Mergify](https://mergify.com/) for sponsoring advanced features like Batch Merge.
+- Thanks to [QingCloud](https://qingcloud.com) for sponsoring CI resources.

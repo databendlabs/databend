@@ -296,7 +296,7 @@ drop table t2;
 
 -- test error code hint
 
-select 3 as a, 4 as a; -- {ErrorCode 1002 }
+select 3 as a, 4 as a;
 -- udf
 select '====UDF====';
 CREATE FUNCTION a_plus_3 AS (a) -> a+3;

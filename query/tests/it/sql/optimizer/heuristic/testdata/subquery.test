@@ -2,7 +2,7 @@
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
 Project: [number]
-    Filter: [number = subquery_4]
+    Filter: [t.number = subquery_4]
         CrossApply
             CrossJoin
                 Scan: default.system.numbers
@@ -11,7 +11,7 @@ Project: [number]
                 Project: [COUNT(*)]
                     EvalScalar: [COUNT(*)]
                         Aggregate: group items: [], aggregate functions: [COUNT(*)]
-                            Filter: [number = number]
+                            Filter: [t.number = t2.number]
                                 CrossJoin
                                     Scan: default.system.numbers
                                     Scan: default.system.numbers
@@ -27,7 +27,7 @@ Project: [number]
             Filter: [subquery_3]
                 EvalScalar: [count(*) > 0]
                     Aggregate: group items: [], aggregate functions: [count(*)]
-                        Filter: [number = 0]
+                        Filter: [numbers.number = 0]
                             Scan: default.system.numbers
 
 
@@ -35,10 +35,10 @@ Project: [number]
 select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [subquery_1], probe keys: [number], join filters: []
+    HashJoin: INNER, build keys: [subquery_1], probe keys: [t.number], join filters: []
         Scan: default.system.numbers
         Max1Row
-            Filter: [number = 0]
+            Filter: [numbers.number = 0]
                 Scan: default.system.numbers
 
 
@@ -46,7 +46,7 @@ Project: [number]
 select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
+    HashJoin: SEMI, build keys: [numbers.number], probe keys: [t.number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -55,7 +55,7 @@ Project: [number]
 select t.number from numbers(1) as t where not exists (select * from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: ANTI, build keys: [number], probe keys: [number], join filters: []
+    HashJoin: ANTI, build keys: [numbers.number], probe keys: [t.number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -63,7 +63,7 @@ Project: [number]
 select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
+    HashJoin: SEMI, build keys: [numbers.number], probe keys: [t.number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -72,10 +72,10 @@ Project: [number]
 select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and number = 0 and t.number < 10)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
-        Filter: [number < 10]
+    HashJoin: SEMI, build keys: [numbers.number], probe keys: [t.number], join filters: []
+        Filter: [t.number < 10]
             Scan: default.system.numbers
-        Filter: [number = 0]
+        Filter: [numbers.number = 0]
             Scan: default.system.numbers
 
 
@@ -83,21 +83,16 @@ Project: [number]
 select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number)
 ----
 Project: [number]
-    Filter: [subquery_3]
-        CrossApply
-            Scan: default.system.numbers
-            Project: [subquery]
-                EvalScalar: [count(*) > 0]
-                    Aggregate: group items: [], aggregate functions: [count(*)]
-                        Filter: [number = number, number < number]
-                            Scan: default.system.numbers
+    HashJoin: SEMI, build keys: [numbers.number], probe keys: [t.number], join filters: [t.number < numbers.number]
+        Scan: default.system.numbers
+        Scan: default.system.numbers
 
 
 # Exists project required columns
 select t.number from numbers(1) as t where exists (select number as a, number as b, number as c from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: []
+    HashJoin: SEMI, build keys: [numbers.number], probe keys: [t.number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -108,14 +103,25 @@ select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 
 Project: [number]
     Filter: [subquery_3]
         CrossApply
-            HashJoin: INNER, build keys: [number], probe keys: [number], join filters: []
+            HashJoin: INNER, build keys: [t1.number], probe keys: [t.number], join filters: []
                 Scan: default.system.numbers
                 Scan: default.system.numbers
             Max1Row
                 Project: [COUNT(*) = 1]
                     EvalScalar: [COUNT(*) = 1]
                         Aggregate: group items: [], aggregate functions: [COUNT(*)]
-                            Filter: [number = number]
+                            Filter: [t.number = numbers.number]
                                 Scan: default.system.numbers
+
+
+# Semi join with other conditions
+select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number)
+----
+Project: [number]
+    HashJoin: ANTI, build keys: [], probe keys: [], join filters: [t.number < t1.number]
+        HashJoin: SEMI, build keys: [], probe keys: [], join filters: [t.number > t1.number]
+            Scan: default.system.numbers
+            Scan: default.system.numbers
+        Scan: default.system.numbers
 
 

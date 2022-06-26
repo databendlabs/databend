@@ -37,7 +37,7 @@ miri:
 	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
 
 run: build-release
-	bash ./scripts/ci/deploy/databend-query-standalone.sh release
+	BUILD_PROFILE=release bash ./scripts/ci/deploy/databend-query-standalone.sh
 
 run-debug: build-debug
 	bash ./scripts/ci/deploy/databend-query-standalone.sh

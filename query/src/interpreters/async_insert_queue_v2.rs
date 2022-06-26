@@ -19,7 +19,7 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
-use common_base::base::tokio::time::interval;
+use common_base::base::tokio::time::interval_at;
 use common_base::base::tokio::time::Duration;
 use common_base::base::tokio::time::Instant;
 use common_base::base::ProgressValues;
@@ -145,7 +145,7 @@ impl Entry {
         match self.is_finished() {
             true => Ok(()),
             false => match self.is_timeout() {
-                true => Err(ErrorCode::AsyncInsertTimeoutError("Async insert timeout.")),
+                true => Err(ErrorCode::AsyncInsertTimeoutError("Async insert timeout")),
                 false => Err((*self.error.read()).clone()),
             },
         }
@@ -224,21 +224,33 @@ impl AsyncInsertQueue {
         // busy timeout
         let busy_timeout = self_arc.busy_timeout;
         self_arc.clone().runtime.as_ref().inner().spawn(async move {
-            let mut intv = interval(busy_timeout);
+            let mut intv = interval_at(Instant::noew() + busy_timeout, busy_timeout);
             loop {
                 intv.tick().await;
+                if self_arc.queue.read().is_empty() {
+                    continue;
+                }
                 let timeout = self_arc.clone().busy_check();
                 intv = interval(timeout);
+                if timeout != busy_timeout {
+                    intv = interval_at(Instant::now() + timeout, timeout);
+                }
             }
         });
         // stale timeout
         let stale_timeout = self.stale_timeout;
         if !stale_timeout.is_zero() {
             self.clone().runtime.as_ref().inner().spawn(async move {
-                let mut intv = interval(stale_timeout);
+                let mut intv = interval_at(Instant::now() + stale_timeout, stale_timeout);
                 loop {
                     intv.tick().await;
-                    self.clone().stale_check();
+                    if self.queue.read().is_empty() {
+                        continue;
+                    }
+                    let timeout = self.clone().stale_check();
+                    if timeout != busy_timeout {
+                        intv = interval_at(Instant::now() + timeout, timeout);
+                    }
                 }
             });
         }
@@ -282,8 +294,10 @@ impl AsyncInsertQueue {
                     );
                 }
                 pipeline.add_pipe(sink_pipeline_builder.finalize());
+                
+                let query_need_abort = ctx.query_need_abort();
                 let executor =
-                    PipelineCompleteExecutor::try_create(self.runtime.clone(), pipeline).unwrap();
+                    PipelineCompleteExecutor::try_create(self.runtime.clone(), query_need_abort, pipeline).unwrap();
                 executor.execute()?;
                 drop(executor);
                 let blocks = ctx.consume_precommit_blocks();
@@ -356,8 +370,7 @@ impl AsyncInsertQueue {
         let entry = self.get_entry(&query_id)?;
         let e = entry.clone();
         self.runtime.as_ref().inner().spawn(async move {
-            let mut intv = interval(time_out);
-            intv.tick().await;
+            let mut intv = interval_at(Instant::now() + time_out, time_out);
             intv.tick().await;
             e.finish_with_timeout();
         });
@@ -442,9 +455,11 @@ impl AsyncInsertQueue {
         timeout
     }
 
-    fn stale_check(self: Arc<Self>) {
+    fn stale_check(self: Arc<Self>) -> Duration {
         let mut keys = Vec::new();
         let mut queue = self.queue.write();
+
+        let mut timeout = self.busy_timeout;
 
         for (key, value) in queue.iter() {
             if value.data_size == 0 {
@@ -454,11 +469,15 @@ impl AsyncInsertQueue {
             if time_lag.cmp(&self.clone().stale_timeout) == Ordering::Greater {
                 self.clone().schedule(key.clone(), value.clone());
                 keys.push(key.clone());
+            } else {
+                timeout = timeout.min(self.stale_timeout - time_lag);
             }
         }
 
         for key in keys.iter() {
             queue.remove(key);
         }
+
+        timeout
     }
 }

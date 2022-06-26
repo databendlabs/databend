@@ -60,4 +60,9 @@ INSERT INTO t2 VALUES(3, [3,4,5]);
 SELECT max(arr), min(arr) FROM t2;
 SELECT arg_max(id, arr), arg_min(id, arr) FROM (SELECT id, arr FROM t2);
 
+
+
+-- https://github.com/datafuselabs/databend/issues/6212
+select number % 3,   sum(number), avg(number),  count() from numbers(100) group by number % 3  order by number % 3 ;
+
 DROP DATABASE db1;

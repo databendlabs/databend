@@ -46,15 +46,8 @@ runs:
     #     token: ${{ inputs.codecov_token }}
     #     file: ${{ steps.coverage.outputs.report }}
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v2
+    - name: Upload failure
       if: failure()
+      uses: ./.github/actions/artifact_failure
       with:
-        path: |
-          _local_fs/
-          _logs*/
-          _meta*/
-          metasrv/_logs*/
-          query/_logs*/
-          store/_logs*/
-          .databend/
+        name: test-unit
