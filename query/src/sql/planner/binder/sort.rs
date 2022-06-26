@@ -159,6 +159,19 @@ impl<'a> Binder {
                     .find(|item| item.alias == order.name)
                 {
                     group_checker.resolve(&scalar_item.scalar, None)?;
+                } else {
+                    group_checker.resolve(
+                        &BoundColumnRef {
+                            column: from_context
+                                .columns
+                                .iter()
+                                .find(|col| col.column_name == order.name)
+                                .cloned()
+                                .ok_or_else(|| ErrorCode::LogicalError("Invalid order by item"))?,
+                        }
+                        .into(),
+                        None,
+                    )?;
                 }
             }
             if order.need_project {
