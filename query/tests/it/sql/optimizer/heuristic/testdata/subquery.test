@@ -83,14 +83,9 @@ Project: [number]
 select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number)
 ----
 Project: [number]
-    Filter: [subquery_3]
-        CrossApply
-            Scan: default.system.numbers
-            Project: [subquery]
-                EvalScalar: [count(*) > 0]
-                    Aggregate: group items: [], aggregate functions: [count(*)]
-                        Filter: [number = number, number < number]
-                            Scan: default.system.numbers
+    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: [number < number]
+        Scan: default.system.numbers
+        Scan: default.system.numbers
 
 
 # Exists project required columns
@@ -117,5 +112,16 @@ Project: [number]
                         Aggregate: group items: [], aggregate functions: [COUNT(*)]
                             Filter: [number = number]
                                 Scan: default.system.numbers
+
+
+# Semi join with other conditions
+select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number)
+----
+Project: [number]
+    HashJoin: ANTI, build keys: [], probe keys: [], join filters: [number < number]
+        HashJoin: SEMI, build keys: [], probe keys: [], join filters: [number > number]
+            Scan: default.system.numbers
+            Scan: default.system.numbers
+        Scan: default.system.numbers
 
 
