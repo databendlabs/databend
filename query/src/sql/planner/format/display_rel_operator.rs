@@ -85,7 +85,13 @@ impl Display for FormatContext {
 
 pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
     match scalar {
-        Scalar::BoundColumnRef(column_ref) => column_ref.column.column_name.clone(),
+        Scalar::BoundColumnRef(column_ref) => {
+            if let Some(table_name) = &column_ref.column.table_name {
+                format!("{}.{}", table_name, column_ref.column.column_name)
+            } else {
+                column_ref.column.column_name.to_string()
+            }
+        }
         Scalar::ConstantExpr(constant) => constant.value.to_string(),
         Scalar::AndExpr(and) => format!(
             "{} AND {}",

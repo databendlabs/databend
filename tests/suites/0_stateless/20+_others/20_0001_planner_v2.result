@@ -321,7 +321,7 @@ abc
 9
 ===Explain===
 Project: [a]
-    Filter: [a > 0]
+    Filter: [t1.a > 0]
         Scan: default.default.t1
 ===Explain Pipeline===
 Project × 1 processor
