@@ -103,9 +103,6 @@ impl RowSpace {
             ));
         }
 
-        // If build_key doesn't have duplicated columns, the length of row_ptrs will be one.
-        // So we don't need to `gather_blocks`, directly return.
-
         if !data_blocks.is_empty() {
             let data_block =
                 DataBlock::block_take_by_chunk_indices(&data_blocks, indices.as_slice())?;
