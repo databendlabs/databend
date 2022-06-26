@@ -68,15 +68,11 @@ impl Rule for RuleEliminateEvalScalar {
 
         // TODO(leiysky): Use another rule to do this.
         // Remove trivial column reference scalar.
-        if eval_scalar
-            .items
-            .iter()
-            .any(|item| matches!(&item.scalar, Scalar::BoundColumnRef(_)))
-        {
+        if eval_scalar.items.iter().any(|item| matches!(&item.scalar, Scalar::BoundColumnRef(column) if column.column.index == item.index)) {
             let new_items = eval_scalar
                 .items
                 .into_iter()
-                .filter(|item| !matches!(&item.scalar, Scalar::BoundColumnRef(_)))
+                .filter(|item| !matches!(&item.scalar, Scalar::BoundColumnRef(column) if column.column.index == item.index))
                 .collect::<Vec<ScalarItem>>();
             if new_items.is_empty() {
                 state.add_result(s_expr.child(0)?.clone());

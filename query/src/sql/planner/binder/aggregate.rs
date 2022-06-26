@@ -150,32 +150,40 @@ impl<'a> AggregateRewriter<'a> {
 
         for (i, arg) in aggregate.args.iter().enumerate() {
             let name = format!("{}_arg_{}", &aggregate.func_name, i);
-            let index = self
-                .metadata
-                .write()
-                .add_column(name.clone(), arg.data_type(), None);
+            if let Scalar::BoundColumnRef(column_ref) = arg {
+                replaced_args.push(column_ref.clone().into());
+                agg_info.aggregate_arguments.push(ScalarItem {
+                    index: column_ref.column.index,
+                    scalar: arg.clone(),
+                });
+            } else {
+                let index = self
+                    .metadata
+                    .write()
+                    .add_column(name.clone(), arg.data_type(), None);
 
-            // Generate a ColumnBinding for each argument of aggregates
-            let column_binding = ColumnBinding {
-                table_name: None,
+                // Generate a ColumnBinding for each argument of aggregates
+                let column_binding = ColumnBinding {
+                    table_name: None,
 
-                // TODO(leiysky): use a more reasonable name, since aggregate arguments
-                // can not be referenced, the name is only for debug
-                column_name: name,
-                index,
-                data_type: arg.data_type(),
-                visible_in_unqualified_wildcard: true,
-            };
-            replaced_args.push(
-                BoundColumnRef {
-                    column: column_binding.clone(),
-                }
-                .into(),
-            );
-            agg_info.aggregate_arguments.push(ScalarItem {
-                index,
-                scalar: arg.clone(),
-            });
+                    // TODO(leiysky): use a more reasonable name, since aggregate arguments
+                    // can not be referenced, the name is only for debug
+                    column_name: name,
+                    index,
+                    data_type: arg.data_type(),
+                    visible_in_unqualified_wildcard: true,
+                };
+                replaced_args.push(
+                    BoundColumnRef {
+                        column: column_binding.clone(),
+                    }
+                    .into(),
+                );
+                agg_info.aggregate_arguments.push(ScalarItem {
+                    index,
+                    scalar: arg.clone(),
+                });
+            }
         }
 
         let index = self.metadata.write().add_column(

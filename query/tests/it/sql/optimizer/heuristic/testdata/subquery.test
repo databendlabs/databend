@@ -9,11 +9,12 @@ Project: [number]
                 Scan: default.system.numbers
             Max1Row
                 Project: [COUNT(*)]
-                    Aggregate: group items: [], aggregate functions: [COUNT(*)]
-                        Filter: [number = number]
-                            CrossJoin
-                                Scan: default.system.numbers
-                                Scan: default.system.numbers
+                    EvalScalar: [COUNT(*)]
+                        Aggregate: group items: [], aggregate functions: [COUNT(*)]
+                            Filter: [number = number]
+                                CrossJoin
+                                    Scan: default.system.numbers
+                                    Scan: default.system.numbers
 
 
 # Uncorrelated subquery

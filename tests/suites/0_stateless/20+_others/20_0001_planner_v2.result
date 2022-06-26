@@ -321,16 +321,14 @@ abc
 9
 ===Explain===
 Project: [a]
-    EvalScalar: [a]
-        Filter: [a > 0]
-            Scan: default.default.t1
+    Filter: [a > 0]
+        Scan: default.default.t1
 ===Explain Pipeline===
 Project × 1 processor
-  Expression × 1 processor
-    TransformHashJoin × 1 processor
-      Rename × 1 processor
-        Project × 1 processor
-          FuseEngineSource × 1 processor
+  TransformHashJoin × 1 processor
+    Rename × 1 processor
+      Project × 1 processor
+        FuseEngineSource × 1 processor
 
 BuildHashTable × 1 processor
   Rename × 1 processor
