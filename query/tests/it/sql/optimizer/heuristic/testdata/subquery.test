@@ -83,7 +83,7 @@ Project: [number]
 select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number)
 ----
 Project: [number]
-    HashJoin: SEMI, build keys: [number], probe keys: [number], join filters: [number < number]
+    HashJoin: SEMI, build keys: [numbers.number], probe keys: [t.number], join filters: [t.number < numbers.number]
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -118,8 +118,8 @@ Project: [number]
 select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number)
 ----
 Project: [number]
-    HashJoin: ANTI, build keys: [], probe keys: [], join filters: [number < number]
-        HashJoin: SEMI, build keys: [], probe keys: [], join filters: [number > number]
+    HashJoin: ANTI, build keys: [], probe keys: [], join filters: [t.number < t1.number]
+        HashJoin: SEMI, build keys: [], probe keys: [], join filters: [t.number > t1.number]
             Scan: default.system.numbers
             Scan: default.system.numbers
         Scan: default.system.numbers
