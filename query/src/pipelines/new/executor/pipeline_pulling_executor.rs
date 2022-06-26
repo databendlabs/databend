@@ -102,14 +102,14 @@ impl PipelinePullingExecutor {
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
         move || {
             if let Err(cause) = executor.execute() {
-                if let Err(send_err) = state.sender.send(Err(cause)) {
+                if let Err(send_err) = state.sender.try_send(Err(cause)) {
                     common_tracing::tracing::warn!("Send error {:?}", send_err);
                 }
 
                 return;
             }
 
-            if let Err(send_err) = state.sender.send(Ok(None)) {
+            if let Err(send_err) = state.sender.try_send(Ok(None)) {
                 common_tracing::tracing::warn!("Send finish event error {:?}", send_err);
             }
         }

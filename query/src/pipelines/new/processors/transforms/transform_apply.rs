@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::Column;
 use common_datavalues::ConstColumn;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -178,7 +179,7 @@ impl OuterRefRewriter {
 pub struct TransformApply {
     ctx: Arc<QueryContext>,
     outer_columns: BTreeSet<ColumnID>,
-
+    outer_schema: DataSchemaRef,
     subquery: PhysicalPlan,
 }
 
@@ -188,11 +189,13 @@ impl TransformApply {
         output: Arc<OutputPort>,
         ctx: Arc<QueryContext>,
         outer_columns: BTreeSet<ColumnID>,
+        outer_schema: DataSchemaRef,
         subquery: PhysicalPlan,
     ) -> ProcessorPtr {
         Transformer::<Self>::create(input, output, Self {
             ctx,
             outer_columns,
+            outer_schema,
             subquery,
         })
     }
@@ -293,6 +296,7 @@ impl Transform for TransformApply {
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let mut result_blocks = vec![];
+
         for row_index in 0..data.num_rows() {
             let outer_columns = self.extract_outer_columns(&data, row_index)?;
             let mut subquery_results = self.execute_subquery(outer_columns)?;
@@ -303,6 +307,10 @@ impl Transform for TransformApply {
             result_blocks.append(&mut subquery_results);
         }
 
-        DataBlock::concat_blocks(&result_blocks)
+        if result_blocks.is_empty() {
+            Ok(DataBlock::empty_with_schema(self.outer_schema.clone()))
+        } else {
+            DataBlock::concat_blocks(&result_blocks)
+        }
     }
 }
