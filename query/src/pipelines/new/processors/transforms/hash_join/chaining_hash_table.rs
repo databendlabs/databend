@@ -311,7 +311,6 @@ impl ChainingHashTable {
                 results.push(self.merge_eq_block(&build_block, &probe_block)?);
             }
             JoinType::Semi => {
-                let mut build_indexs = Vec::with_capacity(keys.len());
                 for (i, key) in keys.iter().enumerate() {
                     let probe_result_ptr = hash_table.find_key(key);
 
@@ -339,7 +338,6 @@ impl ChainingHashTable {
                 }
             }
             JoinType::Anti => {
-                let mut build_indexs = Vec::with_capacity(keys.len());
                 for (i, key) in keys.iter().enumerate() {
                     let probe_result_ptr = hash_table.find_key(key);
 
