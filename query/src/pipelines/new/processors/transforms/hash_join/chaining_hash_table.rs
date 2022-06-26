@@ -435,7 +435,7 @@ impl ChainingHashTable {
         Ok(result_block)
     }
 
-    // Merge build block and probe block that have the same number of rows 
+    // Merge build block and probe block that have the same number of rows
     fn merge_eq_block(
         &self,
         build_block: &DataBlock,
