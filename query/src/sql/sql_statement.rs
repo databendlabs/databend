@@ -82,7 +82,6 @@ use crate::sql::statements::DfUseDatabase;
 pub enum DfStatement<'a> {
     // ANSI SQL AST node
     Query(Box<DfQueryStatement>),
-    Delete(Box<DfDeleteStatement>),
     Explain(DfExplain<'a>),
 
     // Databases.
@@ -134,6 +133,9 @@ pub enum DfStatement<'a> {
 
     // Insert
     InsertQuery(DfInsertStatement<'a>),
+
+    // Delete
+    Delete(Box<DfDeleteStatement>),
 
     // User
     CreateUser(DfCreateUser),
