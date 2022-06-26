@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::binder::scalar::ScalarBinder;
+use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
@@ -142,12 +143,37 @@ impl<'a> Binder {
         &mut self,
         from_context: &BindContext,
         order_by: OrderItems,
+        select_list: &'a SelectList<'a>,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
         let mut order_by_items = Vec::with_capacity(order_by.items.len());
         let mut scalars = vec![];
         for order in order_by.items {
+            if from_context.in_grouping {
+                let mut group_checker = GroupingChecker::new(from_context);
+                // Perform grouping check on original scalar expression if order item is alias.
+                if let Some(scalar_item) = select_list
+                    .items
+                    .iter()
+                    .find(|item| item.alias == order.name)
+                {
+                    group_checker.resolve(&scalar_item.scalar, None)?;
+                } else {
+                    group_checker.resolve(
+                        &BoundColumnRef {
+                            column: from_context
+                                .columns
+                                .iter()
+                                .find(|col| col.column_name == order.name)
+                                .cloned()
+                                .ok_or_else(|| ErrorCode::LogicalError("Invalid order by item"))?,
+                        }
+                        .into(),
+                        None,
+                    )?;
+                }
+            }
             if order.need_project {
                 if let Entry::Occupied(entry) = scalar_items.entry(order.index) {
                     let (index, item) = entry.remove_entry();
@@ -155,7 +181,7 @@ impl<'a> Binder {
 
                     if from_context.in_grouping {
                         let mut group_checker = GroupingChecker::new(from_context);
-                        scalar = group_checker.resolve(&scalar)?;
+                        scalar = group_checker.resolve(&scalar, None)?;
                     }
                     scalars.push(ScalarItem { scalar, index });
                 }
