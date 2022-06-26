@@ -13,17 +13,15 @@
 // limitations under the License.
 
 use common_exception::Result;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::RuleSet;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
 
-lazy_static! {
-    static ref DEFAULT_IMPLEMENT_RULES: Vec<RuleID> =
-        vec![RuleID::ImplementGet, RuleID::ImplementHashJoin];
-}
+static DEFAULT_IMPLEMENT_RULES: Lazy<Vec<RuleID>> =
+    Lazy::new(|| vec![RuleID::ImplementGet, RuleID::ImplementHashJoin]);
 
 pub struct HeuristicImplementor {
     implement_rule_list: RuleSet,
