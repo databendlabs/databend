@@ -13,13 +13,11 @@
 // limitations under the License.
 
 use std::iter::once;
-use std::sync::Arc;
 
-use common_arrow::arrow::array::growable::make_growable;
 use common_arrow::arrow::array::ord as arrow_ord;
 use common_arrow::arrow::array::ord::DynComparator;
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::compute::merge_sort::*;
 use common_arrow::arrow::compute::sort as arrow_sort;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -63,7 +61,8 @@ impl DataBlock {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let indices = arrow_sort::lexsort_to_indices_impl(&order_arrays, limit, &build_compare)?;
+        let indices: PrimitiveArray<u32> =
+            arrow_sort::lexsort_to_indices_impl(&order_arrays, limit, &build_compare)?;
         DataBlock::block_take_by_indices(block, indices.values())
     }
 
@@ -128,54 +127,16 @@ impl DataBlock {
             .map(|f| {
                 let left = lhs.try_column_by_name(f.name())?;
                 let right = rhs.try_column_by_name(f.name())?;
-
-                let left = left.as_arrow_array();
-                let right = right.as_arrow_array();
-
-                let taked =
-                    Self::take_arrays_by_slices(&[left.as_ref(), right.as_ref()], &slices, limit);
-                let taked: ArrayRef = Arc::from(taked);
-
-                match f.data_type().is_nullable() {
-                    false => Ok(taked.into_column()),
-                    true => Ok(taked.into_nullable_column()),
-                }
+                Self::take_columns_by_slices_limit(
+                    f.data_type(),
+                    &[left.clone(), right.clone()],
+                    &slices,
+                    limit,
+                )
             })
             .collect::<Result<Vec<_>>>()?;
 
         Ok(DataBlock::create(lhs.schema().clone(), columns))
-    }
-
-    pub fn take_arrays_by_slices(
-        arrays: &[&dyn Array],
-        slices: &[MergeSlice],
-        limit: Option<usize>,
-    ) -> Box<dyn Array> {
-        let slices = slices.iter();
-        let len = arrays.iter().map(|array| array.len()).sum();
-
-        let limit = limit.unwrap_or(len);
-        let limit = limit.min(len);
-        let mut growable = make_growable(arrays, false, limit);
-
-        if limit != len {
-            let mut current_len = 0;
-            for (index, start, len) in slices {
-                if len + current_len >= limit {
-                    growable.extend(*index, *start, limit - current_len);
-                    break;
-                } else {
-                    growable.extend(*index, *start, *len);
-                    current_len += len;
-                }
-            }
-        } else {
-            for (index, start, len) in slices {
-                growable.extend(*index, *start, *len);
-            }
-        }
-
-        growable.as_box()
     }
 
     pub fn merge_sort_blocks(
