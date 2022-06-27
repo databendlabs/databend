@@ -204,6 +204,7 @@ pub trait Table: Sync + Send {
     }
 }
 
+#[derive(Debug)]
 pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),
