@@ -396,6 +396,8 @@ impl ChainingHashTable {
                             validity.extend_constant(probe_result_ptrs.len(), true);
                         }
                         None => {
+                            //dummy row ptr
+                            build_indexs.push(RowPtr { chunk_index: 0 , row_index: 0 });
                             probe_indexs.push(i as u32);
                             validity.push(false);
                         }
