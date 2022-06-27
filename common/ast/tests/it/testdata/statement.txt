@@ -1713,6 +1713,137 @@ Query(
 
 
 ---------- Input ----------
+select * from a, b, c order by `db`.`a`.`c1`;
+---------- Output ---------
+SELECT * FROM a, b, c ORDER BY `db`.`a`.`c1`
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            Comma(15..16),
+            Ident(17..18),
+            Comma(18..19),
+            Ident(20..21),
+            ORDER(22..27),
+            BY(28..30),
+            QuotedString(31..35),
+            Period(35..36),
+            QuotedString(36..39),
+            Period(39..40),
+            QuotedString(40..44),
+        ],
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    Comma(15..16),
+                    Ident(17..18),
+                    Comma(18..19),
+                    Ident(20..21),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(14..15),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                    Table {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Ident(17..18),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                    Table {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Ident(20..21),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [
+            OrderByExpr {
+                expr: ColumnRef {
+                    span: [
+                        QuotedString(31..35),
+                        Period(35..36),
+                        QuotedString(36..39),
+                        Period(39..40),
+                        QuotedString(40..44),
+                    ],
+                    database: Some(
+                        Identifier {
+                            name: "db",
+                            quote: Some(
+                                '`',
+                            ),
+                            span: QuotedString(31..35),
+                        },
+                    ),
+                    table: Some(
+                        Identifier {
+                            name: "a",
+                            quote: Some(
+                                '`',
+                            ),
+                            span: QuotedString(36..39),
+                        },
+                    ),
+                    column: Identifier {
+                        name: "c1",
+                        quote: Some(
+                            '`',
+                        ),
+                        span: QuotedString(40..44),
+                    },
+                },
+                asc: None,
+                nulls_first: None,
+            },
+        ],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
 select * from a join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a INNER JOIN b ON a.a = b.a

@@ -37,13 +37,12 @@ use crate::sql::plans::SortItem;
 use crate::sql::BindContext;
 use crate::sql::IndexType;
 
-pub struct OrderItems {
-    items: Vec<OrderItem>,
+pub struct OrderItems<'a> {
+    items: Vec<OrderItem<'a>>,
 }
 
-pub struct OrderItem {
-    pub asc: Option<bool>,
-    pub nulls_first: Option<bool>,
+pub struct OrderItem<'a> {
+    pub expr: OrderByExpr<'a>,
     pub index: IndexType,
     pub name: String,
     // True if item reference a alias scalar expression in select list
@@ -58,23 +57,22 @@ impl<'a> Binder {
         projections: &[ColumnBinding],
         order_by: &'a [OrderByExpr<'a>],
         distinct: bool,
-    ) -> Result<OrderItems> {
+    ) -> Result<OrderItems<'a>> {
         let mut order_items = Vec::with_capacity(order_by.len());
         for order in order_by {
             if let Expr::ColumnRef {
-                database: None,
-                table: None,
+                table: ref table_name,
                 column: ref ident,
                 ..
             } = order.expr
             {
+                let table = table_name.clone().map(|v| v.name);
                 // We first search the identifier in select list
                 let mut found = false;
                 for item in projections.iter() {
                     if item.column_name == ident.name {
                         order_items.push(OrderItem {
-                            asc: order.asc,
-                            nulls_first: order.nulls_first,
+                            expr: order.clone(),
                             index: item.index,
                             name: item.column_name.clone(),
                             need_project: scalar_items.get(&item.index).map_or(
@@ -95,7 +93,7 @@ impl<'a> Binder {
 
                 // If there isn't a matched alias in select list, we will fallback to
                 // from clause.
-                let column = from_context.resolve_column(None, ident).and_then(|v| {
+                let column = from_context.resolve_column(table.clone(), ident).and_then(|v| {
                     if distinct {
                         Err(ErrorCode::SemanticError(order.expr.span().display_error("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string())))
                     } else {
@@ -103,8 +101,7 @@ impl<'a> Binder {
                     }
                 })?;
                 order_items.push(OrderItem {
-                    asc: order.asc,
-                    nulls_first: order.nulls_first,
+                    expr: order.clone(),
                     name: column.column_name.clone(),
                     index: column.index,
                     need_project: false,
@@ -121,8 +118,7 @@ impl<'a> Binder {
                     )));
                 }
                 order_items.push(OrderItem {
-                    asc: order.asc,
-                    nulls_first: order.nulls_first,
+                    expr: order.clone(),
                     name: projections[index].column_name.clone(),
                     index: projections[index].index,
                     need_project: false,
@@ -142,7 +138,7 @@ impl<'a> Binder {
     pub(super) async fn bind_order_by(
         &mut self,
         from_context: &BindContext,
-        order_by: OrderItems,
+        order_by: OrderItems<'a>,
         select_list: &'a SelectList<'a>,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         child: SExpr,
@@ -174,6 +170,24 @@ impl<'a> Binder {
                     )?;
                 }
             }
+            if let Expr::ColumnRef {
+                database: ref database_name,
+                table: ref table_name,
+                ..
+            } = order.expr.expr
+            {
+                if let (Some(table_name), Some(database_name)) = (table_name, database_name) {
+                    let catalog_name = self.ctx.get_current_catalog();
+                    let catalog = self.ctx.get_catalog(catalog_name)?;
+                    catalog
+                        .get_table(
+                            &self.ctx.get_tenant(),
+                            &database_name.name,
+                            &table_name.name,
+                        )
+                        .await?;
+                }
+            }
             if order.need_project {
                 if let Entry::Occupied(entry) = scalar_items.entry(order.index) {
                     let (index, item) = entry.remove_entry();
@@ -188,8 +202,8 @@ impl<'a> Binder {
             }
             let order_by_item = SortItem {
                 index: order.index,
-                asc: order.asc,
-                nulls_first: order.nulls_first,
+                asc: order.expr.asc,
+                nulls_first: order.expr.nulls_first,
             };
             order_by_items.push(order_by_item);
         }
