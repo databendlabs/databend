@@ -106,6 +106,7 @@ reqwest = "0.11.11"
 rsa = "0.5.0"
 segment-tree = "2.0.0"
 semver = "1.0.10"
+sentry = "0.27.0"
 serde = { version = "1.0.137", features = ["derive"] }
 serde-bridge = "0.0.3"
 serde_json = "1.0.81"
