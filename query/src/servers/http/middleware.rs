@@ -120,16 +120,12 @@ impl<E> HTTPSessionEndpoint<E> {
     async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
         let credential = get_credential(req, self.kind)?;
         let session = self.manager.create_session(SessionType::Dummy).await?;
-        let (tenant_id, user_info) = session
-            .create_query_context()
-            .await?
-            .get_auth_manager()
-            .auth(&credential)
-            .await?;
-        session.set_current_user(user_info);
-        if let Some(tenant_id) = tenant_id {
+        let ctx = session.create_query_context().await?;
+        if let Some(tenant_id) = req.headers().get("X-DATABEND-TENANT") {
+            let tenant_id = tenant_id.to_str().unwrap().to_string();
             session.set_current_tenant(tenant_id);
         }
+        ctx.get_auth_manager().auth(&ctx, &credential).await?;
 
         Ok(HttpQueryContext::new(self.manager.clone(), session))
     }
@@ -140,7 +136,8 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = E::Output;
 
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
-        tracing::debug!("receive http request: {:?},", req);
+        // method, url, version, header
+        tracing::info!("receive http handler request: {req:?},");
         let res = match self.auth(&req).await {
             Ok(ctx) => {
                 req.extensions_mut().insert(ctx);
@@ -152,11 +149,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             )),
         };
         if let Err(ref err) = res {
-            tracing::warn!(
-                "http request error: status={}, msg={}",
-                err.as_response().status(),
-                err,
-            );
+            tracing::warn!("http request error: {}", err);
         };
         res
     }

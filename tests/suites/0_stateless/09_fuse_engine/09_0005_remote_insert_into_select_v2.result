@@ -1,0 +1,15 @@
+20
+column with default value Null
+edge case1
+edge case2
+edge case3
+checking count: count(*) = (112 + 113 + 20000)
+1
+checking nullable column with non-null values
+200002544
+checking nullable columns with all null values: business_id
+0
+NULL
+checking nullable columns with all null values: cols
+0
+NULL

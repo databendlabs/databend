@@ -32,7 +32,7 @@ fn compare_s_expr(lhs: &SExpr, rhs: &SExpr) -> bool {
         }
     }
 
-    lhs.plan().plan_type() == rhs.plan().plan_type()
+    lhs.plan().rel_op() == rhs.plan().rel_op()
 }
 
 #[test]

@@ -14,7 +14,6 @@
 //
 
 use std::any::Any;
-use std::future::Future;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -82,6 +81,10 @@ impl FuseSnapshotTable {
             arg_table_name,
         }))
     }
+
+    fn get_limit(plan: &ReadDataSourcePlan) -> Option<usize> {
+        plan.push_downs.as_ref().and_then(|extras| extras.limit)
+    }
 }
 
 #[async_trait::async_trait]
@@ -112,7 +115,7 @@ impl Table for FuseSnapshotTable {
     async fn read(
         &self,
         ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
@@ -129,7 +132,12 @@ impl Table for FuseSnapshotTable {
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        let blocks = vec![FuseSnapshot::new(ctx.clone(), tbl).get_history().await?];
+        let limit = Self::get_limit(plan);
+        let blocks = vec![
+            FuseSnapshot::new(ctx.clone(), tbl)
+                .get_history(limit)
+                .await?,
+        ];
         Ok(Box::pin(DataBlockStream::create(
             FuseSnapshot::schema(),
             None,
@@ -140,10 +148,11 @@ impl Table for FuseSnapshotTable {
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
-        _: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
+        let limit = Self::get_limit(plan);
         pipeline.add_pipe(NewPipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
@@ -153,6 +162,7 @@ impl Table for FuseSnapshotTable {
                 self.arg_database_name.to_owned(),
                 self.arg_table_name.to_owned(),
                 CATALOG_DEFAULT.to_owned(),
+                limit,
             )?],
         });
 
@@ -166,6 +176,7 @@ struct FuseHistorySource {
     arg_database_name: String,
     arg_table_name: String,
     catalog_name: String,
+    limit: Option<usize>,
 }
 
 impl FuseHistorySource {
@@ -175,6 +186,7 @@ impl FuseHistorySource {
         arg_database_name: String,
         arg_table_name: String,
         catalog_name: String,
+        limit: Option<usize>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, FuseHistorySource {
             ctx,
@@ -182,40 +194,39 @@ impl FuseHistorySource {
             arg_table_name,
             arg_database_name,
             catalog_name,
+            limit,
         })
     }
 }
 
+#[async_trait::async_trait]
 impl AsyncSource for FuseHistorySource {
     const NAME: &'static str = "fuse_snapshot";
 
-    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
-
-    fn generate(&mut self) -> Self::BlockFuture<'_> {
-        async {
-            if self.finish {
-                return Ok(None);
-            }
-
-            self.finish = true;
-            let tenant_id = self.ctx.get_tenant();
-            let tbl = self
-                .ctx
-                .get_catalog(&self.catalog_name)?
-                .get_table(
-                    tenant_id.as_str(),
-                    self.arg_database_name.as_str(),
-                    self.arg_table_name.as_str(),
-                )
-                .await?;
-
-            let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-            Ok(Some(
-                FuseSnapshot::new(self.ctx.clone(), tbl)
-                    .get_history()
-                    .await?,
-            ))
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.finish {
+            return Ok(None);
         }
+
+        self.finish = true;
+        let tenant_id = self.ctx.get_tenant();
+        let tbl = self
+            .ctx
+            .get_catalog(&self.catalog_name)?
+            .get_table(
+                tenant_id.as_str(),
+                self.arg_database_name.as_str(),
+                self.arg_table_name.as_str(),
+            )
+            .await?;
+
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        Ok(Some(
+            FuseSnapshot::new(self.ctx.clone(), tbl)
+                .get_history(self.limit)
+                .await?,
+        ))
     }
 }
 

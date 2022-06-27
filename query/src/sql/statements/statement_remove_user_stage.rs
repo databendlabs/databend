@@ -32,28 +32,14 @@ pub struct DfRemoveStage {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfRemoveStage {
-    #[tracing::instrument(level = "info", skip(self, _ctx), fields(_ctx.id = _ctx.get_id().as_str()))]
-    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let pattern = self.pattern.clone();
-        let path_vec: Vec<&str> = self.location.split('/').collect();
-        //judge file or directory
-        let mut file_name = "".to_string();
-        if path_vec.len() > 1 {
-            file_name = path_vec[path_vec.len() - 1].to_string();
-        }
-        //get path
-        let path = if !file_name.is_empty() {
-            let path_vec: Vec<&str> = self.location.splitn(2, &file_name).collect();
-            path_vec[0].to_string()
-        } else {
-            self.location.to_string()
-        };
-        let (stage, path) = parse_stage_location(&_ctx, &path).await?;
+        let (stage, path) = parse_stage_location(&ctx, &self.location).await?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::RemoveUserStage(RemoveUserStagePlan {
                 stage,
                 path,
-                file_name,
                 pattern,
             }),
         )))

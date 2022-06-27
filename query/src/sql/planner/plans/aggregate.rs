@@ -26,7 +26,7 @@ use crate::sql::plans::RelOp;
 use crate::sql::plans::ScalarItem;
 
 #[derive(Clone, Debug)]
-pub struct AggregatePlan {
+pub struct Aggregate {
     // group by scalar expressions, such as: group by col1 asc, col2 desc;
     pub group_items: Vec<ScalarItem>,
     // aggregate scalar expressions, such as: sum(col1), count(*);
@@ -35,8 +35,8 @@ pub struct AggregatePlan {
     pub from_distinct: bool,
 }
 
-impl Operator for AggregatePlan {
-    fn plan_type(&self) -> RelOp {
+impl Operator for Aggregate {
+    fn rel_op(&self) -> RelOp {
         RelOp::Aggregate
     }
 
@@ -57,13 +57,13 @@ impl Operator for AggregatePlan {
     }
 }
 
-impl PhysicalPlan for AggregatePlan {
+impl PhysicalPlan for Aggregate {
     fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
         todo!()
     }
 }
 
-impl LogicalPlan for AggregatePlan {
+impl LogicalPlan for Aggregate {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 

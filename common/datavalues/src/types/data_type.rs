@@ -102,6 +102,11 @@ where Self: Sized
 
     fn default_value(&self) -> DataValue;
 
+    /// Returns a random value of current type.
+    fn random_value(&self) -> DataValue {
+        self.default_value()
+    }
+
     fn can_inside_nullable(&self) -> bool {
         true
     }
@@ -109,6 +114,12 @@ where Self: Sized
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef>;
 
     fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef>;
+
+    /// Returns a column with `len` random rows.
+    fn create_random_column(&self, len: usize) -> ColumnRef {
+        let data = (0..len).map(|_| self.random_value()).collect::<Vec<_>>();
+        self.create_column(&data).unwrap()
+    }
 
     /// arrow_type did not have nullable sign, it's nullable sign is in the field
     fn arrow_type(&self) -> ArrowType;
@@ -258,7 +269,7 @@ pub fn wrap_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
 
 pub fn remove_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
     if matches!(data_type.data_type_id(), TypeID::Nullable) {
-        let nullable = data_type.as_any().downcast_ref::<NullableType>().unwrap();
+        let nullable: NullableType = data_type.to_owned().try_into().unwrap();
         return nullable.inner_type().clone();
     }
     data_type.clone()

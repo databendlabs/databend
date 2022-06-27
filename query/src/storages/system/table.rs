@@ -24,7 +24,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use futures::Future;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -259,18 +258,17 @@ where Self: AsyncSource
     }
 }
 
+#[async_trait::async_trait]
 impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<TTable> {
     const NAME: &'static str = TTable::NAME;
-    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
-    fn generate(&mut self) -> Self::BlockFuture<'_> {
-        async move {
-            if self.finished {
-                return Ok(None);
-            }
-
-            self.finished = true;
-            Ok(Some(self.inner.get_full_data(self.context.clone()).await?))
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.finished {
+            return Ok(None);
         }
+
+        self.finished = true;
+        Ok(Some(self.inner.get_full_data(self.context.clone()).await?))
     }
 }

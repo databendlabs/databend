@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -95,6 +96,10 @@ impl Processor for TransformHashJoinProbe {
     fn name(&self) -> &'static str {
         static NAME: &str = "TransformHashJoin";
         NAME
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

@@ -18,7 +18,8 @@ use std::collections::HashMap;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::SelectTarget;
-use common_ast::parser::error::DisplayError;
+use common_ast::parser::token::Token;
+use common_ast::DisplayError;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,8 +32,8 @@ use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::planner::semantic::GroupingChecker;
+use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
-use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
@@ -95,17 +96,20 @@ impl<'a> AggregateRewriter<'a> {
             Scalar::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::OrExpr(scalar) => Ok(OrExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::FunctionCall(func) => {
@@ -124,7 +128,7 @@ impl<'a> AggregateRewriter<'a> {
                 }
                 .into())
             }
-            Scalar::Cast(cast) => Ok(CastExpr {
+            Scalar::CastExpr(cast) => Ok(CastExpr {
                 argument: Box::new(self.visit(&cast.argument)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),
@@ -146,32 +150,40 @@ impl<'a> AggregateRewriter<'a> {
 
         for (i, arg) in aggregate.args.iter().enumerate() {
             let name = format!("{}_arg_{}", &aggregate.func_name, i);
-            let index = self
-                .metadata
-                .write()
-                .add_column(name.clone(), arg.data_type(), None);
+            if let Scalar::BoundColumnRef(column_ref) = arg {
+                replaced_args.push(column_ref.clone().into());
+                agg_info.aggregate_arguments.push(ScalarItem {
+                    index: column_ref.column.index,
+                    scalar: arg.clone(),
+                });
+            } else {
+                let index = self
+                    .metadata
+                    .write()
+                    .add_column(name.clone(), arg.data_type(), None);
 
-            // Generate a ColumnBinding for each argument of aggregates
-            let column_binding = ColumnBinding {
-                table_name: None,
+                // Generate a ColumnBinding for each argument of aggregates
+                let column_binding = ColumnBinding {
+                    table_name: None,
 
-                // TODO(leiysky): use a more reasonable name, since aggregate arguments
-                // can not be referenced, the name is only for debug
-                column_name: name,
-                index,
-                data_type: arg.data_type(),
-                visible_in_unqualified_wildcard: true,
-            };
-            replaced_args.push(
-                BoundColumnRef {
-                    column: column_binding.clone(),
-                }
-                .into(),
-            );
-            agg_info.aggregate_arguments.push(ScalarItem {
-                index,
-                scalar: arg.clone(),
-            });
+                    // TODO(leiysky): use a more reasonable name, since aggregate arguments
+                    // can not be referenced, the name is only for debug
+                    column_name: name,
+                    index,
+                    data_type: arg.data_type(),
+                    visible_in_unqualified_wildcard: true,
+                };
+                replaced_args.push(
+                    BoundColumnRef {
+                        column: column_binding.clone(),
+                    }
+                    .into(),
+                );
+                agg_info.aggregate_arguments.push(ScalarItem {
+                    index,
+                    scalar: arg.clone(),
+                });
+            }
         }
 
         let index = self.metadata.write().add_column(
@@ -225,12 +237,12 @@ impl<'a> Binder {
         &mut self,
         bind_context: &mut BindContext,
         having: &Expr<'a>,
-    ) -> Result<Scalar> {
+    ) -> Result<(Scalar, &'a [Token<'a>])> {
         let mut scalar_binder =
             ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
         let (scalar, _) = scalar_binder.bind(having).await?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-        rewriter.visit(&scalar)
+        Ok((rewriter.visit(&scalar)?, having.span()))
     }
 
     /// We have supported three kinds of `group by` items:
@@ -294,7 +306,7 @@ impl<'a> Binder {
             new_expr = SExpr::create_unary(eval_scalar.into(), new_expr);
         }
 
-        let aggregate_plan = AggregatePlan {
+        let aggregate_plan = Aggregate {
             group_items: bind_context.aggregate_info.group_items.clone(),
             aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
             from_distinct: false,
@@ -308,10 +320,11 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         having: Scalar,
+        span: &'a [Token<'a>],
         child: SExpr,
     ) -> Result<SExpr> {
         let mut grouping_checker = GroupingChecker::new(bind_context);
-        let scalar = grouping_checker.resolve(&having)?;
+        let scalar = grouping_checker.resolve(&having, Some(span))?;
 
         let predicates = split_conjunctions(&scalar);
 
@@ -409,7 +422,7 @@ impl<'a> Binder {
         let index = index as usize - 1;
         if index >= select_list.items.len() {
             return Err(ErrorCode::SemanticError(expr.span().display_error(
-                format!("GROUP BY position {} is not in select list", index),
+                format!("GROUP BY position {} is not in select list", index + 1),
             )));
         }
         let item = select_list

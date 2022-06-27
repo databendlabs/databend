@@ -172,7 +172,7 @@ impl Catalog for MutableCatalog {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
-        tracing::error!(
+        tracing::info!(
             "db name: {}, engine: {}",
             &req.name_ident.db_name,
             &req.meta.engine

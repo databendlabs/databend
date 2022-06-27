@@ -32,6 +32,10 @@ pub struct StructType {
 }
 
 impl StructType {
+    pub fn new_impl(names: Vec<String>, types: Vec<DataTypeImpl>) -> DataTypeImpl {
+        DataTypeImpl::Struct(Self::create(names, types))
+    }
+
     pub fn create(names: Vec<String>, types: Vec<DataTypeImpl>) -> Self {
         debug_assert!(names.len() == types.len());
         StructType { names, types }
@@ -57,7 +61,21 @@ impl DataType for StructType {
     }
 
     fn name(&self) -> String {
-        "Struct".to_string()
+        let mut type_name = String::new();
+        type_name.push_str("Struct(");
+        let mut first = true;
+        for (name, ty) in self.names.iter().zip(self.types.iter()) {
+            if !first {
+                type_name.push_str(", ");
+            }
+            first = false;
+            type_name.push_str(name);
+            type_name.push(' ');
+            type_name.push_str(&ty.name());
+        }
+        type_name.push(')');
+
+        type_name
     }
 
     fn can_inside_nullable(&self) -> bool {
@@ -128,7 +146,7 @@ impl DataType for StructType {
 
         StructDeserializer {
             builder: MutableStructColumn::from_data(self.clone().into(), inners_mutable),
-            inner: inners_desers,
+            inners: inners_desers,
         }
         .into()
     }

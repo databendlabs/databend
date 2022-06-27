@@ -23,6 +23,8 @@ mod property;
 mod rule;
 mod s_expr;
 
+use std::sync::Arc;
+
 use common_exception::Result;
 pub use heuristic::HeuristicOptimizer;
 pub use heuristic::DEFAULT_REWRITE_RULES;
@@ -39,54 +41,44 @@ pub use rule::RuleFactory;
 pub use s_expr::SExpr;
 
 use super::plans::Plan;
+use crate::sessions::QueryContext;
 pub use crate::sql::optimizer::heuristic::RuleList;
 pub use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::RuleSet;
 use crate::sql::MetadataRef;
 
-pub fn optimize(plan: Plan) -> Result<Plan> {
+pub fn optimize(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {
             s_expr,
             bind_context,
             metadata,
         } => Ok(Plan::Query {
-            s_expr: optimize_query(s_expr, metadata.clone())?,
+            s_expr: optimize_query(ctx, metadata.clone(), s_expr)?,
             bind_context,
             metadata,
         }),
         Plan::Explain { kind, plan } => Ok(Plan::Explain {
             kind,
-            plan: Box::new(optimize(*plan)?),
+            plan: Box::new(optimize(ctx, *plan)?),
         }),
-        // Passthrough
-        Plan::ShowMetrics
-        | Plan::ShowProcessList
-        | Plan::ShowSettings
-        | Plan::CreateDatabase(_)
-        | Plan::DropDatabase(_)
-        | Plan::CreateTable(_)
-        | Plan::CreateUser(_)
-        | Plan::CreateView(_)
-        | Plan::CreateStage(_)
-        | Plan::ShowStages
-        | Plan::DropStage(_)
-        | Plan::DescStage(_)
-        | Plan::ListStage(_)
-        | Plan::DropUser(_)
-        | Plan::AlterUser(_)
-        | Plan::RenameDatabase(_)
-        | Plan::CreateUserUDF(_) => Ok(plan),
+        // Passthrough statements
+        _ => Ok(plan),
+
     }
 }
 
-pub fn optimize_query(expression: SExpr, _metadata: MetadataRef) -> Result<SExpr> {
+pub fn optimize_query(
+    ctx: Arc<QueryContext>,
+    metadata: MetadataRef,
+    s_expr: SExpr,
+) -> Result<SExpr> {
     let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone())?;
-    let mut heuristic = HeuristicOptimizer::new(rules);
-    let s_expr = heuristic.optimize(expression)?;
+    let mut heuristic = HeuristicOptimizer::new(ctx, metadata, rules);
+    let optimized = heuristic.optimize(s_expr)?;
     // TODO: enable cascades optimizer
     // let mut cascades = CascadesOptimizer::create(ctx);
     // cascades.optimize(s_expr)
 
-    Ok(s_expr)
+    Ok(optimized)
 }

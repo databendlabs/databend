@@ -47,6 +47,7 @@ pub enum RetryableError {
 pub struct JoinRequest {
     pub node_id: NodeId,
     pub endpoint: Endpoint,
+    pub grpc_api_addr: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -58,6 +59,8 @@ pub struct LeaveRequest {
     Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::From, derive_more::TryInto,
 )]
 pub enum ForwardRequestBody {
+    Ping,
+
     Join(JoinRequest),
     Leave(LeaveRequest),
 
@@ -86,6 +89,9 @@ impl ForwardRequest {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::TryInto)]
 #[allow(clippy::large_enum_variant)]
 pub enum ForwardResponse {
+    #[try_into(ignore)]
+    Pong,
+
     Join(()),
     Leave(()),
     AppliedState(AppliedState),

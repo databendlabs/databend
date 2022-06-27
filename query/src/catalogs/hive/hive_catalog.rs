@@ -127,7 +127,7 @@ impl Catalog for HiveCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let res: Arc<dyn Table> = Arc::new(HiveTable::create(table_info.clone()));
+        let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info.clone())?);
         Ok(res)
     }
 
@@ -155,7 +155,7 @@ impl Catalog for HiveCatalog {
             .get_schema(db_name.to_owned(), table_name.to_owned())
             .map_err(from_thrift_error)?;
         let table_info: TableInfo = super::converters::try_into_table_info(table_meta, fields)?;
-        let res: Arc<dyn Table> = Arc::new(HiveTable::create(table_info));
+        let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info)?);
         Ok(res)
     }
 

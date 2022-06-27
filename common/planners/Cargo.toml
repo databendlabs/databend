@@ -12,7 +12,6 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-ast = { path = "../ast" }
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
@@ -24,9 +23,9 @@ common-meta-types = { path = "../meta/types" }
 
 # Crates.io dependencies
 bitflags = "1.3.2"
-once_cell = "1.10.0"
-serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.79"
+once_cell = "1.12.0"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.81"
 typetag = "0.1.8"
 
 [dev-dependencies]

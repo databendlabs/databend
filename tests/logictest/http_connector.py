@@ -187,7 +187,9 @@ class HttpConnector():
                 continue
             break
         if response['next_uri'] is not None:
-            log.warning("after waited for 12 secs, query still not finished (next url not none)!")
+            log.warning(
+                "after waited for 12 secs, query still not finished (next url not none)!"
+            )
 
         if self._session is None:
             if response is not None and "session_id" in response:

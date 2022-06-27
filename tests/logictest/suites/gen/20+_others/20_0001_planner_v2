@@ -1045,12 +1045,12 @@ select '====Correlated Subquery====';
 ----  
 ====Correlated Subquery====
 
-statement query I 
-select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
+# statement query I
+# select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
 
-----  
-0
-1
+# ----
+# 0
+# 1
 
 statement query I 
 select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;
@@ -1084,8 +1084,8 @@ explain select t1.a from t1 where a > 0;
 
 ----  mysql
 Project: [a]
-    Filter: [a > 0]
-        PhysicalScan: default.default.t1
+    Filter: [t1.a > 0]
+        Scan: default.default.t1
 
 
 ----  http
@@ -1201,8 +1201,12 @@ drop table t1;
 statement ok
 drop table t2;
 
-statement error 1002 
-select 3 as a, 4 as a; 
+statement query ok
+select 3 as a, 4 as a;
+
+----
+3   4
+
 
 statement ok
 set enable_planner_v2 = 0;

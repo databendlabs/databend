@@ -15,9 +15,11 @@
 use std::fmt;
 use std::str::FromStr;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 use common_io::prelude::StorageParams;
+
+use crate::UserIdentity;
 
 /*
 -- Internal stage
@@ -227,18 +229,27 @@ pub struct UserStageInfo {
     pub file_format_options: FileFormatOptions,
     pub copy_options: CopyOptions,
     pub comment: String,
+    pub number_of_files: u64,
+    pub creator: Option<UserIdentity>,
 }
 
-impl TryFrom<Vec<u8>> for UserStageInfo {
-    type Error = ErrorCode;
-
-    fn try_from(value: Vec<u8>) -> Result<Self> {
-        match serde_json::from_slice(&value) {
-            Ok(info) => Ok(info),
-            Err(serialize_error) => Err(ErrorCode::IllegalUserStageFormat(format!(
-                "Cannot deserialize stage from bytes. cause {}",
-                serialize_error
-            ))),
+impl UserStageInfo {
+    pub fn get_prefix(&self) -> String {
+        match self.stage_type {
+            StageType::External => "/".to_string(),
+            StageType::Internal => {
+                // It's internal, so we should prefix with stage name.
+                format!("/stage/{}/", self.stage_name)
+            }
         }
     }
+}
+
+#[derive(Default, Clone)]
+pub struct StageFile {
+    pub path: String,
+    pub size: u64,
+    pub md5: Option<String>,
+    pub last_modified: DateTime<Utc>,
+    pub creator: Option<UserIdentity>,
 }

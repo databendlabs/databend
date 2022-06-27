@@ -47,6 +47,7 @@ use crate::sql::statements::DfDropRole;
 use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfDropUDF;
 use crate::sql::statements::DfDropUser;
+use crate::sql::statements::DfExistsTable;
 use crate::sql::statements::DfExplain;
 use crate::sql::statements::DfGrantPrivilegeStatement;
 use crate::sql::statements::DfInsertStatement;
@@ -102,6 +103,7 @@ pub enum DfStatement<'a> {
     AlterTable(DfAlterTable),
     TruncateTable(DfTruncateTable),
     OptimizeTable(DfOptimizeTable),
+    ExistsTable(DfExistsTable),
     RenameTable(DfRenameTable),
 
     // Views.

@@ -143,6 +143,8 @@ pub enum Expr<'a> {
     /// `EXISTS` expression
     Exists {
         span: &'a [Token<'a>],
+        /// Indicate if this is a `NOT EXISTS`
+        not: bool,
         subquery: Box<Query<'a>>,
     },
     /// Scalar subquery, which will only return a single row with a single column.
@@ -173,8 +175,25 @@ pub enum Expr<'a> {
         interval: Box<Expr<'a>>,
         unit: IntervalKind,
     },
+    DateSub {
+        span: &'a [Token<'a>],
+        date: Box<Expr<'a>>,
+        interval: Box<Expr<'a>>,
+        unit: IntervalKind,
+    },
     /// NULLIF(<expr>, <expr>)
     NullIf {
+        span: &'a [Token<'a>],
+        expr1: Box<Expr<'a>>,
+        expr2: Box<Expr<'a>>,
+    },
+    // Coalesce(<expr>, <expr>, ...)
+    Coalesce {
+        span: &'a [Token<'a>],
+        exprs: Vec<Expr<'a>>,
+    },
+    /// IFNULL(<expr>, <expr>)
+    IfNull {
         span: &'a [Token<'a>],
         expr1: Box<Expr<'a>>,
         expr2: Box<Expr<'a>>,
@@ -300,7 +319,10 @@ impl<'a> Expr<'a> {
             Expr::Array { span, .. } => span,
             Expr::Interval { span, .. } => span,
             Expr::DateAdd { span, .. } => span,
+            Expr::DateSub { span, .. } => span,
             Expr::NullIf { span, .. } => span,
+            Expr::Coalesce { span, .. } => span,
+            Expr::IfNull { span, .. } => span,
         }
     }
 }
@@ -721,8 +743,24 @@ impl<'a> Display for Expr<'a> {
             } => {
                 write!(f, "DATE_ADD({date}, INTERVAL {interval} {unit})")?;
             }
+            Expr::DateSub {
+                date,
+                interval,
+                unit,
+                ..
+            } => {
+                write!(f, "DATE_SUB({date}, INTERVAL {interval} {unit})")?;
+            }
             Expr::NullIf { expr1, expr2, .. } => {
                 write!(f, "NULLIF({expr1}, {expr2})")?;
+            }
+            Expr::Coalesce { exprs, .. } => {
+                write!(f, "COALESCE(")?;
+                write_comma_separated_list(f, exprs)?;
+                write!(f, ")")?;
+            }
+            Expr::IfNull { expr1, expr2, .. } => {
+                write!(f, "IFNULL({expr1}, {expr2})")?;
             }
         }
 

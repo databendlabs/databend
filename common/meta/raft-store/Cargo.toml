@@ -21,17 +21,17 @@ common-meta-types = { path = "../types" }
 common-tracing = { path = "../../tracing" }
 
 # crates.io deps
-anyhow = "1.0.56"
-async-trait = "0.1.53"
+anyhow = "1.0.58"
+async-trait = "0.1.56"
 bytes = "1.1.0"
 derive_more = "0.99.17"
 hostname = "0.3.1"
 maplit = "1.0.2"
-num = "0.4"
-once_cell = "1.10.0"
+num = "0.4.0"
+once_cell = "1.12.0"
 rand = "0.8.5"
-serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.79"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.81"
 
 [dev-dependencies]
 common-base = { path = "../../base" }

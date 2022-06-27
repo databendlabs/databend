@@ -27,9 +27,12 @@ impl ContextFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("connection_id", ConnectionIdFunction::desc());
         factory.register("database", DatabaseFunction::desc());
+        factory.register("currentDatabase", DatabaseFunction::desc());
+        factory.register("current_database", DatabaseFunction::desc());
         factory.register("version", VersionFunction::desc());
-        factory.register("current_user", CurrentUserFunction::desc());
         factory.register("user", UserFunction::desc());
+        factory.register("currentUser", UserFunction::desc());
+        factory.register("current_user", CurrentUserFunction::desc());
         factory.register("timezone", TzFunction::desc());
     }
 }

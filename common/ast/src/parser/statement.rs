@@ -15,30 +15,22 @@
 use std::collections::BTreeMap;
 
 use common_meta_types::AuthType;
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
+use common_meta_types::UserPrivilegeType;
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
+use nom::Slice;
+use url::Url;
 
-use super::error::ErrorKind;
 use crate::ast::*;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
-
-pub fn statements(i: Input) -> IResult<Vec<Statement>> {
-    let stmt = map(statement, Some);
-    let eoi = map(rule! { &EOI }, |_| None);
-
-    map(
-        rule!(
-            #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi }) ~ &EOI
-        ),
-        |(stmts, _)| stmts.into_iter().flatten().collect(),
-    )(i)
-}
+use crate::ErrorKind;
 
 pub fn statement(i: Input) -> IResult<Statement> {
     let explain = map(
@@ -55,234 +47,24 @@ pub fn statement(i: Input) -> IResult<Statement> {
             query: Box::new(statement),
         },
     );
-    let show_databases = map(
+    let insert = map(
         rule! {
-            SHOW ~ ( DATABASES | SCHEMAS ) ~ #show_limit?
+            INSERT ~ ( INTO | OVERWRITE ) ~ TABLE?
+            ~ #peroid_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ #insert_source
         },
-        |(_, _, limit)| Statement::ShowDatabases { limit },
-    );
-    let show_create_database = map(
-        rule! {
-            SHOW ~ CREATE ~ ( DATABASE | SCHEMA ) ~ #ident
-        },
-        |(_, _, _, database)| Statement::ShowCreateDatabase { database },
-    );
-    let create_database = map(
-        rule! {
-            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #database_engine?
-        },
-        |(_, _, opt_if_not_exists, opt_catalog, database, engine)| {
-            Statement::CreateDatabase(CreateDatabaseStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
-                catalog: opt_catalog.map(|(catalog, _)| catalog),
+        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| {
+            Statement::Insert(InsertStmt {
+                catalog,
                 database,
-                engine,
-                options: vec![],
-            })
-        },
-    );
-    let drop_database = map(
-        rule! {
-            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
-        },
-        |(_, _, opt_if_exists, opt_catalog, database)| {
-            Statement::DropDatabase(DropDatabaseStmt {
-                if_exists: opt_if_exists.is_some(),
-                catalog: opt_catalog.map(|(catalog, _)| catalog),
-                database,
-            })
-        },
-    );
-    let alter_database = map(
-        rule! {
-            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #alter_database_action
-        },
-        |(_, _, opt_if_exists, opt_catalog, database, action)| {
-            Statement::AlterDatabase(AlterDatabaseStmt {
-                if_exists: opt_if_exists.is_some(),
-                catalog: opt_catalog.map(|(catalog, _)| catalog),
-                database,
-                action,
-            })
-        },
-    );
-    let use_database = map(
-        rule! {
-            USE ~ #ident
-        },
-        |(_, database)| Statement::UseDatabase { database },
-    );
-    let show_tables = map(
-        rule! {
-            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( FROM ~ ^#ident )? ~ #show_limit?
-        },
-        |(_, opt_full, _, opt_history, opt_database, limit)| Statement::ShowTables {
-            database: opt_database.map(|(_, database)| database),
-            full: opt_full.is_some(),
-            limit,
-            with_history: opt_history.is_some(),
-        },
-    );
-    let show_create_table = map(
-        rule! {
-            SHOW ~ CREATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident
-        },
-        |(_, _, _, opt_database, table)| Statement::ShowCreateTable {
-            database: opt_database.map(|(database, _)| database),
-            table,
-        },
-    );
-    let show_tables_status = map(
-        rule! {
-            SHOW ~ TABLE ~ STATUS ~ ( FROM ~ ^#ident )? ~ #show_limit?
-        },
-        |(_, _, _, opt_database, limit)| Statement::ShowTablesStatus {
-            database: opt_database.map(|(_, database)| database),
-            limit,
-        },
-    );
-    let create_table = map(
-        rule! {
-            CREATE ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
-            ~ ( #ident ~ "." )? ~ #ident
-            ~ #create_table_source?
-            ~ ( #table_option )*
-            ~ ( COMMENT ~ "=" ~ #literal_string )?
-            ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
-            ~ ( AS ~ ^#query )?
-        },
-        |(
-            _,
-            _,
-            opt_if_not_exists,
-            opt_database,
-            table,
-            source,
-            table_options,
-            opt_comment,
-            opt_cluster_by,
-            opt_as_query,
-        )| {
-            Statement::CreateTable(CreateTableStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
-                database: opt_database.map(|(database, _)| database),
                 table,
-                source,
-                table_options,
-                comment: opt_comment.map(|(_, _, comment)| comment),
-                cluster_by: opt_cluster_by
-                    .map(|(_, _, _, exprs, _)| exprs)
+                columns: opt_columns
+                    .map(|(_, columns, _)| columns)
                     .unwrap_or_default(),
-                as_query: opt_as_query.map(|(_, query)| Box::new(query)),
+                source,
+                overwrite: overwrite.kind == OVERWRITE,
             })
-        },
-    );
-    let describe = map(
-        rule! {
-            ( DESC | DESCRIBE ) ~ ( #ident ~ "." )? ~ ( #ident ~ "." )? ~ #ident
-        },
-        |(_, opt_catalog, opt_database, table)| Statement::Describe {
-            catalog: opt_catalog.map(|(catalog, _)| catalog),
-            database: opt_database.map(|(database, _)| database),
-            table,
-        },
-    );
-    let drop_table = map(
-        rule! {
-            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ( ALL )?
-        },
-        |(_, _, opt_if_exists, opt_database, table, opt_all)| Statement::DropTable {
-            if_exists: opt_if_exists.is_some(),
-            database: opt_database.map(|(database, _)| database),
-            table,
-            all: opt_all.is_some(),
-        },
-    );
-    let undrop_table = map(
-        rule! {
-            UNDROP ~ TABLE ~ ( #ident ~ "." )? ~ #ident
-        },
-        |(_, _, opt_database, table)| Statement::UndropTable {
-            database: opt_database.map(|(database, _)| database),
-            table,
-        },
-    );
-    let alter_table = map(
-        rule! {
-            ALTER ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ #alter_table_action
-        },
-        |(_, _, opt_if_exists, opt_database, table, action)| Statement::AlterTable {
-            if_exists: opt_if_exists.is_some(),
-            database: opt_database.map(|(database, _)| database),
-            table,
-            action,
-        },
-    );
-    let rename_table = map(
-        rule! {
-            RENAME ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ TO ~ #ident
-        },
-        |(_, _, opt_database, table, _, new_table)| Statement::RenameTable {
-            database: opt_database.map(|(database, _)| database),
-            table,
-            new_table,
-        },
-    );
-    let truncate_table = map(
-        rule! {
-            TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ PURGE?
-        },
-        |(_, _, opt_database, table, opt_purge)| Statement::TruncateTable {
-            database: opt_database.map(|(database, _)| database),
-            table,
-            purge: opt_purge.is_some(),
-        },
-    );
-    let optimize_table = map(
-        rule! {
-            OPTIMIZE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ #optimize_table_action?
-        },
-        |(_, _, opt_database, table, action)| Statement::OptimizeTable {
-            database: opt_database.map(|(database, _)| database),
-            table,
-            action,
-        },
-    );
-    let create_view = map(
-        rule! {
-            CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
-            ~ ( #ident ~ "." )? ~ #ident
-            ~ AS ~ #query
-        },
-        |(_, _, opt_if_not_exists, opt_database, view, _, query)| {
-            Statement::CreateView(CreateViewStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
-                database: opt_database.map(|(database, _)| database),
-                view,
-                query: Box::new(query),
-            })
-        },
-    );
-    let alter_view = map(
-        rule! {
-            ALTER ~ VIEW
-            ~ ( #ident ~ "." )? ~ #ident
-            ~ AS ~ #query
-        },
-        |(_, _, opt_database, view, _, query)| Statement::AlterView {
-            database: opt_database.map(|(database, _)| database),
-            view,
-            query: Box::new(query),
-        },
-    );
-    let drop_view = map(
-        rule! {
-            DROP ~ VIEW ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
-        },
-        |(_, _, opt_if_exists, opt_database, view)| Statement::DropView {
-            if_exists: opt_if_exists.is_some(),
-            database: opt_database.map(|(database, _)| database),
-            view,
         },
     );
     let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
@@ -310,23 +92,297 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
         |(_, variable, _, value)| Statement::SetVariable { variable, value },
     );
-    let insert = map(
+    let show_databases = map(
         rule! {
-            INSERT ~ ( INTO | OVERWRITE ) ~ TABLE?
-            ~ ( #ident ~ "." )? ~ #ident
-            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ #insert_source
+            SHOW ~ ( DATABASES | SCHEMAS ) ~ #show_limit?
         },
-        |(_, overwrite, _, opt_database, table, opt_columns, source)| Statement::Insert {
-            database: opt_database.map(|(database, _)| database),
-            table,
-            columns: opt_columns
-                .map(|(_, columns, _)| columns)
-                .unwrap_or_default(),
-            source,
-            overwrite: overwrite.kind == OVERWRITE,
+        |(_, _, limit)| Statement::ShowDatabases(ShowDatabasesStmt { limit }),
+    );
+    let show_create_database = map(
+        rule! {
+            SHOW ~ CREATE ~ ( DATABASE | SCHEMA ) ~ #peroid_separated_idents_1_to_2
+        },
+        |(_, _, _, (catalog, database))| {
+            Statement::ShowCreateDatabase(ShowCreateDatabaseStmt { catalog, database })
         },
     );
+    let create_database = map(
+        rule! {
+            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #peroid_separated_idents_1_to_2 ~ #database_engine?
+        },
+        |(_, _, opt_if_not_exists, (catalog, database), engine)| {
+            Statement::CreateDatabase(CreateDatabaseStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                catalog,
+                database,
+                engine,
+                options: vec![],
+            })
+        },
+    );
+    let drop_database = map(
+        rule! {
+            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_2
+        },
+        |(_, _, opt_if_exists, (catalog, database))| {
+            Statement::DropDatabase(DropDatabaseStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+            })
+        },
+    );
+    let alter_database = map(
+        rule! {
+            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_2 ~ #alter_database_action
+        },
+        |(_, _, opt_if_exists, (catalog, database), action)| {
+            Statement::AlterDatabase(AlterDatabaseStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                action,
+            })
+        },
+    );
+    let use_database = map(
+        rule! {
+            USE ~ #ident
+        },
+        |(_, database)| Statement::UseDatabase { database },
+    );
+    let show_tables = map(
+        rule! {
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( FROM ~ ^#ident )? ~ #show_limit?
+        },
+        |(_, opt_full, _, opt_history, opt_database, limit)| {
+            Statement::ShowTables(ShowTablesStmt {
+                database: opt_database.map(|(_, database)| database),
+                full: opt_full.is_some(),
+                limit,
+                with_history: opt_history.is_some(),
+            })
+        },
+    );
+    let show_create_table = map(
+        rule! {
+            SHOW ~ CREATE ~ TABLE ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, _, (catalog, database, table))| {
+            Statement::ShowCreateTable(ShowCreateTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+    let describe_table = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, (catalog, database, table))| {
+            Statement::DescribeTable(DescribeTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+    let show_tables_status = map(
+        rule! {
+            SHOW ~ ( TABLES | TABLE ) ~ STATUS ~ ( FROM ~ ^#ident )? ~ #show_limit?
+        },
+        |(_, _, _, opt_database, limit)| {
+            Statement::ShowTablesStatus(ShowTablesStatusStmt {
+                database: opt_database.map(|(_, database)| database),
+                limit,
+            })
+        },
+    );
+    let create_table = map(
+        rule! {
+            CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #peroid_separated_idents_1_to_3
+            ~ #create_table_source?
+            ~ ( #table_option )*
+            ~ ( COMMENT ~ "=" ~ #literal_string )?
+            ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ ( AS ~ ^#query )?
+        },
+        |(
+            _,
+            opt_transient,
+            _,
+            opt_if_not_exists,
+            (catalog, database, table),
+            source,
+            table_options,
+            opt_comment,
+            opt_cluster_by,
+            opt_as_query,
+        )| {
+            Statement::CreateTable(CreateTableStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                catalog,
+                database,
+                table,
+                source,
+                table_options,
+                comment: opt_comment.map(|(_, _, comment)| comment),
+                cluster_by: opt_cluster_by
+                    .map(|(_, _, _, exprs, _)| exprs)
+                    .unwrap_or_default(),
+                as_query: opt_as_query.map(|(_, query)| Box::new(query)),
+                transient: opt_transient.is_some(),
+            })
+        },
+    );
+    let drop_table = map(
+        rule! {
+            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_3 ~ ( ALL )?
+        },
+        |(_, _, opt_if_exists, (catalog, database, table), opt_all)| {
+            Statement::DropTable(DropTableStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                table,
+                all: opt_all.is_some(),
+            })
+        },
+    );
+    let undrop_table = map(
+        rule! {
+            UNDROP ~ TABLE ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, table))| {
+            Statement::UndropTable(UndropTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+    let alter_table = map(
+        rule! {
+            ALTER ~ TABLE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_3 ~ #alter_table_action
+        },
+        |(_, _, opt_if_exists, (catalog, database, table), action)| {
+            Statement::AlterTable(AlterTableStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                table,
+                action,
+            })
+        },
+    );
+    let rename_table = map(
+        rule! {
+            RENAME ~ TABLE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_3 ~ TO ~ #peroid_separated_idents_1_to_3
+        },
+        |(
+            _,
+            _,
+            opt_if_exists,
+            (catalog, database, table),
+            _,
+            (new_catalog, new_database, new_table),
+        )| {
+            Statement::RenameTable(RenameTableStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                table,
+                new_catalog,
+                new_database,
+                new_table,
+            })
+        },
+    );
+    let truncate_table = map(
+        rule! {
+            TRUNCATE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ PURGE?
+        },
+        |(_, _, (catalog, database, table), opt_purge)| {
+            Statement::TruncateTable(TruncateTableStmt {
+                catalog,
+                database,
+                table,
+                purge: opt_purge.is_some(),
+            })
+        },
+    );
+    let optimize_table = map(
+        rule! {
+            OPTIMIZE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ #optimize_table_action?
+        },
+        |(_, _, (catalog, database, table), action)| {
+            Statement::OptimizeTable(OptimizeTableStmt {
+                catalog,
+                database,
+                table,
+                action,
+            })
+        },
+    );
+    let exists_table = map(
+        rule! {
+            EXISTS ~ TABLE ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, table))| {
+            Statement::ExistsTable(ExistsTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+    let create_view = map(
+        rule! {
+            CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #peroid_separated_idents_1_to_3
+            ~ AS ~ #query
+        },
+        |(_, _, opt_if_not_exists, (catalog, database, view), _, query)| {
+            Statement::CreateView(CreateViewStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                catalog,
+                database,
+                view,
+                query: Box::new(query),
+            })
+        },
+    );
+    let drop_view = map(
+        rule! {
+            DROP ~ VIEW ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, opt_if_exists, (catalog, database, view))| {
+            Statement::DropView(DropViewStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
+    let alter_view = map(
+        rule! {
+            ALTER ~ VIEW
+            ~ #peroid_separated_idents_1_to_3
+            ~ AS ~ #query
+        },
+        |(_, _, (catalog, database, view), _, query)| {
+            Statement::AlterView(AlterViewStmt {
+                catalog,
+                database,
+                view,
+                query: Box::new(query),
+            })
+        },
+    );
+    let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map(
         rule! {
             CREATE ~ USER ~ ( IF ~ NOT ~ EXISTS )?
@@ -354,15 +410,17 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )? )?
             ~ ( WITH ~ ^#role_option+ )?
         },
-        |(_, _, user, opt_auth_option, opt_role_options)| Statement::AlterUser {
-            user,
-            auth_option: opt_auth_option.map(|(_, opt_auth_type, opt_password)| AuthOption {
-                auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
-                password: opt_password.map(|(_, password)| password),
-            }),
-            role_options: opt_role_options
-                .map(|(_, role_options)| role_options)
-                .unwrap_or_default(),
+        |(_, _, user, opt_auth_option, opt_role_options)| {
+            Statement::AlterUser(AlterUserStmt {
+                user,
+                auth_option: opt_auth_option.map(|(_, opt_auth_type, opt_password)| AuthOption {
+                    auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
+                    password: opt_password.map(|(_, password)| password),
+                }),
+                role_options: opt_role_options
+                    .map(|(_, role_options)| role_options)
+                    .unwrap_or_default(),
+            })
         },
     );
     let drop_user = map(
@@ -372,6 +430,55 @@ pub fn statement(i: Input) -> IResult<Statement> {
         |(_, _, opt_if_exists, user)| Statement::DropUser {
             if_exists: opt_if_exists.is_some(),
             user,
+        },
+    );
+    let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
+    let create_role = map(
+        rule! {
+            CREATE ~ ROLE ~ ( IF ~ NOT ~ EXISTS )? ~ #literal_string
+        },
+        |(_, _, opt_if_not_exists, role_name)| Statement::CreateRole {
+            if_not_exists: opt_if_not_exists.is_some(),
+            role_name,
+        },
+    );
+    let drop_role = map(
+        rule! {
+            DROP ~ ROLE ~ ( IF ~ EXISTS )? ~ #literal_string
+        },
+        |(_, _, opt_if_exists, role_name)| Statement::DropRole {
+            if_exists: opt_if_exists.is_some(),
+            role_name,
+        },
+    );
+    let grant = map(
+        rule! {
+            GRANT ~ #grant_source ~ TO ~ #grant_option
+        },
+        |(_, source, _, grant_option)| {
+            Statement::Grant(GrantStmt {
+                source,
+                principal: grant_option,
+            })
+        },
+    );
+    let show_grants = map(
+        rule! {
+            SHOW ~ GRANTS ~ (FOR ~ #grant_option)?
+        },
+        |(_, _, opt_principal)| Statement::ShowGrants {
+            principal: opt_principal.map(|(_, principal)| principal),
+        },
+    );
+    let revoke = map(
+        rule! {
+            REVOKE ~ #grant_source ~ FROM ~ #grant_option
+        },
+        |(_, source, _, grant_option)| {
+            Statement::Revoke(RevokeStmt {
+                source,
+                principal: grant_option,
+            })
         },
     );
     let create_udf = map(
@@ -491,17 +598,20 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             LIST ~ #at_string ~ (PATTERN ~ "=" ~ #literal_string)?
         },
-        |(_, stage_name, pattern_opt)| Statement::ListStage {
-            stage_name,
-            pattern: pattern_opt.map(|v| v.2).unwrap_or_default(),
+        |(_, location, opt_pattern)| Statement::ListStage {
+            location,
+            pattern: opt_pattern.map(|v| v.2).unwrap_or_default(),
         },
     );
 
-    let _remove_stage = map(
+    let remove_stage = map(
         rule! {
-            REMOVE ~ #at_string
+            REMOVE ~ #at_string ~ (PATTERN ~ "=" ~ #literal_string)?
         },
-        |(_, stage_name)| Statement::RemoveStage { stage_name },
+        |(_, location, opt_pattern)| Statement::RemoveStage {
+            location,
+            pattern: opt_pattern.map(|v| v.2).unwrap_or_default(),
+        },
     );
 
     let drop_stage = map(
@@ -516,39 +626,42 @@ pub fn statement(i: Input) -> IResult<Statement> {
 
     let desc_stage = map(
         rule! {
-            DESC ~ STAGE ~ #ident
+            (DESC | DESCRIBE) ~ STAGE ~ #ident
         },
-        |(_, _, stage_name)| Statement::DescStage {
+        |(_, _, stage_name)| Statement::DescribeStage {
             stage_name: stage_name.to_string(),
         },
     );
 
-    alt((
+    let copy_into = map(
+        rule! {
+            COPY
+            ~ INTO ~ #copy_target
+            ~ FROM ~ #copy_target
+            ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")?
+            ~ ( PATTERN ~ "=" ~ #literal_string)?
+            ~ ( FILE_FORMAT ~ "=" ~ #options)?
+            ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
+            ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
+        },
+        |(_, _, dst, _, src, files, pattern, file_format, validation_mode, size_limit)| {
+            Statement::Copy(CopyStmt {
+                src,
+                dst,
+                files: files.map(|v| v.3).unwrap_or_default(),
+                pattern: pattern.map(|v| v.2).unwrap_or_default(),
+                file_format: file_format.map(|v| v.2).unwrap_or_default(),
+                validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
+                size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
+            })
+        },
+    );
+
+    let statement_body = alt((
         rule!(
-            #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
-            | #map(query, |query| Statement::Query(Box::new(query)))
-            | #show_databases : "`SHOW DATABASES [<show_limit>]`"
-            | #show_create_database : "`SHOW CREATE DATABASE <database>`"
-            | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
-            | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
-            | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
-            | #use_database : "`USE <database>`"
-            | #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
-            | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
-            | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
-            | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
-            | #describe : "`DESCRIBE [<database>.]<table>`"
-            | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
-            | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
-            | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
-            | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
-            | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
-            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
-        ),
-        rule!(
-            #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
-            | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
-            | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
+            #map(query, |query| Statement::Query(Box::new(query)))
+            | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+            | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #show_settings : "`SHOW SETTINGS`"
             | #show_stages : "`SHOW STAGES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
@@ -556,23 +669,115 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_variable : "`SET <variable> = <value>`"
-            | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #show_databases : "`SHOW DATABASES [<show_limit>]`"
+            | #show_create_database : "`SHOW CREATE DATABASE <database>`"
+            | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
+            | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
+            | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
+            | #use_database : "`USE <database>`"
+        ),
+        rule!(
+            #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
+            | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
+            | #describe_table : "`DESCRIBE [<database>.]<table>`"
+            | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
+            | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
+            | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
+            | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
+            | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
+            | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
+            | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
+            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
+            | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
+            | #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
+            | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
+            | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
+        ),
+        rule!(
+            #show_users : "`SHOW USERS`"
             | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <role_option> ...]`"
             | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <role_option> ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
+            | #show_roles : "`SHOW ROLES`"
+            | #create_role : "`CREATE ROLE [IF NOT EXISTS] '<role_name>']`"
+            | #drop_role : "`DROP ROLE [IF EXISTS] '<role_name>'`"
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
-            | #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
+        ),
+        rule!(
+            #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
                 [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
                 [ COPY_OPTIONS = ( copyOptions ) ]
                 [ COMMENT = '<string_literal>' ]`"
             | #desc_stage: "`DESC STAGE <stage_name>`"
-            // | #remove_stage: "`REMOVE @<stage_name>`"
             | #list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
+            | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
         ),
-    ))(i)
+        rule! (
+            #copy_into: "`COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`"
+        ),
+        rule!(
+            #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
+            | #show_grants : "`SHOW GRANTS [FOR  { ROLE <role_name> | [USER] <user> }]`"
+                        | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+
+        ),
+    ));
+
+    map(
+        rule! {
+            #statement_body ~ ";"? ~ &EOI
+        },
+        |(stmt, _, _)| stmt,
+    )(i)
+}
+
+// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
+// stop the parser immediately and return the rest tokens by `InsertSource`.
+//
+// This is a hack to make it able to parse a large streaming insert statement.
+pub fn insert_source(i: Input) -> IResult<InsertSource> {
+    let streaming = map(
+        rule! {
+            FORMAT ~ #ident ~ #rest_tokens
+        },
+        |(_, format, rest_tokens)| InsertSource::Streaming {
+            format: format.name,
+            rest_tokens,
+        },
+    );
+    let values = map(
+        rule! {
+            VALUES ~ #rest_tokens
+        },
+        |(_, rest_tokens)| InsertSource::Values { rest_tokens },
+    );
+    let query = map(query, |query| InsertSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+        #streaming
+        | #values
+        | #query
+    )(i)
+}
+
+pub fn rest_tokens<'a>(i: Input<'a>) -> IResult<&'a [Token]> {
+    if i.last().map(|token| token.kind) == Some(EOI) {
+        Ok((i.slice(i.len() - 1..), i.slice(..i.len() - 1).0))
+    } else {
+        Ok((i.slice(i.len()..), i.0))
+    }
 }
 
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
@@ -592,20 +797,28 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         },
         |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
     );
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
 
     map(
         rule! {
             #ident
             ~ #type_name
             ~ ( #nullable | #default_expr )*
-            : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`"
+            ~ ( #comment )?
+            : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>] [COMMENT '<comment>']`"
         },
-        |(name, data_type, constraints)| {
+        |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
                 nullable: false,
                 default_expr: None,
+                comment,
             };
             for constraint in constraints {
                 match constraint {
@@ -620,29 +833,99 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     )(i)
 }
 
-pub fn insert_source(i: Input) -> IResult<InsertSource> {
-    let streaming = map(
+pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
+    let role = map(
         rule! {
-            FORMAT ~ #ident
+            ROLE ~ #literal_string
         },
-        |(_, format)| InsertSource::Streaming {
-            format: format.name,
+        |(_, role_name)| AccountMgrSource::Role { role: role_name },
+    );
+    let privs = map(
+        rule! {
+            #comma_separated_list1(priv_type) ~ ON ~ #grant_level
+        },
+        |(privs, _, level)| AccountMgrSource::Privs {
+            privileges: privs,
+            level,
         },
     );
-    let values = map(
-        rule! {
-            VALUES ~ #values_tokens
-        },
-        |(_, values_tokens)| InsertSource::Values { values_tokens },
+    let all = map(
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ #grant_level },
+        |(_, _, _, level)| AccountMgrSource::ALL { level },
     );
-    let query = map(query, |query| InsertSource::Select {
-        query: Box::new(query),
-    });
 
     rule!(
-        #streaming
-        | #values
-        | #query
+        #role : "ROLE <role_name>"
+        | #privs : "<privileges> ON <privileges_level>"
+        | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
+    )(i)
+}
+
+pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
+    alt((
+        value(UserPrivilegeType::Usage, rule! { USAGE }),
+        value(UserPrivilegeType::Select, rule! { SELECT }),
+        value(UserPrivilegeType::Insert, rule! { INSERT }),
+        value(UserPrivilegeType::Update, rule! { UPDATE }),
+        value(UserPrivilegeType::Delete, rule! { DELETE }),
+        value(UserPrivilegeType::Create, rule! { CREATE }),
+        value(UserPrivilegeType::Drop, rule! { DROP }),
+        value(UserPrivilegeType::Alter, rule! { ALTER }),
+        value(UserPrivilegeType::Super, rule! { SUPER }),
+        value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER }),
+        value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
+        value(UserPrivilegeType::Grant, rule! { GRANT }),
+        value(UserPrivilegeType::CreateStage, rule! { CREATE ~ STAGE }),
+        value(UserPrivilegeType::Set, rule! { SET }),
+    ))(i)
+}
+
+pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
+    // *.*
+    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
+    // db.*
+    // "*": as current db or "table" with current db
+    let db = map(
+        rule! {
+            ( #ident ~ "." )? ~ "*"
+        },
+        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
+    );
+    // db.table
+    let table = map(
+        rule! {
+            ( #ident ~ "." )? ~ #ident
+        },
+        |(database, table)| {
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table.name)
+        },
+    );
+
+    rule!(
+        #global : "*.*"
+        | #db : "<database>.*"
+        | #table : "<database>.<table>"
+    )(i)
+}
+
+pub fn grant_option(i: Input) -> IResult<PrincipalIdentity> {
+    let role = map(
+        rule! {
+            ROLE ~ #literal_string
+        },
+        |(_, role_name)| PrincipalIdentity::Role(role_name),
+    );
+
+    let user = map(
+        rule! {
+            USER? ~ #user_identity
+        },
+        |(_, user)| PrincipalIdentity::User(user),
+    );
+
+    rule!(
+        #role
+        | #user
     )(i)
 }
 
@@ -655,10 +938,11 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     );
     let like = map(
         rule! {
-            LIKE ~ ( #ident ~ "." )? ~ ^#ident
+            LIKE ~ #peroid_separated_idents_1_to_3
         },
-        |(_, opt_database, table)| CreateTableSource::Like {
-            database: opt_database.map(|(database, _)| database),
+        |(_, (catalog, database, table))| CreateTableSource::Like {
+            catalog,
+            database,
             table,
         },
     );
@@ -726,6 +1010,87 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     ))(i)
 }
 
+/// Parse input into `CopyTarget`
+///
+/// # Notes
+///
+/// It's required to parse stage location first. Or stage could be parsed as table.
+pub fn copy_target(i: Input) -> IResult<CopyUnit> {
+    // Parse input like `@my_stage/path/to/dir`
+    let stage_location = |i| {
+        map(at_string, |location| {
+            let parsed = location.splitn(2, '/').collect::<Vec<_>>();
+            if parsed.len() == 1 {
+                CopyUnit::StageLocation {
+                    name: parsed[0].to_string(),
+                    path: "/".to_string(),
+                }
+            } else {
+                CopyUnit::StageLocation {
+                    name: parsed[0].to_string(),
+                    path: format!("/{}", parsed[1]),
+                }
+            }
+        })(i)
+    };
+
+    // Parse input like `mytable`
+    let table = |i| {
+        map(
+            peroid_separated_idents_1_to_3,
+            |(catalog, database, table)| CopyUnit::Table {
+                catalog,
+                database,
+                table,
+            },
+        )(i)
+    };
+
+    // Parse input like `( SELECT * from mytable )`
+    let query = |i| {
+        map(parenthesized_query, |query| {
+            CopyUnit::Query(Box::new(query))
+        })(i)
+    };
+
+    // Parse input like `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
+    let uri_location = |i| {
+        map_res(
+            rule! {
+                #literal_string
+                ~ (CREDENTIALS ~ "=" ~ #options)?
+                ~ (ENCRYPTION ~ "=" ~ #options)?
+            },
+            |(location, credentials_opt, encryption_opt)| {
+                let parsed =
+                    Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
+
+                Ok(CopyUnit::UriLocation {
+                    protocol: parsed.scheme().to_string(),
+                    name: parsed
+                        .host_str()
+                        .ok_or(ErrorKind::Other("invalid uri location"))?
+                        .to_string(),
+                    path: if parsed.path().is_empty() {
+                        "/".to_string()
+                    } else {
+                        parsed.path().to_string()
+                    },
+                    credentials: credentials_opt.map(|v| v.2).unwrap_or_default(),
+                    encryption: encryption_opt.map(|v| v.2).unwrap_or_default(),
+                })
+            },
+        )(i)
+    };
+
+    rule!(
+       #stage_location: "@<stage_name> { <path> }"
+        | #uri_location: "'<protocol>://<name> {<path>} { CREDENTIALS = ({ AWS_ACCESS_KEY = 'aws_access_key' }) } '"
+        | #table: "{ { <catalog>. } <database>. }<table>"
+        | #query: "( <query> )"
+    )(i)
+}
+
 pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     let limit_like = map(
         rule! {
@@ -767,6 +1132,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Fuse, rule! { FUSE }),
         value(Engine::Github, rule! { GITHUB }),
         value(Engine::View, rule! { VIEW }),
+        value(Engine::Random, rule! { RANDOM }),
     ));
 
     map(
@@ -794,15 +1160,6 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
         },
         |(_, _, engine)| engine,
     )(i)
-}
-
-pub fn values_tokens(i: Input) -> IResult<&[Token]> {
-    let semicolon_pos = i
-        .iter()
-        .position(|token| token.text() == ";")
-        .unwrap_or(i.len() - 1);
-    let (value_tokens, rest_tokens) = i.0.split_at(semicolon_pos);
-    Ok((Input(rest_tokens, i.1), value_tokens))
 }
 
 pub fn role_option(i: Input) -> IResult<RoleOption> {
@@ -851,6 +1208,8 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
         })(i)
     };
 
+    let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
+
     let ident_with_format = alt((
         ident_to_string,
         map(rule! { FORMAT }, |_| "FORMAT".to_string()),
@@ -858,8 +1217,10 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     map(
         rule! {
-            "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #literal_string) )* ~ ")"
+            "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #u64_to_string | #literal_string) )* ~ ")"
         },
-        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.clone(), v.clone()))),
+        |(_, opts, _)| {
+            BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))
+        },
     )(i)
 }

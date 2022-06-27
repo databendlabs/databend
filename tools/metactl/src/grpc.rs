@@ -17,7 +17,8 @@ use common_meta_types::protobuf::Empty;
 use tokio_stream::StreamExt;
 
 pub async fn export_meta(addr: &str) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None)?;
+    let client =
+        MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
 
     let mut grpc_client = client.make_client().await?;
 

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::StageType;
 use common_planners::RemoveUserStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -50,27 +51,21 @@ impl Interpreter for RemoveUserStageInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let ctx = self.ctx.clone();
+        let user_mgr = self.ctx.get_user_manager();
+        let tenant = self.ctx.get_tenant();
 
-        let mut files: Vec<String> = vec![];
-
-        if !plan.file_name.is_empty() {
-            files.push(plan.file_name);
-        } else if !plan.pattern.is_empty() {
-            files.append(
-                &mut list_files(
-                    ctx.clone(),
-                    plan.stage.clone(),
-                    plan.path.clone(),
-                    plan.pattern,
-                )
-                .await?,
-            );
+        let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
+        let files = files.iter().map(|f| f.path.clone()).collect::<Vec<_>>();
+        let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
+        if plan.stage.stage_type == StageType::Internal {
+            user_mgr
+                .remove_files(&tenant, &plan.stage.stage_name, files.clone())
+                .await?;
         }
 
-        let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
         for name in files.into_iter() {
-            let obj = format!("{}/{}", plan.path, name);
+            let obj = format!("{}/{}", plan.stage.get_prefix(), name);
+            tracing::debug!("Removing object: {}", obj);
             let _ = op.object(&obj).delete().await;
         }
 

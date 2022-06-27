@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
+use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
@@ -89,6 +90,11 @@ macro_rules! impl_numeric {
 
             fn default_value(&self) -> DataValue {
                 $ty::default().into()
+            }
+
+            fn random_value(&self) -> DataValue {
+                let mut rng = rand::rngs::SmallRng::from_entropy();
+                rng.gen::<$ty>().into()
             }
 
             fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {

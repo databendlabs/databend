@@ -68,12 +68,9 @@ table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
 management_mode = false
 jwt_key_file = ""
-enable_async_insert = false
 async_insert_max_data_size = 10000
 async_insert_busy_timeout = 200
 async_insert_stale_timeout = 0
-wait_for_async_insert = true
-wait_for_async_insert_timeout = 100
 
 [log]
 level = "INFO"
@@ -87,6 +84,7 @@ endpoints = []
 username = "root"
 password = ""
 client_timeout_in_second = 10
+auto_sync_interval = 10
 rpc_tls_meta_server_root_ca_cert = ""
 rpc_tls_meta_service_domain_name = "localhost"
 
@@ -105,6 +103,7 @@ secret_access_key = ""
 bucket = ""
 root = ""
 master_key = ""
+enable_virtual_host_style = false
 
 [storage.azblob]
 account_name = ""
@@ -294,7 +293,7 @@ fn test_env_config_fs() -> Result<()> {
 /// Test whether override works as expected.
 #[test]
 fn test_override_config() -> Result<()> {
-    let file_path = temp_dir().join("databend_config.toml");
+    let file_path = temp_dir().join("databend_test_config.toml");
 
     let mut f = fs::File::create(&file_path)?;
     f.write_all(
@@ -340,12 +339,9 @@ table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
 management_mode = false
 jwt_key_file = ""
-enable_async_insert = false
 async_insert_max_data_size = 10000
 async_insert_busy_timeout = 200
 async_insert_stale_timeout = 0
-wait_for_async_insert = true
-wait_for_async_insert_timeout = 100
 
 [log]
 level = "INFO"
@@ -414,6 +410,9 @@ protocol = "binary"
             assert_eq!("s3", cfg.storage.storage_type);
         },
     );
+
+    // remove temp file
+    fs::remove_file(file_path)?;
 
     Ok(())
 }

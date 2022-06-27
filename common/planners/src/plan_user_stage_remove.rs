@@ -22,7 +22,6 @@ use common_meta_types::UserStageInfo;
 pub struct RemoveUserStagePlan {
     pub stage: UserStageInfo,
     pub path: String,
-    pub file_name: String,
     pub pattern: String,
 }
 

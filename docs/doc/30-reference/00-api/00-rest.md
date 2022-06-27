@@ -77,6 +77,14 @@ you are expected to get JSON like this (formatted):
       "rows": 100000000,
       "bytes": 800000000
     },
+    "write_progress": {
+      "rows": 0,
+      "bytes": 0
+    },
+    "result_progress": {
+      "rows": 0,
+      "bytes": 0 
+    },
     "running_time_ms": 466.85395800000003
   },
   "stats_uri": "/v1/query/3cd25ab7-c3a4-42ce-9e02-e1b354d91f06",

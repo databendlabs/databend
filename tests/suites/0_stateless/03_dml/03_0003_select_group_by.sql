@@ -6,8 +6,8 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 gr
 SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 order by c1;
 
 -- https://github.com/datafuselabs/databend/issues/1786
-SELECT count(*), name FROM system.credits WHERE name='ahash' GROUP BY name;
-SELECT count(1), name FROM system.credits WHERE name='ahash' GROUP BY name;
+-- SELECT count(*), name FROM system.credits WHERE name='ahash' GROUP BY name;
+-- SELECT count(1), name FROM system.credits WHERE name='ahash' GROUP BY name;
 
 -- SELECT 'NOT in GROUP BY function check';
 -- SELECT number%3 as c1, number as c2 FROM numbers_mt(10) where number > 2 group by c1 order by c1;
@@ -76,5 +76,9 @@ INSERT INTO t_array VALUES(1, []),
                           (6, [4,5,6]);
 
 SELECT max(id), min(id), arr FROM t_array GROUP BY arr ORDER BY arr ASC;
+
+-- group by constant string
+select count() from numbers(10) group by 'ab';
+select count() from numbers(10) group by to_nullable('ab');
 
 DROP TABLE t_array;

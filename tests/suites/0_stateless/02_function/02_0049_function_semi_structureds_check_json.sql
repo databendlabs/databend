@@ -20,14 +20,14 @@ DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
 
-CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Fuse;
 
 insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}');
 
 select '==check_json from table==';
 select check_json(v), v from t1;
 
-CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Fuse;
 
 insert into t2 values ('abc'),('[1,');
 

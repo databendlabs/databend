@@ -19,7 +19,11 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
+use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
+use poem::middleware::CatchPanic;
+use poem::middleware::NormalizePath;
+use poem::middleware::TrailingSlash;
 use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
@@ -46,8 +50,7 @@ impl HttpHandlerKind {
         match self {
             HttpHandlerKind::Query => {
                 format!(
-                    r#" examples:
-curl -u root: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
+                    r#" curl -u root: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
 "#,
                     sock,
                 )
@@ -55,8 +58,7 @@ curl -u root: --request POST '{:?}/v1/query/' --header 'Content-Type: applicatio
             HttpHandlerKind::Clickhouse => {
                 let json = r#"{"foo": "bar"}"#;
                 format!(
-                    r#" examples:
-echo 'create table test(foo string)' | curl -u root: '{:?}' --data-binary  @-
+                    r#" echo 'create table test(foo string)' | curl -u root: '{:?}' --data-binary  @-
 echo '{}' | curl -u root: '{:?}/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
                     sock, json, sock,
                 )
@@ -99,17 +101,20 @@ impl HttpHandler {
             kind: self.kind,
             session_manager: self.session_manager.clone(),
         })
+        .with(NormalizePath::new(TrailingSlash::Trim))
+        .with(CatchPanic::new())
         .boxed()
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
-        let mut cfg = RustlsConfig::new()
+        let certificate = RustlsCertificate::new()
             .cert(std::fs::read(
                 &config.query.http_handler_tls_server_cert.as_str(),
             )?)
             .key(std::fs::read(
                 &config.query.http_handler_tls_server_key.as_str(),
             )?);
+        let mut cfg = RustlsConfig::new().fallback(certificate);
         if Path::new(&config.query.http_handler_tls_server_root_ca_cert).exists() {
             cfg = cfg.client_auth_required(std::fs::read(
                 &config.query.http_handler_tls_server_root_ca_cert.as_str(),

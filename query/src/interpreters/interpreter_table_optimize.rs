@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::OptimizeTableAction;
 use common_exception::Result;
+use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;

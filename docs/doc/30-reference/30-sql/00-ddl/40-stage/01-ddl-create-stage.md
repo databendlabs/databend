@@ -34,7 +34,6 @@ externalLocation (for Amazon S3) ::=
 | ----------- | ----------- | --- |
 | URL | Files are in the specified external location (S3-like bucket) | YES |
 | `[ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
-| `[ ENDPOINT_URL = '<endpoint_url>' ]`  | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com` |  Optional |
 
 ### formatTypeOptions
 ```
@@ -72,7 +71,7 @@ CREATE STAGE my_internal_stage;
 
 ### External Stages
 ```sql
-CREATE STAGE my_s3_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z');
+CREATE STAGE my_s3_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z');
 ```
 
 ```sql

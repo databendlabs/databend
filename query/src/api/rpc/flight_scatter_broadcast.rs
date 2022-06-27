@@ -26,8 +26,8 @@ pub struct BroadcastFlightScatter {
     scattered_size: usize,
 }
 
-impl FlightScatter for BroadcastFlightScatter {
-    fn try_create(
+impl BroadcastFlightScatter {
+    pub fn try_create(
         _: Arc<QueryContext>,
         _: DataSchemaRef,
         _: Option<Expression>,
@@ -37,8 +37,10 @@ impl FlightScatter for BroadcastFlightScatter {
             scattered_size: num,
         })
     }
+}
 
-    fn execute(&self, data_block: &DataBlock) -> Result<Vec<DataBlock>> {
+impl FlightScatter for BroadcastFlightScatter {
+    fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
         let mut data_blocks = vec![];
         for _ in 0..self.scattered_size {
             data_blocks.push(data_block.clone());

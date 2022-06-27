@@ -110,6 +110,14 @@ message UserInfo {
   UserOption option = 6;
 }
 
+message UserIdentity {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  string username = 1;
+  string hostname = 2;
+}
+
 message UserStageInfo {
   uint64 ver = 100;
   uint64 min_compatible = 101;
@@ -191,4 +199,19 @@ message UserStageInfo {
   CopyOptions copy_options = 5;
 
   string comment = 6;
+
+  uint64 number_of_files = 7;
+
+  optional UserIdentity creator = 8;
+}
+
+message StageFile {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  string path = 1;
+  uint64 size = 2;
+  optional string md5 = 3;
+  string last_modified = 4;
+  optional UserIdentity creator = 5;
 }

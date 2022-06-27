@@ -61,7 +61,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     let context = create_env().await?;
     let scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = scheduler.reschedule(&PlanNode::Stage(StagePlan {
-        kind: StageKind::Convergent,
+        kind: StageKind::Merge,
         scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
         input: Arc::new(PlanNode::Empty(EmptyPlan::cluster())),
     }))?;
@@ -69,9 +69,8 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
-            FlightAction::CancelAction(_) => panic!(),
-            FlightAction::BroadcastAction(_) => panic!(),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
+            _ => panic!(),
         }
     }
 
@@ -99,7 +98,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     );
 
     match scheduled_tasks.get_local_task() {
-        PlanNode::Remote(plan) => {
+        PlanNode::Remote(RemotePlan::V1(plan)) => {
             assert_eq!(plan.stream_id, "dummy_local");
             assert_eq!(plan.fetch_nodes, ["dummy_local", "dummy"]);
         }
@@ -129,7 +128,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     let scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = scheduler.reschedule(&PlanNode::Select(SelectPlan {
         input: Arc::new(PlanNode::Stage(StagePlan {
-            kind: StageKind::Convergent,
+            kind: StageKind::Merge,
             scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
             input: Arc::new(PlanNode::Select(SelectPlan {
                 input: Arc::new(PlanNode::Stage(StagePlan {
@@ -147,9 +146,8 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
-            FlightAction::CancelAction(_) => panic!(),
-            FlightAction::BroadcastAction(_) => panic!(),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
+            _ => panic!(),
         }
     }
     assert_eq!(remote_actions.len(), 3);
@@ -192,7 +190,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     ) {
         (PlanNode::Select(left), PlanNode::Select(right), PlanNode::Select(finalize)) => {
             match (&*left.input, &*right.input, &*finalize.input) {
-                (PlanNode::Remote(left), PlanNode::Remote(right), PlanNode::Remote(finalize)) => {
+                (PlanNode::Remote(RemotePlan::V1(left)), PlanNode::Remote(RemotePlan::V1(right)), PlanNode::Remote(RemotePlan::V1(finalize))) => {
                     assert_eq!(right.stream_id, "dummy");
                     assert_eq!(left.stream_id, "dummy_local");
                     assert_eq!(left.fetch_nodes, ["dummy_local"]);
@@ -200,7 +198,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
 
                     assert_eq!(finalize.stream_id, "dummy_local");
                     assert_eq!(finalize.fetch_nodes, ["dummy_local", "dummy"]);
-                },
+                }
                 _ => panic!("test_scheduler_plan_with_convergent_and_expansive_stage must be have Remote plan!"),
             }
         }
@@ -232,7 +230,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     let plan_scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = plan_scheduler.reschedule(&PlanNode::Select(SelectPlan {
         input: Arc::new(PlanNode::Stage(StagePlan {
-            kind: StageKind::Convergent,
+            kind: StageKind::Merge,
             scatters_expr: Expression::create_literal(DataValue::UInt64(1)),
             input: Arc::new(PlanNode::Select(SelectPlan {
                 input: Arc::new(PlanNode::Stage(StagePlan {
@@ -247,9 +245,8 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
-            FlightAction::CancelAction(_) => panic!(),
-            FlightAction::BroadcastAction(_) => panic!(),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
+            _ => panic!(),
         }
     }
 
@@ -304,7 +301,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     ) {
         (PlanNode::Select(left), PlanNode::Select(right), PlanNode::Select(finalize)) => {
             match (&*left.input, &*right.input, &*finalize.input) {
-                (PlanNode::Remote(left), PlanNode::Remote(right), PlanNode::Remote(finalize)) => {
+                (PlanNode::Remote(RemotePlan::V1(left)), PlanNode::Remote(RemotePlan::V1(right)), PlanNode::Remote(RemotePlan::V1(finalize))) => {
                     assert_eq!(right.stream_id, "dummy");
                     assert_eq!(left.stream_id, "dummy_local");
                     assert_eq!(left.fetch_nodes, ["dummy_local", "dummy"]);
@@ -312,7 +309,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
 
                     assert_eq!(finalize.stream_id, "dummy_local");
                     assert_eq!(finalize.fetch_nodes, ["dummy_local", "dummy"]);
-                },
+                }
                 _ => panic!("test_scheduler_plan_with_convergent_and_expansive_stage must be have Remote plan!"),
             }
         }

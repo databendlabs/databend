@@ -48,7 +48,7 @@ impl<'a> TypeSerializer<'a> for BooleanSerializer {
         buf.extend_from_slice(v);
     }
 
-    fn serialize_json(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = self
             .values
             .iter()
@@ -84,7 +84,7 @@ impl<'a> TypeSerializer<'a> for BooleanSerializer {
         _valids: Option<&Bitmap>,
         format: &FormatSettings,
     ) -> Result<Vec<Value>> {
-        self.serialize_json(format)
+        self.serialize_json_values(format)
     }
 
     fn serialize_json_object_suppress_error(

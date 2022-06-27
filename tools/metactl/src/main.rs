@@ -185,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
     let raft_config = &config.raft_config;
 
-    let _guards = init_global_tracing("metactl", "./_metactl_log", &config.log_level);
+    let _guards = init_global_tracing("metactl", "./_metactl_log", &config.log_level, Some(false));
 
     eprintln!();
     eprintln!("███╗   ███╗███████╗████████╗ █████╗        ██████╗████████╗██╗     ");
@@ -372,7 +372,8 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 
     loop {
         i += 1;
-        let client = MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None)?;
+        let client =
+            MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
 
         let res = client.get_kv("foo").await;
         println!("{}-th: get_kv(foo): {:?}", i, res);

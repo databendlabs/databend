@@ -28,6 +28,6 @@ async fn test_columns_table() -> Result<()> {
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 5);
+    assert_eq!(block.num_columns(), 8);
     Ok(())
 }

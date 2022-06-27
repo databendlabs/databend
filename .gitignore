@@ -57,3 +57,6 @@ venv/
 __pycache__/
 
 *.zip
+
+# tpch data set
+benchmark/tpch/data

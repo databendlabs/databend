@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::OptimizeTableAction;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
@@ -30,4 +29,11 @@ impl OptimizeTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, PartialEq)]
+pub enum OptimizeTableAction {
+    All,
+    Purge,
+    Compact,
 }

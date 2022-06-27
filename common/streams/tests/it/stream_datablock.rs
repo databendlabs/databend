@@ -21,8 +21,8 @@ use futures::stream::StreamExt;
 #[tokio::test]
 async fn test_datablock_stream() {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("name", i32::to_data_type()),
-        DataField::new("age", Vu8::to_data_type()),
+        DataField::new("name", Vu8::to_data_type()),
+        DataField::new("age", i32::to_data_type()),
     ]);
 
     let data_blocks = vec![

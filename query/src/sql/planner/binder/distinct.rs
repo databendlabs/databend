@@ -20,7 +20,7 @@ use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::GroupingChecker;
-use crate::sql::plans::AggregatePlan;
+use crate::sql::plans::Aggregate;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Scalar;
@@ -41,7 +41,7 @@ impl Binder {
             .map(|(_, item)| {
                 if bind_context.in_grouping {
                     let mut group_checker = GroupingChecker::new(bind_context);
-                    let scalar = group_checker.resolve(&item.scalar)?;
+                    let scalar = group_checker.resolve(&item.scalar, None)?;
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,
@@ -69,7 +69,7 @@ impl Binder {
             })
             .collect();
 
-        let distinct_plan = AggregatePlan {
+        let distinct_plan = Aggregate {
             group_items,
             aggregate_functions: vec![],
             from_distinct: true,

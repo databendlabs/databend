@@ -26,6 +26,8 @@ use common_meta_types::Operation;
 use common_meta_types::PbSeqV;
 use common_meta_types::SeqV;
 use common_meta_types::TxnCondition;
+use common_meta_types::TxnDeleteByPrefixRequest;
+use common_meta_types::TxnDeleteByPrefixResponse;
 use common_meta_types::TxnDeleteRequest;
 use common_meta_types::TxnDeleteResponse;
 use common_meta_types::TxnGetRequest;
@@ -60,6 +62,8 @@ impl KVApiTestSuite {
         self.kv_mget(&builder.build().await).await?;
         self.kv_txn_absent_seq_0(&builder.build().await).await?;
         self.kv_transaction(&builder.build().await).await?;
+        self.kv_delete_by_prefix_transaction(&builder.build().await)
+            .await?;
 
         // Run cross node test on every 2 adjacent nodes
         let mut i = 0;
@@ -561,8 +565,13 @@ impl KVApiTestSuite {
         Ok(())
     }
 
-    fn check_transaction_responses(&self, reply: &TxnReply, expected: &Vec<TxnOpResponse>) {
-        assert!(reply.success);
+    fn check_transaction_responses(
+        &self,
+        reply: &TxnReply,
+        expected: &Vec<TxnOpResponse>,
+        success: bool,
+    ) {
+        assert_eq!(reply.success, success);
         let responses = &reply.responses;
         assert_eq!(responses.len(), expected.len());
 
@@ -611,7 +620,122 @@ impl KVApiTestSuite {
             })),
         }];
 
-        self.check_transaction_responses(&resp, &expected);
+        self.check_transaction_responses(&resp, &expected, true);
+
+        Ok(())
+    }
+
+    pub async fn kv_delete_by_prefix_transaction<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        tracing::info!("--- KVApiTestSuite::kv_delete_by_prefix_transaction() start");
+        let test_prefix = "test";
+
+        let match_keys = vec![
+            format!("{}_key1", test_prefix),
+            format!("{}/key2", test_prefix),
+            format!("{}key3", test_prefix),
+        ];
+
+        let unmatch_keys = vec!["teskey4".to_string()];
+
+        for key in [match_keys.clone(), unmatch_keys.clone()].concat().iter() {
+            kv.upsert_kv(UpsertKVReq::new(
+                key,
+                MatchSeq::Any,
+                Operation::Update(b"v1".to_vec()),
+                None,
+            ))
+            .await?;
+
+            let current = kv.get_kv(key).await?;
+            assert!(current.is_some());
+        }
+
+        // test again with if condition
+        {
+            let txn_key = unmatch_keys.get(0).unwrap().to_string();
+            let condition = vec![TxnCondition {
+                key: txn_key.clone(),
+                expected: ConditionResult::Gt as i32,
+                target: Some(txn_condition::Target::Seq(0)),
+            }];
+
+            let if_then: Vec<TxnOp> = vec![TxnOp {
+                request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
+                    prefix: test_prefix.to_string(),
+                })),
+            }];
+
+            let else_then: Vec<TxnOp> = vec![];
+            let txn = TxnRequest {
+                condition,
+                if_then,
+                else_then,
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> = vec![TxnOpResponse {
+                response: Some(txn_op_response::Response::DeleteByPrefix(
+                    TxnDeleteByPrefixResponse {
+                        prefix: test_prefix.to_string(),
+                        count: match_keys.len() as u32,
+                    },
+                )),
+            }];
+
+            self.check_transaction_responses(&resp, &expected, true);
+
+            for key in match_keys.iter() {
+                let current = kv.get_kv(key).await?;
+                assert!(current.is_none());
+            }
+            for key in unmatch_keys.iter() {
+                let current = kv.get_kv(key).await?;
+                assert!(current.is_some());
+            }
+        }
+
+        // test again with else condition
+        {
+            let txn_key = "unmatch_keys".to_string();
+            let unmatch_prefix = unmatch_keys.get(0).unwrap().to_string();
+            let condition = vec![TxnCondition {
+                key: txn_key.clone(),
+                expected: ConditionResult::Gt as i32,
+                target: Some(txn_condition::Target::Seq(0)),
+            }];
+
+            let if_then: Vec<TxnOp> = vec![];
+
+            let else_then: Vec<TxnOp> = vec![TxnOp {
+                request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
+                    prefix: unmatch_prefix.clone(),
+                })),
+            }];
+            let txn = TxnRequest {
+                condition,
+                if_then,
+                else_then,
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> = vec![TxnOpResponse {
+                response: Some(txn_op_response::Response::DeleteByPrefix(
+                    TxnDeleteByPrefixResponse {
+                        prefix: unmatch_prefix.to_string(),
+                        count: unmatch_keys.len() as u32,
+                    },
+                )),
+            }];
+
+            self.check_transaction_responses(&resp, &expected, false);
+
+            for key in unmatch_keys.iter() {
+                let current = kv.get_kv(key).await?;
+                assert!(current.is_none());
+            }
+        }
 
         Ok(())
     }
@@ -664,7 +788,7 @@ impl KVApiTestSuite {
                 })),
             }];
 
-            self.check_transaction_responses(&resp, &expected);
+            self.check_transaction_responses(&resp, &expected, true);
         }
         // second case: get two key(one not exist) and set one key transaction
         {
@@ -847,7 +971,7 @@ impl KVApiTestSuite {
                 },
             ];
 
-            self.check_transaction_responses(&resp, &expected);
+            self.check_transaction_responses(&resp, &expected, true);
         }
 
         // 4th case: get one key by value and set key transaction
@@ -917,7 +1041,7 @@ impl KVApiTestSuite {
                 },
             ];
 
-            self.check_transaction_responses(&resp, &expected);
+            self.check_transaction_responses(&resp, &expected, true);
         }
         Ok(())
     }

@@ -381,17 +381,13 @@ fn position_sse42<
 
             if POSITIVE {
                 if _mm_cmpestrc::<0>(chars_set, chars_count, bytes, 16) > 0 {
-                    return index + _mm_cmpestri::<0>(chars_set, chars_count, bytes, 16);
+                    return index + _mm_cmpestri::<0>(chars_set, chars_count, bytes, 16) as usize;
                 }
             } else {
                 if _mm_cmpestrc::<_SIDD_NEGATIVE_POLARITY>(chars_set, chars_count, bytes, 16) > 0 {
                     return index
-                        + _mm_cmpestri::<_SIDD_NEGATIVE_POLARITY>(
-                            chars_set,
-                            chars_count,
-                            bytes,
-                            16,
-                        );
+                        + _mm_cmpestri::<_SIDD_NEGATIVE_POLARITY>(chars_set, chars_count, bytes, 16)
+                            as usize;
                 }
             }
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -106,6 +107,10 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
 impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
     fn name(&self) -> &'static str {
         T::name()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

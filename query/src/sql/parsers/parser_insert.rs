@@ -17,8 +17,7 @@
 
 use sqlparser::ast::SetExpr;
 use sqlparser::ast::Statement;
-use sqlparser::ast::StreamValues;
-use sqlparser::ast::Values;
+use sqlparser::ast::StreamSlice;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::QueryOffset;
 
@@ -31,7 +30,7 @@ use crate::sql::DfStatement;
 impl<'a> DfParser<'a> {
     pub(crate) fn parse_insert(&mut self) -> Result<DfStatement<'a>, ParserError> {
         self.parser.next_token();
-        match self.parser.parse_stream_values_insert()? {
+        match self.parser.parse_stream_format_insert()? {
             Statement::Insert {
                 or,
                 table_name,
@@ -47,10 +46,15 @@ impl<'a> DfParser<'a> {
                 let insert_source = match source {
                     None => Ok(InsertSource::Empty),
                     Some(source) => match source.body {
-                        SetExpr::Values(Values(_, stream_value)) => {
-                            self.get_values_str(&stream_value).map(InsertSource::Values)
-                        }
                         SetExpr::Select(_) => Ok(InsertSource::Select(source)),
+                        SetExpr::Streams(stream) => {
+                            let str = self.get_stream_format_str(&stream)?;
+                            if str.is_empty() {
+                                Ok(InsertSource::Empty)
+                            } else {
+                                Ok(InsertSource::StreamFormat(str))
+                            }
+                        }
                         _ => Err(ParserError::ParserError(
                             "Insert must be have values or select source.".to_string(),
                         )),
@@ -74,9 +78,9 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn get_values_str(&self, values_info: &StreamValues) -> Result<&'a str, ParserError> {
-        let start = &values_info.start;
-        let end = &values_info.end;
+    fn get_stream_format_str(&self, stream_slice: &StreamSlice) -> Result<&'a str, ParserError> {
+        let start = &stream_slice.start;
+        let end = &stream_slice.end;
         let sql = self.sql;
 
         match (start, end) {
@@ -87,6 +91,7 @@ impl<'a> DfParser<'a> {
                 Ok(&sql[start..end])
             }
             (QueryOffset::Normal(start), QueryOffset::EOF) => Ok(&sql[*start as usize..]),
+            (QueryOffset::EOF, QueryOffset::EOF) => Ok(&sql[sql.len()..]),
             _ => parser_err!(format!(
                 "Unexpected values position info, start:{}, end:{}",
                 start, end,

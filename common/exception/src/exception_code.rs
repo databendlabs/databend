@@ -155,6 +155,9 @@ build_exceptions! {
 
     // Async insert error codes
     AsyncInsertTimeoutError(1105),
+
+    TableInfoError(1106),
+    ReadTableDataError(1107),
 }
 
 // Metasvr errors [2001, 3000].
@@ -202,6 +205,8 @@ build_exceptions! {
     UnknownStage(2501),
     StageAlreadyExists(2502),
     IllegalUserStageFormat(2503),
+    StageFileAlreadyExists(2504),
+    IllegalStageFileFormat(2505),
 
     // User defined function error codes.
     IllegalUDFFormat(2601),

@@ -23,7 +23,7 @@ pub struct PatternPlan {
 }
 
 impl Operator for PatternPlan {
-    fn plan_type(&self) -> RelOp {
+    fn rel_op(&self) -> RelOp {
         self.plan_type.clone()
     }
 

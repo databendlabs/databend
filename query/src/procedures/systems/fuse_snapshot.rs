@@ -39,14 +39,21 @@ impl Procedure for FuseSnapshotProcedure {
     }
 
     fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default().num_arguments(2)
+        ProcedureFeatures::default().variadic_arguments(2, 3)
     }
 
     async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let catalog_name = ctx.get_current_catalog();
+        let tenant_id = ctx.get_tenant();
         let database_name = args[0].clone();
         let table_name = args[1].clone();
-        let tenant_id = ctx.get_tenant();
+
+        let limit = if args.len() > 2 {
+            let size = args[2].parse::<usize>()?;
+            Some(size)
+        } else {
+            None
+        };
         let tbl = ctx
             .get_catalog(&catalog_name)?
             .get_table(
@@ -58,7 +65,7 @@ impl Procedure for FuseSnapshotProcedure {
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        Ok(FuseSnapshot::new(ctx, tbl).get_history().await?)
+        Ok(FuseSnapshot::new(ctx, tbl).get_history(limit).await?)
     }
 
     fn schema(&self) -> Arc<DataSchema> {

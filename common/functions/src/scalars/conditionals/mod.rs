@@ -17,6 +17,7 @@ mod r#if;
 mod in_basic;
 mod is_not_null;
 mod is_null;
+mod multi_if;
 
 pub use conditional::ConditionalFunction;
 pub use in_basic::InFunction;

@@ -1,11 +1,11 @@
 statement ok
 CREATE STAGE test_stage;
 
-statement query TTT 
+statement query TTTTT
 SHOW STAGES;
 
 ----  
-test_stage Internal 
+test_stage Internal 0 'root'@'127.0.0.1' 
 
 statement ok
 DROP STAGE test_stage;

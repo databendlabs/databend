@@ -2,18 +2,15 @@ Projection: count():UInt64
   Projection: 1 as count():UInt64
     Expression: 1:UInt64 (Exact Statistics)
       ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1]
-RedistributeStage[expr: 0]
-  Projection: 1:UInt8
-    Expression: 1:UInt8 (Before Projection)
-      ReadDataSource: scan schema: [a:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
-RedistributeStage[expr: 0]
-  Projection: (1 + 1):UInt16
-    Expression: 2:UInt16 (Before Projection)
-      ReadDataSource: scan schema: [a:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
-RedistributeStage[expr: 0]
-  Projection: now():Timestamp(6)
-    Expression: now():Timestamp(6) (Before Projection)
-      ReadDataSource: scan schema: [a:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
+Projection: 1:UInt8
+  Expression: 1:UInt8 (Before Projection)
+    ReadDataSource: scan schema: [a:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
+Projection: (1 + 1):UInt16
+  Expression: 2:UInt16 (Before Projection)
+    ReadDataSource: scan schema: [a:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
+Projection: now():Timestamp(6)
+  Expression: now():Timestamp(6) (Before Projection)
+    ReadDataSource: scan schema: [a:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
 Projection: sum(a):Nullable(Int64)
   AggregatorFinal: groupBy=[[]], aggr=[[sum(a)]]
     RedistributeStage[expr: 0]

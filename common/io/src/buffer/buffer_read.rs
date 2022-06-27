@@ -15,7 +15,7 @@
 use std::io::ErrorKind;
 use std::io::Result;
 
-/// Portable std::io::BufRead .
+/// Portable std::io::BufRead.
 pub trait BufferRead: std::io::Read {
     fn working_buf(&self) -> &[u8];
 

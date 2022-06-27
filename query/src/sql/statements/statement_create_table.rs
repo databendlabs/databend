@@ -102,13 +102,12 @@ impl AnalyzableStatement for DfCreateTable {
             let expr = expression_analyzer.analyze_sync(k)?;
             validate_expression(&expr, &table_meta.schema)?;
             validate_clustering(&expr)?;
-            cluster_keys.push(expr);
+            cluster_keys.push(expr.column_name());
         }
 
         if !cluster_keys.is_empty() {
-            let cluster_keys: Vec<String> = cluster_keys.iter().map(|e| e.column_name()).collect();
-            let cluster_keys_sql = format!("({})", cluster_keys.join(", "));
-            table_meta = table_meta.push_cluster_key(cluster_keys_sql);
+            let cluster_keys_str = format!("({})", cluster_keys.join(", "));
+            table_meta = table_meta.push_cluster_key(cluster_keys_str);
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(

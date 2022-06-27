@@ -334,6 +334,63 @@ impl<'a> ScalarViewer<'a> for ArrayViewer<'a> {
     }
 }
 
+#[derive(Clone)]
+pub struct StructViewer<'a> {
+    pub(crate) col: &'a StructColumn,
+    pub(crate) null_mask: usize,
+    pub(crate) non_const_mask: usize,
+    pub(crate) size: usize,
+    pub(crate) pos: usize,
+    pub(crate) validity: Bitmap,
+}
+
+impl<'a> ScalarViewer<'a> for StructViewer<'a> {
+    type ScalarItem = StructValue;
+    type Iterator = Self;
+
+    fn try_create(column: &'a ColumnRef) -> Result<Self> {
+        let (inner, validity) = try_extract_inner(column)?;
+        let col: &'a StructColumn = Series::check_get(inner)?;
+
+        let null_mask = get_null_mask(column);
+        let non_const_mask = non_const_mask(column);
+        let size = column.len();
+
+        Ok(Self {
+            col,
+            null_mask,
+            non_const_mask,
+            validity,
+            size,
+            pos: 0,
+        })
+    }
+
+    #[inline]
+    fn value_at(&self, index: usize) -> <Self::ScalarItem as Scalar>::RefType<'a> {
+        StructValueRef::Indexed {
+            column: self.col,
+            idx: index,
+        }
+    }
+
+    #[inline]
+    fn valid_at(&self, i: usize) -> bool {
+        unsafe { self.validity.get_bit_unchecked(i & self.null_mask) }
+    }
+
+    #[inline]
+    fn size(&self) -> usize {
+        self.size
+    }
+
+    fn iter(&self) -> Self {
+        let mut res = self.clone();
+        res.pos = 0;
+        res
+    }
+}
+
 #[inline]
 fn try_extract_inner(column: &ColumnRef) -> Result<(&ColumnRef, Bitmap)> {
     let (all_is_null, validity) = column.validity();

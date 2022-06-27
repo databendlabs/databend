@@ -24,7 +24,7 @@ hive-it = []
 # Github dependencies
 
 # Crates.io dependencies
-thrift = "0.15"
+thrift = "0.15.0"
 
 [build-dependencies]
-which = "4.2"
+which = "4.2.5"

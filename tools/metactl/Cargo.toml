@@ -24,9 +24,9 @@ common-tracing = { path = "../../common/tracing" }
 databend-meta = { path = "../../metasrv" }
 
 # Crates.io dependencies
-anyhow = "1.0.56"
-clap = { version = "3.1.8", features = ["derive", "env"] }
-serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.79"
-tokio-stream = "0.1.8"
-tonic = "=0.7.2"
+anyhow = "1.0.58"
+clap = { version = "3.2.5", features = ["derive", "env"] }
+serde = { version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.81"
+tokio-stream = "0.1.9"
+tonic = "0.7.2"

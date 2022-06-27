@@ -178,7 +178,7 @@ pub struct ConfigViaEnv {
     pub kvsrv_raft_dir: String,
     pub kvsrv_no_sync: bool,
     pub kvsrv_snapshot_logs_since_last: u64,
-    pub kvsrv_heartbeat_intervalt: u64,
+    pub kvsrv_heartbeat_interval: u64,
     pub kvsrv_install_snapshot_timeout: u64,
     pub raft_max_applied_log_to_keep: u64,
     pub kvsrv_single: bool,
@@ -213,7 +213,7 @@ impl From<Config> for ConfigViaEnv {
             kvsrv_raft_dir: cfg.raft_config.raft_dir,
             kvsrv_no_sync: cfg.raft_config.no_sync,
             kvsrv_snapshot_logs_since_last: cfg.raft_config.snapshot_logs_since_last,
-            kvsrv_heartbeat_intervalt: cfg.raft_config.heartbeat_interval,
+            kvsrv_heartbeat_interval: cfg.raft_config.heartbeat_interval,
             kvsrv_install_snapshot_timeout: cfg.raft_config.install_snapshot_timeout,
             raft_max_applied_log_to_keep: cfg.raft_config.max_applied_log_to_keep,
             kvsrv_single: cfg.raft_config.single,
@@ -237,11 +237,15 @@ impl Into<Config> for ConfigViaEnv {
             raft_dir: self.kvsrv_raft_dir,
             no_sync: self.kvsrv_no_sync,
             snapshot_logs_since_last: self.kvsrv_snapshot_logs_since_last,
-            heartbeat_interval: self.kvsrv_heartbeat_intervalt,
+            heartbeat_interval: self.kvsrv_heartbeat_interval,
             install_snapshot_timeout: self.kvsrv_install_snapshot_timeout,
             max_applied_log_to_keep: self.raft_max_applied_log_to_keep,
             single: self.kvsrv_single,
             join: self.metasrv_join,
+            // Do not allow to leave via environment variable
+            leave_via: vec![],
+            // Do not allow to leave via environment variable
+            leave_id: None,
             id: self.kvsrv_id,
             sled_tree_prefix: self.sled_tree_prefix,
             cluster_name: self.cluster_name,
@@ -329,6 +333,16 @@ pub struct RaftConfig {
     #[clap(long, multiple_occurrences = true, multiple_values = true)]
     pub join: Vec<String>,
 
+    /// Do not run databend-meta, but just remove a node from its cluster via the provided endpoints.
+    ///
+    /// This node will be removed by `id`.
+    #[clap(long)]
+    pub leave_via: Vec<String>,
+
+    /// The node id to leave from a cluster.
+    #[clap(long)]
+    pub leave_id: Option<u64>,
+
     /// The node id. Only used when this server is not initialized,
     ///  e.g. --boot or --single for the first time.
     ///  Otherwise this argument is ignored.
@@ -366,6 +380,8 @@ impl From<RaftConfig> for InnerRaftConfig {
             max_applied_log_to_keep: x.max_applied_log_to_keep,
             single: x.single,
             join: x.join,
+            leave_via: x.leave_via,
+            leave_id: x.leave_id,
             id: x.id,
             sled_tree_prefix: x.sled_tree_prefix,
             cluster_name: x.cluster_name,
@@ -388,6 +404,8 @@ impl From<InnerRaftConfig> for RaftConfig {
             max_applied_log_to_keep: inner.max_applied_log_to_keep,
             single: inner.single,
             join: inner.join,
+            leave_via: inner.leave_via,
+            leave_id: inner.leave_id,
             id: inner.id,
             sled_tree_prefix: inner.sled_tree_prefix,
             cluster_name: inner.cluster_name,

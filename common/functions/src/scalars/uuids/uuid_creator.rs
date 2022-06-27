@@ -13,12 +13,11 @@
 // limitations under the License.
 
 use std::fmt;
+use std::io::Write;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
-use common_datavalues::Column;
-use common_datavalues::ConstColumn;
 use common_datavalues::DataTypeImpl;
-use common_datavalues::NewColumn;
 use common_datavalues::StringColumn;
 use common_datavalues::StringType;
 use common_exception::Result;
@@ -99,9 +98,21 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
         _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let uuid = T::create();
-        let col = StringColumn::new_from_slice(vec![uuid.to_string()]);
+        let mut values: Vec<u8> = Vec::with_capacity(input_rows * 36);
+        let mut offsets: Vec<i64> = Vec::with_capacity(input_rows);
+        offsets.push(0);
 
-        Ok(ConstColumn::new(col.arc(), input_rows).arc())
+        for _ in 0..input_rows {
+            let value = T::create();
+            offsets.push(offsets.last().unwrap() + 36i64);
+            write!(&mut values, "{:x}", value).unwrap();
+        }
+
+        unsafe {
+            Ok(Arc::new(StringColumn::from_data_unchecked(
+                offsets.into(),
+                values.into(),
+            )))
+        }
     }
 }

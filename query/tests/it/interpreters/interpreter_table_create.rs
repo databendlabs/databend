@@ -16,6 +16,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -98,6 +99,20 @@ async fn test_create_table_interpreter() -> Result<()> {
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
 
         assert!(interpreter.execute(None).await.is_err());
+    }
+
+    // create table with column comment in the new planner.
+    {
+        let query = "
+            CREATE TABLE t(\
+            a bigint comment 'a', b int comment 'b',\
+            c varchar(255) comment 'c', d smallint comment 'd', e Date comment 'e')\
+            Engine = Null COMMENT = 'test create'";
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _) = planner.plan_sql(query).await?;
+        let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+
+        assert!(interpreter.execute(None).await.is_ok());
     }
 
     Ok(())

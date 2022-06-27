@@ -142,7 +142,7 @@ statement ok
 DROP TABLE IF EXISTS t1;
 
 statement ok
-CREATE TABLE t1(a UInt64 null, b UInt64 null) Engine = Memory;
+CREATE TABLE t1(a UInt64 null, b UInt64 null) Engine = Fuse;
 
 statement ok
 INSERT INTO t1 (a,b) VALUES (1, NULL), (2, 3);
@@ -160,7 +160,7 @@ statement ok
 DROP TABLE IF EXISTS t2;
 
 statement ok
-CREATE TABLE t2(date DATE, datetime DATETIME null) Engine = Memory;
+CREATE TABLE t2(date DATE, datetime DATETIME null) Engine = Fuse;
 
 statement ok
 INSERT INTO t2 VALUES ('2022-04-23', '2022-04-23 01:48:19'), ('2022-04-24', NULL);

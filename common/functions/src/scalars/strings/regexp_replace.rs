@@ -34,6 +34,7 @@ use crate::scalars::FunctionFeatures;
 #[derive(Clone)]
 pub struct RegexpReplaceFunction {
     display_name: String,
+    return_type: DataTypeImpl,
 }
 
 impl RegexpReplaceFunction {
@@ -54,8 +55,17 @@ impl RegexpReplaceFunction {
             }
         }
 
+        let has_null = args.iter().any(|arg| arg.is_null());
+
+        let return_type = if has_null {
+            NullType::new_impl()
+        } else {
+            NullableType::new_impl(StringType::new_impl())
+        };
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
+            return_type,
         }))
     }
 
@@ -75,7 +85,7 @@ impl Function for RegexpReplaceFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        NullableType::new_impl(StringType::new_impl())
+        self.return_type.clone()
     }
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace

@@ -42,11 +42,11 @@ async fn test_show_stages_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+------+------------+---------+",
-            "| name | stage_type | comment |",
-            "+------+------------+---------+",
-            "| test | External   |         |",
-            "+------+------------+---------+",
+            "+------+------------+-----------------+--------------------+---------+",
+            "| name | stage_type | number_of_files | creator            | comment |",
+            "+------+------------+-----------------+--------------------+---------+",
+            "| test | External   | NULL            | 'root'@'127.0.0.1' |         |",
+            "+------+------------+-----------------+--------------------+---------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

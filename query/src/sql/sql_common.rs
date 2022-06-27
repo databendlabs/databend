@@ -91,7 +91,8 @@ impl SQLCommon {
     }
 
     pub fn short_sql(query: &str) -> String {
-        if query.len() >= 64 && query[..=6].eq_ignore_ascii_case("INSERT") {
+        let query = query.trim_start();
+        if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
             format!("{}...", &query[..64])
         } else {
             query.to_string()

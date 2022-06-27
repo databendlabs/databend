@@ -218,3 +218,33 @@ impl<'a> ScalarRef<'a> for ArrayValueRef<'a> {
         }
     }
 }
+
+impl Scalar for StructValue {
+    type ColumnType = StructColumn;
+    type RefType<'a> = StructValueRef<'a>;
+    type Viewer<'a> = StructViewer<'a>;
+
+    #[inline]
+    fn as_scalar_ref(&self) -> StructValueRef<'_> {
+        StructValueRef::ValueRef { val: self }
+    }
+
+    #[allow(clippy::needless_lifetimes)]
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: StructValueRef<'long>) -> StructValueRef<'short> {
+        long
+    }
+}
+
+impl<'a> ScalarRef<'a> for StructValueRef<'a> {
+    type ColumnType = StructColumn;
+    type ScalarType = StructValue;
+
+    #[inline]
+    fn to_owned_scalar(&self) -> StructValue {
+        match self {
+            StructValueRef::Indexed { column, idx } => column.get(*idx).into(),
+            StructValueRef::ValueRef { val } => (*val).clone(),
+        }
+    }
+}

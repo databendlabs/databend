@@ -77,10 +77,10 @@ impl InsertInterpreter {
         let settings = self.ctx.get_settings();
         let table = self
             .ctx
-            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
+            .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
-        let mut pipeline = self.create_new_pipeline()?;
+        let mut pipeline = self.create_new_pipeline().await?;
         let mut builder = SourcePipeBuilder::create();
 
         if self.async_insert {
@@ -116,7 +116,7 @@ impl InsertInterpreter {
                         SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
                             input: Arc::new((**plan).clone()),
                         })?;
-                    pipeline = select_interpreter.create_new_pipeline()?;
+                    pipeline = select_interpreter.create_new_pipeline().await?;
 
                     if self.check_schema_cast(plan)? {
                         let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
@@ -175,14 +175,17 @@ impl InsertInterpreter {
         table.append2(self.ctx.clone(), &mut pipeline)?;
 
         let async_runtime = self.ctx.get_storage_runtime();
+        let query_need_abort = self.ctx.query_need_abort();
 
         pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-        let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
+        let executor =
+            PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+
         executor.execute()?;
         drop(executor);
 
         let overwrite = self.plan.overwrite;
-        let catalog_name = self.plan.catalog_name.clone();
+        let catalog_name = self.plan.catalog.clone();
         let context = self.ctx.clone();
         let append_entries = self.ctx.consume_precommit_blocks();
 
@@ -239,8 +242,7 @@ impl Interpreter for InsertInterpreter {
         let settings = self.ctx.get_settings();
 
         // Use insert in new processor
-        if settings.get_enable_new_processor_framework()? != 0 && self.ctx.get_cluster().is_empty()
-        {
+        if settings.get_enable_new_processor_framework()? != 0 {
             return self.execute_new(input_stream).await;
         }
 
@@ -249,9 +251,9 @@ impl Interpreter for InsertInterpreter {
             .get_current_session()
             .validate_privilege(
                 &GrantObject::Table(
-                    plan.catalog_name.clone(),
-                    plan.database_name.clone(),
-                    plan.table_name.clone(),
+                    plan.catalog.clone(),
+                    plan.database.clone(),
+                    plan.table.clone(),
                 ),
                 UserPrivilegeType::Insert,
             )
@@ -259,7 +261,7 @@ impl Interpreter for InsertInterpreter {
 
         let table = self
             .ctx
-            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
+            .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
         let cluster_keys = table.cluster_keys();
@@ -268,12 +270,8 @@ impl Interpreter for InsertInterpreter {
 
         let append_logs = match &self.plan.source {
             InsertInputSource::SelectPlan(plan_node) => {
-                let with_plan = InsertWithPlan::new(
-                    &self.ctx,
-                    &self.plan.schema,
-                    plan_node,
-                    &plan.catalog_name,
-                );
+                let with_plan =
+                    InsertWithPlan::new(&self.ctx, &self.plan.schema, plan_node, &plan.catalog);
                 with_plan.execute(table.as_ref()).await
             }
 
@@ -321,7 +319,7 @@ impl Interpreter for InsertInterpreter {
         table
             .commit_insertion(
                 self.ctx.clone(),
-                &self.plan.catalog_name,
+                &self.plan.catalog,
                 append_logs.try_collect().await?,
                 self.plan.overwrite,
             )
@@ -334,7 +332,7 @@ impl Interpreter for InsertInterpreter {
         )))
     }
 
-    fn create_new_pipeline(&self) -> Result<NewPipeline> {
+    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
         let insert_pipeline = NewPipeline::create();
         Ok(insert_pipeline)
     }

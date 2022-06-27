@@ -24,14 +24,15 @@ use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 
+#[derive(Clone)]
 pub struct HashFlightScatter {
     scatter_expression_executor: Arc<ExpressionExecutor>,
     scatter_expression_name: String,
     scattered_size: usize,
 }
 
-impl FlightScatter for HashFlightScatter {
-    fn try_create(
+impl HashFlightScatter {
+    pub fn try_create(
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         expr: Option<Expression>,
@@ -44,8 +45,14 @@ impl FlightScatter for HashFlightScatter {
             Some(expr) => HashFlightScatter::try_create_impl(schema, num, expr, ctx),
         }
     }
+}
 
-    fn execute(&self, data_block: &DataBlock) -> common_exception::Result<Vec<DataBlock>> {
+impl FlightScatter for HashFlightScatter {
+    fn execute(
+        &self,
+        data_block: &DataBlock,
+        _num: usize,
+    ) -> common_exception::Result<Vec<DataBlock>> {
         let expression_executor = self.scatter_expression_executor.clone();
         let evaluated_data_block = expression_executor.execute(data_block)?;
         let indices = evaluated_data_block.try_column_by_name(&self.scatter_expression_name)?;

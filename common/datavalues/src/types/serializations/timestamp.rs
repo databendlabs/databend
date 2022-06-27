@@ -56,7 +56,7 @@ impl<'a> TypeSerializer<'a> for TimestampSerializer<'a> {
         buf.extend_from_slice(s.as_bytes())
     }
 
-    fn serialize_json(&self, format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = self
             .values
             .iter()

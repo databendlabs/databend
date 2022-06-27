@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::parser::token::Token;
+use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -38,7 +40,7 @@ impl<'a> GroupingChecker<'a> {
         Self { bind_context }
     }
 
-    pub fn resolve(&mut self, scalar: &Scalar) -> Result<Scalar> {
+    pub fn resolve(&mut self, scalar: &Scalar, span: Option<&[Token<'_>]>) -> Result<Scalar> {
         if let Some(index) = self
             .bind_context
             .aggregate_info
@@ -62,30 +64,35 @@ impl<'a> GroupingChecker<'a> {
         match scalar {
             Scalar::BoundColumnRef(column) => {
                 // If this is a group item, then it should have been replaced with `group_items_map`
-                Err(ErrorCode::SemanticError(format!("column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function", &column.column.column_name)))
+                let mut err_msg = format!("column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function", &column.column.column_name);
+                err_msg = span.map_or(err_msg.clone(), |span| span.display_error(err_msg.clone()));
+                Err(ErrorCode::SemanticError(err_msg))
             }
             Scalar::ConstantExpr(_) => Ok(scalar.clone()),
             Scalar::AndExpr(scalar) => Ok(AndExpr {
-                left: Box::new(self.resolve(&scalar.left)?),
-                right: Box::new(self.resolve(&scalar.right)?),
+                left: Box::new(self.resolve(&scalar.left, span)?),
+                right: Box::new(self.resolve(&scalar.right, span)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::OrExpr(scalar) => Ok(OrExpr {
-                left: Box::new(self.resolve(&scalar.left)?),
-                right: Box::new(self.resolve(&scalar.right)?),
+                left: Box::new(self.resolve(&scalar.left, span)?),
+                right: Box::new(self.resolve(&scalar.right, span)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
-                left: Box::new(self.resolve(&scalar.left)?),
-                right: Box::new(self.resolve(&scalar.right)?),
+                left: Box::new(self.resolve(&scalar.left, span)?),
+                right: Box::new(self.resolve(&scalar.right, span)?),
+                return_type: scalar.return_type.clone(),
             }
             .into()),
             Scalar::FunctionCall(func) => {
                 let args = func
                     .arguments
                     .iter()
-                    .map(|arg| self.resolve(arg))
+                    .map(|arg| self.resolve(arg, span))
                     .collect::<Result<Vec<Scalar>>>()?;
                 Ok(FunctionCall {
                     arguments: args,
@@ -95,8 +102,8 @@ impl<'a> GroupingChecker<'a> {
                 }
                 .into())
             }
-            Scalar::Cast(cast) => Ok(CastExpr {
-                argument: Box::new(self.resolve(&cast.argument)?),
+            Scalar::CastExpr(cast) => Ok(CastExpr {
+                argument: Box::new(self.resolve(&cast.argument, span)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),
             }

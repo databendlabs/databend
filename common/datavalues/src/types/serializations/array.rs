@@ -87,10 +87,10 @@ impl<'a> TypeSerializer<'a> for ArraySerializer<'a> {
         Ok(Arc::new(ArrayColumnData::create(inner_data, offsets)))
     }
 
-    fn serialize_json(&self, format: &FormatSettings) -> Result<Vec<Value>> {
+    fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {
         let size = self.offsets.len() - 1;
         let mut result = Vec::with_capacity(size);
-        let inner = self.inner.serialize_json(format)?;
+        let inner = self.inner.serialize_json_values(format)?;
         let mut iter = inner.into_iter();
         for i in 0..size {
             let len = (self.offsets[i + 1] - self.offsets[i]) as usize;

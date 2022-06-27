@@ -329,10 +329,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             write!(
                 f,
                 "{:}.{:} to {:}.{:}",
-                entity.database_name,
-                entity.table_name,
-                entity.new_database_name,
-                entity.new_table_name
+                entity.database, entity.table, entity.new_database, entity.new_table
             )?;
 
             if i + 1 != plan.entities.len() {
@@ -368,11 +365,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         f: &mut Formatter,
         plan: &AlterTableClusterKeyPlan,
     ) -> fmt::Result {
-        write!(
-            f,
-            "Alter table {:}.{:}",
-            plan.database_name, plan.table_name
-        )?;
+        write!(f, "Alter table {:}.{:}", plan.database, plan.table)?;
         write!(f, " cluster by {:?}", plan.cluster_keys)
     }
 
@@ -383,7 +376,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         write!(
             f,
             "Alter table {:}.{:} drop cluster key",
-            plan.database_name, plan.table_name
+            plan.database, plan.table
         )
     }
 }

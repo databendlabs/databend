@@ -15,7 +15,7 @@ common-tracing = { path = "../tracing" }
 
 cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev = "f1ce4a2" }
 
-anyhow = "1.0.56"
+anyhow = "1.0.58"
 cargo_metadata = "0.14.2"
-git2 = { version = "0.14", default-features = false }
-vergen = "7.0.0"
+git2 = { version = "0.14.4", default-features = false }
+vergen = "7.2.1"

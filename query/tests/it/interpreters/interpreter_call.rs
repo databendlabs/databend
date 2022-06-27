@@ -54,7 +54,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `FUSE_SNAPSHOT` expect to have 2 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `FUSE_SNAPSHOT` expect to have [2, 3] arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 

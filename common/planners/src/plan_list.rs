@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_datavalues::prelude::ToDataType;
-use common_datavalues::prelude::Vu8;
+use common_datavalues::prelude::*;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -32,9 +32,18 @@ pub struct ListPlan {
 
 impl ListPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        // TODO add more fields
-        let field = DataField::new("file_name", Vu8::to_data_type());
-        Arc::new(DataSchema::new(vec![field]))
+        let name = DataField::new("name", Vu8::to_data_type());
+        let size = DataField::new("size", u64::to_data_type());
+        let md5 = DataField::new_nullable("md5", Vu8::to_data_type());
+        let last_modified = DataField::new("last_modified", Vu8::to_data_type());
+        let creator = DataField::new_nullable("creator", Vu8::to_data_type());
+        Arc::new(DataSchema::new(vec![
+            name,
+            size,
+            md5,
+            last_modified,
+            creator,
+        ]))
     }
 }
 

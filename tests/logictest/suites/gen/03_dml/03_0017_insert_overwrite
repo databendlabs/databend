@@ -8,10 +8,10 @@ statement ok
 USE db1;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t1(a Int8, b UInt32, c UInt64, d String) Engine = MEMORY;
+CREATE TABLE IF NOT EXISTS t1(a Int8, b UInt32, c UInt64, d String) Engine = Fuse;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t2(a Int8, b UInt32, c UInt64, d String) Engine = MEMORY;
+CREATE TABLE IF NOT EXISTS t2(a Int8, b UInt32, c UInt64, d String) Engine = Fuse;
 
 statement ok
 INSERT INTO t1 (a,b,c,d) VALUES(1, 1, 1, 'origin'), (2, 2, 2, 'origin');

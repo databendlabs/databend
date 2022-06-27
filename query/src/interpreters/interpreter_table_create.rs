@@ -156,9 +156,9 @@ impl CreateTableInterpreter {
             .collect();
         let schema = DataSchemaRefExt::create(select_fields);
         let insert_plan = InsertPlan {
-            catalog_name: self.plan.catalog.clone(),
-            database_name: self.plan.database.clone(),
-            table_name: self.plan.table.clone(),
+            catalog: self.plan.catalog.clone(),
+            database: self.plan.database.clone(),
+            table: self.plan.table.clone(),
             table_id: table.get_id(),
             schema,
             overwrite: false,

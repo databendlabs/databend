@@ -83,6 +83,12 @@ pub trait ScalarColumnBuilder: MutableColumn {
     /// Append a value to builder.
     fn push(&mut self, value: <Self::ColumnType as ScalarColumn>::RefItem<'_>);
 
+    fn pushs(&mut self, value: <Self::ColumnType as ScalarColumn>::RefItem<'_>, size: usize) {
+        for _ in 0..size {
+            self.push(value)
+        }
+    }
+
     /// Append a value to builder.
     fn build_const(
         &mut self,
@@ -102,5 +108,11 @@ pub trait ScalarColumnBuilder: MutableColumn {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ColumnMeta {
     Simple,
-    Array { inner_type: DataTypeImpl },
+    Array {
+        inner_type: DataTypeImpl,
+    },
+    Struct {
+        inner_names: Vec<String>,
+        inner_types: Vec<DataTypeImpl>,
+    },
 }

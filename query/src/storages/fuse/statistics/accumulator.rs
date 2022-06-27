@@ -295,8 +295,24 @@ impl BlockStatistics {
 
         for key in cluster_key_index.iter() {
             let col = block.column(*key);
-            min.push(col.get_checked(0)?);
-            max.push(col.get_checked(col.len() - 1)?);
+
+            let mut left = col.get_checked(0)?;
+            // To avoid high cardinality, for the string column,
+            // cluster statistics uses only the first 5 bytes.
+            if let DataValue::String(v) = &left {
+                let l = v.len() as usize;
+                let e = if l < 5 { l } else { 5 };
+                left = DataValue::from(&v[0..e]);
+            }
+            min.push(left);
+
+            let mut right = col.get_checked(col.len() - 1)?;
+            if let DataValue::String(v) = &right {
+                let l = v.len() as usize;
+                let e = if l < 5 { l } else { 5 };
+                right = DataValue::from(&v[0..e]);
+            }
+            max.push(right);
         }
 
         Ok(Some(ClusterStatistics {

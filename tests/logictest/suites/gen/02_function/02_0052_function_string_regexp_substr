@@ -86,7 +86,7 @@ statement ok
 DROP TABLE IF EXISTS t1;
 
 statement ok
-CREATE TABLE t1(s String NULL, pat String NULL, pos Int64 NULL, occu Int64 NULL, mt String NULL) Engine = Memory;
+CREATE TABLE t1(s String NULL, pat String NULL, pos Int64 NULL, occu Int64 NULL, mt String NULL) Engine = Fuse;
 
 statement ok
 INSERT INTO t1 (s, pat, pos, occu, mt) VALUES (NULL, '[a-z]+', 1, 1, ''), ('abc def ghi', NULL, 1, 1, 'c'), ('abc def ghi', '[a-z]+', NULL, 1, 'c'), ('abc def ghi', '[a-z]+', 1, NULL, 'c'), ('abc def ghi', '[a-z]+', 1, 1, NULL), ('abc def ghi', '[a-z]+', 1, 1, 'c');

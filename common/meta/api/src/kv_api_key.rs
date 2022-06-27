@@ -44,6 +44,18 @@ where Self: Sized
     fn from_key(s: &str) -> Result<Self, KVApiKeyError>;
 }
 
+impl KVApiKey for String {
+    const PREFIX: &'static str = "";
+
+    fn to_key(&self) -> String {
+        self.clone()
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        Ok(s.to_string())
+    }
+}
+
 /// Function that escapes special characters in a string.
 ///
 /// All characters except digit, alphabet and '_' are treated as special characters.

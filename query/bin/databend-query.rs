@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -52,11 +53,31 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         "databend-query-{}@{}:{}",
         conf.query.cluster_id, conf.query.mysql_handler_host, conf.query.mysql_handler_port
     );
+
+    let mut _sentry_guard = None;
+    let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());
+    if !bend_sentry_env.is_empty() {
+        // NOTE: `traces_sample_rate` is 0.0 by default, which disable sentry tracing.
+        let traces_sample_rate = env::var("SENTRY_TRACES_SAMPLE_RATE")
+            .ok()
+            .map(|s| {
+                s.parse()
+                    .unwrap_or_else(|_| panic!("`{}` was defined but could not be parsed", s))
+            })
+            .unwrap_or(0.0);
+        _sentry_guard = Some(sentry::init((bend_sentry_env, sentry::ClientOptions {
+            release: common_tracing::databend_semver!(),
+            traces_sample_rate,
+            ..Default::default()
+        })));
+    }
+
     //let _guards = init_tracing_with_file(
     let _guards = init_global_tracing(
         app_name.as_str(),
         conf.log.dir.as_str(),
         conf.log.level.as_str(),
+        None,
     );
 
     init_default_metrics_recorder();
@@ -77,7 +98,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         shutdown_handle.add_service(handler);
 
         tracing::info!(
-            "MySQL handler listening on {}, Usage: mysql -uroot -h{} -P{}",
+            "Listening for MySQL compatibility protocol: {}, Usage: mysql -uroot -h{} -P{}",
             listening,
             listening.ip(),
             listening.port(),
@@ -94,31 +115,14 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         shutdown_handle.add_service(srv);
 
         tracing::info!(
-            "ClickHouse handler listening on {}, Usage: clickhouse-client --host {} --port {}",
+            "Listening for ClickHouse compatibility native protocol: {}, Usage: clickhouse-client --host {} --port {}",
             listening,
             listening.ip(),
             listening.port(),
         );
     }
 
-    // HTTP handler.
-    {
-        let hostname = conf.query.http_handler_host.clone();
-        let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
-
-        let mut srv = HttpHandler::create(session_manager.clone(), HttpHandlerKind::Query);
-        let listening = srv.start(listening.parse()?).await?;
-        shutdown_handle.add_service(srv);
-
-        let http_handler_usage = HttpHandlerKind::Query.usage(listening);
-        tracing::info!(
-            "Http handler listening on {} {}",
-            listening,
-            http_handler_usage
-        );
-    }
-
-    // clickhouse HTTP handler.
+    // ClickHouse HTTP handler.
     {
         let hostname = conf.query.clickhouse_http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.clickhouse_http_handler_port);
@@ -129,7 +133,24 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
         let http_handler_usage = HttpHandlerKind::Clickhouse.usage(listening);
         tracing::info!(
-            "clickhouse Http handler listening on {} {}",
+            "Listening for ClickHouse compatibility http protocol: {}, Usage: {}",
+            listening,
+            http_handler_usage
+        );
+    }
+
+    // Databend HTTP handler.
+    {
+        let hostname = conf.query.http_handler_host.clone();
+        let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
+
+        let mut srv = HttpHandler::create(session_manager.clone(), HttpHandlerKind::Query);
+        let listening = srv.start(listening.parse()?).await?;
+        shutdown_handle.add_service(srv);
+
+        let http_handler_usage = HttpHandlerKind::Query.usage(listening);
+        tracing::info!(
+            "Listening for Databend HTTP API:  {}, Usage: {}",
             listening,
             http_handler_usage
         );
@@ -141,16 +162,16 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let mut srv = MetricService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
-        tracing::info!("Metric API server listening on {}/metrics", listening);
+        tracing::info!("Listening for Metric API: {}/metrics", listening);
     }
 
-    // HTTP API service.
+    // Admin HTTP API service.
     {
         let address = conf.query.admin_api_address.clone();
         let mut srv = HttpService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
-        tracing::info!("HTTP API server listening on {}", listening);
+        tracing::info!("Listening for Admin HTTP API: {}", listening);
     }
 
     // RPC API service.
@@ -159,7 +180,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let mut srv = RpcService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
-        tracing::info!("RPC API server listening on {}", listening);
+        tracing::info!("Listening for RPC API (interserver): {}", listening);
     }
 
     // Cluster register.
@@ -176,20 +197,18 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Async Insert Queue
     {
-        if conf.query.enable_async_insert {
-            let async_insert_queue = session_manager
-                .clone()
-                .get_async_insert_queue()
-                .read()
-                .clone()
-                .unwrap();
-            {
-                let mut queue = async_insert_queue.session_mgr.write();
-                *queue = Some(session_manager.clone());
-            }
-            async_insert_queue.clone().start().await;
-            tracing::info!("Databend async insert has been enabled.")
+        let async_insert_queue = session_manager
+            .clone()
+            .get_async_insert_queue()
+            .read()
+            .clone()
+            .unwrap();
+        {
+            let mut queue = async_insert_queue.session_mgr.write();
+            *queue = Some(session_manager.clone());
         }
+        async_insert_queue.clone().start().await;
+        tracing::info!("Databend async insert has been enabled.")
     }
 
     tracing::info!("Ready for connections.");

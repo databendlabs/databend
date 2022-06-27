@@ -13,15 +13,27 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
+use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 
 #[test]
 fn test_user_stage() -> Result<()> {
-    let actual = UserStageInfo::default();
-    let ser = serde_json::to_string(&actual)?;
-
-    let expect = UserStageInfo::try_from(ser.into_bytes())?;
-    assert_eq!(actual, expect);
+    {
+        let internal = UserStageInfo {
+            stage_name: "test_stage".to_string(),
+            stage_type: StageType::Internal,
+            ..Default::default()
+        };
+        assert_eq!(internal.get_prefix(), "/stage/test_stage/".to_string());
+    }
+    {
+        let external = UserStageInfo {
+            stage_name: "test_stage".to_string(),
+            stage_type: StageType::External,
+            ..Default::default()
+        };
+        assert_eq!(external.get_prefix(), "/".to_string());
+    }
 
     Ok(())
 }
