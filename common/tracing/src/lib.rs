@@ -14,6 +14,9 @@
 
 #![feature(backtrace)]
 
+#[macro_use]
+mod macros;
+
 mod config;
 mod logging;
 mod panic_hook;

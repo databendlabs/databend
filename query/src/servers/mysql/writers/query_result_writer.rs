@@ -20,7 +20,6 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
-use common_datavalues::TimestampType;
 use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -143,16 +142,10 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                             let v = v as i32;
                                             row_writer.write_col(v.to_date(&tz).naive_local())?
                                         }
-                                        (TypeID::Timestamp, DataValue::Int64(v)) => {
-                                            let data_type: TimestampType = data_type.try_into()?;
-
-                                            row_writer.write_col(
-                                                v.to_timestamp(&tz)
-                                                    .naive_local()
-                                                    .format(data_type.format_string().as_str())
-                                                    .to_string(),
-                                            )?
-                                        }
+                                        (TypeID::Timestamp, DataValue::Int64(_)) => row_writer
+                                            .write_col(
+                                                serializer.serialize_field(row_index, format)?,
+                                            )?,
                                         (TypeID::String, DataValue::String(v)) => {
                                             row_writer.write_col(v)?
                                         }

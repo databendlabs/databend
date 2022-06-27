@@ -290,7 +290,7 @@ impl ChainingHashTable {
         };
         Self::fill_null_for_left_join(&mut bm, &index_to_row, &mut row_state);
         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-        DataBlock::filter_block(&merged_block, &predicate)
+        DataBlock::filter_block(merged_block, &predicate)
     }
 
     fn fill_null_for_left_join(

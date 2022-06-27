@@ -51,6 +51,7 @@ use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
 use common_planners::CreateUserStagePlan;
 use common_planners::CreateViewPlan;
+use common_planners::DeletePlan;
 use common_planners::DescribeTablePlan;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropDatabasePlan;
@@ -150,6 +151,7 @@ pub enum Plan {
 
     // Insert
     Insert(Box<Insert>),
+    Delete(Box<DeletePlan>),
 
     // Views
     CreateView(Box<CreateViewPlan>),
@@ -228,6 +230,7 @@ impl Display for Plan {
             Plan::RevokePriv(_) => write!(f, "RevokePriv"),
             Plan::RevokeRole(_) => write!(f, "RevokeRole"),
             Plan::Insert(_) => write!(f, "Insert"),
+            Plan::Delete(_) => write!(f, "Delete"),
         }
     }
 }
@@ -287,6 +290,7 @@ impl Plan {
             Plan::RevokePriv(_) => Arc::new(DataSchema::empty()),
             Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
+            Plan::Delete(_) => Arc::new(DataSchema::empty()),
         }
     }
 }

@@ -120,8 +120,10 @@ impl<'a> Binder {
         {
             s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
 
-            if let Some(having) = having {
-                s_expr = self.bind_having(&from_context, having, s_expr).await?;
+            if let Some((having, span)) = having {
+                s_expr = self
+                    .bind_having(&from_context, having, span, s_expr)
+                    .await?;
             }
         }
 
@@ -131,7 +133,13 @@ impl<'a> Binder {
 
         if !order_by.is_empty() {
             s_expr = self
-                .bind_order_by(&from_context, order_items, &mut scalar_items, s_expr)
+                .bind_order_by(
+                    &from_context,
+                    order_items,
+                    &select_list,
+                    &mut scalar_items,
+                    s_expr,
+                )
                 .await?;
         }
 

@@ -439,15 +439,7 @@ impl HashJoinState for ChainingHashTable {
             let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
             for block in data_blocks.iter() {
                 let filter_vector = filter.eval(&func_ctx, block)?;
-
-                let c = filter_vector.vector();
-                let d = c.validity();
-                println!(
-                    "filter_vector {:?}, {:?}",
-                    c.len(),
-                    d.1.unwrap().null_count()
-                );
-                filtered_blocks.push(DataBlock::filter_block(block, filter_vector.vector())?);
+                filtered_blocks.push(DataBlock::filter_block(block.clone(), filter_vector.vector())?);
             }
             data_blocks = filtered_blocks;
         }

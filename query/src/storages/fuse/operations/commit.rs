@@ -270,7 +270,7 @@ impl FuseTable {
         Ok(new_snapshot)
     }
 
-    async fn commit_to_meta_server(
+    pub async fn commit_to_meta_server(
         ctx: &QueryContext,
         catalog_name: &str,
         table_info: &TableInfo,
@@ -327,7 +327,7 @@ impl FuseTable {
                 acc.col_stats = if acc.col_stats.is_empty() {
                     stats.col_stats.clone()
                 } else {
-                    statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats])?
+                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
                 };
                 seg_acc.push(loc.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))

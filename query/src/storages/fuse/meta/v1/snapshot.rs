@@ -19,6 +19,7 @@ use chrono::Utc;
 use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::storages::fuse::meta::common::ClusterKey;
 use crate::storages::fuse::meta::common::FormatVersion;
@@ -86,6 +87,20 @@ impl TableSnapshot {
             segments,
             cluster_key_meta,
         }
+    }
+
+    pub fn from_previous(previous: &TableSnapshot) -> Self {
+        let id = Uuid::new_v4();
+        let clone = previous.clone();
+        Self::new(
+            id,
+            &clone.timestamp,
+            Some((clone.snapshot_id, clone.format_version)),
+            clone.schema,
+            clone.summary,
+            clone.segments,
+            clone.cluster_key_meta,
+        )
     }
 
     pub fn format_version(&self) -> u64 {

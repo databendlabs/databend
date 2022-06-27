@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
+use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -188,13 +189,22 @@ pub trait Table: Sync + Send {
         _instant: &NavigationPoint,
     ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::UnImplement(format!(
-            "table {},  of engine type {}, do not support time travel",
+            "table {},  of engine type {}, does not support time travel",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
+    async fn delete(&self, _ctx: Arc<QueryContext>, _delete_plan: DeletePlan) -> Result<()> {
+        Err(ErrorCode::UnImplement(format!(
+            "table {},  of engine type {}, does not support DELETE FROM",
             self.name(),
             self.get_table_info().engine(),
         )))
     }
 }
 
+#[derive(Debug)]
 pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),

@@ -99,6 +99,7 @@ fn test_statement() {
         r#"select * from t4;"#,
         r#"select * from aa.bb;"#,
         r#"select * from a, b, c;"#,
+        r#"select * from a, b, c order by `db`.`a`.`c1`;"#,
         r#"select * from a join b on a.a = b.a;"#,
         r#"select * from a left outer join b on a.a = b.a;"#,
         r#"select * from a right outer join b on a.a = b.a;"#,
