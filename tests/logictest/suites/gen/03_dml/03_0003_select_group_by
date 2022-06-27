@@ -103,6 +103,9 @@ SELECT '==GROUP BY DATETIMES==';
 ==GROUP BY DATETIMES==
 
 statement ok
+drop table if exists t_datetime;
+
+statement ok
 CREATE TABLE t_datetime(created_at Date, created_time DateTime, count Int32);
 
 statement ok
@@ -115,16 +118,12 @@ select created_at, sum(count) from t_datetime group by created_at order by creat
 2022-04-01 5
 2022-04-02 5
 
-statement query TI label(mysql,http)
+statement query TI
 select created_time, sum(count) from t_datetime group by created_time order by created_time;
 
-----  mysql
-2022-04-01 00:00:00 5
+----
+2022-04-01 00:00:00.000000 5
 2022-04-01 00:00:00.000001 5
-
-----  http
-2022-04-01 00:00:00 5
-2022-04-01 00:00:00 5
 
 statement ok
 drop table t_datetime;

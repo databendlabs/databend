@@ -6,6 +6,17 @@ import mysql.connector
 import logictest
 from log import log
 
+import mysql.connector
+from mysql.connector.conversion import MySQLConverter
+
+
+class StringConverter(MySQLConverter):
+
+    def _DATETIME_to_python(self, value, dsc=None):
+        if not value:
+            return None
+        return MySQLConverter._STRING_to_python(self, value)
+
 
 class TestMySQL(logictest.SuiteRunner, ABC):
 
@@ -21,6 +32,8 @@ class TestMySQL(logictest.SuiteRunner, ABC):
     def get_connection(self):
         if self._connection is not None:
             return self._connection
+        if "converter_class" not in self.driver:
+            self.driver["converter_class"] = StringConverter
         self._connection = mysql.connector.connect(**self.driver)
         return self._connection
 

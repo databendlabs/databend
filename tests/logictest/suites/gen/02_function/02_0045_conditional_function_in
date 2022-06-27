@@ -169,13 +169,13 @@ statement query TT
 SELECT * FROM t2 WHERE date in ('2022-04-23');
 
 ----  
-2022-04-23 2022-04-23 01:48:19
+2022-04-23 2022-04-23 01:48:19.000000
 
 statement query TT 
 SELECT * FROM t2 WHERE datetime in ('2022-04-23 01:48:19', NULL);
 
 ----  
-2022-04-23 2022-04-23 01:48:19
+2022-04-23 2022-04-23 01:48:19.000000
 
 statement ok
 DROP TABLE t2;

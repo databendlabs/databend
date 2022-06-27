@@ -23,10 +23,10 @@ statement query TB label(mysql,http)
 select  to_datetime(1630320462000000), to_int64(to_datetime(1630320462000000))  = 1630320462000000;
 
 ----  mysql
-2021-08-30 10:47:42 1
+2021-08-30 10:47:42.000000  1
 
 ----  http
-2021-08-30 10:47:42 true
+2021-08-30 10:47:42.000000  true
 
 statement query TB label(mysql,http)
 select  to_date(18869), to_uint32(to_date(18869))  = 18869;
@@ -41,10 +41,10 @@ statement query TB label(mysql,http)
 select  to_datetime(1640019661000000), to_int64(to_datetime(1640019661000000))  = 1640019661000000;
 
 ----  mysql
-2021-12-20 17:01:01 1
+2021-12-20 17:01:01.000000  1
 
 ----  http
-2021-12-20 17:01:01 true
+2021-12-20 17:01:01.000000  true
 
 statement query T 
 select  to_date('1000-01-01');
@@ -68,13 +68,13 @@ statement query T
 select  to_datetime('1000-01-01 00:00:00');
 
 ----  
-1000-01-01 00:00:00
+1000-01-01 00:00:00.000000
 
 statement query T 
 select  to_datetime('9999-12-31 23:59:59');
 
 ----  
-9999-12-31 23:59:59
+9999-12-31 23:59:59.000000
 
 statement error 1010
 select  to_datetime('10000-01-01 00:00:00'); 
@@ -629,13 +629,13 @@ statement query T
 select addYears(to_datetime(1582970400000000), cast(50, INT8)); -- 2020-2-29T10:00:00 + 50 years
 
 ----  
-2070-02-28 10:00:00
+2070-02-28 10:00:00.000000
 
 statement query T 
 select addYears(to_datetime(1582970400000000), cast(-50, INT8)); -- 2020-2-29T10:00:00 - 50 years
 
 ----  
-1970-02-28 10:00:00
+1970-02-28 10:00:00.000000
 
 statement error 1068
 select addYears(to_date('9999-12-31'), 1); 
@@ -671,13 +671,13 @@ statement query T
 select subtractMonths(to_datetime(1582970400000000), cast(122, INT16)); -- 2020-2-29T10:00:00 - (12*10 + 2) months
 
 ----  
-2009-12-29 10:00:00
+2009-12-29 10:00:00.000000
 
 statement query T 
 select to_datetime(1582970400000000) -  interval '122' month;
 
 ----  
-2009-12-29 10:00:00
+2009-12-29 10:00:00.000000
 
 statement error 1068
 select subtractMonths(to_date('1000-01-01'), 1); 
@@ -713,13 +713,13 @@ statement query T
 select addDays(to_datetime(1582970400000000), cast(-1, INT16)); -- 2020-2-29T10:00:00 - 1 day
 
 ----  
-2020-02-28 10:00:00
+2020-02-28 10:00:00.000000
 
 statement query T 
 select to_datetime(1582970400000000) + interval '-1' day;
 
 ----  
-2020-02-28 10:00:00
+2020-02-28 10:00:00.000000
 
 statement error 1068
 select addDays(to_date('9999-12-31'), 1); 
@@ -743,19 +743,19 @@ statement query T
 select addHours(to_datetime(1582970400000000), cast(25, INT32)); -- 2020-2-29T10:00:00 + 25 hours
 
 ----  
-2020-03-01 11:00:00
+2020-03-01 11:00:00.000000
 
 statement query T 
 select to_datetime(1582970400000000) + interval '25' hour;
 
 ----  
-2020-03-01 11:00:00
+2020-03-01 11:00:00.000000
 
 statement query T 
 select addHours(to_date(18321), cast(1.2, Float32));
 
 ----  
-2020-02-29 01:00:00
+2020-02-29 01:00:00.000000
 
 statement error 1069
 select addHours(to_date('9999-12-31'), 24); 
@@ -779,7 +779,7 @@ statement query T
 select subtractMinutes(to_datetime(1582970400000000), cast(1, INT32)); -- 2020-2-29T10:00:00 - 1 minutes
 
 ----  
-2020-02-29 09:59:00
+2020-02-29 09:59:00.000000
 
 statement error 1069
 select subtractMinutes(to_date('1000-01-01'), 1); 
@@ -803,7 +803,7 @@ statement query T
 select addSeconds(to_datetime(1582970400000000), cast(61, INT32)); -- 2020-2-29T10:00:00 + 61 seconds
 
 ----  
-2020-02-29 10:01:01
+2020-02-29 10:01:01.000000
 
 statement query T 
 select '===addSeconds===';
@@ -1234,16 +1234,12 @@ insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '0999
 statement error 1010
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10'); 
 
-statement query TTT label(mysql,http)
+statement query TTT
 select * from t order by b;
 
-----  mysql
-2022-04-02 15:10:28 2022-04-02 15:10:28 1000-01-01
-2022-04-02 15:10:28.221000 2022-04-02 15:10:28.221000 9999-12-31
-
-----  http
-2022-04-02 15:10:28 2022-04-02 15:10:28 1000-01-01
-2022-04-02 15:10:28 2022-04-02 15:10:28 9999-12-31
+----
+2022-04-02 15:10:28.000000 2022-04-02 15:10:28.000 1000-01-01
+2022-04-02 15:10:28.221000 2022-04-02 15:10:28.221 9999-12-31
 
 statement ok
 drop table t;
