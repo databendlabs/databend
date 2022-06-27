@@ -113,7 +113,7 @@ pub async fn upload_to_stage(
             let file = StageFile {
                 path: file_path,
                 size: meta.content_length(),
-                md5: meta.content_md5(),
+                md5: meta.content_md5().map(str::to_string),
                 last_modified: meta.last_modified().map_or(DateTime::default(), |t| {
                     Utc.timestamp(t.unix_timestamp(), 0)
                 }),

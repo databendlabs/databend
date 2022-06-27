@@ -389,7 +389,7 @@ impl SessionManager {
         let op = op.with_backoff(backon::ExponentialBackoff::default());
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
-        op.check(".databend").await.map_err(|e| {
+        op.check().await.map_err(|e| {
             ErrorCode::StorageUnavailable(format!(
                 "current configured storage is not available: {e}"
             ))
