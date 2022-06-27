@@ -126,7 +126,7 @@ fn non_reserved_keyword(
     }
 }
 
-/// Parse one two two idents seperated by a peroid, fulfilling from the right.
+/// Parse one two two idents seperated by a period, fulfilling from the right.
 ///
 /// Example: `table.column`
 pub fn peroid_separated_idents_1_to_2<'a>(
@@ -143,7 +143,7 @@ pub fn peroid_separated_idents_1_to_2<'a>(
     )(i)
 }
 
-/// Parse one two three idents seperated by a peroid, fulfilling from the right.
+/// Parse one two three idents seperated by a period, fulfilling from the right.
 ///
 /// Example: `db.table.column`
 pub fn peroid_separated_idents_1_to_3<'a>(
