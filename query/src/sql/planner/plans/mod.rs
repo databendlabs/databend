@@ -290,7 +290,7 @@ impl Plan {
             Plan::RevokePriv(_) => Arc::new(DataSchema::empty()),
             Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
-            Plan::Delete(_) => todo!(),
+            Plan::Delete(_) => Arc::new(DataSchema::empty()),
         }
     }
 }
