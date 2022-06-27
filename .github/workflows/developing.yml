@@ -63,8 +63,9 @@ jobs:
           target: ${{ matrix.target }}
           profile: debug
 
+
   build_musl:
-    runs-on: [self-hosted, x64, Linux]
+    runs-on: [self-hosted, x64, Linux, development]
     strategy:
       matrix:
         target:
@@ -75,9 +76,10 @@ jobs:
         with:
           # fetch all tags,  metasrv and metaclient need tag as its version.
           fetch-depth: 0
-      - uses: ./.github/actions/build_debug
+      - uses: ./.github/actions/build_linux
         with:
           target: ${{ matrix.target }}
+          profile: debug
 
   test_unit:
     runs-on: [self-hosted, x64, Linux]
