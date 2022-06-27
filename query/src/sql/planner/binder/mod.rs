@@ -39,6 +39,7 @@ mod aggregate;
 mod bind_context;
 mod copy;
 mod ddl;
+mod delete;
 mod distinct;
 mod insert;
 mod join;
@@ -188,6 +189,15 @@ impl<'a> Binder {
                 self.bind_remove_stage(location, pattern).await?
             }
             Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
+            Statement::Delete {
+                catalog,
+                database,
+                table,
+                selection,
+            } => {
+                self.bind_delete(bind_context, catalog, database, table, selection)
+                    .await?
+            }
 
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
 

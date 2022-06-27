@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,10 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub mod accumulator;
-pub mod reducers;
+pub mod block_filter;
+pub mod mutations_collector;
 
-pub use accumulator::PartiallyAccumulated;
-pub use accumulator::StatisticsAccumulator;
-pub use reducers::merge_statistics;
-pub use reducers::reduce_block_statistics;
+pub use block_filter::delete_from_block;

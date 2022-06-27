@@ -12,21 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod locations;
-mod read;
-pub mod retry;
-mod write;
+use std::sync::Arc;
 
-pub use locations::TableMetaLocationGenerator;
-pub use read::BlockReader;
-pub use read::MetaReaders;
-pub use read::SegmentInfoReader;
-pub use read::TableSnapshotReader;
-pub use write::serialize_data_blocks;
-pub use write::write_block;
-pub use write::write_meta;
-pub use write::BlockCompactor;
-pub use write::BlockStreamWriter;
-pub use write::BlockWriter;
-pub use write::SegmentInfoStream;
-pub use write::SegmentWriter;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_meta_app::schema::TableIdent;
+
+use crate::Expression;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct DeletePlan {
+    pub catalog_name: String,
+    pub database_name: String,
+    pub table_name: String,
+    pub table_id: TableIdent,
+    pub selection: Option<Expression>,
+    pub projection: Vec<usize>,
+}
+
+impl DeletePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

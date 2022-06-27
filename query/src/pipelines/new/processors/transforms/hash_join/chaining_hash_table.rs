@@ -322,7 +322,7 @@ impl ChainingHashTable {
                             let func_ctx = self.ctx.try_get_function_context()?;
                             let filter_vector = pred.eval(&func_ctx, &merged)?;
                             let filtered_block =
-                                DataBlock::filter_block(&merged, filter_vector.vector())?;
+                                DataBlock::filter_block(merged, filter_vector.vector())?;
                             if !filtered_block.is_empty() {
                                 results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
                             }
@@ -349,7 +349,7 @@ impl ChainingHashTable {
                             let func_ctx = self.ctx.try_get_function_context()?;
                             let filter_vector = pred.eval(&func_ctx, &merged)?;
                             let filtered_block =
-                                DataBlock::filter_block(&merged, filter_vector.vector())?;
+                                DataBlock::filter_block(merged, filter_vector.vector())?;
                             if filtered_block.is_empty() {
                                 results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
                             }
@@ -412,7 +412,7 @@ impl ChainingHashTable {
             // Here, we directly use `predicate_column` to filter the result block.
             // But pay attention to the fact that **reserved side** may also be filtered.
             // **reserved side** is the left side in left join, and the right side in right join.
-            result_block = DataBlock::filter_block(&result_block, filter_vector.vector())?;
+            result_block = DataBlock::filter_block(result_block, filter_vector.vector())?;
         }
         // If result_block is empty, we need to supply a NULL block for probe_block.
         if result_block.is_empty() {
@@ -597,8 +597,8 @@ impl HashJoinState for ChainingHashTable {
         if let Some(filter) = &self.other_predicate {
             let func_ctx = self.ctx.try_get_function_context()?;
             let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
-            for block in data_blocks.iter() {
-                let filter_vector = filter.eval(&func_ctx, block)?;
+            for block in data_blocks.into_iter() {
+                let filter_vector = filter.eval(&func_ctx, &block)?;
                 filtered_blocks.push(DataBlock::filter_block(block, filter_vector.vector())?);
             }
             data_blocks = filtered_blocks;

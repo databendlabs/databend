@@ -24,7 +24,6 @@ use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::ColumnMeta;
-use databend_query::storages::fuse::meta::Compression;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::index::ColumnStatistics;
 use futures::TryStreamExt;
@@ -60,19 +59,21 @@ fn test_to_partitions() -> Result<()> {
         .map(|col_id| (col_id as u32, col_metas_gen()))
         .collect::<HashMap<_, _>>();
 
-    let block_meta = BlockMeta {
-        row_count: 0,
-        block_size: cols_stats
-            .iter()
-            .map(|(_, col_stats)| col_stats.in_memory_size)
-            .sum(),
-        file_size: 0,
-        col_stats: cols_stats.clone(),
-        col_metas: cols_metas,
-        cluster_stats: None,
-        location: ("".to_owned(), 0),
-        compression: Compression::Lz4Raw,
-    };
+    let cluster_stats = None;
+    let location = ("".to_owned(), 0);
+    let block_size = cols_stats
+        .iter()
+        .map(|(_, col_stats)| col_stats.in_memory_size)
+        .sum();
+    let block_meta = BlockMeta::new(
+        0,
+        block_size,
+        0,
+        cols_stats.clone(),
+        cols_metas,
+        cluster_stats,
+        location,
+    );
 
     let blocks_metas = (0..num_of_block)
         .into_iter()
