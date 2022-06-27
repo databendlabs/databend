@@ -23,8 +23,8 @@ use logos::Span;
 use pratt::NoError;
 use pratt::PrattError;
 
+use crate::input::Input;
 use crate::parser::token::*;
-use crate::parser::util::Input;
 
 const MAX_DISPLAY_ERROR_COUNT: usize = 6;
 
