@@ -48,7 +48,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub type FlightStream<T> =
-    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
+Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
     sessions: Arc<SessionManager>,
@@ -243,9 +243,10 @@ impl FlightService for DatabendQueryFlightService {
                 exchange_manager.handle_prepare_pipeline(&query_context, packet)?;
                 FlightResult { body: vec![] }
             }
-            FlightAction::PreparePublisher(packet) => {
+            FlightAction::PreparePublisher(prepare_publisher) => {
+                let publisher_packet = &prepare_publisher.publisher_packet;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.handle_prepare_publisher(packet)?;
+                exchange_manager.handle_prepare_publisher(publisher_packet).await?;
                 FlightResult { body: vec![] }
             }
             FlightAction::ExecutePipeline(query_id) => {

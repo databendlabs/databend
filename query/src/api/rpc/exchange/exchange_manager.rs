@@ -52,6 +52,7 @@ use crate::api::FlightAction;
 use crate::api::FlightClient;
 use crate::api::FragmentPacket;
 use crate::api::PrepareChannel;
+use crate::api::rpc::exchange::exchange_channel_sender::ExchangeSender;
 use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::NewPipe;
@@ -74,16 +75,24 @@ impl DataExchangeManager {
     }
 
     // Create connections for cluster all nodes. We will push data through this connection.
-    pub fn handle_prepare_publisher(&self, prepare: &PreparePublisher) -> Result<()> {
+    pub async fn handle_prepare_publisher(&self, packet: &PrepareChannel) -> Result<()> {
+        let mut exchange_senders = HashMap::with_capacity(packet.target_2_fragments.len());
+        for (target, _fragments) in &packet.target_2_fragments {
+            let config = self.config.clone();
+            exchange_senders.insert(
+                target.clone(),
+                ExchangeSender::create(config, packet, target).await?,
+            );
+        }
+
         let mut queries_coordinator = self.queries_coordinator.lock();
 
-        let publisher_packet = &prepare.publisher_packet;
-        match queries_coordinator.get_mut(&publisher_packet.query_id) {
+        match queries_coordinator.get_mut(&packet.query_id) {
             None => Err(ErrorCode::LogicalError(format!(
                 "Query {} not found in cluster.",
-                publisher_packet.query_id
+                packet.query_id
             ))),
-            Some(coordinator) => coordinator.init_publisher(self.config.clone(), publisher_packet),
+            Some(coordinator) => coordinator.init_publisher(exchange_senders),
         }
     }
 
@@ -167,7 +176,7 @@ impl DataExchangeManager {
                     None,
                     Some(self.config.query.to_rpc_client_tls_config()),
                 )
-                .await?,
+                    .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
@@ -334,7 +343,7 @@ struct QueryCoordinator {
     query_id: String,
     executor_id: String,
     runtime: Arc<Runtime>,
-    request_server_tx: Option<Sender<DataPacket>>,
+    request_server_tx: Option<Arc<ExchangeSender>>,
     publish_fragments: HashMap<(String, usize), FragmentSender>,
     subscribe_channel: HashMap<String, Sender<Result<DataPacket>>>,
     subscribe_fragments: HashMap<usize, FragmentReceiver>,
@@ -342,7 +351,8 @@ struct QueryCoordinator {
 
     shutdown_cause: Arc<Mutex<Option<ErrorCode>>>,
     executor: Option<Arc<PipelineCompleteExecutor>>,
-    receivers: Vec<Arc<ExchangeReceiver>>,
+    exchange_senders: Vec<Arc<ExchangeSender>>,
+    exchange_receivers: Vec<Arc<ExchangeReceiver>>,
 }
 
 impl QueryCoordinator {
@@ -360,7 +370,8 @@ impl QueryCoordinator {
             ctx: ctx.clone(),
             fragments_coordinator,
             executor: None,
-            receivers: vec![],
+            exchange_senders: vec![],
+            exchange_receivers: vec![],
             shutdown_cause: Arc::new(Mutex::new(None)),
             request_server_tx: None,
             publish_fragments: Default::default(),
@@ -416,7 +427,7 @@ impl QueryCoordinator {
                 let receiver = ExchangeReceiver::create(ctx, query_id, runtime, rx, receivers_map);
 
                 receiver.listen()?;
-                self.receivers.push(receiver);
+                self.exchange_receivers.push(receiver);
                 self.subscribe_channel.insert(source.to_string(), tx);
             }
         }
@@ -463,7 +474,7 @@ impl QueryCoordinator {
         let executor =
             PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
         self.executor = Some(executor.clone());
-        let receivers = self.receivers.clone();
+        let receivers = self.exchange_receivers.clone();
         let shutdown_cause = self.shutdown_cause.clone();
         let mut request_server_tx = self.request_server_tx.take();
 
@@ -505,59 +516,20 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn init_publisher(&mut self, config: Config, packet: &PrepareChannel) -> Result<()> {
-        for (target, fragments) in &packet.target_2_fragments {
-            if target != &packet.executor {
-                if self.publish_fragments.iter().any(|((t, _), _)| t == target) {
-                    return Err(ErrorCode::LogicalError("Publisher id already exists"));
-                }
+    pub fn init_publisher(&mut self, senders: HashMap<String, ExchangeSender>) -> Result<()> {
+        for (target, exchange_sender) in senders.into_iter() {
+            let exchange_sender = Arc::new(exchange_sender);
+            let fragments_sender = exchange_sender.listen(self.executor_id.clone())?;
 
-                let config = config.clone();
-                let target_node_info = &packet.target_nodes_info[target];
-                let address = target_node_info.flight_address.to_string();
-                let tx = self.spawn_pub_worker(config, address)?;
-
-                if target == &packet.request_server {
-                    self.request_server_tx = Some(tx.clone());
-                }
-
-                for fragment_id in fragments {
-                    let (f_tx, f_rx) = async_channel::bounded(1);
-
-                    let c_tx = tx.clone();
-                    let fragment_id_clone = *fragment_id;
-                    let target_clone = target.clone();
-                    let source_clone = packet.executor.clone();
-                    self.runtime.spawn(async move {
-                        'fragment_loop: while let Ok(packet) = f_rx.recv().await {
-                            if let Err(_cause) = c_tx.send(packet).await {
-                                common_tracing::tracing::warn!(
-                                    "{} to {} channel closed.",
-                                    source_clone,
-                                    target_clone
-                                );
-
-                                break 'fragment_loop;
-                            }
-                        }
-
-                        if let Err(_cause) =
-                            c_tx.send(DataPacket::EndFragment(fragment_id_clone)).await
-                        {
-                            common_tracing::tracing::warn!(
-                                "{} to {} channel closed.",
-                                source_clone,
-                                target_clone
-                            );
-                        }
-                    });
-
-                    self.publish_fragments.insert(
-                        (target.clone(), *fragment_id),
-                        FragmentSender::create_unrecorded(f_tx),
-                    );
-                }
+            for (fragment_id, fragment_sender) in fragments_sender.into_iter() {
+                self.publish_fragments.insert((target.clone(), fragment_id), fragment_sender);
             }
+
+            if exchange_sender.is_to_request_server() {
+                self.request_server_tx = Some(exchange_sender.clone());
+            }
+
+            self.exchange_senders.push(exchange_sender);
         }
 
         for coordinator in self.fragments_coordinator.values_mut() {
@@ -625,7 +597,7 @@ impl QueryCoordinator {
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                .await?,
+                    .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
