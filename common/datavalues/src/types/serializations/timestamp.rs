@@ -30,14 +30,26 @@ const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
 #[derive(Debug, Clone)]
 pub struct TimestampSerializer<'a> {
+    #[allow(unused)]
+    pub(crate) precision: usize,
     pub(crate) values: &'a [i64],
+    pub(crate) date_format: String,
 }
 
 impl<'a> TimestampSerializer<'a> {
-    pub fn try_create(col: &'a ColumnRef) -> Result<Self> {
+    pub fn try_create(precision: usize, col: &'a ColumnRef) -> Result<Self> {
         let col: &PrimitiveColumn<i64> = Series::check_get(col)?;
+        let date_format = {
+            if precision == 0 {
+                "%Y-%m-%d %H:%M:%S".to_string()
+            } else {
+                format!("%Y-%m-%d %H:%M:%S%.{}f", precision)
+            }
+        };
         Ok(Self {
+            precision,
             values: col.values(),
+            date_format,
         })
     }
     pub fn to_timestamp(&self, value: &i64, tz: &Tz) -> DateTime<Tz> {
@@ -52,7 +64,7 @@ impl<'a> TypeSerializer<'a> for TimestampSerializer<'a> {
 
     fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
         let dt = self.to_timestamp(&self.values[row_index], &format.timezone);
-        let s = dt.format(TIME_FMT).to_string();
+        let s = dt.format(&self.date_format).to_string();
         buf.extend_from_slice(s.as_bytes())
     }
 
