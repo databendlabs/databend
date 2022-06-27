@@ -25,7 +25,7 @@ impl DataBlock {
     // check if the predicate has any valid row
     pub fn filter_exists(predicate: &ColumnRef) -> Result<bool> {
         let predict_boolean_nonull = Self::cast_to_nonull_boolean(predicate)?;
-            // faster path for constant filter
+        // faster path for constant filter
         if predict_boolean_nonull.is_const() {
             return predict_boolean_nonull.get_bool(0);
         }
@@ -33,9 +33,9 @@ impl DataBlock {
         let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
         let rows = boolean_col.len();
         let count_zeros = boolean_col.values().null_count();
-        return Ok(count_zeros != rows)
+        return Ok(count_zeros != rows);
     }
-    
+
     pub fn filter_block(block: &DataBlock, predicate: &ColumnRef) -> Result<DataBlock> {
         if block.num_columns() == 0 || block.num_rows() == 0 {
             return Ok(block.clone());

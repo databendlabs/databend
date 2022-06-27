@@ -315,7 +315,7 @@ impl ChainingHashTable {
             }
             JoinType::Semi => {
                 let mut probe_indexs = Vec::with_capacity(keys.len());
-                
+
                 for (i, key) in keys.iter().enumerate() {
                     let probe_result_ptr = hash_table.find_key(key);
 
@@ -326,7 +326,7 @@ impl ChainingHashTable {
                             let merged = self.merge_block(&build_block, &probe_block)?;
                             let func_ctx = self.ctx.try_get_function_context()?;
                             let filter_vector = pred.eval(&func_ctx, &merged)?;
-                            
+
                             let has_row = DataBlock::filter_exists(filter_vector.vector())?;
                             if has_row {
                                 probe_indexs.push(i as u32);
@@ -334,7 +334,7 @@ impl ChainingHashTable {
                         }
                         (Some(_), None) => {
                             // No other conditions and has matched result
-                             probe_indexs.push(i as u32);
+                            probe_indexs.push(i as u32);
                         }
                         (None, _) => {
                             // No matched row for current probe row
@@ -346,7 +346,7 @@ impl ChainingHashTable {
             }
             JoinType::Anti => {
                 let mut probe_indexs = Vec::with_capacity(keys.len());
-                
+
                 for (i, key) in keys.iter().enumerate() {
                     let probe_result_ptr = hash_table.find_key(key);
 
@@ -358,7 +358,7 @@ impl ChainingHashTable {
                             let func_ctx = self.ctx.try_get_function_context()?;
                             let filter_vector = pred.eval(&func_ctx, &merged)?;
                             let has_row = DataBlock::filter_exists(filter_vector.vector())?;
-                            
+
                             if !has_row {
                                 probe_indexs.push(i as u32);
                             }
@@ -368,11 +368,11 @@ impl ChainingHashTable {
                         }
                         (None, _) => {
                             // No matched row for current probe row
-                             probe_indexs.push(i as u32);
+                            probe_indexs.push(i as u32);
                         }
                     }
                 }
-                
+
                 let probe_block = DataBlock::block_take_by_indices(input, &probe_indexs)?;
                 results.push(probe_block);
             }
@@ -386,10 +386,6 @@ impl ChainingHashTable {
                 for (i, key) in keys.iter().enumerate() {
                     let probe_result_ptr = hash_table.find_key(key);
 
-                    if probe_result_ptr.is_none() {
-                        // No matched row for current probe row
-                        continue;
-                    }
                     match probe_result_ptr {
                         Some(v) => {
                             let probe_result_ptrs = v.get_value();
@@ -399,7 +395,10 @@ impl ChainingHashTable {
                             }
                             validity.extend_constant(probe_result_ptrs.len(), true);
                         }
-                        None => validity.push(false),
+                        None => {
+                            probe_indexs.push(i as u32);
+                            validity.push(false);
+                        }
                     }
                 }
                 let validity: Bitmap = validity.into();
