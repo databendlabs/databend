@@ -4,7 +4,6 @@ DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
 
-set enable_planner_v2 = 1;
 -- setup
 CREATE TABLE IF NOT EXISTS t(c1 Int, c2 Int );
 INSERT INTO t VALUES(1,2);
