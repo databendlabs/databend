@@ -26,8 +26,8 @@ class TestHttp(logictest.SuiteRunner, ABC):
         self.reset_connection()
 
     def execute_ok(self, statement):
-        self.get_connection().query_with_session(statement)
-        return None
+        resp = self.get_connection().query_with_session(statement)
+        return http_connector.get_error(resp[0])
 
     def execute_error(self, statement):
         resp = self.get_connection().query_with_session(statement)

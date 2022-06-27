@@ -11,9 +11,21 @@ class ClickhouseConnector():
         self._session = None
 
     def query_with_session(self,statement):
+
+        def parseSQL(sql):
+            # for cases like:
+            # SELECT parse_json('"false"')::boolean;          => SELECT parse_json('\"false\"')::boolean;
+            # select as_object(parse_json('{"a":"b"}'));      => select as_object(parse_json('{\"a\":\"b\"}'));
+            # https://stackoverflow.com/questions/49902843/avoid-parameter-binding-when-executing-query-with-sqlalchemy/49913328#49913328
+            if '"' in sql:
+                if '\'' in sql:
+                    return sql.replace('"', '\\\"').replace(':','\\:') #  "  -> \"   : ->  \\:
+            else:
+                return sql  #  do nothing
+
         if self._session is None:
             self._session = make_session(self._engine)
-        return self._session.execute(statement)
+        return self._session.execute(parseSQL(statement))
 
     def reset_session(self):
         if self._session is not None:

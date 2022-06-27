@@ -13,28 +13,28 @@ SELECT 'a';
 ----  
 a
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT NOT(1=1);
 
-----  mysql
+---- 
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT NOT(1);
 
-----  mysql
+---- 
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT NOT(1=1) from numbers(3);
 
-----  mysql
+---- 
 0
 0
 0
@@ -44,28 +44,28 @@ false
 false
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT TRUE;
 
-----  mysql
+---- 
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT FALSE;
 
-----  mysql
+---- 
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT NOT(TRUE);
 
-----  mysql
+---- 
 0
 
 ----  http

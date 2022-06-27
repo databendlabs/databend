@@ -13,14 +13,14 @@ create table if not exists t4(a float, b float, c text, d bool);
 statement ok
 insert into t4(a,b,c,d) values(1.0, 10.224, 'xxdsfs', false );
 
-statement query FFTB label(http,mysql)
+statement query FFTB label(http)
 select a,b,c,d from t4;
 
-----  http
-     1.0 10.224 xxdsfs false
+----  
+1.0 10.224 xxdsfs 0
 
-----  mysql
-     1.0 10.224 xxdsfs 0
+----  http
+1.0 10.224 xxdsfs false
 
 statement ok
 insert into t4(a,b,c,d) values(2.0, 10.224, 'xxdsfs\nds \n', false );
@@ -55,7 +55,13 @@ drop table t5;
 statement error 1006
 create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP);
 
-statement query III label(mysql)
+statement query skipped III
+select number, number + 1, number + 999 from numbers(10);
+
+----
+1 1 1
+
+statement query III
 select number, number + 1, number + 999 from numbers(10);
 
 ----  
@@ -70,18 +76,14 @@ select number, number + 1, number + 999 from numbers(10);
      8     9  1007
      9    10  1008
 
-----  mysql
-     0     1   999
-     1     2  1000
-     2     3  1001
-     3     4  1002
-     4     5  1003
-     5     6  1004
-     6     7  1005
-     7     8  1006
-     8     9  1007
-     9    10  1008
+onlyif mysql
+statement query I
+select 1;
 
+---- 
+1
+
+skipif clickhouse
 statement query I
 select 1;
 

@@ -1,6 +1,9 @@
 statement ok
 set enable_planner_v2 = 1;
 
+statement ok 
+drop table if exists t all;
+
 statement query T 
 select '====SELECT_FROM_NUMBERS====';
 
@@ -253,10 +256,10 @@ select 1, sum(number) from numbers_mt(1000000);
 ----  
 1 499999500000
 
-statement query B label(mysql,http)
+statement query B label(http)
 select count(*) = count(1) from numbers(1000);
 
-----  mysql
+----  
 1
 
 ----  http
@@ -321,45 +324,42 @@ statement query II
 SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1,ct;
 
 ----  
+NULL 3
 0 4
 2 3
-NULL 3
 
 statement query III 
 SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1, a2;
 
 ----  
+NULL NULL 3
 0 0 2
 0 2 2
 1 0 2
 1 2 1
-NULL NULL 3
 
 statement query III 
 SELECT a%2 as a1, to_uint64(c % 3) as c1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
 
-----  
+---- 
+NULL 2 3 
 0 0 2
 0 1 2
 1 0 1
 1 1 2
-NULL 2 3
 
 statement query III 
 SELECT to_uint64(c % 3) as c1, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
 
 ----  
+2 NULL 3
 0 0 2
 1 0 2
 0 1 1
 1 1 2
-2 NULL 3
 
-statement query I 
+statement error 1006 
 select number%2 as b from numbers(5) group by number % 2 having count(*) = 3 and sum(number) > 5;
-
-----  
-0
 
 statement query I 
 select count(*) from numbers(5) group by number % 2 having number % 2 + 1 = 2;
@@ -391,10 +391,10 @@ select count_distinct(number) from ( select number % 100 as number from numbers(
 ----  
 100
 
-statement query B label(mysql,http)
+statement query B label(http)
 select sum_distinct(number) /  count_distinct(number) = avg_distinct(number) from ( select number % 100 as number from numbers(100000));
 
-----  mysql
+----  
 1
 
 ----  http
@@ -406,10 +406,10 @@ select sum_if(number, number >= 100000 - 1) from numbers(100000);
 ----  
 99999
 
-statement query B label(mysql,http)
+statement query B label(http)
 select sum_if(number, number > 100) /  count_if(number,  number > 100) = avg_if(number,  number > 100) from numbers(100000);
 
-----  mysql
+----  
 1
 
 ----  http
@@ -1079,10 +1079,10 @@ create table t1(a int, b int);
 statement ok
 create table t2(a int, b int);
 
-statement query T label(mysql,http)
+statement query T label(http)
 explain select t1.a from t1 where a > 0;
 
-----  mysql
+----  
 Project: [a]
     Filter: [a > 0]
         Scan: default.default.t1

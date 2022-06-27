@@ -316,7 +316,6 @@ class SuiteRunner(object):
 
     def assert_query_equal(self, f, resultset, statement):
         # use join after split instead of strip
-        print(resultset)
         compare_f = "".join(f.split())
         compare_result = "".join(resultset[2].split())
         assert compare_f == compare_result, "Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
@@ -326,13 +325,14 @@ class SuiteRunner(object):
                                                                                 resultset[0].group("label"))
 
     def assert_execute_query(self, statement):
+        if statement.s_type.query_type == "skipped":
+            log.warning("{} statement is skipped".format(statement))
+            return
         actual = safe_execute(lambda: self.execute_query(statement), statement)
         try:
             f = format_value(actual, len(statement.s_type.query_type))
         except Exception:
-            log.warning("{} statement type is query but return nothing".format(
-                statement))
-            raise
+            assert "{} statement type is query but get no result".format(statement)
         assert statement.results is not None and len(
             statement.results) > 0, "No result found {}".format(statement)
         hasResult = False

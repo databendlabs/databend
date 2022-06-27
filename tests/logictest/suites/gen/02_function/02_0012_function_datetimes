@@ -1,50 +1,50 @@
 statement ok
 set timezone = 'UTC';
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT today() >= 18869;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT now() >= 1630295616;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query TB label(mysql,http)
+statement query TB label(http)
 select  to_datetime(1630320462000000), to_int64(to_datetime(1630320462000000))  = 1630320462000000;
 
-----  mysql
-2021-08-30 10:47:42 1
+----
+2021-08-30 10:47:42.000000  1
 
 ----  http
-2021-08-30 10:47:42 true
+2021-08-30 10:47:42.000000  true
 
-statement query TB label(mysql,http)
+statement query TB label(http)
 select  to_date(18869), to_uint32(to_date(18869))  = 18869;
 
-----  mysql
+----
 2021-08-30 1
 
 ----  http
 2021-08-30 true
 
-statement query TB label(mysql,http)
+statement query TB label(http)
 select  to_datetime(1640019661000000), to_int64(to_datetime(1640019661000000))  = 1640019661000000;
 
-----  mysql
-2021-12-20 17:01:01 1
+----
+2021-12-20 17:01:01.000000  1
 
 ----  http
-2021-12-20 17:01:01 true
+2021-12-20 17:01:01.000000  true
 
 statement query T 
 select  to_date('1000-01-01');
@@ -68,13 +68,13 @@ statement query T
 select  to_datetime('1000-01-01 00:00:00');
 
 ----  
-1000-01-01 00:00:00
+1000-01-01 00:00:00.000000
 
 statement query T 
 select  to_datetime('9999-12-31 23:59:59');
 
 ----  
-9999-12-31 23:59:59
+9999-12-31 23:59:59.000000
 
 statement error 1010
 select  to_datetime('10000-01-01 00:00:00'); 
@@ -82,109 +82,109 @@ select  to_datetime('10000-01-01 00:00:00');
 statement error 1069
 select  to_datetime('0999-12-31 23:59:59'); 
 
-statement query B label(mysql,http)
+statement query B label(http)
 select typeof(today() + 3) = 'DATE';
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select typeof(today() - 3) = 'DATE';
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select typeof(now() - 3) = 'TIMESTAMP(6)';
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select typeof(to_datetime(1640019661000000)) = 'TIMESTAMP(6)';
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select today() + 1 - today() = 1;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select typeof(today() - today()) = 'INT';
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select typeof(now() - now()) = 'INT';
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select sum(today() + number - today()) = 45 from numbers(10);
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select today() - 1 = yesterday();
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select today() - yesterday()  = 1;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select today() + 1 = tomorrow();
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select tomorrow() - today() = 1;
 
-----  mysql
+----
 1
 
 ----  http
@@ -202,19 +202,19 @@ select toYYYYMM(to_date(18875));
 ----  
 202109
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toYYYYMM(to_datetime(1630833797000000))  =  202109;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toYYYYMM(to_date(18875))  =  202109;
 
-----  mysql
+----
 1
 
 ----  http
@@ -262,10 +262,10 @@ select toStartOfTenMinutes(to_datetime(1630320462000000));
 ----  
 2021-08-30 10:40:00
 
-statement query B label(mysql,http)
+statement query B label(http)
 select timeSlot(now()) <= now();
 
-----  mysql
+----
 1
 
 ----  http
@@ -295,19 +295,19 @@ select toYYYYMMDDhhmmss(to_date(18875));
 ----  
 20210905000000
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toYYYYMMDDhhmmss(to_datetime(1630833797000000))  =  20210905092317;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toYYYYMMDDhhmmss(to_date(18875))  =  20210905000000;
 
-----  mysql
+----
 1
 
 ----  http
@@ -337,19 +337,19 @@ select toYYYYMMDD(to_date(18875));
 ----  
 20210905
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toYYYYMMDD(to_datetime(1630833797000000))  =  20210905;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toYYYYMMDD(to_date(18875))  =  20210905;
 
-----  mysql
+----
 1
 
 ----  http
@@ -629,13 +629,13 @@ statement query T
 select addYears(to_datetime(1582970400000000), cast(50, INT8)); -- 2020-2-29T10:00:00 + 50 years
 
 ----  
-2070-02-28 10:00:00
+2070-02-28 10:00:00.000000
 
 statement query T 
 select addYears(to_datetime(1582970400000000), cast(-50, INT8)); -- 2020-2-29T10:00:00 - 50 years
 
 ----  
-1970-02-28 10:00:00
+1970-02-28 10:00:00.000000
 
 statement error 1068
 select addYears(to_date('9999-12-31'), 1); 
@@ -671,13 +671,13 @@ statement query T
 select subtractMonths(to_datetime(1582970400000000), cast(122, INT16)); -- 2020-2-29T10:00:00 - (12*10 + 2) months
 
 ----  
-2009-12-29 10:00:00
+2009-12-29 10:00:00.000000
 
 statement query T 
 select to_datetime(1582970400000000) -  interval '122' month;
 
 ----  
-2009-12-29 10:00:00
+2009-12-29 10:00:00.000000
 
 statement error 1068
 select subtractMonths(to_date('1000-01-01'), 1); 
@@ -713,13 +713,13 @@ statement query T
 select addDays(to_datetime(1582970400000000), cast(-1, INT16)); -- 2020-2-29T10:00:00 - 1 day
 
 ----  
-2020-02-28 10:00:00
+2020-02-28 10:00:00.000000
 
 statement query T 
 select to_datetime(1582970400000000) + interval '-1' day;
 
 ----  
-2020-02-28 10:00:00
+2020-02-28 10:00:00.000000
 
 statement error 1068
 select addDays(to_date('9999-12-31'), 1); 
@@ -743,19 +743,19 @@ statement query T
 select addHours(to_datetime(1582970400000000), cast(25, INT32)); -- 2020-2-29T10:00:00 + 25 hours
 
 ----  
-2020-03-01 11:00:00
+2020-03-01 11:00:00.000000
 
 statement query T 
 select to_datetime(1582970400000000) + interval '25' hour;
 
 ----  
-2020-03-01 11:00:00
+2020-03-01 11:00:00.000000
 
 statement query T 
 select addHours(to_date(18321), cast(1.2, Float32));
 
 ----  
-2020-02-29 01:00:00
+2020-02-29 01:00:00.000000
 
 statement error 1069
 select addHours(to_date('9999-12-31'), 24); 
@@ -779,7 +779,7 @@ statement query T
 select subtractMinutes(to_datetime(1582970400000000), cast(1, INT32)); -- 2020-2-29T10:00:00 - 1 minutes
 
 ----  
-2020-02-29 09:59:00
+2020-02-29 09:59:00.000000
 
 statement error 1069
 select subtractMinutes(to_date('1000-01-01'), 1); 
@@ -803,7 +803,7 @@ statement query T
 select addSeconds(to_datetime(1582970400000000), cast(61, INT32)); -- 2020-2-29T10:00:00 + 61 seconds
 
 ----  
-2020-02-29 10:01:01
+2020-02-29 10:01:01.000000
 
 statement query T 
 select '===addSeconds===';
@@ -829,19 +829,19 @@ select toMonth(to_date(18901));
 ----  
 10
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toMonth(to_datetime(1633081817000000))  =  10;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toMonth(to_date(18901))  =  10;
 
-----  mysql
+----
 1
 
 ----  http
@@ -871,19 +871,19 @@ select toDayOfYear(to_date(18902));
 ----  
 275
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toDayOfYear(to_datetime(1633173324000000))  =  275;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toDayOfYear(to_date(18902))  =  275;
 
-----  mysql
+----
 1
 
 ----  http
@@ -913,19 +913,19 @@ select toDayOfMonth(to_date(18902));
 ----  
 2
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toDayOfMonth(to_datetime(1633173324000000))  =  2;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toDayOfMonth(to_date(18902))  =  2;
 
-----  mysql
+----
 1
 
 ----  http
@@ -955,19 +955,19 @@ select toDayOfWeek(to_date(18902));
 ----  
 6
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toDayOfWeek(to_datetime(1633173324000000))  =  6;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toDayOfWeek(to_date(18902))  =  6;
 
-----  mysql
+----
 1
 
 ----  http
@@ -985,10 +985,10 @@ select '===toHour===';
 ----  
 ===toHour===
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toHour(to_datetime(1634551542000000))  =  10;
 
-----  mysql
+----
 1
 
 ----  http
@@ -1006,10 +1006,10 @@ select '===toMinute===';
 ----  
 ===toMinute===
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toMinute(to_datetime(1634551542000000))  =  5;
 
-----  mysql
+----
 1
 
 ----  http
@@ -1027,10 +1027,10 @@ select '===toSecond===';
 ----  
 ===toSecond===
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toSecond(to_datetime(1634551542000000))  =  42;
 
-----  mysql
+----
 1
 
 ----  http
@@ -1048,10 +1048,10 @@ select '===toMonday===';
 ----  
 ===toMonday===
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toMonday(to_datetime(1634614318000000))  =  to_date('2021-10-18');
 
-----  mysql
+----
 1
 
 ----  http
@@ -1069,10 +1069,10 @@ select '===toYear===';
 ----  
 ===toYear===
 
-statement query B label(mysql,http)
+statement query B label(http)
 select toYear(to_datetime(1646404329000000)) = 2022;
 
-----  mysql
+----
 1
 
 ----  http
@@ -1090,55 +1090,55 @@ select '===EXTRACT===';
 ----  
 ===EXTRACT===
 
-statement query B label(mysql,http)
+statement query B label(http)
 select EXTRACT(YEAR FROM to_datetime('2022-03-04 22:32:09')) = 2022;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select EXTRACT(MONTH FROM to_datetime('2022-03-04 22:32:09')) = 3;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select EXTRACT(DAY FROM to_datetime('2022-03-04 22:32:09')) = 4;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select EXTRACT(HOUR FROM to_datetime('2022-03-04 22:32:09')) = 22;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select EXTRACT(MINUTE FROM to_datetime('2022-03-04 22:32:09')) = 32;
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select EXTRACT(SECOND FROM to_datetime('2022-03-04 22:32:09')) = 9;
 
-----  mysql
+----
 1
 
 ----  http
@@ -1156,28 +1156,28 @@ select '===CMP===';
 ----  
 ===CMP===
 
-statement query B label(mysql,http)
+statement query B label(http)
 select to_datetime('2022-04-01 06:50:20')   = '2022-04-01 06:50:20';
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select to_datetime('2022-04-01 06:50:20')   > '2022-04-01 04:50:20';
 
-----  mysql
+----
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select to_datetime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 
-----  mysql
+----
 1
 
 ----  http
@@ -1198,10 +1198,10 @@ create table ts(a DateTime(6), b DateTime, c Date);
 statement ok
 insert into ts values(now(), now(), today());
 
-statement query B label(mysql,http)
+statement query B label(http)
 select to_datetime(a) = to_datetime(b) from ts;
 
-----  mysql
+----
 1
 
 ----  http
@@ -1234,17 +1234,12 @@ insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '0999
 statement error 1010
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10'); 
 
-statement query TTT label(mysql,http)
+statement query TTT
 select * from t order by b;
 
-----  mysql
-2022-04-02 15:10:28 2022-04-02 15:10:28 1000-01-01
-2022-04-02 15:10:28.221000 2022-04-02 15:10:28.221000 9999-12-31
-
-----  http
-2022-04-02 15:10:28 2022-04-02 15:10:28 1000-01-01
-2022-04-02 15:10:28 2022-04-02 15:10:28 9999-12-31
+----
+2022-04-02 15:10:28.000000 2022-04-02 15:10:28.000 1000-01-01
+2022-04-02 15:10:28.221000 2022-04-02 15:10:28.221 9999-12-31
 
 statement ok
 drop table t;
-
