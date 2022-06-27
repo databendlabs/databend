@@ -17,11 +17,11 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use common_tracing::tracing;
+use parking_lot::Mutex;
 
 use crate::base::tokio;
 use crate::base::tokio::time::sleep;
@@ -93,7 +93,7 @@ where
     /// The returned one may be an uninitialized one, i.e., it contains a None.
     /// The lock for `items` should not be held for long, e.g. when `build()` a new connection, it takes dozen ms.
     fn get_pool_item(&self, key: &Mgr::Key) -> PoolItem<Mgr::Item> {
-        let mut items = self.items.lock().unwrap();
+        let mut items = self.items.lock();
 
         if let Some(item) = items.get(key) {
             item.clone()

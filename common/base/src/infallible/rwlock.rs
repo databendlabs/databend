@@ -18,7 +18,7 @@ use parking_lot::RwLockWriteGuard;
 
 use super::RwLockUpgradableReadGuard;
 
-/// A simple wrapper around the lock() function of a std::sync::RwLock
+/// A simple wrapper around the lock() function of a parking_lot::RwLock
 /// The only difference is that you don't need to call unwrap() on it.
 #[derive(Debug, Default)]
 pub struct RwLock<T>(ParkingRwLock<T>);

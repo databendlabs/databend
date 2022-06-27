@@ -16,9 +16,9 @@ use std::borrow::BorrowMut;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::infallible::Mutex;
 use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
@@ -473,7 +473,7 @@ impl ChainingHashTable {
     }
 
     fn probe_cross_join(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
-        let chunks = self.row_space.chunks.read().unwrap();
+        let chunks = self.row_space.chunks.read();
         let build_blocks = (*chunks)
             .iter()
             .map(|chunk| chunk.data_block.clone())
@@ -607,17 +607,17 @@ impl HashJoinState for ChainingHashTable {
     }
 
     fn attach(&self) -> Result<()> {
-        let mut count = self.ref_count.lock().unwrap();
+        let mut count = self.ref_count.lock();
         *count += 1;
         Ok(())
     }
 
     fn detach(&self) -> Result<()> {
-        let mut count = self.ref_count.lock().unwrap();
+        let mut count = self.ref_count.lock();
         *count -= 1;
         if *count == 0 {
             self.finish()?;
-            let mut is_finished = self.is_finished.lock().unwrap();
+            let mut is_finished = self.is_finished.lock();
             *is_finished = true;
             Ok(())
         } else {
@@ -626,11 +626,11 @@ impl HashJoinState for ChainingHashTable {
     }
 
     fn is_finished(&self) -> Result<bool> {
-        Ok(*self.is_finished.lock().unwrap())
+        Ok(*self.is_finished.lock())
     }
 
     fn finish(&self) -> Result<()> {
-        let chunks = self.row_space.chunks.write().unwrap();
+        let chunks = self.row_space.chunks.write();
         for chunk_index in 0..chunks.len() {
             let chunk = &chunks[chunk_index];
             let mut columns = vec![];

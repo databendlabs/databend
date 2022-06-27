@@ -15,7 +15,7 @@
 use parking_lot::Mutex as ParkingMutex;
 use parking_lot::MutexGuard;
 
-/// A simple wrapper around the lock() function of a std::sync::Mutex
+/// A simple wrapper around the lock() function of a parking_lot::Mutex
 #[derive(Debug)]
 pub struct Mutex<T>(ParkingMutex<T>);
 

@@ -14,12 +14,12 @@
 
 use std::env;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::Once;
 
 use once_cell::sync::Lazy;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
+use parking_lot::Mutex;
+use parking_lot::Once;
 use sentry_tracing::EventFilter;
 use tracing::Event;
 use tracing::Level;
@@ -49,7 +49,7 @@ pub fn init_default_ut_tracing() {
     static START: Once = Once::new();
 
     START.call_once(|| {
-        let mut g = GLOBAL_UT_LOG_GUARD.as_ref().lock().unwrap();
+        let mut g = GLOBAL_UT_LOG_GUARD.as_ref().lock();
         *g = Some(init_global_tracing(
             "unittest",
             "_logs_unittest",
@@ -182,7 +182,7 @@ pub fn init_meta_ut_tracing() {
     static START: Once = Once::new();
 
     START.call_once(|| {
-        let mut g = META_UT_LOG_GUARD.as_ref().lock().unwrap();
+        let mut g = META_UT_LOG_GUARD.as_ref().lock();
         *g = Some(do_init_meta_ut_tracing(
             "unittest-meta",
             "./.databend/logs_unittest",

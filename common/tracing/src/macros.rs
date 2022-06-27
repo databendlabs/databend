@@ -30,7 +30,7 @@
 #[macro_export]
 macro_rules! databend_semver {
     () => {{
-        use std::sync::Once;
+        use parking_lot::Once;
         static mut INIT: Once = Once::new();
         static mut RELEASE: Option<String> = None;
         unsafe {

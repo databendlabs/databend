@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Once;
-
 use common_meta_types::NodeId;
 use once_cell::sync::Lazy;
+use parking_lot::Once;
 use prometheus::exponential_buckets;
 use prometheus::CounterVec;
 use prometheus::Gauge;

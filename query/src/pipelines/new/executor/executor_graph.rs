@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_base::infallible::Mutex;
 use common_exception::Result;
 use common_tracing::tracing;
 use petgraph::dot::Config;
@@ -48,7 +49,7 @@ enum State {
 }
 
 struct Node {
-    state: std::sync::Mutex<State>,
+    state: Mutex<State>,
     processor: ProcessorPtr,
 
     updated_list: Arc<UpdateList>,
@@ -65,7 +66,7 @@ impl Node {
         outputs_port: &[Arc<OutputPort>],
     ) -> Arc<Node> {
         Arc::new(Node {
-            state: std::sync::Mutex::new(State::Idle),
+            state: Mutex::new(State::Idle),
             processor: processor.clone(),
             updated_list: UpdateList::create(),
             inputs_port: inputs_port.to_vec(),
@@ -227,7 +228,7 @@ impl ExecutingGraph {
                 let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
 
                 let node = &locker.graph[target_index];
-                let node_state = node.state.lock().unwrap();
+                let node_state = node.state.lock();
 
                 if matches!(*node_state, State::Idle) {
                     state_guard_cache = Some(node_state);
@@ -239,7 +240,7 @@ impl ExecutingGraph {
                 let node = &locker.graph[schedule_index];
 
                 if state_guard_cache.is_none() {
-                    state_guard_cache = Some(node.state.lock().unwrap());
+                    state_guard_cache = Some(node.state.lock());
                 }
 
                 *state_guard_cache.unwrap() = match node.processor.event()? {

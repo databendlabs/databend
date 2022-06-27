@@ -17,9 +17,9 @@
 //! One of the known issue is that `flush_asynce()` in different tokio runtime on different db result in a deadlock.
 
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use tempfile::TempDir;
 
 pub(crate) struct GlobalSledDb {
@@ -57,7 +57,7 @@ pub fn init_temp_sled_db(temp_dir: TempDir) {
     let temp_path = temp_dir.path().to_str().unwrap().to_string();
 
     let (inited_as_temp, curr_path) = {
-        let mut g = GLOBAL_SLED.as_ref().lock().unwrap();
+        let mut g = GLOBAL_SLED.as_ref().lock();
         if let Some(gdb) = g.as_ref() {
             (gdb.temp_dir.is_some(), gdb.path.clone())
         } else {
@@ -73,7 +73,7 @@ pub fn init_temp_sled_db(temp_dir: TempDir) {
 
 pub fn init_sled_db(path: String) {
     let (inited_as_temp, curr_path) = {
-        let mut g = GLOBAL_SLED.as_ref().lock().unwrap();
+        let mut g = GLOBAL_SLED.as_ref().lock();
         if let Some(gdb) = g.as_ref() {
             (gdb.temp_dir.is_some(), gdb.path.clone())
         } else {
@@ -92,7 +92,7 @@ pub fn init_sled_db(path: String) {
 
 pub fn get_sled_db() -> sled::Db {
     {
-        let guard = GLOBAL_SLED.as_ref().lock().unwrap();
+        let guard = GLOBAL_SLED.as_ref().lock();
         let glb_opt = guard.as_ref();
         match glb_opt {
             None => {}
