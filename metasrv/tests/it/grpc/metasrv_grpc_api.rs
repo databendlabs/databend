@@ -366,23 +366,8 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
 
     tracing::info!("--- endpoints should changed when node is down");
     {
-        let g = tc1.grpc_srv.as_ref().unwrap();
-        let meta_node = g.get_meta_node();
-        let old_term = meta_node.raft.metrics().borrow().current_term;
-
         let mut srv = tc0.grpc_srv.take().unwrap();
         srv.stop(None).await?;
-
-        let metrics = meta_node
-            .raft
-            .wait(Some(Duration::from_millis(30_000)))
-            .metrics(
-                |m| m.current_leader.is_some() && m.current_term > old_term,
-                "a leader is observed",
-            )
-            .await?;
-
-        tracing::debug!("got leader, metrics: {:?}", metrics);
 
         // wait for auto sync work.
         tokio::time::sleep(Duration::from_secs(20)).await;
@@ -412,6 +397,17 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
 
         start_metasrv_with_context(&mut tc3).await?;
 
+        let g = tc3.grpc_srv.as_ref().unwrap();
+        let meta_node = g.get_meta_node();
+
+        let metrics = meta_node
+            .raft
+            .wait(Some(Duration::from_millis(30_000)))
+            .metrics(|m| m.current_leader.is_some(), "a leader is observed")
+            .await?;
+
+        tracing::debug!("got leader, metrics: {:?}", metrics);
+
         let addr3 = tc3.config.grpc_api_address.clone();
 
         tokio::time::sleep(Duration::from_secs(15)).await;
@@ -432,6 +428,9 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let res = res?;
         assert_eq!(k.into_bytes(), res.unwrap().data);
     }
+
+    // TODO(ariesdevil): remove node from cluster then get endpoints
+    // tracing::info!("--- endpoints should changed after remove node");
 
     Ok(())
 }
