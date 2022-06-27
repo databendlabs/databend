@@ -24,11 +24,11 @@ use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::UnaryOperator;
-use common_ast::parser::error::Backtrace;
-use common_ast::parser::error::DisplayError;
 use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
+use common_ast::DisplayError;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
 use common_datavalues::BooleanType;
@@ -48,7 +48,7 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 
-use crate::common::ScalarEvaluator;
+use crate::common::Evaluator;
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::RelExpr;
@@ -108,10 +108,12 @@ impl<'a> TypeChecker<'a> {
         data_type: &DataTypeImpl,
     ) -> Result<(Scalar, DataTypeImpl)> {
         // Try constant folding
-        if let Ok((value, value_type)) = ScalarEvaluator::try_create(scalar).and_then(|evaluator| {
-            let func_ctx = self.ctx.try_get_function_context()?;
-            evaluator.try_eval_const(&func_ctx)
-        }) {
+        if let Ok((value, value_type)) =
+            Evaluator::eval_scalar::<String>(scalar).and_then(|evaluator| {
+                let func_ctx = self.ctx.try_get_function_context()?;
+                evaluator.try_eval_const(&func_ctx)
+            })
+        {
             Ok((
                 ConstantExpr {
                     value,

@@ -14,7 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::sql::optimizer::SExpr;
@@ -22,6 +22,7 @@ use crate::sql::plans::Operator;
 use crate::sql::IndexType;
 
 // Check if all plans in an expression are physical plans
+#[allow(unused)]
 pub fn check_physical(expression: &SExpr) -> bool {
     if !expression.plan().is_physical() {
         return false;
@@ -41,9 +42,7 @@ pub fn format_field_name(display_name: &str, index: IndexType) -> String {
     format!("\"{}\"_{}", display_name, index)
 }
 
-lazy_static! {
-    static ref FIELD_NAME_RE: Regex = Regex::new("\"([^\"]*)\"_([0-9]+)").unwrap();
-}
+static FIELD_NAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new("\"([^\"]*)\"_([0-9]+)").unwrap());
 
 /// Decode a field name into display name and index
 pub fn decode_field_name(field_name: &str) -> Result<(String, IndexType)> {

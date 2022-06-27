@@ -10,9 +10,6 @@ inputs:
   target:
     description: ""
     required: true
-  source:
-    description: "github/s3"
-    required: true
   category:
     description: "default/hive"
     required: false
@@ -20,15 +17,33 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Get Upload Info
+      id: info
+      shell: bash
+      run: |
+        if [[ -z "${{ inputs.path }}" ]]; then
+          path="./target/${{ inputs.profile }}"
+        else
+          path="${{ inputs.path }}"
+        fi
+        echo "::set-output name=path::${path}"
+
+        if [[ "${{ inputs.profile }}" == "debug" && "${{ inputs.target }}" =~ "linux" ]]; then
+          src="s3"
+        else
+          src="github"
+        fi
+        echo "::set-output name=src::${src}"
+
     - name: Upload artifact to github
-      if: inputs.source == 'github'
+      if: steps.info.outputs.src == 'github'
       uses: actions/upload-artifact@v2
       with:
         name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
         path: ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*
 
     - name: Upload artifacts to s3
-      if: inputs.source == 's3'
+      if: steps.info.outputs.src == 's3'
       shell: bash
       run: |
         for line in $(ls ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*); do

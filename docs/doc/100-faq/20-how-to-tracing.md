@@ -181,7 +181,49 @@ Open http://127.0.0.1:16686/
 
 ![](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/jaeger-tracing-show.png)
 
-## Explore and diagnose with tokio-console
+## Error Tracking and Performance Monitoring with Sentry
+
+[Sentry](https://github.com/getsentry/sentry) is a developer-first error tracking and performance monitoring platform that helps developers see what actually matters, solve quicker, and learn continuously about their applications.
+
+### Deploy Sentry
+
+Use the SaaS service provided by [sentry.io](https://sentry.io), or deploy it yourself by following [Self-Hosted Sentry](https://develop.sentry.dev/self-hosted/).
+
+<img src="/img/tracing/sentry-hosted.png"/>
+
+### Create a Project
+
+Create a Rust project in Sentry and get the DSN. The DSN in this example is `http://0c44e65426cb4f87ba059464c0740502@127.0.0.1:9000/5` 。
+
+<img src="/img/tracing/sentry-get-dsn.png"/>
+
+### Start Databend
+
+The following two ways of starting are available.
+
+- **Enable Error Tracking Only**
+
+  This will only use the sentry-log feature, which will help us with error tracking.
+
+  ```bash
+  DATABEND_SENTRY_DSN="<your-sentry-dsn>" ./databend-query
+  ```
+
+  <img src="/img/tracing/sentry-error.png"/>
+
+- **Also Enable Performance Monitoring**
+
+  Setting `SENTRY_TRACES_SAMPLE_RATE` greater than `0.0` will allow sentry to perform trace sampling, which will help set up performance monitoring.
+
+  ```bash
+  DATABEND_SENTRY_DSN="<your-sentry-dsn>" SENTRY_TRACES_SAMPLE_RATE=1.0 LOG_LEVEL=DEBUG ./databend-query
+  ```
+
+  **Note:** Set `SENTRY_TRACES_SAMPLE_RATE` a to lower value in production.
+
+  <img src="/img/tracing/sentry-performance.png"/>
+
+## Explore and Diagnose with tokio-console
 
 [tokio-console](https://github.com/tokio-rs/console) is a diagnostics and debugging tool for asynchronous Rust programs. Make sure you have the tool installed before you use it.
 
@@ -228,12 +270,12 @@ tokio-console # for meta console, http://127.0.0.1:6669
 
 **databend-query**
 
-![query console](images/query-console.png)
+<img src="/img/tracing/query-console.png"/>
 
 **databend-meta**
 
-![meta console](images/meta-console.png)
+<img src="/img/tracing/meta-console.png"/>
 
 **task in console**
 
-![task in console](images/task-in-console.png)
+<img src="/img/tracing/task-in-console.png"/>

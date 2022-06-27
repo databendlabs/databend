@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_ast::ast::ShowLimit;
-use common_ast::parser::error::Backtrace;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
 use common_exception::Result;
 
 use crate::sql::plans::Plan;

@@ -23,7 +23,6 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        source: s3
 
     - name: Run Stateless Tests with Cluster mode
       shell: bash

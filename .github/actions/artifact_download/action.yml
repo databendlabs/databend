@@ -10,9 +10,6 @@ inputs:
   target:
     description: ""
     required: true
-  source:
-    description: "github/s3"
-    required: true
   category:
     description: "default/hive"
     required: false
@@ -24,8 +21,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Get Download Path
-      id: path
+    - name: Get Download Info
+      id: info
       shell: bash
       run: |
         if [[ -z "${{ inputs.path }}" ]]; then
@@ -35,21 +32,28 @@ runs:
         fi
         echo "::set-output name=path::${path}"
 
+        if [[ "${{ inputs.profile }}" == "debug" && "${{ inputs.target }}" =~ "linux" ]]; then
+          src="s3"
+        else
+          src="github"
+        fi
+        echo "::set-output name=src::${src}"
+
     - uses: actions/download-artifact@v2
-      if: inputs.source == 'github'
+      if: steps.info.outputs.src == 'github'
       with:
         name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
-        path: ${{ steps.path.outputs.path }}/
+        path: ${{ steps.info.outputs.path }}/
 
     - name: Download artifact from s3
-      if: inputs.source == 's3'
+      if: steps.info.outputs.src == 's3'
       shell: bash
       run: |
         aws s3 cp \
           s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
-          ${{ steps.path.outputs.path }}/ --recursive --exclude "*" --include "databend-*" --no-progress
+          ${{ steps.info.outputs.path }}/ --recursive --exclude "*" --include "databend-*" --no-progress
 
     - name: make artifacts excutable
       shell: bash
       run: |
-        chmod +x ${{ steps.path.outputs.path }}/databend-*
+        chmod +x ${{ steps.info.outputs.path }}/databend-*

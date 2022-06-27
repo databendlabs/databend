@@ -19,7 +19,7 @@ use logos::Logos;
 use logos::Span;
 
 pub use self::TokenKind::*;
-use crate::parser::error::DisplayError;
+use crate::DisplayError;
 
 #[derive(Clone, PartialEq)]
 pub struct Token<'a> {
@@ -319,6 +319,8 @@ pub enum TokenKind {
     DECADE,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
+    #[token("DELETE", ignore(ascii_case))]
+    DELETE,
     #[token("DESC", ignore(ascii_case))]
     DESC,
     #[token("DESCRIBE", ignore(ascii_case))]
@@ -577,8 +579,6 @@ pub enum TokenKind {
     USAGE,
     #[token("UPDATE", ignore(ascii_case))]
     UPDATE,
-    #[token("DELETE", ignore(ascii_case))]
-    DELETE,
     #[token("SUPER", ignore(ascii_case))]
     SUPER,
     #[token("STATUS", ignore(ascii_case))]

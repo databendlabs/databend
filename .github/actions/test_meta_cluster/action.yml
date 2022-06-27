@@ -23,12 +23,10 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        source: s3
 
     - name: Test databend-meta cluster
       shell: bash
       run: |
-        chmod +x ./tests/meta-cluster/test-meta-cluster.sh
         build-tool bash ./tests/meta-cluster/test-meta-cluster.sh
 
     - name: Upload failure

@@ -24,13 +24,13 @@ use nom::combinator::value;
 use nom::Slice;
 use url::Url;
 
-use super::error::ErrorKind;
 use crate::ast::*;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
+use crate::ErrorKind;
 
 pub fn statement(i: Input) -> IResult<Statement> {
     let explain = map(
@@ -65,6 +65,19 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 source,
                 overwrite: overwrite.kind == OVERWRITE,
             })
+        },
+    );
+
+    let delete = map(
+        rule! {
+            DELETE ~ FROM ~ #peroid_separated_idents_1_to_3
+            ~ ( WHERE ~ ^#expr )?
+        },
+        |(_, _, (catalog, database, table), opt_where_block)| Statement::Delete {
+            catalog,
+            database,
+            table,
+            selection: opt_where_block.map(|(_, selection)| selection),
         },
     );
     let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
@@ -662,6 +675,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS`"
             | #show_stages : "`SHOW STAGES`"
             | #show_process_list : "`SHOW PROCESSLIST`"

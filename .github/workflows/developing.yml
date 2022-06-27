@@ -1,15 +1,6 @@
 name: Developing
 
 on:
-  push:
-    branches-ignore:
-      - main
-    paths-ignore:
-      - "docs/**"
-      - "website/**"
-      - "**.md"
-      - "scripts/setup/**"
-      - ".devcontainer/**"
   pull_request:
     paths-ignore:
       - "docs/**"
@@ -21,6 +12,9 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
+
+env:
+  BUILD_PROFILE: debug
 
 jobs:
   check:
@@ -59,6 +53,24 @@ jobs:
         target:
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_linux
+        with:
+          target: ${{ matrix.target }}
+          profile: debug
+
+
+  build_musl:
+    runs-on: [self-hosted, x64, Linux, development]
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
     steps:
       - uses: actions/checkout@v3
         with:

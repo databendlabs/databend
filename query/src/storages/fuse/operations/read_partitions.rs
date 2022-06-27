@@ -46,7 +46,10 @@ impl FuseTable {
                 let schema = self.table_info.schema();
                 let block_metas = BlockPruner::new(snapshot.clone())
                     .apply(ctx.as_ref(), schema, &push_downs)
-                    .await?;
+                    .await?
+                    .into_iter()
+                    .map(|(_, v)| v)
+                    .collect::<Vec<_>>();
 
                 let partitions_scanned = block_metas.len();
                 let partitions_total = snapshot.summary.block_count as usize;
@@ -96,7 +99,6 @@ impl FuseTable {
     fn is_exact(push_downs: &Option<Extras>) -> bool {
         match push_downs {
             None => true,
-            // We don't have limit push down in parquet reader
             Some(extra) => extra.filters.is_empty(),
         }
     }
@@ -191,7 +193,7 @@ impl FuseTable {
             format_version,
             rows_count,
             columns_meta,
-            meta.compression,
+            meta.compression(),
         )
     }
 
@@ -210,12 +212,15 @@ impl FuseTable {
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
+        // TODO
+        // row_count should be a hint value of  LIMIT,
+        // not the count the rows in this partition
         FusePartInfo::create(
             location,
             format_version,
             rows_count,
             columns_meta,
-            meta.compression,
+            meta.compression(),
         )
     }
 

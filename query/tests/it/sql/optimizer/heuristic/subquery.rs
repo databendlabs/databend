@@ -87,6 +87,11 @@ pub async fn test_heuristic_optimizer_subquery() -> Result<()> {
                 .to_string(),
             rules: DEFAULT_REWRITE_RULES.clone(),
         },
+        Suite {
+            comment: "# Semi join with other conditions".to_string(),
+            query: "select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number)".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
     ];
 
     run_suites(ctx, &mut file, &suites).await

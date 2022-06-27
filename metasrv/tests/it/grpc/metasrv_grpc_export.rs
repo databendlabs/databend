@@ -40,7 +40,7 @@ async fn test_export() -> anyhow::Result<()> {
         "root",
         "xxx",
         None,
-        Duration::from_secs(10),
+        Some(Duration::from_secs(10)),
         None,
     )?;
 
