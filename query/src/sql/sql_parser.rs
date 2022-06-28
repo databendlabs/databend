@@ -198,6 +198,7 @@ impl<'a> DfParser<'a> {
                     Keyword::SET => self.parse_set(),
                     Keyword::INSERT => self.parse_insert(),
                     Keyword::SELECT | Keyword::WITH | Keyword::VALUES => self.parse_query(),
+                    Keyword::DELETE => self.parse_delete(),
                     Keyword::GRANT => {
                         self.parser.next_token();
                         self.parse_grant()
@@ -222,6 +223,10 @@ impl<'a> DfParser<'a> {
                         *self = Self::new_with_dialect(self.sql, &SnowflakeDialect {})?;
                         self.parser.next_token();
                         self.parse_list_cmd()
+                    }
+                    Keyword::EXISTS => {
+                        self.parser.next_token();
+                        self.parse_exists()
                     }
 
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {

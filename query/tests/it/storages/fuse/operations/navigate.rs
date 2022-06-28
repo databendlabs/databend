@@ -91,7 +91,6 @@ async fn test_fuse_navigate() -> Result<()> {
 
     // 3. there should be two snapshots
     assert_eq!(2, snapshots.len());
-    eprintln!("snapshots {:?}", &snapshots);
 
     // 4. navigate to the first snapshot
     // history is order by timestamp DESC

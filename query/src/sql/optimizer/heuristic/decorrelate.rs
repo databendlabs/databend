@@ -121,21 +121,21 @@ pub fn try_decorrelate_subquery(input: &SExpr, subquery: &SubqueryExpr) -> Resul
     // This is not necessary, but it is a good heuristic for most cases.
     let mut left_conditions = vec![];
     let mut right_conditions = vec![];
+    let mut other_conditions = vec![];
     let mut left_filters = vec![];
     let mut right_filters = vec![];
     for pred in filter.predicates.iter() {
         let join_condition = JoinCondition::new(pred, &input_prop, &filter_prop);
         match join_condition {
-            JoinCondition::Other(_) => {
-                // We don't allow to evaluate non-equi predicate in hash join for now.
-                return Ok(None);
-            }
-
             JoinCondition::Left(filter) => {
                 left_filters.push(filter.clone());
             }
             JoinCondition::Right(filter) => {
                 right_filters.push(filter.clone());
+            }
+
+            JoinCondition::Other(pred) => {
+                other_conditions.push(pred.clone());
             }
 
             JoinCondition::Both { left, right } => {
@@ -148,9 +148,10 @@ pub fn try_decorrelate_subquery(input: &SExpr, subquery: &SubqueryExpr) -> Resul
         }
     }
 
-    let semi_join = LogicalInnerJoin {
+    let join = LogicalInnerJoin {
         left_conditions,
         right_conditions,
+        other_conditions,
         join_type: match &subquery.typ {
             SubqueryType::Any | SubqueryType::All | SubqueryType::Scalar => {
                 return Ok(None);
@@ -192,12 +193,33 @@ pub fn try_decorrelate_subquery(input: &SExpr, subquery: &SubqueryExpr) -> Resul
         );
     }
     // Add project for join keys
-    let used_columns = semi_join
+    let mut used_columns = join
         .right_conditions
         .iter()
         .fold(ColumnSet::new(), |v, acc| {
             v.union(&acc.used_columns()).cloned().collect()
         });
+    used_columns = used_columns
+        .union(
+            &join
+                .other_conditions
+                .iter()
+                .fold(ColumnSet::new(), |v, acc| {
+                    v.union(&acc.used_columns()).cloned().collect()
+                }),
+        )
+        .cloned()
+        .collect();
+    used_columns = used_columns
+        .difference(
+            &used_columns
+                .intersection(&input_prop.output_columns)
+                .cloned()
+                .collect(),
+        )
+        .cloned()
+        .collect();
+
     right_child = SExpr::create_unary(
         Project {
             columns: used_columns,
@@ -206,7 +228,7 @@ pub fn try_decorrelate_subquery(input: &SExpr, subquery: &SubqueryExpr) -> Resul
         right_child,
     );
 
-    let result = SExpr::create_binary(semi_join.into(), left_child, right_child);
+    let result = SExpr::create_binary(join.into(), left_child, right_child);
 
     Ok(Some(result))
 }

@@ -67,6 +67,7 @@ impl Rule for RuleImplementHashJoin {
             PhysicalHashJoin {
                 build_keys: logical_join.right_conditions,
                 probe_keys: logical_join.left_conditions,
+                other_conditions: logical_join.other_conditions,
                 join_type: logical_join.join_type,
             }
             .into(),

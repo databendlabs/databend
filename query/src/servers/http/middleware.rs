@@ -136,7 +136,8 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = E::Output;
 
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
-        tracing::debug!("receive http request: {:?},", req);
+        // method, url, version, header
+        tracing::info!("receive http handler request: {req:?},");
         let res = match self.auth(&req).await {
             Ok(ctx) => {
                 req.extensions_mut().insert(ctx);

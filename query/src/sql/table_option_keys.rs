@@ -14,7 +14,7 @@
 
 use std::collections::HashSet;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
@@ -29,25 +29,23 @@ pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 /// If both OPT_KEY_SNAPSHOT_LOC and OPT_KEY_SNAPSHOT_LOCATION exist, the latter will be used
 pub const OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
 
-lazy_static! {
-    /// Table option keys that reserved for internal usage only
-    /// - Users are not allowed to specified this option keys in DDL
-    /// - Should not be shown in `show create table` statement
-    pub static ref RESERVED_TABLE_OPTION_KEYS: HashSet<&'static str> = {
-        let mut r = HashSet::new();
-        r.insert(OPT_KEY_DATABASE_ID);
-        r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
-        r
-    };
+/// Table option keys that reserved for internal usage only
+/// - Users are not allowed to specified this option keys in DDL
+/// - Should not be shown in `show create table` statement
+pub static RESERVED_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    let mut r = HashSet::new();
+    r.insert(OPT_KEY_DATABASE_ID);
+    r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    r
+});
 
-    /// Table option keys that Should not be shown in `show create table` statement
-    pub static ref INTERNAL_TABLE_OPTION_KEYS: HashSet<&'static str> = {
-        let mut r = HashSet::new();
-        r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
-        r.insert(OPT_KEY_DATABASE_ID);
-        r
-    };
-}
+/// Table option keys that Should not be shown in `show create table` statement
+pub static INTERNAL_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    let mut r = HashSet::new();
+    r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    r.insert(OPT_KEY_DATABASE_ID);
+    r
+});
 
 pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     RESERVED_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())

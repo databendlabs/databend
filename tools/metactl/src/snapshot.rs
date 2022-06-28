@@ -120,16 +120,23 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<LogId> {
     Ok(max_log_id)
 }
 
-/// Read every line from stdin or restore file, deserialize it into tree_name, key and value. Insert them into sled db and flush.
+/// Read every line from stdin or restore file, deserialize it into tree_name, key and value.
+/// Insert them into sled db and flush.
 fn import_from(restore: String) -> anyhow::Result<LogId> {
     if restore.is_empty() {
         let lines = io::stdin().lines();
         return import_lines(lines);
     } else {
-        let file = File::open(restore).unwrap();
-        let reader = BufReader::new(file);
-        let lines = reader.lines();
-        return import_lines(lines);
+        match File::create(restore) {
+            Ok(file) => {
+                let reader = BufReader::new(file);
+                let lines = reader.lines();
+                return import_lines(lines);
+            }
+            Err(e) => {
+                return Err(anyhow::Error::new(e));
+            }
+        }
     }
 }
 
@@ -153,6 +160,7 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
         nodes.insert(id, Node {
             name: id.to_string(),
             endpoint: endpoint.clone(),
+            grpc_api_addr: None,
         });
         //println!("endpoint:{}", endpoint);
     }

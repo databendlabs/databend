@@ -2,7 +2,7 @@
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [number], probe keys: [number]
+    HashJoin: INNER, build keys: [t1.number], probe keys: [t.number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -10,7 +10,7 @@ Project: [number]
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number and t.number = t1.number + 1
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [number, +(number, 1)], probe keys: [number, number]
+    HashJoin: INNER, build keys: [t1.number, +(t1.number, 1)], probe keys: [t.number, t.number], join filters: []
         Scan: default.system.numbers
         Scan: default.system.numbers
 
@@ -20,16 +20,16 @@ select t.number from numbers(1) as t, numbers(1) as t1 where t.number > 1 and 1 
 ----
 Project: [number]
     CrossJoin
-        Filter: [number > 1]
+        Filter: [t.number > 1]
             Scan: default.system.numbers
-        Filter: [1 < number]
+        Filter: [1 < t1.number]
             Scan: default.system.numbers
 
 
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number + t1.number = 1
 ----
 Project: [number]
-    Filter: [+(number, number) = 1]
+    Filter: [+(t.number, t1.number) = 1]
         CrossJoin
             Scan: default.system.numbers
             Scan: default.system.numbers
@@ -39,7 +39,7 @@ Project: [number]
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number = cast(t1.number as string)
 ----
 Project: [number]
-    Filter: [number = CAST(number AS VARCHAR)]
+    Filter: [t.number = CAST(t1.number AS VARCHAR)]
         CrossJoin
             Scan: default.system.numbers
             Scan: default.system.numbers
@@ -49,9 +49,9 @@ Project: [number]
 select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2 where t1.number = t2.number and t.number = 1
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [number], probe keys: [number]
+    HashJoin: INNER, build keys: [t2.number], probe keys: [t1.number], join filters: []
         CrossJoin
-            Filter: [number = 1]
+            Filter: [t.number = 1]
                 Scan: default.system.numbers
             Scan: default.system.numbers
         Scan: default.system.numbers

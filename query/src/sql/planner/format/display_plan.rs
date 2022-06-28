@@ -55,6 +55,7 @@ impl Plan {
             }
             Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
             Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
+            Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
 
             // Views
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
@@ -63,6 +64,7 @@ impl Plan {
 
             // Insert
             Plan::Insert(insert) => Ok(format!("{:?}", insert)),
+            Plan::Delete(delete) => Ok(format!("{:?}", delete)),
 
             // Stages
             Plan::ShowStages => Ok("SHOW STAGES".to_string()),

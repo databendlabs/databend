@@ -865,6 +865,12 @@ pub struct MetaConfig {
     #[serde(alias = "meta_client_timeout_in_second")]
     pub client_timeout_in_second: u64,
 
+    /// AutoSyncInterval is the interval to update endpoints with its latest members.
+    /// 0 disables auto-sync. By default auto-sync is disabled.
+    #[clap(long = "auto-sync-interval", default_value = "0")]
+    #[serde(alias = "auto_sync_interval")]
+    pub auto_sync_interval: u64,
+
     /// Certificate for client to identify meta rpc serve
     #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
     pub rpc_tls_meta_server_root_ca_cert: String,
@@ -890,6 +896,7 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             username: self.username,
             password: self.password,
             client_timeout_in_second: self.client_timeout_in_second,
+            auto_sync_interval: self.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
         })
@@ -905,6 +912,7 @@ impl From<InnerMetaConfig> for MetaConfig {
             username: inner.username,
             password: inner.password,
             client_timeout_in_second: inner.client_timeout_in_second,
+            auto_sync_interval: inner.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
         }
@@ -920,6 +928,7 @@ impl Debug for MetaConfig {
             .field("password", &mask_string(&self.password, 3))
             .field("embedded_dir", &self.embedded_dir)
             .field("client_timeout_in_second", &self.client_timeout_in_second)
+            .field("auto_sync_interval", &self.auto_sync_interval)
             .field(
                 "rpc_tls_meta_server_root_ca_cert",
                 &self.rpc_tls_meta_server_root_ca_cert,

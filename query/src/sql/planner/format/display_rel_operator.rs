@@ -85,7 +85,13 @@ impl Display for FormatContext {
 
 pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
     match scalar {
-        Scalar::BoundColumnRef(column_ref) => column_ref.column.column_name.clone(),
+        Scalar::BoundColumnRef(column_ref) => {
+            if let Some(table_name) = &column_ref.column.table_name {
+                format!("{}.{}", table_name, column_ref.column.column_name)
+            } else {
+                column_ref.column.column_name.to_string()
+            }
+        }
         Scalar::ConstantExpr(constant) => constant.value.to_string(),
         Scalar::AndExpr(and) => format!(
             "{} AND {}",
@@ -191,6 +197,12 @@ pub fn format_hash_join(
         .map(|scalar| format_scalar(metadata, scalar))
         .collect::<Vec<String>>()
         .join(", ");
+    let join_filters = op
+        .other_conditions
+        .iter()
+        .map(|scalar| format_scalar(metadata, scalar))
+        .collect::<Vec<String>>()
+        .join(", ");
     match op.join_type {
         JoinType::Cross => {
             write!(f, "CrossJoin")
@@ -198,8 +210,8 @@ pub fn format_hash_join(
         _ => {
             write!(
                 f,
-                "HashJoin: {}, build keys: [{}], probe keys: [{}]",
-                &op.join_type, build_keys, probe_keys
+                "HashJoin: {}, build keys: [{}], probe keys: [{}], join filters: [{}]",
+                &op.join_type, build_keys, probe_keys, join_filters,
             )
         }
     }

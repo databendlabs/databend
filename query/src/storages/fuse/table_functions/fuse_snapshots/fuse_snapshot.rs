@@ -33,7 +33,7 @@ impl<'a> FuseSnapshot<'a> {
         Self { ctx, table }
     }
 
-    pub async fn get_history(&self) -> Result<DataBlock> {
+    pub async fn get_history(&self, limit: Option<usize>) -> Result<DataBlock> {
         let tbl = self.table;
         let snapshot_location = tbl.snapshot_loc();
         let snapshot_version = tbl.snapshot_format_version();
@@ -43,6 +43,7 @@ impl<'a> FuseSnapshot<'a> {
                 snapshot_location,
                 snapshot_version,
                 tbl.meta_location_generator().clone(),
+                limit,
             )
             .await?;
         self.snapshots_to_block(snapshots, snapshot_version)

@@ -72,7 +72,7 @@ pub fn cast_from_timestamp(
     let c: &Int64Column = Series::check_get(&c)?;
     let size = c.len();
 
-    let date_time64 = from_type.as_any().downcast_ref::<TimestampType>().unwrap();
+    let date_time64: TimestampType = from_type.to_owned().try_into()?;
 
     match data_type.data_type_id() {
         TypeID::String => {

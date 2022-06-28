@@ -69,6 +69,9 @@ pub enum Request {
 
     /// Get a initialized grpc-client
     MakeClient(MakeClient),
+
+    /// Get endpoints, for test
+    GetEndpoints(GetEndpoints),
 }
 
 /// Meta-client worker-to-handle response body
@@ -82,6 +85,7 @@ pub enum Response {
     Watch(tonic::codec::Streaming<WatchResponse>),
     Export(tonic::codec::Streaming<ExportedChunk>),
     MakeClient(MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>),
+    GetEndpoints(Vec<String>),
 }
 
 /// Export all data stored in metasrv
@@ -93,3 +97,7 @@ pub struct ExportReq {}
 /// This request is only used internally or for testing purpose.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct MakeClient {}
+
+/// Get all meta server endpoints
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct GetEndpoints {}

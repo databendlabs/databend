@@ -14,9 +14,10 @@
 
 use common_ast::ast::AccountMgrLevel;
 use common_ast::ast::AccountMgrSource;
-use common_ast::ast::AccountMgrStatement;
 use common_ast::ast::AlterUserStmt;
 use common_ast::ast::CreateUserStmt;
+use common_ast::ast::GrantStmt;
+use common_ast::ast::RevokeStmt;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
@@ -35,9 +36,9 @@ use crate::sql::Binder;
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_grant(
         &mut self,
-        stmt: &AccountMgrStatement,
+        stmt: &GrantStmt,
     ) -> Result<Plan> {
-        let AccountMgrStatement { source, principal } = stmt;
+        let GrantStmt { source, principal } = stmt;
 
         match source {
             AccountMgrSource::Role { role } => {
@@ -77,9 +78,9 @@ impl<'a> Binder {
 
     pub(in crate::sql::planner::binder) async fn bind_revoke(
         &mut self,
-        stmt: &AccountMgrStatement,
+        stmt: &RevokeStmt,
     ) -> Result<Plan> {
-        let AccountMgrStatement { source, principal } = stmt;
+        let RevokeStmt { source, principal } = stmt;
 
         match source {
             AccountMgrSource::Role { role } => {

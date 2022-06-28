@@ -50,14 +50,12 @@ impl<'a> Binder {
                 column_binding.column_name = item.alias.clone();
                 column_binding
             } else {
-                let column_binding =
-                    self.create_column_binding(None, item.alias.clone(), item.scalar.data_type());
-                scalars.insert(column_binding.index, ScalarItem {
-                    scalar: item.scalar.clone(),
-                    index: column_binding.index,
-                });
-                column_binding
+                self.create_column_binding(None, item.alias.clone(), item.scalar.data_type())
             };
+            scalars.insert(column_binding.index, ScalarItem {
+                scalar: item.scalar.clone(),
+                index: column_binding.index,
+            });
             columns.push(column_binding);
         }
 
@@ -76,7 +74,7 @@ impl<'a> Binder {
             .map(|(_, item)| {
                 if bind_context.in_grouping {
                     let mut grouping_checker = GroupingChecker::new(bind_context);
-                    let scalar = grouping_checker.resolve(&item.scalar)?;
+                    let scalar = grouping_checker.resolve(&item.scalar, None)?;
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,

@@ -12,28 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod error;
 pub mod expr;
 pub mod query;
 pub mod statement;
 pub mod token;
 pub mod unescape;
-pub mod util;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use self::error::DisplayError;
 use self::expr::subexpr;
-use self::util::comma_separated_list0;
 use crate::ast::Expr;
 use crate::ast::Statement;
-use crate::parser::error::Backtrace;
+use crate::input::Input;
 use crate::parser::statement::statement;
 use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
-use crate::parser::util::Input;
+use crate::util::comma_separated_list0;
+use crate::Backtrace;
+use crate::DisplayError;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
     Tokenizer::new(sql).collect::<Result<Vec<_>>>()

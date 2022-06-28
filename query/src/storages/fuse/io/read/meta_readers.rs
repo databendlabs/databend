@@ -71,8 +71,15 @@ impl<'a> TableSnapshotReader<'a> {
         latest_snapshot_location: Option<impl AsRef<str>>,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
+        limit: Option<usize>,
     ) -> Result<Vec<Arc<TableSnapshot>>> {
         let mut snapshots = vec![];
+        let mut l = limit.map(|v| v as u64).unwrap_or(u64::MAX);
+
+        if l == 0 {
+            return Ok(snapshots);
+        }
+
         if let Some(loc) = latest_snapshot_location {
             let mut ver = format_version;
             let mut loc = loc.as_ref().to_string();
@@ -91,6 +98,12 @@ impl<'a> TableSnapshotReader<'a> {
                     ver = v;
                     loc = location_gen.snapshot_location_from_uuid(&id, v)?;
                     snapshots.push(snapshot);
+
+                    // break if reach the limit
+                    l -= 1;
+                    if l == 0 {
+                        break;
+                    }
                 } else {
                     snapshots.push(snapshot);
                     break;

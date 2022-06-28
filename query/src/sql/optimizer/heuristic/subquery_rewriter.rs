@@ -139,6 +139,7 @@ impl SubqueryRewriter {
                         LogicalInnerJoin {
                             left_conditions: vec![],
                             right_conditions: vec![],
+                            other_conditions: vec![],
                             join_type: JoinType::Cross,
                         }
                         .into(),
@@ -147,7 +148,6 @@ impl SubqueryRewriter {
                 } else {
                     (
                         CrossApply {
-                            subquery_output: prop.output_columns,
                             correlated_columns: subquery.outer_columns.clone(),
                         }
                         .into(),
@@ -261,6 +261,7 @@ impl SubqueryRewriter {
                         LogicalInnerJoin {
                             left_conditions: vec![],
                             right_conditions: vec![],
+                            other_conditions: vec![],
                             join_type: JoinType::Cross,
                         }
                         .into(),
@@ -269,7 +270,6 @@ impl SubqueryRewriter {
                 } else {
                     (
                         CrossApply {
-                            subquery_output: prop.output_columns,
                             correlated_columns: subquery.outer_columns.clone(),
                         }
                         .into(),

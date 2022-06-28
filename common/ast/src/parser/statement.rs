@@ -24,13 +24,14 @@ use nom::combinator::value;
 use nom::Slice;
 use url::Url;
 
-use super::error::ErrorKind;
 use crate::ast::*;
+use crate::input::Input;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::token::*;
-use crate::parser::util::*;
 use crate::rule;
+use crate::util::*;
+use crate::ErrorKind;
 
 pub fn statement(i: Input) -> IResult<Statement> {
     let explain = map(
@@ -65,6 +66,19 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 source,
                 overwrite: overwrite.kind == OVERWRITE,
             })
+        },
+    );
+
+    let delete = map(
+        rule! {
+            DELETE ~ FROM ~ #peroid_separated_idents_1_to_3
+            ~ ( WHERE ~ ^#expr )?
+        },
+        |(_, _, (catalog, database, table), opt_where_block)| Statement::Delete {
+            catalog,
+            database,
+            table,
+            selection: opt_where_block.map(|(_, selection)| selection),
         },
     );
     let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
@@ -326,6 +340,18 @@ pub fn statement(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let exists_table = map(
+        rule! {
+            EXISTS ~ TABLE ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, table))| {
+            Statement::ExistsTable(ExistsTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
     let create_view = map(
         rule! {
             CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
@@ -444,7 +470,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             GRANT ~ #grant_source ~ TO ~ #grant_option
         },
         |(_, source, _, grant_option)| {
-            Statement::Grant(AccountMgrStatement {
+            Statement::Grant(GrantStmt {
                 source,
                 principal: grant_option,
             })
@@ -463,7 +489,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             REVOKE ~ #grant_source ~ FROM ~ #grant_option
         },
         |(_, source, _, grant_option)| {
-            Statement::Revoke(AccountMgrStatement {
+            Statement::Revoke(RevokeStmt {
                 source,
                 principal: grant_option,
             })
@@ -650,6 +676,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS`"
             | #show_stages : "`SHOW STAGES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
@@ -676,6 +703,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
+            | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
