@@ -204,6 +204,8 @@ impl InterpreterFactoryV2 {
                 InsertInterpreterV2::try_create(ctx.clone(), *insert.clone(), false)
             }
 
+            Plan::Delete(delete) => DeleteInterpreter::try_create(ctx.clone(), *delete.clone()),
+
             // Roles
             Plan::ShowRoles => ShowRolesInterpreter::try_create(ctx.clone()),
             Plan::CreateRole(create_role) => {

@@ -41,6 +41,7 @@ use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUDF;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfCreateView;
+use crate::sql::statements::DfDeleteStatement;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropRole;
@@ -132,6 +133,9 @@ pub enum DfStatement<'a> {
 
     // Insert
     InsertQuery(DfInsertStatement<'a>),
+
+    // Delete
+    Delete(Box<DfDeleteStatement>),
 
     // User
     CreateUser(DfCreateUser),

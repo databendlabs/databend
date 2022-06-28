@@ -45,6 +45,7 @@ use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
+use common_meta_types::protobuf::MemberListReply;
 use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
@@ -593,12 +594,27 @@ impl MetaGrpcClient {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn sync_endpoints(&self) -> std::result::Result<(), MetaError> {
         let mut client = self.make_client().await?;
-        let endpoints = client
+        let result = client
             .member_list(Request::new(MemberListRequest {
                 data: "".to_string(),
             }))
-            .await?;
-        let result: Vec<String> = endpoints.into_inner().data;
+            .await;
+        let endpoints: std::result::Result<MemberListReply, Status> = match result {
+            Ok(r) => Ok(r.into_inner()),
+            Err(s) => {
+                if status_is_retryable(&s) {
+                    self.mark_as_unhealthy().await;
+                    let mut client = self.make_client().await?;
+                    let req = Request::new(MemberListRequest {
+                        data: "".to_string(),
+                    });
+                    Ok(client.member_list(req).await?.into_inner())
+                } else {
+                    Err(s)
+                }
+            }
+        };
+        let result: Vec<String> = endpoints?.data;
         self.set_endpoints(result).await?;
         Ok(())
     }
