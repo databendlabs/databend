@@ -51,6 +51,6 @@ impl Transform for TransformFilterV2 {
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let typed_vector = self.predicate.eval(&self.func_ctx, &data)?;
         let column = typed_vector.vector();
-        DataBlock::filter_block(&data, column)
+        DataBlock::filter_block(data, column)
     }
 }

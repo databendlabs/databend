@@ -80,8 +80,7 @@ impl<R> ParquetSource<R>
 where R: AsyncRead + AsyncSeek + Unpin + Send
 {
     fn create(builder: ParquetSourceBuilder, reader: R) -> Self {
-        let arrow_table_schema =
-            Arc::new(builder.schema.project(builder.projection.clone())).to_arrow();
+        let arrow_table_schema = Arc::new(builder.schema.project(&builder.projection)).to_arrow();
 
         ParquetSource {
             reader,

@@ -21,7 +21,9 @@ use common_ast::ast::Statement;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserDefinedFunction;
 use common_planners::CreateRolePlan;
+use common_planners::CreateUserUDFPlan;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
@@ -39,6 +41,7 @@ mod aggregate;
 mod bind_context;
 mod copy;
 mod ddl;
+mod delete;
 mod distinct;
 mod insert;
 mod join;
@@ -188,6 +191,15 @@ impl<'a> Binder {
                 self.bind_remove_stage(location, pattern).await?
             }
             Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
+            Statement::Delete {
+                catalog,
+                database,
+                table,
+                selection,
+            } => {
+                self.bind_delete(bind_context, catalog, database, table, selection)
+                    .await?
+            }
 
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
 
@@ -195,8 +207,22 @@ impl<'a> Binder {
                 principal: principal.clone(),
             })),
 
+            Statement::CreateUDF {
+                if_not_exists,
+                udf_name,
+                parameters,
+                definition,
+                description,
+            } => Plan::CreateUserUDF(Box::new(CreateUserUDFPlan {
+                if_not_exists: *if_not_exists,
+                udf: UserDefinedFunction {
+                    name: udf_name.to_string(),
+                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
+                    definition: definition.to_string(),
+                    description: description.clone().unwrap_or_default(),
+                },
+            })),
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
-
             _ => {
                 return Err(ErrorCode::UnImplement(format!(
                     "UnImplemented stmt {stmt} in binder"

@@ -55,6 +55,12 @@ pub enum Statement<'a> {
 
     Insert(InsertStmt<'a>),
 
+    Delete {
+        catalog: Option<Identifier<'a>>,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+        selection: Option<Expr<'a>>,
+    },
     // Databases
     ShowDatabases(ShowDatabasesStmt<'a>),
     ShowCreateDatabase(ShowCreateDatabaseStmt<'a>),
@@ -160,6 +166,18 @@ impl<'a> Display for Statement<'a> {
             }
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,
+            Statement::Delete {
+                catalog,
+                database,
+                table,
+                selection,
+            } => {
+                write!(f, "DELETE FROM ")?;
+                write_comma_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if let Some(conditions) = selection {
+                    write!(f, "WHERE {conditions} ")?;
+                }
+            }
             Statement::Copy(stmt) => write!(f, "{stmt}")?,
             Statement::ShowSettings => {}
             Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,

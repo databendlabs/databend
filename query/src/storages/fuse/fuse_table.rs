@@ -25,6 +25,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
+use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -383,6 +384,7 @@ impl Table for FuseTable {
         Ok(Box::pin(data_block_stream))
     }
 
+    #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]
     async fn commit_insertion(
         &self,
         ctx: Arc<QueryContext>,
@@ -400,15 +402,18 @@ impl Table for FuseTable {
             .await
     }
 
+    #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn truncate(
         &self,
         ctx: Arc<QueryContext>,
         truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         self.check_mutable()?;
-        self.do_truncate(ctx, truncate_plan).await
+        self.do_truncate(ctx, truncate_plan.purge, truncate_plan.catalog.as_str())
+            .await
     }
 
+    #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn optimize(&self, ctx: Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {
         self.check_mutable()?;
         self.do_gc(&ctx, keep_last_snapshot).await
@@ -424,6 +429,7 @@ impl Table for FuseTable {
         }))
     }
 
+    #[tracing::instrument(level = "debug", name = "fuse_table_navigate_to", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn navigate_to(
         &self,
         ctx: Arc<QueryContext>,
@@ -437,5 +443,10 @@ impl Table for FuseTable {
                 Ok(self.navigate_to_time_point(&ctx, *time_point).await?)
             }
         }
+    }
+
+    #[tracing::instrument(level = "debug", name = "fuse_table_delete", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn delete(&self, ctx: Arc<QueryContext>, delete_plan: DeletePlan) -> Result<()> {
+        self.do_delete(ctx, &delete_plan).await
     }
 }
