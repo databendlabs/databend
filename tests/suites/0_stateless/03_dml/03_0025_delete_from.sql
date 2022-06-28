@@ -29,7 +29,7 @@ select 'nullable column cases';
 create table t (c Int null);
 insert into t values (1),(2),(NULL);
 
-select 'delete with condition "const false" -- all 3 rows should be kept';
+select 'delete with condition "const false"';
 delete from t where 1 = 0;
 select count(*) = 3 from t;
 
@@ -49,6 +49,11 @@ select count(*) = 1 from t where c IS NOT NULL;
 
 select 'deleted unconditionally (with const true)';
 delete from t where 1 = 1;
+select count(*) = 0 from t;
+
+insert into t values (1),(2),(NULL);
+select 'deleted with nullary expr now()';
+delete from t where now();
 select count(*) = 0 from t;
 
 drop table t all;

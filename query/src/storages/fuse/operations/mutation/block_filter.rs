@@ -46,7 +46,8 @@ pub async fn delete_from_block(
             // - if the `filter_expr` is of "constant" function:
             //   for the whole block, whether all of the rows should be kept or dropped
             // - but, the expr may NOT be deterministic, e.g.
-            //   A nullary non-constant func, which returns true, false or NULL randomly
+            //   A nullary non-constant func, which returns (values convertable to) true, false or NULL randomly
+            //   e.g. delete from t now()
             all_the_columns_ids(table)
         } else {
             filter_column_ids
@@ -61,6 +62,7 @@ pub async fn delete_from_block(
     let expr_field = filter_expr.to_data_field(&schema)?;
     let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
 
+    // get the filter
     let expr_exec = ExpressionExecutor::try_create(
         ctx.clone(),
         "filter expression executor (delete) ",
@@ -72,23 +74,25 @@ pub async fn delete_from_block(
     let filter_result = expr_exec.execute(&data_block)?;
 
     let predicates = DataBlock::cast_to_nonull_boolean(filter_result.column(0))?;
-    if predicates.is_const() {
-        let flag = predicates.get_bool(0)?;
-        return if flag {
+    // shortcut, if predicates is const boolean (or can be cast to boolean)
+    if let Some(const_bool) = DataBlock::try_as_const_bool(&predicates)? {
+        return if const_bool {
+            // all the rows should be removed
             Ok(Deletion::Remains(DataBlock::empty_with_schema(
                 data_block.schema().clone(),
             )))
         } else {
-            //return Ok(DataBlock::empty_with_schema(data_block.schema().clone()));
+            // none of the rows should be removed
             Ok(Deletion::NothingDeleted)
         };
     }
 
+    // reverse the filter
     let boolean_col: &BooleanColumn = Series::check_get(&predicates)?;
     let values = boolean_col.values();
-    let boolean_col = BooleanColumn::from_arrow_data(values.not());
+    let filter = BooleanColumn::from_arrow_data(values.not());
 
-    // read the whole block
+    // read the whole block if necessary
     let whole_block = if filtering_whole_block {
         data_block
     } else {
@@ -97,11 +101,11 @@ pub async fn delete_from_block(
         whole_block_reader.read_with_block_meta(block_meta).await?
     };
 
-    // returns the data remains after deletion
-    //let data_block = DataBlock::filter_block_with_bool_column(whole_block, filter_result.column(0))?;
-    let data_block = DataBlock::filter_block_with_bool_column(whole_block, &boolean_col)?;
+    // filter out rows
+    let data_block = DataBlock::filter_block_with_bool_column(whole_block, &filter)?;
 
     let res = if data_block.num_rows() == block_meta.row_count as usize {
+        // false positive, nothing removed indeed
         Deletion::NothingDeleted
     } else {
         Deletion::Remains(data_block)

@@ -8,7 +8,7 @@ other rows should be kept
 deleted unconditionally
 1
 nullable column cases
-delete with condition "const false" -- all 3 rows should be kept
+delete with condition "const false"
 1
 normal deletion
 expects one row deleted
@@ -21,4 +21,6 @@ expects no null valued row kept
 expects 1 null valued row kept
 1
 deleted unconditionally (with const true)
+1
+deleted with nullary expr now()
 1
