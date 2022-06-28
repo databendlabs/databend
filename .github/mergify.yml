@@ -63,8 +63,7 @@ pull_request_rules:
   - name: Check PR description
     conditions:
       - author!=Mergify
-      - -body~= |
-          \bI hereby agree to the terms of the CLA available at: https://databend.rs/policies/cla/?\b, \bChangelog?\b, \bSummary?\b
+      - -body~= "\bI hereby agree to the terms of the CLA available at: https://databend.rs/policies/cla/?\b, \bChangelog?\b, \bSummary?\b"
     actions:
       edit:
         draft: True
