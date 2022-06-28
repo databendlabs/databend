@@ -29,6 +29,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   build_gnu:
+    name: build_gnu_${{ matrix.arch }}
     runs-on: [self-hosted, x64, Linux, development]
     strategy:
       matrix:
@@ -46,10 +47,11 @@ jobs:
           profile: debug
 
   build_musl:
+    name: build_musl_${{ matrix.arch }}
     runs-on: [self-hosted, x64, Linux, development]
     strategy:
       matrix:
-        target:
+        arch:
           - x86_64
           - aarch64
     steps:
@@ -124,15 +126,11 @@ jobs:
 
   build_hive:
     runs-on: [self-hosted, x64, Linux, development]
-    strategy:
-      matrix:
-        target:
-          - x86_64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/build_linux_hive
         with:
-          target: ${{ matrix.target }}
+          target: x86_64-unknown-linux-gnu
           profile: debug
 
   test_stateful_hive_standalone:
@@ -141,3 +139,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_hive_standalone
+        with:
+          target: x86_64-unknown-linux-gnu
+          profile: debug
