@@ -70,18 +70,18 @@ pull_request_rules:
       comment:
         message: |
           This pull request's description is not fulfill the requirements. @{{author}} please update it 🙏.
-          
+
           The description should contain the following:
-          
+
           ```
           I hereby agree to the terms of the CLA available at: https://databend.rs/dev/policies/cla/
-          
+
           ## Summary
-          
-            Summary about this PR
-          
+
+          Summary about this PR
+
           ## Changelog
-          
+
           - New Feature
           - Bug Fix
           - Improvement
@@ -89,9 +89,9 @@ pull_request_rules:
           - Build/Testing/CI
           - Documentation
           - Not for changelog (changelog entry is not required)
-          
+
           ## Related Issues
-          
+
           Fixes #issue
           ```
 
