@@ -41,10 +41,10 @@ impl ChainingHashTable {
     ) -> Result<Vec<DataBlock>>
     where
         Key: HashTableKeyable + Clone + 'static,
-    {   
+    {
         let probe_indexs = &mut probe_state.probe_indexs;
-        let build_indexs =  &mut probe_state.build_indexs;
-        
+        let build_indexs = &mut probe_state.build_indexs;
+
         let mut results: Vec<DataBlock> = vec![];
         match self.join_type {
             JoinType::Inner => {
@@ -134,7 +134,8 @@ impl ChainingHashTable {
                     let result = self.left_join(hash_table, probe_state, keys, input)?;
                     return Ok(vec![result]);
                 } else {
-                    let result = self.left_join_with_other_conjunct(hash_table, probe_state, keys, input)?;
+                    let result =
+                        self.left_join_with_other_conjunct(hash_table, probe_state, keys, input)?;
                     return Ok(vec![result]);
                 }
             }
@@ -146,7 +147,7 @@ impl ChainingHashTable {
     fn left_join<Key>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
-        probe_state: &mut ProbeState ,
+        probe_state: &mut ProbeState,
         keys: Vec<Key>,
         input: &DataBlock,
     ) -> Result<DataBlock>
@@ -154,7 +155,7 @@ impl ChainingHashTable {
         Key: HashTableKeyable + Clone + 'static,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
-        let build_indexs =  &mut probe_state.build_indexs;
+        let build_indexs = &mut probe_state.build_indexs;
 
         let mut validity = MutableBitmap::new();
         for (i, key) in keys.iter().enumerate() {
@@ -209,7 +210,7 @@ impl ChainingHashTable {
     fn left_join_with_other_conjunct<Key>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
-        probe_state: &mut ProbeState ,
+        probe_state: &mut ProbeState,
         keys: Vec<Key>,
         input: &DataBlock,
     ) -> Result<DataBlock>
@@ -217,10 +218,10 @@ impl ChainingHashTable {
         Key: HashTableKeyable + Clone + 'static,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
-        let build_indexs =  &mut probe_state.build_indexs;
+        let build_indexs = &mut probe_state.build_indexs;
         let index_to_row = &mut probe_state.index_to_row;
-        
-        let row_state =  &mut probe_state.row_state;
+
+        let row_state = &mut probe_state.row_state;
         row_state.resize(keys.len(), 0);
 
         let mut validity = MutableBitmap::new();

@@ -35,6 +35,7 @@ use common_exception::Result;
 use primitive_types::U256;
 use primitive_types::U512;
 
+use super::ProbeState;
 use crate::common::EvalNode;
 use crate::common::Evaluator;
 use crate::common::HashMap;
@@ -48,8 +49,6 @@ use crate::sessions::QueryContext;
 use crate::sql::exec::ColumnID;
 use crate::sql::exec::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
-
-use super::ProbeState;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
@@ -314,7 +313,11 @@ impl ChainingHashTable {
         Ok(replicated_probe_block)
     }
 
-    fn probe_cross_join(&self, input: &DataBlock, _probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+    fn probe_cross_join(
+        &self,
+        input: &DataBlock,
+        _probe_state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
         let chunks = self.row_space.chunks.read().unwrap();
         let build_blocks = (*chunks)
             .iter()
@@ -329,7 +332,11 @@ impl ChainingHashTable {
         Ok(results)
     }
 
-    fn probe_join(&self, input: &DataBlock, probe_state: &mut ProbeState ) -> Result<Vec<DataBlock>> {
+    fn probe_join(
+        &self,
+        input: &DataBlock,
+        probe_state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let probe_keys = self
             .probe_keys

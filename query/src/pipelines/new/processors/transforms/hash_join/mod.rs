@@ -14,9 +14,9 @@
 
 mod chaining_hash_table;
 mod hash_table;
+mod probe_state;
 mod result_blocks;
 pub(crate) mod row;
-mod probe_state;
 
 pub use chaining_hash_table::ChainingHashTable;
 pub use chaining_hash_table::HashTable;

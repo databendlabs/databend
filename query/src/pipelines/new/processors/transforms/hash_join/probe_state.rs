@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use super::row::RowPtr;
 
 /// ProbeState used for probe phase of hash join.
 /// We may need some reuseable state for probe phase.
 pub struct ProbeState {
-   pub(crate) probe_indexs: Vec<u32>,
-   pub(crate) build_indexs: Vec<RowPtr>,
-    
+    pub(crate) probe_indexs: Vec<u32>,
+    pub(crate) build_indexs: Vec<RowPtr>,
+
     // In the probe phase, the probe block with N rows could join result into M rows
     // e.g.: [0, 1, 2, 3]  results into [0, 1, 2, 2, 3]
-    // index_to_row: the result index to the probe block row -> [0, 1, 2, 2, 3] 
+    // index_to_row: the result index to the probe block row -> [0, 1, 2, 2, 3]
     // row_state:  the state (counter) of the probe block row -> [1, 1, 2, 1]
     pub(crate) index_to_row: Vec<usize>,
     pub(crate) row_state: Vec<u32>,
@@ -36,7 +35,7 @@ impl ProbeState {
         self.index_to_row.clear();
         self.row_state.clear();
     }
-    
+
     pub fn with_capacity(capacity: usize) -> Self {
         ProbeState {
             probe_indexs: Vec::with_capacity(capacity),

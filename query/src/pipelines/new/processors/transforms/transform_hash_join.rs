@@ -19,6 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
+use super::hash_join::ProbeState;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
@@ -27,8 +28,6 @@ use crate::pipelines::new::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::Sink;
 use crate::sessions::QueryContext;
-
-use super::hash_join::ProbeState;
 
 pub struct SinkBuildHashTable {
     join_state: Arc<dyn HashJoinState>,
@@ -67,7 +66,7 @@ pub struct TransformHashJoinProbe {
     output_port: Arc<OutputPort>,
     step: HashJoinStep,
     join_state: Arc<dyn HashJoinState>,
-    probe_state: ProbeState
+    probe_state: ProbeState,
 }
 
 impl TransformHashJoinProbe {
