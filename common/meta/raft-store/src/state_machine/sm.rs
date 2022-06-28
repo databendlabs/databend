@@ -298,7 +298,6 @@ impl StateMachine {
                     return Ok(Some(applied_state));
                 }
                 EntryPayload::Membership(ref mem) => {
-                    println!("last membership: {:?} {:?}", log_id, mem);
                     let r = txn_sm_meta.insert(
                         &LastMembership,
                         &StateMachineMetaValue::Membership(EffectiveMembership {
@@ -306,7 +305,6 @@ impl StateMachine {
                             membership: mem.clone(),
                         }),
                     );
-                    println!("last membership ret: {:?} ", r);
                     return Ok(Some(AppliedState::None));
                 }
             };

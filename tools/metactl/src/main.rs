@@ -56,6 +56,7 @@ pub struct Config {
     #[clap(long, default_value = "")]
     pub db: String,
 
+    /// initial_cluster format: node_id=endpoint,grpc_api_addr;
     #[clap(long, default_value = "")]
     pub initial_cluster: String,
 
