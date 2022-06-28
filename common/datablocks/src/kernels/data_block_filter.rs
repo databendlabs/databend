@@ -29,16 +29,29 @@ impl DataBlock {
 
         let predict_boolean_nonull = Self::cast_to_nonull_boolean(predicate)?;
         // faster path for constant filter
-        if predict_boolean_nonull.is_const() {
-            let flag = predict_boolean_nonull.get_bool(0)?;
+        if let Some(flag) = Self::try_as_const_bool(&predict_boolean_nonull)? {
             if flag {
                 return Ok(block);
             } else {
                 return Ok(DataBlock::empty_with_schema(block.schema().clone()));
             }
         }
-
         let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
+        Self::filter_block_with_bool_column(block, boolean_col)
+    }
+
+    pub fn try_as_const_bool(column_reference: &ColumnRef) -> Result<Option<bool>> {
+        if column_reference.is_const() {
+            Ok(Some(column_reference.get_bool(0)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn filter_block_with_bool_column(
+        block: DataBlock,
+        boolean_col: &BooleanColumn,
+    ) -> Result<DataBlock> {
         let rows = boolean_col.len();
         let count_zeros = boolean_col.values().null_count();
         match count_zeros {

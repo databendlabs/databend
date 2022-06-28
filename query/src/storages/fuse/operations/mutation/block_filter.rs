@@ -12,10 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::ops::Not;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::BooleanColumn;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::Series;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -49,18 +52,13 @@ pub async fn delete_from_block(
             filter_column_ids
         }
     };
+
     // read the cols that we are going to filtering on
     let reader = table.create_block_reader(ctx, col_ids)?;
     let data_block = reader.read_with_block_meta(block_meta).await?;
 
-    // inverse the expr
-    let inverse_expr = Expression::UnaryExpression {
-        op: "not".to_string(),
-        expr: Box::new(filter_expr.clone()),
-    };
-
     let schema = table.table_info.schema();
-    let expr_field = inverse_expr.to_data_field(&schema)?;
+    let expr_field = filter_expr.to_data_field(&schema)?;
     let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
 
     let expr_exec = ExpressionExecutor::try_create(
@@ -68,12 +66,27 @@ pub async fn delete_from_block(
         "filter expression executor (delete) ",
         schema.clone(),
         expr_schema,
-        vec![inverse_expr],
+        vec![filter_expr.clone()],
         false,
     )?;
-
-    // get the single col data block, which indicates the rows should be kept/removed
     let filter_result = expr_exec.execute(&data_block)?;
+
+    let predicates = DataBlock::cast_to_nonull_boolean(filter_result.column(0))?;
+    if predicates.is_const() {
+        let flag = predicates.get_bool(0)?;
+        return if flag {
+            Ok(Deletion::Remains(DataBlock::empty_with_schema(
+                data_block.schema().clone(),
+            )))
+        } else {
+            //return Ok(DataBlock::empty_with_schema(data_block.schema().clone()));
+            Ok(Deletion::NothingDeleted)
+        };
+    }
+
+    let boolean_col: &BooleanColumn = Series::check_get(&predicates)?;
+    let values = boolean_col.values();
+    let boolean_col = BooleanColumn::from_arrow_data(values.not());
 
     // read the whole block
     let whole_block = if filtering_whole_block {
@@ -85,7 +98,9 @@ pub async fn delete_from_block(
     };
 
     // returns the data remains after deletion
-    let data_block = DataBlock::filter_block(whole_block, filter_result.column(0))?;
+    //let data_block = DataBlock::filter_block_with_bool_column(whole_block, filter_result.column(0))?;
+    let data_block = DataBlock::filter_block_with_bool_column(whole_block, &boolean_col)?;
+
     let res = if data_block.num_rows() == block_meta.row_count as usize {
         Deletion::NothingDeleted
     } else {
