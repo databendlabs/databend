@@ -596,11 +596,25 @@ if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
 	fi
 fi
 
-[[ "${AUTO_APPROVE}" == "false" ]] && cat <<EOF
-Finished installing all dependencies.
+if [[ "${AUTO_APPROVE}" == "false" ]]; then
+	if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
+		cat <<EOF
+Finished installing all build dependencies.
 
 You should now be able to build the project by running:
 	cargo build
 EOF
+	fi
+
+	if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
+		cat <<EOF
+Finished installing all dev dependencies.
+
+You should now be able to run tests with:
+	make xxx-test (check Makefile for detailed target)
+EOF
+	fi
+
+fi
 
 exit 0
