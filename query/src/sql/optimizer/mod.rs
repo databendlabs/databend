@@ -64,7 +64,6 @@ pub fn optimize(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
         }),
         // Passthrough statements
         _ => Ok(plan),
-
     }
 }
 

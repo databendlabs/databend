@@ -18,12 +18,12 @@ use common_exception::Result;
 use common_planners::EmptyPlan;
 use common_planners::PlanNode;
 
-use super::*;
 use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
+use super::*;
+use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::DropUserInterpreter;
-use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -242,7 +242,7 @@ impl InterpreterFactoryV2 {
                 RevokeRoleInterpreter::try_create(ctx.clone(), *revoke_role.clone())
             }
             Plan::CreateUserUDF(create_user_udf) => {
-                CreateUserUDFInterpreter::try_create(ctx, *create_user_udf.clone())
+                CreateUserUDFInterpreter::try_create(ctx.clone(), *create_user_udf.clone())
             }
         }?;
 

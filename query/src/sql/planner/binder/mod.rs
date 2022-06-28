@@ -22,8 +22,8 @@ use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
-use common_planners::CreateUserUDFPlan;
 use common_planners::CreateRolePlan;
+use common_planners::CreateUserUDFPlan;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
@@ -203,15 +203,15 @@ impl<'a> Binder {
                 parameters,
                 definition,
                 description,
-            } => Plan::CreateUserUDF(CreateUserUDFPlan {
+            } => Plan::CreateUserUDF(Box::new(CreateUserUDFPlan {
                 if_not_exists: *if_not_exists,
                 udf: UserDefinedFunction {
-                    name: udf_name.clone(),
-                    parameters: parameters.clone(),
-                    definition: definition.clone(),
-                    description: description.clone(),
+                    name: udf_name.to_string(),
+                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
+                    definition: definition.to_string(),
+                    description: description.clone().unwrap_or_default(),
                 },
-            }),
+            })),
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
             _ => {
                 return Err(ErrorCode::UnImplement(format!(

@@ -165,7 +165,7 @@ pub enum Plan {
 
     // UDF
     CreateUserUDF(Box<CreateUserUDFPlan>),
-    
+
     ShowRoles,
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
