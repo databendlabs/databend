@@ -331,12 +331,13 @@ insert into t1 values(1, 2), (3 ,4), (7, 8);
 insert into t2 values(1, 4), (2, 3), (6, 8);
 select * from t1 right join t2 on t1.a = t2.c;
 select * from t1 left join t2 on t1.a = t2.c;
-select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3;
-select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4;
-select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3;
-select * from t1 left outer join t2 on t1.a > 3;
-select * from t1 left outer join t2 on t2.c > 4;
-select * from t1 left outer join t2 on t1.a > t2.c;
+
+select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4 order by a,b,c,d;
+select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t2.c > 4 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a > t2.c order by a,b,c,d;
 drop table t1;
 drop table t2;
 
