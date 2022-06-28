@@ -13,6 +13,7 @@ queue_rules:
       # Reference: https://docs.mergify.com/conditions/#validating-all-status-checks
       # We only require linux checks to pass
       - check-success=check
+      - check-success=build_musl
       - check-success=test_unit
       - check-success=test_metactl
       - check-success=test_stateless_standalone_linux
@@ -21,25 +22,34 @@ queue_rules:
       - check-success=test_sqllogic_standalone_linux
 
 pull_request_rules:
-  - name: put bug fix pr to queue
+  # Push PR into queue when it passes all checks
+  - name: put approved pr to queue
     conditions:
       - "#approved-reviews-by>=2"
+      - -draft
+      - check-success=check
+      - check-success=test_unit
+      - check-success=test_metactl
+      - check-success=test_stateless_standalone_linux
+      - check-success=test_stateless_cluster_linux
+      - check-success=test_stateful_standalone_linux
+      - check-success=test_sqllogic_standalone_linux
     actions:
       queue:
         name: shared_queue
 
-  # if there is a conflict in a approved PR, ping the author.
+  # If there is a conflict in a approved PR, ping the author.
   - name: ping author on conflicts
     conditions:
       - conflict
+      - -draft
       - "#approved-reviews-by >= 2"
     actions:
       comment:
         message: |
           This pull request has merge conflicts that must be resolved before it can be merged. @{{author}} please update it 🙏.
 
-          Try `@mergify update` or update manually.
-
+  # Welcome new contributors
   - name: Welcome new contributor
     conditions:
       - author!=Mergify
@@ -50,6 +60,43 @@ pull_request_rules:
           I have applied any labels matching special text in your PR Changelog.
 
           Please review the labels and make any necessary changes.
+
+  # Check if PR description contains CLA
+  - name: Check PR description
+    conditions:
+      - author!=Mergify
+      - -draft
+      - '-body~=I hereby agree to the terms of the CLA available at: https:\/\/databend\.rs\/dev\/policies\/cla\/'
+      - "-body~=Summary"
+      - "-body~=Changelog"
+    actions:
+      comment:
+        message: |
+          This pull request's description is not fulfill the requirements. @{{author}} please update it 🙏.
+
+          The description should contain the following:
+
+          ```
+          I hereby agree to the terms of the CLA available at: https://databend.rs/dev/policies/cla/
+
+          ## Summary
+
+          Summary about this PR
+
+          ## Changelog
+
+          - New Feature
+          - Bug Fix
+          - Improvement
+          - Performance Improvement
+          - Build/Testing/CI
+          - Documentation
+          - Not for changelog (changelog entry is not required)
+
+          ## Related Issues
+
+          Fixes #issue
+          ```
 
   - name: label on New Feature
     conditions:

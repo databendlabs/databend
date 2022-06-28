@@ -14,8 +14,6 @@ runs:
   steps:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
-      with:
-        registry: public.ecr.aws/i7g1w5q7
 
     - name: Download artifact
       uses: ./.github/actions/artifact_download
@@ -23,12 +21,10 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        source: s3
 
     - name: Test databend-meta cluster
       shell: bash
       run: |
-        chmod +x ./tests/meta-cluster/test-meta-cluster.sh
         build-tool bash ./tests/meta-cluster/test-meta-cluster.sh
 
     - name: Upload failure

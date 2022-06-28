@@ -7,15 +7,15 @@ echo " === SCRIPT_PATH: $SCRIPT_PATH"
 cd "$SCRIPT_PATH/../../"
 pwd
 
-usage()
-{
+BUILD_PROFILE="${BUILD_PROFILE:-debug}"
+
+usage() {
     echo " === test databend-meta cluster: join and leave"
-    echo " === Expect ./target/debug contains the binaries"
+    echo " === Expect ./target/${BUILD_PROFILE} contains the binaries"
     echo " === Usage: $0"
 }
 
-kill_proc()
-{
+kill_proc() {
     local name="$1"
 
     echo " === Kill $name ..."
@@ -36,9 +36,8 @@ kill_proc()
 }
 
 # Test specified version of query and meta
-run_test()
-{
-    local metasrv="./target/debug/databend-meta"
+run_test() {
+    local metasrv="./target/${BUILD_PROFILE}/databend-meta"
 
     echo " === metasrv version:"
     "$metasrv" --cmd ver
@@ -75,19 +74,21 @@ run_test()
     echo " === node 3 in cluster"
     curl -s localhost:28101/v1/cluster/nodes | grep 28303
 
-
     echo " === leave node 3"
 
     "$metasrv" --leave-id 3 --leave-via 127.0.0.1:28103
 
     sleep 1
     echo " === node 3 NOT in cluster"
-    { curl -s localhost:28101/v1/cluster/nodes | grep 28303; } && { echo "node 3 still in cluster"; return 1; } || echo " === Done removing node 3"
+    { curl -s localhost:28101/v1/cluster/nodes | grep 28303; } && {
+        echo "node 3 still in cluster"
+        return 1
+    } || echo " === Done removing node 3"
 }
 
 # -- main --
 
-chmod +x ./target/debug/*
+chmod +x ./target/${BUILD_PROFILE}/*
 
 echo " === current metasrv ver: $(./bins/current/databend-meta --single --cmd ver | tr '\n' ' ')"
 

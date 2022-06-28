@@ -50,6 +50,7 @@ async fn apply_block_pruning(
     BlockPruner::new(table_snapshot)
         .apply(ctx.as_ref(), schema, push_down)
         .await
+        .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
 
 #[tokio::test]

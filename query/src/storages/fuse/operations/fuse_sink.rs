@@ -140,8 +140,8 @@ impl Processor for FuseTableSink {
                 if let Some(v) = &self.cluster_key_info {
                     cluster_stats = BlockStatistics::clusters_statistics(
                         v.cluster_key_id,
-                        v.cluster_key_index.clone(),
-                        block.clone(),
+                        &v.cluster_key_index,
+                        &block,
                     )?;
 
                     // Remove unused columns before serialize

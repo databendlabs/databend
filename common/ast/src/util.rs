@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Range;
-use std::ops::RangeFrom;
-use std::ops::RangeFull;
-use std::ops::RangeTo;
-
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::Offset;
@@ -26,17 +21,23 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::Identifier;
-use crate::parser::error::Backtrace;
-use crate::parser::error::Error;
-use crate::parser::error::ErrorKind;
+use crate::input::Input;
+use crate::input::WithSpan;
 use crate::parser::token::*;
+use crate::rule;
+use crate::Error;
+use crate::ErrorKind;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
-/// Input tokens slice with a backtrace that records all errors including
-/// the optional branch.
-#[derive(Debug, Clone, Copy)]
-pub struct Input<'a>(pub &'a [Token<'a>], pub &'a Backtrace<'a>);
+#[macro_export]
+macro_rules! rule {
+    ($($tt:tt)*) => { nom_rule::rule!(
+        $crate::match_text,
+        $crate::match_token,
+        $($tt)*)
+    }
+}
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
     move |i| match i.0.get(0).filter(|token| token.text() == text) {
@@ -58,15 +59,6 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
     }
 }
 
-#[macro_export]
-macro_rules! rule {
-    ($($tt:tt)*) => { nom_rule::rule!(
-        $crate::parser::util::match_text,
-        $crate::parser::util::match_token,
-        $($tt)*)
-    }
-}
-
 pub fn ident(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(false))(i)
 }
@@ -79,6 +71,8 @@ pub fn function_name(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_function_name(false))(i)
 }
 
+/// TODO(xuanwo): Do we need to remove this function?
+#[allow(dead_code)]
 pub fn function_name_after_as(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_function_name(true))(i)
 }
@@ -132,7 +126,7 @@ fn non_reserved_keyword(
     }
 }
 
-/// Parse one two two idents seperated by a peroid, fulfilling from the right.
+/// Parse one two two idents seperated by a period, fulfilling from the right.
 ///
 /// Example: `table.column`
 pub fn peroid_separated_idents_1_to_2<'a>(
@@ -149,7 +143,7 @@ pub fn peroid_separated_idents_1_to_2<'a>(
     )(i)
 }
 
-/// Parse one two three idents seperated by a peroid, fulfilling from the right.
+/// Parse one two three idents seperated by a period, fulfilling from the right.
 ///
 /// Example: `db.table.column`
 pub fn peroid_separated_idents_1_to_3<'a>(
@@ -310,59 +304,6 @@ where
             Err(e) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
         }
     }
-}
-
-impl<'a> std::ops::Deref for Input<'a> {
-    type Target = [Token<'a>];
-
-    fn deref(&self) -> &Self::Target {
-        self.0
-    }
-}
-
-impl<'a> nom::InputLength for Input<'a> {
-    fn input_len(&self) -> usize {
-        self.0.input_len()
-    }
-}
-
-impl<'a> nom::Offset for Input<'a> {
-    fn offset(&self, second: &Self) -> usize {
-        let fst = self.0.as_ptr();
-        let snd = second.0.as_ptr();
-
-        (snd as usize - fst as usize) / std::mem::size_of::<Token>()
-    }
-}
-
-impl<'a> nom::Slice<Range<usize>> for Input<'a> {
-    fn slice(&self, range: Range<usize>) -> Self {
-        Input(&self.0[range], self.1)
-    }
-}
-
-impl<'a> nom::Slice<RangeTo<usize>> for Input<'a> {
-    fn slice(&self, range: RangeTo<usize>) -> Self {
-        Input(&self.0[range], self.1)
-    }
-}
-
-impl<'a> nom::Slice<RangeFrom<usize>> for Input<'a> {
-    fn slice(&self, range: RangeFrom<usize>) -> Self {
-        Input(&self.0[range], self.1)
-    }
-}
-
-impl<'a> nom::Slice<RangeFull> for Input<'a> {
-    fn slice(&self, _: RangeFull) -> Self {
-        *self
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct WithSpan<'a, T> {
-    pub(crate) span: Input<'a>,
-    pub(crate) elem: T,
 }
 
 pub fn run_pratt_parser<'a, I, P, E>(

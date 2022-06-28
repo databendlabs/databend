@@ -12,6 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO(xuanwo): Add crate level documents here.
+
+mod error;
+pub use error::Backtrace;
+pub use error::DisplayError;
+pub use error::Error;
+pub use error::ErrorKind;
+
+mod input;
+pub use input::Input;
+
+mod util;
+pub use util::match_text;
+pub use util::match_token;
+
 pub mod ast;
 pub mod parser;
 pub mod udfs;

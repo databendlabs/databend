@@ -14,8 +14,6 @@ runs:
   steps:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
-      with:
-        registry: public.ecr.aws/i7g1w5q7
 
     - name: Download artifact
       uses: ./.github/actions/artifact_download
@@ -23,13 +21,11 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        source: s3
         path: ./bins/current
 
     - name: Test compatibility
       shell: bash
       run: |
-        chmod +x ./tests/compat/test-compat.sh
         build-tool bash ./tests/compat/test-compat.sh
 
     - name: Upload failure

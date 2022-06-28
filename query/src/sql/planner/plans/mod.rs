@@ -33,7 +33,7 @@ mod sort;
 use std::fmt::Display;
 use std::sync::Arc;
 
-pub use aggregate::Aggregate;
+pub use aggregate::*;
 pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_datavalues::DataField;
@@ -51,6 +51,7 @@ use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
 use common_planners::CreateUserStagePlan;
 use common_planners::CreateViewPlan;
+use common_planners::DeletePlan;
 use common_planners::DescribeTablePlan;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropDatabasePlan;
@@ -78,7 +79,6 @@ use common_planners::ShowTablesPlan;
 use common_planners::ShowTablesStatusPlan;
 use common_planners::TruncateTablePlan;
 use common_planners::UndropTablePlan;
-// use common_planners::*;
 pub use copy_v2::CopyPlanV2;
 pub use copy_v2::ValidationMode;
 pub use eval_scalar::EvalScalar;
@@ -151,6 +151,7 @@ pub enum Plan {
 
     // Insert
     Insert(Box<Insert>),
+    Delete(Box<DeletePlan>),
 
     // Views
     CreateView(Box<CreateViewPlan>),
@@ -229,6 +230,7 @@ impl Display for Plan {
             Plan::RevokePriv(_) => write!(f, "RevokePriv"),
             Plan::RevokeRole(_) => write!(f, "RevokeRole"),
             Plan::Insert(_) => write!(f, "Insert"),
+            Plan::Delete(_) => write!(f, "Delete"),
         }
     }
 }
@@ -288,6 +290,7 @@ impl Plan {
             Plan::RevokePriv(_) => Arc::new(DataSchema::empty()),
             Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
+            Plan::Delete(_) => Arc::new(DataSchema::empty()),
         }
     }
 }

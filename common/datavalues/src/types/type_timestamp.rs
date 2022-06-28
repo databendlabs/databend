@@ -152,7 +152,7 @@ impl DataType for TimestampType {
     }
 
     fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        Ok(TimestampSerializer::<'a>::try_create(col)?.into())
+        Ok(TimestampSerializer::<'a>::try_create(self.precision, col)?.into())
     }
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         TimestampDeserializer {

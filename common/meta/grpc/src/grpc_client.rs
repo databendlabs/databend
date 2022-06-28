@@ -45,6 +45,7 @@ use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
+use common_meta_types::protobuf::MemberListReply;
 use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
@@ -147,7 +148,7 @@ pub struct MetaGrpcClient {
     token: RwLock<Option<Vec<u8>>>,
     current_endpoint: Arc<Mutex<Option<String>>>,
     unhealthy_endpoints: Mutex<TtlHashMap<String, ()>>,
-    auto_sync_interval: Duration,
+    auto_sync_interval: Option<Duration>,
 
     /// Dedicated runtime to support meta client background tasks.
     ///
@@ -271,7 +272,7 @@ impl MetaGrpcClient {
         username: &str,
         password: &str,
         timeout: Option<Duration>,
-        auto_sync_interval: Duration,
+        auto_sync_interval: Option<Duration>,
         conf: Option<RpcClientTlsConfig>,
     ) -> Result<Arc<ClientHandle>> {
         Self::endpoints_non_empty(&endpoints)?;
@@ -593,29 +594,43 @@ impl MetaGrpcClient {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn sync_endpoints(&self) -> std::result::Result<(), MetaError> {
         let mut client = self.make_client().await?;
-        let endpoints = client
+        let result = client
             .member_list(Request::new(MemberListRequest {
                 data: "".to_string(),
             }))
-            .await?;
-        let result: Vec<String> = endpoints.into_inner().data;
+            .await;
+        let endpoints: std::result::Result<MemberListReply, Status> = match result {
+            Ok(r) => Ok(r.into_inner()),
+            Err(s) => {
+                if status_is_retryable(&s) {
+                    self.mark_as_unhealthy().await;
+                    let mut client = self.make_client().await?;
+                    let req = Request::new(MemberListRequest {
+                        data: "".to_string(),
+                    });
+                    Ok(client.member_list(req).await?.into_inner())
+                } else {
+                    Err(s)
+                }
+            }
+        };
+        let result: Vec<String> = endpoints?.data;
         self.set_endpoints(result).await?;
         Ok(())
     }
 
     async fn auto_sync_endpoints(self: Arc<Self>, mut cancel_tx: OneSend<()>) {
-        if self.auto_sync_interval == Duration::from_secs(0) {
-            return;
-        }
-        loop {
-            select! {
-                _ = cancel_tx.closed() => {
-                    return;
-                }
-                _ = sleep(self.auto_sync_interval) => {
-                    let r = self.sync_endpoints().await;
-                    if let Err(e) = r {
-                        tracing::warn!("auto sync endpoints failed: {:?}", e);
+        if let Some(interval) = self.auto_sync_interval {
+            loop {
+                select! {
+                    _ = cancel_tx.closed() => {
+                        return;
+                    }
+                    _ = sleep(interval) => {
+                        let r = self.sync_endpoints().await;
+                        if let Err(e) = r {
+                            tracing::warn!("auto sync endpoints failed: {:?}", e);
+                        }
                     }
                 }
             }
