@@ -19,15 +19,10 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 
-    - name: Install mysql client for macos-11
+    - name: Test setup
       shell: bash
       run: |
-        brew install mysql
-
-    - name: Install python dependences
-      shell: bash
-      run: |
-        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql sqlalchemy clickhouse_driver
+        bash ./scripts/setup/dev_setup.sh -yd
 
     - name: Run Stateless Tests with Standalone mode
       shell: bash

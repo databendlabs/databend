@@ -13,8 +13,7 @@ queue_rules:
       # Reference: https://docs.mergify.com/conditions/#validating-all-status-checks
       # We only require linux checks to pass
       - check-success=check
-      - check-success=build_musl (x86_64-unknown-linux-musl)
-      - check-success=build_musl (aarch64-unknown-linux-musl)
+      - check-success~=^build_(aarch64|x86_64)_musl$
       - check-success=test_unit
       - check-success=test_metactl
       - check-success=test_stateless_standalone_linux
@@ -29,8 +28,7 @@ pull_request_rules:
       - "#approved-reviews-by>=2"
       - -draft
       - check-success=check
-      - check-success=build_musl (x86_64-unknown-linux-musl)
-      - check-success=build_musl (aarch64-unknown-linux-musl)
+      - check-success~=^build_(aarch64|x86_64)_musl$
       - check-success=test_unit
       - check-success=test_metactl
       - check-success=test_stateless_standalone_linux
