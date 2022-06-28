@@ -32,9 +32,9 @@ jobs:
     runs-on: [self-hosted, x64, Linux, development]
     strategy:
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
+        arch:
+          - x86_64
+          - aarch64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -42,7 +42,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.arch }}-unknown-linux-gnu
           profile: debug
 
   build_musl:
@@ -50,8 +50,8 @@ jobs:
     strategy:
       matrix:
         target:
-          - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-musl
+          - x86_64
+          - aarch64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -59,7 +59,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.arch }}-unknown-linux-musl
           profile: debug
 
   test_unit:

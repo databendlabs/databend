@@ -22,9 +22,9 @@ jobs:
     runs-on: macos-11
     strategy:
       matrix:
-        target:
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
+        arch:
+          - x86_64
+          - aarch64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -32,7 +32,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/build_macos
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.arch }}-apple-darwin
           profile: debug
 
   # https://github.com/datafuselabs/databend/issues/5287
