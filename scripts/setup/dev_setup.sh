@@ -360,6 +360,8 @@ EOF
 Development tools (since -d was provided):
   * mysql client
   * python3 (boto3, yapf, yamllint, ...)
+  * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
+  * sqllogic test dependencies (PyHamcrest, environs, fire, ...)
 EOF
 	fi
 
@@ -557,6 +559,8 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py toml yamllint
 	# drivers
 	python3 -m pip install --quiet mysql-connector-python pymysql sqlalchemy clickhouse_driver
+	# sqllogic dependencies
+	python3 -m pip install --quiet mysql-connector six PyHamcrest requests environs fire
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
