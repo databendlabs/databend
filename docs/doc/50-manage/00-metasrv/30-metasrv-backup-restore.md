@@ -17,7 +17,7 @@ E.g., every line in the output file is a JSON of an exported key-value record.
 ```sh
 # cargo build --bin databend-metactl
 
-./target/debug/databend-metactl --export --raft-dir "<your_meta_dir>" > "<output_fn>"
+./target/debug/databend-metactl --export --raft-dir "<your_meta_dir>" > --db <output_fn>
 
 # tail "<output_fn>"
 # ["state_machine/0",{"Nodes":{"key":2,"value":{"name":"","endpoint":{"addr":"localhost","port":28203}}}}]
@@ -27,13 +27,13 @@ E.g., every line in the output file is a JSON of an exported key-value record.
 # ...
 ```
 
-##  Restore a databend-meta
+## Restore a databend-meta
 
 The following command rebuild a meta service db in `<your_meta_dir>` from
 exported metadata:
 
 ```sh
-cat "<output_fn>" | ./target/debug/databend-metactl --import --raft-dir "<your_meta_dir>"
+./target/debug/databend-metactl --import --raft-dir "<your_meta_dir>" --db <output_fn>
 
 databend-meta --raft-dir "<your_meta_dir>" ...
 ```

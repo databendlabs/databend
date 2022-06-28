@@ -127,7 +127,7 @@ fn import_from(restore: String) -> anyhow::Result<LogId> {
         let lines = io::stdin().lines();
         return import_lines(lines);
     } else {
-        match File::create(restore) {
+        match File::open(restore) {
             Ok(file) => {
                 let reader = BufReader::new(file);
                 let lines = reader.lines();
@@ -140,29 +140,36 @@ fn import_from(restore: String) -> anyhow::Result<LogId> {
     }
 }
 
+// initial_cluster format: node_id=endpoint,grpc_api_addr;
 async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow::Result<()> {
-    let peers = initial_cluster.split(",");
+    let peers = initial_cluster.split(";");
     let mut node_ids = BTreeSet::new();
     let mut nodes = BTreeMap::new();
     for peer in peers {
         //println!("peer:{}", peer);
-        let addr: Vec<&str> = peer.split("=").collect();
-        if addr.len() != 2 {
+        let node_info: Vec<&str> = peer.split("=").collect();
+        if node_info.len() != 2 {
             return Err(anyhow::anyhow!("invalid peer str: {}", peer));
         }
-        let id = u64::from_str(addr[0])?;
+        let id = u64::from_str(node_info[0])?;
         node_ids.insert(id);
-        let url = Url::parse(addr[1])?;
+
+        let addrs: Vec<&str> = node_info[1].split(",").collect();
+        if addrs.len() != 2 {
+            return Err(anyhow::anyhow!("invalid peer str: {}", peer));
+        }
+        let url = Url::parse(addrs[0])?;
         let endpoint = Endpoint {
             addr: url.host_str().unwrap().to_string(),
             port: url.port().unwrap() as u32,
         };
-        nodes.insert(id, Node {
+        let node = Node {
             name: id.to_string(),
             endpoint: endpoint.clone(),
-            grpc_api_addr: None,
-        });
-        //println!("endpoint:{}", endpoint);
+            grpc_api_addr: Some(addrs[1].to_string()),
+        };
+        println!("node:{}", node);
+        nodes.insert(id, node);
     }
 
     let mut log_id: LogId = max_log_id;
@@ -177,6 +184,7 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
 
     let sm = StateMachine::open(&config, sm_id).await?;
 
+    let mut entries = Vec::new();
     // contruct Membership log entry
     {
         // insert last membership log
@@ -189,8 +197,7 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
 
         log.insert(&entry).await?;
 
-        // insert last membership into state_machine
-        sm.apply(&entry).await?;
+        entries.push(entry);
     }
 
     // construct AddNode log entries
@@ -211,8 +218,12 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
             };
 
             log.insert(&entry).await?;
-            sm.apply(&entry).await?;
+            entries.push(entry);
         }
+    }
+
+    for entry in entries {
+        sm.apply(&entry).await?;
     }
 
     Ok(())
@@ -261,6 +272,7 @@ fn export_from_dir(save: String) -> anyhow::Result<()> {
             let tree_kv = (name.clone(), kv_variant);
 
             let line = serde_json::to_string(&tree_kv)?;
+            println!("export line: {}", line);
 
             if file.as_ref().is_none() {
                 println!("{}", line);

@@ -42,7 +42,9 @@ pub async fn export_meta(addr: &str, save: String) -> anyhow::Result<()> {
             if file.as_ref().is_none() {
                 println!("{}", line);
             } else {
-                file.as_ref().unwrap().write(&line.as_bytes())?;
+                file.as_ref()
+                    .unwrap()
+                    .write(format!("{}\n", line).as_bytes())?;
             }
         }
     }
