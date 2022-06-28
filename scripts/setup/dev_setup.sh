@@ -347,13 +347,19 @@ Build tools (since -b or no option was provided):
 EOF
 	fi
 
+	if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
+		cat <<EOF
+Check tools (since -c was provided):
+  * lcov
+  * tools from rust-tools.txt ( e.g. cargo-audit, cargo-udeps, taplo-cli)
+EOF
+	fi
+
 	if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		cat <<EOF
 Development tools (since -d was provided):
   * mysql client
   * python3 (boto3, yapf, yamllint, ...)
-  * lcov
-  * tools from rust-tools.txt ( e.g. cargo-audit, cargo-udeps, taplo-cli)
 EOF
 	fi
 
@@ -385,6 +391,7 @@ EOF
 AUTO_APPROVE=false
 VERBOSE=false
 INSTALL_BUILD_TOOLS=false
+INSTALL_CHECK_TOOLS=false
 INSTALL_DEV_TOOLS=false
 INSTALL_PROFILE=false
 INSTALL_CODEGEN=false
@@ -398,6 +405,9 @@ while getopts "ybdpstv" arg; do
 		;;
 	b)
 		INSTALL_BUILD_TOOLS="true"
+		;;
+	c)
+		INSTALL_CHECK_TOOLS="true"
 		;;
 	d)
 		INSTALL_DEV_TOOLS="true"
@@ -427,6 +437,7 @@ if [[ "$VERBOSE" == "true" ]]; then
 fi
 
 if [[ "$INSTALL_BUILD_TOOLS" == "false" ]] &&
+	[[ "$INSTALL_CHECK_TOOLS" == "false" ]] &&
 	[[ "$INSTALL_DEV_TOOLS" == "false" ]] &&
 	[[ "$INSTALL_PROFILE" == "false" ]] &&
 	[[ "$INSTALL_TPCH_DATA" == "false" ]] &&
@@ -511,6 +522,21 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_toolchain "$RUST_TOOLCHAIN"
 fi
 
+if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
+	if [[ -f scripts/setup/rust-tools.txt ]]; then
+		export RUSTFLAGS="-C target-feature=-crt-static"
+		while IFS='@' read -r tool version; do
+			install_cargo_binary "$tool" "$version"
+		done <scripts/setup/rust-tools.txt
+	fi
+
+	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
+		# needed by lcov
+		echo http://nl.alpinelinux.org/alpine/edge/testing >>/etc/apk/repositories
+	fi
+	install_pkg lcov "$PACKAGE_MANAGER"
+fi
+
 if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	install_mysql_client "$PACKAGE_MANAGER"
 	install_pkg git "$PACKAGE_MANAGER"
@@ -531,19 +557,6 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py toml yamllint
 	# drivers
 	python3 -m pip install --quiet mysql-connector-python pymysql sqlalchemy clickhouse_driver
-
-	if [[ -f scripts/setup/rust-tools.txt ]]; then
-		export RUSTFLAGS="-C target-feature=-crt-static"
-		while IFS='@' read -r tool version; do
-			install_cargo_binary "$tool" "$version"
-		done <scripts/setup/rust-tools.txt
-	fi
-
-	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
-		# needed by lcov
-		echo http://nl.alpinelinux.org/alpine/edge/testing >>/etc/apk/repositories
-	fi
-	install_pkg lcov "$PACKAGE_MANAGER"
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
