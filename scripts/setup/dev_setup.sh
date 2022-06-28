@@ -400,7 +400,7 @@ INSTALL_CODEGEN=false
 INSTALL_TPCH_DATA=false
 
 # parse args
-while getopts "ybdpstv" arg; do
+while getopts "ybcdpstv" arg; do
 	case "$arg" in
 	y)
 		AUTO_APPROVE="true"
