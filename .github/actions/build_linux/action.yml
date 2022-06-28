@@ -18,6 +18,7 @@ runs:
 
     - name: Set musl rustflags
       if: inputs.target == 'x86_64-unknown-linux-musl' || inputs.target == 'aarch64-unknown-linux-musl'
+      shell: bash
       run: |
         flags="-C target-feature=-crt-static"
         echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
