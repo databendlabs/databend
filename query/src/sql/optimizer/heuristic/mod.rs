@@ -14,6 +14,7 @@
 
 mod decorrelate;
 mod implement;
+mod predicate_rewrite;
 mod rule_list;
 mod subquery_rewriter;
 
@@ -21,6 +22,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use once_cell::sync::Lazy;
+use predicate_rewrite::predicate_rewrite;
 
 use super::rule::RuleID;
 use crate::sessions::QueryContext;
@@ -69,8 +71,8 @@ impl HeuristicOptimizer {
     }
 
     fn pre_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
-        let result = decorrelate_subquery(self.metadata.clone(), s_expr)?;
-
+        let mut result = decorrelate_subquery(self.metadata.clone(), s_expr)?;
+        result = predicate_rewrite(result)?;
         Ok(result)
     }
 

@@ -106,6 +106,7 @@ pub fn satisfied_by(scalar: &Scalar, prop: &RelationalProperty) -> bool {
 /// - Right: `b = 1`
 /// - Both: `a = b`
 /// - Other: `a+b = 1`
+#[derive(Clone, Debug)]
 pub enum JoinCondition<'a> {
     Left(&'a Scalar),
     Right(&'a Scalar),
