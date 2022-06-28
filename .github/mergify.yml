@@ -67,8 +67,6 @@ pull_request_rules:
       - "-body~=## Summary"
       - "-body~=## Changelog"
     actions:
-      edit:
-        draft: True
       comment:
         message: |
           This pull request's description is not fulfill the requirements. @{{author}} please update it 🙏.
