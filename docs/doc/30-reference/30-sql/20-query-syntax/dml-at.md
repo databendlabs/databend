@@ -34,6 +34,9 @@ select snapshot_id,timestamp from fuse_snapshot('default', 'ontime2');
 | 16729481923640f9864c1c8ddd0861e3 | 2022-06-28 09:09:40.190662 |
 +----------------------------------+----------------------------+
 
+-- Enable the new Databend planner
+set enable_planner_v2 = 1;  
+
 -- Query with the snapshot ID
 select * from ontime2 at (snapshot=>'16729481923640f9864c1c8ddd0861e3');
 ```
