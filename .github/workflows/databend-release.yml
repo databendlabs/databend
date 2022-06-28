@@ -94,7 +94,7 @@ jobs:
       - name: Set musl rustflags
         if: matrix.platform == 'musl'
         run: |
-          flags="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
+          flags="-C link-arg=-Wl -C target-feature=-crt-static"
           echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
       - name: Build Binary
         run: |

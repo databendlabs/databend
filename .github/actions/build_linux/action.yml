@@ -16,6 +16,12 @@ runs:
         registry: public.ecr.aws/i7g1w5q7
         image: ${{ inputs.target }}
 
+    - name: Set musl rustflags
+      if: inputs.target == 'x86_64-unknown-linux-musl' || inputs.target == 'aarch64-unknown-linux-musl'
+      run: |
+        flags="-C target-feature=-crt-static"
+        echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
+
     - name: Build Debug
       if: inputs.profile == 'debug'
       shell: bash
