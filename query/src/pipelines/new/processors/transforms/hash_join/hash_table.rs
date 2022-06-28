@@ -15,13 +15,15 @@
 use common_datablocks::DataBlock;
 use common_exception::Result;
 
+use super::ProbeState;
+
 /// Concurrent hash table for hash join.
 pub trait HashJoinState: Send + Sync {
     /// Build hash table with input DataBlock
     fn build(&self, input: DataBlock) -> Result<()>;
 
     /// Probe the hash table and retrieve matched rows as DataBlocks
-    fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>>;
+    fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>>;
 
     /// Attach to state
     fn attach(&self) -> Result<()>;

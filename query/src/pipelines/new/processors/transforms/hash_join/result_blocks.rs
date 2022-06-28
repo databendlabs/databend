@@ -23,6 +23,7 @@ use common_datavalues::Series;
 use common_exception::Result;
 
 use super::ChainingHashTable;
+use super::ProbeState;
 use crate::common::EvalNode;
 use crate::common::HashMap;
 use crate::common::HashTableKeyable;
@@ -34,18 +35,19 @@ impl ChainingHashTable {
     pub(crate) fn result_blocks<Key>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
+        probe_state: &mut ProbeState,
         keys: Vec<Key>,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
         Key: HashTableKeyable + Clone + 'static,
-    {
+    {   
+        let probe_indexs = &mut probe_state.probe_indexs;
+        let build_indexs =  &mut probe_state.build_indexs;
+        
         let mut results: Vec<DataBlock> = vec![];
         match self.join_type {
             JoinType::Inner => {
-                let mut probe_indexs = Vec::with_capacity(keys.len());
-                let mut build_indexs = Vec::with_capacity(keys.len());
-
                 for (i, key) in keys.iter().enumerate() {
                     let probe_result_ptr = hash_table.find_key(key);
                     match probe_result_ptr {
@@ -67,8 +69,6 @@ impl ChainingHashTable {
                 results.push(self.merge_eq_block(&build_block, &probe_block)?);
             }
             JoinType::Semi => {
-                let mut probe_indexs = Vec::with_capacity(keys.len());
-
                 for (i, key) in keys.iter().enumerate() {
                     let probe_result_ptr = hash_table.find_key(key);
 
@@ -98,8 +98,6 @@ impl ChainingHashTable {
                 results.push(probe_block);
             }
             JoinType::Anti => {
-                let mut probe_indexs = Vec::with_capacity(keys.len());
-
                 for (i, key) in keys.iter().enumerate() {
                     let probe_result_ptr = hash_table.find_key(key);
 
@@ -133,10 +131,10 @@ impl ChainingHashTable {
             // probe_blocks left join build blocks
             JoinType::Left => {
                 if self.other_predicate.is_none() {
-                    let result = self.left_join(hash_table, keys, input)?;
+                    let result = self.left_join(hash_table, probe_state, keys, input)?;
                     return Ok(vec![result]);
                 } else {
-                    let result = self.left_join_with_other_conjunct(hash_table, keys, input)?;
+                    let result = self.left_join_with_other_conjunct(hash_table, probe_state, keys, input)?;
                     return Ok(vec![result]);
                 }
             }
@@ -148,14 +146,15 @@ impl ChainingHashTable {
     fn left_join<Key>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
+        probe_state: &mut ProbeState ,
         keys: Vec<Key>,
         input: &DataBlock,
     ) -> Result<DataBlock>
     where
         Key: HashTableKeyable + Clone + 'static,
     {
-        let mut probe_indexs = Vec::with_capacity(keys.len());
-        let mut build_indexs = Vec::with_capacity(keys.len());
+        let probe_indexs = &mut probe_state.probe_indexs;
+        let build_indexs =  &mut probe_state.build_indexs;
 
         let mut validity = MutableBitmap::new();
         for (i, key) in keys.iter().enumerate() {
@@ -210,19 +209,19 @@ impl ChainingHashTable {
     fn left_join_with_other_conjunct<Key>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
+        probe_state: &mut ProbeState ,
         keys: Vec<Key>,
         input: &DataBlock,
     ) -> Result<DataBlock>
     where
         Key: HashTableKeyable + Clone + 'static,
     {
-        let mut probe_indexs = Vec::with_capacity(keys.len());
-        let mut build_indexs = Vec::with_capacity(keys.len());
-
-        let mut index_to_row = Vec::with_capacity(keys.len());
-        // 10 --> 100
-        let mut row_state = vec![0u32; keys.len()];
-        // 10 -> 0 ,  0 -> 1
+        let probe_indexs = &mut probe_state.probe_indexs;
+        let build_indexs =  &mut probe_state.build_indexs;
+        let index_to_row = &mut probe_state.index_to_row;
+        
+        let row_state =  &mut probe_state.row_state;
+        row_state.resize(keys.len(), 0);
 
         let mut validity = MutableBitmap::new();
         for (i, key) in keys.iter().enumerate() {
@@ -291,7 +290,7 @@ impl ChainingHashTable {
 
         let mut bm = validity.into_mut().right().unwrap();
 
-        Self::fill_null_for_left_join(&mut bm, &index_to_row, &mut row_state);
+        Self::fill_null_for_left_join(&mut bm, &index_to_row, row_state);
         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
         DataBlock::filter_block(merged_block, &predicate)
     }

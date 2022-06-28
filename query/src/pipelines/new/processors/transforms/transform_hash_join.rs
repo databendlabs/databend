@@ -28,6 +28,8 @@ use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::Sink;
 use crate::sessions::QueryContext;
 
+use super::hash_join::ProbeState;
+
 pub struct SinkBuildHashTable {
     join_state: Arc<dyn HashJoinState>,
 }
@@ -65,16 +67,18 @@ pub struct TransformHashJoinProbe {
     output_port: Arc<OutputPort>,
     step: HashJoinStep,
     join_state: Arc<dyn HashJoinState>,
+    probe_state: ProbeState
 }
 
 impl TransformHashJoinProbe {
     pub fn create(
-        _ctx: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         join_state: Arc<dyn HashJoinState>,
         _output_schema: DataSchemaRef,
     ) -> ProcessorPtr {
+        let default_block_size = ctx.get_settings().get_max_block_size().unwrap_or(102400);
         ProcessorPtr::create(Box::new(TransformHashJoinProbe {
             input_data: None,
             output_data_blocks: vec![],
@@ -82,12 +86,14 @@ impl TransformHashJoinProbe {
             output_port,
             step: HashJoinStep::Build,
             join_state,
+            probe_state: ProbeState::with_capacity(default_block_size as usize),
         }))
     }
 
     fn probe(&mut self, block: &DataBlock) -> Result<()> {
+        self.probe_state.clear();
         self.output_data_blocks
-            .append(&mut self.join_state.probe(block)?);
+            .append(&mut self.join_state.probe(block, &mut self.probe_state)?);
         Ok(())
     }
 }
