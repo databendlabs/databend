@@ -18,3 +18,5 @@ pub static METRIC_CLUSTER_DISCOVERED_NODE_GAUGE: &str = "cluster.discovered_node
 
 pub static METRIC_LABEL_LOCAL_ID: &str = "local_id";
 pub static METRIC_LABEL_FLIGHT_ADDRESS: &str = "flight_address";
+pub static METRIC_LABEL_CLUSTER_ID: &str = "cluster_id";
+pub static METRIC_LABEL_TENANT_ID: &str = "tenant_id";

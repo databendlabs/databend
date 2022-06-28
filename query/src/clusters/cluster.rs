@@ -53,6 +53,9 @@ pub struct ClusterDiscovery {
     local_id: String,
     heartbeat: Mutex<ClusterHeartbeat>,
     api_provider: Arc<dyn ClusterApi>,
+    cluster_id: String,
+    tenant_id: String,
+    flight_address: String,
 }
 
 impl ClusterDiscovery {
@@ -74,7 +77,15 @@ impl ClusterDiscovery {
         Ok(Arc::new(ClusterDiscovery {
             local_id: local_id.clone(),
             api_provider: provider.clone(),
-            heartbeat: Mutex::new(ClusterHeartbeat::create(lift_time, provider)),
+            heartbeat: Mutex::new(ClusterHeartbeat::create(
+                lift_time,
+                provider,
+                cfg.query.cluster_id.clone(),
+                cfg.query.tenant_id.clone(),
+            )),
+            cluster_id: cfg.query.cluster_id.clone(),
+            tenant_id: cfg.query.tenant_id.clone(),
+            flight_address: cfg.query.flight_api_address.clone(),
         }))
     }
 
@@ -105,6 +116,18 @@ impl ClusterDiscovery {
                             ClusterDiscovery::METRIC_LABEL_FUNCTION,
                             String::from("discover"),
                         ),
+                        (
+                            super::metrics::METRIC_LABEL_CLUSTER_ID,
+                            self.cluster_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_TENANT_ID,
+                            self.tenant_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_FLIGHT_ADDRESS,
+                            self.flight_address.clone(),
+                        ),
                     ],
                     1,
                 );
@@ -119,10 +142,24 @@ impl ClusterDiscovery {
                 gauge!(
                     super::metrics::METRIC_CLUSTER_DISCOVERED_NODE_GAUGE,
                     cluster_nodes.len() as f64,
-                    &[(
-                        super::metrics::METRIC_LABEL_LOCAL_ID,
-                        String::from(&self.local_id)
-                    )]
+                    &[
+                        (
+                            super::metrics::METRIC_LABEL_LOCAL_ID,
+                            String::from(&self.local_id)
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_CLUSTER_ID,
+                            self.cluster_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_TENANT_ID,
+                            self.tenant_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_FLIGHT_ADDRESS,
+                            self.flight_address.clone(),
+                        ),
+                    ]
                 );
 
                 Ok(Cluster::create(res, self.local_id.clone()))
@@ -144,6 +181,18 @@ impl ClusterDiscovery {
                         (
                             ClusterDiscovery::METRIC_LABEL_FUNCTION,
                             String::from("drop_invalid_nodes.get_nodes"),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_CLUSTER_ID,
+                            self.cluster_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_TENANT_ID,
+                            self.tenant_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_FLIGHT_ADDRESS,
+                            self.flight_address.clone(),
                         ),
                     ],
                     1,
@@ -287,18 +336,27 @@ struct ClusterHeartbeat {
     shutdown_notify: Arc<Notify>,
     cluster_api: Arc<dyn ClusterApi>,
     shutdown_handler: Option<JoinHandle<()>>,
+    cluster_id: String,
+    tenant_id: String,
 }
 
 impl ClusterHeartbeat {
     const METRIC_LABEL_RESULT: &'static str = "result";
 
-    pub fn create(timeout: Duration, cluster_api: Arc<dyn ClusterApi>) -> ClusterHeartbeat {
+    pub fn create(
+        timeout: Duration,
+        cluster_api: Arc<dyn ClusterApi>,
+        cluster_id: String,
+        tenant_id: String,
+    ) -> ClusterHeartbeat {
         ClusterHeartbeat {
             timeout,
             cluster_api,
             shutdown: Arc::new(AtomicBool::new(false)),
             shutdown_notify: Arc::new(Notify::new()),
             shutdown_handler: None,
+            cluster_id,
+            tenant_id,
         }
     }
 
@@ -307,6 +365,8 @@ impl ClusterHeartbeat {
         let shutdown_notify = self.shutdown_notify.clone();
         let cluster_api = self.cluster_api.clone();
         let sleep_range = self.heartbeat_interval(self.timeout);
+        let cluster_id = self.cluster_id.clone();
+        let tenant_id = self.tenant_id.clone();
 
         async move {
             let mut shutdown_notified = Box::pin(shutdown_notify.notified());
@@ -338,6 +398,8 @@ impl ClusterHeartbeat {
                                         super::metrics::METRIC_LABEL_FLIGHT_ADDRESS,
                                         String::from(&node.flight_address),
                                     ),
+                                    (super::metrics::METRIC_LABEL_CLUSTER_ID, cluster_id.clone()),
+                                    (super::metrics::METRIC_LABEL_TENANT_ID, tenant_id.clone()),
                                     (
                                         ClusterHeartbeat::METRIC_LABEL_RESULT,
                                         String::from("failure"),
