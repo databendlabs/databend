@@ -883,7 +883,7 @@ impl MetaGrpcClient {
 fn status_is_retryable(status: &Status) -> bool {
     matches!(
         status.code(),
-        Code::Unauthenticated | Code::Internal | Code::Unavailable
+        Code::Unauthenticated | Code::Unavailable | Code::Internal
     )
 }
 
