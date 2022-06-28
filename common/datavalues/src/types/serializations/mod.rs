@@ -100,6 +100,7 @@ pub trait TypeSerializer<'a>: Send + Sync {
     ) -> Result<ArcColumnData> {
         unimplemented!()
     }
+
     fn serialize_clickhouse_column(&self, _format: &FormatSettings) -> Result<ArcColumnData> {
         unimplemented!()
     }
