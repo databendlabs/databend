@@ -140,27 +140,6 @@ impl ItemManager for MetaChannelManager {
     }
 }
 
-pub struct MetaGrpcClient {
-    conn_pool: Pool<MetaChannelManager>,
-    endpoints: RwLock<Vec<String>>,
-    username: String,
-    password: String,
-    token: RwLock<Option<Vec<u8>>>,
-    current_endpoint: Arc<Mutex<Option<String>>>,
-    unhealthy_endpoints: Mutex<TtlHashMap<String, ()>>,
-    auto_sync_interval: Option<Duration>,
-
-    /// Dedicated runtime to support meta client background tasks.
-    ///
-    /// In order not to let a blocking operation(such as calling the new PipelinePullingExecutor) in a tokio runtime block meta-client background tasks.
-    /// If a background task is blocked, no meta-client will be able to proceed if meta-client is reused.
-    ///
-    /// Note that a thread_pool tokio runtime does not help: a scheduled tokio-task resides in `filo_slot` won't be stolen by other tokio-workers.
-    /// TODO: dead code
-    #[allow(dead_code)]
-    rt: Arc<Runtime>,
-}
-
 /// A handle to access meta-client worker.
 /// The worker will be actually running in a dedicated runtime: `MetaGrpcClient.rt`.
 pub struct ClientHandle {
@@ -244,6 +223,26 @@ impl ClientHandle {
     }
 }
 
+pub struct MetaGrpcClient {
+    conn_pool: Pool<MetaChannelManager>,
+    endpoints: RwLock<Vec<String>>,
+    username: String,
+    password: String,
+    current_endpoint: Arc<Mutex<Option<String>>>,
+    unhealthy_endpoints: Mutex<TtlHashMap<String, ()>>,
+    auto_sync_interval: Option<Duration>,
+
+    /// Dedicated runtime to support meta client background tasks.
+    ///
+    /// In order not to let a blocking operation(such as calling the new PipelinePullingExecutor) in a tokio runtime block meta-client background tasks.
+    /// If a background task is blocked, no meta-client will be able to proceed if meta-client is reused.
+    ///
+    /// Note that a thread_pool tokio runtime does not help: a scheduled tokio-task resides in `filo_slot` won't be stolen by other tokio-workers.
+    /// TODO: dead code
+    #[allow(dead_code)]
+    rt: Arc<Runtime>,
+}
+
 impl MetaGrpcClient {
     /// Create a new client of metasrv.
     ///
@@ -301,7 +300,6 @@ impl MetaGrpcClient {
             auto_sync_interval,
             username: username.to_string(),
             password: password.to_string(),
-            token: RwLock::new(None),
             rt: rt.clone(),
         });
 
@@ -393,8 +391,8 @@ impl MetaGrpcClient {
                     start.elapsed().as_millis() as f64,
                 );
 
-                if let Err(err) = res {
-                    match err {
+                if let Err(result) = res {
+                    match result {
                         Err(err) => {
                             label_counter_with_val_and_labels(
                                 META_GRPC_CLIENT_REQUEST_FAILED,
@@ -446,11 +444,6 @@ impl MetaGrpcClient {
         MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>,
         MetaError,
     > {
-        {
-            let mut current_endpoint = self.current_endpoint.lock();
-            *current_endpoint = None;
-        }
-
         let mut eps = self.get_endpoints().await;
         debug_assert!(!eps.is_empty());
 
@@ -466,46 +459,35 @@ impl MetaGrpcClient {
                 Ok(c) => {
                     let mut client = MetaServiceClient::new(c.clone());
 
-                    let mut t = self.token.write().await;
-                    match t.clone() {
-                        Some(t) => {
+                    let new_token = Self::handshake(
+                        &mut client,
+                        &METACLI_COMMIT_SEMVER,
+                        &MIN_METASRV_SEMVER,
+                        &self.username,
+                        &self.password,
+                    )
+                    .await;
+                    match new_token {
+                        Ok(token) => {
                             return Ok(MetaServiceClient::with_interceptor(c, AuthInterceptor {
-                                token: t,
-                            }))
+                                token,
+                            }));
                         }
-                        None => {
-                            let new_token = Self::handshake(
-                                &mut client,
-                                &METACLI_COMMIT_SEMVER,
-                                &MIN_METASRV_SEMVER,
-                                &self.username,
-                                &self.password,
-                            )
-                            .await;
-                            match new_token {
-                                Ok(token) => {
-                                    *t = Some(token.clone());
-                                    return Ok(MetaServiceClient::with_interceptor(
-                                        c,
-                                        AuthInterceptor { token },
-                                    ));
-                                }
-                                Err(e) => {
-                                    tracing::warn!("handshake error when make client: {:?}", e);
-                                    {
-                                        let mut ue = self.unhealthy_endpoints.lock();
-                                        ue.insert(addr.to_string(), ());
-                                    }
-                                    if is_last {
-                                        // reach to last addr
-                                        return Err(e);
-                                    }
-                                    continue;
-                                }
+                        Err(e) => {
+                            tracing::warn!("handshake error when make client: {:?}", e);
+                            {
+                                let mut ue = self.unhealthy_endpoints.lock();
+                                ue.insert(addr.to_string(), ());
                             }
+                            if is_last {
+                                // reach to last addr
+                                return Err(e);
+                            }
+                            continue;
                         }
                     };
                 }
+
                 Err(e) => {
                     {
                         let mut ue = self.unhealthy_endpoints.lock();
@@ -529,14 +511,12 @@ impl MetaGrpcClient {
             eps.first().unwrap().clone()
         };
         let ch = self.conn_pool.get(&addr).await;
+        {
+            let mut current_endpoint = self.current_endpoint.lock();
+            *current_endpoint = Some(addr.clone());
+        }
         match ch {
-            Ok(c) => {
-                {
-                    let mut current_endpoint = self.current_endpoint.lock();
-                    *current_endpoint = Some(addr.clone());
-                }
-                Ok(c)
-            }
+            Ok(c) => Ok(c),
             Err(e) => {
                 tracing::warn!(
                     "grpc_client create channel with {} faild, err: {:?}",
@@ -894,15 +874,9 @@ impl MetaGrpcClient {
         Ok(reply)
     }
     async fn mark_as_unhealthy(&self) {
-        {
-            let ca = self.current_endpoint.lock();
-            let mut ue = self.unhealthy_endpoints.lock();
-            ue.insert((*ca).as_ref().unwrap().clone(), ());
-        }
-        {
-            let mut token = self.token.write().await;
-            *token = None;
-        }
+        let ca = self.current_endpoint.lock();
+        let mut ue = self.unhealthy_endpoints.lock();
+        ue.insert((*ca).as_ref().unwrap().clone(), ());
     }
 }
 
