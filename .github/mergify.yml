@@ -64,8 +64,8 @@ pull_request_rules:
     conditions:
       - author!=Mergify
       - '-body~=I hereby agree to the terms of the CLA available at: https:\/\/databend\.rs\/dev\/policies\/cla\/'
-      - "-body~=## Summary"
-      - "-body~=## Changelog"
+      - "-body~=Summary"
+      - "-body~=Changelog"
     actions:
       comment:
         message: |
