@@ -63,7 +63,6 @@ jobs:
           target: ${{ matrix.target }}
           profile: debug
 
-
   build_musl:
     runs-on: [self-hosted, x64, Linux, development]
     strategy:
