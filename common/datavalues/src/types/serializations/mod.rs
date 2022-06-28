@@ -16,7 +16,7 @@ mod array;
 mod boolean;
 mod const_;
 mod date;
-mod helper;
+pub mod helper;
 mod null;
 mod nullable;
 mod number;
@@ -44,6 +44,7 @@ pub use string::StringSerializer;
 pub use struct_::StructSerializer;
 pub use timestamp::TimestampSerializer;
 pub use variant::VariantSerializer;
+pub use helper::escape::write_escaped_string;
 
 #[enum_dispatch]
 pub trait TypeSerializer<'a>: Send + Sync {
