@@ -143,6 +143,7 @@ fn import_from(restore: String) -> anyhow::Result<LogId> {
 // initial_cluster format: node_id=endpoint,grpc_api_addr;
 async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow::Result<()> {
     let peers = initial_cluster.split(";");
+
     let mut node_ids = BTreeSet::new();
     let mut nodes = BTreeMap::new();
     for peer in peers {
@@ -168,7 +169,7 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
             endpoint: endpoint.clone(),
             grpc_api_addr: Some(addrs[1].to_string()),
         };
-        println!("node:{}", node);
+        println!("new cluster node:{}", node);
         nodes.insert(id, node);
     }
 
@@ -272,7 +273,6 @@ fn export_from_dir(save: String) -> anyhow::Result<()> {
             let tree_kv = (name.clone(), kv_variant);
 
             let line = serde_json::to_string(&tree_kv)?;
-            println!("export line: {}", line);
 
             if file.as_ref().is_none() {
                 println!("{}", line);

@@ -645,8 +645,8 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
     pub fn clear(&self) -> MetaStorageResult<()> {
         let err = self.inner.tree.clear();
         match err {
-            Err(err) => return Err(MetaStorageError::SledError(AnyError::new(&err))),
-            Ok(()) => return Ok(()),
+            Err(err) => Err(MetaStorageError::SledError(AnyError::new(&err))),
+            Ok(()) => Ok(()),
         }
     }
 
