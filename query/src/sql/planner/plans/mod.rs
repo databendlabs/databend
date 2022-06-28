@@ -50,6 +50,7 @@ use common_planners::CreateRolePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
 use common_planners::CreateUserStagePlan;
+use common_planners::CreateUserUDFPlan;
 use common_planners::CreateViewPlan;
 use common_planners::DeletePlan;
 use common_planners::DescribeTablePlan;
@@ -163,6 +164,10 @@ pub enum Plan {
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
+
+    // UDF
+    CreateUserUDF(Box<CreateUserUDFPlan>),
+
     ShowRoles,
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
@@ -229,6 +234,7 @@ impl Display for Plan {
             Plan::ShowGrants(_) => write!(f, "ShowGrants"),
             Plan::RevokePriv(_) => write!(f, "RevokePriv"),
             Plan::RevokeRole(_) => write!(f, "RevokeRole"),
+            Plan::CreateUserUDF(_) => write!(f, "CreateUserUDF"),
             Plan::Insert(_) => write!(f, "Insert"),
             Plan::Delete(_) => write!(f, "Delete"),
         }
@@ -289,6 +295,7 @@ impl Plan {
             Plan::RemoveStage(plan) => plan.schema(),
             Plan::RevokePriv(_) => Arc::new(DataSchema::empty()),
             Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
+            Plan::CreateUserUDF(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
         }
