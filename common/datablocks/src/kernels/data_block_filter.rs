@@ -38,7 +38,7 @@ impl DataBlock {
 
     pub fn filter_block(block: DataBlock, predicate: &ColumnRef) -> Result<DataBlock> {
         if block.num_columns() == 0 || block.num_rows() == 0 {
-            return Ok(block.clone());
+            return Ok(block);
         }
 
         let predict_boolean_nonull = Self::cast_to_nonull_boolean(predicate)?;
