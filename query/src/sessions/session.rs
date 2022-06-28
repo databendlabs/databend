@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
@@ -150,20 +149,6 @@ impl Session {
 
     pub fn get_current_query_id(&self) -> Option<String> {
         self.session_ctx.get_current_query_id()
-    }
-
-    pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
-    where F: FnOnce() + Send + 'static {
-        let (tx, rx) = futures::channel::oneshot::channel();
-        self.session_ctx.set_client_host(host);
-        self.session_ctx.set_io_shutdown_tx(Some(tx));
-
-        common_base::base::tokio::spawn(async move {
-            if let Ok(tx) = rx.await {
-                (io_shutdown)();
-                tx.send(()).ok();
-            }
-        });
     }
 
     pub fn set_current_database(self: &Arc<Self>, database_name: String) {
