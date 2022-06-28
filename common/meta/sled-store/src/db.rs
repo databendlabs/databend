@@ -71,10 +71,6 @@ pub fn init_temp_sled_db(temp_dir: TempDir) {
     }
 }
 
-pub fn init_cluster(id: u64, initial_cluster: String) -> anyhow::Result<()> {
-    Ok(())
-}
-
 pub fn init_sled_db(path: String) {
     let (inited_as_temp, curr_path) = {
         let mut g = GLOBAL_SLED.as_ref().lock().unwrap();

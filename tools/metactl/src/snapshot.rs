@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -20,16 +21,29 @@ use std::io::BufReader;
 use std::io::Lines;
 use std::io::Write;
 use std::net::SocketAddr;
+use std::str::FromStr;
 
 use anyhow::anyhow;
 use common_base::base::tokio;
+use common_meta_raft_store::config::RaftConfig;
+use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::sled_key_spaces::KeySpaceKV;
+use common_meta_raft_store::state::RaftState;
+use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
-use common_meta_sled_store::init_cluster;
 use common_meta_sled_store::init_sled_db;
+use common_meta_types::Cmd;
+use common_meta_types::Endpoint;
+use common_meta_types::LogEntry;
+use common_meta_types::LogId;
+use common_meta_types::Node;
 use databend_meta::export::deserialize_to_kv_variant;
 use databend_meta::export::serialize_kv_variant;
+use openraft::raft::Entry;
+use openraft::raft::EntryPayload;
+use openraft::Membership;
 use tokio::net::TcpSocket;
+use url::Url;
 
 use crate::export_meta;
 use crate::Config;
@@ -50,25 +64,31 @@ pub async fn export_data(config: &Config) -> anyhow::Result<()> {
     return Ok(());
 }
 
-pub fn import_data(config: &Config) -> anyhow::Result<()> {
+pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     let raft_config = &config.raft_config;
     eprintln!("import meta dir into: {}", raft_config.raft_dir);
 
     init_sled_db(raft_config.raft_dir.clone());
 
     clear()?;
-    import_from(config.db.clone())?;
+    let max_log_id = import_from(config.db.clone())?;
 
-    return Ok(());
+    if config.initial_cluster.is_empty() {
+        return Ok(());
+    }
+    return init_new_cluster(config.initial_cluster.clone(), max_log_id).await;
 }
 
-fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<()> {
+// return the max log id
+fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<LogId> {
     let db = get_sled_db();
     let mut trees = BTreeMap::new();
     let mut n = 0;
+    let mut max_log_id: LogId = LogId::default();
     for line in lines {
         let l = line?;
         let (tree_name, kv_variant): (String, KeySpaceKV) = serde_json::from_str(&l)?;
+
         // eprintln!("line: {}", l);
 
         if !trees.contains_key(&tree_name) {
@@ -82,26 +102,109 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<()> {
 
         tree.insert(k, v)?;
         n += 1;
-    }
 
+        match kv_variant {
+            KeySpaceKV::Logs { key: _, value } => {
+                if value.log_id > max_log_id {
+                    max_log_id = value.log_id;
+                }
+            }
+            _ => {}
+        }
+    }
     for tree in trees.values() {
         tree.flush()?;
     }
 
     eprintln!("Imported {} records", n);
-    Ok(())
+    Ok(max_log_id)
 }
 
 /// Read every line from stdin or restore file, deserialize it into tree_name, key and value. Insert them into sled db and flush.
-fn import_from(restore: String) -> anyhow::Result<()> {
+fn import_from(restore: String) -> anyhow::Result<LogId> {
     if restore.is_empty() {
         let lines = io::stdin().lines();
-        import_lines(lines)?;
+        return import_lines(lines);
     } else {
         let file = File::open(restore).unwrap();
         let reader = BufReader::new(file);
         let lines = reader.lines();
-        import_lines(lines)?;
+        return import_lines(lines);
+    }
+}
+
+async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow::Result<()> {
+    let peers = initial_cluster.split(",");
+    let mut node_ids = BTreeSet::new();
+    let mut nodes = BTreeMap::new();
+    for peer in peers {
+        //println!("peer:{}", peer);
+        let addr: Vec<&str> = peer.split("=").collect();
+        if addr.len() != 2 {
+            return Err(anyhow::anyhow!("invalid peer str: {}", peer));
+        }
+        let id = u64::from_str(addr[0])?;
+        node_ids.insert(id);
+        let url = Url::parse(addr[1])?;
+        let endpoint = Endpoint {
+            addr: url.host_str().unwrap().to_string(),
+            port: url.port().unwrap() as u32,
+        };
+        nodes.insert(id, Node {
+            name: id.to_string(),
+            endpoint: endpoint.clone(),
+        });
+        //println!("endpoint:{}", endpoint);
+    }
+
+    let mut log_id: LogId = max_log_id;
+
+    let db = get_sled_db();
+    let config = RaftConfig {
+        ..Default::default()
+    };
+    let log = RaftLog::open(&db, &config).await?;
+    let raft_state = RaftState::open_create(&db, &config, Some(()), None).await?;
+    let (sm_id, _prev_sm_id) = raft_state.read_state_machine_id()?;
+
+    let sm = StateMachine::open(&config, sm_id).await?;
+
+    // contruct Membership log entry
+    {
+        // insert last membership log
+        log_id.index += 1;
+        let membership = Membership::new_single(node_ids);
+        let entry: Entry<LogEntry> = Entry::<LogEntry> {
+            log_id: log_id.clone(),
+            payload: EntryPayload::Membership(membership),
+        };
+
+        log.insert(&entry).await?;
+
+        // insert last membership into state_machine
+        sm.apply(&entry).await?;
+    }
+
+    // construct AddNode log entries
+    {
+        // first clear all the nodes info
+        sm.nodes().clear()?;
+
+        for node in nodes {
+            log_id.index += 1;
+            let cmd: Cmd = Cmd::AddNode {
+                node_id: node.0,
+                node: node.1,
+            };
+
+            let entry: Entry<LogEntry> = Entry::<LogEntry> {
+                log_id: log_id.clone(),
+                payload: EntryPayload::Normal(LogEntry { txid: None, cmd }),
+            };
+
+            log.insert(&entry).await?;
+            sm.apply(&entry).await?;
+        }
     }
 
     Ok(())

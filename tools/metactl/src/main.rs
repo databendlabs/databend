@@ -222,7 +222,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if config.import {
-        return snapshot::import_data(&config);
+        return snapshot::import_data(&config).await;
     }
 
     Err(anyhow::anyhow!("Nothing to do"))
