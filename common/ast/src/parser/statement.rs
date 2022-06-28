@@ -25,11 +25,12 @@ use nom::Slice;
 use url::Url;
 
 use crate::ast::*;
+use crate::input::Input;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::token::*;
-use crate::parser::util::*;
 use crate::rule;
+use crate::util::*;
 use crate::ErrorKind;
 
 pub fn statement(i: Input) -> IResult<Statement> {
