@@ -29,7 +29,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   build_gnu:
-    name: build_gnu_${{ matrix.arch }}
+    name: build_${{ matrix.arch }}_gnu
     runs-on: [self-hosted, x64, Linux, development]
     strategy:
       matrix:
@@ -47,7 +47,7 @@ jobs:
           profile: debug
 
   build_musl:
-    name: build_musl_${{ matrix.arch }}
+    name: build_${{ matrix.arch }}_musl
     runs-on: [self-hosted, x64, Linux, development]
     strategy:
       matrix:
