@@ -12,6 +12,7 @@ SELECT
     select_expr [[AS] alias], ...
     [INTO variable [, ...]]
     [ FROM table_references
+    [AT ...]
     [WHERE expr]
     [GROUP BY {{col_name | expr | col_alias | col_position}, ...
     | extended_grouping_expr}]
@@ -51,6 +52,10 @@ SELECT number FROM numbers(3) AS a;
 |      2 |
 +--------+
 ```
+
+## AT Clause
+
+The AT clause enables you to query previous versions of your data. For more information, see [AT](./dml-at.md).
 
 ## WHERE Clause
 
