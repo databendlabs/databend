@@ -59,6 +59,7 @@ pull_request_rules:
 
           Please review the labels and make any necessary changes.
 
+
   # Check if PR description contains CLA
   - name: Check PR description
     conditions:
