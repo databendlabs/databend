@@ -17,6 +17,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
 use common_datavalues::Column;
+use common_datavalues::ColumnRef;
 use common_datavalues::NullableColumn;
 use common_datavalues::Series;
 use common_exception::Result;
@@ -219,7 +220,9 @@ impl ChainingHashTable {
         let mut build_indexs = Vec::with_capacity(keys.len());
 
         let mut index_to_row = Vec::with_capacity(keys.len());
+        // 10 --> 100
         let mut row_state = vec![0u32; keys.len()];
+        // 10 -> 0 ,  0 -> 1
 
         let mut validity = MutableBitmap::new();
         for (i, key) in keys.iter().enumerate() {
@@ -252,27 +255,15 @@ impl ChainingHashTable {
         }
         let validity: Bitmap = validity.into();
         let build_block = self.row_space.gather(&build_indexs)?;
-        let mut nullable_columns = Vec::with_capacity(build_block.num_columns());
 
-        for column in build_block.columns() {
-            if column.is_null() {
-                nullable_columns.push(column.clone());
-            } else if column.is_nullable() {
-                let col: &NullableColumn = Series::check_get(column)?;
-                let new_validity = col.ensure_validity() & (&validity);
-                nullable_columns.push(NullableColumn::wrap_inner(
-                    col.inner().clone(),
-                    Some(new_validity),
-                ));
-            } else {
-                nullable_columns.push(NullableColumn::wrap_inner(
-                    column.clone(),
-                    Some(validity.clone()),
-                ));
-            }
-        }
+        let nullable_columns = build_block
+            .columns()
+            .iter()
+            .map(|c| Self::set_validity(c, &validity))
+            .collect::<Result<Vec<_>>>()?;
+
         let nullable_build_block =
-            DataBlock::create(self.row_space.data_schema.clone(), nullable_columns);
+            DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
         let probe_block = DataBlock::block_take_by_indices(input, &probe_indexs)?;
         let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
 
@@ -282,12 +273,24 @@ impl ChainingHashTable {
         if all_true {
             return Ok(merged_block);
         }
-        let mut bm = match (bm, all_false) {
-            (Some(b), _) => b.into_mut().right().unwrap(),
-            (None, true) => MutableBitmap::from_len_zeroed(merged_block.num_rows()),
+
+        let validity = match (bm, all_false) {
+            (Some(b), _) => b,
+            (None, true) => Bitmap::new_zeroed(merged_block.num_rows()),
             // must be one of above
             _ => unreachable!(),
         };
+
+        let nullable_columns = nullable_columns
+            .iter()
+            .map(|c| Self::set_validity(c, &validity))
+            .collect::<Result<Vec<_>>>()?;
+        let nullable_build_block =
+            DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
+        let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
+
+        let mut bm = validity.into_mut().right().unwrap();
+
         Self::fill_null_for_left_join(&mut bm, &index_to_row, &mut row_state);
         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
         DataBlock::filter_block(merged_block, &predicate)
@@ -343,5 +346,19 @@ impl ChainingHashTable {
             count_zeros == 0,
             rows == count_zeros,
         ))
+    }
+
+    fn set_validity(column: &ColumnRef, validity: &Bitmap) -> Result<ColumnRef> {
+        if column.is_null() {
+            return Ok(column.clone());
+        } else if column.is_nullable() {
+            let col: &NullableColumn = Series::check_get(column)?;
+            let new_validity = col.ensure_validity() & (&validity);
+            let col = NullableColumn::wrap_inner(col.inner().clone(), Some(new_validity));
+            return Ok(col);
+        } else {
+            let col = NullableColumn::wrap_inner(column.clone(), Some(validity.clone()));
+            return Ok(col);
+        }
     }
 }
