@@ -17,7 +17,7 @@ runs:
         image: ${{ inputs.target }}
 
     - name: Set musl rustflags
-      if: inputs.target == 'x86_64-unknown-linux-musl' || inputs.target == 'aarch64-unknown-linux-musl'
+      if: contains(inputs.target, 'musl')
       shell: bash
       run: |
         flags="-C target-feature=-crt-static"
