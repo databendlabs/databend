@@ -41,7 +41,7 @@ set enable_planner_v2 = 1;
 select * from ontime2 at (snapshot=>'16729481923640f9864c1c8ddd0861e3');
 ```
 
-#### Query with a timestamp
+### Query with a timestamp
 
 ```sql
 -- Create a table
