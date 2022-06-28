@@ -350,15 +350,15 @@ impl ChainingHashTable {
 
     fn set_validity(column: &ColumnRef, validity: &Bitmap) -> Result<ColumnRef> {
         if column.is_null() {
-            return Ok(column.clone());
+            Ok(column.clone())
         } else if column.is_nullable() {
             let col: &NullableColumn = Series::check_get(column)?;
-            let new_validity = col.ensure_validity() & (&validity);
+            let new_validity = col.ensure_validity() & validity;
             let col = NullableColumn::wrap_inner(col.inner().clone(), Some(new_validity));
-            return Ok(col);
+            Ok(col)
         } else {
             let col = NullableColumn::wrap_inner(column.clone(), Some(validity.clone()));
-            return Ok(col);
+            Ok(col)
         }
     }
 }
