@@ -40,14 +40,16 @@ pub async fn delete_from_block(
     // extract the columns that are going to be filtered on
     let col_ids = {
         if filter_column_ids.is_empty() {
+            // here the situation: filter_expr is not null, but filter_column_ids in not empty, which
+            // indicates the expr being evaluated is unrelated to the value of rows:
+            //   e.g.
+            //       `delete from t where 1 = 1`, `delete from t where now()`,
+            //       or `delete from t where RANDOM()::INT::BOOLEAN`
+            // tobe refined:
+            // if the `filter_expr` is of "constant" nullary :
+            //   for the whole block, whether all of the rows should be kept or dropped,
+            //   we can just return from here, without accessing the block data
             filtering_whole_block = true;
-            // To be optimized (in `interpreter_delete`, if we adhere the style of interpreter_select)
-            // In this case, the expr being evaluated is unrelated to the value of rows:
-            // - if the `filter_expr` is of "constant" function:
-            //   for the whole block, whether all of the rows should be kept or dropped
-            // - but, the expr may NOT be deterministic, e.g.
-            //   A nullary non-constant func, which returns (values convertable to) true, false or NULL randomly
-            //   e.g. delete from t now()
             all_the_columns_ids(table)
         } else {
             filter_column_ids
