@@ -130,7 +130,7 @@ pub fn predicate_rewrite(s_expr: SExpr) -> Result<SExpr> {
             ))
         }
         RelOperator::LogicalGet(_) => Ok(s_expr.clone()),
-        RelOperator::LogicalInnerJoin(_) => Ok(SExpr::create_binary(
+        RelOperator::LogicalInnerJoin(_) | RelOperator::CrossApply(_) => Ok(SExpr::create_binary(
             s_expr.plan().clone(),
             predicate_rewrite(s_expr.child(0)?.clone())?,
             predicate_rewrite(s_expr.child(1)?.clone())?,
@@ -139,13 +139,12 @@ pub fn predicate_rewrite(s_expr: SExpr) -> Result<SExpr> {
         | RelOperator::Project(_)
         | RelOperator::Limit(_)
         | RelOperator::Sort(_)
-        | RelOperator::EvalScalar(_) => Ok(SExpr::create_unary(
+        | RelOperator::EvalScalar(_)
+        | RelOperator::Max1Row(_) => Ok(SExpr::create_unary(
             s_expr.plan().clone(),
             predicate_rewrite(s_expr.child(0)?.clone())?,
         )),
-        RelOperator::CrossApply(_)
-        | RelOperator::Max1Row(_)
-        | RelOperator::Pattern(_)
+        RelOperator::Pattern(_)
         | RelOperator::PhysicalScan(_)
         | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::LogicalError("Invalid plan type")),
     }

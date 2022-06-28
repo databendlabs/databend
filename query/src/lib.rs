@@ -19,8 +19,6 @@
 #![feature(type_alias_impl_trait)]
 #![feature(assert_matches)]
 
-extern crate core;
-
 pub mod api;
 pub mod catalogs;
 pub mod clusters;
