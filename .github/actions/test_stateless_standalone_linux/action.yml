@@ -14,8 +14,6 @@ runs:
   steps:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
-      with:
-        registry: public.ecr.aws/i7g1w5q7
 
     - name: Download artifact
       uses: ./.github/actions/artifact_download
