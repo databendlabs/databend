@@ -37,6 +37,7 @@ pub struct FormatSettings {
     pub csv_null_bytes: Vec<u8>,
     pub tsv_null_bytes: Vec<u8>,
     pub json_quote_denormals: bool,
+    pub json_escape_forward_slashes: bool,
 }
 
 impl Default for FormatSettings {
@@ -56,6 +57,7 @@ impl Default for FormatSettings {
             csv_null_bytes: vec![b'\\', b'N'],
             tsv_null_bytes: vec![b'\\', b'N'],
             json_quote_denormals: false,
+            json_escape_forward_slashes: true,
         }
     }
 }

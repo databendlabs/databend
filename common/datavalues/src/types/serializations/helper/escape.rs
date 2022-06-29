@@ -12,49 +12,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-const ESCAPES: [u8; 7] = [0x08, 0x0c, b'\n', b'\r', b'\t', b'\0', b'\\'];
+const ZZ: u8 = b'0'; // \x00
+const BB: u8 = b'b'; // \x08
+const TT: u8 = b't'; // \x09
+const NN: u8 = b'n'; // \x0A
+const FF: u8 = b'f'; // \x0C
+const RR: u8 = b'r'; // \x0D
+const BS: u8 = b'\\'; // \x5C
+const __: u8 = 0xff;
 
-fn find_first(values: &[u8], quote: u8) -> usize {
-    for (i, v) in values.iter().enumerate() {
-        for e in ESCAPES.iter() {
-            if v == e {
-                return i;
-            }
-        }
-        if *v == quote {
-            return i;
-        }
-    }
-    values.len()
-}
+// Lookup table of escape sequences.
+// A value of __ means that byte i is not escaped.
+// A value of b'x' at index i means that byte i is escaped as "\x" in TSV.
+static ESCAPE: [u8; 256] = [
+    //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+    ZZ, __, __, __, __, __, __, __, BB, TT, NN, __, FF, RR, __, __, // 0
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
+    __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+];
 
-pub fn write_escaped_string(values: &[u8], buf: &mut Vec<u8>, quote: u8) {
-    let size = values.len();
-    let first_pos = find_first(values, quote);
-    if first_pos >= size {
-        buf.extend_from_slice(values);
-    } else {
-        buf.extend_from_slice(&values[0..first_pos]);
-        for v in &values[first_pos..size] {
-            let e = match v {
-                0x08 => b'b',
-                0x0c => b'f',
-                b'\t' => b't',
-                b'\n' => b'n',
-                b'\r' => b'r',
-                b'\\' => b'\\',
-                b'\0' => b'0',
-                _ => 0u8,
-            };
-            if e != 0u8 {
-                buf.push(b'\\');
-                buf.push(e);
-            } else if *v == quote {
+pub fn write_escaped_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
+    let mut start = 0;
+
+    for (i, &byte) in bytes.iter().enumerate() {
+        let escape = ESCAPE[byte as usize];
+        if escape == __ {
+            if byte == quote {
+                if start < i {
+                    buf.extend_from_slice(&bytes[start..i]);
+                }
                 buf.push(b'\\');
                 buf.push(quote);
-            } else {
-                buf.push(*v);
+                start = i + 1;
             }
+        } else {
+            if start < i {
+                buf.extend_from_slice(&bytes[start..i]);
+            }
+            buf.push(b'\\');
+            buf.push(escape);
+            start = i + 1;
         }
+    }
+
+    if start != bytes.len() {
+        buf.extend_from_slice(&bytes[start..]);
     }
 }
