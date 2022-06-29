@@ -22,9 +22,8 @@ pub struct ProbeState {
 
     // In the probe phase, the probe block with N rows could join result into M rows
     // e.g.: [0, 1, 2, 3]  results into [0, 1, 2, 2, 3]
-    // index_to_row: the result index to the probe block row -> [0, 1, 2, 2, 3]
+    // probe_indexs: the result index to the probe block row -> [0, 1, 2, 2, 3]
     // row_state:  the state (counter) of the probe block row -> [1, 1, 2, 1]
-    pub(crate) index_to_row: Vec<usize>,
     pub(crate) row_state: Vec<u32>,
 }
 
@@ -32,7 +31,6 @@ impl ProbeState {
     pub fn clear(&mut self) {
         self.probe_indexs.clear();
         self.build_indexs.clear();
-        self.index_to_row.clear();
         self.row_state.clear();
     }
 
@@ -40,7 +38,6 @@ impl ProbeState {
         ProbeState {
             probe_indexs: Vec::with_capacity(capacity),
             build_indexs: Vec::with_capacity(capacity),
-            index_to_row: Vec::with_capacity(capacity),
             row_state: Vec::with_capacity(capacity),
         }
     }
