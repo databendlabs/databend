@@ -1,7 +1,3 @@
 {
-  "label": "Databend Cloud",
-  "link": {
-    "type": "generated-index",
-    "slug": "/cloud/"
-  }
+  "label": "Databend Cloud"
 }
