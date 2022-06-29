@@ -312,14 +312,19 @@ impl SessionManager {
             &config.query.cluster_id,
         );
 
-        let mut sessions = self.active_sessions.write();
-        sessions.remove(session_id);
+        let session = {
+            let mut sessions = self.active_sessions.write();
+            sessions.remove(session_id)
+        };
         //also need remove mysql_conn_map
         let mut mysql_conns_map = self.mysql_conn_map.write();
         for (k, v) in mysql_conns_map.deref_mut().clone() {
             if &v == session_id {
                 mysql_conns_map.remove(&k);
             }
+        }
+        if session.is_some() {
+            session.unwrap().kill();
         }
     }
 
