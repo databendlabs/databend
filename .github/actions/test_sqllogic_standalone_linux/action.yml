@@ -19,17 +19,10 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 
-    - name: Install python dependences
+    - name: Test setup
       shell: bash
       run: |
-        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql six PyHamcrest requests environs fire
-    
-    # a temp hack only to make logic test work on click house as quickly as possible
-    # we need another way to support session on clickhouse-sqlalchemy
-    - name: Install forked clickhouse-sqlalchemy 
-      shell: bash
-      run: |
-        pip3 install https://github.com/youngsofun/clickhouse-sqlalchemy/archive/refs/heads/databend.zip
+        bash ./scripts/setup/dev_setup.sh -yd
 
     - name: Run sqllogic Tests with Standalone mode with embedded meta-store
       shell: bash

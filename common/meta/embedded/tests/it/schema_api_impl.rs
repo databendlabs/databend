@@ -100,7 +100,7 @@ async fn test_meta_embedded_table_list() -> anyhow::Result<()> {
 async fn test_meta_embedded_table_drop_out_of_retention_time_history() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
     SchemaApiTestSuite {}
-        .table_drop_out_of_retention_time_history(&mt, &mt)
+        .table_drop_out_of_retention_time_history(&mt)
         .await
 }
 
@@ -108,7 +108,7 @@ async fn test_meta_embedded_table_drop_out_of_retention_time_history() -> anyhow
 async fn test_meta_embedded_database_drop_out_of_retention_time_history() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
     SchemaApiTestSuite {}
-        .database_drop_out_of_retention_time_history(&mt, &mt)
+        .database_drop_out_of_retention_time_history(&mt)
         .await
 }
 
@@ -116,7 +116,7 @@ async fn test_meta_embedded_database_drop_out_of_retention_time_history() -> any
 async fn test_meta_embedded_database_gc_out_of_retention_time() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
     SchemaApiTestSuite {}
-        .database_gc_out_of_retention_time(&mt, &mt)
+        .database_gc_out_of_retention_time(&mt)
         .await
 }
 
@@ -124,7 +124,7 @@ async fn test_meta_embedded_database_gc_out_of_retention_time() -> anyhow::Resul
 async fn test_meta_embedded_table_gc_out_of_retention_time() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
     SchemaApiTestSuite {}
-        .table_gc_out_of_retention_time(&mt, &mt)
+        .table_gc_out_of_retention_time(&mt)
         .await
 }
 

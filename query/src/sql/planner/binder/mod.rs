@@ -21,11 +21,15 @@ use common_ast::ast::Statement;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserDefinedFunction;
+use common_planners::AlterUserUDFPlan;
 use common_planners::CreateRolePlan;
+use common_planners::CreateUserUDFPlan;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
+use common_planners::DropUserUDFPlan;
 use common_planners::ShowGrantsPlan;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
@@ -199,13 +203,49 @@ impl<'a> Binder {
                     .await?
             }
 
+            // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
-
             Statement::ShowGrants { principal } => Plan::ShowGrants(Box::new(ShowGrantsPlan {
                 principal: principal.clone(),
             })),
-
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
+
+            // UDFs
+            Statement::CreateUDF {
+                if_not_exists,
+                udf_name,
+                parameters,
+                definition,
+                description,
+            } => Plan::CreateUDF(Box::new(CreateUserUDFPlan {
+                if_not_exists: *if_not_exists,
+                udf: UserDefinedFunction {
+                    name: udf_name.to_string(),
+                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
+                    definition: definition.to_string(),
+                    description: description.clone().unwrap_or_default(),
+                },
+            })),
+            Statement::AlterUDF {
+                udf_name,
+                parameters,
+                definition,
+                description,
+            } => Plan::AlterUDF(Box::new(AlterUserUDFPlan {
+                udf: UserDefinedFunction {
+                    name: udf_name.to_string(),
+                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
+                    description: definition.to_string(),
+                    definition: description.clone().unwrap_or_default(),
+                },
+            })),
+            Statement::DropUDF {
+                if_exists,
+                udf_name,
+            } => Plan::DropUDF(Box::new(DropUserUDFPlan {
+                if_exists: *if_exists,
+                name: udf_name.to_string(),
+            })),
 
             _ => {
                 return Err(ErrorCode::UnImplement(format!(

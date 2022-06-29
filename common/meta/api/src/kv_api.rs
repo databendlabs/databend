@@ -72,3 +72,13 @@ impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
         self.deref().transaction(txn).await
     }
 }
+
+pub trait AsKVApi {
+    fn as_kv_api(&self) -> &dyn KVApi;
+}
+
+impl<T: KVApi> AsKVApi for T {
+    fn as_kv_api(&self) -> &dyn KVApi {
+        self
+    }
+}

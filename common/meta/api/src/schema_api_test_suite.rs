@@ -62,6 +62,7 @@ use common_tracing::tracing;
 
 use crate::deserialize_struct;
 use crate::serialize_struct;
+use crate::AsKVApi;
 use crate::KVApi;
 use crate::KVApiKey;
 use crate::SchemaApi;
@@ -147,7 +148,7 @@ fn calc_and_compare_drop_on_table_result(result: Vec<Arc<TableInfo>>, expected: 
 }
 
 async fn upsert_test_data(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
     value: Vec<u8>,
 ) -> std::result::Result<u64, MetaError> {
@@ -165,7 +166,7 @@ async fn upsert_test_data(
 }
 
 async fn delete_test_data(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
 ) -> std::result::Result<(), MetaError> {
     let _res = kv_api
@@ -181,7 +182,7 @@ async fn delete_test_data(
 }
 
 async fn get_test_data<PB, T>(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
 ) -> std::result::Result<T, MetaError>
 where
@@ -1737,10 +1738,9 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_drop_out_of_retention_time_history<MT: SchemaApi>(
+    pub async fn database_drop_out_of_retention_time_history<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
     ) -> anyhow::Result<()> {
         let tenant = "tenant1_database_drop_out_of_retention_time_history";
         let db_name = "db1_database_drop_out_of_retention_time_history";
@@ -1784,7 +1784,7 @@ impl SchemaApiTestSuite {
             };
             let id_key = DatabaseId { db_id };
             let data = serialize_struct(&drop_data)?;
-            upsert_test_data(kv_api, &id_key, data).await?;
+            upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
             let res = mt
                 .get_database_history(ListDatabaseReq {
@@ -1799,10 +1799,9 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    async fn create_out_of_retention_time_db<MT: SchemaApi>(
+    async fn create_out_of_retention_time_db<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
         db_name: DatabaseNameIdent,
         drop_on: Option<DateTime<Utc>>,
         delete: bool,
@@ -1828,18 +1827,17 @@ impl SchemaApiTestSuite {
         };
         let id_key = DatabaseId { db_id };
         let data = serialize_struct(&drop_data)?;
-        upsert_test_data(kv_api, &id_key, data).await?;
+        upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
         if delete {
-            delete_test_data(kv_api, &db_name).await?;
+            delete_test_data(mt.as_kv_api(), &db_name).await?;
         }
         Ok(())
     }
 
-    pub async fn database_gc_out_of_retention_time<MT: SchemaApi>(
+    pub async fn database_gc_out_of_retention_time<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
     ) -> anyhow::Result<()> {
         let tenant = "tenant1_database_gc_out_of_retention_time";
         let db_name = "db1_database_gc_out_of_retention_time";
@@ -1868,24 +1866,23 @@ impl SchemaApiTestSuite {
         let drop_on = Some(Utc::now() - Duration::days(1));
 
         // create db_name_ident1 with two dropped value
-        self.create_out_of_retention_time_db(mt, kv_api, db_name_ident1.clone(), drop_on, true)
+        self.create_out_of_retention_time_db(mt, db_name_ident1.clone(), drop_on, true)
             .await?;
         self.create_out_of_retention_time_db(
             mt,
-            kv_api,
             db_name_ident1.clone(),
             Some(Utc::now() - Duration::days(2)),
             false,
         )
         .await?;
-        self.create_out_of_retention_time_db(mt, kv_api, db_name_ident2.clone(), drop_on, false)
+        self.create_out_of_retention_time_db(mt, db_name_ident2.clone(), drop_on, false)
             .await?;
 
-        let id_list: DbIdList = get_test_data(kv_api, &dbid_idlist1).await?;
+        let id_list: DbIdList = get_test_data(mt.as_kv_api(), &dbid_idlist1).await?;
         assert_eq!(id_list.len(), 2);
         let old_id_list = id_list.id_list().clone();
 
-        let id_list: DbIdList = get_test_data(kv_api, &dbid_idlist2).await?;
+        let id_list: DbIdList = get_test_data(mt.as_kv_api(), &dbid_idlist2).await?;
         assert_eq!(id_list.len(), 1);
 
         let req = GCDroppedDataReq {
@@ -1897,26 +1894,25 @@ impl SchemaApiTestSuite {
         assert_eq!(res.gc_db_count, 2);
 
         // assert db id list has been cleaned
-        let id_list: DbIdList = get_test_data(kv_api, &dbid_idlist1).await?;
+        let id_list: DbIdList = get_test_data(mt.as_kv_api(), &dbid_idlist1).await?;
         assert_eq!(id_list.len(), 0);
 
         // assert old db meta has been removed
         for db_id in old_id_list.iter() {
             let id_key = DatabaseId { db_id: *db_id };
-            let res: Result<DatabaseMeta, MetaError> = get_test_data(kv_api, &id_key).await;
+            let res: Result<DatabaseMeta, MetaError> = get_test_data(mt.as_kv_api(), &id_key).await;
             assert!(res.is_err());
         }
 
-        let id_list: DbIdList = get_test_data(kv_api, &dbid_idlist2).await?;
+        let id_list: DbIdList = get_test_data(mt.as_kv_api(), &dbid_idlist2).await?;
         assert_eq!(id_list.len(), 1);
 
         Ok(())
     }
 
-    async fn create_out_of_retention_time_table<MT: SchemaApi>(
+    async fn create_out_of_retention_time_table<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
         name_ident: TableNameIdent,
         dbid_tbname: DBIdTableName,
         drop_on: Option<DateTime<Utc>>,
@@ -1957,18 +1953,17 @@ impl SchemaApiTestSuite {
 
         let id_key = TableId { table_id };
         let data = serialize_struct(&drop_data)?;
-        upsert_test_data(kv_api, &id_key, data).await?;
+        upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
         if delete {
-            delete_test_data(kv_api, &dbid_tbname).await?;
+            delete_test_data(mt.as_kv_api(), &dbid_tbname).await?;
         }
         Ok(())
     }
 
-    pub async fn table_gc_out_of_retention_time<MT: SchemaApi>(
+    pub async fn table_gc_out_of_retention_time<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
     ) -> anyhow::Result<()> {
         let tenant1 = "tenant1_table_gc_out_of_retention_time";
         let db1_name = "db1_table_gc_out_of_retention_time";
@@ -1998,7 +1993,6 @@ impl SchemaApiTestSuite {
         let drop_on = Some(Utc::now() - Duration::days(1));
         self.create_out_of_retention_time_table(
             mt,
-            kv_api,
             tbl_name_ident.clone(),
             DBIdTableName {
                 db_id: res.db_id,
@@ -2010,7 +2004,6 @@ impl SchemaApiTestSuite {
         .await?;
         self.create_out_of_retention_time_table(
             mt,
-            kv_api,
             tbl_name_ident.clone(),
             DBIdTableName {
                 db_id: res.db_id,
@@ -2027,7 +2020,7 @@ impl SchemaApiTestSuite {
         };
 
         // save old id list
-        let id_list: TableIdList = get_test_data(kv_api, &table_id_idlist).await?;
+        let id_list: TableIdList = get_test_data(mt.as_kv_api(), &table_id_idlist).await?;
         assert_eq!(id_list.len(), 2);
         let old_id_list = id_list.id_list().clone();
 
@@ -2039,7 +2032,7 @@ impl SchemaApiTestSuite {
         let res = mt.gc_dropped_data(req).await?;
         assert_eq!(res.gc_table_count, 2);
 
-        let id_list: TableIdList = get_test_data(kv_api, &table_id_idlist).await?;
+        let id_list: TableIdList = get_test_data(mt.as_kv_api(), &table_id_idlist).await?;
         assert_eq!(id_list.len(), 0);
 
         // assert old table meta has been removed
@@ -2047,17 +2040,16 @@ impl SchemaApiTestSuite {
             let id_key = TableId {
                 table_id: *table_id,
             };
-            let res: Result<DatabaseMeta, MetaError> = get_test_data(kv_api, &id_key).await;
+            let res: Result<DatabaseMeta, MetaError> = get_test_data(mt.as_kv_api(), &id_key).await;
             assert!(res.is_err());
         }
 
         Ok(())
     }
 
-    pub async fn table_drop_out_of_retention_time_history<MT: SchemaApi>(
+    pub async fn table_drop_out_of_retention_time_history<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
     ) -> anyhow::Result<()> {
         let tenant = "tenant_table_drop_history";
         let db_name = "table_table_drop_history_db1";
@@ -2133,7 +2125,8 @@ impl SchemaApiTestSuite {
                 ..TableMeta::default()
             };
             let data = serialize_struct(&create_drop_table_meta)?;
-            upsert_test_data(kv_api, &tbid, data).await?;
+
+            upsert_test_data(mt.as_kv_api(), &tbid, data).await?;
             // assert not return out of retention time data
             let res = mt
                 .get_table_history(ListTableReq::new(tenant, db_name))

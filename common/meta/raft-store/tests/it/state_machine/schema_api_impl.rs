@@ -153,7 +153,7 @@ async fn test_meta_embedded_table_drop_out_of_retention_time_history() -> anyhow
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
     SchemaApiTestSuite {}
-        .table_drop_out_of_retention_time_history(&sm, &sm)
+        .table_drop_out_of_retention_time_history(&sm)
         .await
 }
 
@@ -165,7 +165,7 @@ async fn test_meta_embedded_database_drop_out_of_retention_time_history() -> any
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
     SchemaApiTestSuite {}
-        .database_drop_out_of_retention_time_history(&sm, &sm)
+        .database_drop_out_of_retention_time_history(&sm)
         .await
 }
 
@@ -177,7 +177,7 @@ async fn test_meta_embedded_database_gc_out_of_retention_time() -> anyhow::Resul
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
     SchemaApiTestSuite {}
-        .database_gc_out_of_retention_time(&sm, &sm)
+        .database_gc_out_of_retention_time(&sm)
         .await
 }
 
@@ -189,7 +189,7 @@ async fn test_meta_embedded_table_gc_out_of_retention_time() -> anyhow::Result<(
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
     SchemaApiTestSuite {}
-        .table_gc_out_of_retention_time(&sm, &sm)
+        .table_gc_out_of_retention_time(&sm)
         .await
 }
 
