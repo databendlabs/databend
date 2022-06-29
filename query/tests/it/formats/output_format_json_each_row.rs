@@ -109,11 +109,32 @@ fn test_denormal() -> Result<()> {
         let mut formatter = fmt.create_format(schema, format_setting);
         let buffer = formatter.serialize_block(&block)?;
 
-        let tsv_block = String::from_utf8(buffer)?;
+        let json_block = String::from_utf8(buffer)?;
         let expect = r#"{"c1":1.0,"c2":"inf"}
 {"c1":"nan","c2":"inf"}
 "#;
-        assert_eq!(&tsv_block, expect);
+        assert_eq!(&json_block, expect);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_string_escape() -> Result<()> {
+    let format_setting = FormatSettings::default();
+    let schema = DataSchemaRefExt::create(vec![DataField::new("c1", Vu8::to_data_type())]);
+
+    let columns = vec![Series::from_data(vec!["\0"])];
+
+    let block = DataBlock::create(schema.clone(), columns);
+
+    {
+        let fmt = OutputFormatType::JsonEachRow;
+        let mut formatter = fmt.create_format(schema, format_setting);
+        let buffer = formatter.serialize_block(&block)?;
+
+        let expect = b"{\"c1\":\"\\u0000\"}\n";
+        assert_eq!(&buffer, expect);
     }
 
     Ok(())
