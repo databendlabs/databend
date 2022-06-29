@@ -105,7 +105,7 @@ impl RaftState {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn set_cluster_id(&self, id: NodeId) -> MetaResult<()> {
+    pub async fn set_node_id(&self, id: NodeId) -> MetaResult<()> {
         let state = self.state();
         state
             .insert(&RaftStateKey::Id, &RaftStateValue::NodeId(id))
@@ -117,7 +117,7 @@ impl RaftState {
     /// so that next time opening it the caller knows it is initialized.
     #[tracing::instrument(level = "debug", skip(self))]
     async fn init(&self) -> MetaResult<()> {
-        self.set_cluster_id(self.id).await
+        self.set_node_id(self.id).await
     }
 
     pub async fn write_hard_state(&self, hs: &HardState) -> MetaStorageResult<()> {

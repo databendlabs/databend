@@ -56,12 +56,12 @@ pub async fn export_data(config: &Config) -> anyhow::Result<()> {
     // export from grpc api if metasrv is running
     if config.grpc_api_address.is_empty() {
         init_sled_db(raft_config.raft_dir.clone());
-        export_from_dir(&config)?;
+        export_from_dir(config)?;
     } else {
-        export_from_running_node(&config).await?;
+        export_from_running_node(config).await?;
     }
 
-    return Ok(());
+    Ok(())
 }
 
 pub async fn import_data(config: &Config) -> anyhow::Result<()> {
@@ -108,17 +108,16 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
         tree.insert(k, v)?;
         n += 1;
 
-        match kv_variant {
-            KeySpaceKV::Logs { key: _, value } => match max_log_id {
+        if let KeySpaceKV::Logs { key: _, value } = kv_variant {
+            match max_log_id {
                 Some(log_id) => {
                     if value.log_id > log_id {
                         max_log_id = Some(value.log_id);
                     }
                 }
                 None => max_log_id = Some(value.log_id),
-            },
-            _ => {}
-        }
+            };
+        };
     }
     for tree in trees.values() {
         tree.flush()?;
@@ -133,17 +132,15 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
 fn import_from(restore: String) -> anyhow::Result<Option<LogId>> {
     if restore.is_empty() {
         let lines = io::stdin().lines();
-        return import_lines(lines);
+        import_lines(lines)
     } else {
         match File::open(restore) {
             Ok(file) => {
                 let reader = BufReader::new(file);
                 let lines = reader.lines();
-                return import_lines(lines);
+                import_lines(lines)
             }
-            Err(e) => {
-                return Err(anyhow::Error::new(e));
-            }
+            Err(e) => Err(anyhow::Error::new(e)),
         }
     }
 }
@@ -160,14 +157,14 @@ async fn init_new_cluster(
     let mut nodes = BTreeMap::new();
     for peer in initial_cluster {
         println!("peer:{}", peer);
-        let node_info: Vec<&str> = peer.split("=").collect();
+        let node_info: Vec<&str> = peer.split('=').collect();
         if node_info.len() != 2 {
             return Err(anyhow::anyhow!("invalid peer str: {}", peer));
         }
         let id = u64::from_str(node_info[0])?;
         node_ids.insert(id);
 
-        let addrs: Vec<&str> = node_info[1].split(",").collect();
+        let addrs: Vec<&str> = node_info[1].split(',').collect();
         if addrs.len() != 2 {
             return Err(anyhow::anyhow!("invalid peer str: {}", peer));
         }
@@ -197,11 +194,10 @@ async fn init_new_cluster(
     let (sm_id, _prev_sm_id) = raft_state.read_state_machine_id()?;
 
     let sm = StateMachine::open(&config, sm_id).await?;
-    let last_applied_log_id = sm.get_last_applied()?;
 
     let mut log_id: LogId = match max_log_id {
         Some(max_log_id) => max_log_id,
-        None => match last_applied_log_id {
+        None => match sm.get_last_applied()? {
             Some(last_applied) => last_applied,
             None => {
                 return Err(anyhow::Error::new(MetaStorageError::SledError(
@@ -217,7 +213,7 @@ async fn init_new_cluster(
         log_id.index += 1;
         let membership = Membership::new_single(node_ids);
         let entry: Entry<LogEntry> = Entry::<LogEntry> {
-            log_id: log_id.clone(),
+            log_id,
             payload: EntryPayload::Membership(membership),
         };
 
@@ -238,7 +234,7 @@ async fn init_new_cluster(
             };
 
             let entry: Entry<LogEntry> = Entry::<LogEntry> {
-                log_id: log_id.clone(),
+                log_id,
                 payload: EntryPayload::Normal(LogEntry { txid: None, cmd }),
             };
 
@@ -246,11 +242,8 @@ async fn init_new_cluster(
         }
     }
 
-    raft_state.set_cluster_id(id).await?;
-    match last_applied_log_id {
-        Some(id) => sm.set_last_applied(id).await?,
-        None => {}
-    }
+    raft_state.set_node_id(id).await?;
+
     Ok(())
 }
 
@@ -310,13 +303,13 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
             } else {
                 file.as_ref()
                     .unwrap()
-                    .write(format!("{}\n", line).as_bytes())?;
+                    .write_all(format!("{}\n", line).as_bytes())?;
             }
         }
     }
 
     if file.as_ref().is_some() {
-        let _ = file.as_ref().unwrap().sync_all()?;
+        file.as_ref().unwrap().sync_all()?
     }
 
     eprintln!("export {} records", cnt);

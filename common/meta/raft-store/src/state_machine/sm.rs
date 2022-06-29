@@ -847,14 +847,6 @@ impl StateMachine {
         Ok(last_applied)
     }
 
-    pub async fn set_last_applied(&self, last_applied: LogId) -> MetaStorageResult<()> {
-        let sm_meta = self.sm_meta();
-        sm_meta
-            .insert(&LastApplied, &StateMachineMetaValue::LogId(last_applied))
-            .await?;
-        Ok(())
-    }
-
     pub async fn add_node(&self, node_id: u64, node: &Node) -> MetaStorageResult<()> {
         let sm_nodes = self.nodes();
         sm_nodes.insert(&node_id, node).await?;

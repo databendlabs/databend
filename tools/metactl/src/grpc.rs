@@ -44,13 +44,13 @@ pub async fn export_meta(addr: &str, save: String) -> anyhow::Result<()> {
             } else {
                 file.as_ref()
                     .unwrap()
-                    .write(format!("{}\n", line).as_bytes())?;
+                    .write_all(format!("{}\n", line).as_bytes())?;
             }
         }
     }
 
     if file.as_ref().is_some() {
-        let _ = file.as_ref().unwrap().sync_all()?;
+        file.as_ref().unwrap().sync_all()?;
     }
 
     Ok(())
