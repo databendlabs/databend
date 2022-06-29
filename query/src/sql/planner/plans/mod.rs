@@ -167,7 +167,7 @@ pub enum Plan {
     DropUser(Box<DropUserPlan>),
 
     // UDF
-    CreateUserUDF(Box<CreateUserUDFPlan>),
+    CreateUDF(Box<CreateUserUDFPlan>),
     AlterUDF(Box<AlterUserUDFPlan>),
 
     ShowRoles,
@@ -236,7 +236,8 @@ impl Display for Plan {
             Plan::ShowGrants(_) => write!(f, "ShowGrants"),
             Plan::RevokePriv(_) => write!(f, "RevokePriv"),
             Plan::RevokeRole(_) => write!(f, "RevokeRole"),
-            Plan::CreateUserUDF(_) => write!(f, "CreateUserUDF"),
+            Plan::CreateUDF(_) => write!(f, "CreateUDF"),
+            Plan::AlterUDF(_) => write!(f, "AlterUDF"),
             Plan::Insert(_) => write!(f, "Insert"),
             Plan::Delete(_) => write!(f, "Delete"),
         }
@@ -297,7 +298,8 @@ impl Plan {
             Plan::RemoveStage(plan) => plan.schema(),
             Plan::RevokePriv(_) => Arc::new(DataSchema::empty()),
             Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
-            Plan::CreateUserUDF(_) => Arc::new(DataSchema::empty()),
+            Plan::CreateUDF(_) => Arc::new(DataSchema::empty()),
+            Plan::AlterUDF(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
         }

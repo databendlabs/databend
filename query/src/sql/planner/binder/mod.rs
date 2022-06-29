@@ -208,11 +208,6 @@ impl<'a> Binder {
                 principal: principal.clone(),
             })),
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
-            _ => {
-                return Err(ErrorCode::UnImplement(format!(
-                    "UnImplemented stmt {stmt} in binder"
-                )))
-            }
 
             // UDFs
             Statement::CreateUDF {
@@ -221,7 +216,7 @@ impl<'a> Binder {
                 parameters,
                 definition,
                 description,
-            } => Plan::CreateUserUDF(Box::new(CreateUserUDFPlan {
+            } => Plan::CreateUDF(Box::new(CreateUserUDFPlan {
                 if_not_exists: *if_not_exists,
                 udf: UserDefinedFunction {
                     name: udf_name.to_string(),
@@ -243,6 +238,12 @@ impl<'a> Binder {
                     definition: description.clone().unwrap_or_default(),
                 },
             })),
+
+            _ => {
+                return Err(ErrorCode::UnImplement(format!(
+                    "UnImplemented stmt {stmt} in binder"
+                )))
+            }
         };
         Ok(plan)
     }
