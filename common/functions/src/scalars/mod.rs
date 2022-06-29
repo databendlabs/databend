@@ -25,6 +25,7 @@ mod function_common;
 mod function_factory;
 mod function_features;
 mod function_monotonic;
+mod geos;
 mod hashes;
 mod logics;
 mod maths;
