@@ -4,6 +4,7 @@ sidebar_label: Deploying with Cloud Object Storage
 description:
   How to deploy Databend with cloud object storage
 ---
+import GetLatest from '@site/src/components/GetLatest';
 
 ## Deploying with Cloud Object Storage
 
@@ -101,6 +102,80 @@ secret_access_key = "<your-account-key>"
 # account_name = "<your-storage-account-name>"
 # account_key = "<your-account-key>"
 ```
+
+The field *endpoint_url* refers to the service URL of your storage region and varies depending on the object storage solution you use:
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="operating-systems">
+<TabItem value="Amazon S3" label="Amazon S3">
+
+```toml
+endpoint_url = "https://s3.amazonaws.com"
+```
+
+</TabItem>
+
+<TabItem value="Tencent COS" label="Tencent COS">
+
+You can get the URL from the bucket detail page. 
+
+For example, 
+```toml
+endpoint_url = "https://cos.ap-beijing.myqcloud.com"
+```
+
+</TabItem>
+
+<TabItem value="Alibaba OSS" label="Alibaba OSS">
+
+Follow this format:
+```curl
+https://<bucket-name>.<region-id>[-internal].aliyuncs.com
+```
+
+For example, 
+```toml
+endpoint_url = "https://databend.oss-cn-beijing-internal.aliyuncs.com"
+```
+
+For information about the region ID, see https://help.aliyun.com/document_detail/31837.htm
+
+</TabItem>
+
+<TabItem value="Wasabi" label="Wasabi">
+
+To find out the service URL for your storage region, go to https://wasabi-support.zendesk.com/hc/en-us/articles/360015106031-What-are-the-service-URLs-for-Wasabi-s-different-regions-
+
+For example, 
+```toml
+endpoint_url = "https://s3.us-east-2.wasabisys.com"
+```
+
+</TabItem>
+
+<TabItem value="QingCloud QingStore" label="QingCloud QingStore">
+
+To find out the service URL for your storage region, go to https://docsv3.qingcloud.com/storage/object-storage/intro/object-storage/#zone
+
+For example, 
+```toml
+endpoint_url = "https://pek3b.qingstor.com"
+```
+
+</TabItem>
+
+<TabItem value="Azure Blob Storage" label="Azure Blob Storage">
+
+Follow this format:
+```curl
+https://<your-storage-account-name>.blob.core.windows.net
+```
+
+</TabItem>
+</Tabs>
+
 :::tip
 
 If you're using Azure Blob storage, set the parameter type in [storage] block to azblob first. Then comment out the [storage.fs] block,  uncomment the [storage.azblob] block and set your values in it.
