@@ -102,6 +102,9 @@ fn normalize_predicate_scalar(
     }
 }
 
+// The function tries to apply the inverse OR distributive law to the predicate.
+// ((A AND B) OR (A AND C))  =>  (A AND (B OR C))
+// It'll find all OR expressions and extract the common terms.
 pub fn predicate_rewrite(s_expr: SExpr) -> Result<SExpr> {
     match s_expr.plan().clone() {
         RelOperator::Filter(plan) => {
@@ -151,7 +154,7 @@ pub fn predicate_rewrite(s_expr: SExpr) -> Result<SExpr> {
 fn rewrite_predicate_ors(predicate: &PredicateScalar) -> Result<PredicateScalar> {
     match predicate {
         PredicateScalar::Or { args } => {
-            let mut or_args = vec![];
+            let mut or_args = Vec::with_capacity(args.len());
             for arg in args.iter() {
                 or_args.push(rewrite_predicate_ors(arg)?);
             }
@@ -159,7 +162,7 @@ fn rewrite_predicate_ors(predicate: &PredicateScalar) -> Result<PredicateScalar>
             process_duplicate_or_exprs(&or_args)
         }
         PredicateScalar::And { args } => {
-            let mut and_args = vec![];
+            let mut and_args = Vec::with_capacity(args.len());
             for arg in args.iter() {
                 and_args.push(rewrite_predicate_ors(arg)?);
             }
@@ -170,6 +173,7 @@ fn rewrite_predicate_ors(predicate: &PredicateScalar) -> Result<PredicateScalar>
     }
 }
 
+// Recursively flatten the OR expressions.
 fn flatten_ors(or_args: &[PredicateScalar]) -> Result<Vec<PredicateScalar>> {
     let mut flattened_ors = vec![];
     for or_arg in or_args.iter() {
@@ -183,6 +187,7 @@ fn flatten_ors(or_args: &[PredicateScalar]) -> Result<Vec<PredicateScalar>> {
     Ok(flattened_ors)
 }
 
+// Recursively flatten the AND expressions.
 fn flatten_ands(and_args: &[PredicateScalar]) -> Result<Vec<PredicateScalar>> {
     let mut flattened_ands = vec![];
     for and_arg in and_args.iter() {
@@ -195,6 +200,7 @@ fn flatten_ands(and_args: &[PredicateScalar]) -> Result<Vec<PredicateScalar>> {
     }
     Ok(flattened_ands)
 }
+
 // Apply the inverse OR distributive law.
 fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<PredicateScalar> {
     let mut shortest_exprs: Vec<PredicateScalar> = vec![];
@@ -221,6 +227,7 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<PredicateSc
                 }
             }
             _ => {
+                // if there is no AND expression, it must be the shortest expression.
                 shortest_exprs = vec![or_arg.clone()];
                 break;
             }
@@ -261,6 +268,8 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<PredicateSc
         });
     }
 
+    // Rebuild the OR predicate.
+    // (A AND B) OR A will be optimized to A.
     let mut new_or_args = vec![];
     for or_arg in or_args.iter() {
         match or_arg {
@@ -279,9 +288,7 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<PredicateSc
                 }
             }
             _ => {
-                if !exist_exprs.contains(or_arg) {
-                    new_or_args.push((*or_arg).clone());
-                } else {
+                if exist_exprs.contains(or_arg) {
                     new_or_args.clear();
                     break;
                 }
