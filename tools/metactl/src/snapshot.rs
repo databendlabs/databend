@@ -76,12 +76,13 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     if config.initial_cluster.is_empty() || config.raft_config.id == 0 {
         return Ok(());
     }
-    return init_new_cluster(
+    init_new_cluster(
         config.initial_cluster.clone(),
         max_log_id,
         config.raft_config.id,
     )
-    .await;
+    .await?;
+    Ok(())
 }
 
 // return the max log id
