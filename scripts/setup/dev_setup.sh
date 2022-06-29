@@ -561,6 +561,11 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	python3 -m pip install --quiet mysql-connector-python pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
 	python3 -m pip install --quiet mysql-connector six PyHamcrest requests environs fire
+	
+	# sqllogic clickhouse dependencies
+	# a temp hack only to make logic test work on click house as quickly as possible
+    # we need another way to support session on clickhouse-sqlalchemy
+    python3 -m pip install https://github.com/youngsofun/clickhouse-sqlalchemy/archive/refs/heads/databend.zip
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
