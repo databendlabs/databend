@@ -241,7 +241,7 @@ impl InputFormat for CsvInputFormat {
                 }
             } else {
                 if (!memory_reader.ignore_white_spaces_and_byte(b'\n')?
-                    & !memory_reader.ignore_white_spaces_and_byte(b'\r')?)
+                    && !memory_reader.ignore_white_spaces_and_byte(b'\r')?)
                     && !memory_reader.eof()?
                 {
                     return Err(ErrorCode::BadBytes(format!(
