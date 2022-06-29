@@ -1990,10 +1990,12 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "databend-meta",
+ "openraft",
  "serde",
  "serde_json",
  "tokio-stream",
  "tonic",
+ "url",
 ]
 
 [[package]]

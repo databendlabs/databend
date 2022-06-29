@@ -93,8 +93,9 @@ stateless-cluster-test-tls: build
 	rm -rf ./_meta*/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
-metactl-test: build
+metactl-test: build-debug
 	bash ./tests/metactl/test-metactl.sh
+	bash ./tests/metactl/test-metactl-restore-new-cluster.sh
 
 meta-bench: build-release
 	bash ./scripts/benchmark/run-meta-benchmark.sh 10 1000
