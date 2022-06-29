@@ -41,8 +41,8 @@ use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 
+use crate::ApiBuilder;
 use crate::KVApi;
-use crate::KVApiBuilder;
 
 pub struct KVApiTestSuite {}
 
@@ -51,7 +51,7 @@ impl KVApiTestSuite {
     pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
     where
         KV: KVApi,
-        B: KVApiBuilder<KV>,
+        B: ApiBuilder<KV>,
     {
         self.kv_write_read(&builder.build().await).await?;
         self.kv_delete(&builder.build().await).await?;

@@ -25,14 +25,13 @@ use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 
+/// Build an API impl instance or a cluster of API impl
 #[async_trait]
-pub trait KVApiBuilder<T>
-where T: KVApi
-{
-    /// Create a KVApi
+pub trait ApiBuilder<T>: Clone {
+    /// Create a single node impl
     async fn build(&self) -> T;
 
-    /// Create a KVApi cluster
+    /// Create a cluster of T
     async fn build_cluster(&self) -> Vec<T>;
 }
 
