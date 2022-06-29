@@ -96,10 +96,12 @@ pub fn init_global_tracing(
     let mut jaeger_layer = None;
     let fuse_jaeger_env = env::var("DATABEND_JAEGER").unwrap_or_else(|_| "".to_string());
     if !fuse_jaeger_env.is_empty() {
+        let jaeger_agent_endpoint = env::var("DATABEND_JAEGER_AGENT_ENDPOINT").unwrap_or_else(|_| "127.0.0.1:6831".to_string());
         global::set_text_map_propagator(TraceContextPropagator::new());
 
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_service_name(app_name)
+            .with_agent_endpoint(jaeger_agent_endpoint)
             .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 
