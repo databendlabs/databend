@@ -56,7 +56,10 @@ The `--initial-cluster` format is: `node_id=endpoint,grpc_api_addr`, each node c
 E.g.:
 
 ```
-/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=1 --db meta.db --initial-cluster 1=localhost:29103,0.0.0.0:19191 2=localhost:29203,0.0.0.0:29191;3=localhost:29303,0.0.0.0:39191
+/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta1 --id=1 --db meta.db --initial-cluster 1=localhost:29103,0.0.0.0:19191 2=localhost:29203,0.0.0.0:29191;3=localhost:29303,0.0.0.0:39191
+/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta2 --id=2 --db meta.db --initial-cluster 1=localhost:29103,0.0.0.0:19191 2=localhost:29203,0.0.0.0:29191;3=localhost:29303,0.0.0.0:39191
+/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=3 --db meta.db --initial-cluster 1=localhost:29103,0.0.0.0:19191 2=localhost:29203,0.0.0.0:29191;3=localhost:29303,0.0.0.0:39191
 ```
 
-The script above imports the exported data from `meta.db` to `./.databend/new_meta3` dir, and initializes the cluster with three nodes.Then the `databend-meta` can started with the new import data in `./.databend/new_meta3` with new config.
+The script above imports the exported data from `meta.db` and initializes the three cluster nodes: id 1, which raft directory is `./.databend/new_meta1`, and so are id 2 and 3 with different raft directory.
+Note that the `--initial-cluster` argument in these three command line is the same.
