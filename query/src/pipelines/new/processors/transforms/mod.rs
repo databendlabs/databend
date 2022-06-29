@@ -38,7 +38,7 @@ mod transform_sort_partial;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
-pub use hash_join::ChainingHashTable;
+pub use hash_join::JoinHashTable;
 pub use hash_join::HashJoinState;
 pub use hash_join::HashTable;
 pub use hash_join::KeyU128HashTable;
