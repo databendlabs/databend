@@ -4,6 +4,12 @@ set enable_planner_v2 = 1;
 statement ok 
 drop table if exists t all;
 
+statement ok
+drop table if exists t1 all;
+
+statement ok
+drop table if exists t2 all;
+
 statement query T 
 select '====SELECT_FROM_NUMBERS====';
 
@@ -324,42 +330,45 @@ statement query II
 SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1,ct;
 
 ----  
-NULL 3
 0 4
 2 3
+NULL 3
 
 statement query III 
 SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1, a2;
 
 ----  
-NULL NULL 3
 0 0 2
 0 2 2
 1 0 2
 1 2 1
+NULL NULL 3
 
 statement query III 
 SELECT a%2 as a1, to_uint64(c % 3) as c1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
 
 ---- 
-NULL 2 3 
 0 0 2
 0 1 2
 1 0 1
 1 1 2
+NULL 2 3 
 
 statement query III 
 SELECT to_uint64(c % 3) as c1, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
 
 ----  
-2 NULL 3
 0 0 2
 1 0 2
 0 1 1
 1 1 2
+2 NULL 3
 
-statement error 1006 
+statement query I
 select number%2 as b from numbers(5) group by number % 2 having count(*) = 3 and sum(number) > 5;
+
+----
+0
 
 statement query I 
 select count(*) from numbers(5) group by number % 2 having number % 2 + 1 = 2;
@@ -1099,6 +1108,7 @@ select '===Explain Pipeline===';
 ----  
 ===Explain Pipeline===
 
+onlyif mysql
 statement ok
 explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
 
@@ -1150,6 +1160,7 @@ select '====Tuple====';
 ----  
 ====Tuple====
 
+onlyif mysql
 statement ok
 select ('field', number) from numbers(5);
 

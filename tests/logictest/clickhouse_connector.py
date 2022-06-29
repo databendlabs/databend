@@ -40,9 +40,9 @@ class ClickhouseConnector():
         cursor.close()
         return data_list
 
-if __name__ == '__main__':
-    from config import clickhouse_config
-    connector = ClickhouseConnector()
-    connector.connect(**clickhouse_config)
-    print(connector.fetch_all("show databases"))
-    print(connector.fetch_all("select * from t1"))
+# if __name__ == '__main__':
+#     from config import clickhouse_config
+#     connector = ClickhouseConnector()
+#     connector.connect(**clickhouse_config)
+#     print(connector.fetch_all("show databases"))
+#     print(connector.fetch_all("select * from t1"))
