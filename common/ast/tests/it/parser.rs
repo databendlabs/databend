@@ -62,11 +62,16 @@ fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("statement.txt").unwrap();
     let cases = &[
+        r#"show databases"#,
+        r#"show databases format TabSeparatedWithNamesAndTypes;"#,
         r#"show tables"#,
+        r#"show tables format TabSeparatedWithNamesAndTypes;"#,
         r#"show processlist;"#,
         r#"show create table a.b;"#,
+        r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
         r#"explain pipeline select a from b;"#,
         r#"describe a;"#,
+        r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table a.b like c.d;"#,
@@ -209,7 +214,7 @@ fn test_statement() {
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let backtrace = Backtrace::new();
-        let stmt = parse_sql(&tokens, &backtrace).unwrap();
+        let (stmt, fmt) = parse_sql(&tokens, &backtrace).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -217,6 +222,10 @@ fn test_statement() {
         writeln!(file, "---------- AST ------------").unwrap();
         writeln!(file, "{:#?}", stmt).unwrap();
         writeln!(file, "\n").unwrap();
+        if fmt.is_some() {
+            writeln!(file, "---------- FORMAT ------------").unwrap();
+            writeln!(file, "{:#?}", fmt).unwrap();
+        }
     }
 }
 
@@ -234,6 +243,7 @@ fn test_statement_error() {
         r#"truncate a"#,
         r#"drop a"#,
         r#"insert into t format"#,
+        r#"show tables format"#,
         r#"alter database system x rename to db"#,
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
         r#"drop usar if exists 'test-j'@'localhost';"#,

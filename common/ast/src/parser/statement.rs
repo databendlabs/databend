@@ -33,7 +33,7 @@ use crate::rule;
 use crate::util::*;
 use crate::ErrorKind;
 
-pub fn statement(i: Input) -> IResult<Statement> {
+pub fn statement(i: Input) -> IResult<StatementMsg> {
     let explain = map(
         rule! {
             EXPLAIN ~ ( PIPELINE | GRAPH )? ~ #statement
@@ -45,7 +45,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 None => ExplainKind::Syntax,
                 _ => unreachable!(),
             },
-            query: Box::new(statement),
+            query: Box::new(statement.stmt),
         },
     );
     let insert = map(
@@ -743,16 +743,19 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule!(
             #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS [FOR  { ROLE <role_name> | [USER] <user> }]`"
-                        | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+            | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
 
         ),
     ));
 
     map(
         rule! {
-            #statement_body ~ ";"? ~ &EOI
+            #statement_body ~ (FORMAT ~ #ident)? ~ ";"? ~ &EOI
         },
-        |(stmt, _, _)| stmt,
+        |(stmt, opt_format, _, _)| StatementMsg {
+            stmt,
+            format: opt_format.map(|(_, format)| format.name),
+        },
     )(i)
 }
 

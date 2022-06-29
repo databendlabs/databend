@@ -1,4 +1,32 @@
 ---------- Input ----------
+show databases
+---------- Output ---------
+SHOW DATABASES
+---------- AST ------------
+ShowDatabases(
+    ShowDatabasesStmt {
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show databases format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+SHOW DATABASES
+---------- AST ------------
+ShowDatabases(
+    ShowDatabasesStmt {
+        limit: None,
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
+---------- Input ----------
 show tables
 ---------- Output ---------
 SHOW TABLES
@@ -13,6 +41,25 @@ ShowTables(
 )
 
 
+---------- Input ----------
+show tables format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+SHOW TABLES
+---------- AST ------------
+ShowTables(
+    ShowTablesStmt {
+        database: None,
+        full: false,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
 ---------- Input ----------
 show processlist;
 ---------- Output ---------
@@ -45,6 +92,34 @@ ShowCreateTable(
 )
 
 
+---------- Input ----------
+show create table a.b format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+SHOW CREATE TABLE a.b
+---------- AST ------------
+ShowCreateTable(
+    ShowCreateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(18..19),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(20..21),
+        },
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
 ---------- Input ----------
 explain pipeline select a from b;
 ---------- Output ---------
@@ -131,6 +206,28 @@ DescribeTable(
 )
 
 
+---------- Input ----------
+describe a format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+DESCRIBE a
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(9..10),
+        },
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
 ---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------

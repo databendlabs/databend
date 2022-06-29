@@ -42,7 +42,7 @@ pub(super) struct Suite {
 async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     let tokens = tokenize_sql(&suite.query)?;
     let bt = Backtrace::new();
-    let stmt = parse_sql(&tokens, &bt)?;
+    let (stmt, _) = parse_sql(&tokens, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
         ctx.get_catalogs(),

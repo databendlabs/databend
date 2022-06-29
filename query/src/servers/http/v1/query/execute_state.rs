@@ -196,7 +196,7 @@ impl ExecuteState {
             && matches!(stmts.get(0), Some(DfStatement::Query(_)))
         {
             let mut planner = Planner::new(ctx.clone());
-            let (plan, _) = planner.plan_sql(sql).await?;
+            let (plan, _, _) = planner.plan_sql(sql).await?;
             let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
             // Write Start to query log table.
