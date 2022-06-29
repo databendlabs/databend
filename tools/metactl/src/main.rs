@@ -56,9 +56,9 @@ pub struct Config {
     #[clap(long, default_value = "")]
     pub db: String,
 
-    /// initial_cluster format: node_id=endpoint,grpc_api_addr;
-    #[clap(long, default_value = "")]
-    pub initial_cluster: String,
+    /// initial_cluster format: node_id=endpoint,grpc_api_addr
+    #[clap(long, multiple_occurrences = true, multiple_values = true)]
+    pub initial_cluster: Vec<String>,
 
     #[clap(flatten)]
     pub raft_config: RaftConfig,
@@ -141,8 +141,9 @@ pub struct RaftConfig {
     #[serde(alias = "metasrv_join")]
     pub join: Vec<String>,
 
-    /// The node id. Only used when this server is not initialized,
-    ///  e.g. --boot or --single for the first time.
+    /// The node id. Used in these cases:
+    /// 1. when this server is not initialized, e.g. --boot or --single for the first time.
+    /// 2. --initial_cluster with new cluster node id.
     ///  Otherwise this argument is ignored.
     #[clap(long, default_value = "0")]
     #[serde(alias = "kvsrv_id")]

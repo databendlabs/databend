@@ -18,7 +18,7 @@ use std::ops::Bound;
 use std::ops::Deref;
 use std::ops::RangeBounds;
 
-use anyerror::AnyError;
+use common_meta_types::anyerror::AnyError;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::MetaStorageError;
 use common_meta_types::MetaStorageResult;

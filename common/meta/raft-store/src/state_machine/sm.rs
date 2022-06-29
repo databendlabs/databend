@@ -298,13 +298,13 @@ impl StateMachine {
                     return Ok(Some(applied_state));
                 }
                 EntryPayload::Membership(ref mem) => {
-                    let r = txn_sm_meta.insert(
+                    txn_sm_meta.insert(
                         &LastMembership,
                         &StateMachineMetaValue::Membership(EffectiveMembership {
                             log_id: *log_id,
                             membership: mem.clone(),
                         }),
-                    );
+                    )?;
                     return Ok(Some(AppliedState::None));
                 }
             };
@@ -845,6 +845,20 @@ impl StateMachine {
             .map(|x| x.try_into().expect("LogId"));
 
         Ok(last_applied)
+    }
+
+    pub async fn set_last_applied(&self, last_applied: LogId) -> MetaStorageResult<()> {
+        let sm_meta = self.sm_meta();
+        sm_meta
+            .insert(&LastApplied, &StateMachineMetaValue::LogId(last_applied))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn add_node(&self, node_id: u64, node: &Node) -> MetaStorageResult<()> {
+        let sm_nodes = self.nodes();
+        sm_nodes.insert(&node_id, node).await?;
+        Ok(())
     }
 
     pub fn get_client_last_resp(&self, key: &str) -> MetaResult<Option<(u64, AppliedState)>> {

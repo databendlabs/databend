@@ -32,10 +32,12 @@ use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
+use common_meta_types::anyerror::AnyError;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
+use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use databend_meta::export::deserialize_to_kv_variant;
 use databend_meta::export::serialize_kv_variant;
@@ -53,10 +55,8 @@ pub async fn export_data(config: &Config) -> anyhow::Result<()> {
 
     // export from grpc api if metasrv is running
     if config.grpc_api_address.is_empty() {
-        eprintln!("export meta dir from: {}", raft_config.raft_dir);
-
         init_sled_db(raft_config.raft_dir.clone());
-        export_from_dir(config.db.clone())?;
+        export_from_dir(&config)?;
     } else {
         export_from_running_node(&config).await?;
     }
@@ -73,18 +73,23 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     clear()?;
     let max_log_id = import_from(config.db.clone())?;
 
-    if config.initial_cluster.is_empty() {
+    if config.initial_cluster.is_empty() || config.raft_config.id == 0 {
         return Ok(());
     }
-    return init_new_cluster(config.initial_cluster.clone(), max_log_id).await;
+    return init_new_cluster(
+        config.initial_cluster.clone(),
+        max_log_id,
+        config.raft_config.id,
+    )
+    .await;
 }
 
 // return the max log id
-fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<LogId> {
+fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
     let db = get_sled_db();
     let mut trees = BTreeMap::new();
     let mut n = 0;
-    let mut max_log_id: LogId = LogId::default();
+    let mut max_log_id: Option<LogId> = None;
     for line in lines {
         let l = line?;
         let (tree_name, kv_variant): (String, KeySpaceKV) = serde_json::from_str(&l)?;
@@ -104,11 +109,14 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<LogId> {
         n += 1;
 
         match kv_variant {
-            KeySpaceKV::Logs { key: _, value } => {
-                if value.log_id > max_log_id {
-                    max_log_id = value.log_id;
+            KeySpaceKV::Logs { key: _, value } => match max_log_id {
+                Some(log_id) => {
+                    if value.log_id > log_id {
+                        max_log_id = Some(value.log_id);
+                    }
                 }
-            }
+                None => max_log_id = Some(value.log_id),
+            },
             _ => {}
         }
     }
@@ -122,7 +130,7 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<LogId> {
 
 /// Read every line from stdin or restore file, deserialize it into tree_name, key and value.
 /// Insert them into sled db and flush.
-fn import_from(restore: String) -> anyhow::Result<LogId> {
+fn import_from(restore: String) -> anyhow::Result<Option<LogId>> {
     if restore.is_empty() {
         let lines = io::stdin().lines();
         return import_lines(lines);
@@ -141,13 +149,17 @@ fn import_from(restore: String) -> anyhow::Result<LogId> {
 }
 
 // initial_cluster format: node_id=endpoint,grpc_api_addr;
-async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow::Result<()> {
-    let peers = initial_cluster.split(";");
+async fn init_new_cluster(
+    initial_cluster: Vec<String>,
+    max_log_id: Option<LogId>,
+    id: u64,
+) -> anyhow::Result<()> {
+    println!("init-cluster: {:?}", initial_cluster);
 
     let mut node_ids = BTreeSet::new();
     let mut nodes = BTreeMap::new();
-    for peer in peers {
-        //println!("peer:{}", peer);
+    for peer in initial_cluster {
+        println!("peer:{}", peer);
         let node_info: Vec<&str> = peer.split("=").collect();
         if node_info.len() != 2 {
             return Err(anyhow::anyhow!("invalid peer str: {}", peer));
@@ -159,7 +171,10 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
         if addrs.len() != 2 {
             return Err(anyhow::anyhow!("invalid peer str: {}", peer));
         }
-        let url = Url::parse(addrs[0])?;
+        let url = Url::parse(&format!("http://{}", addrs[0]))?;
+        if url.host_str().is_none() || url.port().is_none() {
+            return Err(anyhow::anyhow!("invalid peer raft addr: {}", addrs[0]));
+        }
         let endpoint = Endpoint {
             addr: url.host_str().unwrap().to_string(),
             port: url.port().unwrap() as u32,
@@ -173,8 +188,6 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
         nodes.insert(id, node);
     }
 
-    let mut log_id: LogId = max_log_id;
-
     let db = get_sled_db();
     let config = RaftConfig {
         ..Default::default()
@@ -184,8 +197,20 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
     let (sm_id, _prev_sm_id) = raft_state.read_state_machine_id()?;
 
     let sm = StateMachine::open(&config, sm_id).await?;
+    let last_applied_log_id = sm.get_last_applied()?;
 
-    let mut entries = Vec::new();
+    let mut log_id: LogId = match max_log_id {
+        Some(max_log_id) => max_log_id,
+        None => match last_applied_log_id {
+            Some(last_applied) => last_applied,
+            None => {
+                return Err(anyhow::Error::new(MetaStorageError::SledError(
+                    AnyError::error("cannot find last applied log id"),
+                )))
+            }
+        },
+    };
+
     // contruct Membership log entry
     {
         // insert last membership log
@@ -197,8 +222,6 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
         };
 
         log.insert(&entry).await?;
-
-        entries.push(entry);
     }
 
     // construct AddNode log entries
@@ -207,6 +230,7 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
         sm.nodes().clear()?;
 
         for node in nodes {
+            sm.add_node(node.0, &node.1).await?;
             log_id.index += 1;
             let cmd: Cmd = Cmd::AddNode {
                 node_id: node.0,
@@ -219,14 +243,14 @@ async fn init_new_cluster(initial_cluster: String, max_log_id: LogId) -> anyhow:
             };
 
             log.insert(&entry).await?;
-            entries.push(entry);
         }
     }
 
-    for entry in entries {
-        sm.apply(&entry).await?;
+    raft_state.set_cluster_id(id).await?;
+    match last_applied_log_id {
+        Some(id) => sm.set_last_applied(id).await?,
+        None => {}
     }
-
     Ok(())
 }
 
@@ -250,15 +274,21 @@ fn clear() -> anyhow::Result<()> {
 /// `[sled_tree_name, {key_space: {key, value}}]`
 /// E.g.:
 /// `["test-29000-state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
-fn export_from_dir(save: String) -> anyhow::Result<()> {
+fn export_from_dir(config: &Config) -> anyhow::Result<()> {
     let db = get_sled_db();
 
-    let file: Option<File> = if !save.is_empty() {
-        Some(File::create(&save)?)
+    let file: Option<File> = if !config.db.is_empty() {
+        eprintln!(
+            "export meta dir from: {} to {}",
+            config.raft_config.raft_dir, config.db
+        );
+        Some((File::create(&config.db))?)
     } else {
+        eprintln!("export meta dir from: {}", config.raft_config.raft_dir);
         None
     };
 
+    let mut cnt = 0;
     let mut tree_names = db.tree_names();
     tree_names.sort();
     for n in tree_names.iter() {
@@ -273,6 +303,7 @@ fn export_from_dir(save: String) -> anyhow::Result<()> {
             let tree_kv = (name.clone(), kv_variant);
 
             let line = serde_json::to_string(&tree_kv)?;
+            cnt += 1;
 
             if file.as_ref().is_none() {
                 println!("{}", line);
@@ -287,6 +318,8 @@ fn export_from_dir(save: String) -> anyhow::Result<()> {
     if file.as_ref().is_some() {
         let _ = file.as_ref().unwrap().sync_all()?;
     }
+
+    eprintln!("export {} records", cnt);
 
     Ok(())
 }

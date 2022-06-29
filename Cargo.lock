@@ -1353,7 +1353,6 @@ dependencies = [
 name = "common-meta-sled-store"
 version = "0.1.0"
 dependencies = [
- "anyerror",
  "anyhow",
  "byteorder",
  "common-base",

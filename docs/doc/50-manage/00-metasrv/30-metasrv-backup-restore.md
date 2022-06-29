@@ -27,6 +27,8 @@ E.g., every line in the output file is a JSON of an exported key-value record.
 # ...
 ```
 
+Note: without the `--db` argument, the exported data will output to the stdio instead.
+
 ## Restore a databend-meta
 
 The following command rebuild a meta service db in `<your_meta_dir>` from
@@ -38,4 +40,23 @@ exported metadata:
 databend-meta --raft-dir "<your_meta_dir>" ...
 ```
 
+Note: without the `--db` argument, the import data come from stdio instead, like:
+
+```sh
+cat "<output_fn>" | ./target/debug/databend-metactl --import --raft-dir "<your_meta_dir>"
+```
+
 **Caveat**: Data in `<your_meta_dir>` will be cleared.
+
+## Import data as a new databend-meta cluster
+
+With specifies the `--initial-cluster` argument, the `databend-metactl` can import the data as a new cluster.
+The `--initial-cluster` format is: `node_id=endpoint,grpc_api_addr`, each node config is separated by space.
+
+E.g.:
+
+```
+/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=1 --db meta.db --initial-cluster 1=localhost:29103,0.0.0.0:19191 2=localhost:29203,0.0.0.0:29191;3=localhost:29303,0.0.0.0:39191
+```
+
+The script above imports the exported data from `meta.db` to `./.databend/new_meta3` dir, and initializes the cluster with three nodes.Then the `databend-meta` can started with the new import data in `./.databend/new_meta3` with new config.
