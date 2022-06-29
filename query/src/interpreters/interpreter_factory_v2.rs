@@ -249,6 +249,9 @@ impl InterpreterFactoryV2 {
             Plan::AlterUDF(alter_udf) => {
                 AlterUserUDFInterpreter::try_create(ctx.clone(), *alter_udf.clone())
             }
+            Plan::DropUDF(drop_udf) => {
+                DropUserUDFInterpreter::try_create(ctx.clone(), *drop_udf.clone())
+            }
         }?;
 
         Ok(Arc::new(InterceptorInterpreter::create(

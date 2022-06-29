@@ -62,6 +62,7 @@ use common_planners::DropTableClusterKeyPlan;
 use common_planners::DropTablePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
+use common_planners::DropUserUDFPlan;
 use common_planners::DropViewPlan;
 use common_planners::ExistsTablePlan;
 use common_planners::GrantPrivilegePlan;
@@ -169,6 +170,7 @@ pub enum Plan {
     // UDF
     CreateUDF(Box<CreateUserUDFPlan>),
     AlterUDF(Box<AlterUserUDFPlan>),
+    DropUDF(Box<DropUserUDFPlan>),
 
     ShowRoles,
     CreateRole(Box<CreateRolePlan>),
@@ -238,6 +240,7 @@ impl Display for Plan {
             Plan::RevokeRole(_) => write!(f, "RevokeRole"),
             Plan::CreateUDF(_) => write!(f, "CreateUDF"),
             Plan::AlterUDF(_) => write!(f, "AlterUDF"),
+            Plan::DropUDF(_) => write!(f, "DropUDF"),
             Plan::Insert(_) => write!(f, "Insert"),
             Plan::Delete(_) => write!(f, "Delete"),
         }
@@ -300,6 +303,7 @@ impl Plan {
             Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
             Plan::CreateUDF(_) => Arc::new(DataSchema::empty()),
             Plan::AlterUDF(_) => Arc::new(DataSchema::empty()),
+            Plan::DropUDF(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
         }

@@ -29,6 +29,7 @@ use common_planners::DescribeUserStagePlan;
 use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
+use common_planners::DropUserUDFPlan;
 use common_planners::ShowGrantsPlan;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
@@ -237,6 +238,13 @@ impl<'a> Binder {
                     description: definition.to_string(),
                     definition: description.clone().unwrap_or_default(),
                 },
+            })),
+            Statement::DropUDF {
+                if_exists,
+                udf_name,
+            } => Plan::DropUDF(Box::new(DropUserUDFPlan {
+                if_exists: *if_exists,
+                name: udf_name.to_string(),
             })),
 
             _ => {

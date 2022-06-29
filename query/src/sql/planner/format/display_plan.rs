@@ -90,6 +90,7 @@ impl Plan {
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
             Plan::CreateUDF(create_user_udf) => Ok(format!("{:?}", create_user_udf)),
             Plan::AlterUDF(alter_user_udf) => Ok(format!("{alter_user_udf:?}")),
+            Plan::DropUDF(drop_udf) => Ok(format!("{drop_udf:?}")),
             Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
             Plan::ShowRoles => Ok("SHOW ROLES".to_string()),
             Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
