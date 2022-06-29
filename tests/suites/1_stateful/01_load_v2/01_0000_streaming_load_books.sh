@@ -18,4 +18,4 @@ curl -H "insert_sql:insert into books format CSV" -F "upload=@${CURDIR}/books.cs
 
 echo "select count_if(title is null), count_if(author is null), count_if(date is null), count_if(publish_time is null) from books " |  $MYSQL_CLIENT_CONNECT
 
-# echo "drop table books;" | $MYSQL_CLIENT_CONNECT
+echo "drop table books;" | $MYSQL_CLIENT_CONNECT
