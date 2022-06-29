@@ -60,7 +60,7 @@ impl Session {
             std::sync::atomic::fence(Acquire);
             tracing::debug!("Destroy session {}", self.id);
 
-            self.force_kill_session();
+            self.kill();
             self.session_mgr.destroy_session(&self.id);
         }
     }

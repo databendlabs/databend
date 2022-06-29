@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
@@ -101,7 +102,6 @@ impl Session {
 
     pub fn kill(self: &Arc<Self>) {
         let session_ctx = self.session_ctx.clone();
-        session_ctx.set_abort(true);
         if session_ctx.get_current_query_id().is_some() {
             if let Some(io_shutdown) = session_ctx.take_io_shutdown_tx() {
                 let (tx, rx) = oneshot::channel();
@@ -121,6 +121,8 @@ impl Session {
 
     pub fn force_kill_query(self: &Arc<Self>) {
         let session_ctx = self.session_ctx.clone();
+
+        session_ctx.set_abort(true);
 
         if let Some(context_shared) = session_ctx.take_query_context_shared() {
             context_shared.kill(/* shutdown executing query */);
@@ -149,6 +151,20 @@ impl Session {
 
     pub fn get_current_query_id(&self) -> Option<String> {
         self.session_ctx.get_current_query_id()
+    }
+
+    pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
+    where F: FnOnce() + Send + 'static {
+        let (tx, rx) = futures::channel::oneshot::channel();
+        self.session_ctx.set_client_host(host);
+        self.session_ctx.set_io_shutdown_tx(Some(tx));
+
+        common_base::base::tokio::spawn(async move {
+            if let Ok(tx) = rx.await {
+                (io_shutdown)();
+                tx.send(()).ok();
+            }
+        });
     }
 
     pub fn set_current_database(self: &Arc<Self>, database_name: String) {
