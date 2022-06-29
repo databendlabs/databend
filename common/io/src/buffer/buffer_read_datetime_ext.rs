@@ -57,10 +57,12 @@ where R: BufferRead
             .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
         let res = tz
             .datetime_from_str(v, "%Y-%m-%d %H:%M:%S%.f")
+            .or_else(|_| tz.datetime_from_str(v, "%Y-%m-%dT%H:%M:%S"))
             .map_err_to_code(ErrorCode::BadBytes, || {
                 format!("Cannot parse value:{:?} to DateTime type", v)
             })?;
 
+        self.ignore(|b| b == b'z' || b == b'Z')?;
         if self.ignore_byte(b'.')? {
             buf.clear();
             let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;

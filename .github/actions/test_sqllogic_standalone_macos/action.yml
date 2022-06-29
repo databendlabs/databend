@@ -18,17 +18,11 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        source: github
 
-    - name: Install mysql client for macos-11
+    - name: Test setup
       shell: bash
       run: |
-        brew install mysql
-
-    - name: Install python dependences
-      shell: bash
-      run: |
-        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql six PyHamcrest requests environs fire
+        bash ./scripts/setup/dev_setup.sh -yd
 
     - name: Run sqllogic Tests with Standalone mode with embedded meta-store
       shell: bash
