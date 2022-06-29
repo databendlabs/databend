@@ -30,31 +30,29 @@ use crate::sql::ScalarExpr;
 
 #[derive(Clone, PartialEq, Debug)]
 enum PredicateScalar {
-    AndPredicate { args: Box<Vec<PredicateScalar>> },
-    OrPredicate { args: Box<Vec<PredicateScalar>> },
-    OtherPredicate { expr: Scalar },
+    And { args: Vec<PredicateScalar> },
+    Or { args: Vec<PredicateScalar> },
+    Other { expr: Box<Scalar> },
 }
 
 fn predicate_scalar(scalar: &Scalar) -> Result<PredicateScalar> {
     match scalar {
         Scalar::AndExpr(and_expr) => {
-            let mut args = vec![];
-            args.push(predicate_scalar(&*and_expr.left)?);
-            args.push(predicate_scalar(&*and_expr.right)?);
-            Ok(PredicateScalar::AndPredicate {
-                args: Box::new(args),
-            })
+            let args = vec![
+                predicate_scalar(&*and_expr.left)?,
+                predicate_scalar(&*and_expr.right)?,
+            ];
+            Ok(PredicateScalar::And { args })
         }
         Scalar::OrExpr(or_expr) => {
-            let mut args = vec![];
-            args.push(predicate_scalar(&*or_expr.left)?);
-            args.push(predicate_scalar(&*or_expr.right)?);
-            Ok(PredicateScalar::OrPredicate {
-                args: Box::new(args),
-            })
+            let args = vec![
+                predicate_scalar(&*or_expr.left)?,
+                predicate_scalar(&*or_expr.right)?,
+            ];
+            Ok(PredicateScalar::Or { args })
         }
-        _ => Ok(PredicateScalar::OtherPredicate {
-            expr: scalar.clone(),
+        _ => Ok(PredicateScalar::Other {
+            expr: Box::from(scalar.clone()),
         }),
     }
 }
@@ -64,7 +62,7 @@ fn normalize_predicate_scalar(
     return_type: DataTypeImpl,
 ) -> Result<Scalar> {
     match predicate_scalar {
-        PredicateScalar::AndPredicate { args } => {
+        PredicateScalar::And { args } => {
             assert!(args.len() >= 2);
             let left = normalize_predicate_scalar(&args[0], return_type.clone())?;
             let right = normalize_predicate_scalar(&args[1], return_type.clone())?;
@@ -82,7 +80,7 @@ fn normalize_predicate_scalar(
             }
             Ok(and_expr)
         }
-        PredicateScalar::OrPredicate { args } => {
+        PredicateScalar::Or { args } => {
             assert!(args.len() >= 2);
             let left = normalize_predicate_scalar(&args[0], return_type.clone())?;
             let right = normalize_predicate_scalar(&args[1], return_type.clone())?;
@@ -100,7 +98,7 @@ fn normalize_predicate_scalar(
             }
             Ok(or_expr)
         }
-        PredicateScalar::OtherPredicate { expr } => Ok(expr.clone()),
+        PredicateScalar::Other { expr } => Ok(*expr.clone()),
     }
 }
 
@@ -152,7 +150,7 @@ pub fn predicate_rewrite(s_expr: SExpr) -> Result<SExpr> {
 
 fn rewrite_predicate_ors(predicate: &PredicateScalar) -> Result<PredicateScalar> {
     match predicate {
-        PredicateScalar::OrPredicate { args } => {
+        PredicateScalar::Or { args } => {
             let mut or_args = vec![];
             for arg in args.iter() {
                 or_args.push(rewrite_predicate_ors(arg)?);
@@ -160,17 +158,15 @@ fn rewrite_predicate_ors(predicate: &PredicateScalar) -> Result<PredicateScalar>
             or_args = flatten_ors(&or_args)?;
             process_duplicate_or_exprs(&or_args)
         }
-        PredicateScalar::AndPredicate { args } => {
+        PredicateScalar::And { args } => {
             let mut and_args = vec![];
             for arg in args.iter() {
                 and_args.push(rewrite_predicate_ors(arg)?);
             }
             and_args = flatten_ands(&and_args)?;
-            Ok(PredicateScalar::AndPredicate {
-                args: Box::new(and_args),
-            })
+            Ok(PredicateScalar::And { args: and_args })
         }
-        PredicateScalar::OtherPredicate { .. } => Ok((*predicate).clone()),
+        PredicateScalar::Other { .. } => Ok((*predicate).clone()),
     }
 }
 
@@ -178,7 +174,7 @@ fn flatten_ors(or_args: &[PredicateScalar]) -> Result<Vec<PredicateScalar>> {
     let mut flattened_ors = vec![];
     for or_arg in or_args.iter() {
         match or_arg {
-            PredicateScalar::OrPredicate { args } => {
+            PredicateScalar::Or { args } => {
                 flattened_ors.extend_from_slice(flatten_ors(args.as_slice())?.as_slice())
             }
             _ => flattened_ors.push((*or_arg).clone()),
@@ -191,7 +187,7 @@ fn flatten_ands(and_args: &[PredicateScalar]) -> Result<Vec<PredicateScalar>> {
     let mut flattened_ands = vec![];
     for and_arg in and_args.iter() {
         match and_arg {
-            PredicateScalar::AndPredicate { args } => {
+            PredicateScalar::And { args } => {
                 flattened_ands.extend_from_slice(flatten_ands(args.as_slice())?.as_slice())
             }
             _ => flattened_ands.push((*and_arg).clone()),
@@ -204,11 +200,11 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<PredicateSc
     let mut shortest_exprs: Vec<PredicateScalar> = vec![];
     let mut shortest_exprs_len = 0;
     if or_args.is_empty() {
-        return Ok(PredicateScalar::OtherPredicate {
-            expr: Scalar::ConstantExpr(ConstantExpr {
+        return Ok(PredicateScalar::Other {
+            expr: Box::from(Scalar::ConstantExpr(ConstantExpr {
                 value: DataValue::Boolean(false),
                 data_type: BooleanType::new_impl(),
-            }),
+            })),
         });
     }
     if or_args.len() == 1 {
@@ -217,10 +213,10 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<PredicateSc
     // choose the shortest AND expression
     for or_arg in or_args.iter() {
         match or_arg {
-            PredicateScalar::AndPredicate { args } => {
+            PredicateScalar::And { args } => {
                 let args_num = args.len();
                 if shortest_exprs.is_empty() || args_num < shortest_exprs_len {
-                    shortest_exprs = (**args).clone();
+                    shortest_exprs = (*args).clone();
                     shortest_exprs_len = args_num;
                 }
             }
@@ -240,7 +236,7 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<PredicateSc
         let mut found = true;
         for or_arg in or_args.iter() {
             match or_arg {
-                PredicateScalar::AndPredicate { args } => {
+                PredicateScalar::And { args } => {
                     if !args.contains(expr) {
                         found = false;
                         break;
@@ -260,24 +256,22 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<PredicateSc
     }
 
     if exist_exprs.is_empty() {
-        return Ok(PredicateScalar::OrPredicate {
-            args: Box::new(or_args.to_vec()),
+        return Ok(PredicateScalar::Or {
+            args: or_args.to_vec(),
         });
     }
 
     let mut new_or_args = vec![];
     for or_arg in or_args.iter() {
         match or_arg {
-            PredicateScalar::AndPredicate { args } => {
-                let mut new_args = (**args).clone();
+            PredicateScalar::And { args } => {
+                let mut new_args = (*args).clone();
                 new_args.retain(|expr| !exist_exprs.contains(expr));
                 if !new_args.is_empty() {
                     if new_args.len() == 1 {
                         new_or_args.push(new_args[0].clone());
                     } else {
-                        new_or_args.push(PredicateScalar::AndPredicate {
-                            args: Box::new(new_args),
-                        });
+                        new_or_args.push(PredicateScalar::And { args: new_args });
                     }
                 } else {
                     new_or_args.clear();
@@ -298,8 +292,8 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<PredicateSc
         if new_or_args.len() == 1 {
             exist_exprs.push(new_or_args[0].clone());
         } else {
-            exist_exprs.push(PredicateScalar::OrPredicate {
-                args: Box::new(flatten_ors(&new_or_args)?),
+            exist_exprs.push(PredicateScalar::Or {
+                args: flatten_ors(&new_or_args)?,
             });
         }
     }
@@ -307,8 +301,8 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<PredicateSc
     if exist_exprs.len() == 1 {
         Ok(exist_exprs[0].clone())
     } else {
-        Ok(PredicateScalar::AndPredicate {
-            args: Box::new(flatten_ands(&exist_exprs)?),
+        Ok(PredicateScalar::And {
+            args: flatten_ands(&exist_exprs)?,
         })
     }
 }
