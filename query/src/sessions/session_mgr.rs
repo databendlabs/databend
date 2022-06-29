@@ -122,8 +122,8 @@ impl SessionManager {
                 Arc::new(RwLock::new(None)),
                 storage_runtime.clone(),
                 conf.clone().query.async_insert_max_data_size,
-                tokio::time::Duration::from_millis(conf.query.async_insert_busy_timeout),
-                tokio::time::Duration::from_millis(conf.query.async_insert_stale_timeout),
+                Duration::from_millis(conf.query.async_insert_busy_timeout),
+                Duration::from_millis(conf.query.async_insert_stale_timeout),
             )))));
 
         Ok(Arc::new(SessionManager {
@@ -312,19 +312,18 @@ impl SessionManager {
             &config.query.cluster_id,
         );
 
-        let session = {
+        // stop tracking session
+        {
             let mut sessions = self.active_sessions.write();
-            sessions.remove(session_id)
-        };
+            sessions.remove(session_id);
+        }
+
         //also need remove mysql_conn_map
         let mut mysql_conns_map = self.mysql_conn_map.write();
         for (k, v) in mysql_conns_map.deref_mut().clone() {
             if &v == session_id {
                 mysql_conns_map.remove(&k);
             }
-        }
-        if session.is_some() {
-            session.unwrap().kill();
         }
     }
 
