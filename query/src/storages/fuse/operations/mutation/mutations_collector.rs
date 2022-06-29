@@ -20,6 +20,7 @@ use common_exception::Result;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::SegmentWriter;
@@ -133,16 +134,12 @@ impl<'a> DeletionCollector<'a> {
         let new_summary = reduce_statistics(&new_segment_summaries)?;
         new_snapshot.summary = new_summary;
 
-        // write the new segment out (and keep it in undo log)
+        // write the new snapshot out (and keep it in undo log)
         let snapshot_loc = self.location_generator.snapshot_location_from_uuid(
             &new_snapshot.snapshot_id,
             new_snapshot.format_version(),
         )?;
-        let bytes = serde_json::to_vec(&new_snapshot)?;
-        self.data_accessor
-            .object(&snapshot_loc)
-            .write(bytes)
-            .await?;
+        write_meta(&self.data_accessor, &snapshot_loc, &new_snapshot).await?;
         Ok((new_snapshot, snapshot_loc))
     }
 

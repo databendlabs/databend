@@ -12,21 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
+pub static METRIC_CLUSTER_HEARTBEAT_COUNT: &str = "cluster.heartbeat.count";
+pub static METRIC_CLUSTER_ERROR_COUNT: &str = "cluster.error.count";
+pub static METRIC_CLUSTER_DISCOVERED_NODE_GAUGE: &str = "cluster.discovered_node.gauge";
 
-use common_base::base::tokio;
-use common_meta_api::KVApiTestSuite;
-use common_tracing::tracing;
-
-use crate::init_meta_ut;
-use crate::tests::service::MetaSrvBuilder;
-
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_metasrv_kv_api() -> anyhow::Result<()> {
-    let builder = MetaSrvBuilder {
-        test_contexts: Arc::new(Mutex::new(vec![])),
-    };
-
-    KVApiTestSuite {}.test_all(builder).await
-}
+pub static METRIC_LABEL_LOCAL_ID: &str = "local_id";
+pub static METRIC_LABEL_FLIGHT_ADDRESS: &str = "flight_address";
+pub static METRIC_LABEL_CLUSTER_ID: &str = "cluster_id";
+pub static METRIC_LABEL_TENANT_ID: &str = "tenant_id";

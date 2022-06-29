@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use common_base::base::tokio;
 use common_base::base::GlobalSequence;
 use common_base::base::Stoppable;
+use common_meta_api::ApiBuilder;
 use common_meta_grpc::ClientHandle;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_sled_store::openraft::NodeId;
@@ -212,4 +215,44 @@ macro_rules! init_meta_ut {
             common_tracing::tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
         ((), span)
     }};
+}
+
+/// Build metasrv or metasrv cluster, returns the clients
+#[derive(Clone)]
+pub struct MetaSrvBuilder {
+    pub test_contexts: Arc<Mutex<Vec<MetaSrvTestContext>>>,
+}
+
+#[async_trait]
+impl ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
+    async fn build(&self) -> Arc<ClientHandle> {
+        let (tc, addr) = start_metasrv().await.unwrap();
+
+        let client =
+            MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None, None).unwrap();
+
+        {
+            let mut tcs = self.test_contexts.lock().unwrap();
+            tcs.push(tc);
+        }
+
+        client
+    }
+
+    async fn build_cluster(&self) -> Vec<Arc<ClientHandle>> {
+        let tcs = start_metasrv_cluster(&[0, 1, 2]).await.unwrap();
+
+        let cluster = vec![
+            tcs[0].grpc_client().await.unwrap(),
+            tcs[1].grpc_client().await.unwrap(),
+            tcs[2].grpc_client().await.unwrap(),
+        ];
+
+        {
+            let mut test_contexts = self.test_contexts.lock().unwrap();
+            test_contexts.extend(tcs);
+        }
+
+        cluster
+    }
 }

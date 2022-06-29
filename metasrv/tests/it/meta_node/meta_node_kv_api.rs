@@ -17,7 +17,7 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use common_base::base::tokio;
-use common_meta_api::KVApiBuilder;
+use common_meta_api::ApiBuilder;
 use common_meta_api::KVApiTestSuite;
 use common_tracing::tracing;
 use databend_meta::meta_service::MetaNode;
@@ -28,12 +28,13 @@ use crate::meta_node::meta_node_all::start_meta_node_cluster;
 use crate::meta_node::meta_node_all::start_meta_node_leader;
 use crate::tests::service::MetaSrvTestContext;
 
+#[derive(Clone)]
 struct MetaNodeUnitTestBuilder {
     pub test_contexts: Arc<Mutex<Vec<MetaSrvTestContext>>>,
 }
 
 #[async_trait]
-impl KVApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
+impl ApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
     async fn build(&self) -> Arc<MetaNode> {
         let (_id, tc) = start_meta_node_leader().await.unwrap();
 
