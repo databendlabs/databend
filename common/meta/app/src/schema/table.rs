@@ -607,6 +607,7 @@ pub struct CountTablesReq {
     pub tenant: String,
 }
 
+#[derive(Debug)]
 pub struct CountTablesReply {
     pub count: u64,
 }
