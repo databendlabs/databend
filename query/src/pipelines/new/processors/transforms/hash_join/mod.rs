@@ -14,6 +14,7 @@
 
 mod chaining_hash_table;
 mod hash_table;
+mod probe_state;
 mod result_blocks;
 pub(crate) mod row;
 
@@ -28,4 +29,5 @@ pub use chaining_hash_table::KeyU64HashTable;
 pub use chaining_hash_table::KeyU8HashTable;
 pub use chaining_hash_table::SerializerHashTable;
 pub use hash_table::HashJoinState;
+pub use probe_state::ProbeState;
 pub use result_blocks::*;

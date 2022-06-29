@@ -22,4 +22,40 @@ select 'deleted unconditionally';
 delete from t;
 select count(*) = 0 from t;
 
+drop table t all;
+
+-- setup
+select 'nullable column cases';
+create table t (c Int null);
+insert into t values (1),(2),(NULL);
+
+select 'delete with condition "const false"';
+delete from t where 1 = 0;
+select count(*) = 3 from t;
+
+select 'normal deletion';
+delete from t where c = 1;
+select 'expects one row deleted';
+select count(*) = 2 from t;
+select 'expects null valued row kept';
+select count(*) = 1 from t where c IS NULL;
+
+select 'delete all null valued rows';
+delete from t where c IS NULL;
+select 'expects no null valued row kept';
+select count(*) = 0 from t where c IS NULL;
+select 'expects 1 null valued row kept';
+select count(*) = 1 from t where c IS NOT NULL;
+
+select 'deleted unconditionally (with const true)';
+delete from t where 1 = 1;
+select count(*) = 0 from t;
+
+insert into t values (1),(2),(NULL);
+select 'deleted with nullary expr now()';
+delete from t where now();
+select count(*) = 0 from t;
+
+drop table t all;
+
 DROP DATABASE db1;
