@@ -231,7 +231,7 @@ async fn test_meta_gpc_client_table_drop_out_of_retention_time_history() -> anyh
     )?;
 
     SchemaApiTestSuite {}
-        .table_drop_out_of_retention_time_history(client.as_ref(), client.as_ref())
+        .table_drop_out_of_retention_time_history(client.as_ref())
         .await
 }
 
@@ -252,7 +252,7 @@ async fn test_meta_gpc_client_database_drop_out_of_retention_time_history() -> a
     )?;
 
     SchemaApiTestSuite {}
-        .database_drop_out_of_retention_time_history(client.as_ref(), client.as_ref())
+        .database_drop_out_of_retention_time_history(client.as_ref())
         .await
 }
 
@@ -273,7 +273,7 @@ async fn test_meta_gpc_client_database_gc_out_of_retention_time() -> anyhow::Res
     )?;
 
     SchemaApiTestSuite {}
-        .database_gc_out_of_retention_time(client.as_ref(), client.as_ref())
+        .database_gc_out_of_retention_time(client.as_ref())
         .await
 }
 
@@ -294,7 +294,7 @@ async fn test_meta_gpc_client_table_gc_out_of_retention_time() -> anyhow::Result
     )?;
 
     SchemaApiTestSuite {}
-        .table_gc_out_of_retention_time(client.as_ref(), client.as_ref())
+        .table_gc_out_of_retention_time(client.as_ref())
         .await
 }
 

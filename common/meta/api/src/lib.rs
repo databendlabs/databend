@@ -23,6 +23,7 @@ mod schema_api_impl;
 mod schema_api_keys;
 mod schema_api_test_suite;
 
+pub use kv_api::AsKVApi;
 pub use kv_api::KVApi;
 pub use kv_api::KVApiBuilder;
 pub use kv_api_key::KVApiKey;
