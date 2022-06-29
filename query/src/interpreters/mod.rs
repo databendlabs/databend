@@ -97,6 +97,8 @@ pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;
 pub use interpreter_cluster_key_alter::AlterTableClusterKeyInterpreter;
 pub use interpreter_cluster_key_drop::DropTableClusterKeyInterpreter;
+pub use interpreter_common::list_files_from_dal;
+pub use interpreter_common::list_files_from_meta_api;
 pub use interpreter_copy::CopyInterpreter;
 pub use interpreter_database_create::CreateDatabaseInterpreter;
 pub use interpreter_database_drop::DropDatabaseInterpreter;
