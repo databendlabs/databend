@@ -324,6 +324,7 @@ impl SessionManager {
             }
         }
         if session.is_some() {
+            tracing::info!("kill session, die! die! die!");
             session.unwrap().kill();
         }
     }

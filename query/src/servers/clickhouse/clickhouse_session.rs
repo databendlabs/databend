@@ -53,6 +53,7 @@ impl ClickHouseConnection {
         let host = blocking_stream.peer_addr().ok();
         let blocking_stream_ref = blocking_stream.try_clone()?;
         session.attach(host, move || {
+            tracing::info!("shutdown ClickHouse session");
             if let Err(error) = blocking_stream_ref.shutdown(Shutdown::Both) {
                 tracing::error!("Cannot shutdown ClickHouse session io {}", error);
             }
