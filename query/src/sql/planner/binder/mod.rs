@@ -22,6 +22,7 @@ use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
+use common_planners::AlterUserUDFPlan;
 use common_planners::CreateRolePlan;
 use common_planners::CreateUserUDFPlan;
 use common_planners::DescribeUserStagePlan;
@@ -201,12 +202,19 @@ impl<'a> Binder {
                     .await?
             }
 
+            // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
-
             Statement::ShowGrants { principal } => Plan::ShowGrants(Box::new(ShowGrantsPlan {
                 principal: principal.clone(),
             })),
+            Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
+            _ => {
+                return Err(ErrorCode::UnImplement(format!(
+                    "UnImplemented stmt {stmt} in binder"
+                )))
+            }
 
+            // UDFs
             Statement::CreateUDF {
                 if_not_exists,
                 udf_name,
@@ -222,12 +230,19 @@ impl<'a> Binder {
                     description: description.clone().unwrap_or_default(),
                 },
             })),
-            Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
-            _ => {
-                return Err(ErrorCode::UnImplement(format!(
-                    "UnImplemented stmt {stmt} in binder"
-                )))
-            }
+            Statement::AlterUDF {
+                udf_name,
+                parameters,
+                definition,
+                description,
+            } => Plan::AlterUDF(Box::new(AlterUserUDFPlan {
+                udf: UserDefinedFunction {
+                    name: udf_name.to_string(),
+                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
+                    description: definition.to_string(),
+                    definition: description.clone().unwrap_or_default(),
+                },
+            })),
         };
         Ok(plan)
     }

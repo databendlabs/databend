@@ -44,6 +44,7 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_planners::AlterTableClusterKeyPlan;
 use common_planners::AlterUserPlan;
+use common_planners::AlterUserUDFPlan;
 use common_planners::AlterViewPlan;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateRolePlan;
@@ -167,6 +168,7 @@ pub enum Plan {
 
     // UDF
     CreateUserUDF(Box<CreateUserUDFPlan>),
+    AlterUDF(Box<AlterUserUDFPlan>),
 
     ShowRoles,
     CreateRole(Box<CreateRolePlan>),
