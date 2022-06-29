@@ -35,6 +35,8 @@ use common_io::prelude::FormatSettings;
 pub use const_::ConstSerializer;
 pub use date::DateSerializer;
 use enum_dispatch::enum_dispatch;
+pub use helper::escape::write_escaped_string;
+pub use helper::json::write_json_string;
 pub use null::NullSerializer;
 pub use nullable::NullableSerializer;
 pub use number::NumberSerializer;
@@ -44,7 +46,6 @@ pub use string::StringSerializer;
 pub use struct_::StructSerializer;
 pub use timestamp::TimestampSerializer;
 pub use variant::VariantSerializer;
-pub use helper::escape::write_escaped_string;
 
 #[enum_dispatch]
 pub trait TypeSerializer<'a>: Send + Sync {
