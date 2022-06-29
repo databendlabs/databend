@@ -64,7 +64,7 @@ impl ChainingHashTable {
                 }
 
                 let build_block = self.row_space.gather(build_indexs)?;
-                let probe_block = DataBlock::block_take_by_indices(input, &probe_indexs)?;
+                let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
 
                 results.push(self.merge_eq_block(&build_block, &probe_block)?);
             }
@@ -137,7 +137,7 @@ impl ChainingHashTable {
                 _ => {}
             }
         }
-        DataBlock::block_take_by_indices(input, &probe_indexs)
+        DataBlock::block_take_by_indices(input, probe_indexs)
     }
 
     fn semi_anti_join_with_other_conjunct<const SEMI: bool, Key>(
@@ -157,6 +157,8 @@ impl ChainingHashTable {
         // For semi join, it defaults to all
         row_state.resize(keys.len(), 0);
 
+        let mut dummys = 0;
+
         for (i, key) in keys.iter().enumerate() {
             let probe_result_ptr = hash_table.find_key(key);
 
@@ -172,15 +174,27 @@ impl ChainingHashTable {
                 }
 
                 (None, false) => {
+                    //dummy row ptr
+                    build_indexs.push(RowPtr {
+                        chunk_index: 0,
+                        row_index: 0,
+                    });
                     probe_indexs.push(i as u32);
+
+                    dummys += 1;
                     // must not be filtered out， so we should not increase the row_state for anti join
                     // row_state[i] += 1;
                 }
                 _ => {}
             }
         }
+        let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
+        // faster path for anti join
+        if dummys == probe_indexs.len() {
+            return Ok(probe_block);
+        }
+
         let build_block = self.row_space.gather(build_indexs)?;
-        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexs)?;
         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
         let (bm, all_true, all_false) =
