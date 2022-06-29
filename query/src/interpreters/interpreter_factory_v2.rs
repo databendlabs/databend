@@ -243,8 +243,11 @@ impl InterpreterFactoryV2 {
             Plan::RevokeRole(revoke_role) => {
                 RevokeRoleInterpreter::try_create(ctx.clone(), *revoke_role.clone())
             }
-            Plan::CreateUserUDF(create_user_udf) => {
+            Plan::CreateUDF(create_user_udf) => {
                 CreateUserUDFInterpreter::try_create(ctx.clone(), *create_user_udf.clone())
+            }
+            Plan::AlterUDF(alter_udf) => {
+                AlterUserUDFInterpreter::try_create(ctx.clone(), *alter_udf.clone())
             }
         }?;
 
