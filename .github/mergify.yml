@@ -13,7 +13,7 @@ queue_rules:
       # Reference: https://docs.mergify.com/conditions/#validating-all-status-checks
       # We only require linux checks to pass
       - check-success=check
-      - check-success=build_musl
+      - check-success~=^build_(aarch64|x86_64)_musl$
       - check-success=test_unit
       - check-success=test_metactl
       - check-success=test_stateless_standalone_linux
@@ -23,10 +23,12 @@ queue_rules:
 
 pull_request_rules:
   # Push PR into queue when it passes all checks
-  - name: put bug fix pr to queue
+  - name: put approved pr to queue
     conditions:
       - "#approved-reviews-by>=2"
+      - -draft
       - check-success=check
+      - check-success~=^build_(aarch64|x86_64)_musl$
       - check-success=test_unit
       - check-success=test_metactl
       - check-success=test_stateless_standalone_linux
@@ -41,6 +43,7 @@ pull_request_rules:
   - name: ping author on conflicts
     conditions:
       - conflict
+      - -draft
       - "#approved-reviews-by >= 2"
     actions:
       comment:
@@ -63,6 +66,7 @@ pull_request_rules:
   - name: Check PR description
     conditions:
       - author!=Mergify
+      - -draft
       - '-body~=I hereby agree to the terms of the CLA available at: https:\/\/databend\.rs\/dev\/policies\/cla\/'
       - "-body~=Summary"
       - "-body~=Changelog"

@@ -39,10 +39,10 @@ miri:
 run: build-release
 	BUILD_PROFILE=release bash ./scripts/ci/deploy/databend-query-standalone.sh
 
-run-debug: build-debug
+run-debug: build
 	bash ./scripts/ci/deploy/databend-query-standalone.sh
 
-run-debug-management: build-debug
+run-debug-management: build
 	bash ./scripts/ci/deploy/databend-query-management-mode.sh
 
 build:
@@ -72,28 +72,28 @@ cross-compile-release:
 unit-test:
 	ulimit -n 10000;ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
 
-embedded-meta-test: build-debug
+embedded-meta-test: build
 	rm -rf ./_meta_embedded*
 	bash ./scripts/ci/ci-run-tests-embedded-meta.sh
 
-stateless-test: build-debug
+stateless-test: build
 	rm -rf ./_meta*/
 	rm -rf .databend
 	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-tests-embedded-meta.sh
 
-sqllogic-test: build-debug
+sqllogic-test: build
 	rm -rf ./_meta*/
 	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh
 
-stateless-cluster-test: build-debug
+stateless-cluster-test: build
 	rm -rf ./_meta*/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
-stateless-cluster-test-tls: build-debug
+stateless-cluster-test-tls: build
 	rm -rf ./_meta*/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
-metactl-test: build-debug
+metactl-test: build
 	bash ./tests/metactl/test-metactl.sh
 
 meta-bench: build-release
