@@ -94,9 +94,9 @@ pub fn init_global_tracing(
 
     // Jaeger layer.
     let mut jaeger_layer = None;
-    let fuse_jaeger_env = env::var("DATABEND_JAEGER").unwrap_or_else(|_| "".to_string());
-    if !fuse_jaeger_env.is_empty() {
-        let jaeger_agent_endpoint = env::var("DATABEND_JAEGER_AGENT_ENDPOINT").unwrap_or_else(|_| "127.0.0.1:6831".to_string());
+    let jaeger_agent_endpoint =
+        env::var("DATABEND_JAEGER_AGENT_ENDPOINT").unwrap_or_else(|_| "".to_string());
+    if !jaeger_agent_endpoint.is_empty() {
         global::set_text_map_propagator(TraceContextPropagator::new());
 
         let tracer = opentelemetry_jaeger::new_pipeline()
