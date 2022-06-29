@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cluster;
-mod metrics;
+pub static METRIC_CLUSTER_HEARTBEAT_COUNT: &str = "cluster.heartbeat.count";
+pub static METRIC_CLUSTER_ERROR_COUNT: &str = "cluster.error.count";
+pub static METRIC_CLUSTER_DISCOVERED_NODE_GAUGE: &str = "cluster.discovered_node.gauge";
 
-pub use cluster::Cluster;
-pub use cluster::ClusterDiscovery;
+pub static METRIC_LABEL_LOCAL_ID: &str = "local_id";
+pub static METRIC_LABEL_FLIGHT_ADDRESS: &str = "flight_address";
+pub static METRIC_LABEL_CLUSTER_ID: &str = "cluster_id";
+pub static METRIC_LABEL_TENANT_ID: &str = "tenant_id";
