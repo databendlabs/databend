@@ -11,3 +11,6 @@ curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/clickhouse"
 
 
 curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/clickhouse" -d 'select number, number::varchar, number + 1 from numbers(3) FORMAT NDJSON'
+
+echo "----regexp_like"
+curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/clickhouse" -d 'select  regexp_like('fo\nfo', '^fo$') FORMAT TabSeparatedWithNamesAndTypes'
