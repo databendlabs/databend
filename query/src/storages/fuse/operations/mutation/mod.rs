@@ -13,6 +13,8 @@
 //  limitations under the License.
 
 pub mod block_filter;
+pub mod compact_mutator;
 pub mod mutations_collector;
 
 pub use block_filter::delete_from_block;
+pub use compact_mutator::CompactMutator;

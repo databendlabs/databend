@@ -1,0 +1,159 @@
+//  Copyright 2022 Datafuse Labs.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
+use std::sync::Arc;
+
+use common_exception::Result;
+use opendal::Operator;
+
+use super::block_filter::all_the_columns_ids;
+use crate::sessions::QueryContext;
+use crate::storages::fuse::io::BlockCompactor;
+use crate::storages::fuse::io::BlockWriter;
+use crate::storages::fuse::io::MetaReaders;
+use crate::storages::fuse::io::SegmentWriter;
+use crate::storages::fuse::io::TableMetaLocationGenerator;
+use crate::storages::fuse::meta::Location;
+use crate::storages::fuse::meta::SegmentInfo;
+use crate::storages::fuse::meta::Statistics;
+use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::statistics::reducers::reduce_block_metas;
+use crate::storages::fuse::statistics::reducers::reduce_statistics;
+use crate::storages::fuse::FuseTable;
+
+pub struct CompactMutator<'a> {
+    ctx: &'a Arc<QueryContext>,
+    location_generator: &'a TableMetaLocationGenerator,
+    base_snapshot: &'a TableSnapshot,
+    data_accessor: Operator,
+    row_per_block: usize,
+    block_per_seg: usize,
+    segments: Vec<Location>,
+    summarys: Vec<Statistics>,
+}
+
+impl<'a> CompactMutator<'a> {
+    pub fn try_create(
+        ctx: &'a Arc<QueryContext>,
+        location_generator: &'a TableMetaLocationGenerator,
+        base_snapshot: &'a TableSnapshot,
+        row_per_block: usize,
+        block_per_seg: usize,
+    ) -> Result<Self> {
+        let data_accessor = ctx.get_storage_operator()?;
+        Ok(Self {
+            ctx,
+            location_generator,
+            base_snapshot,
+            data_accessor,
+            row_per_block,
+            block_per_seg,
+            segments: Vec::new(),
+            summarys: Vec::new(),
+        })
+    }
+
+    pub async fn into_new_snapshot(self) -> Result<(TableSnapshot, String)> {
+        let snapshot = self.base_snapshot;
+        let mut new_snapshot = TableSnapshot::from_previous(snapshot);
+        new_snapshot.segments = self.segments.clone();
+        // update the summary of new snapshot
+        let new_summary = reduce_statistics(&self.summarys)?;
+        new_snapshot.summary = new_summary;
+
+        // write the new segment out (and keep it in undo log)
+        let snapshot_loc = self.location_generator.snapshot_location_from_uuid(
+            &new_snapshot.snapshot_id,
+            new_snapshot.format_version(),
+        )?;
+        let bytes = serde_json::to_vec(&new_snapshot)?;
+        self.data_accessor
+            .object(&snapshot_loc)
+            .write(bytes)
+            .await?;
+        Ok((new_snapshot, snapshot_loc))
+    }
+
+    pub async fn compact(&mut self, table: &FuseTable) -> Result<()> {
+        let mut remain_blocks = Vec::new();
+        let mut merged_blocks = Vec::new();
+        let reader = MetaReaders::segment_info_reader(self.ctx);
+        for segment_location in &self.base_snapshot.segments {
+            let (x, ver) = (segment_location.0.clone(), segment_location.1);
+            let mut need_merge = false;
+            let mut remains = Vec::new();
+            let segment = reader.read(x, None, ver).await?;
+            segment.blocks.iter().for_each(|b| {
+                if b.row_count != self.row_per_block as u64 {
+                    merged_blocks.push(b.clone());
+                    need_merge = true;
+                } else {
+                    remains.push(b.clone());
+                }
+            });
+
+            if !need_merge && segment.blocks.len() == self.block_per_seg {
+                self.segments.push(segment_location.clone());
+                self.summarys.push(segment.summary.clone());
+                continue;
+            }
+
+            remain_blocks.append(&mut remains);
+        }
+
+        let col_ids = all_the_columns_ids(table);
+        let mut compactor = BlockCompactor::new(self.row_per_block);
+        let block_writer = BlockWriter::new(&self.data_accessor, self.location_generator);
+        for block_meta in &merged_blocks {
+            let block_reader = table.create_block_reader(self.ctx, col_ids.clone())?;
+            let data_block = block_reader.read_with_block_meta(block_meta).await?;
+
+            let res = compactor.compact(data_block)?;
+            if let Some(blocks) = res {
+                for block in blocks {
+                    let new_block_meta = block_writer.write(block).await?;
+                    remain_blocks.push(new_block_meta);
+                }
+            }
+        }
+        let remains = compactor.finish()?;
+        if let Some(blocks) = remains {
+            for block in blocks {
+                let new_block_meta = block_writer.write(block).await?;
+                remain_blocks.push(new_block_meta);
+            }
+        }
+
+        let segment_info_cache = self
+            .ctx
+            .get_storage_cache_manager()
+            .get_table_segment_cache();
+        let seg_writer = SegmentWriter::new(
+            &self.data_accessor,
+            self.location_generator,
+            &segment_info_cache,
+        );
+
+        let chunks = remain_blocks.chunks(self.block_per_seg);
+        for chunk in chunks {
+            let new_summary = reduce_block_metas(chunk)?;
+            let new_segment = SegmentInfo::new(chunk.to_vec(), new_summary.clone());
+            let new_segment_location = seg_writer.write_segment(new_segment).await?;
+            self.segments.push(new_segment_location);
+            self.summarys.push(new_summary);
+        }
+
+        Ok(())
+    }
+}

@@ -14,11 +14,11 @@
 
 mod append;
 mod commit;
+mod compact;
 mod delete;
 mod fuse_sink;
 mod gc;
 mod mutation;
-mod merge;
 mod navigate;
 mod operation_log;
 mod read;

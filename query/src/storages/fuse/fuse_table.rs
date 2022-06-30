@@ -28,6 +28,7 @@ use common_meta_types::MatchSeq;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
+use common_planners::OptimizeTablePlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -448,5 +449,10 @@ impl Table for FuseTable {
     #[tracing::instrument(level = "debug", name = "fuse_table_delete", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn delete(&self, ctx: Arc<QueryContext>, delete_plan: DeletePlan) -> Result<()> {
         self.do_delete(ctx, &delete_plan).await
+    }
+
+    #[tracing::instrument(level = "debug", name = "fuse_table_compact", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn compact(&self, ctx: Arc<QueryContext>, plan: OptimizeTablePlan) -> Result<()> {
+        self.do_compact(ctx, &plan).await
     }
 }
