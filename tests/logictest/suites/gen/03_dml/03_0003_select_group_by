@@ -1,4 +1,10 @@
 statement ok
+use default;
+
+statement ok
+drop table if exists t all;
+
+statement ok
 SELECT max(number) FROM numbers_mt(0) GROUP BY number % 4;
 
 statement ok

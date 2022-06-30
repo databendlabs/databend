@@ -10,19 +10,19 @@ CREATE FUNCTION cal AS (a,b,c,d,e) -> a + c * (e / b) - d;
 statement ok
 CREATE FUNCTION notnull AS (p) -> not(is_null(p));
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT notnull(null);
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT notnull('null');
 
-----  mysql
+----  
 1
 
 ----  http
