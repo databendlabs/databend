@@ -204,6 +204,8 @@ fn test_statement() {
                     skip_header = 1
                 )
                 size_limit=10;"#,
+        r#"CALL system$test(a)"#,
+        r#"CALL system$test('a')"#,
     ];
 
     for case in cases {
@@ -250,6 +252,8 @@ fn test_statement_error() {
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
         r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
         r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
+        r#"CALL system$test"#,
+        r#"CALL system$test(a"#,
     ];
 
     for case in cases {

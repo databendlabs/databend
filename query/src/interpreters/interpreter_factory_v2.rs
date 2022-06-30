@@ -84,6 +84,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowGrants(_)
                 | DfStatement::RevokeRole(_)
                 | DfStatement::RevokePrivilege(_)
+                | DfStatement::Call(_)
         )
     }
 
@@ -102,6 +103,8 @@ impl InterpreterFactoryV2 {
             Plan::Explain { kind, plan } => {
                 ExplainInterpreterV2::try_create(ctx.clone(), *plan.clone(), kind.clone())
             }
+
+            Plan::Call(plan) => CallInterpreter::try_create(ctx.clone(), *plan.clone()),
 
             Plan::Copy(copy_plan) => CopyInterpreterV2::try_create(ctx.clone(), *copy_plan.clone()),
 

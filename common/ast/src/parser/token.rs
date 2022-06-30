@@ -267,6 +267,8 @@ pub enum TokenKind {
     BOTH,
     #[token("BY", ignore(ascii_case))]
     BY,
+    #[token("CALL", ignore(ascii_case))]
+    CALL,
     #[token("CASE", ignore(ascii_case))]
     CASE,
     #[token("CAST", ignore(ascii_case))]

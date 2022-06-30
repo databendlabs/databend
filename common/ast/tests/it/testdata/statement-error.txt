@@ -270,3 +270,27 @@ error:
   |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, or `;`
 
 
+---------- Input ----------
+CALL system$test
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | CALL system$test
+  | ----            ^ expected `(`
+  | |               
+  | while parsing `CALL <procedure_name>(<parameter>, ...)`
+
+
+---------- Input ----------
+CALL system$test(a
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | CALL system$test(a
+  | ----              ^ expected `)` or `,`
+  | |                 
+  | while parsing `CALL <procedure_name>(<parameter>, ...)`
+
+
