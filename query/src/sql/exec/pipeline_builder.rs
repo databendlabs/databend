@@ -474,6 +474,7 @@ impl PipelineBuilder {
         offset: usize,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
+        pipeline.resize(1)?;
         pipeline.add_transform(|input, output| {
             TransformLimit::try_create(limit, offset, input, output)
         })?;

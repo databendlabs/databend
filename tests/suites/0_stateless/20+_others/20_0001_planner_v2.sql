@@ -169,6 +169,7 @@ select '=== Test offset ===';
 select number from numbers(10) order by number asc offset 5;
 select '===================';
 select number+number as number from numbers(10) order by number asc offset 5;
+select number from numbers(10000) limit 1;
 
 -- Memory engine
 select '====Memory Table====';
