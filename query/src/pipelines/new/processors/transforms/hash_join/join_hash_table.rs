@@ -289,8 +289,8 @@ impl JoinHashTable {
         Ok(probe_block)
     }
 
-    // Merge build block and probe block
-    pub(crate) fn merge_block(
+    // Merge build block and probe block (1 row block)
+    pub(crate) fn merge_with_constant_block(
         &self,
         build_block: &DataBlock,
         probe_block: &DataBlock,
@@ -327,7 +327,7 @@ impl JoinHashTable {
         let mut results: Vec<DataBlock> = Vec::with_capacity(input.num_rows());
         for i in 0..input.num_rows() {
             let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-            results.push(self.merge_block(&build_block, &probe_block)?);
+            results.push(self.merge_with_constant_block(&build_block, &probe_block)?);
         }
         Ok(results)
     }
@@ -428,34 +428,13 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
-        let mut data_blocks = match self.join_type {
+        match self.join_type {
             JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left => {
                 self.probe_join(input, probe_state)
             }
             JoinType::Cross => self.probe_cross_join(input, probe_state),
             _ => unimplemented!("{} is unimplemented", self.join_type),
-        }?;
-        if self.other_predicate.is_none()
-            || self.join_type == JoinType::Anti
-            || self.join_type == JoinType::Semi
-            || self.join_type == JoinType::Left
-        {
-            return Ok(data_blocks);
         }
-        // Process other conditions for Inner join
-        if let Some(filter) = &self.other_predicate {
-            let func_ctx = self.ctx.try_get_function_context()?;
-            let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
-            for block in data_blocks.iter() {
-                let filter_vector = filter.eval(&func_ctx, block)?;
-                filtered_blocks.push(DataBlock::filter_block(
-                    block.clone(),
-                    filter_vector.vector(),
-                )?);
-            }
-            data_blocks = filtered_blocks;
-        }
-        Ok(data_blocks)
     }
 
     fn attach(&self) -> Result<()> {

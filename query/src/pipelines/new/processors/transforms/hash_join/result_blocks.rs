@@ -65,8 +65,19 @@ impl JoinHashTable {
 
                 let build_block = self.row_space.gather(build_indexs)?;
                 let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
+                let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-                results.push(self.merge_eq_block(&build_block, &probe_block)?);
+                match &self.other_predicate {
+                    Some(other_predicate) => {
+                        let func_ctx = self.ctx.try_get_function_context()?;
+                        let filter_vector = other_predicate.eval(&func_ctx, &merged_block)?;
+                        results.push(DataBlock::filter_block(
+                            merged_block,
+                            filter_vector.vector(),
+                        )?);
+                    }
+                    None => results.push(merged_block),
+                }
             }
             JoinType::Semi => {
                 if self.other_predicate.is_none() {
@@ -362,7 +373,7 @@ impl JoinHashTable {
             }
         }
     }
-    
+
     // keep at least one index of the positive state and the null state
     // bitmap: [1, 0, 1] with row_state [2, 0], probe_index: [0, 0, 1]
     // bitmap will be [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1]
