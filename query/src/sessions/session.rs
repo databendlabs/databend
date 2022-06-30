@@ -100,9 +100,8 @@ impl Session {
         self.session_ctx.get_abort()
     }
 
-    pub fn kill(self: &Arc<Self>) {
+    pub fn quit(self: &Arc<Self>) {
         let session_ctx = self.session_ctx.clone();
-        session_ctx.set_abort(true);
         if session_ctx.get_current_query_id().is_some() {
             if let Some(io_shutdown) = session_ctx.take_io_shutdown_tx() {
                 let (tx, rx) = oneshot::channel();
@@ -113,6 +112,11 @@ impl Session {
             }
         }
         self.session_mgr.http_query_manager.kill_session(&self.id);
+    }
+
+    pub fn kill(self: &Arc<Self>) {
+        self.session_ctx.set_abort(true);
+        self.quit();
     }
 
     pub fn force_kill_session(self: &Arc<Self>) {
@@ -154,7 +158,7 @@ impl Session {
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
     where F: FnOnce() + Send + 'static {
-        let (tx, rx) = futures::channel::oneshot::channel();
+        let (tx, rx) = oneshot::channel();
         self.session_ctx.set_client_host(host);
         self.session_ctx.set_io_shutdown_tx(Some(tx));
 

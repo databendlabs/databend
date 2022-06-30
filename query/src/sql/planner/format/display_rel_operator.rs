@@ -94,12 +94,12 @@ pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
         }
         Scalar::ConstantExpr(constant) => constant.value.to_string(),
         Scalar::AndExpr(and) => format!(
-            "{} AND {}",
+            "({}) AND ({})",
             format_scalar(metadata, &and.left),
             format_scalar(metadata, &and.right)
         ),
         Scalar::OrExpr(or) => format!(
-            "{} OR {}",
+            "({}) OR ({})",
             format_scalar(metadata, &or.left),
             format_scalar(metadata, &or.right)
         ),
