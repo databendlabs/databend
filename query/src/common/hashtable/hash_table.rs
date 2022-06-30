@@ -75,9 +75,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
             if let Some(zero_entity) = self.zero_entity_raw {
                 if std::mem::needs_drop::<Entity>() {
                     let entity = self.zero_entity.unwrap();
-                    if !entity.is_zero() {
-                        std::ptr::drop_in_place(entity);
-                    }
+                    std::ptr::drop_in_place(entity);
                 }
 
                 let zero_layout = Layout::from_size_align_unchecked(

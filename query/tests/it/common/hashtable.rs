@@ -97,8 +97,8 @@ fn test_hash_map_drop() {
         let mut rng = rand::thread_rng();
 
         for _ in 0..1200 {
-            let key = rng.gen::<u64>();
-
+            let key = rng.gen::<u64>() % 40;
+            
             let mut inserted = false;
             let entity = table.insert_key(&key, &mut inserted);
             if inserted {
