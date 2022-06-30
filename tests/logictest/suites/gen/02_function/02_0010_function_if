@@ -1,7 +1,7 @@
-statement query B label(mysql,http)
+statement query B label(http)
 select if(number>1, true, false) from numbers(3) order by number;
 
-----  mysql
+----  
 0
 0
 1
@@ -35,10 +35,10 @@ zero
 Z+
 Z+
 
-statement query B label(mysql,http)
+statement query B label(http)
 select if(number<1, true, null) from numbers(3) order by number;
 
-----  mysql
+----  
 1
 NULL
 NULL

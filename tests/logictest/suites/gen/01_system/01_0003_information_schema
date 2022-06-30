@@ -18,19 +18,19 @@ SCHEMATA
 TABLES
 VIEWS
 
-statement query B label(mysql,http)
+statement query B label(http)
 select count(1) > 1 from information_schema.columns;
 
-----  mysql
+---- 
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select count(1) > 1 from information_Schema.Columns;
 
-----  mysql
+---- 
 1
 
 ----  http

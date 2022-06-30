@@ -8,7 +8,7 @@ statement ok
 USE db_12_0001;
 
 statement ok
-select "column 'dropped_on' of system.tables should work";
+select 'column "dropped_on" of system.tables should work';
 
 statement ok
 CREATE TABLE t(c1 int);
