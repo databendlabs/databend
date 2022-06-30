@@ -35,6 +35,7 @@ use common_exception::Result;
 use primitive_types::U256;
 use primitive_types::U512;
 
+use super::ProbeState;
 use crate::common::EvalNode;
 use crate::common::Evaluator;
 use crate::common::HashMap;
@@ -312,7 +313,11 @@ impl ChainingHashTable {
         Ok(replicated_probe_block)
     }
 
-    fn probe_cross_join(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+    fn probe_cross_join(
+        &self,
+        input: &DataBlock,
+        _probe_state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
         let chunks = self.row_space.chunks.read().unwrap();
         let build_blocks = (*chunks)
             .iter()
@@ -327,7 +332,11 @@ impl ChainingHashTable {
         Ok(results)
     }
 
-    fn probe_join(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+    fn probe_join(
+        &self,
+        input: &DataBlock,
+        probe_state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let probe_keys = self
             .probe_keys
@@ -345,49 +354,49 @@ impl ChainingHashTable {
                     .map(|key| KeysRef::create(key.as_ptr() as usize, key.len()))
                     .collect();
 
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU8HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU16HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU32HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU64HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU128HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU256HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU512HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
         }
     }
@@ -418,12 +427,12 @@ impl HashJoinState for ChainingHashTable {
         }
     }
 
-    fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+    fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         let mut data_blocks = match self.join_type {
             JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left => {
-                self.probe_join(input)
+                self.probe_join(input, probe_state)
             }
-            JoinType::Cross => self.probe_cross_join(input),
+            JoinType::Cross => self.probe_cross_join(input, probe_state),
             _ => unimplemented!("{} is unimplemented", self.join_type),
         }?;
         if self.other_predicate.is_none()

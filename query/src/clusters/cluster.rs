@@ -35,11 +35,13 @@ use common_management::ClusterApi;
 use common_management::ClusterMgr;
 use common_meta_api::KVApi;
 use common_meta_types::NodeInfo;
+use common_metrics::label_counter_with_val_and_labels;
 use common_tracing::tracing;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
+use metrics::gauge;
 use rand::thread_rng;
 use rand::Rng;
 
@@ -51,9 +53,14 @@ pub struct ClusterDiscovery {
     local_id: String,
     heartbeat: Mutex<ClusterHeartbeat>,
     api_provider: Arc<dyn ClusterApi>,
+    cluster_id: String,
+    tenant_id: String,
+    flight_address: String,
 }
 
 impl ClusterDiscovery {
+    const METRIC_LABEL_FUNCTION: &'static str = "function";
+
     async fn create_meta_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
         let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         match meta_api_provider.try_get_meta_store().await {
@@ -70,7 +77,15 @@ impl ClusterDiscovery {
         Ok(Arc::new(ClusterDiscovery {
             local_id: local_id.clone(),
             api_provider: provider.clone(),
-            heartbeat: Mutex::new(ClusterHeartbeat::create(lift_time, provider)),
+            heartbeat: Mutex::new(ClusterHeartbeat::create(
+                lift_time,
+                provider,
+                cfg.query.cluster_id.clone(),
+                cfg.query.tenant_id.clone(),
+            )),
+            cluster_id: cfg.query.cluster_id.clone(),
+            tenant_id: cfg.query.tenant_id.clone(),
+            flight_address: cfg.query.flight_api_address.clone(),
         }))
     }
 
@@ -89,12 +104,63 @@ impl ClusterDiscovery {
 
     pub async fn discover(&self) -> Result<Arc<Cluster>> {
         match self.api_provider.get_nodes().await {
-            Err(cause) => Err(cause.add_message_back("(while cluster api get_nodes).")),
+            Err(cause) => {
+                label_counter_with_val_and_labels(
+                    super::metrics::METRIC_CLUSTER_ERROR_COUNT,
+                    vec![
+                        (
+                            super::metrics::METRIC_LABEL_LOCAL_ID,
+                            String::from(&self.local_id),
+                        ),
+                        (
+                            ClusterDiscovery::METRIC_LABEL_FUNCTION,
+                            String::from("discover"),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_CLUSTER_ID,
+                            self.cluster_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_TENANT_ID,
+                            self.tenant_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_FLIGHT_ADDRESS,
+                            self.flight_address.clone(),
+                        ),
+                    ],
+                    1,
+                );
+                Err(cause.add_message_back("(while cluster api get_nodes)."))
+            }
             Ok(cluster_nodes) => {
                 let mut res = Vec::with_capacity(cluster_nodes.len());
                 for node in &cluster_nodes {
                     res.push(Arc::new(node.clone()))
                 }
+
+                gauge!(
+                    super::metrics::METRIC_CLUSTER_DISCOVERED_NODE_GAUGE,
+                    cluster_nodes.len() as f64,
+                    &[
+                        (
+                            super::metrics::METRIC_LABEL_LOCAL_ID,
+                            String::from(&self.local_id)
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_CLUSTER_ID,
+                            self.cluster_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_TENANT_ID,
+                            self.tenant_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_FLIGHT_ADDRESS,
+                            self.flight_address.clone(),
+                        ),
+                    ]
+                );
 
                 Ok(Cluster::create(res, self.local_id.clone()))
             }
@@ -105,6 +171,32 @@ impl ClusterDiscovery {
         let current_nodes_info = match self.api_provider.get_nodes().await {
             Ok(nodes) => nodes,
             Err(cause) => {
+                label_counter_with_val_and_labels(
+                    super::metrics::METRIC_CLUSTER_ERROR_COUNT,
+                    vec![
+                        (
+                            super::metrics::METRIC_LABEL_LOCAL_ID,
+                            String::from(&self.local_id),
+                        ),
+                        (
+                            ClusterDiscovery::METRIC_LABEL_FUNCTION,
+                            String::from("drop_invalid_nodes.get_nodes"),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_CLUSTER_ID,
+                            self.cluster_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_TENANT_ID,
+                            self.tenant_id.clone(),
+                        ),
+                        (
+                            super::metrics::METRIC_LABEL_FLIGHT_ADDRESS,
+                            self.flight_address.clone(),
+                        ),
+                    ],
+                    1,
+                );
                 return Err(cause.add_message_back("(while drop_invalid_nodes)"));
             }
         };
@@ -244,16 +336,27 @@ struct ClusterHeartbeat {
     shutdown_notify: Arc<Notify>,
     cluster_api: Arc<dyn ClusterApi>,
     shutdown_handler: Option<JoinHandle<()>>,
+    cluster_id: String,
+    tenant_id: String,
 }
 
 impl ClusterHeartbeat {
-    pub fn create(timeout: Duration, cluster_api: Arc<dyn ClusterApi>) -> ClusterHeartbeat {
+    const METRIC_LABEL_RESULT: &'static str = "result";
+
+    pub fn create(
+        timeout: Duration,
+        cluster_api: Arc<dyn ClusterApi>,
+        cluster_id: String,
+        tenant_id: String,
+    ) -> ClusterHeartbeat {
         ClusterHeartbeat {
             timeout,
             cluster_api,
             shutdown: Arc::new(AtomicBool::new(false)),
             shutdown_notify: Arc::new(Notify::new()),
             shutdown_handler: None,
+            cluster_id,
+            tenant_id,
         }
     }
 
@@ -262,6 +365,8 @@ impl ClusterHeartbeat {
         let shutdown_notify = self.shutdown_notify.clone();
         let cluster_api = self.cluster_api.clone();
         let sleep_range = self.heartbeat_interval(self.timeout);
+        let cluster_id = self.cluster_id.clone();
+        let tenant_id = self.tenant_id.clone();
 
         async move {
             let mut shutdown_notified = Box::pin(shutdown_notify.notified());
@@ -282,6 +387,26 @@ impl ClusterHeartbeat {
                         shutdown_notified = new_shutdown_notified;
                         let heartbeat = cluster_api.heartbeat(&node, None);
                         if let Err(failure) = heartbeat.await {
+                            label_counter_with_val_and_labels(
+                                super::metrics::METRIC_CLUSTER_HEARTBEAT_COUNT,
+                                vec![
+                                    (
+                                        super::metrics::METRIC_LABEL_LOCAL_ID,
+                                        String::from(&node.id),
+                                    ),
+                                    (
+                                        super::metrics::METRIC_LABEL_FLIGHT_ADDRESS,
+                                        String::from(&node.flight_address),
+                                    ),
+                                    (super::metrics::METRIC_LABEL_CLUSTER_ID, cluster_id.clone()),
+                                    (super::metrics::METRIC_LABEL_TENANT_ID, tenant_id.clone()),
+                                    (
+                                        ClusterHeartbeat::METRIC_LABEL_RESULT,
+                                        String::from("failure"),
+                                    ),
+                                ],
+                                1,
+                            );
                             tracing::error!("Cluster cluster api heartbeat failure: {:?}", failure);
                         }
                     }

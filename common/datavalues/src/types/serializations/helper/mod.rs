@@ -13,3 +13,4 @@
 // limitations under the License.
 
 pub mod escape;
+pub mod json;

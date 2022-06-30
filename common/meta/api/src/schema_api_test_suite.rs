@@ -62,6 +62,8 @@ use common_tracing::tracing;
 
 use crate::deserialize_struct;
 use crate::serialize_struct;
+use crate::ApiBuilder;
+use crate::AsKVApi;
 use crate::KVApi;
 use crate::KVApiKey;
 use crate::SchemaApi;
@@ -147,10 +149,10 @@ fn calc_and_compare_drop_on_table_result(result: Vec<Arc<TableInfo>>, expected: 
 }
 
 async fn upsert_test_data(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
     value: Vec<u8>,
-) -> std::result::Result<u64, MetaError> {
+) -> Result<u64, MetaError> {
     let res = kv_api
         .upsert_kv(UpsertKVReq {
             key: key.to_key(),
@@ -165,9 +167,9 @@ async fn upsert_test_data(
 }
 
 async fn delete_test_data(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
-) -> std::result::Result<(), MetaError> {
+) -> Result<(), MetaError> {
     let _res = kv_api
         .upsert_kv(UpsertKVReq {
             key: key.to_key(),
@@ -181,9 +183,9 @@ async fn delete_test_data(
 }
 
 async fn get_test_data<PB, T>(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
-) -> std::result::Result<T, MetaError>
+) -> Result<T, MetaError>
 where
     PB: common_protos::prost::Message + Default,
     T: FromToProto<PB>,
@@ -197,7 +199,111 @@ where
 }
 
 impl SchemaApiTestSuite {
-    pub async fn database_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    /// Test SchemaAPI on a single node
+    pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
+    where
+        B: ApiBuilder<MT>,
+        MT: SchemaApi + AsKVApi,
+    {
+        let suite = SchemaApiTestSuite {};
+
+        suite.database_create_get_drop(&b.build().await).await?;
+        suite
+            .database_create_get_drop_in_diff_tenant(&b.build().await)
+            .await?;
+        suite.database_list(&b.build().await).await?;
+        suite.database_list_in_diff_tenant(&b.build().await).await?;
+        suite.database_rename(&b.build().await).await?;
+        suite
+            .database_drop_undrop_list_history(&b.build().await)
+            .await?;
+        suite
+            .database_drop_out_of_retention_time_history(&b.build().await)
+            .await?;
+
+        suite.table_create_get_drop(&b.build().await).await?;
+        suite.table_rename(&b.build().await).await?;
+        suite.table_update_meta(&b.build().await).await?;
+        suite.table_upsert_option(&b.build().await).await?;
+        suite.table_list(&b.build().await).await?;
+        suite
+            .table_drop_undrop_list_history(&b.build().await)
+            .await?;
+        suite
+            .database_gc_out_of_retention_time(&b.build().await)
+            .await?;
+        suite
+            .table_gc_out_of_retention_time(&b.build().await)
+            .await?;
+        suite
+            .table_drop_out_of_retention_time_history(&b.build().await)
+            .await?;
+        suite.get_table_by_id(&b.build().await).await?;
+
+        Ok(())
+    }
+
+    /// Test SchemaAPI on cluster
+    pub async fn test_cluster<B, MT>(b: B) -> anyhow::Result<()>
+    where
+        B: ApiBuilder<MT>,
+        MT: SchemaApi,
+    {
+        let suite = SchemaApiTestSuite {};
+
+        // leader-follower test
+        {
+            let cluster = b.build_cluster().await;
+            suite
+                .database_get_diff_nodes(&cluster[0], &cluster[1])
+                .await?;
+        }
+        {
+            let cluster = b.build_cluster().await;
+            suite
+                .list_database_diff_nodes(&cluster[0], &cluster[1])
+                .await?;
+        }
+        {
+            let cluster = b.build_cluster().await;
+            suite
+                .list_table_diff_nodes(&cluster[0], &cluster[1])
+                .await?;
+        }
+        {
+            let cluster = b.build_cluster().await;
+            suite.table_get_diff_nodes(&cluster[0], &cluster[1]).await?;
+        }
+
+        // follower-follower test
+        {
+            let cluster = b.build_cluster().await;
+            suite
+                .database_get_diff_nodes(&cluster[2], &cluster[1])
+                .await?;
+        }
+        {
+            let cluster = b.build_cluster().await;
+            suite
+                .list_database_diff_nodes(&cluster[2], &cluster[1])
+                .await?;
+        }
+        {
+            let cluster = b.build_cluster().await;
+            suite
+                .list_table_diff_nodes(&cluster[2], &cluster[1])
+                .await?;
+        }
+        {
+            let cluster = b.build_cluster().await;
+            suite.table_get_diff_nodes(&cluster[2], &cluster[1]).await?;
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn database_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         tracing::info!("--- create db1");
         {
@@ -349,7 +455,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_create_get_drop_in_diff_tenant<MT: SchemaApi>(
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn database_create_get_drop_in_diff_tenant<MT: SchemaApi>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -490,7 +597,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn database_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
         let mut db_ids = vec![];
         let db_names = vec!["db1", "db2"];
@@ -528,7 +636,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_list_in_diff_tenant<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn database_list_in_diff_tenant<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
         let tenant1 = "tenant1";
         let tenant2 = "tenant2";
@@ -575,7 +684,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_rename<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn database_rename<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let db2_name = "db2";
@@ -689,8 +799,9 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_drop_undrop_list_history<MT: SchemaApi>(
-        self,
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn database_drop_undrop_list_history<MT: SchemaApi>(
+        &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant = "tenant1_database_drop_undrop_list_history";
@@ -909,7 +1020,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn table_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -1225,7 +1337,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_rename<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn table_rename<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db1_name = "db1";
         let tb2_name = "tb2";
@@ -1464,7 +1577,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn update_table_meta<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn table_update_meta<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -1591,7 +1705,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_upsert_option<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn table_upsert_option<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -1737,10 +1852,10 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_drop_out_of_retention_time_history<MT: SchemaApi>(
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn database_drop_out_of_retention_time_history<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
     ) -> anyhow::Result<()> {
         let tenant = "tenant1_database_drop_out_of_retention_time_history";
         let db_name = "db1_database_drop_out_of_retention_time_history";
@@ -1784,7 +1899,7 @@ impl SchemaApiTestSuite {
             };
             let id_key = DatabaseId { db_id };
             let data = serialize_struct(&drop_data)?;
-            upsert_test_data(kv_api, &id_key, data).await?;
+            upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
             let res = mt
                 .get_database_history(ListDatabaseReq {
@@ -1799,10 +1914,10 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    async fn create_out_of_retention_time_db<MT: SchemaApi>(
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn create_out_of_retention_time_db<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
         db_name: DatabaseNameIdent,
         drop_on: Option<DateTime<Utc>>,
         delete: bool,
@@ -1828,18 +1943,18 @@ impl SchemaApiTestSuite {
         };
         let id_key = DatabaseId { db_id };
         let data = serialize_struct(&drop_data)?;
-        upsert_test_data(kv_api, &id_key, data).await?;
+        upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
         if delete {
-            delete_test_data(kv_api, &db_name).await?;
+            delete_test_data(mt.as_kv_api(), &db_name).await?;
         }
         Ok(())
     }
 
-    pub async fn database_gc_out_of_retention_time<MT: SchemaApi>(
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn database_gc_out_of_retention_time<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
     ) -> anyhow::Result<()> {
         let tenant = "tenant1_database_gc_out_of_retention_time";
         let db_name = "db1_database_gc_out_of_retention_time";
@@ -1868,24 +1983,23 @@ impl SchemaApiTestSuite {
         let drop_on = Some(Utc::now() - Duration::days(1));
 
         // create db_name_ident1 with two dropped value
-        self.create_out_of_retention_time_db(mt, kv_api, db_name_ident1.clone(), drop_on, true)
+        self.create_out_of_retention_time_db(mt, db_name_ident1.clone(), drop_on, true)
             .await?;
         self.create_out_of_retention_time_db(
             mt,
-            kv_api,
             db_name_ident1.clone(),
             Some(Utc::now() - Duration::days(2)),
             false,
         )
         .await?;
-        self.create_out_of_retention_time_db(mt, kv_api, db_name_ident2.clone(), drop_on, false)
+        self.create_out_of_retention_time_db(mt, db_name_ident2.clone(), drop_on, false)
             .await?;
 
-        let id_list: DbIdList = get_test_data(kv_api, &dbid_idlist1).await?;
+        let id_list: DbIdList = get_test_data(mt.as_kv_api(), &dbid_idlist1).await?;
         assert_eq!(id_list.len(), 2);
         let old_id_list = id_list.id_list().clone();
 
-        let id_list: DbIdList = get_test_data(kv_api, &dbid_idlist2).await?;
+        let id_list: DbIdList = get_test_data(mt.as_kv_api(), &dbid_idlist2).await?;
         assert_eq!(id_list.len(), 1);
 
         let req = GCDroppedDataReq {
@@ -1897,26 +2011,26 @@ impl SchemaApiTestSuite {
         assert_eq!(res.gc_db_count, 2);
 
         // assert db id list has been cleaned
-        let id_list: DbIdList = get_test_data(kv_api, &dbid_idlist1).await?;
+        let id_list: DbIdList = get_test_data(mt.as_kv_api(), &dbid_idlist1).await?;
         assert_eq!(id_list.len(), 0);
 
         // assert old db meta has been removed
         for db_id in old_id_list.iter() {
             let id_key = DatabaseId { db_id: *db_id };
-            let res: Result<DatabaseMeta, MetaError> = get_test_data(kv_api, &id_key).await;
+            let res: Result<DatabaseMeta, MetaError> = get_test_data(mt.as_kv_api(), &id_key).await;
             assert!(res.is_err());
         }
 
-        let id_list: DbIdList = get_test_data(kv_api, &dbid_idlist2).await?;
+        let id_list: DbIdList = get_test_data(mt.as_kv_api(), &dbid_idlist2).await?;
         assert_eq!(id_list.len(), 1);
 
         Ok(())
     }
 
-    async fn create_out_of_retention_time_table<MT: SchemaApi>(
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn create_out_of_retention_time_table<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
         name_ident: TableNameIdent,
         dbid_tbname: DBIdTableName,
         drop_on: Option<DateTime<Utc>>,
@@ -1957,18 +2071,18 @@ impl SchemaApiTestSuite {
 
         let id_key = TableId { table_id };
         let data = serialize_struct(&drop_data)?;
-        upsert_test_data(kv_api, &id_key, data).await?;
+        upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
         if delete {
-            delete_test_data(kv_api, &dbid_tbname).await?;
+            delete_test_data(mt.as_kv_api(), &dbid_tbname).await?;
         }
         Ok(())
     }
 
-    pub async fn table_gc_out_of_retention_time<MT: SchemaApi>(
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn table_gc_out_of_retention_time<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
     ) -> anyhow::Result<()> {
         let tenant1 = "tenant1_table_gc_out_of_retention_time";
         let db1_name = "db1_table_gc_out_of_retention_time";
@@ -1998,7 +2112,6 @@ impl SchemaApiTestSuite {
         let drop_on = Some(Utc::now() - Duration::days(1));
         self.create_out_of_retention_time_table(
             mt,
-            kv_api,
             tbl_name_ident.clone(),
             DBIdTableName {
                 db_id: res.db_id,
@@ -2010,7 +2123,6 @@ impl SchemaApiTestSuite {
         .await?;
         self.create_out_of_retention_time_table(
             mt,
-            kv_api,
             tbl_name_ident.clone(),
             DBIdTableName {
                 db_id: res.db_id,
@@ -2027,7 +2139,7 @@ impl SchemaApiTestSuite {
         };
 
         // save old id list
-        let id_list: TableIdList = get_test_data(kv_api, &table_id_idlist).await?;
+        let id_list: TableIdList = get_test_data(mt.as_kv_api(), &table_id_idlist).await?;
         assert_eq!(id_list.len(), 2);
         let old_id_list = id_list.id_list().clone();
 
@@ -2039,7 +2151,7 @@ impl SchemaApiTestSuite {
         let res = mt.gc_dropped_data(req).await?;
         assert_eq!(res.gc_table_count, 2);
 
-        let id_list: TableIdList = get_test_data(kv_api, &table_id_idlist).await?;
+        let id_list: TableIdList = get_test_data(mt.as_kv_api(), &table_id_idlist).await?;
         assert_eq!(id_list.len(), 0);
 
         // assert old table meta has been removed
@@ -2047,17 +2159,17 @@ impl SchemaApiTestSuite {
             let id_key = TableId {
                 table_id: *table_id,
             };
-            let res: Result<DatabaseMeta, MetaError> = get_test_data(kv_api, &id_key).await;
+            let res: Result<DatabaseMeta, MetaError> = get_test_data(mt.as_kv_api(), &id_key).await;
             assert!(res.is_err());
         }
 
         Ok(())
     }
 
-    pub async fn table_drop_out_of_retention_time_history<MT: SchemaApi>(
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn table_drop_out_of_retention_time_history<MT: SchemaApi + AsKVApi>(
         self,
         mt: &MT,
-        kv_api: &impl KVApi,
     ) -> anyhow::Result<()> {
         let tenant = "tenant_table_drop_history";
         let db_name = "table_table_drop_history_db1";
@@ -2133,7 +2245,8 @@ impl SchemaApiTestSuite {
                 ..TableMeta::default()
             };
             let data = serialize_struct(&create_drop_table_meta)?;
-            upsert_test_data(kv_api, &tbid, data).await?;
+
+            upsert_test_data(mt.as_kv_api(), &tbid, data).await?;
             // assert not return out of retention time data
             let res = mt
                 .get_table_history(ListTableReq::new(tenant, db_name))
@@ -2145,10 +2258,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_drop_undrop_list_history<MT: SchemaApi>(
-        self,
-        mt: &MT,
-    ) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn table_drop_undrop_list_history<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant_drop_undrop_list_history_db1";
         let db_name = "table_drop_undrop_list_history_db1";
         let tbl_name = "table_drop_undrop_list_history_tb2";
@@ -2528,7 +2639,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn get_table_by_id<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn get_table_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -2633,7 +2745,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn table_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
 
@@ -2708,21 +2821,6 @@ impl SchemaApiTestSuite {
         }
 
         Ok(())
-    }
-
-    fn req_get_db(tenant: impl ToString, db_name: impl ToString) -> GetDatabaseReq {
-        GetDatabaseReq {
-            inner: DatabaseNameIdent {
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-            },
-        }
-    }
-
-    fn req_count_table(tenant: impl ToString) -> CountTablesReq {
-        CountTablesReq {
-            tenant: tenant.to_string(),
-        }
     }
 
     // pub async fn share_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
@@ -2862,7 +2960,23 @@ impl SchemaApiTestSuite {
     //
 }
 
+/// Supporting utils
 impl SchemaApiTestSuite {
+    fn req_get_db(tenant: impl ToString, db_name: impl ToString) -> GetDatabaseReq {
+        GetDatabaseReq {
+            inner: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db_name.to_string(),
+            },
+        }
+    }
+
+    fn req_count_table(tenant: impl ToString) -> CountTablesReq {
+        CountTablesReq {
+            tenant: tenant.to_string(),
+        }
+    }
+
     async fn create_database<MT: SchemaApi>(
         &self,
         mt: &MT,

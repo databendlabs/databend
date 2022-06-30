@@ -15,13 +15,6 @@ runs:
       with:
         image: ${{ inputs.target }}
 
-    - name: Set musl rustflags
-      if: contains(inputs.target, 'musl')
-      shell: bash
-      run: |
-        flags="-C target-feature=-crt-static"
-        echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
-
     - name: Build Debug
       if: inputs.profile == 'debug'
       shell: bash
