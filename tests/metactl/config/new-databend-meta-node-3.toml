@@ -6,7 +6,7 @@ admin_api_address  = "0.0.0.0:28301"
 grpc_api_address   = "0.0.0.0:39191"
 
 [raft_config]
-id            = 3
+id            = 6
 raft_dir      = "./.databend/new_meta3"
 raft_api_port = 29303
 
