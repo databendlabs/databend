@@ -257,7 +257,7 @@ impl SubqueryRewriter {
                     project.into(),
                     SExpr::create_unary(
                         eval_scalar.into(),
-                        SExpr::create_unary(agg.into(), subquery_expr.clone()),
+                        SExpr::create_unary(agg.into(), subquery_expr),
                     ),
                 );
 
