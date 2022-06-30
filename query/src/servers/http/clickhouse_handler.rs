@@ -56,6 +56,7 @@ use crate::sql::plans::Plan;
 use crate::sql::DfParser;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
+use crate::sql::OPT_KEY_DATABASE_ID;
 
 // accept all clickhouse params, so they do not go to settings.
 #[derive(Serialize, Deserialize)]
@@ -153,6 +154,29 @@ async fn execute_v2(
     Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
 }
 
+async fn rewrite_plan(ctx: &Arc<QueryContext>, plan: PlanNode) -> Result<PlanNode> {
+    if let PlanNode::CreateTable(p) = &plan {
+        if p.engine().to_lowercase() == "mergetree" {
+            let mut new_plan = p.clone();
+            new_plan.table_meta.engine = "Fuse".to_string();
+
+            // from plan_with_db_id()
+            let catalog = ctx.get_catalog(&p.catalog)?;
+            let db = catalog
+                .get_database(ctx.get_tenant().as_str(), &p.database)
+                .await?;
+            let db_id = db.get_db_info().ident.db_id;
+            new_plan
+                .table_meta
+                .options
+                .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+
+            return Ok(PlanNode::CreateTable(new_plan));
+        }
+    }
+    Ok(plan)
+}
+
 async fn execute(
     ctx: Arc<QueryContext>,
     plan: PlanNode,
@@ -160,6 +184,7 @@ async fn execute(
     input_stream: Option<SendableDataBlockStream>,
     params: StatementHandlerParams,
 ) -> Result<WithContentType<Body>> {
+    let plan = rewrite_plan(&ctx, plan).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
     let _ = interpreter
         .start()
