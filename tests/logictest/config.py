@@ -52,6 +52,10 @@ def config_from_env():
     if clickhouse_password is not None:
         clickhouse_config['password'] = clickhouse_password
 
+    clickhouse_user = os.getenv("QUERY_CLICKHOUSE_HANDLER_USER")
+    if clickhouse_user is not None:
+        clickhouse_config['user'] = clickhouse_user
+
     mysql_database = os.getenv("MYSQL_DATABASE")
     if mysql_database is not None:
         mysql_config['database'] = mysql_database
@@ -62,6 +66,5 @@ def config_from_env():
     if mysql_user is not None:
         mysql_config['user'] = mysql_user
         http_config['user'] = mysql_user
-        clickhouse_config['user'] = mysql_user
 
 config_from_env()

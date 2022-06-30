@@ -1,6 +1,9 @@
+
+skipif clickhouse
 statement ok
 set timezone = 'UTC';
 
+skipif clickhouse
 statement query B label(http)
 SELECT today() >= 18869;
 
@@ -10,6 +13,7 @@ SELECT today() >= 18869;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 SELECT now() >= 1630295616;
 
@@ -19,6 +23,7 @@ SELECT now() >= 1630295616;
 ----  http
 true
 
+skipif clickhouse
 statement query TB label(http)
 select  to_datetime(1630320462000000), to_int64(to_datetime(1630320462000000))  = 1630320462000000;
 
@@ -28,6 +33,7 @@ select  to_datetime(1630320462000000), to_int64(to_datetime(1630320462000000))  
 ----  http
 2021-08-30 10:47:42.000000  true
 
+skipif clickhouse
 statement query TB label(http)
 select  to_date(18869), to_uint32(to_date(18869))  = 18869;
 
@@ -37,6 +43,7 @@ select  to_date(18869), to_uint32(to_date(18869))  = 18869;
 ----  http
 2021-08-30 true
 
+skipif clickhouse
 statement query TB label(http)
 select  to_datetime(1640019661000000), to_int64(to_datetime(1640019661000000))  = 1640019661000000;
 
@@ -46,42 +53,51 @@ select  to_datetime(1640019661000000), to_int64(to_datetime(1640019661000000))  
 ----  http
 2021-12-20 17:01:01.000000  true
 
+skipif clickhouse
 statement query T 
 select  to_date('1000-01-01');
 
 ----  
 1000-01-01
 
+skipif clickhouse
 statement query T 
 select  to_date('9999-12-31');
 
 ----  
 9999-12-31
 
+skipif clickhouse
 statement error 1010
 select  to_date('10000-12-31'); 
 
+skipif clickhouse
 statement error 1068
 select  to_date('0999-12-31'); 
 
+skipif clickhouse
 statement query T 
 select  to_datetime('1000-01-01 00:00:00');
 
 ----  
 1000-01-01 00:00:00.000000
 
+skipif clickhouse
 statement query T 
 select  to_datetime('9999-12-31 23:59:59');
 
 ----  
 9999-12-31 23:59:59.000000
 
+skipif clickhouse
 statement error 1010
 select  to_datetime('10000-01-01 00:00:00'); 
 
+skipif clickhouse
 statement error 1069
 select  to_datetime('0999-12-31 23:59:59'); 
 
+skipif clickhouse
 statement query B label(http)
 select typeof(today() + 3) = 'DATE';
 
@@ -91,6 +107,7 @@ select typeof(today() + 3) = 'DATE';
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select typeof(today() - 3) = 'DATE';
 
@@ -100,6 +117,7 @@ select typeof(today() - 3) = 'DATE';
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select typeof(now() - 3) = 'TIMESTAMP(6)';
 
@@ -109,6 +127,7 @@ select typeof(now() - 3) = 'TIMESTAMP(6)';
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select typeof(to_datetime(1640019661000000)) = 'TIMESTAMP(6)';
 
@@ -118,6 +137,7 @@ select typeof(to_datetime(1640019661000000)) = 'TIMESTAMP(6)';
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select today() + 1 - today() = 1;
 
@@ -127,6 +147,7 @@ select today() + 1 - today() = 1;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select typeof(today() - today()) = 'INT';
 
@@ -136,6 +157,7 @@ select typeof(today() - today()) = 'INT';
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select typeof(now() - now()) = 'INT';
 
@@ -145,6 +167,7 @@ select typeof(now() - now()) = 'INT';
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select sum(today() + number - today()) = 45 from numbers(10);
 
@@ -154,6 +177,7 @@ select sum(today() + number - today()) = 45 from numbers(10);
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select today() - 1 = yesterday();
 
@@ -163,6 +187,7 @@ select today() - 1 = yesterday();
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select today() - yesterday()  = 1;
 
@@ -172,6 +197,7 @@ select today() - yesterday()  = 1;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select today() + 1 = tomorrow();
 
@@ -181,6 +207,7 @@ select today() + 1 = tomorrow();
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select tomorrow() - today() = 1;
 
@@ -190,18 +217,21 @@ select tomorrow() - today() = 1;
 ----  http
 true
 
+skipif clickhouse
 statement query I 
 select toYYYYMM(to_datetime(1630833797000000));
 
 ----  
 202109
 
+skipif clickhouse
 statement query I 
 select toYYYYMM(to_date(18875));
 
 ----  
 202109
 
+skipif clickhouse
 statement query B label(http)
 select toYYYYMM(to_datetime(1630833797000000))  =  202109;
 
@@ -211,6 +241,7 @@ select toYYYYMM(to_datetime(1630833797000000))  =  202109;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select toYYYYMM(to_date(18875))  =  202109;
 
@@ -220,48 +251,56 @@ select toYYYYMM(to_date(18875))  =  202109;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===round===';
 
 ----  
 ===round===
 
+skipif clickhouse
 statement query T 
 select timeSlot(to_datetime(1630320462000000));
 
 ----  
 2021-08-30 10:30:00
 
+skipif clickhouse
 statement query T 
 select toStartOfHour(to_datetime(1630320462000000));
 
 ----  
 2021-08-30 10:00:00
 
+skipif clickhouse
 statement query T 
 select toStartOfFifteenMinutes(to_datetime(1630320462000000));
 
 ----  
 2021-08-30 10:45:00
 
+skipif clickhouse
 statement query T 
 select toStartOfMinute(to_datetime(1630320462000000));
 
 ----  
 2021-08-30 10:47:00
 
+skipif clickhouse
 statement query T 
 select toStartOfFiveMinutes(to_datetime(1630320462000000));
 
 ----  
 2021-08-30 10:45:00
 
+skipif clickhouse
 statement query T 
 select toStartOfTenMinutes(to_datetime(1630320462000000));
 
 ----  
 2021-08-30 10:40:00
 
+skipif clickhouse
 statement query B label(http)
 select timeSlot(now()) <= now();
 
@@ -271,30 +310,35 @@ select timeSlot(now()) <= now();
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===round-end===';
 
 ----  
 ===round-end===
 
+skipif clickhouse
 statement query T 
 select '===toYYYYMMDDhhmmss===';
 
 ----  
 ===toYYYYMMDDhhmmss===
 
+skipif clickhouse
 statement query I 
 select toYYYYMMDDhhmmss(to_datetime(1630833797000000));
 
 ----  
 20210905092317
 
+skipif clickhouse
 statement query I 
 select toYYYYMMDDhhmmss(to_date(18875));
 
 ----  
 20210905000000
 
+skipif clickhouse
 statement query B label(http)
 select toYYYYMMDDhhmmss(to_datetime(1630833797000000))  =  20210905092317;
 
@@ -304,6 +348,7 @@ select toYYYYMMDDhhmmss(to_datetime(1630833797000000))  =  20210905092317;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select toYYYYMMDDhhmmss(to_date(18875))  =  20210905000000;
 
@@ -313,30 +358,35 @@ select toYYYYMMDDhhmmss(to_date(18875))  =  20210905000000;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toYYYYMMDDhhmmss===';
 
 ----  
 ===toYYYYMMDDhhmmss===
 
+skipif clickhouse
 statement query T 
 select '===toYYYYMMDD===';
 
 ----  
 ===toYYYYMMDD===
 
+skipif clickhouse
 statement query I 
 select toYYYYMMDD(to_datetime(1630833797000000));
 
 ----  
 20210905
 
+skipif clickhouse
 statement query I 
 select toYYYYMMDD(to_date(18875));
 
 ----  
 20210905
 
+skipif clickhouse
 statement query B label(http)
 select toYYYYMMDD(to_datetime(1630833797000000))  =  20210905;
 
@@ -346,6 +396,7 @@ select toYYYYMMDD(to_datetime(1630833797000000))  =  20210905;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select toYYYYMMDD(to_date(18875))  =  20210905;
 
@@ -355,480 +406,566 @@ select toYYYYMMDD(to_date(18875))  =  20210905;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toYYYYMMDD===';
 
 ----  
 ===toYYYYMMDD===
 
+skipif clickhouse
 statement query T 
 select '===toStartOf===';
 
 ----  
 ===toStartOf===
 
+skipif clickhouse
 statement query T 
 select toStartOfYear(to_datetime(1630812366000000));
 
 ----  
 2021-01-01
 
+skipif clickhouse
 statement query T 
 select toStartOfISOYear(to_datetime(1630812366000000));
 
 ----  
 2021-01-04
 
+skipif clickhouse
 statement query T 
 select toStartOfYear(to_date(18869));
 
 ----  
 2021-01-01
 
+skipif clickhouse
 statement query T 
 select toStartOfISOYear(to_date(18869));
 
 ----  
 2021-01-04
 
+skipif clickhouse
 statement query T 
 select toStartOfQuarter(to_datetime(1631705259000000));
 
 ----  
 2021-07-01
 
+skipif clickhouse
 statement query T 
 select toStartOfQuarter(to_datetime(1621078059000000));
 
 ----  
 2021-04-01
 
+skipif clickhouse
 statement query T 
 select toStartOfMonth(to_datetime(1631705259000000));
 
 ----  
 2021-09-01
 
+skipif clickhouse
 statement query T 
 select toStartOfQuarter(to_date(18885));
 
 ----  
 2021-07-01
 
+skipif clickhouse
 statement query T 
 select toStartOfQuarter(to_date(18762));
 
 ----  
 2021-04-01
 
+skipif clickhouse
 statement query T 
 select toStartOfMonth(to_date(18885));
 
 ----  
 2021-09-01
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000));
 
 ----  
 2021-09-19
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000), 0);
 
 ----  
 2021-09-19
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000), 1);
 
 ----  
 2021-09-20
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000), 2);
 
 ----  
 2021-09-19
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000), 3);
 
 ----  
 2021-09-20
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000), 4);
 
 ----  
 2021-09-19
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000), 5);
 
 ----  
 2021-09-20
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000), 6);
 
 ----  
 2021-09-19
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000), 7);
 
 ----  
 2021-09-20
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000), 8);
 
 ----  
 2021-09-19
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_datetime(1632397739000000), 9);
 
 ----  
 2021-09-20
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769));
 
 ----  
 2021-05-16
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769), 0);
 
 ----  
 2021-05-16
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769), 1);
 
 ----  
 2021-05-17
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769), 2);
 
 ----  
 2021-05-16
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769), 3);
 
 ----  
 2021-05-17
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769), 4);
 
 ----  
 2021-05-16
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769), 5);
 
 ----  
 2021-05-17
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769), 6);
 
 ----  
 2021-05-16
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769), 7);
 
 ----  
 2021-05-17
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769), 8);
 
 ----  
 2021-05-16
 
+skipif clickhouse
 statement query T 
 select toStartOfWeek(to_date(18769), 9);
 
 ----  
 2021-05-17
 
+skipif clickhouse
 statement error 1068
 select toStartOfWeek(to_date('1000-01-01')); 
 
+skipif clickhouse
 statement error 1068
 select toStartOfWeek(to_datetime('1000-01-01 00:00:00')); 
 
+skipif clickhouse
 statement query T 
 select '===toStartOf===';
 
 ----  
 ===toStartOf===
 
+skipif clickhouse
 statement query T 
 select '===addYears===';
 
 ----  
 ===addYears===
 
+skipif clickhouse
 statement query T 
 select addYears(to_date(18321), cast(1, UINT8));  -- 2020-2-29 + 1 year
 
 ----  
 2021-02-28
 
+skipif clickhouse
 statement query T 
 select addYears(to_date(18321), cast(1, UINT16));
 
 ----  
 2021-02-28
 
+skipif clickhouse
 statement query T 
 select addYears(to_date(18321), cast(1, UINT32));
 
 ----  
 2021-02-28
 
+skipif clickhouse
 statement query T 
 select addYears(to_date(18321), cast(1, UINT64));
 
 ----  
 2021-02-28
 
+skipif clickhouse
 statement query T 
 select addYears(to_date(18321), cast(-1, INT8));
 
 ----  
 2019-02-28
 
+skipif clickhouse
 statement query T 
 select addYears(to_date(18321), cast(-1, INT16));
 
 ----  
 2019-02-28
 
+skipif clickhouse
 statement query T 
 select addYears(to_date(18321), cast(-1, INT32));
 
 ----  
 2019-02-28
 
+skipif clickhouse
 statement query T 
 select addYears(to_date(18321), cast(-1, INT64));
 
 ----  
 2019-02-28
 
+skipif clickhouse
 statement query T 
 select addYears(to_datetime(1582970400000000), cast(50, INT8)); -- 2020-2-29T10:00:00 + 50 years
 
 ----  
 2070-02-28 10:00:00.000000
 
+skipif clickhouse
 statement query T 
 select addYears(to_datetime(1582970400000000), cast(-50, INT8)); -- 2020-2-29T10:00:00 - 50 years
 
 ----  
 1970-02-28 10:00:00.000000
 
+skipif clickhouse
 statement error 1068
 select addYears(to_date('9999-12-31'), 1); 
 
+skipif clickhouse
 statement error 1069
 select addYears(to_datetime('9999-12-31 23:59:59'), 1); 
 
+skipif clickhouse
 statement query T 
 select '===addYears===';
 
 ----  
 ===addYears===
 
+skipif clickhouse
 statement query T 
 select '===subtractMonths===';
 
 ----  
 ===subtractMonths===
 
+skipif clickhouse
 statement query T 
 select subtractMonths(to_date(18321), cast(13, INT16)); -- 2020-2-29 - 13 months
 
 ----  
 2019-01-29
 
+skipif clickhouse
 statement query T 
 select to_date(18321) -  interval '13' month;
 
 ----  
 2019-01-29
 
+skipif clickhouse
 statement query T 
 select subtractMonths(to_datetime(1582970400000000), cast(122, INT16)); -- 2020-2-29T10:00:00 - (12*10 + 2) months
 
 ----  
 2009-12-29 10:00:00.000000
 
+skipif clickhouse
 statement query T 
 select to_datetime(1582970400000000) -  interval '122' month;
 
 ----  
 2009-12-29 10:00:00.000000
 
+skipif clickhouse
 statement error 1068
 select subtractMonths(to_date('1000-01-01'), 1); 
 
+skipif clickhouse
 statement error 1069
 select subtractMonths(to_datetime('1000-01-01 00:00:00'), 1); 
 
+skipif clickhouse
 statement query T 
 select '===subtractMonths===';
 
 ----  
 ===subtractMonths===
 
+skipif clickhouse
 statement query T 
 select '===addDays===';
 
 ----  
 ===addDays===
 
+skipif clickhouse
 statement query T 
 select addDays(to_date(18321), cast(1, INT16)); -- 2020-2-29 + 1 day
 
 ----  
 2020-03-01
 
+skipif clickhouse
 statement query T 
 select to_date(18321) + interval '1' day;
 
 ----  
 2020-03-01
 
+skipif clickhouse
 statement query T 
 select addDays(to_datetime(1582970400000000), cast(-1, INT16)); -- 2020-2-29T10:00:00 - 1 day
 
 ----  
 2020-02-28 10:00:00.000000
 
+skipif clickhouse
 statement query T 
 select to_datetime(1582970400000000) + interval '-1' day;
 
 ----  
 2020-02-28 10:00:00.000000
 
+skipif clickhouse
 statement error 1068
 select addDays(to_date('9999-12-31'), 1); 
 
+skipif clickhouse
 statement error 1069
 select addDays(to_datetime('9999-12-31 23:59:59'), 1); 
 
+skipif clickhouse
 statement query T 
 select '===addDays===';
 
 ----  
 ===addDays===
 
+skipif clickhouse
 statement query T 
 select '===addHours===';
 
 ----  
 ===addHours===
 
+skipif clickhouse
 statement query T 
 select addHours(to_datetime(1582970400000000), cast(25, INT32)); -- 2020-2-29T10:00:00 + 25 hours
 
 ----  
 2020-03-01 11:00:00.000000
 
+skipif clickhouse
 statement query T 
 select to_datetime(1582970400000000) + interval '25' hour;
 
 ----  
 2020-03-01 11:00:00.000000
 
+skipif clickhouse
 statement query T 
 select addHours(to_date(18321), cast(1.2, Float32));
 
 ----  
 2020-02-29 01:00:00.000000
 
+skipif clickhouse
 statement error 1069
 select addHours(to_date('9999-12-31'), 24); 
 
+skipif clickhouse
 statement error 1069
 select addHours(to_datetime('9999-12-31 23:59:59'), 1); 
 
+skipif clickhouse
 statement query T 
 select '===addHours===';
 
 ----  
 ===addHours===
 
+skipif clickhouse
 statement query T 
 select '===subtractMinutes===';
 
 ----  
 ===subtractMinutes===
 
+skipif clickhouse
 statement query T 
 select subtractMinutes(to_datetime(1582970400000000), cast(1, INT32)); -- 2020-2-29T10:00:00 - 1 minutes
 
 ----  
 2020-02-29 09:59:00.000000
 
+skipif clickhouse
 statement error 1069
 select subtractMinutes(to_date('1000-01-01'), 1); 
 
+skipif clickhouse
 statement error 1069
 select subtractMinutes(to_datetime('1000-01-01 00:00:00'), 1); 
 
+skipif clickhouse
 statement query T 
 select '===subtractMinutes===';
 
 ----  
 ===subtractMinutes===
 
+skipif clickhouse
 statement query T 
 select '===addSeconds===';
 
 ----  
 ===addSeconds===
 
+skipif clickhouse
 statement query T 
 select addSeconds(to_datetime(1582970400000000), cast(61, INT32)); -- 2020-2-29T10:00:00 + 61 seconds
 
 ----  
 2020-02-29 10:01:01.000000
 
+skipif clickhouse
 statement query T 
 select '===addSeconds===';
 
 ----  
 ===addSeconds===
 
+skipif clickhouse
 statement query T 
 select '===toMonth===';
 
 ----  
 ===toMonth===
 
+skipif clickhouse
 statement query I 
 select toMonth(to_datetime(1633081817000000));
 
 ----  
 10
 
+skipif clickhouse
 statement query I 
 select toMonth(to_date(18901));
 
 ----  
 10
 
+skipif clickhouse
 statement query B label(http)
 select toMonth(to_datetime(1633081817000000))  =  10;
 
@@ -838,6 +975,7 @@ select toMonth(to_datetime(1633081817000000))  =  10;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select toMonth(to_date(18901))  =  10;
 
@@ -847,30 +985,35 @@ select toMonth(to_date(18901))  =  10;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toMonth===';
 
 ----  
 ===toMonth===
 
+skipif clickhouse
 statement query T 
 select '===toDayOfYear===';
 
 ----  
 ===toDayOfYear===
 
+skipif clickhouse
 statement query I 
 select toDayOfYear(to_datetime(1633173324000000));
 
 ----  
 275
 
+skipif clickhouse
 statement query I 
 select toDayOfYear(to_date(18902));
 
 ----  
 275
 
+skipif clickhouse
 statement query B label(http)
 select toDayOfYear(to_datetime(1633173324000000))  =  275;
 
@@ -880,6 +1023,7 @@ select toDayOfYear(to_datetime(1633173324000000))  =  275;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select toDayOfYear(to_date(18902))  =  275;
 
@@ -889,30 +1033,35 @@ select toDayOfYear(to_date(18902))  =  275;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toDayOfYear===';
 
 ----  
 ===toDayOfYear===
 
+skipif clickhouse
 statement query T 
 select '===toDayOfMonth===';
 
 ----  
 ===toDayOfMonth===
 
+skipif clickhouse
 statement query I 
 select toDayOfMonth(to_datetime(1633173324000000));
 
 ----  
 2
 
+skipif clickhouse
 statement query I 
 select toDayOfMonth(to_date(18902));
 
 ----  
 2
 
+skipif clickhouse
 statement query B label(http)
 select toDayOfMonth(to_datetime(1633173324000000))  =  2;
 
@@ -922,6 +1071,7 @@ select toDayOfMonth(to_datetime(1633173324000000))  =  2;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select toDayOfMonth(to_date(18902))  =  2;
 
@@ -931,30 +1081,35 @@ select toDayOfMonth(to_date(18902))  =  2;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toDayOfMonth===';
 
 ----  
 ===toDayOfMonth===
 
+skipif clickhouse
 statement query T 
 select '===toDayOfWeek===';
 
 ----  
 ===toDayOfWeek===
 
+skipif clickhouse
 statement query I 
 select toDayOfWeek(to_datetime(1633173324000000));
 
 ----  
 6
 
+skipif clickhouse
 statement query I 
 select toDayOfWeek(to_date(18902));
 
 ----  
 6
 
+skipif clickhouse
 statement query B label(http)
 select toDayOfWeek(to_datetime(1633173324000000))  =  6;
 
@@ -964,6 +1119,7 @@ select toDayOfWeek(to_datetime(1633173324000000))  =  6;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select toDayOfWeek(to_date(18902))  =  6;
 
@@ -973,18 +1129,21 @@ select toDayOfWeek(to_date(18902))  =  6;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toDayOfWeek===';
 
 ----  
 ===toDayOfWeek===
 
+skipif clickhouse
 statement query T 
 select '===toHour===';
 
 ----  
 ===toHour===
 
+skipif clickhouse
 statement query B label(http)
 select toHour(to_datetime(1634551542000000))  =  10;
 
@@ -994,18 +1153,21 @@ select toHour(to_datetime(1634551542000000))  =  10;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toHour===';
 
 ----  
 ===toHour===
 
+skipif clickhouse
 statement query T 
 select '===toMinute===';
 
 ----  
 ===toMinute===
 
+skipif clickhouse
 statement query B label(http)
 select toMinute(to_datetime(1634551542000000))  =  5;
 
@@ -1015,18 +1177,21 @@ select toMinute(to_datetime(1634551542000000))  =  5;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toMinute===';
 
 ----  
 ===toMinute===
 
+skipif clickhouse
 statement query T 
 select '===toSecond===';
 
 ----  
 ===toSecond===
 
+skipif clickhouse
 statement query B label(http)
 select toSecond(to_datetime(1634551542000000))  =  42;
 
@@ -1036,18 +1201,21 @@ select toSecond(to_datetime(1634551542000000))  =  42;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toSecond===';
 
 ----  
 ===toSecond===
 
+skipif clickhouse
 statement query T 
 select '===toMonday===';
 
 ----  
 ===toMonday===
 
+skipif clickhouse
 statement query B label(http)
 select toMonday(to_datetime(1634614318000000))  =  to_date('2021-10-18');
 
@@ -1057,18 +1225,21 @@ select toMonday(to_datetime(1634614318000000))  =  to_date('2021-10-18');
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toMonday===';
 
 ----  
 ===toMonday===
 
+skipif clickhouse
 statement query T 
 select '===toYear===';
 
 ----  
 ===toYear===
 
+skipif clickhouse
 statement query B label(http)
 select toYear(to_datetime(1646404329000000)) = 2022;
 
@@ -1078,18 +1249,21 @@ select toYear(to_datetime(1646404329000000)) = 2022;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===toYear===';
 
 ----  
 ===toYear===
 
+skipif clickhouse
 statement query T 
 select '===EXTRACT===';
 
 ----  
 ===EXTRACT===
 
+skipif clickhouse
 statement query B label(http)
 select EXTRACT(YEAR FROM to_datetime('2022-03-04 22:32:09')) = 2022;
 
@@ -1099,6 +1273,7 @@ select EXTRACT(YEAR FROM to_datetime('2022-03-04 22:32:09')) = 2022;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select EXTRACT(MONTH FROM to_datetime('2022-03-04 22:32:09')) = 3;
 
@@ -1108,6 +1283,7 @@ select EXTRACT(MONTH FROM to_datetime('2022-03-04 22:32:09')) = 3;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select EXTRACT(DAY FROM to_datetime('2022-03-04 22:32:09')) = 4;
 
@@ -1117,6 +1293,7 @@ select EXTRACT(DAY FROM to_datetime('2022-03-04 22:32:09')) = 4;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select EXTRACT(HOUR FROM to_datetime('2022-03-04 22:32:09')) = 22;
 
@@ -1126,6 +1303,7 @@ select EXTRACT(HOUR FROM to_datetime('2022-03-04 22:32:09')) = 22;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select EXTRACT(MINUTE FROM to_datetime('2022-03-04 22:32:09')) = 32;
 
@@ -1135,6 +1313,7 @@ select EXTRACT(MINUTE FROM to_datetime('2022-03-04 22:32:09')) = 32;
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select EXTRACT(SECOND FROM to_datetime('2022-03-04 22:32:09')) = 9;
 
@@ -1144,18 +1323,21 @@ select EXTRACT(SECOND FROM to_datetime('2022-03-04 22:32:09')) = 9;
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===EXTRACT===';
 
 ----  
 ===EXTRACT===
 
+skipif clickhouse
 statement query T 
 select '===CMP===';
 
 ----  
 ===CMP===
 
+skipif clickhouse
 statement query B label(http)
 select to_datetime('2022-04-01 06:50:20')   = '2022-04-01 06:50:20';
 
@@ -1165,6 +1347,7 @@ select to_datetime('2022-04-01 06:50:20')   = '2022-04-01 06:50:20';
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select to_datetime('2022-04-01 06:50:20')   > '2022-04-01 04:50:20';
 
@@ -1174,6 +1357,7 @@ select to_datetime('2022-04-01 06:50:20')   > '2022-04-01 04:50:20';
 ----  http
 true
 
+skipif clickhouse
 statement query B label(http)
 select to_datetime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 
@@ -1183,21 +1367,26 @@ select to_datetime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 ----  http
 true
 
+skipif clickhouse
 statement query T 
 select '===INSERT===';
 
 ----  
 ===INSERT===
 
+skipif clickhouse
 statement ok
 drop table if exists ts;
 
+skipif clickhouse
 statement ok
 create table ts(a DateTime(6), b DateTime, c Date);
 
+skipif clickhouse
 statement ok
 insert into ts values(now(), now(), today());
 
+skipif clickhouse
 statement query B label(http)
 select to_datetime(a) = to_datetime(b) from ts;
 
@@ -1207,33 +1396,43 @@ select to_datetime(a) = to_datetime(b) from ts;
 ----  http
 true
 
+skipif clickhouse
 statement ok
 drop table if exists ts;
 
+skipif clickhouse
 statement ok
 drop table if exists t;
 
+skipif clickhouse
 statement ok
 create table t(a datetime, b DateTime(3), c Date);
 
+skipif clickhouse
 statement ok
 insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28', '1000-01-01');
 
+skipif clickhouse
 statement ok
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '9999-12-31');
 
+skipif clickhouse
 statement error 1069
 insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '2020-10-10'); 
 
+skipif clickhouse
 statement error 1010
 insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10-10'); 
 
+skipif clickhouse
 statement error 1068
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '0999-10-10'); 
 
+skipif clickhouse
 statement error 1010
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10'); 
 
+skipif clickhouse
 statement query TTT
 select * from t order by b;
 
@@ -1241,5 +1440,6 @@ select * from t order by b;
 2022-04-02 15:10:28.000000 2022-04-02 15:10:28.000 1000-01-01
 2022-04-02 15:10:28.221000 2022-04-02 15:10:28.221 9999-12-31
 
+skipif clickhouse
 statement ok
 drop table t;

@@ -1,21 +1,28 @@
+
+skipif clickhouse
 statement ok
 set enable_planner_v2 = 1;
 
+skipif clickhouse
 statement ok 
 drop table if exists t all;
 
+skipif clickhouse
 statement ok
 drop table if exists t1 all;
 
+skipif clickhouse
 statement ok
 drop table if exists t2 all;
 
+skipif clickhouse
 statement query T 
 select '====SELECT_FROM_NUMBERS====';
 
 ----  
 ====SELECT_FROM_NUMBERS====
 
+skipif clickhouse
 statement query I 
 select * from numbers(10);
 
@@ -31,96 +38,112 @@ select * from numbers(10);
 8
 9
 
+skipif clickhouse
 statement query T 
 select '====ALIAS====';
 
 ----  
 ====ALIAS====
 
+skipif clickhouse
 statement query II 
 select number as a, number + 1 as b from numbers(1);
 
 ----  
 0 1
 
+skipif clickhouse
 statement query II 
 select number as a, number + 1 as b from numbers(1) group by a, number order by number;
 
 ----  
 0 1
 
+skipif clickhouse
 statement query T 
 select '====SCALAR_EXPRESSION====';
 
 ----  
 ====SCALAR_EXPRESSION====
 
+skipif clickhouse
 statement query I 
 select extract(day from to_date('2022-05-13'));
 
 ----  
 13
 
+skipif clickhouse
 statement query T 
 select '====COMPARISON====';
 
 ----  
 ====COMPARISON====
 
+skipif clickhouse
 statement query I 
 select * from numbers(10) where number between 1 and 9 and number > 2 and number < 8 and number is not null and number = 5 and number >= 5 and number <= 5;
 
 ----  
 5
 
+skipif clickhouse
 statement query T 
 select '====CAST====';
 
 ----  
 ====CAST====
 
+skipif clickhouse
 statement query I 
 select * from numbers(10) where cast(number as string) = '5';
 
 ----  
 5
 
+skipif clickhouse
 statement query I 
 select * from numbers(10) where try_cast(number as string) = '5';
 
 ----  
 5
 
+skipif clickhouse
 statement query T 
 select '====BINARY_OPERATOR====';
 
 ----  
 ====BINARY_OPERATOR====
 
+skipif clickhouse
 statement query F 
 select (number + 1 - 2) * 3 / 4 from numbers(1);
 
 ----  
 -0.75
 
+skipif clickhouse
 statement query T 
 select '====FUNCTIONS====';
 
 ----  
 ====FUNCTIONS====
 
+skipif clickhouse
 statement query F 
 select sin(cos(number)) from numbers(1);
 
 ----  
 0.8414709848078965
 
+skipif clickhouse
 statement query T 
 select '====IN_LIST====';
 
 ----  
 ====IN_LIST====
 
+skipif clickhouse
 statement query I 
 select * from numbers(5) where number in (1, 3);
 
@@ -128,42 +151,50 @@ select * from numbers(5) where number in (1, 3);
 1
 3
 
+skipif clickhouse
 statement query T 
 select '====MAP_ACCESS====';
 
 ----  
 ====MAP_ACCESS====
 
+skipif clickhouse
 statement query T 
 select parse_json('{"k1": [0, 1, 2]}'):k1[2];
 
 ----  
 2
 
+skipif clickhouse
 statement query T 
 select parse_json('{"k1": [0, 1, 2]}')['k1'][2];
 
 ----  
 2
 
+skipif clickhouse
 statement query T 
 select parse_json('{"k1": {"k2": [0, 1, 2]}}'):k1.k2[2];
 
 ----  
 2
 
+skipif clickhouse
 statement query T 
 select '====AGGREGATOR====';
 
 ----  
 ====AGGREGATOR====
 
+skipif clickhouse
 statement ok
 create table t(a int, b int);
 
+skipif clickhouse
 statement ok
 insert into t values(1, 2), (2, 3), (3, 4);
 
+skipif clickhouse
 statement query I 
 select sum(a) + 1 from t group by a;
 
@@ -172,6 +203,7 @@ select sum(a) + 1 from t group by a;
 4
 3
 
+skipif clickhouse
 statement query I 
 select sum(a) from t group by a;
 
@@ -180,12 +212,14 @@ select sum(a) from t group by a;
 3
 2
 
+skipif clickhouse
 statement query I 
 select sum(a) from t;
 
 ----  
 6
 
+skipif clickhouse
 statement query I 
 select count(a) from t group by a;
 
@@ -194,18 +228,21 @@ select count(a) from t group by a;
 1
 1
 
+skipif clickhouse
 statement query I 
 select count(a) from t;
 
 ----  
 3
 
+skipif clickhouse
 statement query I 
 select count() from t;
 
 ----  
 3
 
+skipif clickhouse
 statement query I 
 select count() from t group by a;
 
@@ -214,12 +251,14 @@ select count() from t group by a;
 1
 1
 
+skipif clickhouse
 statement query I 
 select count(1) from t;
 
 ----  
 3
 
+skipif clickhouse
 statement query I 
 select count(1) from t group by a;
 
@@ -228,12 +267,14 @@ select count(1) from t group by a;
 1
 1
 
+skipif clickhouse
 statement query I 
 select count(*) from t;
 
 ----  
 3
 
+skipif clickhouse
 statement query I 
 select sum(a) from t group by a having sum(a) > 1;
 
@@ -241,27 +282,32 @@ select sum(a) from t group by a having sum(a) > 1;
 3
 2
 
+skipif clickhouse
 statement query I 
 select sum(a+1) from t group by a+1 having sum(a+1) = 2;
 
 ----  
 2
 
+skipif clickhouse
 statement query I 
 select sum(a+1) from t group by a+1, b having sum(a+1) > 3;
 
 ----  
 4
 
+skipif clickhouse
 statement ok
 drop table t;
 
+skipif clickhouse
 statement query II 
 select 1, sum(number) from numbers_mt(1000000);
 
 ----  
 1 499999500000
 
+skipif clickhouse
 statement query B label(http)
 select count(*) = count(1) from numbers(1000);
 
@@ -271,36 +317,42 @@ select count(*) = count(1) from numbers(1000);
 ----  http
 true
 
+skipif clickhouse
 statement query I 
 select count(1) from numbers(1000);
 
 ----  
 1000
 
+skipif clickhouse
 statement query I 
 select sum(3) from numbers(1000);
 
 ----  
 3000
 
+skipif clickhouse
 statement query I 
 select count(null) from numbers(1000);
 
 ----  
 0
 
+skipif clickhouse
 statement query I 
 SELECT max(number) FROM numbers_mt (10) where number > 99999999998;
 
 ----  
 0
 
+skipif clickhouse
 statement query I 
 SELECT max(number) FROM numbers_mt (10) where number > 2;
 
 ----  
 9
 
+skipif clickhouse
 statement query II 
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 group by number%3, number%2 order by c1,c2;
 
@@ -312,6 +364,7 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 gr
 2 0
 2 1
 
+skipif clickhouse
 statement query I 
 SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 order by c1;
 
@@ -320,12 +373,15 @@ SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 ord
 1
 2
 
+skipif clickhouse
 statement ok
 CREATE TABLE t(a UInt64 null, b UInt32 null, c UInt32) Engine = Fuse;
 
+skipif clickhouse
 statement ok
 INSERT INTO t(a,b, c)  SELECT if (number % 3 = 1, null, number) as a, number + 3 as b, number + 4 as c FROM numbers(10);
 
+skipif clickhouse
 statement query II 
 SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1,ct;
 
@@ -334,6 +390,7 @@ SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1,ct;
 2 3
 NULL 3
 
+skipif clickhouse
 statement query III 
 SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1, a2;
 
@@ -344,6 +401,7 @@ SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1, 
 1 2 1
 NULL NULL 3
 
+skipif clickhouse
 statement query III 
 SELECT a%2 as a1, to_uint64(c % 3) as c1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
 
@@ -354,6 +412,7 @@ SELECT a%2 as a1, to_uint64(c % 3) as c1, count(0) as ct FROM t GROUP BY a1, c1 
 1 1 2
 NULL 2 3 
 
+skipif clickhouse
 statement query III 
 SELECT to_uint64(c % 3) as c1, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
 
@@ -364,42 +423,49 @@ SELECT to_uint64(c % 3) as c1, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c1 
 1 1 2
 2 NULL 3
 
+skipif clickhouse
 statement query I
 select number%2 as b from numbers(5) group by number % 2 having count(*) = 3 and sum(number) > 5;
 
 ----
 0
 
+skipif clickhouse
 statement query I 
 select count(*) from numbers(5) group by number % 2 having number % 2 + 1 = 2;
 
 ----  
 2
 
+skipif clickhouse
 statement query II 
 select number, sum(number) from numbers(10) group by 1, number having sum(number) = 5;
 
 ----  
 5 5
 
+skipif clickhouse
 statement query I 
 SELECT arg_min(user_name, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name);
 
 ----  
 1
 
+skipif clickhouse
 statement query I 
 select sum_distinct(number) from ( select number % 100 as number from numbers(100000));
 
 ----  
 4950
 
+skipif clickhouse
 statement query I 
 select count_distinct(number) from ( select number % 100 as number from numbers(100000));
 
 ----  
 100
 
+skipif clickhouse
 statement query B label(http)
 select sum_distinct(number) /  count_distinct(number) = avg_distinct(number) from ( select number % 100 as number from numbers(100000));
 
@@ -409,12 +475,14 @@ select sum_distinct(number) /  count_distinct(number) = avg_distinct(number) fro
 ----  http
 true
 
+skipif clickhouse
 statement query I 
 select sum_if(number, number >= 100000 - 1) from numbers(100000);
 
 ----  
 99999
 
+skipif clickhouse
 statement query B label(http)
 select sum_if(number, number > 100) /  count_if(number,  number > 100) = avg_if(number,  number > 100) from numbers(100000);
 
@@ -424,105 +492,131 @@ select sum_if(number, number > 100) /  count_if(number,  number > 100) = avg_if(
 ----  http
 true
 
+skipif clickhouse
 statement query I 
 select count_if(number, number>9) from numbers(10);
 
 ----  
 0
 
+skipif clickhouse
 statement query I 
 select sum(number > 314) from numbers(1000);
 
 ----  
 685
 
+skipif clickhouse
 statement query F 
 select avg(number > 314) from numbers(1000);
 
 ----  
 0.685
 
+skipif clickhouse
 statement ok
 drop table t;
 
+skipif clickhouse
 statement query T 
 select '====Having alias====';
 
 ----  
 ====Having alias====
 
+skipif clickhouse
 statement query I 
 select number as a from numbers(1) group by a having a = 0;
 
 ----  
 0
 
+skipif clickhouse
 statement query I 
 select number+1 as a from numbers(1) group by a having a = 1;
 
 ----  
 1
 
+skipif clickhouse
 statement query T 
 select '====INNER_JOIN====';
 
 ----  
 ====INNER_JOIN====
 
+skipif clickhouse
 statement ok
 create table t(a int);
 
+skipif clickhouse
 statement ok
 insert into t values(1),(2),(3);
 
+skipif clickhouse
 statement ok
 create table t1(b float);
 
+skipif clickhouse
 statement ok
 insert into t1 values(1.0),(2.0),(3.0);
 
+skipif clickhouse
 statement ok
 create table t2(c smallint unsigned null);
 
+skipif clickhouse
 statement ok
 insert into t2 values(1),(2),(null);
 
+skipif clickhouse
 statement ok
 select * from t inner join t1 on t.a = t1.b;
 
+skipif clickhouse
 statement ok
 select * from t inner join t2 on t.a = t2.c;
 
+skipif clickhouse
 statement ok
 select * from t inner join t2 on t.a = t2.c + 1;
 
+skipif clickhouse
 statement ok
 select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c;
 
+skipif clickhouse
 statement ok
 select * from t1 inner join t on t.a = t1.b;
 
+skipif clickhouse
 statement ok
 select * from t2 inner join t on t.a = t2.c;
 
+skipif clickhouse
 statement ok
 select * from t2 inner join t on t.a = t2.c + 1;
 
+skipif clickhouse
 statement ok
 select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c;
 
+skipif clickhouse
 statement ok
 select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
 
+skipif clickhouse
 statement ok
 select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5;
 
+skipif clickhouse
 statement query T 
 select '====ORDER_BY====';
 
 ----  
 ====ORDER_BY====
 
+skipif clickhouse
 statement query II 
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc;
 
@@ -538,6 +632,7 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 
 0 1
 0 1
 
+skipif clickhouse
 statement query IT 
 SELECT number, null from numbers(3) order by number desc;
 
@@ -546,6 +641,7 @@ SELECT number, null from numbers(3) order by number desc;
 1 NULL
 0 NULL
 
+skipif clickhouse
 statement query II 
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number desc;
 
@@ -561,6 +657,7 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number d
 2 1
 2 0
 
+skipif clickhouse
 statement query I 
 SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s;
 
@@ -576,54 +673,66 @@ SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s;
 8
 9
 
+skipif clickhouse
 statement ok
 create table t3(a int, b int);
 
+skipif clickhouse
 statement ok
 insert into t3 values(1,2),(2,3);
 
+skipif clickhouse
 statement ok
 drop table t;
 
+skipif clickhouse
 statement ok
 drop table t1;
 
+skipif clickhouse
 statement ok
 drop table t2;
 
+skipif clickhouse
 statement ok
 drop table t3;
 
+skipif clickhouse
 statement query T 
 select '====SELECT_WITHOUT_FROM====';
 
 ----  
 ====SELECT_WITHOUT_FROM====
 
+skipif clickhouse
 statement query I 
 select 1 + 1;
 
 ----  
 2
 
+skipif clickhouse
 statement query I 
 select to_int(8);
 
 ----  
 8
 
+skipif clickhouse
 statement query T 
 select 'new_planner';
 
 ----  
 new_planner
 
+skipif clickhouse
 statement query T 
 select '=== Test limit ===';
 
 ----  
 === Test limit ===
 
+skipif clickhouse
 statement query I 
 select number from numbers(100) order by number asc limit 10;
 
@@ -639,12 +748,14 @@ select number from numbers(100) order by number asc limit 10;
 8
 9
 
+skipif clickhouse
 statement query T 
 select '==================';
 
 ----  
 ==================
 
+skipif clickhouse
 statement query I 
 select number*2 as number from numbers(100) order by number limit 10;
 
@@ -660,12 +771,14 @@ select number*2 as number from numbers(100) order by number limit 10;
 16
 18
 
+skipif clickhouse
 statement query T 
 select '=== Test limit n, m ===';
 
 ----  
 === Test limit n, m ===
 
+skipif clickhouse
 statement query I 
 select number from numbers(100) order by number asc limit 9, 11;
 
@@ -682,12 +795,14 @@ select number from numbers(100) order by number asc limit 9, 11;
 18
 19
 
+skipif clickhouse
 statement query T 
 select '==================';
 
 ----  
 ==================
 
+skipif clickhouse
 statement query I 
 select number-2 as number from numbers(100) order by number asc limit 10, 10;
 
@@ -703,12 +818,14 @@ select number-2 as number from numbers(100) order by number asc limit 10, 10;
 16
 17
 
+skipif clickhouse
 statement query T 
 select '=== Test limit with offset ===';
 
 ----  
 === Test limit with offset ===
 
+skipif clickhouse
 statement query I 
 select number from numbers(100) order by number asc limit 10 offset 10;
 
@@ -724,12 +841,14 @@ select number from numbers(100) order by number asc limit 10 offset 10;
 18
 19
 
+skipif clickhouse
 statement query T 
 select '==============================';
 
 ----  
 ==============================
 
+skipif clickhouse
 statement query F 
 select number/2 as number from numbers(100) order by number asc limit 10 offset 10;
 
@@ -745,12 +864,14 @@ select number/2 as number from numbers(100) order by number asc limit 10 offset 
 9.0
 9.5
 
+skipif clickhouse
 statement query T 
 select '=== Test offset ===';
 
 ----  
 === Test offset ===
 
+skipif clickhouse
 statement query I 
 select number from numbers(10) order by number asc offset 5;
 
@@ -761,12 +882,14 @@ select number from numbers(10) order by number asc offset 5;
 8
 9
 
+skipif clickhouse
 statement query T 
 select '===================';
 
 ----  
 ===================
 
+skipif clickhouse
 statement query I 
 select number+number as number from numbers(10) order by number asc offset 5;
 
@@ -777,42 +900,52 @@ select number+number as number from numbers(10) order by number asc offset 5;
 16
 18
 
+skipif clickhouse
 statement query T 
 select '====Memory Table====';
 
 ----  
 ====Memory Table====
 
+skipif clickhouse
 statement ok
 drop table if exists temp;
 
+skipif clickhouse
 statement ok
 create table temp (a int) engine = Memory;
 
+skipif clickhouse
 statement ok
 insert into temp values (1);
 
+skipif clickhouse
 statement query I 
 select a from temp;
 
 ----  
 1
 
+skipif clickhouse
 statement ok
 drop table temp;
 
+skipif clickhouse
 statement query T 
 select '=== Test Subquery In From ===';
 
 ----  
 === Test Subquery In From ===
 
+skipif clickhouse
 statement ok
 create table t(a int, b int);
 
+skipif clickhouse
 statement ok
 insert into t values(1, 2),(2, 3);
 
+skipif clickhouse
 statement query I 
 select t1.a from (select * from t) as t1;
 
@@ -820,6 +953,7 @@ select t1.a from (select * from t) as t1;
 1
 2
 
+skipif clickhouse
 statement query III 
 SELECT a,b,count() from (SELECT cast((number%4) AS bigint) as a, cast((number%20) AS bigint) as b from numbers(100)) group by a,b order by a,b limit 3 ;
 
@@ -828,30 +962,36 @@ SELECT a,b,count() from (SELECT cast((number%4) AS bigint) as a, cast((number%20
 0 4 5
 0 8 5
 
+skipif clickhouse
 statement ok
 drop table t;
 
+skipif clickhouse
 statement query T 
 select '====Context Function====';
 
 ----  
 ====Context Function====
 
+skipif clickhouse
 statement ok
 use default;
 
+skipif clickhouse
 statement query T 
 select database();
 
 ----  
 default
 
+skipif clickhouse
 statement query T 
 select '==== Distinct =====';
 
 ----  
 ==== Distinct =====
 
+skipif clickhouse
 statement query I 
 SELECT DISTINCT * FROM numbers(3) ORDER BY  number;
 
@@ -860,12 +1000,14 @@ SELECT DISTINCT * FROM numbers(3) ORDER BY  number;
 1
 2
 
+skipif clickhouse
 statement query I 
 SELECT DISTINCT 1 FROM numbers(3);
 
 ----  
 1
 
+skipif clickhouse
 statement query I 
 SELECT DISTINCT (number %3) as c FROM numbers(1000) ORDER BY c;
 
@@ -874,6 +1016,7 @@ SELECT DISTINCT (number %3) as c FROM numbers(1000) ORDER BY c;
 1
 2
 
+skipif clickhouse
 statement query I 
 SELECT DISTINCT count(number %3) as c FROM numbers(10)  group by number % 3 ORDER BY c;
 
@@ -881,153 +1024,188 @@ SELECT DISTINCT count(number %3) as c FROM numbers(10)  group by number % 3 ORDE
 3
 4
 
+skipif clickhouse
 statement query T 
 select '===Inner Join with Using===';
 
 ----  
 ===Inner Join with Using===
 
+skipif clickhouse
 statement ok
 drop table if exists t1;
 
+skipif clickhouse
 statement ok
 create table t1(a int, b int);
 
+skipif clickhouse
 statement ok
 insert into t1 values(7, 8), (3, 4), (5, 6);
 
+skipif clickhouse
 statement ok
 drop table if exists t2;
 
+skipif clickhouse
 statement ok
 create table t2(a int, d int);
 
+skipif clickhouse
 statement ok
 insert into t2 values(1, 2), (3, 4), (5, 6);
 
+skipif clickhouse
 statement ok
 select * from t1 join t2 using(a);
 
+skipif clickhouse
 statement ok
 select t1.a from t1 join t2 using(a);
 
+skipif clickhouse
 statement ok
 select t2.d from t1 join t2 using(a);
 
+skipif clickhouse
 statement ok
 select * from t1 natural join t2;
 
+skipif clickhouse
 statement ok
 drop table t1;
 
+skipif clickhouse
 statement ok
 drop table t2;
 
+skipif clickhouse
 statement query T 
 select '===Inner Join with duplicate keys===';
 
 ----  
 ===Inner Join with duplicate keys===
 
+skipif clickhouse
 statement ok
 create table t1(a int, b int);
 
+skipif clickhouse
 statement ok
 insert into t1 values(1, 2), (1, 3), (2, 4);
 
+skipif clickhouse
 statement ok
 create table t2(c int, d int);
 
+skipif clickhouse
 statement ok
 insert into t2 values(1, 2), (2, 6);
 
+skipif clickhouse
 statement ok
 select * from t2 inner join t1 on t1.a = t2.c;
 
+skipif clickhouse
 statement ok
 drop table t1;
 
+skipif clickhouse
 statement ok
 drop table t2;
 
+skipif clickhouse
 statement query T 
 select '===Trim Function===';
 
 ----  
 ===Trim Function===
 
+skipif clickhouse
 statement query T 
 select trim(leading ' ' from '      abc');
 
 ----  
 abc
 
+skipif clickhouse
 statement query T 
 select trim(leading ' ' from '');
 
 ----  
 	
 
+skipif clickhouse
 statement query T 
 select trim(leading 'ab' from 'abab');
 
 ----  
 	
 
+skipif clickhouse
 statement query T 
 select trim(leading 'ab' from 'abc');
 
 ----  
 c
 
+skipif clickhouse
 statement query T 
 select trim(trailing ' ' from 'abc    ');
 
 ----  
 abc
 
+skipif clickhouse
 statement query T 
 select trim(trailing ' ' from '');
 
 ----  
 	
 
+skipif clickhouse
 statement query T 
 select trim(trailing 'ab' from 'abab');
 
 ----  
 	
 
+skipif clickhouse
 statement query T 
 select trim(trailing 'ab' from 'cab');
 
 ----  
 c
 
+skipif clickhouse
 statement query T 
 select trim(both 'ab' from 'abab');
 
 ----  
 	
 
+skipif clickhouse
 statement query T 
 select trim(both 'ab' from 'abcab');
 
 ----  
 c
 
+skipif clickhouse
 statement query T 
 select trim(' abc ');
 
 ----  
 abc
 
+skipif clickhouse
 statement query T 
 select '===Array Literal===';
 
 ----  
 ===Array Literal===
 
+skipif clickhouse
 statement query I
 select [1, 2, 3];
 
@@ -1035,6 +1213,7 @@ select [1, 2, 3];
 [1, 2, 3]
 
 
+skipif clickhouse
 statement query T
 select [];
 
@@ -1042,25 +1221,29 @@ select [];
 []
 
 
+skipif clickhouse
 statement query T
 select [[1, 2, 3],[1, 2, 3]];
 
 ----
 [[1, 2, 3], [1, 2, 3]]
 
+skipif clickhouse
 statement query T 
 select '====Correlated Subquery====';
 
 ----  
 ====Correlated Subquery====
 
-# statement query I
-# select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
+skipif clickhouse 
+statement query I
+select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
 
-# ----
-# 0
-# 1
+----
+0
+1
 
+skipif clickhouse
 statement query I 
 select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;
 
@@ -1076,18 +1259,22 @@ select (select number from numbers(10) as t1 where t.number = t1.number) from nu
 8
 9
 
+skipif clickhouse
 statement query T 
 select '===Explain===';
 
 ----  
 ===Explain===
 
+skipif clickhouse
 statement ok
 create table t1(a int, b int);
 
+skipif clickhouse
 statement ok
 create table t2(a int, b int);
 
+skipif clickhouse
 statement query T label(http)
 explain select t1.a from t1 where a > 0;
 
@@ -1102,6 +1289,7 @@ Projection: a:Int32
   Filter: (a > 0)
     ReadDataSource: scan schema: [a:Int32], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [(a > 0)]]
 
+skipif clickhouse
 statement query T 
 select '===Explain Pipeline===';
 
@@ -1109,51 +1297,63 @@ select '===Explain Pipeline===';
 ===Explain Pipeline===
 
 onlyif mysql
+skipif clickhouse
 statement ok
 explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
 
+skipif clickhouse
 statement ok
 drop table t1;
 
+skipif clickhouse
 statement ok
 drop table t2;
 
+skipif clickhouse
 statement query T 
 select '===Position Function===';
 
 ----  
 ===Position Function===
 
+skipif clickhouse
 statement query I 
 SELECT POSITION('bar' IN 'foobarbar');
 
 ----  
 4
 
+skipif clickhouse
 statement query I 
 SELECT POSITION('xbar' IN 'foobar');
 
 ----  
 0
 
+skipif clickhouse
 statement ok
 drop table if exists t;
 
+skipif clickhouse
 statement ok
 create table t (a varchar);
 
+skipif clickhouse
 statement ok
 insert into t values ('foo');
 
+skipif clickhouse
 statement query I 
 select POSITION('o' IN t.a) from t;
 
 ----  
 2
 
+skipif clickhouse
 statement ok
 drop table t;
 
+skipif clickhouse
 statement query T 
 select '====Tuple====';
 
@@ -1161,57 +1361,72 @@ select '====Tuple====';
 ====Tuple====
 
 onlyif mysql
+skipif clickhouse
 statement ok
 select ('field', number) from numbers(5);
 
+skipif clickhouse
 statement query T 
 select '====View====';
 
 ----  
 ====View====
 
+skipif clickhouse
 statement ok
 drop view if exists temp;
 
+skipif clickhouse
 statement ok
 create view temp as select number from numbers(1);
 
+skipif clickhouse
 statement query I 
 select number from temp;
 
 ----  
 0
 
+skipif clickhouse
 statement ok
 drop view temp;
 
+skipif clickhouse
 statement query T 
 select '====Cross Join====';
 
 ----  
 ====Cross Join====
 
+skipif clickhouse
 statement ok
 create table t1(a int, b int);
 
+skipif clickhouse
 statement ok
 create table t2(c int, d int);
 
+skipif clickhouse
 statement ok
 insert into t1 values(1, 2), (2, 3), (3 ,4);
 
+skipif clickhouse
 statement ok
 insert into t2 values(2,2), (3, 5), (7 ,8);
 
+skipif clickhouse
 statement ok
 select * from t1, t2;
 
+skipif clickhouse
 statement ok
 drop table t1;
 
+skipif clickhouse
 statement ok
 drop table t2;
 
+skipif clickhouse
 statement query ok
 select 3 as a, 4 as a;
 
@@ -1219,6 +1434,7 @@ select 3 as a, 4 as a;
 3   4
 
 
+skipif clickhouse
 statement ok
 set enable_planner_v2 = 0;
 

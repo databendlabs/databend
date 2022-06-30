@@ -20,11 +20,13 @@ class ClickhouseConnector():
             if '"' in sql:
                 if '\'' in sql:
                     return sql.replace('"', '\\\"').replace(':','\\:') #  "  -> \"   : ->  \\:
+                return sql.replace('"', '\'')
             else:
                 return sql  #  do nothing
 
         if self._session is None:
             self._session = make_session(self._engine)
+        print(parseSQL(statement))
         return self._session.execute(parseSQL(statement))
 
     def reset_session(self):
