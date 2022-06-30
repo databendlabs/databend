@@ -22,7 +22,7 @@ use async_channel::Sender;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_exception::Result;
 
-use crate::api::rpc::packet::DataPacket;
+use crate::api::rpc::packets::DataPacket;
 
 // Different from async_channel::Sender
 // It is allowed to close the channel when has one reference.

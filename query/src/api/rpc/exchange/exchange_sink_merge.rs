@@ -24,7 +24,7 @@ use common_exception::Result;
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
-use crate::api::rpc::packet::DataPacket;
+use crate::api::rpc::packets::DataPacket;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;

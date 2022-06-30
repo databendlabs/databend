@@ -29,7 +29,7 @@ use common_exception::Result;
 use futures::future::Either;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentReceiver;
-use crate::api::rpc::packet::DataPacket;
+use crate::api::rpc::packets::DataPacket;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeReceiver {
@@ -229,6 +229,7 @@ impl ExchangeReceiver {
             }
             DataPacket::ErrorCode(error_code) => Err(error_code),
             DataPacket::Progress(ref values) => {
+                println!("recv progress {:?}", values);
                 self.ctx.get_scan_progress().incr(values);
                 Ok(())
             }

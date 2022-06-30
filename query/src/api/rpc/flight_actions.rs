@@ -21,8 +21,8 @@ use common_planners::Expression;
 use common_planners::PlanNode;
 use tonic::Status;
 
-use crate::api::ExecutorPacket;
-use crate::api::PrepareChannel;
+use crate::api::QueryFragmentsPlanPacket;
+use crate::api::InitNodesChannelPacket;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ShuffleAction {
@@ -119,17 +119,17 @@ impl TryInto<Vec<u8>> for CancelAction {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct PreparePipeline {
-    pub executor_packet: ExecutorPacket,
+pub struct InitQueryFragmentsPlan {
+    pub executor_packet: QueryFragmentsPlanPacket,
 }
 
-impl TryInto<PreparePipeline> for Vec<u8> {
+impl TryInto<InitQueryFragmentsPlan> for Vec<u8> {
     type Error = Status;
 
-    fn try_into(self) -> Result<PreparePipeline, Self::Error> {
+    fn try_into(self) -> Result<InitQueryFragmentsPlan, Self::Error> {
         match std::str::from_utf8(&self) {
             Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(utf8_body) => match serde_json::from_str::<PreparePipeline>(utf8_body) {
+            Ok(utf8_body) => match serde_json::from_str::<InitQueryFragmentsPlan>(utf8_body) {
                 Err(cause) => Err(Status::invalid_argument(cause.to_string())),
                 Ok(action) => Ok(action),
             },
@@ -137,7 +137,7 @@ impl TryInto<PreparePipeline> for Vec<u8> {
     }
 }
 
-impl TryInto<Vec<u8>> for PreparePipeline {
+impl TryInto<Vec<u8>> for InitQueryFragmentsPlan {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
@@ -148,17 +148,17 @@ impl TryInto<Vec<u8>> for PreparePipeline {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct PreparePublisher {
-    pub publisher_packet: PrepareChannel,
+pub struct InitNodesChannel {
+    pub publisher_packet: InitNodesChannelPacket,
 }
 
-impl TryInto<PreparePublisher> for Vec<u8> {
+impl TryInto<InitNodesChannel> for Vec<u8> {
     type Error = Status;
 
-    fn try_into(self) -> Result<PreparePublisher, Self::Error> {
+    fn try_into(self) -> Result<InitNodesChannel, Self::Error> {
         match std::str::from_utf8(&self) {
             Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(utf8_body) => match serde_json::from_str::<PreparePublisher>(utf8_body) {
+            Ok(utf8_body) => match serde_json::from_str::<InitNodesChannel>(utf8_body) {
                 Err(cause) => Err(Status::invalid_argument(cause.to_string())),
                 Ok(action) => Ok(action),
             },
@@ -166,7 +166,7 @@ impl TryInto<PreparePublisher> for Vec<u8> {
     }
 }
 
-impl TryInto<Vec<u8>> for PreparePublisher {
+impl TryInto<Vec<u8>> for InitNodesChannel {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
@@ -181,9 +181,9 @@ pub enum FlightAction {
     PrepareShuffleAction(ShuffleAction),
     BroadcastAction(BroadcastAction),
     CancelAction(CancelAction),
-    PreparePipeline(PreparePipeline),
-    PreparePublisher(PreparePublisher),
-    ExecutePipeline(String),
+    InitQueryFragmentsPlan(InitQueryFragmentsPlan),
+    InitNodesChannel(InitNodesChannel),
+    ExecutePartialQuery(String),
     // ShutdownQuery(String),
 }
 
@@ -237,10 +237,10 @@ impl TryInto<FlightAction> for Action {
             "PrepareShuffleAction" => Ok(FlightAction::PrepareShuffleAction(self.body.try_into()?)),
             "BroadcastAction" => Ok(FlightAction::BroadcastAction(self.body.try_into()?)),
             "CancelAction" => Ok(FlightAction::CancelAction(self.body.try_into()?)),
-            "PreparePipeline" => Ok(FlightAction::PreparePipeline(self.body.try_into()?)),
-            "PreparePublisher" => Ok(FlightAction::PreparePublisher(self.body.try_into()?)),
-            "ExecutePipeline" => match String::from_utf8(self.body.to_owned()) {
-                Ok(query_id) => Ok(FlightAction::ExecutePipeline(query_id)),
+            "InitQueryFragmentsPlan" => Ok(FlightAction::InitQueryFragmentsPlan(self.body.try_into()?)),
+            "InitNodesChannel" => Ok(FlightAction::InitNodesChannel(self.body.try_into()?)),
+            "ExecutePartialQuery" => match String::from_utf8(self.body.to_owned()) {
+                Ok(query_id) => Ok(FlightAction::ExecutePartialQuery(query_id)),
                 Err(cause) => Err(Status::invalid_argument(cause.to_string())),
             },
             // "ShutdownQuery" => match String::from_utf8(self.body.to_owned()) {
@@ -272,16 +272,16 @@ impl TryInto<Action> for FlightAction {
                 r#type: String::from("CancelAction"),
                 body: cancel_action.try_into()?,
             }),
-            FlightAction::PreparePipeline(prepare_pipeline) => Ok(Action {
-                r#type: String::from("PreparePipeline"),
-                body: prepare_pipeline.try_into()?,
+            FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => Ok(Action {
+                r#type: String::from("InitQueryFragmentsPlan"),
+                body: init_query_fragments_plan.try_into()?,
             }),
-            FlightAction::PreparePublisher(publisher) => Ok(Action {
-                r#type: String::from("PreparePublisher"),
-                body: publisher.try_into()?,
+            FlightAction::InitNodesChannel(init_nodes_channel) => Ok(Action {
+                r#type: String::from("InitNodesChannel"),
+                body: init_nodes_channel.try_into()?,
             }),
-            FlightAction::ExecutePipeline(query_id) => Ok(Action {
-                r#type: String::from("ExecutePipeline"),
+            FlightAction::ExecutePartialQuery(query_id) => Ok(Action {
+                r#type: String::from("ExecutePartialQuery"),
                 body: query_id.into_bytes(),
             }),
         }

@@ -16,9 +16,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_meta_types::NodeInfo;
+use crate::api::rpc::Packet;
+use crate::Config;
+use common_exception::{ErrorCode, Result};
+use crate::api::FlightAction;
+use crate::api::rpc::flight_actions::InitNodesChannel;
+use crate::api::rpc::packets::packet::create_client;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct PrepareChannel {
+pub struct InitNodesChannelPacket {
     pub query_id: String,
     pub executor: String,
     pub request_server: String,
@@ -27,7 +33,7 @@ pub struct PrepareChannel {
     pub data_endpoints: HashMap<String, Arc<NodeInfo>>,
 }
 
-impl PrepareChannel {
+impl InitNodesChannelPacket {
     pub fn create(
         query_id: String,
         executor_id: String,
@@ -35,8 +41,8 @@ impl PrepareChannel {
         executors: HashMap<String, Arc<NodeInfo>>,
         target_nodes_info: HashMap<String, Arc<NodeInfo>>,
         target_2_fragments: HashMap<String, Vec<usize>>,
-    ) -> PrepareChannel {
-        PrepareChannel {
+    ) -> InitNodesChannelPacket {
+        InitNodesChannelPacket {
             query_id,
             request_server,
             target_nodes_info,
@@ -44,5 +50,22 @@ impl PrepareChannel {
             executor: executor_id,
             data_endpoints: executors,
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl Packet for InitNodesChannelPacket {
+    async fn commit(&self, config: &Config, timeout: u64) -> Result<()> {
+        if !self.data_endpoints.contains_key(&self.executor) {
+            return Err(ErrorCode::LogicalError(format!(
+                "Not found {} node in cluster",
+                &self.executor
+            )));
+        }
+
+        let executor_info = &self.data_endpoints[&self.executor];
+        let mut conn = create_client(config, &executor_info.flight_address).await?;
+        let action = FlightAction::InitNodesChannel(InitNodesChannel { publisher_packet });
+        conn.execute_action(action, timeout).await
     }
 }

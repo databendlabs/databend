@@ -16,36 +16,48 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_meta_types::NodeInfo;
+use crate::api::rpc::Packet;
+use crate::Config;
+use common_exception::{ErrorCode, Result};
+use crate::api::FlightAction;
+use crate::api::rpc::packets::packet::create_client;
 
-use crate::api::rpc::packet::packet_fragment::FragmentPacket;
-
+// Run all query fragments of query in the node
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct ExecutorPacket {
+pub struct ExecutePartialQueryPacket {
     pub query_id: String,
     pub executor: String,
-    pub request_executor: String,
-    pub fragments: Vec<FragmentPacket>,
     // We send nodes info for each node. This is a bad choice
     pub executors_info: HashMap<String, Arc<NodeInfo>>,
-    pub source_2_fragments: HashMap<String, Vec<usize>>,
 }
 
-impl ExecutorPacket {
+impl ExecutePartialQueryPacket {
     pub fn create(
         query_id: String,
         executor: String,
-        fragments: Vec<FragmentPacket>,
         executors_info: HashMap<String, Arc<NodeInfo>>,
-        source_2_fragments: HashMap<String, Vec<usize>>,
-        request_executor: String,
-    ) -> ExecutorPacket {
-        ExecutorPacket {
+    ) -> ExecutePartialQueryPacket {
+        ExecutePartialQueryPacket {
             query_id,
             executor,
-            fragments,
             executors_info,
-            request_executor,
-            source_2_fragments,
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl Packet for ExecutePartialQueryPacket {
+    async fn commit(&self, config: &Config, timeout: u64) -> Result<()> {
+        if !self.executors_info.contains_key(&self.executor) {
+            return Err(ErrorCode::ClusterUnknownNode(format!(
+                "Not found {} node in cluster",
+                &self.executor
+            )));
+        }
+
+        let executor = &self.executors_info[&self.executor];
+        let mut conn = create_client(config, &executor.flight_address).await?;
+        let action = FlightAction::ExecutePartialQuery(self.query_id.clone());
+        conn.execute_action(action, timeout).await
     }
 }

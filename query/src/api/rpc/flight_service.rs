@@ -236,22 +236,22 @@ impl FlightService for DatabendQueryFlightService {
                     .await?;
                 FlightResult { body: vec![] }
             }
-            FlightAction::PreparePipeline(packet) => {
+            FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {
                 let session = self.sessions.create_session(SessionType::FlightRPC).await?;
-                let query_context = session.create_query_context().await?;
+                let ctx = session.create_query_context().await?;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.handle_prepare_pipeline(&query_context, packet)?;
+                exchange_manager.init_query_fragments_plan(&ctx, init_query_fragments_plan)?;
                 FlightResult { body: vec![] }
             }
-            FlightAction::PreparePublisher(prepare_publisher) => {
-                let publisher_packet = &prepare_publisher.publisher_packet;
+            FlightAction::InitNodesChannel(init_nodes_channel) => {
+                let publisher_packet = &init_nodes_channel.publisher_packet;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.handle_prepare_publisher(publisher_packet).await?;
+                exchange_manager.init_nodes_channel(publisher_packet).await?;
                 FlightResult { body: vec![] }
             }
-            FlightAction::ExecutePipeline(query_id) => {
+            FlightAction::ExecutePartialQuery(query_id) => {
                 let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.handle_execute_pipeline(query_id)?;
+                exchange_manager.execute_partial_query(query_id)?;
                 FlightResult { body: vec![] }
             }
         };

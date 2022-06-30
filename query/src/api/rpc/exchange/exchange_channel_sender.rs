@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+use common_base::base::tokio::time::sleep;
 use async_channel::{Recv, RecvError, Sender};
 use futures_util::future::Either;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
@@ -22,26 +24,26 @@ use common_base::base::tokio::sync::futures::Notified;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::infallible::Mutex;
-use crate::api::rpc::packet::DataPacket;
+use crate::api::rpc::packets::DataPacket;
 use common_exception::{ErrorCode, Result};
 use common_grpc::ConnectionFactory;
-use crate::api::{FlightClient, PrepareChannel};
+use crate::api::{FlightClient, InitNodesChannelPacket};
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
 use crate::Config;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeSender {
     query_id: String,
-    runtime: Arc<Runtime>,
-    ctx: Arc<QueryContext>,
     target_fragments: Vec<usize>,
+    request_server_notify: Arc<Notify>,
     notifies: HashMap<usize, Arc<Notify>>,
     join_handlers: Mutex<Vec<JoinHandle<()>>>,
     flight_client: Mutex<Option<FlightClient>>,
+    target_is_request_server: bool,
 }
 
 impl ExchangeSender {
-    pub async fn create(config: Config, packet: &PrepareChannel, target: &str) -> Result<ExchangeSender> {
+    pub async fn create(config: Config, packet: &InitNodesChannelPacket, target: &str) -> Result<ExchangeSender> {
         let target_node_info = &packet.target_nodes_info[target];
         let address = target_node_info.flight_address.to_string();
         let flight_client = Self::create_client(config, &address).await?;
@@ -56,40 +58,67 @@ impl ExchangeSender {
             );
         }
 
-        unimplemented!()
-        // Self::create_client(config, channel.)
-        // Ok(ExchangeSender {})
+        Ok(ExchangeSender {
+            query_id: packet.query_id.clone(),
+            notifies: target_fragments_notifies,
+            target_fragments: target_fragments_id.to_owned(),
+            join_handlers: Mutex::new(vec![]),
+            flight_client: Mutex::new(Some(flight_client)),
+            target_is_request_server: target == packet.request_server,
+            request_server_notify: Arc::new(Notify::new()),
+        })
     }
 
     pub fn is_to_request_server(&self) -> bool {
-        false
+        self.target_is_request_server
     }
 
-    pub fn listen(&self, source: String) -> Result<HashMap<usize, FragmentSender>> {
-        let flight_tx = self.listen_flight(&source)?;
+    pub fn listen(&self, ctx: Arc<QueryContext>, source: String, runtime: Arc<Runtime>) -> Result<(Sender<DataPacket>, HashMap<usize, FragmentSender>)> {
+        let flight_tx = self.listen_flight(ctx.clone(), &source, runtime.clone())?;
         let mut target_fragments_senders = HashMap::with_capacity(self.target_fragments.len());
 
         for target_fragment_id in &self.target_fragments {
-            let sender = self.listen_fragment(flight_tx.clone(), *target_fragment_id)?;
+            let runtime = runtime.clone();
+            let sender = self.listen_fragment(flight_tx.clone(), *target_fragment_id, runtime)?;
             target_fragments_senders.insert(
                 *target_fragment_id,
                 FragmentSender::create_unrecorded(sender),
             );
         }
 
-        // TODO: send other type data if need
+        if self.target_is_request_server {
+            let flight_tx = flight_tx.clone();
+            let request_notify = self.request_server_notify.clone();
+            runtime.spawn(async move {
+                let mut notify = Box::pin(request_notify.notified());
+                'listen_loop: loop {
+                    println!("send progress");
+                    if let Err(cause) = flight_tx.send(DataPacket::Progress(ctx.get_scan_progress_value())).await {
+                        println!("send progress failure");
+                        // TODO: report error and shutdown query
+                        break 'listen_loop;
+                    }
 
-        Ok(target_fragments_senders)
+                    let sleep = Box::pin(sleep(Duration::from_millis(500)));
+                    match futures::future::select(notify, sleep).await {
+                        Either::Left((_, _)) => { break 'listen_loop; }
+                        Either::Right((_, y)) => { notify = y; }
+                    }
+                }
+            });
+        }
+
+        Ok((flight_tx, target_fragments_senders))
     }
 
-    fn listen_fragment(&self, c_tx: Sender<DataPacket>, fragment_id: usize) -> Result<Sender<DataPacket>> {
+    fn listen_fragment(&self, c_tx: Sender<DataPacket>, fragment_id: usize, runtime: Arc<Runtime>) -> Result<Sender<DataPacket>> {
         let mut join_handlers = self.join_handlers.lock();
 
         let notify = self.notifies[&fragment_id].clone();
         let (f_tx, f_rx) = async_channel::bounded(1);
 
-        join_handlers.push(self.runtime.spawn(async {
-            let mut notified = notify.notified();
+        join_handlers.push(runtime.spawn(async move {
+            let mut notified = Box::pin(notify.notified());
 
             'fragment_loop: loop {
                 match futures::future::select(notified, f_rx.recv()).await {
@@ -98,13 +127,7 @@ impl ExchangeSender {
                         notified = n;
 
                         if let Ok(recv_packet) = recv_message {
-                            if let Err(_cause) = c_tx.send(recv_packet).await {
-                                // common_tracing::tracing::warn!(
-                                //     "{} to {} channel closed.",
-                                //     source_clone,
-                                //     target_clone
-                                // );
-
+                            if c_tx.send(recv_packet).await.is_err() {
                                 break 'fragment_loop;
                             }
 
@@ -112,36 +135,50 @@ impl ExchangeSender {
                         }
 
                         // Disconnect channel, exit loop
-                        if let Err(_cause) = c_tx.send(DataPacket::EndFragment(fragment_id)).await {
-                            // common_tracing::tracing::warn!(
-                            //     "{} to {} channel closed.",
-                            //     source_clone,
-                            //     target_clone
-                            // );
-                        }
-
+                        c_tx.send(DataPacket::EndFragment(fragment_id)).await;
                         break 'fragment_loop;
                     }
                 }
             }
+
+            // TODO: if join handler is end, shutdown query.
         }));
 
         Ok(f_tx)
     }
 
-    pub async fn send_error(&self, error: ErrorCode) {
-        // self.
-        // request_server_tx.send(DataPacket::ErrorCode(cause))
+    pub async fn abort(&self) -> Result<()> {
+        for notify in self.notifies.values() {
+            notify.notify_one();
+        }
+
+        while let Some(join_handler) = self.join_handlers.lock().pop() {
+            if let Err(join_cause) = join_handler.await {
+                if join_cause.is_panic() {
+                    let cause = join_cause.into_panic();
+                    return match cause.downcast_ref::<&'static str>() {
+                        None => match cause.downcast_ref::<String>() {
+                            None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+                            Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                        },
+                        Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                    };
+                }
+            }
+        }
+
+        Ok(())
     }
 
-    fn listen_flight(&self, source: &String) -> Result<Sender<DataPacket>> {
-        let ctx = self.ctx.clone();
+    fn listen_flight(&self, ctx: Arc<QueryContext>, source: &String, runtime: Arc<Runtime>) -> Result<Sender<DataPacket>> {
+        let source = source.clone();
         let query_id = self.query_id.clone();
         let mut connection = self.get_flight_client()?;
 
         let (flight_tx, rx) = async_channel::bounded(2);
 
-        self.runtime.spawn(async {
+        let mut join_handlers = self.join_handlers.lock();
+        join_handlers.push(runtime.spawn(async move {
             if let Err(status) = connection.do_put(&query_id, &source, rx).await {
                 common_tracing::tracing::warn!("Flight connection failure: {:?}", status);
 
@@ -151,12 +188,12 @@ impl ExchangeSender {
                     common_tracing::tracing::warn!("Cannot shutdown query, cause {:?}", cause);
                 }
             }
-        });
+        }));
 
         Ok(flight_tx)
     }
 
-    fn get_flight_client(self: &Arc<Self>) -> Result<FlightClient> {
+    fn get_flight_client(&self) -> Result<FlightClient> {
         match self.flight_client.lock().take() {
             Some(flight_client) => Ok(flight_client),
             None => Err(ErrorCode::LogicalError("Cannot get flight client. It's a bug.")),
