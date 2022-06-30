@@ -202,10 +202,10 @@ INSERT INTO t11 (id, arr) VALUES(1, [true, true]), (2, [false, false]), (3, [tru
 statement ok
 select * from t11;
 
-statement query BB label(mysql,http)
+statement query BB label(http)
 select arr[0], arr[1] from t11;
 
----- mysql
+----
 1 1
 0 0
 1 0

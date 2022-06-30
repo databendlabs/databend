@@ -13,6 +13,7 @@ CREATE TABLE t(c1 int);
 statement ok
 DROP TABLE t;
 
+skipif clickhouse
 statement query T 
 select "show tables should give empty list, if all the tables droppped";
 
@@ -22,6 +23,7 @@ show tables should give empty list, if all the tables droppped
 statement ok
 SHOW TABLES;
 
+skipif clickhouse
 statement query T 
 select "after undrop, table should appear";
 
@@ -31,15 +33,16 @@ after undrop, table should appear
 statement ok
 UNDROP TABLE t;
 
-statement query T label(mysql,http)
+statement query T label(http)
 SHOW TABLES;
 
-----  mysql
+----  
 t
 
 ----  http
 t
 
+skipif clickhouse
 statement query T 
 select "after undrop, data should appear";
 
@@ -58,6 +61,7 @@ UNDROP TABLE t;
 statement ok
 select * from t;
 
+skipif clickhouse
 statement query T 
 select "Tables of same name";
 
@@ -79,6 +83,7 @@ DROP TABLE t;
 statement ok
 UNDROP TABLE t;
 
+skipif clickhouse
 statement query T 
 select "-- the latest t should be recovered, which has 1 row";
 
@@ -94,6 +99,7 @@ ALTER TABLE t RENAME TO t1;
 statement ok
 UNDROP TABLE t;
 
+skipif clickhouse
 statement query T 
 select "-- the first t should be recovered, which has 2 row";
 
