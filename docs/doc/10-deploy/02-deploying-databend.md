@@ -195,9 +195,6 @@ secret_access_key = "<your-account-key>"
 
 d. Set your values in the [storage.fs] or [storage.azblob] block. Please note that the field *endpoint_url* refers to the service URL of your storage region and varies depending on the object storage solution you use:
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 <Tabs groupId="operating-systems">
 <TabItem value="MinIO" label="MinIO">
 
