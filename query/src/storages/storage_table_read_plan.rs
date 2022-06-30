@@ -87,7 +87,7 @@ impl ToReadDataSourcePlan for dyn Table {
     }
 }
 
-pub fn get_description(table_info: &TableInfo, statistics: &Statistics) -> String {
+fn get_description(table_info: &TableInfo, statistics: &Statistics) -> String {
     if statistics.read_rows > 0 {
         format!(
             "(Read from {} table, {} Read Rows:{}, Read Bytes:{}, Partitions Scanned:{}, Partitions Total:{})",
