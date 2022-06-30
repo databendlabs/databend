@@ -28,7 +28,7 @@ Databend works with self-hosted or cloud object storage solutions. You will need
 This topic describes the standalone deployment architecture and environments.
 
 ### Deployment Architecture
-When you deploy Databend in standalone mode, you host a Meta node and a Query node on the same machine or separately. For more information about how to deploy Databend in standalone mode with various object storage solutions, see [Deploying with Self-Hosted Object Storage](./10-deploying-with-self-hosted-object-storage.md).
+When you deploy Databend in standalone mode, you host a Meta node and a Query node on the same machine or separately. For more information about how to deploy Databend in standalone mode with various object storage solutions, see [Deploying a Standalone Databend](./02-deploying-databend.md).
 
 <img src="/img/deploy/deploy-standalone-arch.png"/>
 
