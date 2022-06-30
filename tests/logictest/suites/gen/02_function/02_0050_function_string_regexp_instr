@@ -1,3 +1,6 @@
+statement ok
+use default;
+
 statement query I 
 SELECT REGEXP_INSTR('dog cat dog', 'dog');
 

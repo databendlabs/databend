@@ -1,3 +1,4 @@
+skipif clickhouse
 statement query TT 
 SHOW ENGINES;
 

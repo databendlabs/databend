@@ -34,12 +34,14 @@ select '==get_ignore_case==';
 ----  
 ==get_ignore_case==
 
+skipif clickhouse
 statement query T 
 select get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'aA');
 
 ----  
 2
 
+skipif clickhouse
 statement query T 
 select get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
 
@@ -52,18 +54,21 @@ select '==get_path==';
 ----  
 ==get_path==
 
+skipif clickhouse
 statement query T 
 select get_path(parse_json('{"attr":[{"name":1}, {"name":2}]}'), 'attr[0].name');
 
 ----  
 1
 
+skipif clickhouse
 statement query T 
 select get_path(parse_json('{"attr":[{"name":1}, {"name":2}]}'), 'attr[1]:name');
 
 ----  
 2
 
+skipif clickhouse
 statement query T 
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer:id');
 
