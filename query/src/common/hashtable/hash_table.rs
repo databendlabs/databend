@@ -56,11 +56,30 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
 {
     fn drop(&mut self) {
         unsafe {
-            let size = (self.grower.max_size() as usize) * mem::size_of::<Entity>();
+            let item_size = self.grower.max_size() as usize;
+
+            if std::mem::needs_drop::<Entity>() {
+                for off in 0..item_size {
+                    let entity = self.entities.add(off);
+
+                    if !entity.is_zero() {
+                        std::ptr::drop_in_place(entity);
+                    }
+                }
+            }
+
+            let size = item_size * mem::size_of::<Entity>();
             let layout = Layout::from_size_align_unchecked(size, std::mem::align_of::<Entity>());
             std::alloc::dealloc(self.entities_raw, layout);
 
             if let Some(zero_entity) = self.zero_entity_raw {
+                if std::mem::needs_drop::<Entity>() {
+                    let entity = self.zero_entity.unwrap();
+                    if !entity.is_zero() {
+                        std::ptr::drop_in_place(entity);
+                    }
+                }
+
                 let zero_layout = Layout::from_size_align_unchecked(
                     mem::size_of::<Entity>(),
                     std::mem::align_of::<Entity>(),
