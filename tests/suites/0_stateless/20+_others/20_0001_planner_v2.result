@@ -323,6 +323,13 @@ abc
 Project: [a]
     Filter: [t1.a > 0]
         Scan: default.default.t1
+Filter: [(t1.a > 3) OR ((t2.a > 5) AND (t1.a > 1))]
+    HashJoin: INNER, build keys: [t2.a], probe keys: [t1.a], join filters: []
+        Scan: default.default.t1
+        Scan: default.default.t2
+HashJoin: INNER, build keys: [t2.a], probe keys: [t1.a], join filters: []
+    Scan: default.default.t1
+    Scan: default.default.t2
 ===Explain Pipeline===
 Project × 1 processor
   TransformHashJoin × 1 processor

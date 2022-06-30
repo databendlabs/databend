@@ -75,7 +75,7 @@ async fn test_session_in_management_mode() -> Result<()> {
         conf.clone(),
         String::from("test-001"),
         SessionType::Dummy,
-        session_manager,
+        session_manager.clone(),
         None,
     )
     .await?;
@@ -89,6 +89,21 @@ async fn test_session_in_management_mode() -> Result<()> {
         let actual = session.get_current_tenant();
         assert_eq!(&actual, "tenant2");
     }
+
+    // test session leak
+    let leak_id;
+    {
+        let leak_session = session_manager.create_session(SessionType::Dummy).await?;
+        leak_id = leak_session.get_id();
+        assert!(session_manager
+            .get_session_by_id(leak_id.as_str())
+            .await
+            .is_some());
+    }
+    assert!(session_manager
+        .get_session_by_id(leak_id.as_str())
+        .await
+        .is_none());
 
     Ok(())
 }

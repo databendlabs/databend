@@ -16,7 +16,7 @@ mod array;
 mod boolean;
 mod const_;
 mod date;
-mod helper;
+pub mod helper;
 mod null;
 mod nullable;
 mod number;
@@ -35,6 +35,8 @@ use common_io::prelude::FormatSettings;
 pub use const_::ConstSerializer;
 pub use date::DateSerializer;
 use enum_dispatch::enum_dispatch;
+pub use helper::escape::write_escaped_string;
+pub use helper::json::write_json_string;
 pub use null::NullSerializer;
 pub use nullable::NullableSerializer;
 pub use number::NumberSerializer;
@@ -100,6 +102,7 @@ pub trait TypeSerializer<'a>: Send + Sync {
     ) -> Result<ArcColumnData> {
         unimplemented!()
     }
+
     fn serialize_clickhouse_column(&self, _format: &FormatSettings) -> Result<ArcColumnData> {
         unimplemented!()
     }

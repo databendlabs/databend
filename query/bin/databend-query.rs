@@ -50,8 +50,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     }
 
     let app_name = format!(
-        "databend-query-{}@{}:{}",
-        conf.query.cluster_id, conf.query.mysql_handler_host, conf.query.mysql_handler_port
+        "databend-query-{}-{}@{}",
+        conf.query.tenant_id, conf.query.cluster_id, conf.query.flight_api_address
     );
 
     let mut _sentry_guard = None;

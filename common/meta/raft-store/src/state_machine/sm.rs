@@ -847,6 +847,12 @@ impl StateMachine {
         Ok(last_applied)
     }
 
+    pub async fn add_node(&self, node_id: u64, node: &Node) -> MetaStorageResult<()> {
+        let sm_nodes = self.nodes();
+        sm_nodes.insert(&node_id, node).await?;
+        Ok(())
+    }
+
     pub fn get_client_last_resp(&self, key: &str) -> MetaResult<Option<(u64, AppliedState)>> {
         let client_last_resps = self.client_last_resps();
         let v: Option<ClientLastRespValue> = client_last_resps.get(&key.to_string())?;

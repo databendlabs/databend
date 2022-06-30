@@ -18,6 +18,7 @@ use std::ops::Bound;
 use std::ops::Deref;
 use std::ops::RangeBounds;
 
+use common_meta_types::anyerror::AnyError;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::MetaStorageError;
 use common_meta_types::MetaStorageResult;
@@ -639,6 +640,14 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
     pub async fn range_remove<R>(&self, range: R, flush: bool) -> MetaStorageResult<()>
     where R: RangeBounds<KV::K> {
         self.inner.range_remove::<KV, R>(range, flush).await
+    }
+
+    pub fn clear(&self) -> MetaStorageResult<()> {
+        let err = self.inner.tree.clear();
+        match err {
+            Err(err) => Err(MetaStorageError::SledError(AnyError::new(&err))),
+            Ok(()) => Ok(()),
+        }
     }
 
     pub fn range_keys<R>(&self, range: R) -> MetaStorageResult<Vec<KV::K>>
