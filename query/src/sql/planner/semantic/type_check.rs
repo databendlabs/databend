@@ -521,6 +521,17 @@ impl<'a> TypeChecker<'a> {
                     .await?
             }
 
+            Expr::InSubquery { subquery, not, .. } => self.resolve_subquery(
+                if *not {
+                    SubqueryType::All
+                } else {
+                    SubqueryType::Any
+                },
+                subquery,
+                true,
+                None,
+            ),
+
             Expr::MapAccess {
                 span,
                 expr,
