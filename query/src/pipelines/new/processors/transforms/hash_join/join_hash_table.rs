@@ -101,7 +101,7 @@ pub enum HashTable {
     KeyU512HashTable(KeyU512HashTable),
 }
 
-pub struct ChainingHashTable {
+pub struct JoinHashTable {
     /// Reference count
     ref_count: Mutex<usize>,
     is_finished: Mutex<bool>,
@@ -118,7 +118,7 @@ pub struct ChainingHashTable {
     pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
 }
 
-impl ChainingHashTable {
+impl JoinHashTable {
     pub fn create_join_state(
         ctx: Arc<QueryContext>,
         join_type: JoinType,
@@ -126,13 +126,13 @@ impl ChainingHashTable {
         probe_keys: &[PhysicalScalar],
         other_predicate: Option<&PhysicalScalar>,
         build_schema: DataSchemaRef,
-    ) -> Result<Arc<ChainingHashTable>> {
+    ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types: Vec<DataTypeImpl> =
             build_keys.iter().map(|expr| expr.data_type()).collect();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
         Ok(match method {
             HashMethodKind::SingleString(_) | HashMethodKind::Serializer(_) => {
-                Arc::new(ChainingHashTable::try_create(
+                Arc::new(JoinHashTable::try_create(
                     ctx,
                     join_type,
                     HashTable::SerializerHashTable(SerializerHashTable {
@@ -145,7 +145,7 @@ impl ChainingHashTable {
                     build_schema,
                 )?)
             }
-            HashMethodKind::KeysU8(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU8HashTable(KeyU8HashTable {
@@ -157,7 +157,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU16(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU16HashTable(KeyU16HashTable {
@@ -169,7 +169,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU32(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU32HashTable(KeyU32HashTable {
@@ -181,7 +181,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU64(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU64HashTable(KeyU64HashTable {
@@ -193,7 +193,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU128(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU128HashTable(KeyU128HashTable {
@@ -205,7 +205,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU256(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU256HashTable(KeyU256HashTable {
@@ -217,7 +217,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU512(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU512HashTable(KeyU512HashTable {
@@ -289,8 +289,8 @@ impl ChainingHashTable {
         Ok(probe_block)
     }
 
-    // Merge build block and probe block
-    pub(crate) fn merge_block(
+    // Merge build block and probe block (1 row block)
+    pub(crate) fn merge_with_constant_block(
         &self,
         build_block: &DataBlock,
         probe_block: &DataBlock,
@@ -327,7 +327,7 @@ impl ChainingHashTable {
         let mut results: Vec<DataBlock> = Vec::with_capacity(input.num_rows());
         for i in 0..input.num_rows() {
             let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-            results.push(self.merge_block(&build_block, &probe_block)?);
+            results.push(self.merge_with_constant_block(&build_block, &probe_block)?);
         }
         Ok(results)
     }
@@ -402,7 +402,7 @@ impl ChainingHashTable {
     }
 }
 
-impl HashJoinState for ChainingHashTable {
+impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let build_cols = self
@@ -428,34 +428,13 @@ impl HashJoinState for ChainingHashTable {
     }
 
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
-        let mut data_blocks = match self.join_type {
+        match self.join_type {
             JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left => {
                 self.probe_join(input, probe_state)
             }
             JoinType::Cross => self.probe_cross_join(input, probe_state),
             _ => unimplemented!("{} is unimplemented", self.join_type),
-        }?;
-        if self.other_predicate.is_none()
-            || self.join_type == JoinType::Anti
-            || self.join_type == JoinType::Semi
-            || self.join_type == JoinType::Left
-        {
-            return Ok(data_blocks);
         }
-        // Process other conditions for Inner join
-        if let Some(filter) = &self.other_predicate {
-            let func_ctx = self.ctx.try_get_function_context()?;
-            let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
-            for block in data_blocks.iter() {
-                let filter_vector = filter.eval(&func_ctx, block)?;
-                filtered_blocks.push(DataBlock::filter_block(
-                    block.clone(),
-                    filter_vector.vector(),
-                )?);
-            }
-            data_blocks = filtered_blocks;
-        }
-        Ok(data_blocks)
     }
 
     fn attach(&self) -> Result<()> {
