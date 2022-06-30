@@ -25,10 +25,11 @@ Project: [number]
         Scan: default.system.numbers
         Project: [subquery]
             Filter: [subquery_3]
-                EvalScalar: [count(*) > 0]
+                EvalScalar: [count(*) = 1]
                     Aggregate: group items: [], aggregate functions: [count(*)]
-                        Filter: [numbers.number = 0]
-                            Scan: default.system.numbers
+                        Limit: [1], Offset: [0]
+                            Filter: [numbers.number = 0]
+                                Scan: default.system.numbers
 
 
 # Uncorrelated subquery

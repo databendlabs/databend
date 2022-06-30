@@ -35,6 +35,7 @@ use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::JoinType;
+use crate::sql::plans::Limit;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::Max1Row;
 use crate::sql::plans::OrExpr;
@@ -169,11 +170,18 @@ impl SubqueryRewriter {
                         return Ok((result, UnnestResult::SimpleJoin));
                     }
                 }
+                let mut subquery_expr = subquery.subquery.clone();
+                // Wrap Limit to current subquery
+                let limit = Limit {
+                    limit: Some(1),
+                    offset: 0,
+                };
+                subquery_expr = SExpr::create_unary(limit.into(), subquery_expr.clone());
 
-                // We will rewrite EXISTS subquery into the form `COUNT(*) > 0`.
+                // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
                 // In contrast, NOT EXISTS subquery will be rewritten into `COUNT(*) = 0`.
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
-                // `(SELECT COUNT(*) > 0 FROM t WHERE a > 1)`
+                // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
                 let agg_func = AggregateFunctionFactory::instance().get("count", vec![], vec![])?;
                 let agg_func_index = self.metadata.write().add_column(
                     "count(*)".to_string(),
@@ -198,18 +206,14 @@ impl SubqueryRewriter {
                     from_distinct: false,
                 };
 
-                // COUNT(*) > 0 or COUNT(*) = 0
+                // COUNT(*) = 1 or COUNT(*) = 0
                 let compare_index = self.metadata.write().add_column(
                     "subquery".to_string(),
                     BooleanType::new_impl(),
                     None,
                 );
                 let compare = ComparisonExpr {
-                    op: if subquery.typ == SubqueryType::Exists {
-                        ComparisonOp::GT
-                    } else {
-                        ComparisonOp::Equal
-                    },
+                    op: ComparisonOp::Equal,
                     left: Box::new(
                         BoundColumnRef {
                             column: ColumnBinding {
@@ -224,7 +228,11 @@ impl SubqueryRewriter {
                     ),
                     right: Box::new(
                         ConstantExpr {
-                            value: DataValue::Int64(0),
+                            value: if SubqueryType::Exists == subquery.typ {
+                                DataValue::Int64(1)
+                            } else {
+                                DataValue::Int64(0)
+                            },
                             data_type: agg_func.return_type()?,
                         }
                         .into(),
@@ -243,13 +251,13 @@ impl SubqueryRewriter {
                 };
 
                 // Project
-                //     EvalScalar: COUNT(*) > 0 or COUNT(*) = 0
+                //     EvalScalar: COUNT(*) = 1 or COUNT(*) = 0
                 //         Aggregate: COUNT(*)
                 let rewritten_subquery = SExpr::create_unary(
                     project.into(),
                     SExpr::create_unary(
                         eval_scalar.into(),
-                        SExpr::create_unary(agg.into(), subquery.subquery.clone()),
+                        SExpr::create_unary(agg.into(), subquery_expr),
                     ),
                 );
 

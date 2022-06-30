@@ -332,9 +332,10 @@ pub fn format_sort(
 pub fn format_limit(
     f: &mut std::fmt::Formatter<'_>,
     _metadata: &MetadataRef,
-    _op: &Limit,
+    op: &Limit,
 ) -> std::fmt::Result {
-    write!(f, "Limit")
+    let limit = if let Some(val) = op.limit { val } else { 0 };
+    write!(f, "Limit: [{}], Offset: [{}]", limit, op.offset)
 }
 
 pub fn format_cross_apply(
