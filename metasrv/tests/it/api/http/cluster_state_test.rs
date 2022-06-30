@@ -23,7 +23,7 @@ use common_base::base::Stoppable;
 use common_meta_types::Node;
 use common_tracing::tracing;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
-use databend_meta::api::http::v1::cluster_state::state_handler;
+use databend_meta::api::http::v1::cluster_state::status_handler;
 use databend_meta::api::HttpService;
 use databend_meta::meta_service::MetaNode;
 use poem::get;
@@ -102,12 +102,12 @@ async fn test_cluster_state() -> common_exception::Result<()> {
         .await?;
 
     let cluster_router = Route::new()
-        .at("/cluster/state", get(state_handler))
+        .at("/cluster/status", get(status_handler))
         .data(meta_node1.clone());
     let response = cluster_router
         .call(
             Request::builder()
-                .uri(Uri::from_static("/cluster/state"))
+                .uri(Uri::from_static("/cluster/status"))
                 .method(Method::GET)
                 .finish(),
         )
