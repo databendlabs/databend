@@ -81,7 +81,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             selection: opt_where_block.map(|(_, selection)| selection),
         },
     );
-    let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
+    let show_settings = map(
+        rule! {
+            SHOW ~ SETTINGS ~ (LIKE ~ #literal_string)?
+        },
+        |(_, _, opt_like)| Statement::ShowSettings {
+            like: opt_like.map(|(_, like)| like),
+        },
+    );
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
     let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
     let show_metrics = value(Statement::ShowMetrics, rule! { SHOW ~ METRICS });
@@ -689,7 +696,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
-            | #show_settings : "`SHOW SETTINGS`"
+            | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
             | #show_metrics : "`SHOW METRICS`"

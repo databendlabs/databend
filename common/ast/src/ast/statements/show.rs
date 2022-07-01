@@ -26,7 +26,7 @@ pub enum ShowLimit<'a> {
 impl<'a> Display for ShowLimit<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ShowLimit::Like { pattern } => write!(f, "LIKE {pattern}"),
+            ShowLimit::Like { pattern } => write!(f, "LIKE '{pattern}'"),
             ShowLimit::Where { selection } => write!(f, "WHERE {selection}"),
         }
     }

@@ -211,6 +211,7 @@ fn test_statement() {
                 size_limit=10;"#,
         r#"CALL system$test(a)"#,
         r#"CALL system$test('a')"#,
+        r#"show settings like 'enable%'"#,
     ];
 
     for case in cases {
@@ -264,6 +265,7 @@ fn test_statement_error() {
         r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
         r#"CALL system$test"#,
         r#"CALL system$test(a"#,
+        r#"show settings ilike 'enable%'"#,
     ];
 
     for case in cases {

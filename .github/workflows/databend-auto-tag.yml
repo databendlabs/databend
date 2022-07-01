@@ -3,7 +3,7 @@ name: Auto tag for nightly release
 on:
   schedule:
     # Release at 00:00 UTC+8
-    - cron:  '0 16 * * *'
+    - cron: '0 16 * * *'
   workflow_dispatch:
 
 permissions:

@@ -37,7 +37,9 @@ pub enum Statement<'a> {
     Copy(CopyStmt<'a>),
     Call(CallStmt),
 
-    ShowSettings,
+    ShowSettings {
+        like: Option<String>,
+    },
     ShowProcessList,
     ShowMetrics,
     ShowFunctions {
@@ -186,7 +188,12 @@ impl<'a> Display for Statement<'a> {
                 }
             }
             Statement::Copy(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowSettings => {}
+            Statement::ShowSettings { like } => {
+                write!(f, "SHOW SETTINGS")?;
+                if like.is_some() {
+                    write!(f, " LIKE '{}'", like.as_ref().unwrap())?;
+                }
+            }
             Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,
             Statement::ShowMetrics => write!(f, "SHOW METRICS")?,
             Statement::ShowFunctions { limit } => {
