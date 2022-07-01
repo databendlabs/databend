@@ -1,5 +1,9 @@
+import environs
+import os
 from clickhouse_sqlalchemy import make_session
 from sqlalchemy import create_engine
+
+from log import log
 
 default_database = "default"
 
@@ -7,7 +11,14 @@ class ClickhouseConnector():
 
     def connect(self, host, port, user="root",password="", database=default_database):
         self._uri = "clickhouse+http://{}:{}@{}:{}/{}".format(user,password,host,port,database)
-        self._engine = create_engine(self._uri)
+        log.debug(self._uri)
+        e = environs.Env()
+        self._additonal_headers = dict()
+        if os.getenv("CLICKHOUSE_ADDITIONAL_HEADERS") is not None:
+            headers = e.dict("CLICKHOUSE_ADDITIONAL_HEADERS")
+            for key in headers:
+                self._additonal_headers["header__" + key] = headers[key]
+        self._engine = create_engine(self._uri, connect_args=self._additonal_headers)
         self._session = None
 
     def query_with_session(self,statement):
@@ -26,7 +37,7 @@ class ClickhouseConnector():
 
         if self._session is None:
             self._session = make_session(self._engine)
-        print(parseSQL(statement))
+        log.debug(parseSQL(statement))
         return self._session.execute(parseSQL(statement))
 
     def reset_session(self):
