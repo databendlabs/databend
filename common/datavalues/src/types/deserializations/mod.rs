@@ -63,11 +63,15 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()>;
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut R, format: &FormatSettings) -> Result<()>;
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut NestedCheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()>;
 
     fn de_text_csv<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         self.de_text(reader, format)
@@ -75,7 +79,7 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_text_json<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         self.de_text(reader, format)
@@ -83,7 +87,7 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_text_quoted<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         self.de_text(reader, format)

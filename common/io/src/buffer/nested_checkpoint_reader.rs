@@ -107,7 +107,7 @@ impl<R: BufferRead> BufferRead for NestedCheckpointReader<R> {
                     let size = inner.len();
                     self.reader.consume(size);
                 }
-                return Ok(&self.buffer[self.pos..self.buffer.len()]);
+                Ok(&self.buffer[self.pos..self.buffer.len()])
             }
         }
     }

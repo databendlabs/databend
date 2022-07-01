@@ -84,7 +84,11 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut R, _format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut NestedCheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         self.buffer.clear();
         reader.read_escaped_string_text(&mut self.buffer)?;
         self.builder.append_value(self.buffer.as_slice());
@@ -93,7 +97,7 @@ impl TypeDeserializer for StringDeserializer {
 
     fn de_text_quoted<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         _format: &FormatSettings,
     ) -> Result<()> {
         self.buffer.clear();
@@ -104,7 +108,7 @@ impl TypeDeserializer for StringDeserializer {
 
     fn de_text_csv<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         settings: &FormatSettings,
     ) -> Result<()> {
         let mut read_buffer = reader.fill_buf()?;

@@ -81,7 +81,11 @@ impl TypeDeserializer for StructDeserializer {
         }
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut R, format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut NestedCheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         reader.must_ignore_byte(b'(')?;
         let mut values = Vec::with_capacity(self.inners.len());
         for (idx, inner) in self.inners.iter_mut().enumerate() {
@@ -100,7 +104,7 @@ impl TypeDeserializer for StructDeserializer {
 
     fn de_text_csv<R: BufferRead>(
         &mut self,
-        _reader: &mut R,
+        _reader: &mut NestedCheckpointReader<R>,
         _format: &FormatSettings,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement("Unimplement error"))
