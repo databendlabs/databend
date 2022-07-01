@@ -72,7 +72,7 @@ pub enum ForwardRequestBody {
 }
 
 /// A request that is forwarded from one raft node to another
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ForwardRequest {
     /// Forward the request to leader if the node received this request is not leader.
     pub forward_to_leader: u64,

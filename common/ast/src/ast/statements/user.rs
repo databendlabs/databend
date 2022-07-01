@@ -101,7 +101,7 @@ impl Display for AlterUserStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GrantStmt {
     pub source: AccountMgrSource,
     pub principal: PrincipalIdentity,
@@ -117,7 +117,7 @@ impl Display for GrantStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RevokeStmt {
     pub source: AccountMgrSource,
     pub principal: PrincipalIdentity,

@@ -35,7 +35,7 @@ impl Display for ShowDatabasesStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShowCreateDatabaseStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Identifier<'a>,
@@ -50,7 +50,7 @@ impl Display for ShowCreateDatabaseStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateDatabaseStmt<'a> {
     pub if_not_exists: bool,
     pub catalog: Option<Identifier<'a>>,
@@ -74,7 +74,7 @@ impl Display for CreateDatabaseStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DropDatabaseStmt<'a> {
     pub if_exists: bool,
     pub catalog: Option<Identifier<'a>>,
@@ -93,7 +93,7 @@ impl Display for DropDatabaseStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlterDatabaseStmt<'a> {
     pub if_exists: bool,
     pub catalog: Option<Identifier<'a>>,
@@ -118,7 +118,7 @@ impl Display for AlterDatabaseStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AlterDatabaseAction<'a> {
     RenameDatabase { new_db: Identifier<'a> },
 }
