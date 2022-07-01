@@ -74,10 +74,14 @@ impl TypeDeserializer for NullableDeserializer {
         reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
+        reader.push_checkpoint();
         if reader.ignore_insensitive_bytes(b"null")? {
+            reader.pop_checkpoint();
             self.de_default(format);
             return Ok(());
         }
+        reader.rollback_to_checkpoint()?;
+        reader.pop_checkpoint();
         self.inner.de_text_json(reader, format)?;
         self.bitmap.push(true);
         Ok(())
@@ -89,6 +93,7 @@ impl TypeDeserializer for NullableDeserializer {
         reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
+        reader.push_checkpoint();
         if reader.ignore_insensitive_bytes(b"null")? {
             reader.pop_checkpoint();
             self.de_default(format);
