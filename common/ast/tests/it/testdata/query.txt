@@ -34,6 +34,9 @@ Query {
             ],
             from: [
                 Table {
+                    span: [
+                        Ident(14..15),
+                    ],
                     catalog: None,
                     database: None,
                     table: Identifier {
@@ -112,11 +115,20 @@ Query {
                 ),
             ],
             from: [
-                Join(
-                    Join {
+                Join {
+                    span: [
+                        Ident(14..22),
+                        INNER(23..28),
+                        JOIN(29..33),
+                        Ident(34..40),
+                    ],
+                    join: Join {
                         op: Inner,
                         condition: None,
                         left: Table {
+                            span: [
+                                Ident(14..22),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -128,6 +140,9 @@ Query {
                             travel_point: None,
                         },
                         right: Table {
+                            span: [
+                                Ident(34..40),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -139,7 +154,7 @@ Query {
                             travel_point: None,
                         },
                     },
-                ),
+                },
             ],
             selection: None,
             group_by: [],
@@ -188,11 +203,20 @@ Query {
                 ),
             ],
             from: [
-                Join(
-                    Join {
+                Join {
+                    span: [
+                        Ident(14..22),
+                        CROSS(23..28),
+                        JOIN(29..33),
+                        Ident(34..40),
+                    ],
+                    join: Join {
                         op: CrossJoin,
                         condition: None,
                         left: Table {
+                            span: [
+                                Ident(14..22),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -204,6 +228,9 @@ Query {
                             travel_point: None,
                         },
                         right: Table {
+                            span: [
+                                Ident(34..40),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -215,7 +242,7 @@ Query {
                             travel_point: None,
                         },
                     },
-                ),
+                },
             ],
             selection: None,
             group_by: [],
@@ -274,8 +301,18 @@ Query {
                 ),
             ],
             from: [
-                Join(
-                    Join {
+                Join {
+                    span: [
+                        Ident(14..22),
+                        INNER(23..28),
+                        JOIN(29..33),
+                        Ident(34..40),
+                        ON(41..43),
+                        Ident(44..45),
+                        Eq(46..47),
+                        Ident(48..49),
+                    ],
+                    join: Join {
                         op: Inner,
                         condition: On(
                             BinaryOp {
@@ -310,6 +347,9 @@ Query {
                             },
                         ),
                         left: Table {
+                            span: [
+                                Ident(14..22),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -321,6 +361,9 @@ Query {
                             travel_point: None,
                         },
                         right: Table {
+                            span: [
+                                Ident(34..40),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -332,7 +375,7 @@ Query {
                             travel_point: None,
                         },
                     },
-                ),
+                },
             ],
             selection: None,
             group_by: [],
@@ -402,8 +445,18 @@ Query {
                 ),
             ],
             from: [
-                Join(
-                    Join {
+                Join {
+                    span: [
+                        Ident(14..22),
+                        INNER(23..28),
+                        JOIN(29..33),
+                        Ident(34..40),
+                        ON(41..43),
+                        Ident(44..45),
+                        Eq(46..47),
+                        Ident(48..49),
+                    ],
+                    join: Join {
                         op: Inner,
                         condition: On(
                             BinaryOp {
@@ -438,6 +491,9 @@ Query {
                             },
                         ),
                         left: Table {
+                            span: [
+                                Ident(14..22),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -449,6 +505,9 @@ Query {
                             travel_point: None,
                         },
                         right: Table {
+                            span: [
+                                Ident(34..40),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -460,7 +519,7 @@ Query {
                             travel_point: None,
                         },
                     },
-                ),
+                },
             ],
             selection: None,
             group_by: [],
@@ -529,11 +588,21 @@ Query {
                 ),
             ],
             from: [
-                Join(
-                    Join {
+                Join {
+                    span: [
+                        Ident(14..22),
+                        NATURAL(23..30),
+                        FULL(31..35),
+                        JOIN(36..40),
+                        Ident(41..47),
+                    ],
+                    join: Join {
                         op: FullOuter,
                         condition: Natural,
                         left: Table {
+                            span: [
+                                Ident(14..22),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -545,6 +614,9 @@ Query {
                             travel_point: None,
                         },
                         right: Table {
+                            span: [
+                                Ident(41..47),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -556,7 +628,7 @@ Query {
                             travel_point: None,
                         },
                     },
-                ),
+                },
             ],
             selection: None,
             group_by: [],
@@ -621,8 +693,22 @@ Query {
                 ),
             ],
             from: [
-                Join(
-                    Join {
+                Join {
+                    span: [
+                        Ident(14..22),
+                        NATURAL(23..30),
+                        JOIN(31..35),
+                        Ident(36..42),
+                        LEFT(43..47),
+                        OUTER(48..53),
+                        JOIN(54..58),
+                        Ident(59..65),
+                        USING(66..71),
+                        LParen(72..73),
+                        Ident(73..75),
+                        RParen(75..76),
+                    ],
+                    join: Join {
                         op: LeftOuter,
                         condition: Using(
                             [
@@ -633,11 +719,28 @@ Query {
                                 },
                             ],
                         ),
-                        left: Join(
-                            Join {
+                        left: Join {
+                            span: [
+                                Ident(14..22),
+                                NATURAL(23..30),
+                                JOIN(31..35),
+                                Ident(36..42),
+                                LEFT(43..47),
+                                OUTER(48..53),
+                                JOIN(54..58),
+                                Ident(59..65),
+                                USING(66..71),
+                                LParen(72..73),
+                                Ident(73..75),
+                                RParen(75..76),
+                            ],
+                            join: Join {
                                 op: Inner,
                                 condition: Natural,
                                 left: Table {
+                                    span: [
+                                        Ident(14..22),
+                                    ],
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
@@ -649,6 +752,9 @@ Query {
                                     travel_point: None,
                                 },
                                 right: Table {
+                                    span: [
+                                        Ident(36..42),
+                                    ],
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
@@ -660,8 +766,11 @@ Query {
                                     travel_point: None,
                                 },
                             },
-                        ),
+                        },
                         right: Table {
+                            span: [
+                                Ident(59..65),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -673,7 +782,7 @@ Query {
                             travel_point: None,
                         },
                     },
-                ),
+                },
             ],
             selection: None,
             group_by: [],
@@ -918,6 +1027,9 @@ Query {
             ],
             from: [
                 Table {
+                    span: [
+                        Ident(87..95),
+                    ],
                     catalog: None,
                     database: None,
                     table: Identifier {
@@ -929,6 +1041,10 @@ Query {
                     travel_point: None,
                 },
                 Table {
+                    span: [
+                        Ident(97..103),
+                        Ident(104..107),
+                    ],
                     catalog: None,
                     database: None,
                     table: Identifier {
@@ -949,6 +1065,37 @@ Query {
                     travel_point: None,
                 },
                 Subquery {
+                    span: [
+                        LParen(125..126),
+                        SELECT(147..153),
+                        Ident(178..187),
+                        Comma(187..188),
+                        COUNT(213..218),
+                        LParen(218..219),
+                        Ident(219..229),
+                        RParen(229..230),
+                        FROM(251..255),
+                        Ident(280..288),
+                        LEFT(289..293),
+                        OUTER(294..299),
+                        JOIN(300..304),
+                        Ident(305..311),
+                        ON(312..314),
+                        Ident(343..352),
+                        Eq(353..354),
+                        Ident(355..364),
+                        AND(393..396),
+                        Ident(397..406),
+                        NOT(407..410),
+                        LIKE(411..415),
+                        QuotedString(416..425),
+                        GROUP(446..451),
+                        BY(452..454),
+                        Ident(479..488),
+                        RParen(505..506),
+                        AS(507..509),
+                        Ident(510..518),
+                    ],
                     subquery: Query {
                         span: [
                             SELECT(147..153),
@@ -1057,8 +1204,24 @@ Query {
                                     },
                                 ],
                                 from: [
-                                    Join(
-                                        Join {
+                                    Join {
+                                        span: [
+                                            Ident(280..288),
+                                            LEFT(289..293),
+                                            OUTER(294..299),
+                                            JOIN(300..304),
+                                            Ident(305..311),
+                                            ON(312..314),
+                                            Ident(343..352),
+                                            Eq(353..354),
+                                            Ident(355..364),
+                                            AND(393..396),
+                                            Ident(397..406),
+                                            NOT(407..410),
+                                            LIKE(411..415),
+                                            QuotedString(416..425),
+                                        ],
+                                        join: Join {
                                             op: LeftOuter,
                                             condition: On(
                                                 BinaryOp {
@@ -1126,6 +1289,9 @@ Query {
                                                 },
                                             ),
                                             left: Table {
+                                                span: [
+                                                    Ident(280..288),
+                                                ],
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
@@ -1137,6 +1303,9 @@ Query {
                                                 travel_point: None,
                                             },
                                             right: Table {
+                                                span: [
+                                                    Ident(305..311),
+                                                ],
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
@@ -1148,7 +1317,7 @@ Query {
                                                 travel_point: None,
                                             },
                                         },
-                                    ),
+                                    },
                                 ],
                                 selection: None,
                                 group_by: [
@@ -1326,6 +1495,9 @@ Query {
                     ],
                     from: [
                         Table {
+                            span: [
+                                Ident(14..16),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -1360,6 +1532,9 @@ Query {
                     ],
                     from: [
                         Table {
+                            span: [
+                                Ident(37..39),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -1439,6 +1614,9 @@ Query {
                             ],
                             from: [
                                 Table {
+                                    span: [
+                                        Ident(14..16),
+                                    ],
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
@@ -1473,6 +1651,9 @@ Query {
                             ],
                             from: [
                                 Table {
+                                    span: [
+                                        Ident(37..39),
+                                    ],
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
@@ -1509,6 +1690,9 @@ Query {
                     ],
                     from: [
                         Table {
+                            span: [
+                                Ident(60..62),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -1581,6 +1765,9 @@ Query {
                     ],
                     from: [
                         Table {
+                            span: [
+                                Ident(14..16),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -1622,6 +1809,9 @@ Query {
                             ],
                             from: [
                                 Table {
+                                    span: [
+                                        Ident(37..39),
+                                    ],
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
@@ -1656,6 +1846,9 @@ Query {
                             ],
                             from: [
                                 Table {
+                                    span: [
+                                        Ident(64..66),
+                                    ],
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
@@ -1739,6 +1932,9 @@ Query {
                             ],
                             from: [
                                 Table {
+                                    span: [
+                                        Ident(15..17),
+                                    ],
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
@@ -1773,6 +1969,9 @@ Query {
                             ],
                             from: [
                                 Table {
+                                    span: [
+                                        Ident(38..40),
+                                    ],
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
@@ -1809,6 +2008,9 @@ Query {
                     ],
                     from: [
                         Table {
+                            span: [
+                                Ident(62..64),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -1883,6 +2085,9 @@ Query {
                     ],
                     from: [
                         Table {
+                            span: [
+                                Ident(14..16),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -1924,6 +2129,9 @@ Query {
                             ],
                             from: [
                                 Table {
+                                    span: [
+                                        Ident(38..40),
+                                    ],
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
@@ -1958,6 +2166,9 @@ Query {
                             ],
                             from: [
                                 Table {
+                                    span: [
+                                        Ident(61..63),
+                                    ],
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
