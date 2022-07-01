@@ -262,9 +262,10 @@ pub async fn clickhouse_handler_get(
         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
     {
         let mut planner = Planner::new(context.clone());
-        let (plan, _) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+        let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+        let format = get_format_with_default(fmt, default_format)?;
+        let format = get_format_from_plan(&plan, format)?;
 
-        let format = get_format_from_plan(&plan, default_format)?;
         context.attach_query_str(&sql);
         execute_v2(context, plan, format, None, params)
             .await
@@ -343,8 +344,9 @@ pub async fn clickhouse_handler_post(
         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
     {
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
-        let format = get_format_from_plan(&plan, default_format)?;
+        let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+        let format = get_format_with_default(fmt, default_format)?;
+        let format = get_format_from_plan(&plan, format)?;
         ctx.attach_query_str(&sql);
         execute_v2(ctx, plan, format, None, params)
             .await

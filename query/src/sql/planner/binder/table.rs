@@ -134,7 +134,7 @@ impl<'a> Binder {
                             .ok_or_else(|| ErrorCode::LogicalError("Invalid VIEW object"))?;
                         let tokens = tokenize_sql(query.as_str())?;
                         let backtrace = Backtrace::new();
-                        let stmt = parse_sql(&tokens, &backtrace)?;
+                        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
                         if let Statement::Query(query) = &stmt {
                             self.bind_query(bind_context, query).await
                         } else {

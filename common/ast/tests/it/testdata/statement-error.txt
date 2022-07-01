@@ -44,7 +44,7 @@ error:
   --> SQL:1:15
   |
 1 | drop table if a.b
-  |               ^ expected `EXISTS`, `.`, `ALL`, or `;`
+  |               ^ expected `EXISTS`, `.`, `ALL`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -54,7 +54,7 @@ error:
   --> SQL:1:21
   |
 1 | truncate table a.b.c.d
-  |                     ^ expected `PURGE` or `;`
+  |                     ^ expected `PURGE`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -92,6 +92,16 @@ error:
 
 
 ---------- Input ----------
+show tables format
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | show tables format
+  |                   ^ expected <Ident> or <QuotedString>
+
+
+---------- Input ----------
 alter database system x rename to db
 ---------- Output ---------
 error: 
@@ -110,7 +120,7 @@ error:
   --> SQL:1:45
   |
 1 | create user 'test-e'@'localhost' identified bi 'password';
-  |                                             ^^ expected `WITH`, `BY`, or `;`
+  |                                             ^^ expected `WITH`, `BY`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -130,7 +140,7 @@ error:
   --> SQL:1:33
   |
 1 | alter user 'test-e'@'localhost' identifie by 'new-password';
-  |                                 ^^^^^^^^^ expected `IDENTIFIED`, `WITH`, or `;`
+  |                                 ^^^^^^^^^ expected `IDENTIFIED`, `WITH`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -140,7 +150,7 @@ error:
   --> SQL:1:19
   |
 1 | create role 'test'@'localhost';
-  |                   ^ expected `;`
+  |                   ^ expected `FORMAT` or `;`
 
 
 ---------- Input ----------
@@ -150,7 +160,7 @@ error:
   --> SQL:1:17
   |
 1 | drop role 'test'@'localhost';
-  |                 ^ expected `;`
+  |                 ^ expected `FORMAT` or `;`
 
 
 ---------- Input ----------
@@ -257,7 +267,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
-  |                                      ^^^^^^^^^^ expected `CREDENTIALS`, `ENCRYPTION`, `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, or 2 more ...
+  |                                      ^^^^^^^^^^ expected `CREDENTIALS`, `ENCRYPTION`, `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, or 3 more ...
 
 
 ---------- Input ----------
@@ -267,7 +277,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CREDENTIALS = ();
-  |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, or `;`
+  |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, `FORMAT`, or 1 more ...
 
 
 ---------- Input ----------

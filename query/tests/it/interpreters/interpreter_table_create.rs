@@ -109,7 +109,7 @@ async fn test_create_table_interpreter() -> Result<()> {
             c varchar(255) comment 'c', d smallint comment 'd', e Date comment 'e')\
             Engine = Null COMMENT = 'test create'";
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _) = planner.plan_sql(query).await?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
         let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
         assert!(interpreter.execute(None).await.is_ok());

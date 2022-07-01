@@ -153,6 +153,12 @@ pub enum Statement<'a> {
     },
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct StatementMsg<'a> {
+    pub(crate) stmt: Statement<'a>,
+    pub(crate) format: Option<String>,
+}
+
 impl<'a> Display for Statement<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
