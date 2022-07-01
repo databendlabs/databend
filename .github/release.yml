@@ -1,0 +1,22 @@
+changelog:
+  exclude:
+    labels:
+      - pr-chore
+    authors:
+      - Mergify
+  categories:
+    - title: Exciting New Features ✨
+      labels:
+        - pr-feature
+    - title: Thoughtful Bug Fix 🔧
+      labels:
+        - pr-bugfix
+    - title: Code Refactor 🎉
+      labels:
+        - pr-refactor
+    - title: Build/Testing/CI Infra Changes 🔌
+      labels:
+        - pr-build
+    - title: Documentation 📔
+      labels:
+        - pr-doc
