@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /// Partition status of data
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum PartitionState {
     Random,
     /*Broadcast,*/

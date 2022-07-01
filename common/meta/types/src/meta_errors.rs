@@ -24,7 +24,7 @@ use crate::MetaResultError;
 use crate::MetaStorageError;
 
 /// Top level error MetaNode would return.
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MetaError {
     #[error(transparent)]
     MetaNetworkError(#[from] MetaNetworkError),

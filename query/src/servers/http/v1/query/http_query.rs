@@ -97,7 +97,7 @@ impl PaginationConf {
     }
 }
 
-#[derive(Deserialize, Debug, Default, PartialEq)]
+#[derive(Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct HttpSessionConf {
     pub database: Option<String>,

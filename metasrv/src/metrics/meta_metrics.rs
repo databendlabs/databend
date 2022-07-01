@@ -618,13 +618,13 @@ pub fn meta_metrics_to_prometheus_string() -> String {
     if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
         eprintln!("could not encode custom metrics: {}", e);
     };
-    let res = match String::from_utf8(buffer.clone()) {
+    
+
+    match String::from_utf8(buffer.clone()) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("custom metrics could not be from_utf8'd: {}", e);
             String::default()
         }
-    };
-
-    res
+    }
 }

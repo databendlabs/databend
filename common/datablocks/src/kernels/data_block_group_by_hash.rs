@@ -176,7 +176,7 @@ impl HashMethodKind {
 }
 
 // A special case for Group by String
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSingleString {}
 
 impl HashMethodSingleString {
@@ -222,7 +222,7 @@ impl HashMethod for HashMethodSingleString {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSerializer {}
 
 impl HashMethodSerializer {

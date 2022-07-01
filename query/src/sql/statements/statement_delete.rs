@@ -34,7 +34,7 @@ use crate::sql::statements::ExpressionAnalyzer;
 use crate::sql::statements::QueryRelation;
 use crate::storages::view::view_table::VIEW_ENGINE;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfDeleteStatement {
     pub name: ObjectName,
     pub selection: Option<Expr>,

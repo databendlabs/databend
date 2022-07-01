@@ -56,7 +56,7 @@ impl AnalyzableStatement for DfRevokePrivilegeStatement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfRevokeRoleStatement {
     pub role: String,
     pub principal: PrincipalIdentity,

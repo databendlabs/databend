@@ -160,7 +160,7 @@ impl DataExchangeManager {
     }
 
     async fn create_client(&self, address: &str) -> Result<FlightClient> {
-        return match self.config.tls_query_cli_enabled() {
+        match self.config.tls_query_cli_enabled() {
             true => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
@@ -172,7 +172,7 @@ impl DataExchangeManager {
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
             ))),
-        };
+        }
     }
 
     async fn prepare_pipeline(&self, packets: &[ExecutorPacket], timeout: u64) -> Result<()> {
@@ -618,7 +618,7 @@ impl QueryCoordinator {
     }
 
     async fn create_client(config: Config, address: &str) -> Result<FlightClient> {
-        return match config.tls_query_cli_enabled() {
+        match config.tls_query_cli_enabled() {
             true => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
@@ -630,7 +630,7 @@ impl QueryCoordinator {
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
             ))),
-        };
+        }
     }
 
     fn spawn_pub_worker(&mut self, config: Config, addr: String) -> Result<Sender<DataPacket>> {

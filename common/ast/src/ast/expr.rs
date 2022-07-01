@@ -245,14 +245,14 @@ pub enum TypeName {
     Variant,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrimWhere {
     Both,
     Leading,
     Trailing,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryOperator {
     Plus,
     Minus,
@@ -285,7 +285,7 @@ pub enum BinaryOperator {
     BitwiseXor,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryOperator {
     Plus,
     Minus,

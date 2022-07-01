@@ -69,7 +69,7 @@ pub struct DfInsertStatement<'a> {
     pub on: Option<OnInsert>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InsertSource<'a> {
     /// for insert format
     Empty,

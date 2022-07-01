@@ -39,7 +39,7 @@ pub struct DfAlterTable {
     pub action: AlterTableAction,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AlterTableAction {
     RenameTable(ObjectName),
     AlterTableClusterKey(Vec<Expr>),

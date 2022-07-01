@@ -21,7 +21,7 @@ use logos::Span;
 pub use self::TokenKind::*;
 use crate::DisplayError;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Token<'a> {
     pub source: &'a str,
     pub kind: TokenKind,

@@ -34,7 +34,7 @@ use crate::storages::index::IndexSchemaVersion;
 /// of the nonexistent of value '12' in column 'age'. Otherwise should return 'Unknown'.
 ///
 /// If the column is not applicable for bloom filter, like TypeID::struct, NotApplicable is used.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BloomFilterExprEvalResult {
     False,
     Unknown,

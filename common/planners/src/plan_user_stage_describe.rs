@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DescribeUserStagePlan {
     pub name: String,
 }

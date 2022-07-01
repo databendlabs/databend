@@ -33,7 +33,7 @@ pub struct DfAlterDatabase {
     pub action: AlterDatabaseAction,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AlterDatabaseAction {
     RenameDatabase(ObjectName),
 }

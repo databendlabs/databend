@@ -18,7 +18,7 @@ use common_meta_types::Node;
 
 use super::outer_v0::Config as OuterV0Config;
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Config {
     pub cmd: String,
     pub config_file: String,

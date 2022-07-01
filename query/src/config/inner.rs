@@ -92,7 +92,7 @@ impl Config {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     pub tenant_id: String,
@@ -211,7 +211,7 @@ impl QueryConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ThriftProtocol {
     Binary,
     // Compact,
@@ -252,7 +252,7 @@ impl Default for HiveCatalogConfig {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     pub embedded_dir: String,

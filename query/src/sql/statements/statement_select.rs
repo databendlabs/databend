@@ -45,7 +45,7 @@ use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::QueryRelation;
 use crate::storages::ToReadDataSourcePlan;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfQueryStatement {
     pub distinct: bool,
     pub from: Vec<TableWithJoins>,

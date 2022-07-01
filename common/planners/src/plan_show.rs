@@ -29,7 +29,7 @@ use crate::ShowSettingsPlan;
 use crate::ShowTablesPlan;
 use crate::ShowUsersPlan;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum PlanShowKind {
     All,
 

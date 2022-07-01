@@ -23,7 +23,7 @@ use common_planners::PartInfoPtr;
 
 use crate::storages::fuse::meta::Compression;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ColumnMeta {
     pub offset: u64,
     pub length: u64,

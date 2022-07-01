@@ -14,7 +14,7 @@
 
 use common_datavalues::DataSchemaRef;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct V1RemotePlan {
     pub schema: DataSchemaRef,
     pub query_id: String,
@@ -23,14 +23,14 @@ pub struct V1RemotePlan {
     pub fetch_nodes: Vec<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct V2RemotePlan {
     schema: DataSchemaRef,
     pub receive_query_id: String,
     pub receive_fragment_id: usize,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum RemotePlan {
     V1(V1RemotePlan),
     V2(V2RemotePlan),

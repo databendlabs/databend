@@ -34,7 +34,7 @@ pub struct DfGrantPrivilegeStatement {
     pub on: DfGrantObject,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DfGrantObject {
     Global,
     Database(Option<String>),
@@ -85,7 +85,7 @@ impl AnalyzableStatement for DfGrantPrivilegeStatement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfGrantRoleStatement {
     pub role: String,
     pub principal: PrincipalIdentity,

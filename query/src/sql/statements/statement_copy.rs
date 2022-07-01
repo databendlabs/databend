@@ -43,7 +43,7 @@ use crate::sql::statements::AnalyzedResult;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfCopy {
     pub name: ObjectName,
     pub columns: Vec<Ident>,

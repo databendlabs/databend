@@ -56,7 +56,7 @@ pub struct LeaveRequest {
 }
 
 #[derive(
-    Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::From, derive_more::TryInto,
+    Serialize, Deserialize, Debug, Clone, PartialEq, Eq, derive_more::From, derive_more::TryInto,
 )]
 pub enum ForwardRequestBody {
     Ping,
@@ -86,7 +86,7 @@ impl ForwardRequest {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::TryInto)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, derive_more::TryInto)]
 #[allow(clippy::large_enum_variant)]
 pub enum ForwardResponse {
     #[try_into(ignore)]

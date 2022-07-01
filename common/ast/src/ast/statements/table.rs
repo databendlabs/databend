@@ -403,7 +403,7 @@ impl Display for ExistsTableStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Engine {
     Null,
     Memory,
@@ -426,7 +426,7 @@ impl Display for Engine {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptimizeTableAction {
     All,
     Purge,
@@ -443,7 +443,7 @@ impl Display for OptimizeTableAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TableOption {
     Engine(Engine),
     Comment(String),

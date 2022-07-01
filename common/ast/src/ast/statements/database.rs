@@ -123,7 +123,7 @@ pub enum AlterDatabaseAction<'a> {
     RenameDatabase { new_db: Identifier<'a> },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DatabaseEngine {
     Default,
     Github(String),
@@ -139,7 +139,7 @@ impl Display for DatabaseEngine {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SQLProperty {
     pub name: String,
     pub value: String,

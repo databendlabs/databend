@@ -63,7 +63,7 @@ use crate::storages::result::block_buffer::BlockBufferWriterWithResultTable;
 use crate::storages::result::ResultQueryInfo;
 use crate::storages::result::ResultTableSink;
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
     Running,
     Failed,

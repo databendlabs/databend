@@ -250,7 +250,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FsStorageConfig {
     /// fs storage backend data path
@@ -377,7 +377,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct AzblobStorageConfig {
     /// Account for Azblob
@@ -453,7 +453,7 @@ impl TryInto<InnerStorageAzblobConfig> for AzblobStorageConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Args, Debug)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args, Debug)]
 #[serde(default)]
 pub struct HdfsConfig {
     #[clap(long = "storage-hdfs-name-node", default_value_t)]
@@ -493,7 +493,7 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
 }
 
 /// Query config group.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
@@ -747,7 +747,7 @@ impl From<InnerQueryConfig> for QueryConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
@@ -794,7 +794,7 @@ impl From<InnerLogConfig> for LogConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct HiveCatalogConfig {
     #[clap(long = "hive-meta-store-address", default_value = "127.0.0.1:9083")]
@@ -831,7 +831,7 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
 
 /// Meta config group.
 /// TODO(xuanwo): All meta_xxx should be rename to xxx.
-#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
