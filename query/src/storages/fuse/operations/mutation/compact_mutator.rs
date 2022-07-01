@@ -86,7 +86,9 @@ impl<'a> CompactMutator<'a> {
     }
 
     pub async fn compact(&mut self, table: &FuseTable) -> Result<()> {
+        // Blocks that need to be reorganized into new segments. 
         let mut remain_blocks = Vec::new();
+        // Blocks that need to be compacted.
         let mut merged_blocks = Vec::new();
         let reader = MetaReaders::segment_info_reader(self.ctx);
         for segment_location in &self.base_snapshot.segments {
@@ -103,6 +105,8 @@ impl<'a> CompactMutator<'a> {
                 }
             });
 
+            // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted, 
+            // then record the segment information.
             if !need_merge && segment.blocks.len() == self.block_per_seg {
                 self.segments.push(segment_location.clone());
                 self.summarys.push(segment.summary.clone());
@@ -112,6 +116,7 @@ impl<'a> CompactMutator<'a> {
             remain_blocks.append(&mut remains);
         }
 
+        // Compact the blocks.
         let col_ids = all_the_columns_ids(table);
         let mut compactor = BlockCompactor::new(self.row_per_block);
         let block_writer = BlockWriter::new(&self.data_accessor, self.location_generator);
@@ -135,6 +140,7 @@ impl<'a> CompactMutator<'a> {
             }
         }
 
+        // Create new segments.
         let segment_info_cache = self
             .ctx
             .get_storage_cache_manager()
@@ -144,7 +150,6 @@ impl<'a> CompactMutator<'a> {
             self.location_generator,
             &segment_info_cache,
         );
-
         let chunks = remain_blocks.chunks(self.block_per_seg);
         for chunk in chunks {
             let new_summary = reduce_block_metas(chunk)?;
