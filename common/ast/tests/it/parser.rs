@@ -398,6 +398,9 @@ fn test_expr() {
         r#"coalesce(a, b, c)"#,
         r#"ifnull(1, 1)"#,
         r#"ifnull(a, b)"#,
+        r#"1 is distinct from 2"#,
+        r#"a is distinct from b"#,
+        r#"1 is not distinct from null"#,
     ];
 
     for case in cases {
