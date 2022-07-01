@@ -23,6 +23,9 @@ use common_ast::ast::SQLProperty;
 use common_ast::ast::ShowCreateDatabaseStmt;
 use common_ast::ast::ShowDatabasesStmt;
 use common_ast::ast::ShowLimit;
+use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::ToDataType;
@@ -31,29 +34,43 @@ use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
-use common_planners::PlanShowKind;
 use common_planners::RenameDatabaseEntity;
 use common_planners::RenameDatabasePlan;
 use common_planners::ShowCreateDatabasePlan;
-use common_planners::ShowDatabasesPlan;
 
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
+use crate::sql::BindContext;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_show_databases(
-        &self,
+        &mut self,
+        bind_context: &BindContext,
         stmt: &ShowDatabasesStmt<'a>,
     ) -> Result<Plan> {
         let ShowDatabasesStmt { limit } = stmt;
-
-        let kind = match limit {
-            Some(ShowLimit::Like { pattern }) => PlanShowKind::Like(pattern.clone()),
-            Some(ShowLimit::Where { selection }) => PlanShowKind::Like(selection.to_string()),
-            None => PlanShowKind::All,
-        };
-
-        Ok(Plan::ShowDatabases(Box::new(ShowDatabasesPlan { kind })))
+        let query = format!(
+            "SELECT name AS Database FROM system.databases {} ORDER BY name",
+            match limit {
+                None => {
+                    "".to_string()
+                }
+                Some(predicate) => {
+                    match predicate {
+                        ShowLimit::Like { pattern } => {
+                            format!("WHERE name LIKE '{}'", pattern)
+                        }
+                        ShowLimit::Where { selection } => {
+                            format!("WHERE {}", selection)
+                        }
+                    }
+                }
+            }
+        );
+        let tokens = tokenize_sql(query.as_str())?;
+        let backtrace = Backtrace::new();
+        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
+        self.bind_statement(bind_context, &stmt).await
     }
 
     pub(in crate::sql::planner::binder) async fn bind_show_create_database(
