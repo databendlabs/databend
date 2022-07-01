@@ -44,6 +44,7 @@ use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
+use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::ClusterKey;
@@ -171,7 +172,7 @@ impl FuseTable {
         }
     }
 
-    async fn update_table_meta(
+    pub async fn update_table_meta(
         &self,
         ctx: &QueryContext,
         catalog_name: &str,
@@ -182,9 +183,8 @@ impl FuseTable {
         let snapshot_loc = self
             .meta_location_generator()
             .snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
-        let bytes = serde_json::to_vec(snapshot)?;
         let operator = ctx.get_storage_operator()?;
-        operator.object(&snapshot_loc).write(bytes).await?;
+        write_meta(&operator, &snapshot_loc, snapshot).await?;
 
         // set new snapshot location
         meta.options

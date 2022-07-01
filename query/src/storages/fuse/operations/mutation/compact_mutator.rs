@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_exception::Result;
 use opendal::Operator;
 
@@ -24,9 +25,8 @@ use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::SegmentWriter;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::Location;
+use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::statistics::reducers::reduce_block_metas;
 use crate::storages::fuse::statistics::reducers::reduce_statistics;
@@ -39,8 +39,6 @@ pub struct CompactMutator<'a> {
     data_accessor: Operator,
     row_per_block: usize,
     block_per_seg: usize,
-    segments: Vec<Location>,
-    summarys: Vec<Statistics>,
 }
 
 impl<'a> CompactMutator<'a> {
@@ -59,39 +57,20 @@ impl<'a> CompactMutator<'a> {
             data_accessor,
             row_per_block,
             block_per_seg,
-            segments: Vec::new(),
-            summarys: Vec::new(),
         })
     }
 
-    pub async fn into_new_snapshot(self) -> Result<(TableSnapshot, String)> {
+    pub async fn compact(&mut self, table: &FuseTable) -> Result<TableSnapshot> {
         let snapshot = self.base_snapshot;
-        let mut new_snapshot = TableSnapshot::from_previous(snapshot);
-        new_snapshot.segments = self.segments.clone();
-        // update the summary of new snapshot
-        let new_summary = reduce_statistics(&self.summarys)?;
-        new_snapshot.summary = new_summary;
-
-        // write the new segment out (and keep it in undo log)
-        let snapshot_loc = self.location_generator.snapshot_location_from_uuid(
-            &new_snapshot.snapshot_id,
-            new_snapshot.format_version(),
-        )?;
-        let bytes = serde_json::to_vec(&new_snapshot)?;
-        self.data_accessor
-            .object(&snapshot_loc)
-            .write(bytes)
-            .await?;
-        Ok((new_snapshot, snapshot_loc))
-    }
-
-    pub async fn compact(&mut self, table: &FuseTable) -> Result<()> {
-        // Blocks that need to be reorganized into new segments. 
+        // Blocks that need to be reorganized into new segments.
         let mut remain_blocks = Vec::new();
         // Blocks that need to be compacted.
         let mut merged_blocks = Vec::new();
+        // The new segments.
+        let mut segments = Vec::new();
+        let mut summarys = Vec::new();
         let reader = MetaReaders::segment_info_reader(self.ctx);
-        for segment_location in &self.base_snapshot.segments {
+        for segment_location in &snapshot.segments {
             let (x, ver) = (segment_location.0.clone(), segment_location.1);
             let mut need_merge = false;
             let mut remains = Vec::new();
@@ -105,11 +84,11 @@ impl<'a> CompactMutator<'a> {
                 }
             });
 
-            // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted, 
+            // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
             // then record the segment information.
             if !need_merge && segment.blocks.len() == self.block_per_seg {
-                self.segments.push(segment_location.clone());
-                self.summarys.push(segment.summary.clone());
+                segments.push(segment_location.clone());
+                summarys.push(segment.summary.clone());
                 continue;
             }
 
@@ -125,20 +104,10 @@ impl<'a> CompactMutator<'a> {
             let data_block = block_reader.read_with_block_meta(block_meta).await?;
 
             let res = compactor.compact(data_block)?;
-            if let Some(blocks) = res {
-                for block in blocks {
-                    let new_block_meta = block_writer.write(block).await?;
-                    remain_blocks.push(new_block_meta);
-                }
-            }
+            Self::write_block(&block_writer, res, &mut remain_blocks).await?;
         }
         let remains = compactor.finish()?;
-        if let Some(blocks) = remains {
-            for block in blocks {
-                let new_block_meta = block_writer.write(block).await?;
-                remain_blocks.push(new_block_meta);
-            }
-        }
+        Self::write_block(&block_writer, remains, &mut remain_blocks).await?;
 
         // Create new segments.
         let segment_info_cache = self
@@ -155,10 +124,29 @@ impl<'a> CompactMutator<'a> {
             let new_summary = reduce_block_metas(chunk)?;
             let new_segment = SegmentInfo::new(chunk.to_vec(), new_summary.clone());
             let new_segment_location = seg_writer.write_segment(new_segment).await?;
-            self.segments.push(new_segment_location);
-            self.summarys.push(new_summary);
+            segments.push(new_segment_location);
+            summarys.push(new_summary);
         }
 
+        let mut new_snapshot = TableSnapshot::from_previous(snapshot);
+        new_snapshot.segments = segments;
+        // update the summary of new snapshot
+        let new_summary = reduce_statistics(&summarys)?;
+        new_snapshot.summary = new_summary;
+        Ok(new_snapshot)
+    }
+
+    async fn write_block(
+        writer: &BlockWriter<'_>,
+        blocks: Option<Vec<DataBlock>>,
+        metas: &mut Vec<BlockMeta>,
+    ) -> Result<()> {
+        if let Some(blocks) = blocks {
+            for block in blocks {
+                let new_block_meta = writer.write(block).await?;
+                metas.push(new_block_meta);
+            }
+        }
         Ok(())
     }
 }

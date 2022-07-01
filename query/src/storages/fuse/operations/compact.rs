@@ -15,8 +15,8 @@
 
 use std::sync::Arc;
 
-use common_cache::Cache;
 use common_exception::Result;
+use common_meta_app::schema::TableStatistics;
 use common_planners::OptimizeTablePlan;
 
 use super::mutation::CompactMutator;
@@ -54,35 +54,20 @@ impl FuseTable {
             block_per_seg,
         )?;
 
-        mutator.compact(self).await?;
-        let (new_snapshot, loc) = mutator.into_new_snapshot().await?;
-
-        let operator = ctx.get_storage_operator()?;
-        let result = Self::commit_to_meta_server(
+        let new_snapshot = mutator.compact(self).await?;
+        let mut new_table_meta = self.get_table_info().meta.clone(); // update statistics
+        new_table_meta.statistics = TableStatistics {
+            number_of_rows: new_snapshot.summary.row_count,
+            data_bytes: new_snapshot.summary.uncompressed_byte_size,
+            compressed_data_bytes: new_snapshot.summary.compressed_byte_size,
+            index_data_bytes: 0, // TODO we do not have it yet
+        };
+        self.update_table_meta(
             ctx.as_ref(),
             &plan.catalog,
-            self.get_table_info(),
-            loc.clone(),
-            &new_snapshot.summary,
+            &new_snapshot,
+            &mut new_table_meta,
         )
-        .await;
-
-        match result {
-            Ok(_) => {
-                if let Some(snapshot_cache) =
-                    ctx.get_storage_cache_manager().get_table_snapshot_cache()
-                {
-                    let cache = &mut snapshot_cache.write().await;
-                    cache.put(loc, Arc::new(new_snapshot));
-                }
-                Ok(())
-            }
-            Err(e) => {
-                // commit snapshot to meta server failed, try to delete it.
-                // "major GC" will collect this, if deletion failure (even after DAL retried)
-                let _ = operator.object(&loc).delete().await;
-                Err(e)
-            }
-        }
+        .await
     }
 }

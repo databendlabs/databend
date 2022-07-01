@@ -206,7 +206,7 @@ pub trait Table: Sync + Send {
 
     async fn compact(&self, _ctx: Arc<QueryContext>, _plan: OptimizeTablePlan) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
-            "table {},  of engine type {}, does not support Optimize",
+            "table {},  of engine type {}, does not support compact",
             self.name(),
             self.get_table_info().engine(),
         )))
