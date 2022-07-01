@@ -62,7 +62,6 @@ jobs:
           tag: ${{ github.ref }}
           aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
-          changelog: ${{ steps.changelog_reader.outputs.log_entry }}
 
   publish_linux:
     name: linux assets
@@ -124,7 +123,6 @@ jobs:
           tag: ${{ github.ref }}
           aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
-          changelog: ${{ steps.changelog_reader.outputs.log_entry }}
 
   release_docker_combined:
     name: docker image combined

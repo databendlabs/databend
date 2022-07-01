@@ -19,23 +19,20 @@ inputs:
   aws_secret_access_key:
     description: "AWS secret access key"
     required: true
-  changelog:
-    description: "Release changelog"
-    required: true
 
 runs:
   using: "composite"
   steps:
     - name: Release databend
-      uses: svenstaro/upload-release-action@v2
+      uses: ncipollo/release-action@v1
       with:
-        repo_token: ${{ inputs.github_token }}
-        file: databend-${{ inputs.version }}-${{ inputs.target }}.*
-        asset_name: databend-${{ inputs.version }}-${{ inputs.target }}
+        token: ${{ inputs.github_token }}
+        artifacts: databend-${{ inputs.version }}-${{ inputs.target }}.*
+        allowUpdates: true
+        name: databend-${{ inputs.version }}-${{ inputs.target }}
         tag: ${{ inputs.tag }}
-        file_glob: true
-        overwrite: true
-        body: ${{ inputs.changelog }}
+        generateReleaseNotes: true
+        discussionCategory: Announcement
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v1
