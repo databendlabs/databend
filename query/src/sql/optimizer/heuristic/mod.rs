@@ -33,6 +33,7 @@ use crate::sql::MetadataRef;
 
 pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     vec![
+        RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::EliminateFilter,
         RuleID::EliminateEvalScalar,
@@ -70,7 +71,6 @@ impl HeuristicOptimizer {
 
     fn pre_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         let result = decorrelate_subquery(self.metadata.clone(), s_expr)?;
-
         Ok(result)
     }
 

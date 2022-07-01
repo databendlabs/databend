@@ -4,19 +4,19 @@ select '==as_boolean==';
 ----  
 ==as_boolean==
 
-statement query B label(mysql,http)
+statement query B label(http)
 select as_boolean(parse_json('true'));
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select as_boolean(parse_json('false'));
 
-----  mysql
+----  
 0
 
 ----  http

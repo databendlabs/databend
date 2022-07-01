@@ -139,3 +139,33 @@ fn test_filter_all_const_data_block() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_filter_try_as_const_bool() -> Result<()> {
+    {
+        fn const_val(v: bool) {
+            let const_col = ConstColumn::new(Series::from_data(vec![v]), 6);
+            let predicate: Arc<dyn Column> = Arc::new(const_col);
+            let r = DataBlock::try_as_const_bool(&predicate);
+            assert!(matches!(r, Ok(Some(p)) if p == v));
+        }
+        // const values, should return Some(val)
+        const_val(true);
+        const_val(false);
+    }
+    {
+        // non-const value, should return None
+        let predicate = Series::from_data(vec![false]);
+        let r = DataBlock::try_as_const_bool(&predicate);
+        assert!(matches!(r, Ok(None)));
+    }
+
+    {
+        // const non-bool column , should return Err
+        let const_col = ConstColumn::new(Series::from_data(vec![vec![1]]), 6);
+        let predicate: Arc<dyn Column> = Arc::new(const_col);
+        let r = DataBlock::try_as_const_bool(&predicate);
+        assert!(matches!(r, Err(_)));
+    }
+    Ok(())
+}

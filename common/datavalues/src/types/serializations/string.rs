@@ -20,6 +20,7 @@ use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
 
+pub use super::helper::json::write_json_string;
 use crate::prelude::*;
 use crate::types::serializations::helper::escape::write_escaped_string;
 
@@ -56,6 +57,16 @@ impl<'a> TypeSerializer<'a> for StringSerializer<'a> {
             buf,
             quote,
         )
+    }
+
+    fn write_field_json(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        buf.push(b'\"');
+        write_json_string(
+            unsafe { self.column.value_unchecked(row_index) },
+            buf,
+            format,
+        );
+        buf.push(b'\"');
     }
 
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {

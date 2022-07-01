@@ -19,10 +19,10 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 
-    - name: Install python dependences
+    - name: Test setup
       shell: bash
       run: |
-        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql six PyHamcrest requests environs fire
+        bash ./scripts/setup/dev_setup.sh -yd
 
     - name: Run sqllogic Tests with Standalone mode with embedded meta-store
       shell: bash

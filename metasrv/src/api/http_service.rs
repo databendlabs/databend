@@ -54,8 +54,8 @@ impl HttpService {
                 get(super::http::v1::cluster_state::nodes_handler),
             )
             .at(
-                "/v1/cluster/state",
-                get(super::http::v1::cluster_state::state_handler),
+                "/v1/cluster/status",
+                get(super::http::v1::cluster_state::status_handler),
             )
             .at(
                 "/v1/metrics",

@@ -169,6 +169,7 @@ select '=== Test offset ===';
 select number from numbers(10) order by number asc offset 5;
 select '===================';
 select number+number as number from numbers(10) order by number asc offset 5;
+select number from numbers(10000) limit 1;
 
 -- Memory engine
 select '====Memory Table====';
@@ -261,6 +262,8 @@ select '===Explain===';
 create table t1(a int, b int);
 create table t2(a int, b int);
 explain select t1.a from t1 where a > 0;
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
 select '===Explain Pipeline===';
 explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
 drop table t1;
@@ -331,12 +334,13 @@ insert into t1 values(1, 2), (3 ,4), (7, 8);
 insert into t2 values(1, 4), (2, 3), (6, 8);
 select * from t1 right join t2 on t1.a = t2.c;
 select * from t1 left join t2 on t1.a = t2.c;
-select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3;
-select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4;
-select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3;
-select * from t1 left outer join t2 on t1.a > 3;
-select * from t1 left outer join t2 on t2.c > 4;
-select * from t1 left outer join t2 on t1.a > t2.c;
+
+select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4 order by a,b,c,d;
+select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t2.c > 4 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a > t2.c order by a,b,c,d;
 drop table t1;
 drop table t2;
 

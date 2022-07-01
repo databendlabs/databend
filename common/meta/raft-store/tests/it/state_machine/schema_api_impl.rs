@@ -12,193 +12,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use std::sync::Mutex;
+
+use async_trait::async_trait;
 use common_base::base::tokio;
+use common_meta_api::ApiBuilder;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_raft_store::state_machine::StateMachine;
 
 use crate::testing::new_raft_test_context;
+use crate::testing::RaftTestContext;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_database_create_get_drop() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
+#[derive(Clone)]
+struct StateMachineBuilder {
+    test_context: Arc<Mutex<Option<RaftTestContext>>>,
+}
 
-    SchemaApiTestSuite {}.database_create_get_drop(&sm).await
+#[async_trait]
+impl ApiBuilder<StateMachine> for StateMachineBuilder {
+    async fn build(&self) -> StateMachine {
+        let tc = new_raft_test_context();
+        let sm = StateMachine::open(&tc.raft_config, 1).await.unwrap();
+        {
+            let mut x = self.test_context.lock().unwrap();
+            *x = Some(tc);
+        }
+
+        sm
+    }
+
+    async fn build_cluster(&self) -> Vec<StateMachine> {
+        unimplemented!("StateMachine does not support cluster mode")
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_database_create_get_drop_in_diff_tenant() -> anyhow::Result<()> {
+async fn test_meta_embedded_single() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    SchemaApiTestSuite {}
-        .database_create_get_drop_in_diff_tenant(&sm)
-        .await
+    let builder = StateMachineBuilder {
+        test_context: Default::default(),
+    };
+
+    SchemaApiTestSuite::test_single_node(builder).await
 }
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_database_list() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}.database_list(&sm).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_database_list_in_diff_tenant() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}
-        .database_list_in_diff_tenant(&sm)
-        .await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_database_rename() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}.database_rename(&sm).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_table_create_get_drop() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}.table_create_get_drop(&sm).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_table_rename() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}.table_rename(&sm).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_table_upsert_option() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}.table_upsert_option(&sm).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_table_drop_undrop_list_history() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}
-        .table_drop_undrop_list_history(&sm)
-        .await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_database_drop_undrop_list_history() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-    SchemaApiTestSuite {}
-        .database_drop_undrop_list_history(&sm)
-        .await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_table_update_meta() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}.update_table_meta(&sm).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_table_list() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}.table_list(&sm).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_table_drop_out_of_retention_time_history() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}
-        .table_drop_out_of_retention_time_history(&sm, &sm)
-        .await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_database_drop_out_of_retention_time_history() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}
-        .database_drop_out_of_retention_time_history(&sm, &sm)
-        .await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_database_gc_out_of_retention_time() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}
-        .database_gc_out_of_retention_time(&sm, &sm)
-        .await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_table_gc_out_of_retention_time() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    SchemaApiTestSuite {}
-        .table_gc_out_of_retention_time(&sm, &sm)
-        .await
-}
-
-// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-// async fn test_meta_embedded_share_create_get_drop() -> anyhow::Result<()> {
-//     let (_log_guards, ut_span) = init_raft_store_ut!();
-//     let _ent = ut_span.enter();
-//     let tc = new_raft_test_context();
-//     let sm = StateMachine::open(&tc.raft_config, 1).await?;
-//
-//     SchemaApiTestSuite {}.share_create_get_drop(&sm).await
-// }

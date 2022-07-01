@@ -18,28 +18,24 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
-use common_datavalues::wrap_nullable;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
-use common_datavalues::NullableColumn;
 use common_exception::Result;
 use primitive_types::U256;
 use primitive_types::U512;
 
+use super::ProbeState;
 use crate::common::EvalNode;
 use crate::common::Evaluator;
 use crate::common::HashMap;
@@ -105,24 +101,24 @@ pub enum HashTable {
     KeyU512HashTable(KeyU512HashTable),
 }
 
-pub struct ChainingHashTable {
+pub struct JoinHashTable {
     /// Reference count
     ref_count: Mutex<usize>,
     is_finished: Mutex<bool>,
 
-    build_keys: Vec<EvalNode<ColumnID>>,
-    probe_keys: Vec<EvalNode<ColumnID>>,
+    pub(crate) build_keys: Vec<EvalNode<ColumnID>>,
+    pub(crate) probe_keys: Vec<EvalNode<ColumnID>>,
 
-    ctx: Arc<QueryContext>,
+    pub(crate) ctx: Arc<QueryContext>,
 
     /// A shared big hash table stores all the rows from build side
-    hash_table: RwLock<HashTable>,
-    row_space: RowSpace,
-    join_type: JoinType,
-    other_predicate: Option<EvalNode<ColumnID>>,
+    pub(crate) hash_table: RwLock<HashTable>,
+    pub(crate) row_space: RowSpace,
+    pub(crate) join_type: JoinType,
+    pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
 }
 
-impl ChainingHashTable {
+impl JoinHashTable {
     pub fn create_join_state(
         ctx: Arc<QueryContext>,
         join_type: JoinType,
@@ -130,13 +126,13 @@ impl ChainingHashTable {
         probe_keys: &[PhysicalScalar],
         other_predicate: Option<&PhysicalScalar>,
         build_schema: DataSchemaRef,
-    ) -> Result<Arc<ChainingHashTable>> {
+    ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types: Vec<DataTypeImpl> =
             build_keys.iter().map(|expr| expr.data_type()).collect();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
         Ok(match method {
             HashMethodKind::SingleString(_) | HashMethodKind::Serializer(_) => {
-                Arc::new(ChainingHashTable::try_create(
+                Arc::new(JoinHashTable::try_create(
                     ctx,
                     join_type,
                     HashTable::SerializerHashTable(SerializerHashTable {
@@ -149,7 +145,7 @@ impl ChainingHashTable {
                     build_schema,
                 )?)
             }
-            HashMethodKind::KeysU8(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU8HashTable(KeyU8HashTable {
@@ -161,7 +157,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU16(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU16HashTable(KeyU16HashTable {
@@ -173,7 +169,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU32(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU32HashTable(KeyU32HashTable {
@@ -185,7 +181,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU64(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU64HashTable(KeyU64HashTable {
@@ -197,7 +193,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU128(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU128HashTable(KeyU128HashTable {
@@ -209,7 +205,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU256(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU256HashTable(KeyU256HashTable {
@@ -221,7 +217,7 @@ impl ChainingHashTable {
                 other_predicate,
                 build_schema,
             )?),
-            HashMethodKind::KeysU512(hash_method) => Arc::new(ChainingHashTable::try_create(
+            HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 join_type,
                 HashTable::KeyU512HashTable(KeyU512HashTable {
@@ -276,167 +272,8 @@ impl ChainingHashTable {
         })
     }
 
-    fn result_blocks<Key>(
-        &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
-        keys: Vec<Key>,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
-    where
-        Key: HashTableKeyable + Clone + 'static,
-    {
-        let mut results: Vec<DataBlock> = vec![];
-        match self.join_type {
-            JoinType::Inner => {
-                let mut probe_indexs = Vec::with_capacity(keys.len());
-                let mut build_indexs = Vec::with_capacity(keys.len());
-
-                for (i, key) in keys.iter().enumerate() {
-                    let probe_result_ptr = hash_table.find_key(key);
-                    if probe_result_ptr.is_none() {
-                        // No matched row for current probe row
-                        continue;
-                    }
-                    let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-                    probe_indexs.extend_from_slice(probe_result_ptrs);
-
-                    for _ in probe_result_ptrs {
-                        build_indexs.push(i as u32);
-                    }
-                }
-
-                let build_block = self.row_space.gather(&probe_indexs)?;
-                let probe_block = DataBlock::block_take_by_indices(input, &build_indexs)?;
-
-                results.push(self.merge_eq_block(&build_block, &probe_block)?);
-            }
-            JoinType::Semi => {
-                for (i, key) in keys.iter().enumerate() {
-                    let probe_result_ptr = hash_table.find_key(key);
-
-                    match (probe_result_ptr, &self.other_predicate) {
-                        (Some(ptrs), Some(pred)) => {
-                            let build_block = self.row_space.gather(ptrs.get_value())?;
-                            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                            let merged = self.merge_block(&build_block, &probe_block)?;
-                            let func_ctx = self.ctx.try_get_function_context()?;
-                            let filter_vector = pred.eval(&func_ctx, &merged)?;
-                            let filtered_block =
-                                DataBlock::filter_block(merged, filter_vector.vector())?;
-                            if !filtered_block.is_empty() {
-                                results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
-                            }
-                        }
-                        (Some(_), None) => {
-                            // No other conditions and has matched result
-                            results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
-                        }
-                        (None, _) => {
-                            // No matched row for current probe row
-                        }
-                    }
-                }
-            }
-            JoinType::Anti => {
-                for (i, key) in keys.iter().enumerate() {
-                    let probe_result_ptr = hash_table.find_key(key);
-
-                    match (probe_result_ptr, &self.other_predicate) {
-                        (Some(ptrs), Some(pred)) => {
-                            let build_block = self.row_space.gather(ptrs.get_value())?;
-                            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                            let merged = self.merge_block(&build_block, &probe_block)?;
-                            let func_ctx = self.ctx.try_get_function_context()?;
-                            let filter_vector = pred.eval(&func_ctx, &merged)?;
-                            let filtered_block =
-                                DataBlock::filter_block(merged, filter_vector.vector())?;
-                            if filtered_block.is_empty() {
-                                results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
-                            }
-                        }
-                        (Some(_), None) => {
-                            // No other conditions and has matched result
-                        }
-                        (None, _) => {
-                            // No matched row for current probe row
-                            results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
-                        }
-                    }
-                }
-            }
-            JoinType::Left => {
-                for (i, key) in keys.iter().enumerate() {
-                    let probe_result_ptr = hash_table.find_key(key);
-                    let data_schema_fields = self.row_space.data_schema.fields();
-                    let mut columns = Vec::with_capacity(data_schema_fields.len());
-                    if let Some(probe_result_ptr) = probe_result_ptr {
-                        let probe_result_ptrs = probe_result_ptr.get_value();
-                        let block = self.row_space.gather(probe_result_ptrs)?;
-                        for column in block.columns().iter() {
-                            let mut validity = MutableBitmap::new();
-                            validity.extend_constant(column.len(), true);
-                            columns.push(NullableColumn::wrap_inner(
-                                column.clone(),
-                                Some(validity.into()),
-                            ));
-                        }
-                    } else {
-                        // No matched row for current probe row
-                        // Create a NULL block for right side
-                        for field in data_schema_fields.iter() {
-                            let nullable_data_type = wrap_nullable(field.data_type());
-                            columns.push(
-                                nullable_data_type.create_constant_column(&DataValue::Null, 1)?,
-                            );
-                        }
-                    };
-                    let build_block =
-                        DataBlock::create(self.row_space.data_schema.clone(), columns);
-                    let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                    let merged_block = self.merge_block(&build_block, &probe_block)?;
-                    results.push(self.filter_block(&probe_block, merged_block)?);
-                }
-            }
-            _ => unreachable!(),
-        }
-        Ok(results)
-    }
-
-    // Todo(xudong963): optimize the performance of this function
-    fn filter_block(&self, probe_block: &DataBlock, merged_block: DataBlock) -> Result<DataBlock> {
-        let mut result_block = merged_block;
-        for filter in self.other_predicate.iter() {
-            let func_ctx = self.ctx.try_get_function_context()?;
-            // `predicate_column` contains a column, which is a boolean column.
-            let filter_vector = filter.eval(&func_ctx, &result_block)?;
-            // Here, we directly use `predicate_column` to filter the result block.
-            // But pay attention to the fact that **reserved side** may also be filtered.
-            // **reserved side** is the left side in left join, and the right side in right join.
-            result_block = DataBlock::filter_block(result_block, filter_vector.vector())?;
-        }
-        // If result_block is empty, we need to supply a NULL block for probe_block.
-        if result_block.is_empty() {
-            result_block = probe_block.clone();
-            let data_schema_fields = self.row_space.data_schema.fields();
-            let mut columns = Vec::with_capacity(data_schema_fields.len());
-            for field in data_schema_fields.iter() {
-                let nullable_data_type = wrap_nullable(field.data_type());
-                columns.push(nullable_data_type.create_constant_column(&DataValue::Null, 1)?);
-            }
-            let null_block = DataBlock::create(self.row_space.data_schema.clone(), columns);
-            for (col, field) in null_block
-                .columns()
-                .iter()
-                .zip(null_block.schema().fields().iter())
-            {
-                result_block = result_block.add_column(col.clone(), field.clone())?;
-            }
-        }
-        Ok(result_block)
-    }
-
     // Merge build block and probe block that have the same number of rows
-    fn merge_eq_block(
+    pub(crate) fn merge_eq_block(
         &self,
         build_block: &DataBlock,
         probe_block: &DataBlock,
@@ -452,8 +289,12 @@ impl ChainingHashTable {
         Ok(probe_block)
     }
 
-    // Merge build block and probe block
-    fn merge_block(&self, build_block: &DataBlock, probe_block: &DataBlock) -> Result<DataBlock> {
+    // Merge build block and probe block (1 row block)
+    pub(crate) fn merge_with_constant_block(
+        &self,
+        build_block: &DataBlock,
+        probe_block: &DataBlock,
+    ) -> Result<DataBlock> {
         let mut replicated_probe_block = DataBlock::empty();
         for (i, col) in probe_block.columns().iter().enumerate() {
             let replicated_col = ConstColumn::new(col.clone(), build_block.num_rows()).arc();
@@ -472,7 +313,11 @@ impl ChainingHashTable {
         Ok(replicated_probe_block)
     }
 
-    fn probe_cross_join(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+    fn probe_cross_join(
+        &self,
+        input: &DataBlock,
+        _probe_state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
         let chunks = self.row_space.chunks.read().unwrap();
         let build_blocks = (*chunks)
             .iter()
@@ -482,12 +327,16 @@ impl ChainingHashTable {
         let mut results: Vec<DataBlock> = Vec::with_capacity(input.num_rows());
         for i in 0..input.num_rows() {
             let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-            results.push(self.merge_block(&build_block, &probe_block)?);
+            results.push(self.merge_with_constant_block(&build_block, &probe_block)?);
         }
         Ok(results)
     }
 
-    fn probe_join(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+    fn probe_join(
+        &self,
+        input: &DataBlock,
+        probe_state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let probe_keys = self
             .probe_keys
@@ -505,55 +354,55 @@ impl ChainingHashTable {
                     .map(|key| KeysRef::create(key.as_ptr() as usize, key.len()))
                     .collect();
 
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU8HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU16HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU32HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU64HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU128HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU256HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
             HashTable::KeyU512HashTable(table) => {
                 let keys = table
                     .hash_method
                     .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys, input)
             }
         }
     }
 }
 
-impl HashJoinState for ChainingHashTable {
+impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let build_cols = self
@@ -578,32 +427,14 @@ impl HashJoinState for ChainingHashTable {
         }
     }
 
-    fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
-        let mut data_blocks = match self.join_type {
+    fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+        match self.join_type {
             JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left => {
-                self.probe_join(input)
+                self.probe_join(input, probe_state)
             }
-            JoinType::Cross => self.probe_cross_join(input),
+            JoinType::Cross => self.probe_cross_join(input, probe_state),
             _ => unimplemented!("{} is unimplemented", self.join_type),
-        }?;
-        if self.other_predicate.is_none()
-            || self.join_type == JoinType::Left
-            || self.join_type == JoinType::Anti
-            || self.join_type == JoinType::Semi
-        {
-            return Ok(data_blocks);
         }
-        // Process other conditions for Inner/Semi/Anti join
-        if let Some(filter) = &self.other_predicate {
-            let func_ctx = self.ctx.try_get_function_context()?;
-            let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
-            for block in data_blocks.into_iter() {
-                let filter_vector = filter.eval(&func_ctx, &block)?;
-                filtered_blocks.push(DataBlock::filter_block(block, filter_vector.vector())?);
-            }
-            data_blocks = filtered_blocks;
-        }
-        Ok(data_blocks)
     }
 
     fn attach(&self) -> Result<()> {

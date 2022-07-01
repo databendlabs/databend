@@ -21,6 +21,8 @@ use common_io::prelude::FormatSettings;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 
+mod helpers;
+
 #[test]
 fn test_serializers() -> Result<()> {
     struct Test {

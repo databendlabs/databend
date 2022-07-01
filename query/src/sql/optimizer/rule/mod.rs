@@ -47,6 +47,7 @@ pub enum RuleID {
     NormalizeScalarFilter,
     PushDownFilterProject,
     PushDownFilterEvalScalar,
+    NormalizeDisjunctiveFilter,
     PushDownFilterJoin,
     PushDownFilterCrossApply,
     EliminateEvalScalar,
@@ -77,6 +78,7 @@ impl Display for RuleID {
             RuleID::MergeEvalScalar => write!(f, "MergeEvalScalar"),
             RuleID::MergeFilter => write!(f, "MergeFilter"),
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
+            RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
         }
     }
 }

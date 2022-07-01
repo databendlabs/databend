@@ -95,6 +95,7 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReq;
 use common_proto_conv::FromToProto;
+use common_tracing::func_name;
 use common_tracing::tracing;
 use txn_condition::Target;
 use ConditionResult::Eq;
@@ -112,10 +113,13 @@ const TXN_MAX_RETRY_TIMES: u32 = 10;
 /// Thus every type that impl KVApi impls SchemaApi.
 #[tonic::async_trait]
 impl<KV: KVApi> SchemaApi for KV {
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn create_database(
         &self,
         req: CreateDatabaseReq,
     ) -> Result<CreateDatabaseReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let name_key = &req.name_ident;
 
         if req.meta.drop_on.is_some() {
@@ -207,7 +211,10 @@ impl<KV: KVApi> SchemaApi for KV {
         )))
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tenant_dbname = &req.name_ident;
         let mut retry = 0;
 
@@ -283,10 +290,13 @@ impl<KV: KVApi> SchemaApi for KV {
         )))
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn undrop_database(
         &self,
         req: UndropDatabaseReq,
     ) -> Result<UndropDatabaseReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let name_key = &req.name_ident;
 
         let mut retry = 0;
@@ -387,10 +397,13 @@ impl<KV: KVApi> SchemaApi for KV {
         )))
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn rename_database(
         &self,
         req: RenameDatabaseReq,
     ) -> Result<RenameDatabaseReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tenant_dbname = &req.name_ident;
         let tenant_newdbname = DatabaseNameIdent {
             tenant: tenant_dbname.tenant.clone(),
@@ -524,7 +537,10 @@ impl<KV: KVApi> SchemaApi for KV {
         )))
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let name_key = &req.inner;
 
         let (_, db_id, db_meta_seq, db_meta) =
@@ -542,10 +558,13 @@ impl<KV: KVApi> SchemaApi for KV {
         Ok(Arc::new(db))
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn get_database_history(
         &self,
         req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         // List tables by tenant, db_id, table_name.
         let dbid_tbname_idlist = DbIdListKey {
             tenant: req.tenant,
@@ -609,10 +628,13 @@ impl<KV: KVApi> SchemaApi for KV {
         return Ok(db_info_list);
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let name_key = DatabaseNameIdent {
             tenant: req.tenant,
             // Using a empty db to to list all
@@ -664,7 +686,10 @@ impl<KV: KVApi> SchemaApi for KV {
         Ok(db_infos)
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
         let mut tbcount_found = false;
@@ -803,7 +828,10 @@ impl<KV: KVApi> SchemaApi for KV {
         )))
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
         let mut tbcount_found = false;
@@ -926,7 +954,10 @@ impl<KV: KVApi> SchemaApi for KV {
         )))
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
         let mut tbcount_found = false;
@@ -1075,7 +1106,10 @@ impl<KV: KVApi> SchemaApi for KV {
         )))
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = tenant_dbname_tbname.db_name_ident();
         let tenant_newdbname_newtbname = TableNameIdent {
@@ -1259,7 +1293,10 @@ impl<KV: KVApi> SchemaApi for KV {
         )))
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tenant_dbname_tbname = &req.inner;
         let tenant_dbname = tenant_dbname_tbname.db_name_ident();
 
@@ -1315,7 +1352,10 @@ impl<KV: KVApi> SchemaApi for KV {
         return Ok(Arc::new(tb_info));
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn get_table_history(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tenant_dbname = &req.inner;
 
         // Get db by name to ensure presence
@@ -1403,7 +1443,10 @@ impl<KV: KVApi> SchemaApi for KV {
         return Ok(tb_info_list);
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tenant_dbname = &req.inner;
 
         // Get db by name to ensure presence
@@ -1470,10 +1513,13 @@ impl<KV: KVApi> SchemaApi for KV {
         Ok(tb_infos)
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn get_table_by_id(
         &self,
         table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>), MetaError> {
+        tracing::debug!(req = debug(&table_id), "SchemaApi: {}", func_name!());
+
         let tbid = TableId { table_id };
 
         let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
@@ -1493,10 +1539,13 @@ impl<KV: KVApi> SchemaApi for KV {
         ))
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tbid = TableId {
             table_id: req.table_id,
         };
@@ -1562,10 +1611,13 @@ impl<KV: KVApi> SchemaApi for KV {
         }
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn update_table_meta(
         &self,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let tbid = TableId {
             table_id: req.table_id,
         };
@@ -1614,10 +1666,13 @@ impl<KV: KVApi> SchemaApi for KV {
         }
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn gc_dropped_data(
         &self,
         req: GCDroppedDataReq,
     ) -> Result<GCDroppedDataReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let table_cnt = if req.table_at_least != 0 {
             gc_dropped_table(self, req.tenant.clone(), req.table_at_least).await?
         } else {
@@ -1641,7 +1696,10 @@ impl<KV: KVApi> SchemaApi for KV {
     ///
     /// It get the count from kv space first,
     /// if not found, it will compute the count by listing all databases and table ids.
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, MetaError> {
+        tracing::debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
         let key = CountTablesKey {
             tenant: req.tenant.to_string(),
         };

@@ -22,10 +22,12 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::*;
+use crate::input::Input;
+use crate::input::WithSpan;
 use crate::parser::expr::*;
 use crate::parser::token::*;
-use crate::parser::util::*;
 use crate::rule;
+use crate::util::*;
 
 pub fn query(i: Input) -> IResult<Query> {
     map(
