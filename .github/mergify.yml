@@ -91,7 +91,7 @@ pull_request_rules:
     conditions:
       - author!=Mergify
       - -draft
-      - 'title~=^(feat|fix|refactor|ci|build|docs|website|chore)(\(.*\))?:'
+      - '-title~=^(feat|fix|refactor|ci|build|docs|website|chore)(\(.*\))?:'
     actions:
       comment:
         message: |
