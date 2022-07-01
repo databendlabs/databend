@@ -29,6 +29,8 @@ impl Plan {
 
             Plan::Copy(plan) => Ok(format!("{:?}", plan)),
 
+            Plan::Call(plan) => Ok(format!("{:?}", plan)),
+
             // Databases
             Plan::ShowDatabases(show_databases) => Ok(format!("{:?}", show_databases)),
             Plan::ShowCreateDatabase(show_create_database) => {

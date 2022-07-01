@@ -4403,3 +4403,33 @@ Copy(
 )
 
 
+---------- Input ----------
+CALL system$test(a)
+---------- Output ---------
+CALL system$test(a)
+---------- AST ------------
+Call(
+    CallStmt {
+        name: "system$test",
+        args: [
+            "a",
+        ],
+    },
+)
+
+
+---------- Input ----------
+CALL system$test('a')
+---------- Output ---------
+CALL system$test(a)
+---------- AST ------------
+Call(
+    CallStmt {
+        name: "system$test",
+        args: [
+            "a",
+        ],
+    },
+)
+
+

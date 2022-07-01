@@ -35,6 +35,7 @@ pub enum Statement<'a> {
     },
 
     Copy(CopyStmt<'a>),
+    Call(CallStmt),
 
     ShowSettings,
     ShowProcessList,
@@ -327,6 +328,7 @@ impl<'a> Display for Statement<'a> {
                 }
             }
             Statement::DescribeStage { stage_name } => write!(f, "DESC STAGE {stage_name}")?,
+            Statement::Call(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

@@ -671,6 +671,18 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
     );
 
+    let call = map(
+        rule! {
+            CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
+        },
+        |(_, name, _, args, _)| {
+            Statement::Call(CallStmt {
+                name: name.to_string(),
+                args,
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -739,6 +751,9 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`"
+        ),
+        rule! (
+            #call: "`CALL <procedure_name>(<parameter>, ...)`"
         ),
         rule!(
             #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
@@ -1209,22 +1224,31 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
     ))(i)
 }
 
+pub fn ident_to_string(i: Input) -> IResult<String> {
+    map_res(ident, |ident| {
+        if ident.quote.is_none() {
+            Ok(ident.to_string())
+        } else {
+            Err(ErrorKind::Other(
+                "unexpected quoted identifier, try to remove the quote",
+            ))
+        }
+    })(i)
+}
+
+pub fn u64_to_string(i: Input) -> IResult<String> {
+    map(literal_u64, |v| v.to_string())(i)
+}
+
+pub fn parameter_to_string(i: Input) -> IResult<String> {
+    map(
+        rule! { ( #literal_string | #ident_to_string | #u64_to_string ) },
+        |parameter| parameter,
+    )(i)
+}
+
 // parse: (k = v ...)* into a map
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let ident_to_string = |i| {
-        map_res(ident, |ident| {
-            if ident.quote.is_none() {
-                Ok(ident.to_string())
-            } else {
-                Err(ErrorKind::Other(
-                    "unexpected quoted identifier, try to remove the quote",
-                ))
-            }
-        })(i)
-    };
-
-    let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
-
     let ident_with_format = alt((
         ident_to_string,
         map(rule! { FORMAT }, |_| "FORMAT".to_string()),
@@ -1232,7 +1256,7 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     map(
         rule! {
-            "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #u64_to_string | #literal_string) )* ~ ")"
+            "(" ~ ( #ident_with_format ~ "=" ~ #parameter_to_string )* ~ ")"
         },
         |(_, opts, _)| {
             BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))

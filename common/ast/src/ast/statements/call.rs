@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,28 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod call;
-mod copy;
-mod database;
-mod explain;
-mod insert;
-mod kill;
-mod show;
-mod stage;
-mod statement;
-mod table;
-mod user;
-mod view;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
-pub use call::*;
-pub use copy::*;
-pub use database::*;
-pub use explain::*;
-pub use insert::*;
-pub use kill::*;
-pub use show::*;
-pub use stage::*;
-pub use statement::*;
-pub use table::*;
-pub use user::*;
-pub use view::*;
+use crate::ast::write_comma_separated_list;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallStmt {
+    pub name: String,
+    pub args: Vec<String>,
+}
+
+impl Display for CallStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CALL {}(", self.name)?;
+        write_comma_separated_list(f, self.args.clone())?;
+        write!(f, ")")?;
+        Ok(())
+    }
+}
