@@ -63,8 +63,6 @@ impl CopyInterpreter {
         from: &ReadDataSourcePlan,
         files: &Vec<String>,
     ) -> Result<Vec<String>> {
-        
-
         match &from.source_info {
             SourceInfo::StageSource(table_info) => {
                 let path = &table_info.path;

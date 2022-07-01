@@ -90,7 +90,7 @@ impl MutableCatalog {
     pub async fn try_create_with_config(conf: Config) -> Result<Self> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
-            
+
             provider.try_get_meta_store().await?
         };
 

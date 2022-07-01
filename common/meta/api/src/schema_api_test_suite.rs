@@ -1143,7 +1143,6 @@ impl SchemaApiTestSuite {
             table_meta: table_meta(created_on),
         };
         let tb_ident_2 = {
-            
             {
                 let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
                 let res = mt.create_table(req.clone()).await?;

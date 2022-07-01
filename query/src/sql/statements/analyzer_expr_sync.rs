@@ -265,7 +265,6 @@ impl ExpressionSyncAnalyzer {
                         k @ Value::Number(_, _) => format!("[{}]", k),
                         Value::SingleQuotedString(s) => format!("[\"{}\"]", s),
                         Value::ColonString(s) => {
-                            
                             if i == 0 {
                                 s.to_string()
                             } else {

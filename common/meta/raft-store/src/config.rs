@@ -28,7 +28,6 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
     let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
-    
     match (build_semver, git_sha, rustc_semver, timestamp) {
         #[cfg(not(feature = "simd"))]
         (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
