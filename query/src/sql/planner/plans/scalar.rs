@@ -266,7 +266,7 @@ impl TryFrom<Scalar> for SubqueryExpr {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BoundColumnRef {
     pub column: ColumnBinding,
 }

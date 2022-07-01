@@ -32,7 +32,7 @@ pub struct SparseIndexValue {
 }
 
 /// Sparse index.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SparseIndex {
     pub col: String,
     // Sparse index.

@@ -32,7 +32,7 @@ use super::outer_v0::Config as OuterV0Config;
 /// Inner config for query.
 ///
 /// All function should implemented based on this Config.
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct Config {
     pub cmd: String,
     pub config_file: String,
@@ -237,7 +237,7 @@ impl Display for ThriftProtocol {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HiveCatalogConfig {
     pub meta_store_address: String,
     pub protocol: ThriftProtocol,

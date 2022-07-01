@@ -40,7 +40,7 @@ impl ColumnMeta {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct FusePartInfo {
     pub location: String,
     /// FusePartInfo itself is not versioned

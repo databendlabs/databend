@@ -27,7 +27,7 @@ use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfGrantPrivilegeStatement {
     pub principal: PrincipalIdentity,
     pub priv_types: UserPrivilegeSet,

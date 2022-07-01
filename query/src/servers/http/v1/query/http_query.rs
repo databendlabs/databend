@@ -105,7 +105,7 @@ pub struct HttpSessionConf {
     pub settings: Option<BTreeMap<String, String>>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum HttpSession {
     // keep New before old, so it deserialize to New when empty

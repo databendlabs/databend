@@ -26,7 +26,7 @@ use crate::sql::statements::resolve_database;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfAlterDatabase {
     pub if_exists: bool,
     pub database_name: ObjectName,

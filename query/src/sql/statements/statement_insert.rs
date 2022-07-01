@@ -46,7 +46,7 @@ use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::storages::Table;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfInsertStatement<'a> {
     pub or: Option<SqliteOnConflict>,
     /// TABLE

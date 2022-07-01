@@ -150,12 +150,10 @@ impl Function for AsFunction {
                     bitmap.into(),
                 ));
             }
-            _ => {
-                return Err(ErrorCode::UnknownFunction(format!(
-                    "Unsupported Function {} as {}",
-                    self.display_name, self.type_id
-                )));
-            }
+            _ => Err(ErrorCode::UnknownFunction(format!(
+                "Unsupported Function {} as {}",
+                self.display_name, self.type_id
+            ))),
         }
     }
 }

@@ -52,7 +52,7 @@ use crate::DATABEND_COMMIT_VERSION;
 /// It's forbidden to do any breaking changes on this struct.
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Parser)]
 #[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
@@ -156,7 +156,7 @@ impl TryInto<InnerConfig> for Config {
 }
 
 /// Storage config group.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
     /// Current storage type: fs|s3
