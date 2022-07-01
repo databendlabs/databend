@@ -307,7 +307,7 @@ impl<T> MallocShallowSizeOf for std::collections::VecDeque<T> {
         if ops.has_malloc_enclosing_size_of() {
             if let Some(front) = self.front() {
                 // The front element is an interior pointer.
-                unsafe { ops.malloc_enclosing_size_of(&*front) }
+                unsafe { ops.malloc_enclosing_size_of(front) }
             } else {
                 // This assumes that no memory is allocated when the VecDeque is empty.
                 0

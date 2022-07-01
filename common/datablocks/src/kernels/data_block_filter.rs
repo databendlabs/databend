@@ -118,7 +118,7 @@ impl DataBlock {
                 return Ok(Arc::new(col));
             },
             {
-                return Err(ErrorCode::BadDataValueType(format!(
+                Err(ErrorCode::BadDataValueType(format!(
                     "Filter predict column does not support type '{:?}'",
                     data_type_id
                 )));

@@ -40,7 +40,7 @@ pub const MICROSECONDS: i64 = 1_000_000;
 
 #[inline]
 pub fn check_timestamp(micros: i64) -> Result<()> {
-    if micros >= TIMESTAMP_MIN && micros <= TIMESTAMP_MAX {
+    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
         return Ok(());
     }
     Err(ErrorCode::InvalidTimestamp(
