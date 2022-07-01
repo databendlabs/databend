@@ -17,8 +17,10 @@ use std::io::Result;
 
 use super::BufferRead;
 
+// this struct can avoid NestedCheckpointReader<NestedCheckpointReader<R>> in recursive functions
 pub struct NestedCheckpointReader<R: BufferRead> {
     reader: R,
+    // clear buffer until all checkpoints is popped and the buffer is consumed
     buffer: Vec<u8>,
     checkpoints: Vec<usize>,
 
@@ -42,6 +44,7 @@ impl<R: BufferRead> NestedCheckpointReader<R> {
         self.checkpoints.push(self.pos)
     }
 
+    // todo(youngsofun): add CheckPointGuard to make it safer.
     pub fn pop_checkpoint(&mut self) {
         assert!(self.checkpointing);
         self.checkpoints.pop();
