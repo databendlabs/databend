@@ -29,7 +29,7 @@ pub struct AddResult<T, ID> {
 }
 
 /// `Change` describes a state change, including the states before and after a change.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::From)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, derive_more::From)]
 pub struct Change<T, ID = u64>
 where
     ID: Clone + PartialEq,

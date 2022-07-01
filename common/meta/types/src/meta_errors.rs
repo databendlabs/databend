@@ -81,6 +81,6 @@ pub enum MetaError {
 
 pub type MetaResult<T> = Result<T, MetaError>;
 
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("InvalidMembership")]
 pub struct InvalidMembership {}

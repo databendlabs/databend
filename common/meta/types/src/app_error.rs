@@ -27,7 +27,7 @@ pub trait AppErrorMessage: Display {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DatabaseAlreadyExists: `{db_name}` while `{context}`")]
 pub struct DatabaseAlreadyExists {
     db_name: String,
@@ -43,7 +43,7 @@ impl DatabaseAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("CreateDatabaseWithDropTime: `{db_name}` with drop_on")]
 pub struct CreateDatabaseWithDropTime {
     db_name: String,
@@ -57,7 +57,7 @@ impl CreateDatabaseWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DropDbWithDropTime: drop {db_name} with drop_on time")]
 pub struct DropDbWithDropTime {
     db_name: String,
@@ -71,7 +71,7 @@ impl DropDbWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UndropDbWithNoDropTime: undrop {db_name} with no drop_on time")]
 pub struct UndropDbWithNoDropTime {
     db_name: String,
@@ -85,7 +85,7 @@ impl UndropDbWithNoDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UndropDbHasNoHistory: undrop {db_name} has no db id history")]
 pub struct UndropDbHasNoHistory {
     db_name: String,
@@ -99,7 +99,7 @@ impl UndropDbHasNoHistory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("TableAlreadyExists: {table_name} while {context}")]
 pub struct TableAlreadyExists {
     table_name: String,
@@ -115,7 +115,7 @@ impl TableAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("CreateTableWithDropTime: create {table_name} with drop time")]
 pub struct CreateTableWithDropTime {
     table_name: String,
@@ -129,7 +129,7 @@ impl CreateTableWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UndropTableAlreadyExists: undrop {table_name} already exists")]
 pub struct UndropTableAlreadyExists {
     table_name: String,
@@ -143,7 +143,7 @@ impl UndropTableAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UndropTableWithNoDropTime: undrop {table_name} with no drop_on time")]
 pub struct UndropTableWithNoDropTime {
     table_name: String,
@@ -157,7 +157,7 @@ impl UndropTableWithNoDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DropTableWithDropTime: drop {table_name} with drop_on time")]
 pub struct DropTableWithDropTime {
     table_name: String,
@@ -171,7 +171,7 @@ impl DropTableWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UndropTableHasNoHistory: undrop {table_name} has no table id history")]
 pub struct UndropTableHasNoHistory {
     table_name: String,
@@ -185,7 +185,7 @@ impl UndropTableHasNoHistory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("TableVersionMismatched: {table_id} expect `{expect}` but `{curr}`  while `{context}`")]
 pub struct TableVersionMismatched {
     table_id: u64,
@@ -205,7 +205,7 @@ impl TableVersionMismatched {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatabase: `{db_name}` while `{context}`")]
 pub struct UnknownDatabase {
     db_name: String,
@@ -221,7 +221,7 @@ impl UnknownDatabase {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatabaseId: `{db_id}` while `{context}`")]
 pub struct UnknownDatabaseId {
     db_id: u64,
@@ -234,7 +234,7 @@ impl UnknownDatabaseId {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownTable: `{table_name}` while `{context}`")]
 pub struct UnknownTable {
     table_name: String,
@@ -250,7 +250,7 @@ impl UnknownTable {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownTableId: `{table_id}` while `{context}`")]
 pub struct UnknownTableId {
     table_id: u64,
@@ -266,7 +266,7 @@ impl UnknownTableId {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("ShareAlreadyExists: {share_name} while {context}")]
 pub struct ShareAlreadyExists {
     share_name: String,
@@ -282,7 +282,7 @@ impl ShareAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownShare: {share_name} while {context}")]
 pub struct UnknownShare {
     share_name: String,
@@ -298,7 +298,7 @@ impl UnknownShare {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownShareID: {share_id} while {context}")]
 pub struct UnknownShareId {
     share_id: u64,
@@ -314,7 +314,7 @@ impl UnknownShareId {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("TxnRetryMaxTimes: Txn {op} has retry {max_retry} times, abort.")]
 pub struct TxnRetryMaxTimes {
     op: String,
@@ -330,7 +330,7 @@ impl TxnRetryMaxTimes {
     }
 }
 
-#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum AppError {
     #[error(transparent)]
     TableVersionMismatched(#[from] TableVersionMismatched),

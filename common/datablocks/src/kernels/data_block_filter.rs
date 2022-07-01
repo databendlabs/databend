@@ -121,7 +121,7 @@ impl DataBlock {
                 Err(ErrorCode::BadDataValueType(format!(
                     "Filter predict column does not support type '{:?}'",
                     data_type_id
-                )));
+                )))
             })
         }
     }

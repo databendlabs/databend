@@ -35,7 +35,7 @@ use crate::NodeId;
 use crate::TxnOpResponse;
 use crate::TxnReply;
 
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum RetryableError {
     /// Trying to write to a non-leader returns the latest leader the raft node knows,
     /// to indicate the client to retry.
@@ -43,14 +43,14 @@ pub enum RetryableError {
     ForwardToLeader { leader: NodeId },
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JoinRequest {
     pub node_id: NodeId,
     pub endpoint: Endpoint,
     pub grpc_api_addr: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct LeaveRequest {
     pub node_id: NodeId,
 }

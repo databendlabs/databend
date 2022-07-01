@@ -41,7 +41,7 @@ pub struct ShareMeta {
     pub tables: Vec<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateShareReq {
     pub if_not_exists: bool,
     pub tenant: String,
@@ -63,7 +63,7 @@ pub struct CreateShareReply {
     pub share_id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropShareReq {
     pub if_exists: bool,
     pub tenant: String,
@@ -76,10 +76,10 @@ impl Display for DropShareReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropShareReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetShareReq {
     pub tenant: String,
     pub share_name: String,
