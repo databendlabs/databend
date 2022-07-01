@@ -138,7 +138,6 @@ impl ValueSource {
                 skip_to_next_row(reader, 1)?;
                 // Parse from expression and append all columns.
                 let buf = reader.get_checkpoint_buffer();
-                reader.pop_checkpoint();
 
                 let exprs = parse_exprs(buf, session_type)?;
 
@@ -150,6 +149,7 @@ impl ValueSource {
                     deser.append_data_value(values[append_idx].clone(), &format)?;
                 }
 
+                reader.pop_checkpoint();
                 return Ok(());
             }
         }
