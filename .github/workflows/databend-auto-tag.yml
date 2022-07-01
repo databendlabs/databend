@@ -36,7 +36,7 @@ jobs:
             let minor = result[2];
             let patch = (parseInt(result[3]) + 1).toString();
             let next_tag = `v${major}.${minor}.${patch}-nightly`;
-            
+
             core.setOutput('tag', next_tag)
       - uses: actions-ecosystem/action-push-tag@v1
         if: ${{ steps.generated-tag.outputs.tag }}
