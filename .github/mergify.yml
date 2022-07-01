@@ -39,7 +39,7 @@ pull_request_rules:
       queue:
         name: shared_queue
 
-  # If there is a conflict in a approved PR, ping the author.
+  # If there is a conflict in an approved PR, ping the author.
   - name: ping author on conflicts
     conditions:
       - conflict
@@ -69,7 +69,6 @@ pull_request_rules:
       - -draft
       - '-body~=I hereby agree to the terms of the CLA available at: https:\/\/databend\.rs\/dev\/policies\/cla\/'
       - "-body~=Summary"
-      - "-body~=Changelog"
     actions:
       comment:
         message: |
@@ -83,77 +82,68 @@ pull_request_rules:
           ## Summary
 
           Summary about this PR
-
-          ## Changelog
-
-          - New Feature
-          - Bug Fix
-          - Improvement
-          - Performance Improvement
-          - Build/Testing/CI
-          - Documentation
-          - Not for changelog (changelog entry is not required)
-
-          ## Related Issues
-
-          Fixes #issue
           ```
 
+  # Check if PR title contain valid tags
+  - name: Check PR title
+    conditions:
+      - author!=Mergify
+      - -draft
+      - 'title~=^(feat|fix|refactor|ci|build|docs|website|chore)(\(.*\))?:'
+    actions:
+      comment:
+        message: |
+          This pull request's title is not fulfill the requirements. @{{author}} please update it 🙏.
+          
+          The title should contain one if the following tags:
+          
+          - `feat`: this PR introduces a new feature to the codebase
+          - `fix`: this PR patches a bug in codebase
+          - `refactor`: this PR changes the code base without new features or bugfix
+          - `ci|build`: this PR changes build/testing/ci steps
+          - `docs|website`: this PR changes the documents or websites
+          - `chore`: this PR only has small changes that no need to record
+
+  # Assign pr label based of tags
   - name: label on New Feature
     conditions:
-      - body~=- New Feature
+      - 'title~=^(feat)(\(.*\))?:'
     actions:
       label:
         add:
           - pr-feature
   - name: label on Bug Fix
     conditions:
-      - body~=- Bug Fix
+      - 'title~=^(fix)(\(.*\))?:'
     actions:
       label:
         add:
           - pr-bugfix
-  - name: label on Improvement
+  - name: label on Refactor
     conditions:
-      - body~=- Improvement
+      - 'title~=^(refactor)(\(.*\))?:'
     actions:
       label:
         add:
-          - pr-improvement
-  - name: label on Performance
-    conditions:
-      - body~=- Performance Improvement
-    actions:
-      label:
-        add:
-          - pr-performance
+          - pr-refactor
   - name: label on Build/Testing/CI
     conditions:
-      - body~=- Build/Testing/CI
+      - 'title~=^(ci|build)(\(.*\))?:'
     actions:
       label:
         add:
           - pr-build
   - name: label on Documentation
     conditions:
-      - or:
-          - body~=- Documentation
-          - body~=- Website
+      - 'title~=^(docs|website)(\(.*\))?:'
     actions:
       label:
         add:
-          - pr-doc-fix
+          - pr-doc
   - name: label on Not for changelog
     conditions:
-      - body~=- Not for changelog
+      - 'title~=^(chore)(\(.*\))?:'
     actions:
       label:
         add:
-          - pr-not-for-changelog
-  - name: label on Other
-    conditions:
-      - body~=- Other
-    actions:
-      label:
-        add:
-          - pr-other
+          - pr-chore
