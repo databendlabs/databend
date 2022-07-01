@@ -73,7 +73,31 @@ struct Point {
 5. Verify and ensure that the test suites passes, `make test`.
 6. Make sure your code passes both linters, `make lint`.
 7. Change the status to “Ready for review”.
-8. Watch out the replies from the @datafuse-bots, she will be your guide.
+8. Watch out the replies from the `@mergify`, she will be your guide.
+
+### PR Title
+
+Format: `<type>(<scope>): <subject>`
+
+`<scope>` is optional
+
+```
+fix(query): fix group by string bug
+^--^  ^------------^
+|     |
+|     +-> Summary in present tense.
+|
++-------> Type: feat, fix, refactor, ci, build, docs, website, chore
+```
+
+More types:
+
+- `feat`: this PR introduces a new feature to the codebase
+- `fix`: this PR patches a bug in codebase
+- `refactor`: this PR changes the code base without new features or bugfix
+- `ci|build`: this PR changes build/testing/ci steps
+- `docs|website`: this PR changes the documents or websites
+- `chore`: this PR only has small changes that no need to record, like coding styles.
 
 ### PR Template
 
@@ -86,52 +110,12 @@ I hereby agree to the terms of the CLA available at: https://databend.rs/dev/pol
 
 Summary about this PR
 
-## Changelog
-
-- New Feature
-- Bug Fix
-- Improvement
-- Performance Improvement
-- Build/Testing/CI
-- Documentation
-- Other 
-- Not for changelog (changelog entry is not required)
-
-## Related Issues
-
 Fixes #issue
 ```
 
 You should not change the PR template context, but need to finish:
 
-1. `Summary` - Describes what constitutes the Pull Request and what changes you have made to the code.
-2. `Changelog` - Choose one or more, this is used for tagging label, then used to generate the changelog.
-3. `Related Issues` - Fixes which issue, the issue will be closed once the commit is merged into the main brach.
-
-### PR Commit Message
-
-Format: `<type>(<scope>): <subject>`
-
-`<scope>` is optional
-
-```
-fix(functions): fix group by string bug
-^--^  ^------------^
-|     |
-|     +-> Summary in present tense.
-|
-+-------> Type: chore, docs, feat, fix, refactor, style, or test.
-```
-
-More types:
-
-- `feat`: (new feature for the user)
-- `fix`: (bug fix for the user)
-- `docs`: (changes to the documentation)
-- `style`: (formatting, missing semi colons, etc; no production code change)
-- `refactor`: (refactoring production code, eg. renaming a variable)
-- `test`: (adding missing tests, refactoring tests; no production code change)
-- `chore`: (updating grunt tasks etc; no production code change)
+- `Summary` - Describes what constitutes the Pull Request and what changes you have made to the code. For example, fixes which issue.
 
 ## Testing
 
