@@ -3,7 +3,7 @@ name: Auto tag for nightly release
 on:
   schedule:
     # Release at 00:00 UTC+8
-    - cron:  '0 16 * * *'
+    - cron: '0 16 * * *'
   workflow_dispatch:
 
 permissions:
@@ -18,11 +18,28 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - uses: actions-ecosystem/action-get-latest-tag@v1
+        id: get-latest-tag
       - name: Bump version and push tag
-        id: tag_version
-        uses: mathieudutour/github-tag-action@v6.0
+        id: generated-tag
+        uses: actions/github-script@v6
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          pre_release_branches: main
-          default_bump: patch
-          append_to_pre_release_tag: -nightly
+          script: |
+            let tag = "${{ steps.get-latest-tag.outputs.tag }}";
+            let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(tag);
+            if (result === null) {
+              console.log("invalid tag, ignoring");
+              return
+            }
+
+            let major = result[1];
+            let minor = result[2];
+            let patch = (parseInt(result[3]) + 1).toString();
+            let next_tag = `v${major}.${minor}.${patch}-nightly`;
+
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: "refs/tags/"+next_tag,
+              sha: context.sha,
+            });
