@@ -1,4 +1,7 @@
 statement ok
+DROP TABLE IF EXISTS math_sample_numbers;
+
+statement ok
 CREATE TABLE math_sample_numbers (timestamp UInt32, value Int32) Engine = Fuse;
 
 statement ok
