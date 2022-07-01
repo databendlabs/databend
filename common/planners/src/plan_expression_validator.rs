@@ -63,24 +63,24 @@ pub fn validate_function_arg(
 ) -> Result<()> {
     match variadic_arguments {
         Some((start, end)) => {
-            return if args_len < start || args_len > end {
+            if args_len < start || args_len > end {
                 Err(ErrorCode::NumberArgumentsNotMatch(format!(
                     "Function `{}` expect to have [{}, {}] arguments, but got {}",
                     name, start, end, args_len
                 )))
             } else {
                 Ok(())
-            };
+            }
         }
         None => {
-            return if num_arguments != args_len {
+            if num_arguments != args_len {
                 Err(ErrorCode::NumberArgumentsNotMatch(format!(
                     "Function `{}` expect to have {} arguments, but got {}",
                     name, num_arguments, args_len
                 )))
             } else {
                 Ok(())
-            };
+            }
         }
     }
 }

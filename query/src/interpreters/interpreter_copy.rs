@@ -63,7 +63,7 @@ impl CopyInterpreter {
         from: &ReadDataSourcePlan,
         files: &Vec<String>,
     ) -> Result<Vec<String>> {
-        let files = match &from.source_info {
+        match &from.source_info {
             SourceInfo::StageSource(table_info) => {
                 let path = &table_info.path;
                 // Here we add the path to the file: /path/to/path/file1.
@@ -100,9 +100,7 @@ impl CopyInterpreter {
                 "Cannot list files for the source info: {:?}",
                 other
             ))),
-        };
-
-        files
+        }
     }
 
     // Rewrite the ReadDataSourcePlan.S3StageSource.file_name to new file name.

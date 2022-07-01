@@ -1057,8 +1057,8 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
 
 pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
     let uri = format!("/v1/query/{}/download", query_id);
-    let resp = get_uri(ep, &uri).await;
-    resp
+
+    get_uri(ep, &uri).await
 }
 
 async fn test_download(v2: u64) -> Result<()> {

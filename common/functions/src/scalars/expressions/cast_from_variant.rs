@@ -190,11 +190,11 @@ pub fn cast_from_variant(
                 return Ok((builder.build(size), Some(bitmap.into())));
             }
             _ => {
-                return Err(ErrorCode::BadDataValueType(format!(
+                Err(ErrorCode::BadDataValueType(format!(
                             "Unsupported cast variant value to {}",
                             data_type.data_type_id()
-                )));
+                )))
             }
         }
-    });
+    })
 }

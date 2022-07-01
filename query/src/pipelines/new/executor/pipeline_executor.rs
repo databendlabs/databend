@@ -178,7 +178,7 @@ impl PipelineExecutor {
         // Wake up other threads to finish when throw error
         self.finish()?;
 
-        return Err(cause.add_message_back(format!(" (while in processor thread {})", thread_num)));
+        Err(cause.add_message_back(format!(" (while in processor thread {})", thread_num)))
     }
 
     /// # Safety

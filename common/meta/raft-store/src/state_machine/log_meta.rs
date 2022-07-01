@@ -24,7 +24,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LogMetaKey {
     /// The last purged log id in the log.
     ///
@@ -33,7 +33,7 @@ pub enum LogMetaKey {
     /// Because raft replication requires logs to be consecutive.
     LastPurged,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, derive_more::TryInto)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, derive_more::TryInto)]
 pub enum LogMetaValue {
     LogId(LogId),
 }

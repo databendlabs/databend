@@ -17,7 +17,7 @@ use std::error::Error;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("{err} while {context}")]
 pub struct ErrorWithContext<E> {
     #[source]

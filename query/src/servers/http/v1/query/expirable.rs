@@ -17,7 +17,7 @@ use std::time::Instant;
 
 use crate::sessions::SessionRef;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum ExpiringState {
     InUse(String),
     // return Duration, so user can choose to use Systime or Instance

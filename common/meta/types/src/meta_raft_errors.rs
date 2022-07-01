@@ -22,7 +22,7 @@ use thiserror::Error;
 pub type ForwardToLeader = openraft::error::ForwardToLeader;
 
 // represent raft related errors
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MetaRaftError {
     #[error(transparent)]
     ForwardToLeader(#[from] ForwardToLeader),
@@ -46,7 +46,7 @@ pub enum MetaRaftError {
     RequestNotForwardToLeaderError(String),
 }
 
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum RetryableError {
     /// Trying to write to a non-leader returns the latest leader the raft node knows,
     /// to indicate the client to retry.

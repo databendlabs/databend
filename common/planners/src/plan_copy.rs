@@ -23,7 +23,7 @@ use crate::PlanNode;
 use crate::ReadDataSourcePlan;
 use crate::StageTableInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
 pub enum ValidationMode {
     None,
     ReturnNRows(u64),

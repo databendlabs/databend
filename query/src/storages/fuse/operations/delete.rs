@@ -56,9 +56,8 @@ impl FuseTable {
                 "unconditionally delete from table, {}.{}.{}",
                 plan.catalog_name, plan.database_name, plan.table_name
             );
-            return self
-                .do_truncate(ctx.clone(), purge, plan.catalog_name.as_str())
-                .await;
+            self.do_truncate(ctx.clone(), purge, plan.catalog_name.as_str())
+                .await
         }
     }
 

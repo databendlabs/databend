@@ -77,7 +77,7 @@ pub enum SetExpr<'a> {
     SetOperation(Box<SetOperation<'a>>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SetOperator {
     Union,
     Except,
@@ -112,7 +112,7 @@ pub type QualifiedName<'a> = Vec<Indirection<'a>>;
 
 /// Indirection of a select result, like a part of `db.table.column`.
 /// Can be a database name, table name, field name or wildcard star(`*`).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Indirection<'a> {
     // Field name
     Identifier(Identifier<'a>),
@@ -152,7 +152,7 @@ pub enum TableReference<'a> {
     Join(Join<'a>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableAlias<'a> {
     pub name: Identifier<'a>,
     pub columns: Vec<Identifier<'a>>,
@@ -166,7 +166,7 @@ pub struct Join<'a> {
     pub right: Box<TableReference<'a>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JoinOperator {
     Inner,
     // Outer joins can not work with `JoinCondition::None`

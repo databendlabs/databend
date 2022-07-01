@@ -19,7 +19,7 @@ use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UndropTablePlan {
     pub tenant: String,
     pub catalog: String,

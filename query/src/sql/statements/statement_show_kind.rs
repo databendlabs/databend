@@ -15,7 +15,7 @@
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DfShowKind {
     All,
     Like(Ident),

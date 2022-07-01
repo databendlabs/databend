@@ -20,7 +20,7 @@ use serde::Serialize;
 /// raft state: A mapping of client serial IDs to their state info:
 /// (serial, RaftResponse)
 /// This is used to de-dup client request, to impl idempotent operations.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ClientLastRespValue {
     pub req_serial_num: u64,
     pub res: AppliedState,

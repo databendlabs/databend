@@ -84,11 +84,9 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
         let flags = BitFlags::<mt::UserOptionFlag, u64>::from_bits(p.flags);
         match flags {
             Ok(flags) => Ok(mt::UserOption::new(flags)),
-            Err(e) => {
-                return Err(Incompatible {
-                    reason: format!("UserOptionFlag error: {}", e),
-                });
-            }
+            Err(e) => Err(Incompatible {
+                reason: format!("UserOptionFlag error: {}", e),
+            }),
         }
     }
 
@@ -188,11 +186,9 @@ impl FromToProto<pb::GrantEntry> for mt::GrantEntry {
                 })?)?,
                 privileges,
             )),
-            Err(e) => {
-                return Err(Incompatible {
-                    reason: format!("UserPrivilegeType error: {}", e),
-                });
-            }
+            Err(e) => Err(Incompatible {
+                reason: format!("UserPrivilegeType error: {}", e),
+            }),
         }
     }
 
@@ -412,7 +408,7 @@ impl FromToProto<pb::user_stage_info::StageStorage> for StorageParams {
     }
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageStorage, Incompatible> {
-        match &*self {
+        match self {
             StorageParams::S3(_) => Ok(pb::user_stage_info::StageStorage {
                 storage: Some(pb::user_stage_info::stage_storage::Storage::S3(
                     self.to_pb()?,

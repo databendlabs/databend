@@ -26,7 +26,7 @@ pub use statements::*;
 use crate::parser::token::Token;
 
 // Identifier of table name or column name.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identifier<'a> {
     pub name: String,
     pub quote: Option<char>,

@@ -15,7 +15,7 @@
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct EmptyPlan {
     pub schema: DataSchemaRef,
     pub is_cluster: bool,

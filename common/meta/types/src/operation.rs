@@ -20,7 +20,7 @@ use std::fmt::Formatter;
 pub type MetaId = u64;
 
 /// An operation that updates a field, delete it, or leave it as is.
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Operation<T> {
     Update(T),
     Delete,
@@ -48,7 +48,7 @@ where for<'x> T: serde::Serialize + serde::Deserialize<'x> + Debug + Clone
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GCDroppedDataReq {
     pub tenant: String,
     // gc at least dropped tables, 0 means donot gc table
@@ -57,7 +57,7 @@ pub struct GCDroppedDataReq {
     pub db_at_least: u32,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GCDroppedDataReply {
     pub gc_table_count: u32,
     pub gc_db_count: u32,

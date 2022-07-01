@@ -87,10 +87,10 @@ impl DataType for ArrayType {
             return Ok(Arc::new(ConstColumn::new(column, size)));
         }
 
-        return Result::Err(ErrorCode::BadDataValueType(format!(
+        Err(ErrorCode::BadDataValueType(format!(
             "Unexpected type:{:?} to generate list column",
             data.value_type()
-        )));
+        )))
     }
 
     fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {

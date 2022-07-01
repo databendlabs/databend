@@ -251,9 +251,9 @@ impl<'a> Binder {
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {
         let (left_expr, mut left_bind_context) =
-            self.bind_set_expr(bind_context, &*left, &[]).await?;
+            self.bind_set_expr(bind_context, left, &[]).await?;
         let (right_expr, mut right_bind_context) =
-            self.bind_set_expr(bind_context, &*right, &[]).await?;
+            self.bind_set_expr(bind_context, right, &[]).await?;
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(
                 "SetOperation must have the same number of columns",
