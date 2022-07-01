@@ -19,13 +19,10 @@ use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
-use crate::sql::PlanParser;
 
 pub struct OptimizeTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -65,15 +62,8 @@ impl Interpreter for OptimizeTableInterpreter {
         );
 
         if do_compact {
-            // it is a "simple and violent" strategy, to be optimized later
-            let obj_name = format!("{}.{}", &plan.database, &plan.table);
-            let rewritten_query =
-                format!("INSERT OVERWRITE {} SELECT * FROM {}", obj_name, obj_name);
-            let rewritten_plan =
-                PlanParser::parse(self.ctx.clone(), rewritten_query.as_str()).await?;
-            let interpreter = InterpreterFactory::get(self.ctx.clone(), rewritten_plan)?;
-            let mut stream = interpreter.execute(None).await?;
-            while let Some(Ok(_)) = stream.next().await {}
+            // TODO(zhyass): clustering key.
+            table.compact(self.ctx.clone(), self.plan.clone()).await?;
             if do_purge {
                 // currently, context caches the table, we have to "refresh"
                 // the table by using the catalog API directly
