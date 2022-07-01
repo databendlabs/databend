@@ -42,9 +42,7 @@ where
 {
     #[inline(always)]
     pub fn set_value(self: *mut Self, value: Value) {
-        unsafe {
-            (*self).value = value;
-        }
+        unsafe { std::ptr::write(&mut (*self).value as *mut Value, value) }
     }
 
     #[inline(always)]

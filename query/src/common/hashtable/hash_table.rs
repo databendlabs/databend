@@ -31,6 +31,8 @@ pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower
     zero_entity: Option<*mut Entity>,
     zero_entity_raw: Option<*mut u8>,
 
+    // set to true if the table is converted to other hash table
+    pub(crate) entity_swapped: bool,
     /// Generics hold
     generics_hold: PhantomData<Key>,
 }
@@ -58,7 +60,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
         unsafe {
             let item_size = self.grower.max_size() as usize;
 
-            if std::mem::needs_drop::<Entity>() {
+            if std::mem::needs_drop::<Entity>() && !self.entity_swapped {
                 for off in 0..item_size {
                     let entity = self.entities.add(off);
 
@@ -73,7 +75,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
             std::alloc::dealloc(self.entities_raw, layout);
 
             if let Some(zero_entity) = self.zero_entity_raw {
-                if std::mem::needs_drop::<Entity>() {
+                if std::mem::needs_drop::<Entity>() && !self.entity_swapped {
                     let entity = self.zero_entity.unwrap();
                     std::ptr::drop_in_place(entity);
                 }
@@ -105,6 +107,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
                 zero_entity: None,
                 zero_entity_raw: None,
                 generics_hold: PhantomData::default(),
+                entity_swapped: false,
             }
         }
     }

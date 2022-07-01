@@ -91,14 +91,16 @@ fn test_hash_map_drop() {
     }
 
     let item = Arc::new(AtomicUsize::new(0));
+    let two_level_item = Arc::new(AtomicUsize::new(0));
 
     {
         let mut table = HashMap::<u64, Vec<A>>::create();
+        let mut two_level_table = HashMapKind::<u64, Vec<A>>::create_hash_table();
         let mut rng = rand::thread_rng();
 
         for _ in 0..1200 {
-            let key = rng.gen::<u64>() % 40;
-            
+            let key = rng.gen::<u64>() % 300;
+
             let mut inserted = false;
             let entity = table.insert_key(&key, &mut inserted);
             if inserted {
@@ -106,9 +108,21 @@ fn test_hash_map_drop() {
             } else {
                 entity.get_mut_value().push(A::new(item.clone()));
             }
+
+            inserted = false;
+            let entity = two_level_table.insert_key(&key, &mut inserted);
+            if inserted {
+                entity.set_value(vec![A::new(item.clone())]);
+            } else {
+                entity.get_mut_value().push(A::new(item.clone()));
+            }
+        }
+        unsafe {
+            two_level_table.convert_to_two_level();
         }
     }
-
     let count = item.load(Ordering::Relaxed);
+    let count2 = two_level_item.load(Ordering::Relaxed);
     assert_eq!(count, 0);
+    assert_eq!(count2, 0);
 }
