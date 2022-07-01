@@ -304,3 +304,13 @@ error:
   | while parsing `CALL <procedure_name>(<parameter>, ...)`
 
 
+---------- Input ----------
+show settings ilike 'enable%'
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | show settings ilike 'enable%'
+  |               ^^^^^ expected `LIKE`, `FORMAT`, or `;`
+
+

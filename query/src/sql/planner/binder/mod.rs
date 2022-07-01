@@ -118,7 +118,7 @@ impl<'a> Binder {
 
             Statement::ShowMetrics => Plan::ShowMetrics,
             Statement::ShowProcessList => Plan::ShowProcessList,
-            Statement::ShowSettings => Plan::ShowSettings,
+            Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(stmt).await?,

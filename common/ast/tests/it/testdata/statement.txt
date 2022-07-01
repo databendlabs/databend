@@ -4755,3 +4755,15 @@ Call(
 )
 
 
+---------- Input ----------
+show settings like 'enable%'
+---------- Output ---------
+SHOW SETTINGS LIKE 'enable%'
+---------- AST ------------
+ShowSettings {
+    like: Some(
+        "enable%",
+    ),
+}
+
+
