@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod geo;
-mod geo_to_h3;
+use crate::scalars::geos::GeoToH3Function;
+use crate::FunctionFactory;
 
-pub use geo::GeoFunction;
-pub use geo_to_h3::GeoToH3Function;
+#[derive(Clone)]
+pub struct GeoFunction;
+
+impl GeoFunction {
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("geoToH3", GeoToH3Function::desc());
+    }
+}

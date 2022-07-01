@@ -12,8 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod geo;
 mod geo_to_h3;
-
-pub use geo::GeoFunction;
-pub use geo_to_h3::GeoToH3Function;

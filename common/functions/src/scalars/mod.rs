@@ -48,6 +48,7 @@ pub use function_common::*;
 pub use function_factory::*;
 pub use function_features::FunctionFeatures;
 pub use function_monotonic::Monotonicity;
+pub use geos::*;
 pub use hashes::*;
 pub use logics::*;
 pub use maths::*;
