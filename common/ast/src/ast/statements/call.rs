@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallStmt {
     pub name: String,
     pub args: Vec<String>,
