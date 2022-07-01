@@ -67,13 +67,14 @@ impl<'a> Binder {
                 .from
                 .iter()
                 .cloned()
-                .reduce(|left, right| {
-                    TableReference::Join(Join {
+                .reduce(|left, right| TableReference::Join {
+                    span: &[],
+                    join: Join {
                         op: JoinOperator::CrossJoin,
                         condition: JoinCondition::None,
                         left: Box::new(left),
                         right: Box::new(right),
-                    })
+                    },
                 })
                 .unwrap();
             self.bind_table_reference(bind_context, &cross_joins)

@@ -132,6 +132,7 @@ pub enum TimeTravelPoint<'a> {
 pub enum TableReference<'a> {
     // Table name
     Table {
+        span: &'a [Token<'a>],
         catalog: Option<Identifier<'a>>,
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
@@ -140,16 +141,21 @@ pub enum TableReference<'a> {
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
+        span: &'a [Token<'a>],
         subquery: Box<Query<'a>>,
         alias: Option<TableAlias<'a>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
+        span: &'a [Token<'a>],
         name: Identifier<'a>,
         params: Vec<Expr<'a>>,
         alias: Option<TableAlias<'a>>,
     },
-    Join(Join<'a>),
+    Join {
+        span: &'a [Token<'a>],
+        join: Join<'a>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -222,6 +228,7 @@ impl<'a> Display for TableReference<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TableReference::Table {
+                span: _,
                 catalog,
                 database,
                 table,
@@ -245,13 +252,18 @@ impl<'a> Display for TableReference<'a> {
                     write!(f, " AS {alias}")?;
                 }
             }
-            TableReference::Subquery { subquery, alias } => {
+            TableReference::Subquery {
+                span: _,
+                subquery,
+                alias,
+            } => {
                 write!(f, "({subquery})")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
             }
             TableReference::TableFunction {
+                span: _,
                 name,
                 params,
                 alias,
@@ -263,7 +275,7 @@ impl<'a> Display for TableReference<'a> {
                     write!(f, " AS {alias}")?;
                 }
             }
-            TableReference::Join(join) => {
+            TableReference::Join { span: _, join } => {
                 write!(f, "{}", join.left)?;
                 if join.condition == JoinCondition::Natural {
                     write!(f, " NATURAL")?;
