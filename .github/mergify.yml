@@ -82,7 +82,7 @@ pull_request_rules:
           ## Summary
 
           Summary about this PR
-          
+
           Fixes #issue
           ```
 
@@ -96,9 +96,9 @@ pull_request_rules:
       comment:
         message: |
           This pull request's title is not fulfill the requirements. @{{author}} please update it 🙏.
-          
+
           The title should contain one if the following tags:
-          
+
           - `feat`: this PR introduces a new feature to the codebase
           - `fix`: this PR patches a bug in codebase
           - `refactor`: this PR changes the code base without new features or bugfix
