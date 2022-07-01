@@ -97,7 +97,18 @@ pull_request_rules:
         message: |
           This pull request's title is not fulfill the requirements. @{{author}} please update it 🙏.
 
-          The title should contain one if the following tags:
+          Valid format:
+
+          ```
+          fix(query): fix group by string bug
+            ^--^  ^------------^
+            |     |
+            |     +-> Summary in present tense.
+            |
+          +-------> Type: feat, fix, refactor, ci, build, docs, website, chore
+          ```
+
+          Valid types:
 
           - `feat`: this PR introduces a new feature to the codebase
           - `fix`: this PR patches a bug in codebase
