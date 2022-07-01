@@ -110,6 +110,30 @@ impl DataExchangeManager {
         }
     }
 
+    // Create a pipeline based on query plan
+    pub fn init_query_fragments_plan(&self, ctx: &Arc<QueryContext>, packet: &QueryFragmentsPlanPacket) -> Result<()> {
+        let mut queries_coordinator = self.queries_coordinator.lock();
+
+        // TODO: When the query is not executed for a long time after submission, we need to remove it
+        match queries_coordinator.entry(packet.query_id.to_owned()) {
+            Entry::Occupied(_) => Err(ErrorCode::LogicalError(format!(
+                "Already exists query id {:?}",
+                packet.query_id
+            ))),
+            Entry::Vacant(entry) => {
+                let query_coordinator = QueryCoordinator::create(ctx, packet)?;
+                let query_coordinator = entry.insert(query_coordinator);
+                query_coordinator.prepare_pipeline()?;
+
+                if packet.executor != packet.request_executor {
+                    query_coordinator.prepare_subscribes_channel(packet)?;
+                }
+
+                Ok(())
+            }
+        }
+    }
+
     // Receive data by cluster other nodes.
     pub async fn handle_do_put(
         &self,
@@ -137,31 +161,6 @@ impl DataExchangeManager {
                 query_id
             ))),
             Some(mut coordinator) => coordinator.shutdown(cause),
-        }
-    }
-
-    // Create a pipeline based on query plan
-    pub fn init_query_fragments_plan(&self, ctx: &Arc<QueryContext>, prepare: &InitQueryFragmentsPlan) -> Result<()> {
-        let mut queries_coordinator = self.queries_coordinator.lock();
-
-        let executor_packet = &prepare.executor_packet;
-        // TODO: When the query is not executed for a long time after submission, we need to remove it
-        match queries_coordinator.entry(executor_packet.query_id.to_owned()) {
-            Entry::Occupied(_) => Err(ErrorCode::LogicalError(format!(
-                "Already exists query id {:?}",
-                executor_packet.query_id
-            ))),
-            Entry::Vacant(entry) => {
-                let query_coordinator = QueryCoordinator::create(ctx, executor_packet)?;
-                let query_coordinator = entry.insert(query_coordinator);
-                query_coordinator.prepare_pipeline()?;
-
-                if executor_packet.executor != executor_packet.request_executor {
-                    query_coordinator.prepare_subscribes_channel(executor_packet)?;
-                }
-
-                Ok(())
-            }
         }
     }
 
@@ -385,6 +384,7 @@ impl QueryCoordinator {
         let executor =
             PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
         self.executor = Some(executor.clone());
+        let senders = self.exchange_senders.clone();
         let receivers = self.exchange_receivers.clone();
         let shutdown_cause = self.shutdown_cause.clone();
         let mut request_server_tx = self.request_server_tx.take();
@@ -418,6 +418,17 @@ impl QueryCoordinator {
                     }
                 });
             }
+
+            for sender in &senders {
+                let sender = sender.clone();
+                futures::executor::block_on(async move {
+                    if let Err(cause) = sender.abort().await {
+                        common_tracing::tracing::warn!("Sender join failure {:?}", cause);
+                    }
+                });
+            }
+
+            println!("Pipeline execute successfully");
         });
 
         Ok(())

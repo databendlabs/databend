@@ -149,7 +149,7 @@ impl TryInto<Vec<u8>> for InitQueryFragmentsPlan {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct InitNodesChannel {
-    pub publisher_packet: InitNodesChannelPacket,
+    pub init_nodes_channel_packet: InitNodesChannelPacket,
 }
 
 impl TryInto<InitNodesChannel> for Vec<u8> {

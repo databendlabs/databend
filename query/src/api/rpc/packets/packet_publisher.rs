@@ -65,7 +65,7 @@ impl Packet for InitNodesChannelPacket {
 
         let executor_info = &self.data_endpoints[&self.executor];
         let mut conn = create_client(config, &executor_info.flight_address).await?;
-        let action = FlightAction::InitNodesChannel(InitNodesChannel { publisher_packet });
+        let action = FlightAction::InitNodesChannel(InitNodesChannel { init_nodes_channel_packet: self.clone() });
         conn.execute_action(action, timeout).await
     }
 }

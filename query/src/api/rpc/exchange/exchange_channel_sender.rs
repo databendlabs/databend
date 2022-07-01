@@ -92,9 +92,7 @@ impl ExchangeSender {
             runtime.spawn(async move {
                 let mut notify = Box::pin(request_notify.notified());
                 'listen_loop: loop {
-                    println!("send progress");
                     if let Err(cause) = flight_tx.send(DataPacket::Progress(ctx.get_scan_progress_value())).await {
-                        println!("send progress failure");
                         // TODO: report error and shutdown query
                         break 'listen_loop;
                     }
@@ -136,12 +134,16 @@ impl ExchangeSender {
 
                         // Disconnect channel, exit loop
                         c_tx.send(DataPacket::EndFragment(fragment_id)).await;
-                        break 'fragment_loop;
+                        return;
                     }
                 }
             }
 
-            // TODO: if join handler is end, shutdown query.
+            while let Ok(recv_packet) = f_rx.try_recv() {
+                if c_tx.send(recv_packet).await.is_err() {
+                    break;
+                }
+            }
         }));
 
         Ok(f_tx)

@@ -240,11 +240,11 @@ impl FlightService for DatabendQueryFlightService {
                 let session = self.sessions.create_session(SessionType::FlightRPC).await?;
                 let ctx = session.create_query_context().await?;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.init_query_fragments_plan(&ctx, init_query_fragments_plan)?;
+                exchange_manager.init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)?;
                 FlightResult { body: vec![] }
             }
             FlightAction::InitNodesChannel(init_nodes_channel) => {
-                let publisher_packet = &init_nodes_channel.publisher_packet;
+                let publisher_packet = &init_nodes_channel.init_nodes_channel_packet;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
                 exchange_manager.init_nodes_channel(publisher_packet).await?;
                 FlightResult { body: vec![] }
