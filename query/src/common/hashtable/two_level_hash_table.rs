@@ -89,7 +89,6 @@ impl<
     #[allow(clippy::missing_safety_doc)]
     pub unsafe fn convert_to_two_level(&mut self) {
         let mut two_level_hash_table = Self::create_two_level_hash_table();
-
         if !self.is_empty() {
             let mut inserted = true;
             for old_entity in self.iter() {
@@ -100,7 +99,19 @@ impl<
                 }
             }
         }
+        self.set_entity_swapped(true);
         std::mem::swap(self, &mut two_level_hash_table);
+    }
+
+    pub fn set_entity_swapped(&mut self, entity_swapped: bool) {
+        match self {
+            HashTableKind::HashTable(data) => data.entity_swapped = entity_swapped,
+            HashTableKind::TwoLevelHashTable(data) => {
+                for table in data.hash_tables.iter_mut() {
+                    table.entity_swapped = entity_swapped;
+                }
+            }
+        }
     }
 }
 

@@ -32,10 +32,6 @@ lint-yaml:
 check-license:
 	license-eye -v info -c .licenserc.yaml header check
 
-miri:
-	cargo miri setup
-	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
-
 run: build-release
 	BUILD_PROFILE=release bash ./scripts/ci/deploy/databend-query-standalone.sh
 
