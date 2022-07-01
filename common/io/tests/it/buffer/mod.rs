@@ -15,5 +15,4 @@
 mod buffer_read;
 mod buffer_read_datetime_ext;
 mod buffer_read_number_ext;
-mod checkpoint_reader;
 mod nested_checkpoint_reader;
