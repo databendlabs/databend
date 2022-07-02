@@ -10,9 +10,6 @@ inputs:
   target:
     description: "Release target"
     required: true
-  tag:
-    description: "Release tag"
-    required: true
   aws_access_key_id:
     description: "AWS access key id"
     required: true
@@ -23,16 +20,12 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Release databend
-      uses: ncipollo/release-action@v1
-      with:
-        token: ${{ inputs.github_token }}
-        artifacts: databend-${{ inputs.version }}-${{ inputs.target }}.*
-        allowUpdates: true
-        name: databend-${{ inputs.version }}-${{ inputs.target }}
-        tag: ${{ inputs.tag }}
-        generateReleaseNotes: true
-        discussionCategory: Announcement
+    - name: Update release to github
+      shell: bash
+      # Reference: https://cli.github.com/manual/gh_release_upload
+      run: gh release upload ${{ inputs.version }} databend-${{ inputs.version }}-${{ inputs.target }}.* --clobber
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v1
