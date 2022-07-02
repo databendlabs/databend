@@ -526,6 +526,10 @@ pub enum SubqueryType {
 pub struct SubqueryExpr {
     pub typ: SubqueryType,
     pub subquery: SExpr,
+    // The expr that is used to compare the result of the subquery (IN/ANY/ALL)
+    pub child_expr: Option<Box<Scalar>>,
+    // Comparison operator for Any/All, such as a = Any (...)
+    pub compare_op: Option<ComparisonOp>,
     pub data_type: DataTypeImpl,
     pub allow_multi_rows: bool,
     pub outer_columns: ColumnSet,

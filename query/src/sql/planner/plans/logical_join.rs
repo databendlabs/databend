@@ -35,6 +35,7 @@ pub enum JoinType {
     Semi,
     Anti,
     Cross,
+    Mark,
 }
 
 impl Display for JoinType {

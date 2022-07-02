@@ -50,6 +50,7 @@ use common_functions::scalars::TupleFunction;
 
 use crate::common::Evaluator;
 use crate::sessions::QueryContext;
+use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::planner::metadata::optimize_remove_count_args;
@@ -512,25 +513,48 @@ impl<'a> TypeChecker<'a> {
                     subquery,
                     true,
                     None,
+                    None,
+                    None,
                 )
                 .await?
             }
 
             Expr::Subquery { subquery, .. } => {
-                self.resolve_subquery(SubqueryType::Scalar, subquery, false, None)
+                self.resolve_subquery(SubqueryType::Scalar, subquery, false, None, None, None)
                     .await?
             }
 
-            Expr::InSubquery { subquery, not, .. } => self.resolve_subquery(
-                if *not {
-                    SubqueryType::All
-                } else {
-                    SubqueryType::Any
-                },
+            Expr::InSubquery {
                 subquery,
-                true,
-                None,
-            ),
+                not,
+                expr,
+                span,
+            } => {
+                if not {
+                    return self
+                        .resolve_function(
+                            span,
+                            "not",
+                            &[&Expr::InSubquery {
+                                subquery: subquery.clone(),
+                                not: false,
+                                expr: expr.clone(),
+                                span: span.clone(),
+                            }],
+                            required_type,
+                        )
+                        .await;
+                }
+                // InSubquery will be transformed to Expr = Any(...)
+                self.resolve_subquery(
+                    SubqueryType::Any,
+                    subquery,
+                    true,
+                    Some(*expr.clone()),
+                    Some(ComparisonOp::Equal),
+                    None,
+                )
+            }
 
             Expr::MapAccess {
                 span,
@@ -1097,6 +1121,8 @@ impl<'a> TypeChecker<'a> {
         typ: SubqueryType,
         subquery: &Query<'_>,
         allow_multi_rows: bool,
+        child_expr: Option<Expr>,
+        compare_op: Option<ComparisonOp>,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         let mut binder = Binder::new(
@@ -1107,7 +1133,7 @@ impl<'a> TypeChecker<'a> {
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
+        let (s_expr, mut output_context) = binder.bind_query(&bind_context, subquery).await?;
 
         if typ == SubqueryType::Scalar && output_context.columns.len() > 1 {
             return Err(ErrorCode::SemanticError(
@@ -1115,14 +1141,29 @@ impl<'a> TypeChecker<'a> {
             ));
         }
 
-        let data_type = output_context.columns[0].data_type.clone();
+        let mut data_type = output_context.columns[0].data_type.clone();
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
         let rel_prop = rel_expr.derive_relational_prop()?;
 
+        let mut child_scalar = None;
+        if let Some(expr) = child_expr {
+            assert_eq!(output_context.columns.len(), 1);
+            (scalar, scalar_data_type) = self.resolve(&expr, None).await?;
+            if scalar_data_type != data_type {
+                // Make compare type keep consistent
+                let coercion_type = merge_types(&scalar_data_type, &data_type)?;
+                data_type = coercion_type;
+                scalar = wrap_cast_if_needed(scalar, &coercion_type);
+            }
+            child_scalar = Some(scalar);
+        }
+
         let subquery_expr = SubqueryExpr {
             subquery: s_expr,
-            data_type: data_type.clone(),
+            child_expr: child_scalar,
+            compare_op,
+            data_type: subquery_data_type.clone(),
             allow_multi_rows,
             typ,
             outer_columns: rel_prop.outer_columns,

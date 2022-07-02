@@ -291,6 +291,33 @@ impl SubqueryRewriter {
                     result,
                 ))
             }
+            SubqueryType::Any => {
+                let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
+                let prop = rel_expr.derive_relational_prop()?;
+                let column_name = format!("subquery_{}", prop.output_columns[0]);
+                let right_condition = Scalar::BoundColumnRef(BoundColumnRef {
+                    column: ColumnBinding {
+                        table_name: None,
+                        column_name,
+                        index: prop.output_columns[0],
+                        data_type: subquery.data_type.clone(),
+                        visible_in_unqualified_wildcard: false,
+                    },
+                });
+                if prop.outer_columns.is_empty() {
+                    let mark_join = LogicalInnerJoin {
+                        left_conditions: vec![*subquery.child_expr.unwrap()],
+                        right_conditions: vec![right_condition],
+                        other_conditions: vec![],
+                        join_type: JoinType::Mark,
+                    }
+                    .into();
+                    Ok((
+                        SExpr::create_binary(mark_join, left.clone(), subquery.subquery.clone()),
+                        UnnestResult::SimpleJoin,
+                    ))
+                }
+            }
             _ => Err(ErrorCode::LogicalError(format!(
                 "Unsupported subquery type: {:?}",
                 &subquery.typ
