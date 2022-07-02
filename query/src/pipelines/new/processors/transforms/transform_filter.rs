@@ -107,7 +107,7 @@ impl Transform for TransformFilterImpl<true> {
         }
 
         let filter_block = self.executor.execute(&data)?;
-        self.correct_with_schema(DataBlock::filter_block(&data, filter_block.column(0))?)
+        self.correct_with_schema(DataBlock::filter_block(data, filter_block.column(0))?)
     }
 }
 
@@ -122,6 +122,6 @@ impl Transform for TransformFilterImpl<false> {
         }
 
         let filter_block = self.executor.execute(&data)?;
-        self.correct_with_schema(DataBlock::filter_block(&data, filter_block.column(0))?)
+        self.correct_with_schema(DataBlock::filter_block(data, filter_block.column(0))?)
     }
 }

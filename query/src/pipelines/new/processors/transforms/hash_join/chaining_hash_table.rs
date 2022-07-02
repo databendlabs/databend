@@ -18,24 +18,19 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
-use common_datavalues::wrap_nullable;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
-use common_datavalues::NullableColumn;
 use common_exception::Result;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -110,16 +105,16 @@ pub struct ChainingHashTable {
     ref_count: Mutex<usize>,
     is_finished: Mutex<bool>,
 
-    build_keys: Vec<EvalNode<ColumnID>>,
-    probe_keys: Vec<EvalNode<ColumnID>>,
+    pub(crate) build_keys: Vec<EvalNode<ColumnID>>,
+    pub(crate) probe_keys: Vec<EvalNode<ColumnID>>,
 
-    ctx: Arc<QueryContext>,
+    pub(crate) ctx: Arc<QueryContext>,
 
     /// A shared big hash table stores all the rows from build side
-    hash_table: RwLock<HashTable>,
-    row_space: RowSpace,
-    join_type: JoinType,
-    other_predicate: Option<EvalNode<ColumnID>>,
+    pub(crate) hash_table: RwLock<HashTable>,
+    pub(crate) row_space: RowSpace,
+    pub(crate) join_type: JoinType,
+    pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
 }
 
 impl ChainingHashTable {
@@ -276,167 +271,8 @@ impl ChainingHashTable {
         })
     }
 
-    fn result_blocks<Key>(
-        &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
-        keys: Vec<Key>,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
-    where
-        Key: HashTableKeyable + Clone + 'static,
-    {
-        let mut results: Vec<DataBlock> = vec![];
-        match self.join_type {
-            JoinType::Inner => {
-                let mut probe_indexs = Vec::with_capacity(keys.len());
-                let mut build_indexs = Vec::with_capacity(keys.len());
-
-                for (i, key) in keys.iter().enumerate() {
-                    let probe_result_ptr = hash_table.find_key(key);
-                    if probe_result_ptr.is_none() {
-                        // No matched row for current probe row
-                        continue;
-                    }
-                    let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
-                    probe_indexs.extend_from_slice(probe_result_ptrs);
-
-                    for _ in probe_result_ptrs {
-                        build_indexs.push(i as u32);
-                    }
-                }
-
-                let build_block = self.row_space.gather(&probe_indexs)?;
-                let probe_block = DataBlock::block_take_by_indices(input, &build_indexs)?;
-
-                results.push(self.merge_eq_block(&build_block, &probe_block)?);
-            }
-            JoinType::Semi => {
-                for (i, key) in keys.iter().enumerate() {
-                    let probe_result_ptr = hash_table.find_key(key);
-
-                    match (probe_result_ptr, &self.other_predicate) {
-                        (Some(ptrs), Some(pred)) => {
-                            let build_block = self.row_space.gather(ptrs.get_value())?;
-                            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                            let merged = self.merge_block(&build_block, &probe_block)?;
-                            let func_ctx = self.ctx.try_get_function_context()?;
-                            let filter_vector = pred.eval(&func_ctx, &merged)?;
-                            let filtered_block =
-                                DataBlock::filter_block(&merged, filter_vector.vector())?;
-                            if !filtered_block.is_empty() {
-                                results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
-                            }
-                        }
-                        (Some(_), None) => {
-                            // No other conditions and has matched result
-                            results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
-                        }
-                        (None, _) => {
-                            // No matched row for current probe row
-                        }
-                    }
-                }
-            }
-            JoinType::Anti => {
-                for (i, key) in keys.iter().enumerate() {
-                    let probe_result_ptr = hash_table.find_key(key);
-
-                    match (probe_result_ptr, &self.other_predicate) {
-                        (Some(ptrs), Some(pred)) => {
-                            let build_block = self.row_space.gather(ptrs.get_value())?;
-                            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                            let merged = self.merge_block(&build_block, &probe_block)?;
-                            let func_ctx = self.ctx.try_get_function_context()?;
-                            let filter_vector = pred.eval(&func_ctx, &merged)?;
-                            let filtered_block =
-                                DataBlock::filter_block(&merged, filter_vector.vector())?;
-                            if filtered_block.is_empty() {
-                                results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
-                            }
-                        }
-                        (Some(_), None) => {
-                            // No other conditions and has matched result
-                        }
-                        (None, _) => {
-                            // No matched row for current probe row
-                            results.push(DataBlock::block_take_by_indices(input, &[i as u32])?);
-                        }
-                    }
-                }
-            }
-            JoinType::Left => {
-                for (i, key) in keys.iter().enumerate() {
-                    let probe_result_ptr = hash_table.find_key(key);
-                    let data_schema_fields = self.row_space.data_schema.fields();
-                    let mut columns = Vec::with_capacity(data_schema_fields.len());
-                    if let Some(probe_result_ptr) = probe_result_ptr {
-                        let probe_result_ptrs = probe_result_ptr.get_value();
-                        let block = self.row_space.gather(probe_result_ptrs)?;
-                        for column in block.columns().iter() {
-                            let mut validity = MutableBitmap::new();
-                            validity.extend_constant(column.len(), true);
-                            columns.push(NullableColumn::wrap_inner(
-                                column.clone(),
-                                Some(validity.into()),
-                            ));
-                        }
-                    } else {
-                        // No matched row for current probe row
-                        // Create a NULL block for right side
-                        for field in data_schema_fields.iter() {
-                            let nullable_data_type = wrap_nullable(field.data_type());
-                            columns.push(
-                                nullable_data_type.create_constant_column(&DataValue::Null, 1)?,
-                            );
-                        }
-                    };
-                    let build_block =
-                        DataBlock::create(self.row_space.data_schema.clone(), columns);
-                    let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-                    let merged_block = self.merge_block(&build_block, &probe_block)?;
-                    results.push(self.filter_block(&probe_block, merged_block)?);
-                }
-            }
-            _ => unreachable!(),
-        }
-        Ok(results)
-    }
-
-    // Todo(xudong963): optimize the performance of this function
-    fn filter_block(&self, probe_block: &DataBlock, merged_block: DataBlock) -> Result<DataBlock> {
-        let mut result_block = merged_block;
-        for filter in self.other_predicate.iter() {
-            let func_ctx = self.ctx.try_get_function_context()?;
-            // `predicate_column` contains a column, which is a boolean column.
-            let filter_vector = filter.eval(&func_ctx, &result_block)?;
-            // Here, we directly use `predicate_column` to filter the result block.
-            // But pay attention to the fact that **reserved side** may also be filtered.
-            // **reserved side** is the left side in left join, and the right side in right join.
-            result_block = DataBlock::filter_block(&result_block, filter_vector.vector())?;
-        }
-        // If result_block is empty, we need to supply a NULL block for probe_block.
-        if result_block.is_empty() {
-            result_block = probe_block.clone();
-            let data_schema_fields = self.row_space.data_schema.fields();
-            let mut columns = Vec::with_capacity(data_schema_fields.len());
-            for field in data_schema_fields.iter() {
-                let nullable_data_type = wrap_nullable(field.data_type());
-                columns.push(nullable_data_type.create_constant_column(&DataValue::Null, 1)?);
-            }
-            let null_block = DataBlock::create(self.row_space.data_schema.clone(), columns);
-            for (col, field) in null_block
-                .columns()
-                .iter()
-                .zip(null_block.schema().fields().iter())
-            {
-                result_block = result_block.add_column(col.clone(), field.clone())?;
-            }
-        }
-        Ok(result_block)
-    }
-
     // Merge build block and probe block that have the same number of rows
-    fn merge_eq_block(
+    pub(crate) fn merge_eq_block(
         &self,
         build_block: &DataBlock,
         probe_block: &DataBlock,
@@ -453,7 +289,11 @@ impl ChainingHashTable {
     }
 
     // Merge build block and probe block
-    fn merge_block(&self, build_block: &DataBlock, probe_block: &DataBlock) -> Result<DataBlock> {
+    pub(crate) fn merge_block(
+        &self,
+        build_block: &DataBlock,
+        probe_block: &DataBlock,
+    ) -> Result<DataBlock> {
         let mut replicated_probe_block = DataBlock::empty();
         for (i, col) in probe_block.columns().iter().enumerate() {
             let replicated_col = ConstColumn::new(col.clone(), build_block.num_rows()).arc();
@@ -587,19 +427,22 @@ impl HashJoinState for ChainingHashTable {
             _ => unimplemented!("{} is unimplemented", self.join_type),
         }?;
         if self.other_predicate.is_none()
-            || self.join_type == JoinType::Left
             || self.join_type == JoinType::Anti
             || self.join_type == JoinType::Semi
+            || self.join_type == JoinType::Left
         {
             return Ok(data_blocks);
         }
-        // Process other conditions for Inner/Semi/Anti join
+        // Process other conditions for Inner join
         if let Some(filter) = &self.other_predicate {
             let func_ctx = self.ctx.try_get_function_context()?;
             let mut filtered_blocks = Vec::with_capacity(data_blocks.len());
             for block in data_blocks.iter() {
                 let filter_vector = filter.eval(&func_ctx, block)?;
-                filtered_blocks.push(DataBlock::filter_block(block, filter_vector.vector())?);
+                filtered_blocks.push(DataBlock::filter_block(
+                    block.clone(),
+                    filter_vector.vector(),
+                )?);
             }
             data_blocks = filtered_blocks;
         }

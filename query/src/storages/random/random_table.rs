@@ -100,7 +100,7 @@ impl Table for RandomTable {
                 let mut schema = self.schema();
                 if let Some(projection) = push_downs.projection {
                     // do projection on schema
-                    schema = Arc::new(schema.project(projection));
+                    schema = Arc::new(schema.project(&projection));
                 }
                 let limit = match push_downs.limit {
                     Some(limit) => limit,
@@ -149,7 +149,7 @@ impl Table for RandomTable {
         if let Some(extras) = push_downs {
             if let Some(projection) = extras.projection {
                 // do projection on schema
-                output_schema = Arc::new(output_schema.project(projection));
+                output_schema = Arc::new(output_schema.project(&projection));
             }
         }
 

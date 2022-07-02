@@ -1,4 +1,4 @@
-name: Developing
+name: Dev Linux
 
 on:
   pull_request:
@@ -28,31 +28,14 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-  build_macos:
-    name: "build_macos(optional)"
-    runs-on: macos-11
-    strategy:
-      matrix:
-        target:
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/build_macos
-        with:
-          target: ${{ matrix.target }}
-          profile: debug
-
-  build_linux:
+  build_gnu:
+    name: build_${{ matrix.arch }}_gnu
     runs-on: [self-hosted, x64, Linux, development]
     strategy:
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
+        arch:
+          - x86_64
+          - aarch64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -60,7 +43,25 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.arch }}-unknown-linux-gnu
+          profile: debug
+
+  build_musl:
+    name: build_${{ matrix.arch }}_musl
+    runs-on: [self-hosted, x64, Linux, development]
+    strategy:
+      matrix:
+        arch:
+          - x86_64
+          - aarch64
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_linux
+        with:
+          target: ${{ matrix.arch }}-unknown-linux-musl
           profile: debug
 
   test_unit:
@@ -76,93 +77,68 @@ jobs:
 
   test_metactl:
     runs-on: [self-hosted, x64, Linux, development]
-    needs: build_linux
+    needs: build_gnu
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_metactl
 
   test_compat:
     runs-on: [self-hosted, x64, Linux, development]
-    needs: build_linux
+    needs: build_gnu
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_compat
 
   test_meta_cluster:
     runs-on: [self-hosted, x64, Linux, development]
-    needs: build_linux
+    needs: build_gnu
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_meta_cluster
 
   test_stateless_standalone_linux:
     runs-on: [self-hosted, x64, Linux, development]
-    needs: build_linux
+    needs: build_gnu
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_linux
 
-  # https://github.com/datafuselabs/databend/issues/5287
-  # test_stateless_standalone_macos:
-  #  runs-on: macos-11
-  #  needs: build_macos
-  #  steps:
-  #    - uses: actions/checkout@v3
-  #    - uses: ./.github/actions/test_stateless_standalone_macos
-
   test_stateless_cluster_linux:
     runs-on: [self-hosted, x64, Linux, development]
-    needs: build_linux
+    needs: build_gnu
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_linux
 
-  test_stateless_cluster_macos:
-    name: "test_stateless_cluster_macos(optional)"
-    runs-on: macos-11
-    needs: build_macos
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/test_stateless_cluster_macos
-
-  test_sqllogic_standalone_macos:
-    name: "test_sqllogic_standalone_macos(optional)"
-    runs-on: macos-11
-    needs: build_macos
-    steps:
-      - uses: actions/checkout@v2
-      - uses: ./.github/actions/test_sqllogic_standalone_macos
-
   test_sqllogic_standalone_linux:
     runs-on: [self-hosted, x64, Linux, development]
-    needs: build_linux
+    needs: build_gnu
     steps:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_sqllogic_standalone_linux
 
   test_stateful_standalone_linux:
     runs-on: [self-hosted, x64, Linux, development]
-    needs: build_linux
+    needs: build_gnu
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
 
-  build_linux_hive:
+  build_hive:
     runs-on: [self-hosted, x64, Linux, development]
-    strategy:
-      matrix:
-        target:
-          - x86_64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/build_linux_hive
         with:
-          target: ${{ matrix.target }}
+          target: x86_64-unknown-linux-gnu
           profile: debug
 
   test_stateful_hive_standalone:
     runs-on: [self-hosted, x64, Linux, development]
-    needs: build_linux_hive
+    needs: build_hive
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_hive_standalone
+        with:
+          target: x86_64-unknown-linux-gnu
+          profile: debug

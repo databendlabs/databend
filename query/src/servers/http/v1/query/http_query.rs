@@ -22,7 +22,6 @@ use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 use serde::Deserialize;
 
 use super::HttpQueryContext;
@@ -207,11 +206,14 @@ impl HttpQuery {
         let id = ctx.get_id();
 
         let block_buffer = BlockBuffer::new(request.pagination.max_rows_in_buffer);
-        let state = ExecuteState::try_create(&request, session, ctx, block_buffer.clone()).await?;
+        let state =
+            ExecuteState::try_create(&request, session, ctx.clone(), block_buffer.clone()).await?;
+        let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
             request.pagination.max_rows_per_page,
             block_buffer,
             request.string_fields,
+            format_settings,
         )));
         let query = HttpQuery {
             id,
@@ -230,13 +232,9 @@ impl HttpQuery {
         self.request.pagination.wait_time_secs == 0
     }
 
-    pub async fn get_response_page(
-        &self,
-        page_no: usize,
-        format: &FormatSettings,
-    ) -> Result<HttpQueryResponseInternal> {
+    pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         Ok(HttpQueryResponseInternal {
-            data: Some(self.get_page(page_no, format).await?),
+            data: Some(self.get_page(page_no).await?),
             session_id: self.session_id.clone(),
             state: self.get_state().await,
         })
@@ -261,10 +259,10 @@ impl HttpQuery {
         }
     }
 
-    async fn get_page(&self, page_no: usize, format: &FormatSettings) -> Result<ResponseData> {
+    async fn get_page(&self, page_no: usize) -> Result<ResponseData> {
         let mut data = self.data.lock().await;
         let page = data
-            .get_a_page(page_no, &self.request.pagination.get_wait_type(), format)
+            .get_a_page(page_no, &self.request.pagination.get_wait_type())
             .await?;
         let response = ResponseData {
             page,

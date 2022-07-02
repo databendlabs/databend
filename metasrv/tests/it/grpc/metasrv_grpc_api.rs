@@ -373,32 +373,25 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let mut srv = tc0.grpc_srv.take().unwrap();
         srv.stop(None).await?;
 
-        let metrics = meta_node
-            .raft
-            .wait(Some(Duration::from_millis(30_000)))
-            .metrics(
-                |m| m.current_leader.is_some() && m.current_term > old_term,
-                "a leader is observed",
-            )
-            .await?;
+        // wait for leader observed
+        // if tc0 is old leader, then we need to check both current_leader is some and current_term > old_term
+        // if tc0 isn't old leader, then we need do nothing.
+        if meta_node.get_leader().await == 0 {
+            let metrics = meta_node
+                .raft
+                .wait(Some(Duration::from_millis(30_000)))
+                .metrics(
+                    |m| m.current_leader.is_some() && m.current_term > old_term,
+                    "a leader is observed",
+                )
+                .await?;
 
-        tracing::debug!("got leader, metrics: {:?}", metrics);
-
-        // wait for auto sync work.
-        tokio::time::sleep(Duration::from_secs(20)).await;
-
+            tracing::debug!("got leader, metrics: {metrics:?}");
+        }
         let res = client.get_endpoints().await?;
         let res: HashSet<String> = HashSet::from_iter(res.into_iter());
 
         assert_eq!(3, res.len());
-
-        // still can get kv from cluster
-        let k = "join-k".to_string();
-
-        let res = client.get_kv(k.as_str()).await;
-
-        let res = res?;
-        assert_eq!(k.into_bytes(), res.unwrap().data);
     }
 
     tracing::info!("--- endpoints should changed when add node");
@@ -412,12 +405,30 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
 
         start_metasrv_with_context(&mut tc3).await?;
 
+        let g = tc3.grpc_srv.as_ref().unwrap();
+        let meta_node = g.get_meta_node();
+
+        let metrics = meta_node
+            .raft
+            .wait(Some(Duration::from_millis(30_000)))
+            .metrics(|m| m.current_leader.is_some(), "a leader is observed")
+            .await?;
+
+        tracing::debug!("got leader, metrics: {metrics:?}");
+
         let addr3 = tc3.config.grpc_api_address.clone();
 
-        tokio::time::sleep(Duration::from_secs(15)).await;
-
-        let res = client.get_endpoints().await?;
-        let res: HashSet<String> = HashSet::from_iter(res.into_iter());
+        let mut i = 0;
+        let mut res = vec![];
+        while i < 15 {
+            res = client.get_endpoints().await?;
+            if res.contains(&addr3) {
+                break;
+            } else {
+                i += 1;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        }
 
         assert!(
             res.contains(&addr3),
@@ -432,6 +443,9 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let res = res?;
         assert_eq!(k.into_bytes(), res.unwrap().data);
     }
+
+    // TODO(ariesdevil): remove node from cluster then get endpoints
+    // tracing::info!("--- endpoints should changed after remove node");
 
     Ok(())
 }
