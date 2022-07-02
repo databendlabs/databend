@@ -126,7 +126,10 @@ impl DataExchangeManager {
                 query_coordinator.prepare_pipeline()?;
 
                 if packet.executor != packet.request_executor {
-                    query_coordinator.prepare_subscribes_channel(packet)?;
+                    query_coordinator.prepare_subscribes_channel(
+                        query_coordinator.ctx.clone(),
+                        packet,
+                    )?;
                 }
 
                 Ok(())
@@ -150,6 +153,11 @@ impl DataExchangeManager {
             ))),
             Some(coordinator) => coordinator.receive_data(source, stream),
         }
+    }
+
+    pub fn remove_query(&self, query_id: &str) {
+        let mut queries_coordinator = self.queries_coordinator.lock();
+        queries_coordinator.remove(query_id);
     }
 
     pub fn shutdown_query(&self, query_id: &str, cause: Option<ErrorCode>) -> Result<()> {
@@ -178,7 +186,7 @@ impl DataExchangeManager {
 
         // Initialize channels between cluster nodes
         let init_nodes_channel_packets = actions.get_init_nodes_channel_packets()?;
-        self.init_root_pipeline_channel(&query_fragments_plan_packets)?;
+        self.init_root_pipeline_channel(ctx.clone(), &query_fragments_plan_packets)?;
         init_nodes_channel_packets.commit(&self.config, timeout).await?;
 
         QueryCoordinator::init_pipeline(&mut root_pipeline)?;
@@ -196,7 +204,7 @@ impl DataExchangeManager {
         Ok(pipeline)
     }
 
-    fn init_root_pipeline_channel(&self, executor_packet: &[QueryFragmentsPlanPacket]) -> Result<()> {
+    fn init_root_pipeline_channel(&self, ctx: Arc<QueryContext>, executor_packet: &[QueryFragmentsPlanPacket]) -> Result<()> {
         for executor_packet in executor_packet {
             if executor_packet.executor == executor_packet.request_executor {
                 let mut queries_coordinator = self.queries_coordinator.lock();
@@ -207,7 +215,7 @@ impl DataExchangeManager {
                         executor_packet.query_id
                     ))),
                     Entry::Occupied(mut entry) => {
-                        entry.get_mut().prepare_subscribes_channel(executor_packet)
+                        entry.get_mut().prepare_subscribes_channel(ctx.clone(), executor_packet)
                     }
                 }?;
             }
@@ -325,12 +333,12 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn prepare_subscribes_channel(&mut self, prepare: &QueryFragmentsPlanPacket) -> Result<()> {
+    pub fn prepare_subscribes_channel(&mut self, ctx: Arc<QueryContext>, prepare: &QueryFragmentsPlanPacket) -> Result<()> {
         for source in prepare.source_2_fragments.keys() {
             if source != &prepare.executor {
                 let (tx, rx) = async_channel::bounded(1);
 
-                let ctx = self.ctx.clone();
+                let ctx = ctx.clone();
                 let query_id = prepare.query_id.clone();
                 let runtime = self.runtime.clone();
                 let receivers_map = &self.subscribe_fragments;
@@ -379,6 +387,7 @@ impl QueryCoordinator {
             }
         }
 
+        let query_id = self.query_id.clone();
         let async_runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
         let executor =
@@ -388,6 +397,7 @@ impl QueryCoordinator {
         let receivers = self.exchange_receivers.clone();
         let shutdown_cause = self.shutdown_cause.clone();
         let mut request_server_tx = self.request_server_tx.take();
+        let exchange_manager = self.ctx.get_exchange_manager();
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             if let Err(cause) = executor.execute() {
@@ -406,6 +416,9 @@ impl QueryCoordinator {
                 }
             }
 
+            // close request server channel.
+            drop(request_server_tx);
+
             for receiver in &receivers {
                 receiver.shutdown();
             }
@@ -420,14 +433,20 @@ impl QueryCoordinator {
             }
 
             for sender in &senders {
+                sender.abort();
+            }
+
+            for sender in &senders {
                 let sender = sender.clone();
                 futures::executor::block_on(async move {
-                    if let Err(cause) = sender.abort().await {
+                    if let Err(cause) = sender.join().await {
                         common_tracing::tracing::warn!("Sender join failure {:?}", cause);
                     }
                 });
             }
 
+            // let mut queries_coordinator = exchange_manager.queries_coordinator.lock();
+            // queries_coordinator.remove(&query_id);
             println!("Pipeline execute successfully");
         });
 

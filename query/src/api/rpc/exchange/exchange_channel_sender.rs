@@ -14,12 +14,13 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use common_base::base::tokio::time::sleep;
 use async_channel::{Recv, RecvError, Sender};
 use futures_util::future::Either;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::{Runtime, TrySpawn};
+use common_base::base::{ProgressValues, Runtime, TrySpawn};
 use common_base::base::tokio::sync::futures::Notified;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
@@ -35,8 +36,7 @@ use crate::sessions::QueryContext;
 pub struct ExchangeSender {
     query_id: String,
     target_fragments: Vec<usize>,
-    request_server_notify: Arc<Notify>,
-    notifies: HashMap<usize, Arc<Notify>>,
+    target_fragments_finished: HashMap<usize, Arc<AtomicBool>>,
     join_handlers: Mutex<Vec<JoinHandle<()>>>,
     flight_client: Mutex<Option<FlightClient>>,
     target_is_request_server: bool,
@@ -49,23 +49,22 @@ impl ExchangeSender {
         let flight_client = Self::create_client(config, &address).await?;
         let target_fragments_id = &packet.target_2_fragments[target];
 
-        let mut target_fragments_notifies = HashMap::with_capacity(target_fragments_id.len());
+        let mut target_fragments_finished = HashMap::with_capacity(target_fragments_id.len());
 
         for target_fragment_id in target_fragments_id {
-            target_fragments_notifies.insert(
+            target_fragments_finished.insert(
                 *target_fragment_id,
-                Arc::new(Notify::new()),
+                Arc::new(AtomicBool::new(false)),
             );
         }
 
         Ok(ExchangeSender {
+            target_fragments_finished,
             query_id: packet.query_id.clone(),
-            notifies: target_fragments_notifies,
             target_fragments: target_fragments_id.to_owned(),
             join_handlers: Mutex::new(vec![]),
             flight_client: Mutex::new(Some(flight_client)),
             target_is_request_server: target == packet.request_server,
-            request_server_notify: Arc::new(Notify::new()),
         })
     }
 
@@ -79,50 +78,38 @@ impl ExchangeSender {
 
         for target_fragment_id in &self.target_fragments {
             let runtime = runtime.clone();
-            let sender = self.listen_fragment(flight_tx.clone(), *target_fragment_id, runtime)?;
+            let sender = self.listen_fragment(ctx.clone(), flight_tx.clone(), *target_fragment_id, runtime)?;
             target_fragments_senders.insert(
                 *target_fragment_id,
                 FragmentSender::create_unrecorded(sender),
             );
         }
 
-        if self.target_is_request_server {
-            let flight_tx = flight_tx.clone();
-            let request_notify = self.request_server_notify.clone();
-            runtime.spawn(async move {
-                let mut notify = Box::pin(request_notify.notified());
-                'listen_loop: loop {
-                    if let Err(cause) = flight_tx.send(DataPacket::Progress(ctx.get_scan_progress_value())).await {
-                        // TODO: report error and shutdown query
-                        break 'listen_loop;
-                    }
-
-                    let sleep = Box::pin(sleep(Duration::from_millis(500)));
-                    match futures::future::select(notify, sleep).await {
-                        Either::Left((_, _)) => { break 'listen_loop; }
-                        Either::Right((_, y)) => { notify = y; }
-                    }
-                }
-            });
-        }
-
         Ok((flight_tx, target_fragments_senders))
     }
 
-    fn listen_fragment(&self, c_tx: Sender<DataPacket>, fragment_id: usize, runtime: Arc<Runtime>) -> Result<Sender<DataPacket>> {
+    fn listen_fragment(&self, ctx: Arc<QueryContext>, c_tx: Sender<DataPacket>, fragment_id: usize, runtime: Arc<Runtime>) -> Result<Sender<DataPacket>> {
         let mut join_handlers = self.join_handlers.lock();
 
-        let notify = self.notifies[&fragment_id].clone();
+        let to_request_server = self.is_to_request_server();
+        let is_finished = self.target_fragments_finished[&fragment_id].clone();
         let (f_tx, f_rx) = async_channel::bounded(1);
 
         join_handlers.push(runtime.spawn(async move {
-            let mut notified = Box::pin(notify.notified());
+            let mut sleep_future = Box::pin(sleep(Duration::from_millis(500)));
 
-            'fragment_loop: loop {
-                match futures::future::select(notified, f_rx.recv()).await {
-                    Either::Left((_, _)) => { break 'fragment_loop; }
+            'fragment_loop: while !is_finished.load(Ordering::Relaxed) {
+                match futures::future::select(sleep_future, f_rx.recv()).await {
+                    Either::Left((_, _)) => {
+                        if to_request_server {
+                            let scan_progress = ctx.get_scan_progress();
+                            c_tx.send(DataPacket::Progress(scan_progress.fetch())).await;
+                        }
+
+                        sleep_future = Box::pin(sleep(Duration::from_millis(500)));
+                    }
                     Either::Right((recv_message, n)) => {
-                        notified = n;
+                        sleep_future = n;
 
                         if let Ok(recv_packet) = recv_message {
                             if c_tx.send(recv_packet).await.is_err() {
@@ -133,27 +120,28 @@ impl ExchangeSender {
                         }
 
                         // Disconnect channel, exit loop
-                        c_tx.send(DataPacket::EndFragment(fragment_id)).await;
-                        return;
-                    }
-                }
-            }
+                        if to_request_server {
+                            let scan_progress = ctx.get_scan_progress();
+                            c_tx.send(DataPacket::Progress(scan_progress.fetch())).await;
+                        }
 
-            while let Ok(recv_packet) = f_rx.try_recv() {
-                if c_tx.send(recv_packet).await.is_err() {
-                    break;
-                }
+                        c_tx.send(DataPacket::EndFragment(fragment_id)).await;
+                        break 'fragment_loop;
+                    }
+                };
             }
         }));
 
         Ok(f_tx)
     }
 
-    pub async fn abort(&self) -> Result<()> {
-        for notify in self.notifies.values() {
-            notify.notify_one();
+    pub fn abort(&self) {
+        for is_finished in self.target_fragments_finished.values() {
+            is_finished.store(true, Ordering::SeqCst);
         }
+    }
 
+    pub async fn join(&self) -> Result<()> {
         while let Some(join_handler) = self.join_handlers.lock().pop() {
             if let Err(join_cause) = join_handler.await {
                 if join_cause.is_panic() {

@@ -99,6 +99,13 @@ impl ExchangeReceiver {
                         }
                     }
                     Either::Right((_notified, _recv)) => {
+                        while let Ok(recv_data) = rx.try_recv() {
+                            let txs = &mut fragments_receiver;
+                            if let Err(cause) = this.on_packet(recv_data, txs).await {
+                                break;
+                            }
+                        }
+
                         break;
                     }
                 };

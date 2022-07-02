@@ -15,6 +15,7 @@
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::base::ProgressValues;
@@ -39,6 +40,7 @@ impl DataPacket {
         match data.app_metadata[0] {
             0x01 => DataPacket::flight_data_packet(data),
             0x02 => DataPacket::error_code(data),
+            0x03 => DataPacket::progress_values(data),
             0x04 => DataPacket::fragment_end(data),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
@@ -54,6 +56,13 @@ impl DataPacket {
         }
 
         Err(ErrorCode::BadBytes("Cannot parse inf usize."))
+    }
+
+    fn progress_values(mut data: FlightData) -> Result<DataPacket> {
+        let mut data_body = data.data_body.as_slice();
+        let rows = data_body.read_u64::<BigEndian>()? as usize;
+        let bytes = data_body.read_u64::<BigEndian>()? as usize;
+        Ok(DataPacket::Progress(ProgressValues { rows, bytes }))
     }
 
     fn fragment_end(data: FlightData) -> Result<DataPacket> {
@@ -113,12 +122,14 @@ impl Stream for DataPacketStream {
                     data_header: error.code().to_be_bytes().to_vec(),
                     flight_descriptor: None,
                 })),
-                DataPacket::Progress(_values) => {
-                    // let rows = values.rows.to_be_bytes();
-                    // let bytes = values.bytes.to_be_bytes();
+                DataPacket::Progress(values) => {
+                    let mut bytes = Vec::with_capacity(16);
+                    bytes.write_u64::<BigEndian>(values.rows as u64);
+                    bytes.write_u64::<BigEndian>(values.bytes as u64);
+
                     Poll::Ready(Some(FlightData {
                         app_metadata: vec![0x03],
-                        data_body: vec![],
+                        data_body: bytes,
                         data_header: vec![],
                         flight_descriptor: None,
                     }))

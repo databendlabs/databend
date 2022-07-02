@@ -44,9 +44,25 @@ impl Progress {
             .fetch_add(progress_values.bytes, Ordering::Relaxed);
     }
 
+    pub fn fetch(&self) -> ProgressValues {
+        let rows = self.rows.fetch_min(0, Ordering::SeqCst);
+        let bytes = self.bytes.fetch_min(0, Ordering::SeqCst);
+
+        ProgressValues { rows, bytes }
+    }
+
     pub fn get_values(&self) -> ProgressValues {
         let rows = self.rows.load(Ordering::Relaxed) as usize;
         let bytes = self.bytes.load(Ordering::Relaxed) as usize;
         ProgressValues { rows, bytes }
+    }
+}
+
+impl ProgressValues {
+    pub fn diff(&self, other: &Self) -> ProgressValues {
+        ProgressValues {
+            rows: self.rows - other.rows,
+            bytes: self.bytes - other.bytes,
+        }
     }
 }
