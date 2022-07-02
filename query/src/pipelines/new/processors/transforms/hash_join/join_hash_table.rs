@@ -31,6 +31,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashTableKeyable;
@@ -101,6 +102,13 @@ pub enum HashTable {
     KeyU512HashTable(KeyU512HashTable),
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum MarkerKind {
+    TRUE,
+    FALSE,
+    NULL,
+}
+
 pub struct JoinHashTable {
     /// Reference count
     ref_count: Mutex<usize>,
@@ -116,6 +124,8 @@ pub struct JoinHashTable {
     pub(crate) row_space: RowSpace,
     pub(crate) join_type: JoinType,
     pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
+
+    pub(crate) marker: RwLock<Vec<MarkerKind>>,
 }
 
 impl JoinHashTable {
@@ -269,6 +279,7 @@ impl JoinHashTable {
             ctx,
             hash_table: RwLock::new(hash_table),
             join_type,
+            marker: RwLock::new(vec![]),
         })
     }
 
@@ -429,7 +440,7 @@ impl HashJoinState for JoinHashTable {
 
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match self.join_type {
-            JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left => {
+            JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left | JoinType::Mark => {
                 self.probe_join(input, probe_state)
             }
             JoinType::Cross => self.probe_cross_join(input, probe_state),
@@ -461,16 +472,28 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn finish(&self) -> Result<()> {
-        let chunks = self.row_space.chunks.write().unwrap();
+        let chunks = self.row_space.chunks.read().unwrap();
+        let mut marker = self.marker.write();
         for chunk_index in 0..chunks.len() {
             let chunk = &chunks[chunk_index];
             let mut columns = vec![];
             if let Some(cols) = chunk.cols.as_ref() {
                 columns = Vec::with_capacity(cols.len());
                 for col in cols.iter() {
+                    if self.join_type == JoinType::Mark {
+                        assert_eq!(cols.len(), 1);
+                        for row_idx in 0..col.len() {
+                            if col.get(row_idx) == DataValue::Null {
+                                marker.push(MarkerKind::NULL);
+                            } else {
+                                marker.push(MarkerKind::FALSE);
+                            }
+                        }
+                    }
                     columns.push(col);
                 }
             }
+            dbg!(marker.len());
             match (*self.hash_table.write()).borrow_mut() {
                 HashTable::SerializerHashTable(table) => {
                     if let Some(keys) = chunk.keys.as_ref() {

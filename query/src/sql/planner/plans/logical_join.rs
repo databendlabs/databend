@@ -62,6 +62,9 @@ impl Display for JoinType {
             JoinType::Cross => {
                 write!(f, "CROSS")
             }
+            JoinType::Mark => {
+                write!(f, "MARK")
+            }
         }
     }
 }

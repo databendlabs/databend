@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 
 use crate::sql::plans::JoinType;
+use crate::sql::IndexType;
 
 pub type ColumnID = String;
 
@@ -164,6 +165,7 @@ impl PhysicalPlan {
                 build,
                 probe,
                 join_type,
+                probe_keys,
                 ..
             } => {
                 let mut fields = probe.output_schema()?.fields().clone();
@@ -179,6 +181,21 @@ impl PhysicalPlan {
 
                     JoinType::Semi | JoinType::Anti => {
                         // Do nothing
+                    }
+
+                    JoinType::Mark => {
+                        if let PhysicalScalar::Variable {
+                            column_id,
+                            data_type,
+                        } = probe_keys[0].clone()
+                        {
+                            fields.clear();
+                            fields = build.output_schema()?.fields().clone();
+                            let mark_index = column_id.parse::<IndexType>()?;
+                            dbg!(mark_index.clone());
+                            let field_name = format!("subquery_{}", mark_index);
+                            fields.push(DataField::new(field_name.as_str(), data_type));
+                        }
                     }
 
                     _ => {

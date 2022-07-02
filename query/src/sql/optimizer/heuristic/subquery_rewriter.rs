@@ -51,6 +51,7 @@ enum UnnestResult {
     Uncorrelated,
     Apply,
     SimpleJoin, // SemiJoin or AntiJoin
+    MarkJoin,
 }
 
 /// Rewrite subquery into `Apply` operator
@@ -294,28 +295,37 @@ impl SubqueryRewriter {
             SubqueryType::Any => {
                 let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                 let prop = rel_expr.derive_relational_prop()?;
-                let column_name = format!("subquery_{}", prop.output_columns[0]);
+                let output_columns = prop.output_columns.clone();
+                let index = output_columns
+                    .iter()
+                    .take(1)
+                    .next()
+                    .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
+                dbg!(index);
+                let column_name = format!("subquery_{}", index);
                 let right_condition = Scalar::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding {
                         table_name: None,
                         column_name,
-                        index: prop.output_columns[0],
+                        index: *index,
                         data_type: subquery.data_type.clone(),
                         visible_in_unqualified_wildcard: false,
                     },
                 });
                 if prop.outer_columns.is_empty() {
                     let mark_join = LogicalInnerJoin {
-                        left_conditions: vec![*subquery.child_expr.unwrap()],
-                        right_conditions: vec![right_condition],
+                        right_conditions: vec![*subquery.child_expr.as_ref().unwrap().clone()],
+                        left_conditions: vec![right_condition],
                         other_conditions: vec![],
                         join_type: JoinType::Mark,
                     }
                     .into();
                     Ok((
-                        SExpr::create_binary(mark_join, left.clone(), subquery.subquery.clone()),
-                        UnnestResult::SimpleJoin,
+                        SExpr::create_binary(mark_join, subquery.subquery.clone(), left.clone()),
+                        UnnestResult::MarkJoin,
                     ))
+                } else {
+                    todo!()
                 }
             }
             _ => Err(ErrorCode::LogicalError(format!(
@@ -437,8 +447,11 @@ impl SubqueryRewriter {
                         s_expr,
                     ));
                 }
-
-                let rel_expr = RelExpr::with_s_expr(s_expr.child(1)?);
+                let rel_expr = if subquery.typ == SubqueryType::Any {
+                    RelExpr::with_s_expr(s_expr.child(0)?)
+                } else {
+                    RelExpr::with_s_expr(s_expr.child(1)?)
+                };
                 let prop = rel_expr.derive_relational_prop()?;
 
                 // Extract the subquery and replace it with the ColumnBinding from it.

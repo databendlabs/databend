@@ -530,7 +530,7 @@ impl<'a> TypeChecker<'a> {
                 expr,
                 span,
             } => {
-                if not {
+                if *not {
                     return self
                         .resolve_function(
                             span,
@@ -554,6 +554,7 @@ impl<'a> TypeChecker<'a> {
                     Some(ComparisonOp::Equal),
                     None,
                 )
+                .await?
             }
 
             Expr::MapAccess {
@@ -755,11 +756,6 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await?
             }
-
-            _ => Err(ErrorCode::UnImplement(format!(
-                "Unsupported expr: {:?}",
-                expr
-            )))?,
         };
 
         self.post_resolve(&scalar, &data_type)
@@ -1121,7 +1117,7 @@ impl<'a> TypeChecker<'a> {
         typ: SubqueryType,
         subquery: &Query<'_>,
         allow_multi_rows: bool,
-        child_expr: Option<Expr>,
+        child_expr: Option<Expr<'_>>,
         compare_op: Option<ComparisonOp>,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
@@ -1133,7 +1129,7 @@ impl<'a> TypeChecker<'a> {
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let (s_expr, mut output_context) = binder.bind_query(&bind_context, subquery).await?;
+        let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
 
         if typ == SubqueryType::Scalar && output_context.columns.len() > 1 {
             return Err(ErrorCode::SemanticError(
@@ -1149,21 +1145,21 @@ impl<'a> TypeChecker<'a> {
         let mut child_scalar = None;
         if let Some(expr) = child_expr {
             assert_eq!(output_context.columns.len(), 1);
-            (scalar, scalar_data_type) = self.resolve(&expr, None).await?;
+            let (mut scalar, scalar_data_type) = self.resolve(&expr, None).await?;
             if scalar_data_type != data_type {
                 // Make compare type keep consistent
                 let coercion_type = merge_types(&scalar_data_type, &data_type)?;
-                data_type = coercion_type;
                 scalar = wrap_cast_if_needed(scalar, &coercion_type);
+                data_type = coercion_type;
             }
-            child_scalar = Some(scalar);
+            child_scalar = Some(Box::new(scalar));
         }
 
         let subquery_expr = SubqueryExpr {
             subquery: s_expr,
             child_expr: child_scalar,
             compare_op,
-            data_type: subquery_data_type.clone(),
+            data_type: data_type.clone(),
             allow_multi_rows,
             typ,
             outer_columns: rel_prop.outer_columns,
