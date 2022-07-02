@@ -110,7 +110,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ steps.target.outputs.target }}
-          tag: ${{ github.ref }}
           aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
 
@@ -172,7 +171,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ steps.target.outputs.target }}
-          tag: ${{ github.ref }}
           aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
 
