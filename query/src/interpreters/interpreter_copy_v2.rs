@@ -147,9 +147,7 @@ impl CopyInterpreterV2 {
 
         let table = ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        if ctx.get_settings().get_enable_new_processor_framework()? != 0
-            && self.ctx.get_cluster().is_empty()
-        {
+        if ctx.get_settings().get_enable_new_processor_framework()? != 0 {
             table.append2(ctx.clone(), &mut pipeline)?;
             pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
