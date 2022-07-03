@@ -50,6 +50,7 @@ use crate::sessions::QueryContext;
 use crate::sql::exec::ColumnID;
 use crate::sql::exec::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
+use crate::sql::IndexType;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
@@ -126,6 +127,7 @@ pub struct JoinHashTable {
     pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
 
     pub(crate) marker: RwLock<Vec<MarkerKind>>,
+    pub(crate) marker_index: Option<IndexType>,
 }
 
 impl JoinHashTable {
@@ -136,6 +138,7 @@ impl JoinHashTable {
         probe_keys: &[PhysicalScalar],
         other_predicate: Option<&PhysicalScalar>,
         build_schema: DataSchemaRef,
+        marker_index: Option<IndexType>,
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types: Vec<DataTypeImpl> =
             build_keys.iter().map(|expr| expr.data_type()).collect();
@@ -153,6 +156,7 @@ impl JoinHashTable {
                     probe_keys,
                     other_predicate,
                     build_schema,
+                    marker_index,
                 )?)
             }
             HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
@@ -166,6 +170,7 @@ impl JoinHashTable {
                 probe_keys,
                 other_predicate,
                 build_schema,
+                marker_index,
             )?),
             HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -178,6 +183,7 @@ impl JoinHashTable {
                 probe_keys,
                 other_predicate,
                 build_schema,
+                marker_index,
             )?),
             HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -190,6 +196,7 @@ impl JoinHashTable {
                 probe_keys,
                 other_predicate,
                 build_schema,
+                marker_index,
             )?),
             HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -202,6 +209,7 @@ impl JoinHashTable {
                 probe_keys,
                 other_predicate,
                 build_schema,
+                marker_index,
             )?),
             HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -214,6 +222,7 @@ impl JoinHashTable {
                 probe_keys,
                 other_predicate,
                 build_schema,
+                marker_index,
             )?),
             HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -226,6 +235,7 @@ impl JoinHashTable {
                 probe_keys,
                 other_predicate,
                 build_schema,
+                marker_index,
             )?),
             HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -238,6 +248,7 @@ impl JoinHashTable {
                 probe_keys,
                 other_predicate,
                 build_schema,
+                marker_index,
             )?),
         })
     }
@@ -250,6 +261,7 @@ impl JoinHashTable {
         probe_keys: &[PhysicalScalar],
         other_predicate: Option<&PhysicalScalar>,
         mut build_data_schema: DataSchemaRef,
+        marker_index: Option<IndexType>,
     ) -> Result<Self> {
         if join_type == JoinType::Left {
             let mut nullable_field = Vec::with_capacity(build_data_schema.fields().len());
@@ -280,6 +292,7 @@ impl JoinHashTable {
             hash_table: RwLock::new(hash_table),
             join_type,
             marker: RwLock::new(vec![]),
+            marker_index,
         })
     }
 
@@ -445,6 +458,14 @@ impl HashJoinState for JoinHashTable {
             }
             JoinType::Cross => self.probe_cross_join(input, probe_state),
             _ => unimplemented!("{} is unimplemented", self.join_type),
+        }?;
+        if self.other_predicate.is_none()
+            || self.join_type == JoinType::Anti
+            || self.join_type == JoinType::Semi
+            || self.join_type == JoinType::Left
+            || self.join_type == JoinType::Mark
+        {
+            return Ok(data_blocks);
         }
     }
 
@@ -493,7 +514,6 @@ impl HashJoinState for JoinHashTable {
                     columns.push(col);
                 }
             }
-            dbg!(marker.len());
             match (*self.hash_table.write()).borrow_mut() {
                 HashTable::SerializerHashTable(table) => {
                     if let Some(keys) = chunk.keys.as_ref() {

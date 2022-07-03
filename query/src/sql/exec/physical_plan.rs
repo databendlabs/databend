@@ -17,11 +17,13 @@ use std::collections::BTreeSet;
 
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
+use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::NullableType;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
@@ -77,6 +79,7 @@ pub enum PhysicalPlan {
         probe_keys: Vec<PhysicalScalar>,
         other_conditions: Vec<PhysicalScalar>,
         join_type: JoinType,
+        marker_index: Option<IndexType>,
     },
     CrossApply {
         input: Box<PhysicalPlan>,
@@ -165,7 +168,6 @@ impl PhysicalPlan {
                 build,
                 probe,
                 join_type,
-                probe_keys,
                 ..
             } => {
                 let mut fields = probe.output_schema()?.fields().clone();
@@ -184,18 +186,12 @@ impl PhysicalPlan {
                     }
 
                     JoinType::Mark => {
-                        if let PhysicalScalar::Variable {
-                            column_id,
-                            data_type,
-                        } = probe_keys[0].clone()
-                        {
-                            fields.clear();
-                            fields = build.output_schema()?.fields().clone();
-                            let mark_index = column_id.parse::<IndexType>()?;
-                            dbg!(mark_index.clone());
-                            let field_name = format!("subquery_{}", mark_index);
-                            fields.push(DataField::new(field_name.as_str(), data_type));
-                        }
+                        fields.clear();
+                        fields = build.output_schema()?.fields().clone();
+                        fields.push(DataField::new(
+                            "marker",
+                            NullableType::new_impl(BooleanType::new_impl()),
+                        ));
                     }
 
                     _ => {

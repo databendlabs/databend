@@ -25,6 +25,7 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
+use crate::sql::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
@@ -75,6 +76,7 @@ pub struct LogicalInnerJoin {
     pub right_conditions: Vec<Scalar>,
     pub other_conditions: Vec<Scalar>,
     pub join_type: JoinType,
+    pub marker_index: Option<IndexType>,
 }
 
 impl Operator for LogicalInnerJoin {

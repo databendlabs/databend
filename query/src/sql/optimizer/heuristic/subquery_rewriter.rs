@@ -14,6 +14,7 @@
 
 use common_datavalues::BooleanType;
 use common_datavalues::DataValue;
+use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -45,13 +46,14 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
+use crate::sql::IndexType;
 use crate::sql::MetadataRef;
 
 enum UnnestResult {
     Uncorrelated,
     Apply,
     SimpleJoin, // SemiJoin or AntiJoin
-    MarkJoin,
+    MarkJoin { marker_index: IndexType },
 }
 
 /// Rewrite subquery into `Apply` operator
@@ -143,6 +145,7 @@ impl SubqueryRewriter {
                             right_conditions: vec![],
                             other_conditions: vec![],
                             join_type: JoinType::Cross,
+                            marker_index: None,
                         }
                         .into(),
                         UnnestResult::Uncorrelated,
@@ -273,6 +276,7 @@ impl SubqueryRewriter {
                             right_conditions: vec![],
                             other_conditions: vec![],
                             join_type: JoinType::Cross,
+                            marker_index: None,
                         }
                         .into(),
                         UnnestResult::Uncorrelated,
@@ -301,7 +305,6 @@ impl SubqueryRewriter {
                     .take(1)
                     .next()
                     .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
-                dbg!(index);
                 let column_name = format!("subquery_{}", index);
                 let right_condition = Scalar::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding {
@@ -313,16 +316,22 @@ impl SubqueryRewriter {
                     },
                 });
                 if prop.outer_columns.is_empty() {
+                    let marker_index = self.metadata.write().add_column(
+                        "marker".to_string(),
+                        NullableType::new_impl(BooleanType::new_impl()),
+                        None,
+                    );
                     let mark_join = LogicalInnerJoin {
                         right_conditions: vec![*subquery.child_expr.as_ref().unwrap().clone()],
                         left_conditions: vec![right_condition],
                         other_conditions: vec![],
                         join_type: JoinType::Mark,
+                        marker_index: Some(marker_index),
                     }
                     .into();
                     Ok((
                         SExpr::create_binary(mark_join, subquery.subquery.clone(), left.clone()),
-                        UnnestResult::MarkJoin,
+                        UnnestResult::MarkJoin { marker_index },
                     ))
                 } else {
                     todo!()
@@ -455,13 +464,17 @@ impl SubqueryRewriter {
                 let prop = rel_expr.derive_relational_prop()?;
 
                 // Extract the subquery and replace it with the ColumnBinding from it.
-                let index = *prop
-                    .output_columns
-                    .iter()
-                    .take(1)
-                    .next()
-                    .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
-                let name = format!("subquery_{}", index);
+                let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
+                    (marker_index, "marker".to_string())
+                } else {
+                    let index = *prop
+                        .output_columns
+                        .iter()
+                        .take(1)
+                        .next()
+                        .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
+                    (index, format!("subquery_{}", index))
+                };
                 let column_ref = ColumnBinding {
                     database_name: None,
                     table_name: None,

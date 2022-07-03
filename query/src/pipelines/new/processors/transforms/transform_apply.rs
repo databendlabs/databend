@@ -61,6 +61,7 @@ impl OuterRefRewriter {
                 probe_keys,
                 other_conditions,
                 join_type,
+                marker_index,
             } => Ok(PhysicalPlan::HashJoin {
                 build: Box::new(self.rewrite_physical_plan(build)?),
                 probe: Box::new(self.rewrite_physical_plan(probe)?),
@@ -69,6 +70,7 @@ impl OuterRefRewriter {
                 probe_keys: probe_keys.clone(),
                 other_conditions: other_conditions.clone(),
                 join_type: join_type.clone(),
+                marker_index: marker_index.clone(),
             }),
             PhysicalPlan::Limit {
                 input,

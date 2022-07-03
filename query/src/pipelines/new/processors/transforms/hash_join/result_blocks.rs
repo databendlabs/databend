@@ -142,7 +142,6 @@ impl JoinHashTable {
                     if let Some(v) = probe_result_ptr {
                         let probe_result_ptrs = v.get_value();
                         let mut marker = self.marker.write();
-                        dbg!(marker.len());
                         for ptr in probe_result_ptrs {
                             marker[ptr.row_index as usize] = MarkerKind::TRUE;
                         }
@@ -169,24 +168,19 @@ impl JoinHashTable {
                 // transfer marker to a Nullable(BooleanColumn)
                 let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
                 let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
-                if let EvalNode::Variable { id } = self.probe_keys[0].clone() {
-                    dbg!(id.clone());
-                    let marker_name = format!("subquery_{}", id);
-                    let marker_schema = DataSchema::new(vec![DataField::new(
-                        &marker_name,
-                        NullableType::new_impl(BooleanType::new_impl()),
-                    )]);
-                    let marker_block =
-                        DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
-                    let build_indexs = &mut probe_state.build_indexs;
-                    for entity in hash_table.iter() {
-                        build_indexs.extend_from_slice(entity.get_value());
-                    }
-                    let build_block = self.row_space.gather(build_indexs)?;
-                    let result = self.merge_eq_block(&build_block, &marker_block)?;
-                    dbg!(result.clone());
-                    results.push(result);
+                let marker_schema = DataSchema::new(vec![DataField::new(
+                    &self.marker_index.unwrap().to_string(),
+                    NullableType::new_impl(BooleanType::new_impl()),
+                )]);
+                let marker_block =
+                    DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
+                let build_indexs = &mut probe_state.build_indexs;
+                for entity in hash_table.iter() {
+                    build_indexs.extend_from_slice(entity.get_value());
                 }
+                let build_block = self.row_space.gather(build_indexs)?;
+                let result = self.merge_eq_block(&marker_block, &build_block)?;
+                results.push(result);
             }
             _ => unreachable!(),
         }

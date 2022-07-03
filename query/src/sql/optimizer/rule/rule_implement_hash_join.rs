@@ -69,6 +69,7 @@ impl Rule for RuleImplementHashJoin {
                 probe_keys: logical_join.left_conditions,
                 other_conditions: logical_join.other_conditions,
                 join_type: logical_join.join_type,
+                marker_index: logical_join.marker_index,
             }
             .into(),
             expression.children().to_vec(),
