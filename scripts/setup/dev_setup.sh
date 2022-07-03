@@ -563,8 +563,8 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 
 	# sqllogic clickhouse dependencies
 	# a temp hack only to make logic test work on click house as quickly as possible
-    # we need another way to support session on clickhouse-sqlalchemy
-    python3 -m pip install https://github.com/youngsofun/clickhouse-sqlalchemy/archive/a116e3162c699c12e63a689385b547f639c13018.zip
+	# we need another way to support session on clickhouse-sqlalchemy
+	python3 -m pip install https://github.com/youngsofun/clickhouse-sqlalchemy/archive/a116e3162c699c12e63a689385b547f639c13018.zip
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
