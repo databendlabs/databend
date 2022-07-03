@@ -89,3 +89,30 @@ ee	ff
 5	6
 NULL	NULL
 5	6
+==Array(String Nullable)==
+1	['aa', 'bb']
+2	[NULL, 'cc']
+3	['dd', NULL]
+4	['ee', 'ff']
+aa	bb
+NULL	cc
+dd	NULL
+ee	ff
+==Array(Int64 Nullable)==
+1	[1, 2, 3, 4]
+2	[5, NULL, 7, 8]
+3	[NULL, 9, 10, 11]
+1	2
+5	NULL
+NULL	9
+1	2
+==Array(Array(Int64) Nullable)==
+1	[[1, 2], [3, 4]]
+2	[[5, 6], NULL, [7, 8]]
+3	[[9, 10]]
+[1, 2]	[3, 4]
+[5, 6]	NULL
+[9, 10]	NULL
+1	3
+5	NULL
+9	NULL
