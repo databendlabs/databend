@@ -40,7 +40,7 @@ pub use exchange::DataExchangeManager;
 pub use exchange::MergeExchange;
 pub use exchange::ShuffleDataExchange;
 pub use packets::ExecutePartialQueryPacket;
-pub use packets::QueryFragmentsPlanPacket;
 pub use packets::FragmentPlanPacket;
 pub use packets::InitNodesChannelPacket;
 pub use packets::Packet;
+pub use packets::QueryFragmentsPlanPacket;

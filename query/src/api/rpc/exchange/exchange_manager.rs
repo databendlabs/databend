@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use async_channel::Sender;
 use common_arrow::arrow_format::flight::data::FlightData;
-use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
 use common_base::base::Thread;
@@ -28,7 +27,6 @@ use common_base::infallible::ReentrantMutex;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_grpc::ConnectionFactory;
 use common_planners::PlanNode;
 use futures::StreamExt;
 use tonic::Streaming;
@@ -36,31 +34,27 @@ use tonic::Streaming;
 use crate::api::rpc::exchange::exchange_channel::FragmentReceiver;
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
 use crate::api::rpc::exchange::exchange_channel_receiver::ExchangeReceiver;
+use crate::api::rpc::exchange::exchange_channel_sender::ExchangeSender;
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sink::ExchangeSink;
 use crate::api::rpc::exchange::exchange_source::ExchangeSource;
-use crate::api::rpc::flight_actions::InitQueryFragmentsPlan;
-use crate::api::rpc::flight_actions::InitNodesChannel;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::packets::DataPacket;
-use crate::api::rpc::packets::ExecutePartialQueryPacket;
+use crate::api::rpc::Packet;
 use crate::api::DataExchange;
-use crate::api::QueryFragmentsPlanPacket;
-use crate::api::FlightAction;
-use crate::api::FlightClient;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
-use crate::api::rpc::exchange::exchange_channel_sender::ExchangeSender;
-use crate::interpreters::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
+use crate::api::QueryFragmentsPlanPacket;
+use crate::interpreters::QueryFragmentActions;
+use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::Config;
-use crate::api::rpc::Packet;
 
 pub struct DataExchangeManager {
     config: Config,
@@ -78,7 +72,7 @@ impl DataExchangeManager {
     // Create connections for cluster all nodes. We will push data through this connection.
     pub async fn init_nodes_channel(&self, packet: &InitNodesChannelPacket) -> Result<()> {
         let mut exchange_senders = HashMap::with_capacity(packet.target_2_fragments.len());
-        for (target, _fragments) in &packet.target_2_fragments {
+        for target in packet.target_2_fragments.keys() {
             if target != &packet.executor {
                 let config = self.config.clone();
                 let exchange_sender = ExchangeSender::create(config, packet, target).await?;
@@ -111,7 +105,11 @@ impl DataExchangeManager {
     }
 
     // Create a pipeline based on query plan
-    pub fn init_query_fragments_plan(&self, ctx: &Arc<QueryContext>, packet: &QueryFragmentsPlanPacket) -> Result<()> {
+    pub fn init_query_fragments_plan(
+        &self,
+        ctx: &Arc<QueryContext>,
+        packet: &QueryFragmentsPlanPacket,
+    ) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
         // TODO: When the query is not executed for a long time after submission, we need to remove it
@@ -126,10 +124,8 @@ impl DataExchangeManager {
                 query_coordinator.prepare_pipeline()?;
 
                 if packet.executor != packet.request_executor {
-                    query_coordinator.prepare_subscribes_channel(
-                        query_coordinator.ctx.clone(),
-                        packet,
-                    )?;
+                    query_coordinator
+                        .prepare_subscribes_channel(query_coordinator.ctx.clone(), packet)?;
                 }
 
                 Ok(())
@@ -172,31 +168,45 @@ impl DataExchangeManager {
         }
     }
 
-    pub async fn commit_actions(&self, ctx: Arc<QueryContext>, actions: QueryFragmentsActions) -> Result<NewPipeline> {
+    pub async fn commit_actions(
+        &self,
+        ctx: Arc<QueryContext>,
+        actions: QueryFragmentsActions,
+    ) -> Result<NewPipeline> {
         let settings = ctx.get_settings();
         let timeout = settings.get_flight_client_timeout()?;
         let root_actions = actions.get_root_actions()?;
 
         // Submit distributed tasks to all nodes.
         let query_fragments_plan_packets = actions.get_query_fragments_plan_packets()?;
-        query_fragments_plan_packets.commit(&self.config, timeout).await?;
+        query_fragments_plan_packets
+            .commit(&self.config, timeout)
+            .await?;
 
         // Get local pipeline of local task
-        let mut root_pipeline = self.get_root_pipeline(ctx.get_id(), &root_actions)?;
+        let mut root_pipeline = self.get_root_pipeline(ctx.get_id(), root_actions)?;
 
         // Initialize channels between cluster nodes
         let init_nodes_channel_packets = actions.get_init_nodes_channel_packets()?;
         self.init_root_pipeline_channel(ctx.clone(), &query_fragments_plan_packets)?;
-        init_nodes_channel_packets.commit(&self.config, timeout).await?;
+        init_nodes_channel_packets
+            .commit(&self.config, timeout)
+            .await?;
 
         QueryCoordinator::init_pipeline(&mut root_pipeline)?;
         let execute_partial_query_packets = actions.get_execute_partial_query_packets()?;
-        execute_partial_query_packets.commit(&self.config, timeout).await?;
+        execute_partial_query_packets
+            .commit(&self.config, timeout)
+            .await?;
 
         Ok(root_pipeline)
     }
 
-    fn get_root_pipeline(&self, query_id: String, root_actions: &QueryFragmentActions) -> Result<NewPipeline> {
+    fn get_root_pipeline(
+        &self,
+        query_id: String,
+        root_actions: &QueryFragmentActions,
+    ) -> Result<NewPipeline> {
         let schema = root_actions.get_schema()?;
         let fragment_id = root_actions.fragment_id;
         let mut pipeline = NewPipeline::create();
@@ -204,7 +214,11 @@ impl DataExchangeManager {
         Ok(pipeline)
     }
 
-    fn init_root_pipeline_channel(&self, ctx: Arc<QueryContext>, executor_packet: &[QueryFragmentsPlanPacket]) -> Result<()> {
+    fn init_root_pipeline_channel(
+        &self,
+        ctx: Arc<QueryContext>,
+        executor_packet: &[QueryFragmentsPlanPacket],
+    ) -> Result<()> {
         for executor_packet in executor_packet {
             if executor_packet.executor == executor_packet.request_executor {
                 let mut queries_coordinator = self.queries_coordinator.lock();
@@ -214,9 +228,9 @@ impl DataExchangeManager {
                         "Already exists query id {:?}",
                         executor_packet.query_id
                     ))),
-                    Entry::Occupied(mut entry) => {
-                        entry.get_mut().prepare_subscribes_channel(ctx.clone(), executor_packet)
-                    }
+                    Entry::Occupied(mut entry) => entry
+                        .get_mut()
+                        .prepare_subscribes_channel(ctx.clone(), executor_packet),
                 }?;
             }
         }
@@ -274,7 +288,10 @@ struct QueryCoordinator {
 }
 
 impl QueryCoordinator {
-    pub fn create(ctx: &Arc<QueryContext>, executor: &QueryFragmentsPlanPacket) -> Result<QueryCoordinator> {
+    pub fn create(
+        ctx: &Arc<QueryContext>,
+        executor: &QueryFragmentsPlanPacket,
+    ) -> Result<QueryCoordinator> {
         let mut fragments_coordinator = HashMap::with_capacity(executor.fragments.len());
 
         for fragment in &executor.fragments {
@@ -333,7 +350,11 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn prepare_subscribes_channel(&mut self, ctx: Arc<QueryContext>, prepare: &QueryFragmentsPlanPacket) -> Result<()> {
+    pub fn prepare_subscribes_channel(
+        &mut self,
+        ctx: Arc<QueryContext>,
+        prepare: &QueryFragmentsPlanPacket,
+    ) -> Result<()> {
         for source in prepare.source_2_fragments.keys() {
             if source != &prepare.executor {
                 let (tx, rx) = async_channel::bounded(1);
@@ -403,7 +424,9 @@ impl QueryCoordinator {
             if let Err(cause) = executor.execute() {
                 if let Some(request_server_tx) = request_server_tx.take() {
                     futures::executor::block_on(async move {
-                        request_server_tx.send(DataPacket::ErrorCode(cause)).await
+                        if request_server_tx.send(DataPacket::ErrorCode(cause)).await.is_err() {
+                            common_tracing::tracing::warn!("Cannot send error code, request server channel is closed.");
+                        }
                     });
                 }
             }
@@ -411,7 +434,9 @@ impl QueryCoordinator {
             if let Some(cause) = shutdown_cause.lock().take() {
                 if let Some(request_server_tx) = request_server_tx.take() {
                     futures::executor::block_on(async move {
-                        request_server_tx.send(DataPacket::ErrorCode(cause)).await
+                        if request_server_tx.send(DataPacket::ErrorCode(cause)).await.is_err() {
+                            common_tracing::tracing::warn!("Cannot send error code, request server channel is closed.");
+                        }
                     });
                 }
             }
@@ -447,7 +472,10 @@ impl QueryCoordinator {
 
             let mut queries_coordinator = exchange_manager.queries_coordinator.lock();
             queries_coordinator.remove(&query_id);
-            println!("Pipeline execute successfully {}", queries_coordinator.len());
+            println!(
+                "Pipeline execute successfully {}",
+                queries_coordinator.len()
+            );
         });
 
         Ok(())
@@ -462,7 +490,8 @@ impl QueryCoordinator {
             let (flight_tx, fragments_sender) = exchange_sender.listen(ctx, source, runtime)?;
 
             for (fragment_id, fragment_sender) in fragments_sender.into_iter() {
-                self.publish_fragments.insert((target.clone(), fragment_id), fragment_sender);
+                self.publish_fragments
+                    .insert((target.clone(), fragment_id), fragment_sender);
             }
 
             if exchange_sender.is_to_request_server() {
@@ -527,47 +556,6 @@ impl QueryCoordinator {
         Err(ErrorCode::LogicalError(
             "Cannot found fragment channel, It's a bug.",
         ))
-    }
-
-    async fn create_client(config: Config, address: &str) -> Result<FlightClient> {
-        return match config.tls_query_cli_enabled() {
-            true => Ok(FlightClient::new(FlightServiceClient::new(
-                ConnectionFactory::create_rpc_channel(
-                    address.to_owned(),
-                    None,
-                    Some(config.query.to_rpc_client_tls_config()),
-                )
-                    .await?,
-            ))),
-            false => Ok(FlightClient::new(FlightServiceClient::new(
-                ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
-            ))),
-        };
-    }
-
-    fn spawn_pub_worker(&mut self, config: Config, addr: String) -> Result<Sender<DataPacket>> {
-        let ctx = self.ctx.clone();
-        let query_id = self.query_id.clone();
-        let source = self.executor_id.clone();
-        let (tx, rx) = async_channel::bounded(2);
-
-        self.runtime.spawn(async move {
-            let mut connection = Self::create_client(config, &addr).await?;
-
-            if let Err(status) = connection.do_put(&query_id, &source, rx).await {
-                common_tracing::tracing::warn!("Flight connection failure: {:?}", status);
-
-                // Shutdown all query fragments executor and report error to request server.
-                let exchange_manager = ctx.get_exchange_manager();
-                if let Err(cause) = exchange_manager.shutdown_query(&query_id, Some(status)) {
-                    common_tracing::tracing::warn!("Cannot shutdown query, cause {:?}", cause);
-                }
-            }
-
-            common_exception::Result::Ok(())
-        });
-
-        Ok(tx)
     }
 
     pub fn get_fragment_sink(&self, id: usize, endpoint: &str) -> Result<FragmentSender> {

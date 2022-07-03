@@ -29,7 +29,8 @@ use common_exception::Result;
 use futures::future::Either;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentReceiver;
-use crate::api::rpc::packets::{DataPacket, FragmentData, PrecommitBlock};
+use crate::api::rpc::packets::DataPacket;
+use crate::api::rpc::packets::FragmentData;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeReceiver {
@@ -101,7 +102,7 @@ impl ExchangeReceiver {
                     Either::Right((_notified, _recv)) => {
                         while let Ok(recv_data) = rx.try_recv() {
                             let txs = &mut fragments_receiver;
-                            if let Err(cause) = this.on_packet(recv_data, txs).await {
+                            if let Err(_cause) = this.on_packet(recv_data, txs).await {
                                 break;
                             }
                         }
@@ -236,7 +237,7 @@ impl ExchangeReceiver {
             }
             DataPacket::ErrorCode(error_code) => Err(error_code),
             DataPacket::Progress(progress_info) => progress_info.inc(&self.ctx),
-            DataPacket::PrecommitBlock(precommit_block) => precommit_block.precommit(&self.ctx)
+            DataPacket::PrecommitBlock(precommit_block) => precommit_block.precommit(&self.ctx),
         }
     }
 }

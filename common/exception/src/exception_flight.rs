@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_arrow::arrow_format::flight::data::FlightData;
+
 use crate::ErrorCode;
 use crate::Result;
 

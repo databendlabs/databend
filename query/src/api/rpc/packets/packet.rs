@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use crate::Config;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
+
 use crate::api::FlightClient;
+use crate::Config;
 
 #[async_trait::async_trait]
 pub trait Packet: Send + Sync {
@@ -41,7 +42,8 @@ pub async fn create_client(config: &Config, address: &str) -> Result<FlightClien
                 address.to_owned(),
                 None,
                 Some(config.query.to_rpc_client_tls_config()),
-            ).await?,
+            )
+            .await?,
         ))),
         false => Ok(FlightClient::new(FlightServiceClient::new(
             ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,

@@ -12,27 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Read;
 use std::io::Write;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
+use byteorder::BigEndian;
+use byteorder::ReadBytesExt;
+use byteorder::WriteBytesExt;
+use common_arrow::arrow::io::flight::deserialize_batch;
+use common_arrow::arrow::io::flight::serialize_batch;
+use common_arrow::arrow::io::flight::serialize_schema_to_info;
+use common_arrow::arrow::io::ipc::read::deserialize_schema;
+use common_arrow::arrow::io::ipc::write::default_ipc_fields;
+use common_arrow::arrow::io::ipc::write::WriteOptions;
+use common_arrow::arrow::io::ipc::IpcSchema;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::base::ProgressValues;
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
-use std::io::Read;
-use common_arrow::arrow::io::flight::{deserialize_batch, serialize_batch, serialize_schema, serialize_schema_to_info};
-use common_arrow::arrow::io::ipc::IpcSchema;
-use common_arrow::arrow::io::ipc::read::deserialize_schema;
-use common_arrow::arrow::io::ipc::write::{default_ipc_fields, WriteOptions};
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
-use common_io::prelude::{BinaryRead, BinaryWrite, BinaryWriteBuf};
+
 use crate::sessions::QueryContext;
 
 pub enum FragmentData {
@@ -40,6 +45,7 @@ pub enum FragmentData {
     Data(usize, FlightData),
 }
 
+#[allow(clippy::enum_variant_names)]
 pub enum ProgressInfo {
     ScanProgress(ProgressValues),
     WriteProgress(ProgressValues),
@@ -176,11 +182,15 @@ impl From<PrecommitBlock> for FlightData {
         let header_len = schema.len() + data_flight.data_header.len();
         let mut data_header = Vec::with_capacity(header_len + 8);
 
-        data_header.write_u64::<BigEndian>(schema.len() as u64).unwrap();
-        data_header.write_u64::<BigEndian>(data_flight.data_header.len() as u64).unwrap();
+        data_header
+            .write_u64::<BigEndian>(schema.len() as u64)
+            .unwrap();
+        data_header
+            .write_u64::<BigEndian>(data_flight.data_header.len() as u64)
+            .unwrap();
 
-        data_header.write_all(&schema);
-        data_header.write_all(&data_flight.data_header);
+        data_header.write_all(&schema).unwrap();
+        data_header.write_all(&data_flight.data_header).unwrap();
 
         FlightData {
             data_header,
@@ -200,10 +210,14 @@ impl TryFrom<FlightData> for DataPacket {
         }
 
         match flight_data.app_metadata[0] {
-            0x01 => Ok(DataPacket::FragmentData(FragmentData::try_from(flight_data)?)),
+            0x01 => Ok(DataPacket::FragmentData(FragmentData::try_from(
+                flight_data,
+            )?)),
             0x02 => Ok(DataPacket::ErrorCode(ErrorCode::try_from(flight_data)?)),
             0x03 => Ok(DataPacket::Progress(ProgressInfo::try_from(flight_data)?)),
-            0x04 => Ok(DataPacket::PrecommitBlock(PrecommitBlock::try_from(flight_data)?)),
+            0x04 => Ok(DataPacket::PrecommitBlock(PrecommitBlock::try_from(
+                flight_data,
+            )?)),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
     }
@@ -215,15 +229,17 @@ impl TryFrom<FlightData> for FragmentData {
     fn try_from(flight_data: FlightData) -> Result<Self> {
         match flight_data.app_metadata[1..].try_into() {
             Err(_) => Err(ErrorCode::BadBytes("Cannot parse inf usize.")),
-            Ok(slice) => Ok(match flight_data.data_header.is_empty() && flight_data.data_body.is_empty() {
-                true => FragmentData::End(usize::from_be_bytes(slice)),
-                false => FragmentData::Data(usize::from_be_bytes(slice), FlightData {
-                    app_metadata: vec![],
-                    flight_descriptor: None,
-                    data_body: flight_data.data_body,
-                    data_header: flight_data.data_header,
-                }),
-            })
+            Ok(slice) => Ok(
+                match flight_data.data_header.is_empty() && flight_data.data_body.is_empty() {
+                    true => FragmentData::End(usize::from_be_bytes(slice)),
+                    false => FragmentData::Data(usize::from_be_bytes(slice), FlightData {
+                        app_metadata: vec![],
+                        flight_descriptor: None,
+                        data_body: flight_data.data_body,
+                        data_header: flight_data.data_header,
+                    }),
+                },
+            ),
         }
     }
 }
@@ -241,7 +257,10 @@ impl TryFrom<FlightData> for ProgressInfo {
             1 => Ok(ProgressInfo::ScanProgress(ProgressValues { rows, bytes })),
             2 => Ok(ProgressInfo::WriteProgress(ProgressValues { rows, bytes })),
             3 => Ok(ProgressInfo::ResultProgress(ProgressValues { rows, bytes })),
-            _ => Err(ErrorCode::UnImplement(format!("Unimplemented progress info type, {}", info_type))),
+            _ => Err(ErrorCode::UnImplement(format!(
+                "Unimplemented progress info type, {}",
+                info_type
+            ))),
         }
     }
 }
@@ -258,8 +277,8 @@ impl TryFrom<FlightData> for PrecommitBlock {
         let mut schema_binary = vec![0; schema_binary_len];
         let mut data_flight_data_header = vec![0; data_flight_data_header_len];
 
-        data_header.read_exact(&mut schema_binary);
-        data_header.read_exact(&mut data_flight_data_header);
+        data_header.read_exact(&mut schema_binary)?;
+        data_header.read_exact(&mut data_flight_data_header)?;
         let (arrow_schema, _) = deserialize_schema(&schema_binary)?;
 
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
@@ -275,9 +294,13 @@ impl TryFrom<FlightData> for PrecommitBlock {
             flight_descriptor: None,
         };
 
-        let chunk = deserialize_batch(&flight, &arrow_schema.fields, &ipc_schema, &Default::default())?;
+        let chunk = deserialize_batch(
+            &flight,
+            &arrow_schema.fields,
+            &ipc_schema,
+            &Default::default(),
+        )?;
         let data_schema = Arc::new(DataSchema::from(arrow_schema));
         Ok(PrecommitBlock(DataBlock::from_chunk(&data_schema, &chunk)?))
     }
 }
-

@@ -16,8 +16,8 @@
 
 pub mod exception;
 mod exception_code;
-mod exception_into;
 mod exception_flight;
+mod exception_into;
 
 pub use exception::ErrorCode;
 pub use exception::Result;

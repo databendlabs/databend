@@ -13,27 +13,32 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use common_base::base::tokio::time::sleep;
-use async_channel::{Recv, RecvError, Sender};
-use futures_util::future::Either;
-use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow::io::ipc::write::{default_ipc_fields, WriteOptions};
+
+use async_channel::Sender;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::{ProgressValues, Runtime, TrySpawn};
-use common_base::base::tokio::sync::futures::Notified;
-use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::base::tokio::time::sleep;
+use common_base::base::Runtime;
+use common_base::base::TrySpawn;
 use common_base::infallible::Mutex;
-use crate::api::rpc::packets::{DataPacket, FragmentData, PrecommitBlock, ProgressInfo};
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_grpc::ConnectionFactory;
-use crate::api::{FlightClient, InitNodesChannelPacket};
+use futures_util::future::Either;
+
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
-use crate::Config;
+use crate::api::rpc::packets::DataPacket;
+use crate::api::rpc::packets::FragmentData;
+use crate::api::rpc::packets::PrecommitBlock;
+use crate::api::rpc::packets::ProgressInfo;
+use crate::api::FlightClient;
+use crate::api::InitNodesChannelPacket;
 use crate::sessions::QueryContext;
+use crate::Config;
 
 pub struct ExchangeSender {
     query_id: String,
@@ -45,7 +50,11 @@ pub struct ExchangeSender {
 }
 
 impl ExchangeSender {
-    pub async fn create(config: Config, packet: &InitNodesChannelPacket, target: &str) -> Result<ExchangeSender> {
+    pub async fn create(
+        config: Config,
+        packet: &InitNodesChannelPacket,
+        target: &str,
+    ) -> Result<ExchangeSender> {
         let target_node_info = &packet.target_nodes_info[target];
         let address = target_node_info.flight_address.to_string();
         let flight_client = Self::create_client(config, &address).await?;
@@ -54,10 +63,7 @@ impl ExchangeSender {
         let mut target_fragments_finished = HashMap::with_capacity(target_fragments_id.len());
 
         for target_fragment_id in target_fragments_id {
-            target_fragments_finished.insert(
-                *target_fragment_id,
-                Arc::new(AtomicBool::new(false)),
-            );
+            target_fragments_finished.insert(*target_fragment_id, Arc::new(AtomicBool::new(false)));
         }
 
         Ok(ExchangeSender {
@@ -74,13 +80,19 @@ impl ExchangeSender {
         self.target_is_request_server
     }
 
-    pub fn listen(&self, ctx: Arc<QueryContext>, source: String, runtime: Arc<Runtime>) -> Result<(Sender<DataPacket>, HashMap<usize, FragmentSender>)> {
+    pub fn listen(
+        &self,
+        ctx: Arc<QueryContext>,
+        source: String,
+        runtime: Arc<Runtime>,
+    ) -> Result<(Sender<DataPacket>, HashMap<usize, FragmentSender>)> {
         let flight_tx = self.listen_flight(ctx.clone(), &source, runtime.clone())?;
         let mut target_fragments_senders = HashMap::with_capacity(self.target_fragments.len());
 
         for target_fragment_id in &self.target_fragments {
             let runtime = runtime.clone();
-            let sender = self.listen_fragment(ctx.clone(), flight_tx.clone(), *target_fragment_id, runtime)?;
+            let sender =
+                self.listen_fragment(ctx.clone(), flight_tx.clone(), *target_fragment_id, runtime)?;
             target_fragments_senders.insert(
                 *target_fragment_id,
                 FragmentSender::create_unrecorded(sender),
@@ -90,7 +102,13 @@ impl ExchangeSender {
         Ok((flight_tx, target_fragments_senders))
     }
 
-    fn listen_fragment(&self, ctx: Arc<QueryContext>, c_tx: Sender<DataPacket>, fragment_id: usize, runtime: Arc<Runtime>) -> Result<Sender<DataPacket>> {
+    fn listen_fragment(
+        &self,
+        ctx: Arc<QueryContext>,
+        c_tx: Sender<DataPacket>,
+        fragment_id: usize,
+        runtime: Arc<Runtime>,
+    ) -> Result<Sender<DataPacket>> {
         let mut join_handlers = self.join_handlers.lock();
 
         let to_request_server = self.is_to_request_server();
@@ -129,7 +147,7 @@ impl ExchangeSender {
                         }
 
                         let fragment_end = FragmentData::End(fragment_id);
-                        c_tx.send(DataPacket::FragmentData(fragment_end)).await;
+                        c_tx.send(DataPacket::FragmentData(fragment_end)).await.ok();
                         break 'fragment_loop;
                     }
                 };
@@ -146,7 +164,9 @@ impl ExchangeSender {
         if scan_progress_values.rows != 0 || scan_progress_values.bytes != 0 {
             let progress = ProgressInfo::ScanProgress(scan_progress_values);
             if c_tx.send(DataPacket::Progress(progress)).await.is_err() {
-                common_tracing::tracing::warn!("Send scan progress values error, because flight connection is closed.");
+                common_tracing::tracing::warn!(
+                    "Send scan progress values error, because flight connection is closed."
+                );
                 return;
             }
         }
@@ -157,7 +177,9 @@ impl ExchangeSender {
         if write_progress_values.rows != 0 || write_progress_values.bytes != 0 {
             let progress = ProgressInfo::WriteProgress(write_progress_values);
             if c_tx.send(DataPacket::Progress(progress)).await.is_err() {
-                common_tracing::tracing::warn!("Send write progress values error, because flight connection is closed.");
+                common_tracing::tracing::warn!(
+                    "Send write progress values error, because flight connection is closed."
+                );
                 return;
             }
         }
@@ -168,8 +190,9 @@ impl ExchangeSender {
         if result_progress_values.rows != 0 || result_progress_values.bytes != 0 {
             let progress = ProgressInfo::ResultProgress(result_progress_values);
             if c_tx.send(DataPacket::Progress(progress)).await.is_err() {
-                common_tracing::tracing::warn!("Send result progress values error, because flight connection is closed.");
-                return;
+                common_tracing::tracing::warn!(
+                    "Send result progress values error, because flight connection is closed."
+                );
             }
         }
     }
@@ -181,8 +204,14 @@ impl ExchangeSender {
             for precommit_block in precommit_blocks {
                 if !precommit_block.is_empty() {
                     let precommit_block = PrecommitBlock(precommit_block);
-                    if c_tx.send(DataPacket::PrecommitBlock(precommit_block)).await.is_err() {
-                        common_tracing::tracing::warn!("Send precommit block error, because flight connection is closed.");
+                    if c_tx
+                        .send(DataPacket::PrecommitBlock(precommit_block))
+                        .await
+                        .is_err()
+                    {
+                        common_tracing::tracing::warn!(
+                            "Send precommit block error, because flight connection is closed."
+                        );
                         return;
                     }
                 }
@@ -197,7 +226,9 @@ impl ExchangeSender {
     }
 
     pub async fn join(&self) -> Result<()> {
-        while let Some(join_handler) = self.join_handlers.lock().pop() {
+        while let Some(join_handler) = {
+            self.join_handlers.lock().pop()
+        } {
             if let Err(join_cause) = join_handler.await {
                 if join_cause.is_panic() {
                     let cause = join_cause.into_panic();
@@ -215,8 +246,13 @@ impl ExchangeSender {
         Ok(())
     }
 
-    fn listen_flight(&self, ctx: Arc<QueryContext>, source: &String, runtime: Arc<Runtime>) -> Result<Sender<DataPacket>> {
-        let source = source.clone();
+    fn listen_flight(
+        &self,
+        ctx: Arc<QueryContext>,
+        source: &str,
+        runtime: Arc<Runtime>,
+    ) -> Result<Sender<DataPacket>> {
+        let source = source.to_owned();
         let query_id = self.query_id.clone();
         let mut connection = self.get_flight_client()?;
 
@@ -241,7 +277,9 @@ impl ExchangeSender {
     fn get_flight_client(&self) -> Result<FlightClient> {
         match self.flight_client.lock().take() {
             Some(flight_client) => Ok(flight_client),
-            None => Err(ErrorCode::LogicalError("Cannot get flight client. It's a bug.")),
+            None => Err(ErrorCode::LogicalError(
+                "Cannot get flight client. It's a bug.",
+            )),
         }
     }
 

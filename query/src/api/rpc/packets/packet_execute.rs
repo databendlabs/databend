@@ -15,12 +15,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_meta_types::NodeInfo;
-use crate::api::rpc::Packet;
-use crate::Config;
-use common_exception::{ErrorCode, Result};
-use crate::api::FlightAction;
+
 use crate::api::rpc::packets::packet::create_client;
+use crate::api::rpc::Packet;
+use crate::api::FlightAction;
+use crate::Config;
 
 // Run all query fragments of query in the node
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

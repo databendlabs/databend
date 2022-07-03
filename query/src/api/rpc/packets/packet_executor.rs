@@ -14,19 +14,17 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+
 use common_exception::ErrorCode;
-use common_grpc::ConnectionFactory;
-
-use common_meta_types::NodeInfo;
-use crate::api::{FlightAction, FlightClient};
-use crate::api::rpc::packets::packet::{create_client, Packet};
-
 use common_exception::Result;
-use crate::api::rpc::flight_actions::InitQueryFragmentsPlan;
-use crate::api::rpc::packets::packet_fragment::FragmentPlanPacket;
-use crate::Config;
+use common_meta_types::NodeInfo;
 
+use crate::api::rpc::flight_actions::InitQueryFragmentsPlan;
+use crate::api::rpc::packets::packet::create_client;
+use crate::api::rpc::packets::packet::Packet;
+use crate::api::rpc::packets::packet_fragment::FragmentPlanPacket;
+use crate::api::FlightAction;
+use crate::Config;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct QueryFragmentsPlanPacket {
@@ -71,8 +69,9 @@ impl Packet for QueryFragmentsPlanPacket {
 
         let executor = &self.executors_info[&self.executor];
         let mut conn = create_client(config, &executor.flight_address).await?;
-        let action = FlightAction::InitQueryFragmentsPlan(InitQueryFragmentsPlan { executor_packet: self.clone() });
+        let action = FlightAction::InitQueryFragmentsPlan(InitQueryFragmentsPlan {
+            executor_packet: self.clone(),
+        });
         conn.execute_action(action, timeout).await
     }
 }
-

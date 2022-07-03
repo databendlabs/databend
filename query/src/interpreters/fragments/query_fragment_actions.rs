@@ -26,9 +26,9 @@ use common_planners::PlanNode;
 
 use crate::api::DataExchange;
 use crate::api::ExecutePartialQueryPacket;
-use crate::api::QueryFragmentsPlanPacket;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
+use crate::api::QueryFragmentsPlanPacket;
 use crate::sessions::QueryContext;
 
 // Query plan fragment with executor name

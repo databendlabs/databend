@@ -21,8 +21,8 @@ use common_planners::Expression;
 use common_planners::PlanNode;
 use tonic::Status;
 
-use crate::api::QueryFragmentsPlanPacket;
 use crate::api::InitNodesChannelPacket;
+use crate::api::QueryFragmentsPlanPacket;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ShuffleAction {
@@ -237,7 +237,9 @@ impl TryInto<FlightAction> for Action {
             "PrepareShuffleAction" => Ok(FlightAction::PrepareShuffleAction(self.body.try_into()?)),
             "BroadcastAction" => Ok(FlightAction::BroadcastAction(self.body.try_into()?)),
             "CancelAction" => Ok(FlightAction::CancelAction(self.body.try_into()?)),
-            "InitQueryFragmentsPlan" => Ok(FlightAction::InitQueryFragmentsPlan(self.body.try_into()?)),
+            "InitQueryFragmentsPlan" => {
+                Ok(FlightAction::InitQueryFragmentsPlan(self.body.try_into()?))
+            }
             "InitNodesChannel" => Ok(FlightAction::InitNodesChannel(self.body.try_into()?)),
             "ExecutePartialQuery" => match String::from_utf8(self.body.to_owned()) {
                 Ok(query_id) => Ok(FlightAction::ExecutePartialQuery(query_id)),
