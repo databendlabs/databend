@@ -164,7 +164,7 @@ Try to read 10 rows from csv and insert into the `mytable`.
 COPY INTO mytable
   FROM 's3://mybucket/data.csv'
   credentials=(aws_key_id='<AWS_ACCESS_KEY_ID>' aws_secret_key='<AWS_SECRET_ACCESS_KEY>')
-  FILE_FORMAT = (type = "CSV" field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
+  FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
 
 Try to load data from a gzip compressed csv and insert into `mytable`
@@ -173,5 +173,5 @@ Try to load data from a gzip compressed csv and insert into `mytable`
 COPY INTO mytable
   FROM 's3://mybucket/data.csv.gz'
   credentials=(aws_key_id='<AWS_ACCESS_KEY_ID>' aws_secret_key='<AWS_SECRET_ACCESS_KEY>')
-  FILE_FORMAT = (type = "CSV" field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = GZIP) size_limit=10;
+  FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = GZIP) size_limit=10;
 ```
