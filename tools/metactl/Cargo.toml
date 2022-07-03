@@ -22,7 +22,7 @@ common-meta-sled-store = { path = "../../common/meta/sled-store" }
 common-meta-types = { path = "../../common/meta/types" }
 common-tracing = { path = "../../common/tracing" }
 databend-meta = { path = "../../metasrv" }
-openraft = { git = "https://github.com/datafuselabs/openraft", rev = "v0.7.0-alpha.1" }
+openraft = { git = "https://github.com/datafuselabs/openraft", rev = "v0.7.0-alpha.2" }
 
 # Crates.io dependencies
 anyhow = "1.0.58"
