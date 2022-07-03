@@ -81,9 +81,6 @@ impl Rule for RulePushDownFilterJoin {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let join_expr = s_expr.child(0)?;
         let mut join: LogicalInnerJoin = join_expr.plan().clone().try_into()?;
-        if join.join_type == JoinType::Mark {
-            return Ok(());
-        }
 
         let rel_expr = RelExpr::with_s_expr(join_expr);
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
