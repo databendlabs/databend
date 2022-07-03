@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -23,68 +25,34 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
+use std::io::Read;
+use common_arrow::arrow::io::flight::{deserialize_batch, serialize_batch, serialize_schema, serialize_schema_to_info};
+use common_arrow::arrow::io::ipc::IpcSchema;
+use common_arrow::arrow::io::ipc::read::deserialize_schema;
+use common_arrow::arrow::io::ipc::write::{default_ipc_fields, WriteOptions};
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
+use common_io::prelude::{BinaryRead, BinaryWrite, BinaryWriteBuf};
+use crate::sessions::QueryContext;
 
-pub enum DataPacket {
+pub enum FragmentData {
+    End(usize),
     Data(usize, FlightData),
-    EndFragment(usize),
-    ErrorCode(ErrorCode),
-    Progress(ProgressValues),
 }
 
-impl DataPacket {
-    pub fn from_flight(data: FlightData) -> Result<DataPacket> {
-        if data.app_metadata.is_empty() {
-            return Err(ErrorCode::BadBytes("Flight data app metadata is empty."));
-        }
+pub enum ProgressInfo {
+    ScanProgress(ProgressValues),
+    WriteProgress(ProgressValues),
+    ResultProgress(ProgressValues),
+}
 
-        match data.app_metadata[0] {
-            0x01 => DataPacket::flight_data_packet(data),
-            0x02 => DataPacket::error_code(data),
-            0x03 => DataPacket::progress_values(data),
-            0x04 => DataPacket::fragment_end(data),
-            _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
-        }
-    }
+pub struct PrecommitBlock(pub DataBlock);
 
-    fn error_code(data: FlightData) -> Result<DataPacket> {
-        if let Ok(slice) = data.data_header.try_into() {
-            let code = u16::from_be_bytes(slice);
-            let message = String::from_utf8(data.data_body)?;
-            return Ok(DataPacket::ErrorCode(ErrorCode::create(
-                code, message, None, None,
-            )));
-        }
-
-        Err(ErrorCode::BadBytes("Cannot parse inf usize."))
-    }
-
-    fn progress_values(mut data: FlightData) -> Result<DataPacket> {
-        let mut data_body = data.data_body.as_slice();
-        let rows = data_body.read_u64::<BigEndian>()? as usize;
-        let bytes = data_body.read_u64::<BigEndian>()? as usize;
-        Ok(DataPacket::Progress(ProgressValues { rows, bytes }))
-    }
-
-    fn fragment_end(data: FlightData) -> Result<DataPacket> {
-        if let Ok(slice) = data.data_body.try_into() {
-            return Ok(DataPacket::EndFragment(usize::from_be_bytes(slice)));
-        }
-
-        Err(ErrorCode::BadBytes("Cannot parse inf usize."))
-    }
-
-    fn flight_data_packet(data: FlightData) -> Result<DataPacket> {
-        if let Ok(slice) = data.app_metadata[1..].try_into() {
-            return Ok(DataPacket::Data(usize::from_be_bytes(slice), FlightData {
-                app_metadata: vec![],
-                data_body: data.data_body,
-                data_header: data.data_header,
-                flight_descriptor: None,
-            }));
-        }
-
-        Err(ErrorCode::BadBytes("Cannot parse inf uszie."))
-    }
+pub enum DataPacket {
+    ErrorCode(ErrorCode),
+    Progress(ProgressInfo),
+    FragmentData(FragmentData),
+    PrecommitBlock(PrecommitBlock),
 }
 
 pub struct DataPacketStream {
@@ -104,43 +72,212 @@ impl Stream for DataPacketStream {
         match self.rx.poll_next_unpin(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(None) => Poll::Ready(None),
-            Poll::Ready(Some(data_packet)) => match data_packet {
-                DataPacket::Data(fragment_id, data) => {
-                    let mut app_metadata = vec![0x01];
-                    app_metadata.extend_from_slice(&fragment_id.to_be_bytes());
+            Poll::Ready(Some(packet)) => Poll::Ready(Some(FlightData::from(packet))),
+        }
+    }
+}
 
-                    Poll::Ready(Some(FlightData {
-                        app_metadata,
-                        data_body: data.data_body,
-                        data_header: data.data_header,
-                        flight_descriptor: None,
-                    }))
-                }
-                DataPacket::ErrorCode(error) => Poll::Ready(Some(FlightData {
-                    app_metadata: vec![0x02],
-                    data_body: error.message().into_bytes(),
-                    data_header: error.code().to_be_bytes().to_vec(),
-                    flight_descriptor: None,
-                })),
-                DataPacket::Progress(values) => {
-                    let mut bytes = Vec::with_capacity(16);
-                    bytes.write_u64::<BigEndian>(values.rows as u64);
-                    bytes.write_u64::<BigEndian>(values.bytes as u64);
+impl FragmentData {
+    pub fn get_fragment_id(&self) -> usize {
+        match self {
+            FragmentData::End(fragment_id) => *fragment_id,
+            FragmentData::Data(fragment_id, _) => *fragment_id,
+        }
+    }
+}
 
-                    Poll::Ready(Some(FlightData {
-                        app_metadata: vec![0x03],
-                        data_body: bytes,
-                        data_header: vec![],
-                        flight_descriptor: None,
-                    }))
-                }
-                DataPacket::EndFragment(fragment) => Poll::Ready(Some(FlightData {
-                    app_metadata: vec![0x04],
-                    data_header: vec![],
-                    data_body: fragment.to_be_bytes().to_vec(),
-                    flight_descriptor: None,
-                })),
+impl ProgressInfo {
+    pub fn inc(&self, ctx: &Arc<QueryContext>) -> Result<()> {
+        match self {
+            ProgressInfo::ScanProgress(values) => ctx.get_scan_progress().incr(values),
+            ProgressInfo::WriteProgress(values) => ctx.get_write_progress().incr(values),
+            ProgressInfo::ResultProgress(values) => ctx.get_result_progress().incr(values),
+        };
+
+        Ok(())
+    }
+}
+
+impl PrecommitBlock {
+    pub fn precommit(&self, ctx: &Arc<QueryContext>) -> Result<()> {
+        ctx.push_precommit_block(self.0.clone());
+        Ok(())
+    }
+}
+
+impl From<DataPacket> for FlightData {
+    fn from(packet: DataPacket) -> Self {
+        match packet {
+            DataPacket::ErrorCode(error) => FlightData::from(error),
+            DataPacket::Progress(progress_info) => FlightData::from(progress_info),
+            DataPacket::FragmentData(fragment_data) => FlightData::from(fragment_data),
+            DataPacket::PrecommitBlock(precommit_block) => FlightData::from(precommit_block),
+        }
+    }
+}
+
+impl From<FragmentData> for FlightData {
+    fn from(data: FragmentData) -> Self {
+        let mut app_metadata = vec![0x01];
+        let fragment_id = data.get_fragment_id();
+        app_metadata.extend_from_slice(&fragment_id.to_be_bytes());
+
+        match data {
+            FragmentData::End(_) => FlightData {
+                app_metadata,
+                data_body: vec![],
+                data_header: vec![],
+                flight_descriptor: None,
+            },
+            FragmentData::Data(_, flight_data) => FlightData {
+                app_metadata,
+                data_body: flight_data.data_body,
+                data_header: flight_data.data_header,
+                flight_descriptor: None,
             },
         }
     }
 }
+
+impl From<ProgressInfo> for FlightData {
+    fn from(info: ProgressInfo) -> Self {
+        let (info_type, values) = match info {
+            ProgressInfo::ScanProgress(values) => (1_u8, values),
+            ProgressInfo::WriteProgress(values) => (2_u8, values),
+            ProgressInfo::ResultProgress(values) => (3_u8, values),
+        };
+
+        let mut bytes = Vec::with_capacity(16);
+        bytes.write_u8(info_type).unwrap();
+        bytes.write_u64::<BigEndian>(values.rows as u64).unwrap();
+        bytes.write_u64::<BigEndian>(values.bytes as u64).unwrap();
+
+        FlightData {
+            data_body: bytes,
+            data_header: vec![],
+            app_metadata: vec![0x03],
+            flight_descriptor: None,
+        }
+    }
+}
+
+impl From<PrecommitBlock> for FlightData {
+    fn from(block: PrecommitBlock) -> Self {
+        let data_block = block.0;
+        let arrow_schema = data_block.schema().to_arrow();
+        let schema = serialize_schema_to_info(&arrow_schema, None).unwrap();
+
+        // schema_flight
+        let options = WriteOptions { compression: None };
+        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        let chunks = data_block.try_into().unwrap();
+        let (_dicts, data_flight) = serialize_batch(&chunks, &ipc_fields, &options);
+
+        let header_len = schema.len() + data_flight.data_header.len();
+        let mut data_header = Vec::with_capacity(header_len + 8);
+
+        data_header.write_u64::<BigEndian>(schema.len() as u64).unwrap();
+        data_header.write_u64::<BigEndian>(data_flight.data_header.len() as u64).unwrap();
+
+        data_header.write_all(&schema);
+        data_header.write_all(&data_flight.data_header);
+
+        FlightData {
+            data_header,
+            data_body: data_flight.data_body,
+            flight_descriptor: None,
+            app_metadata: vec![0x04],
+        }
+    }
+}
+
+impl TryFrom<FlightData> for DataPacket {
+    type Error = ErrorCode;
+
+    fn try_from(flight_data: FlightData) -> Result<Self> {
+        if flight_data.app_metadata.is_empty() {
+            return Err(ErrorCode::BadBytes("Flight data app metadata is empty."));
+        }
+
+        match flight_data.app_metadata[0] {
+            0x01 => Ok(DataPacket::FragmentData(FragmentData::try_from(flight_data)?)),
+            0x02 => Ok(DataPacket::ErrorCode(ErrorCode::try_from(flight_data)?)),
+            0x03 => Ok(DataPacket::Progress(ProgressInfo::try_from(flight_data)?)),
+            0x04 => Ok(DataPacket::PrecommitBlock(PrecommitBlock::try_from(flight_data)?)),
+            _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
+        }
+    }
+}
+
+impl TryFrom<FlightData> for FragmentData {
+    type Error = ErrorCode;
+
+    fn try_from(flight_data: FlightData) -> Result<Self> {
+        match flight_data.app_metadata[1..].try_into() {
+            Err(_) => Err(ErrorCode::BadBytes("Cannot parse inf usize.")),
+            Ok(slice) => Ok(match flight_data.data_header.is_empty() && flight_data.data_body.is_empty() {
+                true => FragmentData::End(usize::from_be_bytes(slice)),
+                false => FragmentData::Data(usize::from_be_bytes(slice), FlightData {
+                    app_metadata: vec![],
+                    flight_descriptor: None,
+                    data_body: flight_data.data_body,
+                    data_header: flight_data.data_header,
+                }),
+            })
+        }
+    }
+}
+
+impl TryFrom<FlightData> for ProgressInfo {
+    type Error = ErrorCode;
+
+    fn try_from(flight_data: FlightData) -> Result<Self> {
+        let mut data_body = flight_data.data_body.as_slice();
+        let info_type = data_body.read_u8()?;
+        let rows = data_body.read_u64::<BigEndian>()? as usize;
+        let bytes = data_body.read_u64::<BigEndian>()? as usize;
+
+        match info_type {
+            1 => Ok(ProgressInfo::ScanProgress(ProgressValues { rows, bytes })),
+            2 => Ok(ProgressInfo::WriteProgress(ProgressValues { rows, bytes })),
+            3 => Ok(ProgressInfo::ResultProgress(ProgressValues { rows, bytes })),
+            _ => Err(ErrorCode::UnImplement(format!("Unimplemented progress info type, {}", info_type))),
+        }
+    }
+}
+
+impl TryFrom<FlightData> for PrecommitBlock {
+    type Error = ErrorCode;
+
+    fn try_from(flight_data: FlightData) -> Result<Self> {
+        let mut data_header = flight_data.data_header.as_slice();
+
+        let schema_binary_len = data_header.read_u64::<BigEndian>()? as usize;
+        let data_flight_data_header_len = data_header.read_u64::<BigEndian>()? as usize;
+
+        let mut schema_binary = vec![0; schema_binary_len];
+        let mut data_flight_data_header = vec![0; data_flight_data_header_len];
+
+        data_header.read_exact(&mut schema_binary);
+        data_header.read_exact(&mut data_flight_data_header);
+        let (arrow_schema, _) = deserialize_schema(&schema_binary)?;
+
+        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        let ipc_schema = IpcSchema {
+            fields: ipc_fields,
+            is_little_endian: true,
+        };
+
+        let flight = FlightData {
+            app_metadata: vec![],
+            data_header: data_flight_data_header,
+            data_body: flight_data.data_body,
+            flight_descriptor: None,
+        };
+
+        let chunk = deserialize_batch(&flight, &arrow_schema.fields, &ipc_schema, &Default::default())?;
+        let data_schema = Arc::new(DataSchema::from(arrow_schema));
+        Ok(PrecommitBlock(DataBlock::from_chunk(&data_schema, &chunk)?))
+    }
+}
+

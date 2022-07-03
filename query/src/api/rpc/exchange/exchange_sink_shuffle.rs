@@ -24,7 +24,7 @@ use common_exception::Result;
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
-use crate::api::rpc::packets::DataPacket;
+use crate::api::rpc::packets::{DataPacket, FragmentData};
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
@@ -244,9 +244,8 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
                         ));
                     }
 
-                    output_data
-                        .serialized_blocks
-                        .push(Some(DataPacket::Data(self.fragment_id, values)));
+                    let data = FragmentData::Data(self.fragment_id, values);
+                    output_data.serialized_blocks.push(Some(DataPacket::FragmentData(data)));
                 }
             }
 

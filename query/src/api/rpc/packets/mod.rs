@@ -26,3 +26,6 @@ pub use packet_executor::QueryFragmentsPlanPacket;
 pub use packet_fragment::FragmentPlanPacket;
 pub use packet_publisher::InitNodesChannelPacket;
 pub use packet::Packet;
+pub use packet_data::ProgressInfo;
+pub use packet_data::FragmentData;
+pub use packet_data::PrecommitBlock;

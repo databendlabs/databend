@@ -445,9 +445,9 @@ impl QueryCoordinator {
                 });
             }
 
-            // let mut queries_coordinator = exchange_manager.queries_coordinator.lock();
-            // queries_coordinator.remove(&query_id);
-            println!("Pipeline execute successfully");
+            let mut queries_coordinator = exchange_manager.queries_coordinator.lock();
+            queries_coordinator.remove(&query_id);
+            println!("Pipeline execute successfully {}", queries_coordinator.len());
         });
 
         Ok(())
@@ -505,7 +505,7 @@ impl QueryCoordinator {
                 'fragment_loop: while let Some(flight_data) = stream.next().await {
                     let data_packet = match flight_data {
                         Err(status) => DataPacket::ErrorCode(ErrorCode::from(status)),
-                        Ok(flight_data) => match DataPacket::from_flight(flight_data) {
+                        Ok(flight_data) => match DataPacket::try_from(flight_data) {
                             Ok(data_packet) => data_packet,
                             Err(error_code) => DataPacket::ErrorCode(error_code),
                         },

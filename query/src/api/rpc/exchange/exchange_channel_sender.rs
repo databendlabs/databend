@@ -19,13 +19,15 @@ use std::time::Duration;
 use common_base::base::tokio::time::sleep;
 use async_channel::{Recv, RecvError, Sender};
 use futures_util::future::Either;
+use common_arrow::arrow::io::flight::serialize_batch;
+use common_arrow::arrow::io::ipc::write::{default_ipc_fields, WriteOptions};
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::{ProgressValues, Runtime, TrySpawn};
 use common_base::base::tokio::sync::futures::Notified;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::infallible::Mutex;
-use crate::api::rpc::packets::DataPacket;
+use crate::api::rpc::packets::{DataPacket, FragmentData, PrecommitBlock, ProgressInfo};
 use common_exception::{ErrorCode, Result};
 use common_grpc::ConnectionFactory;
 use crate::api::{FlightClient, InitNodesChannelPacket};
@@ -98,12 +100,13 @@ impl ExchangeSender {
         join_handlers.push(runtime.spawn(async move {
             let mut sleep_future = Box::pin(sleep(Duration::from_millis(500)));
 
-            'fragment_loop: while !is_finished.load(Ordering::Relaxed) {
+            // flight connect is closed if c_tx is closed.
+            'fragment_loop: while !is_finished.load(Ordering::Relaxed) && !c_tx.is_closed() {
                 match futures::future::select(sleep_future, f_rx.recv()).await {
                     Either::Left((_, _)) => {
                         if to_request_server {
-                            let scan_progress = ctx.get_scan_progress();
-                            c_tx.send(DataPacket::Progress(scan_progress.fetch())).await;
+                            ExchangeSender::send_progress_if_need(&ctx, &c_tx).await;
+                            ExchangeSender::send_precommit_if_need(&ctx, &c_tx).await;
                         }
 
                         sleep_future = Box::pin(sleep(Duration::from_millis(500)));
@@ -121,11 +124,12 @@ impl ExchangeSender {
 
                         // Disconnect channel, exit loop
                         if to_request_server {
-                            let scan_progress = ctx.get_scan_progress();
-                            c_tx.send(DataPacket::Progress(scan_progress.fetch())).await;
+                            ExchangeSender::send_progress_if_need(&ctx, &c_tx).await;
+                            ExchangeSender::send_precommit_if_need(&ctx, &c_tx).await;
                         }
 
-                        c_tx.send(DataPacket::EndFragment(fragment_id)).await;
+                        let fragment_end = FragmentData::End(fragment_id);
+                        c_tx.send(DataPacket::FragmentData(fragment_end)).await;
                         break 'fragment_loop;
                     }
                 };
@@ -133,6 +137,57 @@ impl ExchangeSender {
         }));
 
         Ok(f_tx)
+    }
+
+    async fn send_progress_if_need(ctx: &Arc<QueryContext>, c_tx: &Sender<DataPacket>) {
+        let scan_progress = ctx.get_scan_progress();
+        let scan_progress_values = scan_progress.fetch();
+
+        if scan_progress_values.rows != 0 || scan_progress_values.bytes != 0 {
+            let progress = ProgressInfo::ScanProgress(scan_progress_values);
+            if c_tx.send(DataPacket::Progress(progress)).await.is_err() {
+                common_tracing::tracing::warn!("Send scan progress values error, because flight connection is closed.");
+                return;
+            }
+        }
+
+        let write_progress = ctx.get_write_progress();
+        let write_progress_values = write_progress.fetch();
+
+        if write_progress_values.rows != 0 || write_progress_values.bytes != 0 {
+            let progress = ProgressInfo::WriteProgress(write_progress_values);
+            if c_tx.send(DataPacket::Progress(progress)).await.is_err() {
+                common_tracing::tracing::warn!("Send write progress values error, because flight connection is closed.");
+                return;
+            }
+        }
+
+        let result_progress = ctx.get_result_progress();
+        let result_progress_values = result_progress.fetch();
+
+        if result_progress_values.rows != 0 || result_progress_values.bytes != 0 {
+            let progress = ProgressInfo::ResultProgress(result_progress_values);
+            if c_tx.send(DataPacket::Progress(progress)).await.is_err() {
+                common_tracing::tracing::warn!("Send result progress values error, because flight connection is closed.");
+                return;
+            }
+        }
+    }
+
+    async fn send_precommit_if_need(ctx: &Arc<QueryContext>, c_tx: &Sender<DataPacket>) {
+        let precommit_blocks = ctx.consume_precommit_blocks();
+
+        if !precommit_blocks.is_empty() {
+            for precommit_block in precommit_blocks {
+                if !precommit_block.is_empty() {
+                    let precommit_block = PrecommitBlock(precommit_block);
+                    if c_tx.send(DataPacket::PrecommitBlock(precommit_block)).await.is_err() {
+                        common_tracing::tracing::warn!("Send precommit block error, because flight connection is closed.");
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     pub fn abort(&self) {

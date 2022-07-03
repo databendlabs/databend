@@ -459,9 +459,10 @@ impl QueryContext {
 
     pub fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
         let mut blocks = self.precommit_blocks.write();
-        let result = blocks.clone();
-        blocks.clear();
-        result
+
+        let mut swaped_precommit_blocks = vec![];
+        std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
+        swaped_precommit_blocks
     }
 
     pub fn try_get_function_context(&self) -> Result<FunctionContext> {
@@ -487,9 +488,9 @@ impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
+        where
+            T: Future + Send + 'static,
+            T::Output: Send + 'static,
     {
         Ok(self.shared.try_get_runtime()?.spawn(task))
     }
