@@ -36,5 +36,6 @@ def run(pattern=".*"):
         http.set_label("clickhouse")
         http.run_sql_suite()
 
+
 if __name__ == '__main__':
     fire.Fire(run)

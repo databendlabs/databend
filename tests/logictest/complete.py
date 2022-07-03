@@ -7,10 +7,11 @@ from logictest import is_empty_line
 from http_connector import HttpConnector, format_result
 from config import http_config
 
-target_dir="./"
+target_dir = "./"
 
 http_client = HttpConnector()
 http_client.connect(**http_config)
+
 
 def run(source_file, target_path="."):
     if not os.path.isfile(source_file):
@@ -19,7 +20,9 @@ def run(source_file, target_path="."):
     print("Source file: {}".format(source_file))
     case_name = os.path.basename(source_file)
     print("Case name: {}".format(case_name))
-    out = open("{}/{}".format(target_path,case_name),mode="w+", encoding='UTF-8')
+    out = open("{}/{}".format(target_path, case_name),
+               mode="w+",
+               encoding='UTF-8')
 
     statement = list()
     f = open(source_file, encoding='UTF-8')
@@ -27,16 +30,18 @@ def run(source_file, target_path="."):
         if line.startswith("--"):  # ignore comments
             continue
         if line.startswith("statement"):
-            if len(statement) != 0: 
+            if len(statement) != 0:
                 sql = "".join(statement[1:])
                 # print("Get a sql: {}".format(sql))
                 try:
                     http_results = format_result(http_client.fetch_all(sql))
                     query_options = http_client.get_query_option()
                     if query_options:
-                        statement[0] = statement[0].strip() + " " + query_options + "\n"
+                        statement[0] = statement[0].strip(
+                        ) + " " + query_options + "\n"
                 except Exception as err:
-                    print("Get query results error, with msg: {}".format(str(err)))
+                    print("Get query results error, with msg: {}".format(
+                        str(err)))
 
                 # print(query_options)
                 # print(http_results)
@@ -44,7 +49,9 @@ def run(source_file, target_path="."):
                 if "query" not in statement[0]:
                     pass
                 elif len(http_results) == 0:
-                    out.write("-- auto generated, statement query get no results\n") # manual check
+                    out.write(
+                        "-- auto generated, statement query get no results\n"
+                    )  # manual check
                     statement[0] = "statement query skipped\n"
                 else:
                     statement.append("----\n")
@@ -61,6 +68,7 @@ def run(source_file, target_path="."):
     out.flush()
     f.close()
     out.close()
+
 
 if __name__ == '__main__':
     fire.Fire(run)
