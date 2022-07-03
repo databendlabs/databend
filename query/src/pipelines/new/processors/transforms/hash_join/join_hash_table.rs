@@ -458,14 +458,6 @@ impl HashJoinState for JoinHashTable {
             }
             JoinType::Cross => self.probe_cross_join(input, probe_state),
             _ => unimplemented!("{} is unimplemented", self.join_type),
-        }?;
-        if self.other_predicate.is_none()
-            || self.join_type == JoinType::Anti
-            || self.join_type == JoinType::Semi
-            || self.join_type == JoinType::Left
-            || self.join_type == JoinType::Mark
-        {
-            return Ok(data_blocks);
         }
     }
 
