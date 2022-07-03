@@ -32,7 +32,7 @@ use super::outer_v0::Config as OuterV0Config;
 /// Inner config for query.
 ///
 /// All function should implemented based on this Config.
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct Config {
     pub cmd: String,
     pub config_file: String,
@@ -92,7 +92,7 @@ impl Config {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     pub tenant_id: String,
@@ -211,7 +211,7 @@ impl QueryConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ThriftProtocol {
     Binary,
     // Compact,
@@ -237,7 +237,7 @@ impl Display for ThriftProtocol {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HiveCatalogConfig {
     pub meta_store_address: String,
     pub protocol: ThriftProtocol,
@@ -252,7 +252,7 @@ impl Default for HiveCatalogConfig {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     pub embedded_dir: String,

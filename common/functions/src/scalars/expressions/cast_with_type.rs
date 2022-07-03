@@ -249,10 +249,10 @@ pub fn cast_to_variant(
         return Ok((builder.build(size), None));
     }
     // other data types can't automatically casted to variant
-    return Err(ErrorCode::BadDataValueType(format!(
+    Err(ErrorCode::BadDataValueType(format!(
         "Expression type does not match column data type, expecting VARIANT but got {}",
         from_type.data_type_id()
-    )));
+    )))
 }
 
 pub fn cast_to_timestamp(

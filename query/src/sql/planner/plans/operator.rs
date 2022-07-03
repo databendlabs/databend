@@ -58,7 +58,7 @@ pub trait PhysicalPlan {
 }
 
 /// Relational operator
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum RelOp {
     // Logical operators
     LogicalGet,

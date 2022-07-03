@@ -28,9 +28,11 @@ select block_count, row_count from fuse_snapshot('db_09_0006', 't') order by row
 ----  
 2 2
 
+skipif clickhouse
 statement error 1025
 select * from fuse_snapshot('db_09_0006', 'not_exist'); 
 
+skipif clickhouse
 statement error 1003
 select * from fuse_snapshot('not_exist', 'not_exist'); 
 

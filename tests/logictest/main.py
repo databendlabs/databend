@@ -4,8 +4,9 @@ import os
 
 from mysql_runner import TestMySQL
 from http_runner import TestHttp
+from clickhouse_runner import TestClickhouse
 
-from config import mysql_config, http_config
+from config import mysql_config, http_config, clickhouse_config
 
 import fire
 
@@ -28,6 +29,12 @@ def run(pattern=".*"):
         http.set_label("http")
         http.run_sql_suite()
 
+    disable_ch_test = os.getenv("DISABLE_CLICKHOUSE_LOGIC_TEST")
+    if disable_ch_test is None:
+        http = TestClickhouse("clickhouse", pattern)
+        http.set_driver(clickhouse_config)
+        http.set_label("clickhouse")
+        http.run_sql_suite()
 
 if __name__ == '__main__':
     fire.Fire(run)

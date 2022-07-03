@@ -24,7 +24,7 @@ use common_meta_types::UserPrivilegeType;
 
 use crate::ast::write_comma_separated_list;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateUserStmt {
     pub if_not_exists: bool,
     pub user: UserIdentity,
@@ -51,7 +51,7 @@ impl Display for CreateUserStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct AuthOption {
     pub auth_type: Option<AuthType>,
     pub password: Option<String>,
@@ -70,7 +70,7 @@ impl Display for AuthOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlterUserStmt {
     // None means current user
     pub user: Option<UserIdentity>,
@@ -101,7 +101,7 @@ impl Display for AlterUserStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GrantStmt {
     pub source: AccountMgrSource,
     pub principal: PrincipalIdentity,
@@ -117,7 +117,7 @@ impl Display for GrantStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RevokeStmt {
     pub source: AccountMgrSource,
     pub principal: PrincipalIdentity,
@@ -133,7 +133,7 @@ impl Display for RevokeStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccountMgrSource {
     Role {
         role: String,
@@ -147,14 +147,14 @@ pub enum AccountMgrSource {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccountMgrLevel {
     Global,
     Database(Option<String>),
     Table(Option<String>, String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RoleOption {
     TenantSetting,
     NoTenantSetting,

@@ -20,7 +20,7 @@ use sled::transaction::UnabortableTransactionError;
 
 use crate::error_context::ErrorWithContext;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 pub enum MetaStorageError {
     // type to represent bytes format errors
     #[error("{0}")]

@@ -84,6 +84,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowGrants(_)
                 | DfStatement::RevokeRole(_)
                 | DfStatement::RevokePrivilege(_)
+                | DfStatement::Call(_)
         )
     }
 
@@ -102,6 +103,8 @@ impl InterpreterFactoryV2 {
             Plan::Explain { kind, plan } => {
                 ExplainInterpreterV2::try_create(ctx.clone(), *plan.clone(), kind.clone())
             }
+
+            Plan::Call(plan) => CallInterpreter::try_create(ctx.clone(), *plan.clone()),
 
             Plan::Copy(copy_plan) => CopyInterpreterV2::try_create(ctx.clone(), *copy_plan.clone()),
 
@@ -243,8 +246,14 @@ impl InterpreterFactoryV2 {
             Plan::RevokeRole(revoke_role) => {
                 RevokeRoleInterpreter::try_create(ctx.clone(), *revoke_role.clone())
             }
-            Plan::CreateUserUDF(create_user_udf) => {
+            Plan::CreateUDF(create_user_udf) => {
                 CreateUserUDFInterpreter::try_create(ctx.clone(), *create_user_udf.clone())
+            }
+            Plan::AlterUDF(alter_udf) => {
+                AlterUserUDFInterpreter::try_create(ctx.clone(), *alter_udf.clone())
+            }
+            Plan::DropUDF(drop_udf) => {
+                DropUserUDFInterpreter::try_create(ctx.clone(), *drop_udf.clone())
             }
         }?;
 

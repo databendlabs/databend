@@ -14,7 +14,7 @@
 
 use serde::Serialize;
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct FunctionFeatures {
     pub is_deterministic: bool,
     pub negative_function_name: Option<String>,

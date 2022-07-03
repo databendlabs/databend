@@ -142,14 +142,14 @@ impl PipelinePullingExecutor {
             }
             Ok(None)
         } else {
-            return match self.receiver.try_recv() {
+            match self.receiver.try_recv() {
                 Ok(data_block) => data_block,
                 // puller will not pull again once it received a None
                 Err(err) => Err(ErrorCode::LogicalError(format!(
                     "Logical error, try receiver error. after executor finish {}",
                     err
                 ))),
-            };
+            }
         }
     }
 }

@@ -41,9 +41,9 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 pub fn parse_sql<'a>(
     sql_tokens: &'a [Token<'a>],
     backtrace: &'a Backtrace<'a>,
-) -> Result<Statement<'a>> {
+) -> Result<(Statement<'a>, Option<String>)> {
     match statement(Input(sql_tokens, backtrace)) {
-        Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok(stmts),
+        Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok((stmts.stmt, stmts.format)),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
             rest[0].display_error("unable to parse rest of the sql".to_string()),
         )),

@@ -67,13 +67,14 @@ impl<'a> Binder {
                 .from
                 .iter()
                 .cloned()
-                .reduce(|left, right| {
-                    TableReference::Join(Join {
+                .reduce(|left, right| TableReference::Join {
+                    span: &[],
+                    join: Join {
                         op: JoinOperator::CrossJoin,
                         condition: JoinCondition::None,
                         left: Box::new(left),
                         right: Box::new(right),
-                    })
+                    },
                 })
                 .unwrap();
             self.bind_table_reference(bind_context, &cross_joins)
@@ -251,9 +252,9 @@ impl<'a> Binder {
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {
         let (left_expr, mut left_bind_context) =
-            self.bind_set_expr(bind_context, &*left, &[]).await?;
+            self.bind_set_expr(bind_context, left, &[]).await?;
         let (right_expr, mut right_bind_context) =
-            self.bind_set_expr(bind_context, &*right, &[]).await?;
+            self.bind_set_expr(bind_context, right, &[]).await?;
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(
                 "SetOperation must have the same number of columns",

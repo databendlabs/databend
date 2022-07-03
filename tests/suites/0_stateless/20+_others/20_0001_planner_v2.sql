@@ -169,6 +169,7 @@ select '=== Test offset ===';
 select number from numbers(10) order by number asc offset 5;
 select '===================';
 select number+number as number from numbers(10) order by number asc offset 5;
+select number from numbers(10000) limit 1;
 
 -- Memory engine
 select '====Memory Table====';
@@ -261,6 +262,8 @@ select '===Explain===';
 create table t1(a int, b int);
 create table t2(a int, b int);
 explain select t1.a from t1 where a > 0;
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
 select '===Explain Pipeline===';
 explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
 drop table t1;

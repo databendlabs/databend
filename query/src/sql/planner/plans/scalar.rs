@@ -266,7 +266,7 @@ impl TryFrom<Scalar> for SubqueryExpr {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BoundColumnRef {
     pub column: ColumnBinding,
 }
@@ -285,7 +285,7 @@ impl ScalarExpr for BoundColumnRef {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ConstantExpr {
     pub value: DataValue,
 
@@ -352,7 +352,7 @@ impl ScalarExpr for OrExpr {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ComparisonOp {
     Equal,
     NotEqual,

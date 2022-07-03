@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
     pub schema: DataSchemaRef,
     pub stage_info: UserStageInfo,

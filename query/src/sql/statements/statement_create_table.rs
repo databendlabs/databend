@@ -44,7 +44,7 @@ use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
 use crate::sql::OPT_KEY_DATABASE_ID;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfCreateTable {
     pub if_not_exists: bool,
     /// Table name

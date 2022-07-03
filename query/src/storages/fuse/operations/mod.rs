@@ -14,6 +14,7 @@
 
 mod append;
 mod commit;
+mod compact;
 mod delete;
 mod fuse_sink;
 mod gc;
@@ -27,6 +28,7 @@ mod truncate;
 pub mod util;
 
 pub use fuse_sink::FuseTableSink;
+pub use mutation::delete_from_block;
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;
 pub use util::column_metas;

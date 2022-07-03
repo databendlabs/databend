@@ -70,7 +70,7 @@ impl TypeDeserializer for TimestampDeserializer {
 
     fn de_text_quoted<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
@@ -92,7 +92,11 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut R, format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut NestedCheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         let ts = reader.read_timestamp_text(&format.timezone)?;
         let micros = ts.timestamp_micros();
         check_timestamp(micros)?;
@@ -102,7 +106,7 @@ impl TypeDeserializer for TimestampDeserializer {
 
     fn de_text_csv<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
@@ -118,7 +122,7 @@ impl TypeDeserializer for TimestampDeserializer {
 
     fn de_text_json<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'"')?;

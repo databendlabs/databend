@@ -424,8 +424,14 @@ impl QueryCoordinator {
             if let Err(cause) = executor.execute() {
                 if let Some(request_server_tx) = request_server_tx.take() {
                     futures::executor::block_on(async move {
-                        if request_server_tx.send(DataPacket::ErrorCode(cause)).await.is_err() {
-                            common_tracing::tracing::warn!("Cannot send error code, request server channel is closed.");
+                        if request_server_tx
+                            .send(DataPacket::ErrorCode(cause))
+                            .await
+                            .is_err()
+                        {
+                            common_tracing::tracing::warn!(
+                                "Cannot send error code, request server channel is closed."
+                            );
                         }
                     });
                 }
@@ -434,8 +440,14 @@ impl QueryCoordinator {
             if let Some(cause) = shutdown_cause.lock().take() {
                 if let Some(request_server_tx) = request_server_tx.take() {
                     futures::executor::block_on(async move {
-                        if request_server_tx.send(DataPacket::ErrorCode(cause)).await.is_err() {
-                            common_tracing::tracing::warn!("Cannot send error code, request server channel is closed.");
+                        if request_server_tx
+                            .send(DataPacket::ErrorCode(cause))
+                            .await
+                            .is_err()
+                        {
+                            common_tracing::tracing::warn!(
+                                "Cannot send error code, request server channel is closed."
+                            );
                         }
                     });
                 }

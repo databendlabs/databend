@@ -226,9 +226,7 @@ impl ExchangeSender {
     }
 
     pub async fn join(&self) -> Result<()> {
-        while let Some(join_handler) = {
-            self.join_handlers.lock().pop()
-        } {
+        while let Some(join_handler) = self.pop_join_handler() {
             if let Err(join_cause) = join_handler.await {
                 if join_cause.is_panic() {
                     let cause = join_cause.into_panic();
@@ -244,6 +242,10 @@ impl ExchangeSender {
         }
 
         Ok(())
+    }
+
+    fn pop_join_handler(&self) -> Option<JoinHandle<()>> {
+        self.join_handlers.lock().pop()
     }
 
     fn listen_flight(
@@ -284,18 +286,18 @@ impl ExchangeSender {
     }
 
     async fn create_client(config: Config, address: &str) -> Result<FlightClient> {
-        return match config.tls_query_cli_enabled() {
+        match config.tls_query_cli_enabled() {
             true => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                    .await?,
+                .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
             ))),
-        };
+        }
     }
 }

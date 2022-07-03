@@ -1,27 +1,40 @@
-statement ok
+statement query I
 /*!40101*/select number from numbers_mt(2) ORDER BY number;
+
+----
+0
+1
 
 statement ok
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 
-statement ok
+statement query I
 /*!40101*/select number from numbers_mt(1) ORDER BY number;
 
+----
+0
+
+onlyif mysql
 statement ok
 COMMIT;
 
+onlyif mysql
 statement ok
 ROLLBACK;
 
+onlyif mysql
 statement ok
 START;
 
+onlyif mysql
 statement ok
 SET SQL_LOG_BIN=0;
 
+onlyif mysql
 statement ok
 SHOW MASTER STATUS;
 
+onlyif mysql
 statement ok
 SHOW ALL SLAVES STATUS;
 

@@ -32,10 +32,6 @@ lint-yaml:
 check-license:
 	license-eye -v info -c .licenserc.yaml header check
 
-miri:
-	cargo miri setup
-	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
-
 run: build-release
 	BUILD_PROFILE=release bash ./scripts/ci/deploy/databend-query-standalone.sh
 
@@ -93,8 +89,9 @@ stateless-cluster-test-tls: build
 	rm -rf ./_meta*/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
-metactl-test: build
+metactl-test: build-debug
 	bash ./tests/metactl/test-metactl.sh
+	bash ./tests/metactl/test-metactl-restore-new-cluster.sh
 
 meta-bench: build-release
 	bash ./scripts/benchmark/run-meta-benchmark.sh 10 1000

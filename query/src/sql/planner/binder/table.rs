@@ -87,6 +87,7 @@ impl<'a> Binder {
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
             TableReference::Table {
+                span: _,
                 catalog,
                 database,
                 table,
@@ -134,7 +135,7 @@ impl<'a> Binder {
                             .ok_or_else(|| ErrorCode::LogicalError("Invalid VIEW object"))?;
                         let tokens = tokenize_sql(query.as_str())?;
                         let backtrace = Backtrace::new();
-                        let stmt = parse_sql(&tokens, &backtrace)?;
+                        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
                         if let Statement::Query(query) = &stmt {
                             self.bind_query(bind_context, query).await
                         } else {
@@ -163,6 +164,7 @@ impl<'a> Binder {
                 }
             }
             TableReference::TableFunction {
+                span: _,
                 name,
                 params,
                 alias,
@@ -214,8 +216,12 @@ impl<'a> Binder {
                 }
                 Ok((s_expr, bind_context))
             }
-            TableReference::Join(join) => self.bind_join(bind_context, join).await,
-            TableReference::Subquery { subquery, alias } => {
+            TableReference::Join { span: _, join } => self.bind_join(bind_context, join).await,
+            TableReference::Subquery {
+                span: _,
+                subquery,
+                alias,
+            } => {
                 let (s_expr, mut bind_context) = self.bind_query(bind_context, subquery).await?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias)?;

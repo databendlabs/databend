@@ -19,7 +19,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 // represent network related errors
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MetaNetworkError {
     #[error(transparent)]
     ConnectionError(#[from] ConnectionError),
@@ -65,7 +65,7 @@ impl From<MetaNetworkError> for ErrorCode {
 
 pub type MetaNetworkResult<T> = std::result::Result<T, MetaNetworkError>;
 
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("ConnectionError: {msg} source: {source}")]
 pub struct ConnectionError {
     msg: String,
@@ -82,7 +82,7 @@ impl ConnectionError {
     }
 }
 
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("InvalidArgument: {msg} source: {source}")]
 pub struct InvalidArgument {
     msg: String,

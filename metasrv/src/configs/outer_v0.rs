@@ -29,7 +29,7 @@ use serfig::parsers::Toml;
 use super::inner::Config as InnerConfig;
 use crate::version::METASRV_COMMIT_VERSION;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
@@ -158,7 +158,7 @@ impl Config {
 /// #[serde(flatten)] doesn't work correctly for env.
 /// We should work around it by flatten them manully.
 /// We are seeking for better solutions.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct ConfigViaEnv {
     pub metasrv_config_file: String,
@@ -268,7 +268,7 @@ impl Into<Config> for ConfigViaEnv {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct RaftConfig {

@@ -265,12 +265,11 @@ impl ExpressionSyncAnalyzer {
                         k @ Value::Number(_, _) => format!("[{}]", k),
                         Value::SingleQuotedString(s) => format!("[\"{}\"]", s),
                         Value::ColonString(s) => {
-                            let key = if i == 0 {
+                            if i == 0 {
                                 s.to_string()
                             } else {
                                 format!(":{}", s)
-                            };
-                            key
+                            }
                         }
                         Value::PeriodString(s) => format!(".{}", s),
                         _ => format!("[{}]", k),

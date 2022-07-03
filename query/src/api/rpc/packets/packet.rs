@@ -36,7 +36,7 @@ impl<T: Packet> Packet for Vec<T> {
 }
 
 pub async fn create_client(config: &Config, address: &str) -> Result<FlightClient> {
-    return match config.tls_query_cli_enabled() {
+    match config.tls_query_cli_enabled() {
         true => Ok(FlightClient::new(FlightServiceClient::new(
             ConnectionFactory::create_rpc_channel(
                 address.to_owned(),
@@ -48,5 +48,5 @@ pub async fn create_client(config: &Config, address: &str) -> Result<FlightClien
         false => Ok(FlightClient::new(FlightServiceClient::new(
             ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
         ))),
-    };
+    }
 }

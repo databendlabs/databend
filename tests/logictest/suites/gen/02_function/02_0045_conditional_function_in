@@ -33,100 +33,100 @@ SELECT NULL IN (1, 2, 3);
 ----  
 NULL
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT 1 IN (1, 2, NULL);
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT 1 IN (2, 3, NULL);
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT 1.1 IN (1.10, 2, 3.3, 1.1);
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 1 in (1.2, 2);
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 1 in (1.0, 2);
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'aa' in ('aa', 'bb', 'cc');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select true in (true, false);
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select true in (NULL, false);
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_date(18869) in (to_date(18869));
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_date(18869) in ('2021-08-30');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_date(18869) in (to_date(18869), NULL);
 
-----  mysql
+----  
 1
 
 ----  http

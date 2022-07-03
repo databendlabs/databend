@@ -152,7 +152,6 @@ impl BlockReader {
             let idx = *col_idx[i];
             let field = self.arrow_schema.fields[idx].clone();
             let column_descriptor = &self.parquet_schema_descriptor.columns()[idx];
-            //let column_meta = &part.columns_meta[&idx];
             let column_meta = &meta
                 .col_metas
                 .get(&(i as u32))

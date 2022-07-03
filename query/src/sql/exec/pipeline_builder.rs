@@ -36,8 +36,8 @@ use crate::pipelines::new::processors::transforms::TransformProject;
 use crate::pipelines::new::processors::transforms::TransformRename;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
-use crate::pipelines::new::processors::ChainingHashTable;
 use crate::pipelines::new::processors::HashJoinState;
+use crate::pipelines::new::processors::JoinHashTable;
 use crate::pipelines::new::processors::SinkBuildHashTable;
 use crate::pipelines::new::processors::Sinker;
 use crate::pipelines::new::processors::SortMergeCompactor;
@@ -474,6 +474,7 @@ impl PipelineBuilder {
         offset: usize,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
+        pipeline.resize(1)?;
         pipeline.add_transform(|input, output| {
             TransformLimit::try_create(limit, offset, input, output)
         })?;
@@ -516,7 +517,7 @@ impl PipelineBuilder {
                 }
             },
         )?;
-        let hash_join_state = ChainingHashTable::create_join_state(
+        let hash_join_state = JoinHashTable::create_join_state(
             ctx.clone(),
             join_type,
             build_keys,

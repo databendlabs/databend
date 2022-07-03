@@ -99,10 +99,11 @@ impl DataType for StructType {
             let struct_column = StructColumn::from_data(cols, DataTypeImpl::Struct(self.clone()));
             return Ok(Arc::new(ConstColumn::new(Arc::new(struct_column), size)));
         }
-        return Result::Err(ErrorCode::BadDataValueType(format!(
+
+        Err(ErrorCode::BadDataValueType(format!(
             "Unexpected type:{:?} to generate list column",
             data.value_type()
-        )));
+        )))
     }
 
     fn arrow_type(&self) -> ArrowType {

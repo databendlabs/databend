@@ -48,7 +48,7 @@ pub enum DataValue {
 
 impl Eq for DataValue {}
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, MallocSizeOf)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, MallocSizeOf)]
 pub enum ValueType {
     Null,
     Boolean,

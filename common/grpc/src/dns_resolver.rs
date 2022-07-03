@@ -214,7 +214,7 @@ impl ConnectionFactory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 pub enum GrpcConnectionError {
     #[error("invalid uri: {uri}, error: {source}")]
     InvalidUri {

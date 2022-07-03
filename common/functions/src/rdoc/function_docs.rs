@@ -14,7 +14,7 @@
 
 use serde::Serialize;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Default)]
 pub struct FunctionDocs {
     // Function Category
     pub category: String,
