@@ -116,42 +116,45 @@ impl ExchangeSender {
         let (f_tx, f_rx) = async_channel::bounded(1);
 
         join_handlers.push(runtime.spawn(async move {
-            let mut sleep_future = Box::pin(sleep(Duration::from_millis(500)));
-
             // flight connect is closed if c_tx is closed.
             'fragment_loop: while !is_finished.load(Ordering::Relaxed) && !c_tx.is_closed() {
+                let sleep_future = Box::pin(sleep(Duration::from_millis(500)));
+
                 match futures::future::select(sleep_future, f_rx.recv()).await {
                     Either::Left((_, _)) => {
                         if to_request_server {
                             ExchangeSender::send_progress_if_need(&ctx, &c_tx).await;
                             ExchangeSender::send_precommit_if_need(&ctx, &c_tx).await;
                         }
-
-                        sleep_future = Box::pin(sleep(Duration::from_millis(500)));
                     }
-                    Either::Right((recv_message, n)) => {
-                        sleep_future = n;
-
+                    Either::Right((recv_message, _)) => {
                         if let Ok(recv_packet) = recv_message {
                             if c_tx.send(recv_packet).await.is_err() {
-                                break 'fragment_loop;
+                                return;
                             }
 
                             continue 'fragment_loop;
                         }
 
-                        // Disconnect channel, exit loop
-                        if to_request_server {
-                            ExchangeSender::send_progress_if_need(&ctx, &c_tx).await;
-                            ExchangeSender::send_precommit_if_need(&ctx, &c_tx).await;
-                        }
-
-                        let fragment_end = FragmentData::End(fragment_id);
-                        c_tx.send(DataPacket::FragmentData(fragment_end)).await.ok();
                         break 'fragment_loop;
                     }
                 };
             }
+
+            while let Ok(recv_message) = f_rx.try_recv() {
+                if c_tx.send(recv_message).await.is_err() {
+                    return;
+                }
+            }
+
+            // Disconnect channel, exit loop
+            if to_request_server {
+                ExchangeSender::send_progress_if_need(&ctx, &c_tx).await;
+                ExchangeSender::send_precommit_if_need(&ctx, &c_tx).await;
+            }
+
+            let fragment_end = FragmentData::End(fragment_id);
+            c_tx.send(DataPacket::FragmentData(fragment_end)).await.ok();
         }));
 
         Ok(f_tx)
