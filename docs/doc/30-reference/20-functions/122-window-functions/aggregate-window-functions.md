@@ -6,14 +6,14 @@ An aggregate window function comes with an aggregate function and an OVER clause
 
 When you use aggregate functions with GROUP BY, a single row is returned for each unique set of values in the grouped columns. Aggregate window functions do not collapse rows. All of the rows in the result set are returned. See [Examples](#examples) for a detailed comparison.
 
-All the aggregate functions supported by Databend can be used as aggregate window functions. See [Aggregate Functions](../10-aggregate-functions/) for supported aggregate functions.
+All the aggregate functions supported by Databend can be used as aggregate window functions. See [Aggregate Functions](/doc/reference/functions/aggregate-functions) for supported aggregate functions.
 
 ## Syntax
 
 ```sql
 <aggregate-function> ( <arguments> ) 
-OVER ([PARTITION BY expression1 [, expression2] ...
-     [ORDER BY expression1 [ASC | DESC] [, expression2 [ASC | DESC]] ... )
+OVER ([PARTITION BY expression1 [, expression2] ...]
+     [ORDER BY expression1 [ASC | DESC]] [, expression2 [ASC | DESC]] ... )
 ```
 
 ## Examples
