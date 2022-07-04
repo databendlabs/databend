@@ -59,7 +59,7 @@ jobs:
         # Reference: https://cli.github.com/manual/gh_release_create
         run: |
           echo "Create a release for ${{ steps.generated-tag.outputs.tag }}"
-          gh release create ${{ steps.generated-tag.outputs.tag }} --discussion-category "general" --generate-notes -p
+          gh release create ${{ steps.generated-tag.outputs.tag }} --generate-notes -p
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
