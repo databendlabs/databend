@@ -4,13 +4,13 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 
-curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/clickhouse" -d 'select number, number::varchar, number + 1 from numbers(3) FORMAT CSV'
+curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d 'select number, number::varchar, number + 1 from numbers(3) FORMAT CSV'
 
 
-curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/clickhouse" -d 'select number, number::varchar, number + 1 from numbers(3) FORMAT TSV'
+curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d 'select number, number::varchar, number + 1 from numbers(3) FORMAT TSV'
 
 
-curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/clickhouse" -d 'select number, number::varchar, number + 1 from numbers(3) FORMAT NDJSON'
+curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d 'select number, number::varchar, number + 1 from numbers(3) FORMAT NDJSON'
 
 echo "----regexp_like"
-curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/clickhouse" -d "select regexp_like('fo\nfo', '^fo$') FORMAT TabSeparatedWithNamesAndTypes"
+curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "select regexp_like('fo\nfo', '^fo$') FORMAT TabSeparatedWithNamesAndTypes"
