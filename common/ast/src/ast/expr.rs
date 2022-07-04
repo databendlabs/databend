@@ -59,19 +59,15 @@ pub enum Expr<'a> {
         subquery: Box<Query<'a>>,
         not: bool,
     },
-    /// `expr op ANY (SELECT ...)`
-    AnySubquery {
+    /// Any Operator
+    AnyOp {
         span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
-        subquery: Box<Query<'a>>,
-        op: ComparisonOperator,
+        expr: Box<Query<'a>>,
     },
-    /// `expr op ALL (SELECT ...)`
-    AllSubquery {
+    /// All operator
+    AllOp {
         span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
-        subquery: Box<Query<'a>>,
-        op: ComparisonOperator,
+        expr: Box<Query<'a>>,
     },
     /// `BETWEEN ... AND ...`
     Between {
@@ -274,16 +270,6 @@ pub enum TrimWhere {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ComparisonOperator {
-    Gt,
-    Lt,
-    Gte,
-    Lte,
-    Eq,
-    NotEq,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryOperator {
     Plus,
     Minus,
@@ -355,8 +341,8 @@ impl<'a> Expr<'a> {
             | Expr::NullIf { span, .. }
             | Expr::Coalesce { span, .. }
             | Expr::IfNull { span, .. }
-            | Expr::AnySubquery { span, .. }
-            | Expr::AllSubquery { span, .. } => span,
+            | Expr::AnyOp { span, .. }
+            | Expr::AllOp { span, .. } => span,
         }
     }
 }
@@ -372,31 +358,6 @@ impl Display for UnaryOperator {
             }
             UnaryOperator::Not => {
                 write!(f, "NOT")
-            }
-        }
-    }
-}
-
-impl Display for ComparisonOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ComparisonOperator::Gt => {
-                write!(f, ">")
-            }
-            ComparisonOperator::Lt => {
-                write!(f, "<")
-            }
-            ComparisonOperator::Gte => {
-                write!(f, ">=")
-            }
-            ComparisonOperator::Lte => {
-                write!(f, "<=")
-            }
-            ComparisonOperator::Eq => {
-                write!(f, "=")
-            }
-            ComparisonOperator::NotEq => {
-                write!(f, "<>")
             }
         }
     }
@@ -655,15 +616,11 @@ impl<'a> Display for Expr<'a> {
                 }
                 write!(f, " IN({subquery})")?;
             }
-            Expr::AnySubquery {
-                expr, subquery, op, ..
-            } => {
-                write!(f, "{expr} {op} Any({subquery})")?;
+            Expr::AnyOp { expr, .. } => {
+                write!(f, "Any({expr})")?;
             }
-            Expr::AllSubquery {
-                expr, subquery, op, ..
-            } => {
-                write!(f, "{expr} {op} All({subquery})")?;
+            Expr::AllOp { expr, .. } => {
+                write!(f, "All({expr})")?;
             }
             Expr::Between {
                 expr,

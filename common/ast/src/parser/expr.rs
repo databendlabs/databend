@@ -165,15 +165,13 @@ pub enum ExprElement<'a> {
         subquery: Box<Query<'a>>,
         not: bool,
     },
-    /// `expr op ANY (SELECT ...)`
-    AnySubquery {
-        subquery: Box<Query<'a>>,
-        op: ComparisonOperator,
+    /// Any operation
+    AnyOp {
+        subquery: Query<'a>,
     },
-    /// `expr op ALL (SELECT ...)`
-    AllSubquery {
-        subquery: Box<Query<'a>>,
-        op: ComparisonOperator,
+    /// All operation
+    AllOp {
+        subquery: Query<'a>,
     },
     /// `BETWEEN ... AND ...`
     Between {
@@ -315,8 +313,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
             }
             ExprElement::InList { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::InSubquery { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
-            ExprElement::AnySubquery { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
-            ExprElement::AllSubquery { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::UnaryOp { op } => match op {
                 UnaryOperator::Not => Affix::Prefix(Precedence(NOT_PREC)),
 
@@ -499,6 +495,14 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 expr1: Box::new(expr1),
                 expr2: Box::new(expr2),
             },
+            ExprElement::AllOp { subquery } => Expr::AllOp {
+                span: elem.span.0,
+                expr: Box::new(subquery),
+            },
+            ExprElement::AnyOp { subquery } => Expr::AnyOp {
+                span: elem.span.0,
+                expr: Box::new(subquery),
+            },
             _ => unreachable!(),
         };
         Ok(expr)
@@ -572,18 +576,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 subquery,
                 not,
             },
-            ExprElement::AnySubquery { subquery, op } => Expr::AnySubquery {
-                span: elem.span.0,
-                expr: Box::new(lhs),
-                subquery,
-                op,
-            },
-            ExprElement::AllSubquery { subquery, op } => Expr::AllSubquery {
-                span: elem.span.0,
-                expr: Box::new(lhs),
-                subquery,
-                op,
-            },
             ExprElement::Between { low, high, not } => Expr::Between {
                 span: elem.span.0,
                 expr: Box::new(lhs),
@@ -638,23 +630,17 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             not: opt_not.is_some(),
         },
     );
-    let any_subquery = map(
+    let any_op = map(
         rule! {
-            #comparison_op ~ ANY ~ "(" ~ #query  ~ ^")"
+           ANY ~ "(" ~ #query ~ ^")"
         },
-        |(op, _, _, subquery, _)| ExprElement::AnySubquery {
-            subquery: Box::new(subquery),
-            op,
-        },
+        |(_, _, subquery, _)| ExprElement::AnyOp { subquery },
     );
-    let all_subquery = map(
+    let all_op = map(
         rule! {
-            #comparison_op ~ ALL ~ "(" ~ #query  ~ ^")"
+            ALL ~ "(" ~ #query  ~ ^")"
         },
-        |(op, _, _, subquery, _)| ExprElement::AllSubquery {
-            subquery: Box::new(subquery),
-            op,
-        },
+        |(_, _, subquery, _)| ExprElement::AllOp { subquery },
     );
     let between = map(
         rule! {
@@ -960,8 +946,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #literal : "<literal>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
-            | #any_subquery : "`<op> ANY (SELECT ...)`"
-            | #all_subquery : "`<op> ALL (SELECT ...)`"
+            | #any_op : "`ANY (SELECT ...)`"
+            | #all_op : "`ALL (SELECT ...)`"
             | #group
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"
@@ -975,17 +961,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     // Plus and Minus are parsed as binary op at first.
     value(UnaryOperator::Not, rule! { NOT })(i)
-}
-
-pub fn comparison_op(i: Input) -> IResult<ComparisonOperator> {
-    alt((
-        value(ComparisonOperator::Gt, rule! { ">" }),
-        value(ComparisonOperator::Lt, rule! { "<" }),
-        value(ComparisonOperator::Gte, rule! { ">=" }),
-        value(ComparisonOperator::Lte, rule! { "<=" }),
-        value(ComparisonOperator::Eq, rule! { "=" }),
-        value(ComparisonOperator::NotEq, rule! { "<>" | "!=" }),
-    ))(i)
 }
 
 pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
