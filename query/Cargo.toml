@@ -114,6 +114,7 @@ serfig = "0.0.2"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
 smallvec = { version = "1.8.0", features = ["write"] }
+snailquote = "0.3.1"
 strum = "0.24.1"
 strum_macros = "0.24.0"
 tempfile = { version = "3.3.0", optional = true }
