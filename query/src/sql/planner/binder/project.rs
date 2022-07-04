@@ -50,7 +50,7 @@ impl<'a> Binder {
                 column_binding.column_name = item.alias.clone();
                 column_binding
             } else {
-                self.create_column_binding(None, item.alias.clone(), item.scalar.data_type())
+                self.create_column_binding(None, None, item.alias.clone(), item.scalar.data_type())
             };
             scalars.insert(column_binding.index, ScalarItem {
                 scalar: item.scalar.clone(),
@@ -132,7 +132,8 @@ impl<'a> Binder {
                         let indirection = &names[0];
                         match indirection {
                             Indirection::Identifier(ident) => {
-                                let column_binding = input_context.resolve_column(None, ident)?;
+                                let column_binding =
+                                    input_context.resolve_column(None, None, ident)?;
                                 output.items.push(SelectItem {
                                     select_target,
                                     scalar: BoundColumnRef {

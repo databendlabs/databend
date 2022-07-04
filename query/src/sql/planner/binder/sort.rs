@@ -61,12 +61,12 @@ impl<'a> Binder {
         let mut order_items = Vec::with_capacity(order_by.len());
         for order in order_by {
             if let Expr::ColumnRef {
+                database: ref database_name,
                 table: ref table_name,
                 column: ref ident,
                 ..
             } = order.expr
             {
-                let table = table_name.clone().map(|v| v.name);
                 // We first search the identifier in select list
                 let mut found = false;
                 for item in projections.iter() {
@@ -93,7 +93,7 @@ impl<'a> Binder {
 
                 // If there isn't a matched alias in select list, we will fallback to
                 // from clause.
-                let column = from_context.resolve_column(table.clone(), ident).and_then(|v| {
+                let column = from_context.resolve_column(database_name.as_ref().map(|v| v.name.as_str()), table_name.as_ref().map(|v| v.name.as_str()), ident).and_then(|v| {
                     if distinct {
                         Err(ErrorCode::SemanticError(order.expr.span().display_error("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string())))
                     } else {

@@ -217,6 +217,7 @@ impl SubqueryRewriter {
                     left: Box::new(
                         BoundColumnRef {
                             column: ColumnBinding {
+                                database_name: None,
                                 table_name: None,
                                 column_name: "count(*)".to_string(),
                                 index: agg_func_index,
@@ -422,6 +423,7 @@ impl SubqueryRewriter {
                     .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
                 let name = format!("subquery_{}", index);
                 let column_ref = ColumnBinding {
+                    database_name: None,
                     table_name: None,
                     column_name: name,
                     index,

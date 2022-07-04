@@ -264,6 +264,7 @@ impl<'a> Binder {
     /// Create a new ColumnBinding with assigned index
     pub(super) fn create_column_binding(
         &mut self,
+        database_name: Option<String>,
         table_name: Option<String>,
         column_name: String,
         data_type: DataTypeImpl,
@@ -273,6 +274,7 @@ impl<'a> Binder {
             .write()
             .add_column(column_name.clone(), data_type.clone(), None);
         ColumnBinding {
+            database_name,
             table_name,
             column_name,
             index,
