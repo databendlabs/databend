@@ -62,7 +62,6 @@ pub fn optimize(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
             kind,
             plan: Box::new(optimize(ctx, *plan)?),
         }),
-
         // Passthrough statements
         _ => Ok(plan),
     }

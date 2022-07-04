@@ -26,6 +26,7 @@ use ordered_float::OrderedFloat;
 use serde_json::json;
 
 use crate::prelude::*;
+use crate::type_coercion::merge_types;
 
 /// A specific value of a data type.
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
@@ -48,7 +49,7 @@ pub enum DataValue {
 
 impl Eq for DataValue {}
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, MallocSizeOf)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, MallocSizeOf)]
 pub enum ValueType {
     Null,
     Boolean,
@@ -123,18 +124,22 @@ impl DataValue {
             }
             DataValue::Float64(_) => Float64Type::new_impl(),
             DataValue::String(_) => StringType::new_impl(),
-            DataValue::Array(x) => {
-                let inner_type = if x.is_empty() {
-                    UInt8Type::new_impl()
+            DataValue::Array(vals) => {
+                let inner_type = if vals.is_empty() {
+                    NullType::new_impl()
                 } else {
-                    x[0].data_type()
+                    vals.iter()
+                        .fold(Ok(vals[0].data_type()), |acc, v| {
+                            merge_types(&acc?, &v.data_type())
+                        })
+                        .unwrap()
                 };
-                DataTypeImpl::Array(ArrayType::create(inner_type))
+                ArrayType::new_impl(inner_type)
             }
-            DataValue::Struct(x) => {
-                let names = (0..x.len()).map(|i| i.to_string()).collect::<Vec<_>>();
-                let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                DataTypeImpl::Struct(StructType::create(names, types))
+            DataValue::Struct(vals) => {
+                let names = (0..vals.len()).map(|i| i.to_string()).collect::<Vec<_>>();
+                let types = vals.iter().map(|v| v.data_type()).collect::<Vec<_>>();
+                StructType::new_impl(names, types)
             }
             DataValue::Variant(_) => VariantType::new_impl(),
         }
@@ -149,18 +154,22 @@ impl DataValue {
             DataValue::UInt64(_) => UInt64Type::new_impl(),
             DataValue::Float64(_) => Float64Type::new_impl(),
             DataValue::String(_) => StringType::new_impl(),
-            DataValue::Array(x) => {
-                let inner_type = if x.is_empty() {
-                    UInt8Type::new_impl()
+            DataValue::Array(vals) => {
+                let inner_type = if vals.is_empty() {
+                    NullType::new_impl()
                 } else {
-                    x[0].data_type()
+                    vals.iter()
+                        .fold(Ok(vals[0].max_data_type()), |acc, v| {
+                            merge_types(&acc?, &v.max_data_type())
+                        })
+                        .unwrap()
                 };
-                DataTypeImpl::Array(ArrayType::create(inner_type))
+                ArrayType::new_impl(inner_type)
             }
-            DataValue::Struct(x) => {
-                let names = (0..x.len()).map(|i| i.to_string()).collect::<Vec<_>>();
-                let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                DataTypeImpl::Struct(StructType::create(names, types))
+            DataValue::Struct(vals) => {
+                let names = (0..vals.len()).map(|i| i.to_string()).collect::<Vec<_>>();
+                let types = vals.iter().map(|v| v.max_data_type()).collect::<Vec<_>>();
+                StructType::new_impl(names, types)
             }
             DataValue::Variant(_) => VariantType::new_impl(),
         }

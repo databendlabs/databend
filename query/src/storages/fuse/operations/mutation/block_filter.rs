@@ -115,7 +115,7 @@ pub async fn delete_from_block(
     Ok(res)
 }
 
-fn all_the_columns_ids(table: &FuseTable) -> Vec<usize> {
+pub fn all_the_columns_ids(table: &FuseTable) -> Vec<usize> {
     (0..table.table_info.schema().fields().len())
         .into_iter()
         .collect::<Vec<usize>>()

@@ -15,6 +15,14 @@ http_config = {
     'database': 'default',
 }
 
+clickhouse_config = {
+    'user': 'root',
+    'password': '',
+    'host': '127.0.0.1',
+    "port": 8125,
+    'database': 'default',
+}
+
 
 def config_from_env():
     mysql_host = os.getenv("QUERY_MYSQL_HANDLER_HOST")
@@ -33,10 +41,27 @@ def config_from_env():
     if http_port is not None:
         http_config['port'] = int(http_port)
 
+    clickhouse_host = os.getenv("QUERY_CLICKHOUSE_HANDLER_HOST")
+    if clickhouse_host is not None:
+        clickhouse_config['host'] = clickhouse_host
+
+    clickhouse_port = os.getenv("QUERY_CLICKHOUSE_HANDLER_PORT")
+    if clickhouse_port is not None:
+        clickhouse_config['port'] = clickhouse_port
+
+    clickhouse_password = os.getenv("QUERY_CLICKHOUSE_HANDLER_PASSWORD")
+    if clickhouse_password is not None:
+        clickhouse_config['password'] = clickhouse_password
+
+    clickhouse_user = os.getenv("QUERY_CLICKHOUSE_HANDLER_USER")
+    if clickhouse_user is not None:
+        clickhouse_config['user'] = clickhouse_user
+
     mysql_database = os.getenv("MYSQL_DATABASE")
     if mysql_database is not None:
         mysql_config['database'] = mysql_database
         http_config['database'] = mysql_database
+        clickhouse_config['database'] = mysql_database
 
     mysql_user = os.getenv("MYSQL_USER")
     if mysql_user is not None:

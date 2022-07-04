@@ -29,7 +29,7 @@ pub use range_filter::ColumnStatistics;
 pub use range_filter::RangeFilter;
 pub use range_filter::StatisticsOfColumns;
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum IndexSchemaVersion {
     V1,
 }

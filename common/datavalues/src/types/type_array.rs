@@ -87,10 +87,10 @@ impl DataType for ArrayType {
             return Ok(Arc::new(ConstColumn::new(column, size)));
         }
 
-        return Result::Err(ErrorCode::BadDataValueType(format!(
+        Err(ErrorCode::BadDataValueType(format!(
             "Unexpected type:{:?} to generate list column",
             data.value_type()
-        )));
+        )))
     }
 
     fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
@@ -118,7 +118,11 @@ impl DataType for ArrayType {
     }
 
     fn arrow_type(&self) -> ArrowType {
-        let field = Field::new("list".to_string(), self.inner.arrow_type(), false);
+        let field = Field::new(
+            "list".to_string(),
+            self.inner.arrow_type(),
+            self.inner.is_nullable(),
+        );
         ArrowType::LargeList(Box::new(field))
     }
 

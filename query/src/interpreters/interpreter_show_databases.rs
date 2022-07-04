@@ -39,7 +39,7 @@ impl ShowDatabasesInterpreter {
     }
 
     fn build_query(&self) -> Result<String> {
-        return match &self.plan.kind {
+        match &self.plan.kind {
             PlanShowKind::All => {
                 Ok("SELECT name AS Database FROM system.databases ORDER BY name".to_string())
             }
@@ -51,7 +51,7 @@ impl ShowDatabasesInterpreter {
                 "SELECT name As Database FROM system.databases WHERE {} ORDER BY name",
                 v
             )),
-        };
+        }
     }
 }
 

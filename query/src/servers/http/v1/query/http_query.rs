@@ -97,7 +97,7 @@ impl PaginationConf {
     }
 }
 
-#[derive(Deserialize, Debug, Default, PartialEq)]
+#[derive(Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct HttpSessionConf {
     pub database: Option<String>,
@@ -105,7 +105,7 @@ pub struct HttpSessionConf {
     pub settings: Option<BTreeMap<String, String>>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum HttpSession {
     // keep New before old, so it deserialize to New when empty

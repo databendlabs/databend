@@ -25,14 +25,15 @@ use nom::Slice;
 use url::Url;
 
 use crate::ast::*;
+use crate::input::Input;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::token::*;
-use crate::parser::util::*;
 use crate::rule;
+use crate::util::*;
 use crate::ErrorKind;
 
-pub fn statement(i: Input) -> IResult<Statement> {
+pub fn statement(i: Input) -> IResult<StatementMsg> {
     let explain = map(
         rule! {
             EXPLAIN ~ ( PIPELINE | GRAPH )? ~ #statement
@@ -44,7 +45,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 None => ExplainKind::Syntax,
                 _ => unreachable!(),
             },
-            query: Box::new(statement),
+            query: Box::new(statement.stmt),
         },
     );
     let insert = map(
@@ -80,7 +81,14 @@ pub fn statement(i: Input) -> IResult<Statement> {
             selection: opt_where_block.map(|(_, selection)| selection),
         },
     );
-    let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
+    let show_settings = map(
+        rule! {
+            SHOW ~ SETTINGS ~ (LIKE ~ #literal_string)?
+        },
+        |(_, _, opt_like)| Statement::ShowSettings {
+            like: opt_like.map(|(_, like)| like),
+        },
+    );
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
     let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
     let show_metrics = value(Statement::ShowMetrics, rule! { SHOW ~ METRICS });
@@ -670,13 +678,25 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
     );
 
+    let call = map(
+        rule! {
+            CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
+        },
+        |(_, name, _, args, _)| {
+            Statement::Call(CallStmt {
+                name: name.to_string(),
+                args,
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
-            | #show_settings : "`SHOW SETTINGS`"
+            | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
             | #show_metrics : "`SHOW METRICS`"
@@ -739,19 +759,25 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`"
         ),
+        rule! (
+            #call: "`CALL <procedure_name>(<parameter>, ...)`"
+        ),
         rule!(
             #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS [FOR  { ROLE <role_name> | [USER] <user> }]`"
-                        | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+            | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
 
         ),
     ));
 
     map(
         rule! {
-            #statement_body ~ ";"? ~ &EOI
+            #statement_body ~ (FORMAT ~ #ident)? ~ ";"? ~ &EOI
         },
-        |(stmt, _, _)| stmt,
+        |(stmt, opt_format, _, _)| StatementMsg {
+            stmt,
+            format: opt_format.map(|(_, format)| format.name),
+        },
     )(i)
 }
 
@@ -1208,22 +1234,31 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
     ))(i)
 }
 
+pub fn ident_to_string(i: Input) -> IResult<String> {
+    map_res(ident, |ident| {
+        if ident.quote.is_none() {
+            Ok(ident.to_string())
+        } else {
+            Err(ErrorKind::Other(
+                "unexpected quoted identifier, try to remove the quote",
+            ))
+        }
+    })(i)
+}
+
+pub fn u64_to_string(i: Input) -> IResult<String> {
+    map(literal_u64, |v| v.to_string())(i)
+}
+
+pub fn parameter_to_string(i: Input) -> IResult<String> {
+    map(
+        rule! { ( #literal_string | #ident_to_string | #u64_to_string ) },
+        |parameter| parameter,
+    )(i)
+}
+
 // parse: (k = v ...)* into a map
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let ident_to_string = |i| {
-        map_res(ident, |ident| {
-            if ident.quote.is_none() {
-                Ok(ident.to_string())
-            } else {
-                Err(ErrorKind::Other(
-                    "unexpected quoted identifier, try to remove the quote",
-                ))
-            }
-        })(i)
-    };
-
-    let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
-
     let ident_with_format = alt((
         ident_to_string,
         map(rule! { FORMAT }, |_| "FORMAT".to_string()),
@@ -1231,7 +1266,7 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     map(
         rule! {
-            "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #u64_to_string | #literal_string) )* ~ ")"
+            "(" ~ ( #ident_with_format ~ "=" ~ #parameter_to_string )* ~ ")"
         },
         |(_, opts, _)| {
             BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))

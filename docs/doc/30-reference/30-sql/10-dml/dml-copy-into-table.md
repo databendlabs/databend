@@ -88,7 +88,7 @@ Description: Number of lines at the start of the file to skip.
 
 Default: `0`
 
-#### `COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | NONE`
+#### `COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | XZ | NONE`
 
 Description: String that represents the compression algorithm.
 
@@ -105,6 +105,7 @@ Values:
 | `ZSTD`        | Zstandard v0.8 (and higher) is supported.                       |
 | `DEFLATE`     | Deflate-compressed files (with zlib header, RFC1950).           |
 | `RAW_DEFLATE` | Deflate-compressed files (without any header, RFC1951).         |
+| `XZ` |                                                                 |
 | `NONE`        | Indicates that the files have not been compressed.              |
 
 ### copyOptions
@@ -164,7 +165,7 @@ Try to read 10 rows from csv and insert into the `mytable`.
 COPY INTO mytable
   FROM 's3://mybucket/data.csv'
   credentials=(aws_key_id='<AWS_ACCESS_KEY_ID>' aws_secret_key='<AWS_SECRET_ACCESS_KEY>')
-  FILE_FORMAT = (type = "CSV" field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
+  FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
 
 Try to load data from a gzip compressed csv and insert into `mytable`
@@ -173,5 +174,5 @@ Try to load data from a gzip compressed csv and insert into `mytable`
 COPY INTO mytable
   FROM 's3://mybucket/data.csv.gz'
   credentials=(aws_key_id='<AWS_ACCESS_KEY_ID>' aws_secret_key='<AWS_SECRET_ACCESS_KEY>')
-  FILE_FORMAT = (type = "CSV" field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = GZIP) size_limit=10;
+  FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = GZIP) size_limit=10;
 ```

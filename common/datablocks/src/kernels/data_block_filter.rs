@@ -22,6 +22,20 @@ use common_exception::Result;
 use crate::DataBlock;
 
 impl DataBlock {
+    // check if the predicate has any valid row
+    pub fn filter_exists(predicate: &ColumnRef) -> Result<bool> {
+        let predict_boolean_nonull = Self::cast_to_nonull_boolean(predicate)?;
+        // faster path for constant filter
+        if predict_boolean_nonull.is_const() {
+            return predict_boolean_nonull.get_bool(0);
+        }
+
+        let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
+        let rows = boolean_col.len();
+        let count_zeros = boolean_col.values().null_count();
+        Ok(count_zeros != rows)
+    }
+
     pub fn filter_block(block: DataBlock, predicate: &ColumnRef) -> Result<DataBlock> {
         if block.num_columns() == 0 || block.num_rows() == 0 {
             return Ok(block);
@@ -104,10 +118,10 @@ impl DataBlock {
                 return Ok(Arc::new(col));
             },
             {
-                return Err(ErrorCode::BadDataValueType(format!(
+                Err(ErrorCode::BadDataValueType(format!(
                     "Filter predict column does not support type '{:?}'",
                     data_type_id
-                )));
+                )))
             })
         }
     }

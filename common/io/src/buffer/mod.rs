@@ -19,7 +19,7 @@ mod buffer_read_ext;
 mod buffer_read_number_ext;
 mod buffer_reader;
 mod checkpoint_read;
-mod checkpoint_reader;
+mod nested_checkpoint_reader;
 
 pub use buffer_memory::*;
 pub use buffer_read::*;
@@ -28,4 +28,4 @@ pub use buffer_read_ext::*;
 pub use buffer_read_number_ext::*;
 pub use buffer_reader::*;
 pub use checkpoint_read::*;
-pub use checkpoint_reader::*;
+pub use nested_checkpoint_reader::NestedCheckpointReader;

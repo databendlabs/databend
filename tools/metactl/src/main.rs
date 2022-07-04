@@ -13,34 +13,26 @@
 // limitations under the License.
 
 mod grpc;
+use grpc::export_meta;
 
-use std::collections::BTreeMap;
-use std::io;
-use std::net::SocketAddr;
+mod snapshot;
 
-use anyhow::anyhow;
 use clap::Parser;
 use common_base::base::tokio;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_raft_store::config::get_default_raft_advertise_host;
-use common_meta_raft_store::sled_key_spaces::KeySpaceKV;
-use common_meta_sled_store::get_sled_db;
-use common_meta_sled_store::init_sled_db;
 use common_tracing::init_global_tracing;
-use databend_meta::export::deserialize_to_kv_variant;
-use databend_meta::export::serialize_kv_variant;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
-use tokio::net::TcpSocket;
 
 /// TODO(xuanwo)
 ///
 /// We should make metactl config keeps backward compatibility too.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
-struct Config {
+pub struct Config {
     /// Run a command
     #[clap(long, default_value = "")]
     pub cmd: String,
@@ -57,12 +49,23 @@ struct Config {
     #[clap(long, env = "METASRV_GRPC_API_ADDRESS", default_value = "")]
     pub grpc_api_address: String,
 
+    /// When export raft data, this is the name of the save db file.
+    /// If `db` is empty, output the exported data as json to stdout instead.
+    /// When import raft data, this is the name of the restored db file.
+    /// If `db` is empty, the restored data is from stdin instead.
+    #[clap(long, default_value = "")]
+    pub db: String,
+
+    /// initial_cluster format: node_id=endpoint,grpc_api_addr
+    #[clap(long, multiple_occurrences = true, multiple_values = true)]
+    pub initial_cluster: Vec<String>,
+
     #[clap(flatten)]
     pub raft_config: RaftConfig,
 }
 
 /// TODO: This is a temp copy of RaftConfig, we will migrate them in the future.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct RaftConfig {
@@ -138,8 +141,9 @@ pub struct RaftConfig {
     #[serde(alias = "metasrv_join")]
     pub join: Vec<String>,
 
-    /// The node id. Only used when this server is not initialized,
-    ///  e.g. --boot or --single for the first time.
+    /// The node id. Used in these cases:
+    /// 1. when this server is not initialized, e.g. --boot or --single for the first time.
+    /// 2. --initial_cluster with new cluster node id.
     ///  Otherwise this argument is ignored.
     #[clap(long, default_value = "0")]
     #[serde(alias = "kvsrv_id")]
@@ -183,7 +187,6 @@ impl Default for RaftConfig {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
-    let raft_config = &config.raft_config;
 
     let _guards = init_global_tracing("metactl", "./_metactl_log", &config.log_level, Some(false));
 
@@ -217,28 +220,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if config.export {
-        // export from grpc api if metasrv is running
-        if config.grpc_api_address.is_empty() {
-            eprintln!("export meta dir from: {}", raft_config.raft_dir);
-
-            init_sled_db(raft_config.raft_dir.clone());
-            export_from_dir()?;
-        } else {
-            export_from_running_node(&config).await?;
-        }
-
-        return Ok(());
+        return snapshot::export_data(&config).await;
     }
 
     if config.import {
-        eprintln!("import meta dir into: {}", raft_config.raft_dir);
-
-        init_sled_db(raft_config.raft_dir.clone());
-
-        clear()?;
-        import_from_stdin()?;
-
-        return Ok(());
+        return snapshot::import_data(&config).await;
     }
 
     Err(anyhow::anyhow!("Nothing to do"))
@@ -247,116 +233,6 @@ async fn main() -> anyhow::Result<()> {
 fn pretty<T>(v: &T) -> Result<String, serde_json::Error>
 where T: Serialize {
     serde_json::to_string_pretty(v)
-}
-
-fn clear() -> anyhow::Result<()> {
-    let db = get_sled_db();
-
-    let tree_names = db.tree_names();
-    for n in tree_names.iter() {
-        let name = String::from_utf8(n.to_vec())?;
-        let tree = db.open_tree(&name)?;
-        tree.clear()?;
-        eprintln!("Clear sled tree {} Done", name);
-    }
-
-    Ok(())
-}
-
-/// Read every line from stdin, deserialize it into tree_name, key and value. Insert them into sled db and flush.
-fn import_from_stdin() -> anyhow::Result<()> {
-    let db = get_sled_db();
-
-    let mut trees = BTreeMap::new();
-
-    let lines = io::stdin().lines();
-    let mut n = 0;
-    for line in lines {
-        let l = line?;
-        let (tree_name, kv_variant): (String, KeySpaceKV) = serde_json::from_str(&l)?;
-        // eprintln!("line: {}", l);
-
-        if !trees.contains_key(&tree_name) {
-            let tree = db.open_tree(&tree_name)?;
-            trees.insert(tree_name.clone(), tree);
-        }
-
-        let tree = trees.get(&tree_name).unwrap();
-
-        let (k, v) = serialize_kv_variant(&kv_variant)?;
-
-        tree.insert(k, v)?;
-        n += 1;
-    }
-
-    for tree in trees.values() {
-        tree.flush()?;
-    }
-
-    eprintln!("Imported {} records", n);
-
-    Ok(())
-}
-
-/// Print the entire sled db.
-///
-/// The output encodes every key-value into one line:
-/// `[sled_tree_name, {key_space: {key, value}}]`
-/// E.g.:
-/// `["test-29000-state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
-fn export_from_dir() -> anyhow::Result<()> {
-    let db = get_sled_db();
-
-    let mut tree_names = db.tree_names();
-    tree_names.sort();
-    for n in tree_names.iter() {
-        let name = String::from_utf8(n.to_vec())?;
-
-        let tree = db.open_tree(&name)?;
-        for x in tree.iter() {
-            let kv = x?;
-            let kv = vec![kv.0.to_vec(), kv.1.to_vec()];
-
-            let kv_variant = deserialize_to_kv_variant(&kv)?;
-            let tree_kv = (name.clone(), kv_variant);
-
-            let line = serde_json::to_string(&tree_kv)?;
-
-            println!("{}", line);
-        }
-    }
-
-    Ok(())
-}
-
-/// Dump metasrv data, raft-log, state machine etc in json to stdout.
-async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> {
-    eprintln!("export meta dir from remote: {}", config.grpc_api_address);
-
-    let grpc_api_addr: SocketAddr = match config.grpc_api_address.parse() {
-        Ok(addr) => addr,
-        Err(e) => {
-            eprintln!(
-                "ERROR: grpc api address is invalid: {}",
-                &config.grpc_api_address
-            );
-            return Err(anyhow!(e));
-        }
-    };
-
-    if service_is_running(grpc_api_addr).await? {
-        grpc::export_meta(&config.grpc_api_address).await?;
-        return Ok(());
-    }
-    Ok(())
-}
-
-// if port is open, service is running
-async fn service_is_running(addr: SocketAddr) -> Result<bool, io::Error> {
-    let socket = TcpSocket::new_v4()?;
-    let stream = socket.connect(addr).await;
-
-    Ok(stream.is_ok())
 }
 
 async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {

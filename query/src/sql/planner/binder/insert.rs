@@ -34,7 +34,6 @@ use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BufferReader;
-use common_io::prelude::CheckpointReader;
 use common_io::prelude::*;
 use common_planners::Expression;
 use common_streams::NDJsonSourceBuilder;
@@ -162,7 +161,7 @@ impl<'a> Binder {
             Some("VALUES") | None => {
                 let bytes = stream_str.as_bytes();
                 let cursor = Cursor::new(bytes);
-                let mut reader = CheckpointReader::new(BufferReader::new(cursor));
+                let mut reader = NestedCheckpointReader::new(BufferReader::new(cursor));
                 let source = ValueSourceV2::new(
                     self.ctx.clone(),
                     bind_context,
@@ -223,7 +222,10 @@ impl<'a> ValueSourceV2<'a> {
         }
     }
 
-    pub async fn read<R: BufferRead>(&self, reader: &mut CheckpointReader<R>) -> Result<DataBlock> {
+    pub async fn read<R: BufferRead>(
+        &self,
+        reader: &mut NestedCheckpointReader<R>,
+    ) -> Result<DataBlock> {
         let mut desers = self
             .schema
             .fields()
@@ -270,17 +272,18 @@ impl<'a> ValueSourceV2<'a> {
     /// Parse single row value, like ('111', 222, 1 + 1)
     async fn parse_next_row<R: BufferRead>(
         &self,
-        reader: &mut CheckpointReader<R>,
+        reader: &mut NestedCheckpointReader<R>,
         col_size: usize,
         desers: &mut [TypeDeserializerImpl],
         bind_context: &BindContext,
         metadata: MetadataRef,
     ) -> Result<()> {
         let _ = reader.ignore_white_spaces()?;
-        reader.checkpoint();
+        reader.push_checkpoint();
 
         // Start of the row --- '('
         if !reader.ignore_byte(b'(')? {
+            reader.pop_checkpoint();
             return Err(ErrorCode::BadDataValueType(
                 "Must start with parentheses".to_string(),
             ));
@@ -329,7 +332,7 @@ impl<'a> ValueSourceV2<'a> {
                 )
                 .await?;
 
-                reader.reset_checkpoint();
+                reader.pop_checkpoint();
 
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
                     deser.append_data_value(values[append_idx].clone(), &format)?;
@@ -339,13 +342,14 @@ impl<'a> ValueSourceV2<'a> {
             }
         }
 
+        reader.pop_checkpoint();
         Ok(())
     }
 }
 
 // Values |(xxx), (yyy), (zzz)
 pub fn skip_to_next_row<R: BufferRead>(
-    reader: &mut CheckpointReader<R>,
+    reader: &mut NestedCheckpointReader<R>,
     mut balance: i32,
 ) -> Result<()> {
     let _ = reader.ignore_white_spaces()?;

@@ -32,14 +32,14 @@ use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfAlterTable {
     pub if_exists: bool,
     pub table: ObjectName,
     pub action: AlterTableAction,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AlterTableAction {
     RenameTable(ObjectName),
     AlterTableClusterKey(Vec<Expr>),

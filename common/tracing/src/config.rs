@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /// Config for tracing.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
     pub level: String,
     pub dir: String,

@@ -17,20 +17,19 @@ pub mod query;
 pub mod statement;
 pub mod token;
 pub mod unescape;
-pub mod util;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use self::expr::subexpr;
-use self::util::comma_separated_list0;
 use crate::ast::Expr;
 use crate::ast::Statement;
+use crate::input::Input;
 use crate::parser::statement::statement;
 use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
-use crate::parser::util::Input;
+use crate::util::comma_separated_list0;
 use crate::Backtrace;
 use crate::DisplayError;
 
@@ -42,9 +41,9 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 pub fn parse_sql<'a>(
     sql_tokens: &'a [Token<'a>],
     backtrace: &'a Backtrace<'a>,
-) -> Result<Statement<'a>> {
+) -> Result<(Statement<'a>, Option<String>)> {
     match statement(Input(sql_tokens, backtrace)) {
-        Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok(stmts),
+        Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok((stmts.stmt, stmts.format)),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
             rest[0].display_error("unable to parse rest of the sql".to_string()),
         )),

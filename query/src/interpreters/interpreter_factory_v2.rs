@@ -18,8 +18,12 @@ use common_exception::Result;
 use common_planners::EmptyPlan;
 use common_planners::PlanNode;
 
+use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
+use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
+use crate::interpreters::AlterUserInterpreter;
+use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
@@ -70,6 +74,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::CreateUser(_)
                 | DfStatement::ShowRoles(_)
                 | DfStatement::AlterDatabase(_)
+                | DfStatement::CreateUDF(_)
                 | DfStatement::DropUser(_)
                 | DfStatement::AlterUser(_)
                 | DfStatement::CreateRole(_)
@@ -79,6 +84,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowGrants(_)
                 | DfStatement::RevokeRole(_)
                 | DfStatement::RevokePrivilege(_)
+                | DfStatement::Call(_)
         )
     }
 
@@ -97,6 +103,8 @@ impl InterpreterFactoryV2 {
             Plan::Explain { kind, plan } => {
                 ExplainInterpreterV2::try_create(ctx.clone(), *plan.clone(), kind.clone())
             }
+
+            Plan::Call(plan) => CallInterpreter::try_create(ctx.clone(), *plan.clone()),
 
             Plan::Copy(copy_plan) => CopyInterpreterV2::try_create(ctx.clone(), *copy_plan.clone()),
 
@@ -237,6 +245,15 @@ impl InterpreterFactoryV2 {
             }
             Plan::RevokeRole(revoke_role) => {
                 RevokeRoleInterpreter::try_create(ctx.clone(), *revoke_role.clone())
+            }
+            Plan::CreateUDF(create_user_udf) => {
+                CreateUserUDFInterpreter::try_create(ctx.clone(), *create_user_udf.clone())
+            }
+            Plan::AlterUDF(alter_udf) => {
+                AlterUserUDFInterpreter::try_create(ctx.clone(), *alter_udf.clone())
+            }
+            Plan::DropUDF(drop_udf) => {
+                DropUserUDFInterpreter::try_create(ctx.clone(), *drop_udf.clone())
             }
         }?;
 

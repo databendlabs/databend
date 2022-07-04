@@ -25,7 +25,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RaftStateKey {
     /// The node id.
     Id,

@@ -159,7 +159,7 @@ impl From<octocrab::Error> for ErrorCode {
 }
 
 // ===  ser/de to/from tonic::Status ===
-#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SerializedError {
     code: u16,
     message: String,

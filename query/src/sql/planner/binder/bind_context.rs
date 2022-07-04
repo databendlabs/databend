@@ -22,7 +22,7 @@ use common_exception::Result;
 use super::AggregateInfo;
 use crate::sql::common::IndexType;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ColumnBinding {
     /// Table name of this `ColumnBinding` in current context
     pub table_name: Option<String>,

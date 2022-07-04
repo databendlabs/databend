@@ -12,9 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+
+use databend_query::common::HashMap;
 use databend_query::common::HashMapKind;
 use databend_query::common::HashTableGrower;
 use databend_query::common::SingleLevelGrower;
+use rand::Rng;
 
 #[test]
 fn test_hash_table_grower() {
@@ -62,4 +68,61 @@ fn test_two_level_hash_table() {
     assert!(!inserted);
 
     assert_eq!(entity.get_value(), &2);
+}
+
+#[test]
+fn test_hash_map_drop() {
+    #[derive(Debug, Clone)]
+    struct A {
+        item: Arc<AtomicUsize>,
+    }
+
+    impl A {
+        pub fn new(item: Arc<AtomicUsize>) -> Self {
+            item.fetch_add(1, Ordering::Relaxed);
+            Self { item }
+        }
+    }
+
+    impl Drop for A {
+        fn drop(&mut self) {
+            self.item.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    let item = Arc::new(AtomicUsize::new(0));
+    let two_level_item = Arc::new(AtomicUsize::new(0));
+
+    {
+        let mut table = HashMap::<u64, Vec<A>>::create();
+        let mut two_level_table = HashMapKind::<u64, Vec<A>>::create_hash_table();
+        let mut rng = rand::thread_rng();
+
+        for _ in 0..1200 {
+            let key = rng.gen::<u64>() % 300;
+
+            let mut inserted = false;
+            let entity = table.insert_key(&key, &mut inserted);
+            if inserted {
+                entity.set_value(vec![A::new(item.clone())]);
+            } else {
+                entity.get_mut_value().push(A::new(item.clone()));
+            }
+
+            inserted = false;
+            let entity = two_level_table.insert_key(&key, &mut inserted);
+            if inserted {
+                entity.set_value(vec![A::new(item.clone())]);
+            } else {
+                entity.get_mut_value().push(A::new(item.clone()));
+            }
+        }
+        unsafe {
+            two_level_table.convert_to_two_level();
+        }
+    }
+    let count = item.load(Ordering::Relaxed);
+    let count2 = two_level_item.load(Ordering::Relaxed);
+    assert_eq!(count, 0);
+    assert_eq!(count2, 0);
 }

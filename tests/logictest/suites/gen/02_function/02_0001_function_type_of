@@ -124,19 +124,19 @@ select '=== TEST_datetimes';
 ----  
 === TEST_datetimes
 
-statement query B label(mysql,http)
+statement query B label(http)
 select typeof(now()) = 'DateTime';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select typeof(today()) = 'Date';
 
-----  mysql
+----  
 0
 
 ----  http

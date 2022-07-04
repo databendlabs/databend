@@ -59,6 +59,37 @@ docker build -t sqllogic/test:latest .
 - ADDITIONAL_HEADERS (for security scenario)
 3. docker run --name logictest --rm --network host public.ecr.aws/k3y0u5f2/sqllogic/test:latest
 
+## Write logic test tips
+
+1. skipif  help you skip test of given handler
+```
+skipif clickhouse
+statement query I
+select 1;
+
+----
+1
+```
+
+2. onlyif help you run test only by given handler
+```
+onlyif mysql
+statement query I
+select 1;
+
+----
+1
+```
+
+3. if some test has flaky failure, and you want ignore it, simply add skipped before statement query.(Remove it after problem solved)
+```
+statement query skipped I
+select 1;
+
+----
+1
+```
+
 # Learn More
 
 Ref pr: https://github.com/datafuselabs/databend/pull/5048

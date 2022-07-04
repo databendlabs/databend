@@ -18,7 +18,7 @@ use common_datavalues::prelude::*;
 
 use crate::PlanNode;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExplainType {
     Syntax,
     Graph,

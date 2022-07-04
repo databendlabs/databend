@@ -29,6 +29,8 @@ impl Plan {
 
             Plan::Copy(plan) => Ok(format!("{:?}", plan)),
 
+            Plan::Call(plan) => Ok(format!("{:?}", plan)),
+
             // Databases
             Plan::ShowDatabases(show_databases) => Ok(format!("{:?}", show_databases)),
             Plan::ShowCreateDatabase(show_create_database) => {
@@ -88,6 +90,9 @@ impl Plan {
             Plan::ShowUsers => Ok("SHOW USERS".to_string()),
             Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
+            Plan::CreateUDF(create_user_udf) => Ok(format!("{:?}", create_user_udf)),
+            Plan::AlterUDF(alter_user_udf) => Ok(format!("{alter_user_udf:?}")),
+            Plan::DropUDF(drop_udf) => Ok(format!("{drop_udf:?}")),
             Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
             Plan::ShowRoles => Ok("SHOW ROLES".to_string()),
             Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),

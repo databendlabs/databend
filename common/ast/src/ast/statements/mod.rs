@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod call;
 mod copy;
 mod database;
 mod explain;
@@ -24,6 +25,7 @@ mod table;
 mod user;
 mod view;
 
+pub use call::*;
 pub use copy::*;
 pub use database::*;
 pub use explain::*;

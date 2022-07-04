@@ -23,7 +23,7 @@ use super::AnalyzableStatement;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzedResult;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfCall {
     pub name: String,
     pub args: Vec<String>,

@@ -154,7 +154,7 @@ async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
     for case in cases {
         for stmt in case.create_stmt {
             // create table in the new planner to support column comment.
-            let (plan, _) = planner.plan_sql(stmt).await?;
+            let (plan, _, _) = planner.plan_sql(stmt).await?;
             let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
             let _ = executor.execute(None).await?;
         }

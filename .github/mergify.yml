@@ -13,7 +13,7 @@ queue_rules:
       # Reference: https://docs.mergify.com/conditions/#validating-all-status-checks
       # We only require linux checks to pass
       - check-success=check
-      - check-success=build_musl
+      - check-success~=^build_(aarch64|x86_64)_musl$
       - check-success=test_unit
       - check-success=test_metactl
       - check-success=test_stateless_standalone_linux
@@ -23,10 +23,12 @@ queue_rules:
 
 pull_request_rules:
   # Push PR into queue when it passes all checks
-  - name: put bug fix pr to queue
+  - name: put approved pr to queue
     conditions:
       - "#approved-reviews-by>=2"
+      - -draft
       - check-success=check
+      - check-success~=^build_(aarch64|x86_64)_musl$
       - check-success=test_unit
       - check-success=test_metactl
       - check-success=test_stateless_standalone_linux
@@ -37,84 +39,182 @@ pull_request_rules:
       queue:
         name: shared_queue
 
-  # if there is a conflict in a approved PR, ping the author.
+  # If there is a conflict in an approved PR, ping the author.
   - name: ping author on conflicts
     conditions:
       - conflict
+      - -draft
       - "#approved-reviews-by >= 2"
     actions:
       comment:
         message: |
           This pull request has merge conflicts that must be resolved before it can be merged. @{{author}} please update it 🙏.
 
-          Try `@mergify update` or update manually.
-
-  - name: Welcome new contributor
+  # Check if PR description contains CLA
+  - name: Check PR description
     conditions:
       - author!=Mergify
+      - -draft
+      - '-body~=I hereby agree to the terms of the CLA available at: https:\/\/databend\.rs\/dev\/policies\/cla\/'
+      - "-body~=Summary"
     actions:
       comment:
         message: |
-          Thanks for the contribution!
-          I have applied any labels matching special text in your PR Changelog.
+          This pull request's description is not fulfill the requirements. @{{author}} please update it 🙏.
 
-          Please review the labels and make any necessary changes.
+          The description should contain the following:
 
+          ```
+          I hereby agree to the terms of the CLA available at: https://databend.rs/dev/policies/cla/
+
+          ## Summary
+
+          Summary about this PR
+
+          Close #issue
+          ```
+
+  # Check if PR description contain CLA
+  - name: CLA Check
+    conditions:
+      - or:
+          - author=Mergify
+          - and:
+              - 'body~=I hereby agree to the terms of the CLA available at: https:\/\/databend\.rs\/dev\/policies\/cla\/'
+              - "body~=Summary"
+    actions:
+      post_check:
+        title: |
+          {% if check_succeed %}
+          Description contains CLA
+          {% else %}
+          Description doesn't contain CLA
+          {% endif %}
+        summary: |
+          {% if not check_succeed %}
+          Pull request description must contain [CLA](https://databend.rs/doc/contributing/good-pr) like the following:
+
+          ```
+          I hereby agree to the terms of the CLA available at: https://databend.rs/dev/policies/cla/
+
+          ## Summary
+
+          Summary about this PR
+
+          Close #issue
+          ```
+          {% endif %}
+
+  # Check if PR title contain valid types
+  - name: Comment PR if title not semantic
+    conditions:
+      - author!=Mergify
+      - -draft
+      - '-title~=^(feat|fix|refactor|ci|build|docs|website|chore)(\(.*\))?:'
+    actions:
+      comment:
+        message: |
+          This pull request's title is not fulfill the requirements. @{{author}} please update it 🙏.
+
+          Valid format:
+
+          ```
+          fix(query): fix group by string bug
+            ^         ^---------------------^
+            |         |
+            |         +-> Summary in present tense.
+            |
+            +-------> Type: feat, fix, refactor, ci, build, docs, website, chore
+          ```
+
+          Valid types:
+
+          - `feat`: this PR introduces a new feature to the codebase
+          - `fix`: this PR patches a bug in codebase
+          - `refactor`: this PR changes the code base without new features or bugfix
+          - `ci|build`: this PR changes build/testing/ci steps
+          - `docs|website`: this PR changes the documents or websites
+          - `chore`: this PR only has small changes that no need to record
+
+  # Check if PR title contain valid types
+  - name: Semantic PR Check
+    conditions:
+      - or:
+          - author=Mergify
+          - 'title~=^(feat|fix|refactor|ci|build|docs|website|chore)(\(.*\))?:'
+    actions:
+      post_check:
+        title: |
+          {% if check_succeed %}
+          Title follows Semantic PR
+          {% else %}
+          Title does not follow Semantic PR
+          {% endif %}
+        summary: |
+          {% if not check_succeed %}
+          Pull request title must follow [Semantic PR](https://databend.rs/doc/contributing/good-pr)
+
+          Valid format:
+
+          ```
+          fix(query): fix group by string bug
+            ^         ^---------------------^
+            |         |
+            |         +-> Summary in present tense.
+            |
+            +-------> Type: feat, fix, refactor, ci, build, docs, website, chore
+          ```
+
+          Valid types:
+
+          - `feat`: this PR introduces a new feature to the codebase
+          - `fix`: this PR patches a bug in codebase
+          - `refactor`: this PR changes the code base without new features or bugfix
+          - `ci|build`: this PR changes build/testing/ci steps
+          - `docs|website`: this PR changes the documents or websites
+          - `chore`: this PR only has small changes that no need to record
+          {% endif %}
+
+  # Assign pr label based of tags
   - name: label on New Feature
     conditions:
-      - body~=- New Feature
+      - 'title~=^(feat)(\(.*\))?:'
     actions:
       label:
         add:
           - pr-feature
   - name: label on Bug Fix
     conditions:
-      - body~=- Bug Fix
+      - 'title~=^(fix)(\(.*\))?:'
     actions:
       label:
         add:
           - pr-bugfix
-  - name: label on Improvement
+  - name: label on Refactor
     conditions:
-      - body~=- Improvement
+      - 'title~=^(refactor)(\(.*\))?:'
     actions:
       label:
         add:
-          - pr-improvement
-  - name: label on Performance
-    conditions:
-      - body~=- Performance Improvement
-    actions:
-      label:
-        add:
-          - pr-performance
+          - pr-refactor
   - name: label on Build/Testing/CI
     conditions:
-      - body~=- Build/Testing/CI
+      - 'title~=^(ci|build)(\(.*\))?:'
     actions:
       label:
         add:
           - pr-build
   - name: label on Documentation
     conditions:
-      - or:
-          - body~=- Documentation
-          - body~=- Website
+      - 'title~=^(docs|website)(\(.*\))?:'
     actions:
       label:
         add:
-          - pr-doc-fix
+          - pr-doc
   - name: label on Not for changelog
     conditions:
-      - body~=- Not for changelog
+      - 'title~=^(chore)(\(.*\))?:'
     actions:
       label:
         add:
-          - pr-not-for-changelog
-  - name: label on Other
-    conditions:
-      - body~=- Other
-    actions:
-      label:
-        add:
-          - pr-other
+          - pr-chore

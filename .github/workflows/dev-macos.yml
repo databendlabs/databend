@@ -1,0 +1,60 @@
+name: Dev MacOS
+
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "website/**"
+      - "**.md"
+      - "scripts/setup/**"
+      - ".devcontainer/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  BUILD_PROFILE: debug
+
+jobs:
+  build_macos:
+    name: "build_${{ matrix.arch }}_macos(optional)"
+    runs-on: macos-11
+    strategy:
+      matrix:
+        arch:
+          - x86_64
+          - aarch64
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_macos
+        with:
+          target: ${{ matrix.arch }}-apple-darwin
+          profile: debug
+
+  # https://github.com/datafuselabs/databend/issues/5287
+  # test_stateless_standalone_macos:
+  #  runs-on: macos-11
+  #  needs: build_macos
+  #  steps:
+  #    - uses: actions/checkout@v3
+  #    - uses: ./.github/actions/test_stateless_standalone_macos
+
+  test_stateless_cluster_macos:
+    name: "test_stateless_cluster_macos(optional)"
+    runs-on: macos-11
+    needs: build_macos
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_stateless_cluster_macos
+
+  test_sqllogic_standalone_macos:
+    name: "test_sqllogic_standalone_macos(optional)"
+    runs-on: macos-11
+    needs: build_macos
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_sqllogic_standalone_macos

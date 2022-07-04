@@ -18,7 +18,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RemoveUserStagePlan {
     pub stage: UserStageInfo,
     pub path: String,

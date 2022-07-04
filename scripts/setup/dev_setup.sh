@@ -304,7 +304,6 @@ function install_toolchain {
 	rustup component add rustfmt --toolchain "$version"
 	rustup component add rust-src --toolchain "$version"
 	rustup component add clippy --toolchain "$version"
-	rustup component add miri --toolchain "$version"
 	rustup default "$version"
 }
 
@@ -347,13 +346,21 @@ Build tools (since -b or no option was provided):
 EOF
 	fi
 
+	if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
+		cat <<EOF
+Check tools (since -c was provided):
+  * lcov
+  * tools from rust-tools.txt ( e.g. cargo-audit, cargo-udeps, taplo-cli)
+EOF
+	fi
+
 	if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		cat <<EOF
 Development tools (since -d was provided):
   * mysql client
   * python3 (boto3, yapf, yamllint, ...)
-  * lcov
-  * tools from rust-tools.txt ( e.g. cargo-audit, cargo-udeps, taplo-cli)
+  * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
+  * sqllogic test dependencies (PyHamcrest, environs, fire, ...)
 EOF
 	fi
 
@@ -385,19 +392,23 @@ EOF
 AUTO_APPROVE=false
 VERBOSE=false
 INSTALL_BUILD_TOOLS=false
+INSTALL_CHECK_TOOLS=false
 INSTALL_DEV_TOOLS=false
 INSTALL_PROFILE=false
 INSTALL_CODEGEN=false
 INSTALL_TPCH_DATA=false
 
 # parse args
-while getopts "ybdpstv" arg; do
+while getopts "ybcdpstv" arg; do
 	case "$arg" in
 	y)
 		AUTO_APPROVE="true"
 		;;
 	b)
 		INSTALL_BUILD_TOOLS="true"
+		;;
+	c)
+		INSTALL_CHECK_TOOLS="true"
 		;;
 	d)
 		INSTALL_DEV_TOOLS="true"
@@ -427,6 +438,7 @@ if [[ "$VERBOSE" == "true" ]]; then
 fi
 
 if [[ "$INSTALL_BUILD_TOOLS" == "false" ]] &&
+	[[ "$INSTALL_CHECK_TOOLS" == "false" ]] &&
 	[[ "$INSTALL_DEV_TOOLS" == "false" ]] &&
 	[[ "$INSTALL_PROFILE" == "false" ]] &&
 	[[ "$INSTALL_TPCH_DATA" == "false" ]] &&
@@ -511,6 +523,21 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_toolchain "$RUST_TOOLCHAIN"
 fi
 
+if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
+	if [[ -f scripts/setup/rust-tools.txt ]]; then
+		export RUSTFLAGS="-C target-feature=-crt-static"
+		while IFS='@' read -r tool version; do
+			install_cargo_binary "$tool" "$version"
+		done <scripts/setup/rust-tools.txt
+	fi
+
+	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
+		# needed by lcov
+		echo http://nl.alpinelinux.org/alpine/edge/testing >>/etc/apk/repositories
+	fi
+	install_pkg lcov "$PACKAGE_MANAGER"
+fi
+
 if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	install_mysql_client "$PACKAGE_MANAGER"
 	install_pkg git "$PACKAGE_MANAGER"
@@ -531,19 +558,13 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py toml yamllint
 	# drivers
 	python3 -m pip install --quiet mysql-connector-python pymysql sqlalchemy clickhouse_driver
+	# sqllogic dependencies
+	python3 -m pip install --quiet mysql-connector six PyHamcrest requests environs fire
 
-	if [[ -f scripts/setup/rust-tools.txt ]]; then
-		export RUSTFLAGS="-C target-feature=-crt-static"
-		while IFS='@' read -r tool version; do
-			install_cargo_binary "$tool" "$version"
-		done <scripts/setup/rust-tools.txt
-	fi
-
-	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
-		# needed by lcov
-		echo http://nl.alpinelinux.org/alpine/edge/testing >>/etc/apk/repositories
-	fi
-	install_pkg lcov "$PACKAGE_MANAGER"
+	# sqllogic clickhouse dependencies
+	# a temp hack only to make logic test work on click house as quickly as possible
+	# we need another way to support session on clickhouse-sqlalchemy
+	python3 -m pip install https://github.com/youngsofun/clickhouse-sqlalchemy/archive/a116e3162c699c12e63a689385b547f639c13018.zip
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
@@ -579,11 +600,25 @@ if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
 	fi
 fi
 
-[[ "${AUTO_APPROVE}" == "false" ]] && cat <<EOF
-Finished installing all dependencies.
+if [[ "${AUTO_APPROVE}" == "false" ]]; then
+	if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
+		cat <<EOF
+Finished installing all build dependencies.
 
 You should now be able to build the project by running:
 	cargo build
 EOF
+	fi
+
+	if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
+		cat <<EOF
+Finished installing all dev dependencies.
+
+You should now be able to run tests with:
+	make xxx-test (check Makefile for detailed target)
+EOF
+	fi
+
+fi
 
 exit 0

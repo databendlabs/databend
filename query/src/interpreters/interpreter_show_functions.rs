@@ -39,7 +39,7 @@ impl ShowFunctionsInterpreter {
     }
 
     fn build_query(&self) -> Result<String> {
-        return match &self.plan.kind {
+        match &self.plan.kind {
             PlanShowKind::All => Ok(
                 "SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions ORDER BY name"
                     .to_string(),
@@ -52,7 +52,7 @@ impl ShowFunctionsInterpreter {
                 "SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions WHERE {} ORDER BY name",
                 v
             )),
-        };
+        }
     }
 }
 

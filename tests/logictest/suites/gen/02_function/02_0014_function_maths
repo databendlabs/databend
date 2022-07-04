@@ -1,4 +1,7 @@
 statement ok
+DROP TABLE IF EXISTS math_sample_numbers;
+
+statement ok
 CREATE TABLE math_sample_numbers (timestamp UInt32, value Int32) Engine = Fuse;
 
 statement ok
@@ -238,10 +241,10 @@ SELECT asin(0.2);
 ----  
 0.2013579207903308
 
-statement query F label(mysql,http)
+statement query F label(http)
 SELECT asin(1.1);
 
-----  mysql
+----  
 nan
 
 ----  http
@@ -253,10 +256,10 @@ SELECT acos(1);
 ----  
 0.0
 
-statement query F label(mysql,http)
+statement query F label(http)
 SELECT acos(1.0001);
 
-----  mysql
+----  
 nan
 
 ----  http
@@ -342,10 +345,10 @@ SELECT sqrt(0);
 ----  
 0.0
 
-statement query F label(mysql,http)
+statement query F label(http)
 SELECT sqrt(-4);
 
-----  mysql
+----  
 nan
 
 ----  http

@@ -101,9 +101,9 @@ impl PipelineExecutor {
                 graph,
                 threads_num,
                 workers_condvar,
+                query_need_abort,
                 global_tasks_queue,
                 async_runtime: async_rt,
-                query_need_abort,
             }))
         }
     }
@@ -178,7 +178,7 @@ impl PipelineExecutor {
         // Wake up other threads to finish when throw error
         self.finish()?;
 
-        return Err(cause.add_message_back(format!(" (while in processor thread {})", thread_num)));
+        Err(cause.add_message_back(format!(" (while in processor thread {})", thread_num)))
     }
 
     /// # Safety

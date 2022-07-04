@@ -223,7 +223,7 @@ impl FuseTable {
         Ok(())
     }
 
-    fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
+    pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
         self.table_info
             .options()
             .get(opt_key)

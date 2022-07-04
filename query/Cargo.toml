@@ -56,7 +56,7 @@ common-tracing = { path = "../common/tracing" }
 # Github dependencies
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "d44a8e1" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "269dffd" }
 
 # Crates.io dependencies
 ahash = "0.7.6"
@@ -114,6 +114,7 @@ serfig = "0.0.2"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
 smallvec = { version = "1.8.0", features = ["write"] }
+snailquote = "0.3.1"
 strum = "0.24.1"
 strum_macros = "0.24.0"
 tempfile = { version = "3.3.0", optional = true }

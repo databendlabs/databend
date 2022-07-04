@@ -26,7 +26,7 @@ use crate::TxnRequest;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Cmd {
     /// Increment the sequence number generator specified by `key` and returns the new value.

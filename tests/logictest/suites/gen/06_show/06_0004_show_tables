@@ -16,36 +16,65 @@ CREATE TABLE showtable.t3(c1 int) ENGINE = Null;
 statement ok
 use showtable;
 
-statement ok
+statement query T
 SHOW TABLES;
 
-statement ok
+----
+t1
+t2 
+t3
+
+statement query T
 SHOW TABLES LIKE 't%';
 
-statement ok
+----
+t1
+t2 
+t3
+
+statement query T 
 SHOW TABLES LIKE 't2';
+
+----
+t2
 
 statement ok
 SHOW TABLES LIKE 't';
 
-statement ok
+statement query T
 SHOW TABLES WHERE Tables_in_showtable LIKE 't%';
 
+----
+t1
+t2 
+t3
+
+skipif clickhouse
 statement ok
 SHOW TABLES WHERE Tables_in_showtable = 't%' AND 1 = 0;
 
-statement ok
+statement query T
 SHOW TABLES WHERE Tables_in_showtable = 't2' OR 1 = 1;
 
-statement ok
+----
+t1
+t2 
+t3
+
+statement query T
 SHOW TABLES WHERE Tables_in_showtable = 't2' AND 1 = 1;
+
+----
+t2
 
 statement ok
 USE default;
 
+skipif clickhouse
 statement ok
 SHOW TABLES FROM showtables WHERE Tables_in_showtables LIKE 't%';
 
+skipif clickhouse
 statement ok
 SHOW TABLES FROM showtables WHERE Tables_in_showtables = "t%" AND 1 = 0;
 

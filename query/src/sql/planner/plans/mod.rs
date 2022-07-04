@@ -44,12 +44,15 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_planners::AlterTableClusterKeyPlan;
 use common_planners::AlterUserPlan;
+use common_planners::AlterUserUDFPlan;
 use common_planners::AlterViewPlan;
+use common_planners::CallPlan;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateRolePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
 use common_planners::CreateUserStagePlan;
+use common_planners::CreateUserUDFPlan;
 use common_planners::CreateViewPlan;
 use common_planners::DeletePlan;
 use common_planners::DescribeTablePlan;
@@ -60,6 +63,7 @@ use common_planners::DropTableClusterKeyPlan;
 use common_planners::DropTablePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
+use common_planners::DropUserUDFPlan;
 use common_planners::DropViewPlan;
 use common_planners::ExistsTablePlan;
 use common_planners::GrantPrivilegePlan;
@@ -122,6 +126,9 @@ pub enum Plan {
     // Copy
     Copy(Box<CopyPlanV2>),
 
+    // Call
+    Call(Box<CallPlan>),
+
     // System
     ShowMetrics,
     ShowProcessList,
@@ -163,6 +170,12 @@ pub enum Plan {
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
+
+    // UDF
+    CreateUDF(Box<CreateUserUDFPlan>),
+    AlterUDF(Box<AlterUserUDFPlan>),
+    DropUDF(Box<DropUserUDFPlan>),
+
     ShowRoles,
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
@@ -229,8 +242,12 @@ impl Display for Plan {
             Plan::ShowGrants(_) => write!(f, "ShowGrants"),
             Plan::RevokePriv(_) => write!(f, "RevokePriv"),
             Plan::RevokeRole(_) => write!(f, "RevokeRole"),
+            Plan::CreateUDF(_) => write!(f, "CreateUDF"),
+            Plan::AlterUDF(_) => write!(f, "AlterUDF"),
+            Plan::DropUDF(_) => write!(f, "DropUDF"),
             Plan::Insert(_) => write!(f, "Insert"),
             Plan::Delete(_) => write!(f, "Delete"),
+            Plan::Call(_) => write!(f, "Call"),
         }
     }
 }
@@ -289,8 +306,12 @@ impl Plan {
             Plan::RemoveStage(plan) => plan.schema(),
             Plan::RevokePriv(_) => Arc::new(DataSchema::empty()),
             Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
+            Plan::CreateUDF(_) => Arc::new(DataSchema::empty()),
+            Plan::AlterUDF(_) => Arc::new(DataSchema::empty()),
+            Plan::DropUDF(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
+            Plan::Call(_) => Arc::new(DataSchema::empty()),
         }
     }
 }

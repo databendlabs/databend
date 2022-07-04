@@ -1,4 +1,7 @@
 statement ok
+use default;
+
+statement ok
 create table t09_0012(c int null);
 
 statement ok
