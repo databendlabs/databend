@@ -31,6 +31,13 @@ use crate::formats::output_format_csv::CSVWithNamesOutputFormat;
 use crate::formats::output_format_csv::TSVOutputFormat;
 use crate::formats::output_format_csv::TSVWithNamesAndTypesOutputFormat;
 use crate::formats::output_format_csv::TSVWithNamesOutputFormat;
+use crate::formats::output_format_json_each_row::JsonCompactEachRowOutputFormat;
+use crate::formats::output_format_json_each_row::JsonCompactEachRowWithNamesAndTypesOutputFormat;
+use crate::formats::output_format_json_each_row::JsonCompactEachRowWithNamesOutputFormat;
+use crate::formats::output_format_json_each_row::JsonCompactStringsEachRowOutputFormat;
+use crate::formats::output_format_json_each_row::JsonCompactStringsEachRowWithNamesAndTypesOutputFormat;
+use crate::formats::output_format_json_each_row::JsonCompactStringsEachRowWithNamesOutputFormat;
+use crate::formats::output_format_json_each_row::JsonStringsEachRowOutputFormat;
 use crate::formats::FormatFactory;
 
 pub trait OutputFormat: Send {
@@ -70,6 +77,13 @@ pub enum OutputFormatType {
     TSVWithNamesAndTypes,
     Parquet,
     JsonEachRow,
+    JsonStringsEachRow,
+    JsonCompactEachRow,
+    JsonCompactStringsEachRow,
+    JsonCompactEachRowWithNames,
+    JsonCompactEachRowWithNamesAndTypes,
+    JsonCompactStringsEachRowWithNames,
+    JsonCompactStringsEachRowWithNamesAndTypes,
     Values,
 }
 
@@ -84,6 +98,12 @@ impl OutputFormatType {
         match self {
             OutputFormatType::CSV => Some(OutputFormatType::CSVWithNames),
             OutputFormatType::TSV => Some(OutputFormatType::TSVWithNames),
+            OutputFormatType::JsonCompactEachRow => {
+                Some(OutputFormatType::JsonCompactEachRowWithNames)
+            }
+            OutputFormatType::JsonCompactStringsEachRow => {
+                Some(OutputFormatType::JsonCompactStringsEachRowWithNames)
+            }
             _ => None,
         }
     }
@@ -92,6 +112,12 @@ impl OutputFormatType {
         match self {
             OutputFormatType::CSV => Some(OutputFormatType::CSVWithNamesAndTypes),
             OutputFormatType::TSV => Some(OutputFormatType::TSVWithNamesAndTypes),
+            OutputFormatType::JsonCompactEachRow => {
+                Some(OutputFormatType::JsonCompactEachRowWithNamesAndTypes)
+            }
+            OutputFormatType::JsonCompactStringsEachRow => {
+                Some(OutputFormatType::JsonCompactStringsEachRowWithNamesAndTypes)
+            }
             _ => None,
         }
     }
@@ -114,7 +140,16 @@ impl OutputFormatType {
                 "text/csv; charset=UTF-8; header=present"
             }
             OutputFormatType::Parquet => "application/octet-stream",
-            OutputFormatType::JsonEachRow => "application/json; charset=UTF-8",
+            OutputFormatType::JsonEachRow
+            | OutputFormatType::JsonStringsEachRow
+            | OutputFormatType::JsonCompactEachRow
+            | OutputFormatType::JsonCompactEachRowWithNames
+            | OutputFormatType::JsonCompactEachRowWithNamesAndTypes
+            | OutputFormatType::JsonCompactStringsEachRow
+            | OutputFormatType::JsonCompactStringsEachRowWithNames
+            | OutputFormatType::JsonCompactStringsEachRowWithNamesAndTypes => {
+                "application/x-ndjson; charset=UTF-8"
+            }
             _ => "text/plain; charset=UTF-8",
         }
         .to_string()
@@ -148,6 +183,30 @@ impl OutputFormatType {
             OutputFormatType::JsonEachRow => {
                 Box::new(JsonEachRowOutputFormat::create(schema, format_setting))
             }
+            OutputFormatType::JsonStringsEachRow => Box::new(
+                JsonStringsEachRowOutputFormat::create(schema, format_setting),
+            ),
+            OutputFormatType::JsonCompactEachRow => Box::new(
+                JsonCompactEachRowOutputFormat::create(schema, format_setting),
+            ),
+            OutputFormatType::JsonCompactStringsEachRow => Box::new(
+                JsonCompactStringsEachRowOutputFormat::create(schema, format_setting),
+            ),
+            OutputFormatType::JsonCompactEachRowWithNames => Box::new(
+                JsonCompactEachRowWithNamesOutputFormat::create(schema, format_setting),
+            ),
+            OutputFormatType::JsonCompactEachRowWithNamesAndTypes => Box::new(
+                JsonCompactEachRowWithNamesAndTypesOutputFormat::create(schema, format_setting),
+            ),
+            OutputFormatType::JsonCompactStringsEachRowWithNames => Box::new(
+                JsonCompactStringsEachRowWithNamesOutputFormat::create(schema, format_setting),
+            ),
+            OutputFormatType::JsonCompactStringsEachRowWithNamesAndTypes => Box::new(
+                JsonCompactStringsEachRowWithNamesAndTypesOutputFormat::create(
+                    schema,
+                    format_setting,
+                ),
+            ),
             OutputFormatType::Values => {
                 Box::new(ValuesOutputFormat::create(schema, format_setting))
             }
