@@ -149,4 +149,33 @@ select * from t16;
 select arr[0], arr[1] from t16;
 select arr[0], arr[1] from t16 where arr[1] = 6 order by arr[2] desc;
 
+select '==Array(String Nullable)==';
+
+CREATE TABLE IF NOT EXISTS t17(id Int, arr Array(String Null)) Engine = Fuse;
+
+INSERT INTO t17 (id, arr) VALUES(1, ['aa', 'bb']), (2, [null, 'cc']), (3, ['dd', null]), (4, ['ee', 'ff']);
+
+select * from t17;
+select arr[0], arr[1] from t17;
+
+select '==Array(Int64 Nullable)==';
+
+CREATE TABLE IF NOT EXISTS t18(id Int, arr Array(Int64 Null)) Engine = Fuse;
+
+INSERT INTO t18 (id, arr) VALUES(1, [1,2,3,4]), (2, [5,null,7,8]), (3, [null,9,10,11]);
+
+select * from t18;
+select arr[0], arr[1] from t18;
+select arr[0], arr[1] from t18 where arr[1] = 2 order by arr[2] desc;
+
+select '==Array(Array(Int64) Nullable)==';
+
+CREATE TABLE IF NOT EXISTS t19(id Int, arr Array(Array(Int64) Null)) Engine = Fuse;
+
+INSERT INTO t19 (id, arr) VALUES(1, [[1,2],[3,4]]), (2, [[5,6],null]), (3, [[7,8],[9,10]]);
+
+select * from t19;
+select arr[0], arr[1] from t19;
+select arr[0][0], arr[1][0] from t19;
+
 DROP DATABASE db1;
