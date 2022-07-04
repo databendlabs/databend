@@ -91,6 +91,7 @@ mod stream;
 pub use access::ManagementModeAccess;
 pub use async_insert_queue::AsyncInsertQueue;
 pub use fragments::QueryFragmentAction;
+pub use fragments::QueryFragmentActions;
 pub use fragments::QueryFragmentsActions;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;

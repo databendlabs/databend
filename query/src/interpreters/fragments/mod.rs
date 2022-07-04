@@ -22,5 +22,6 @@ mod query_fragment_stage;
 pub use query_fragment::QueryFragment;
 pub use query_fragment::QueryFragmentsBuilder;
 pub use query_fragment_actions::QueryFragmentAction;
+pub use query_fragment_actions::QueryFragmentActions;
 pub use query_fragment_actions::QueryFragmentsActions;
 pub use query_fragment_root::RootQueryFragment;

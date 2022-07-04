@@ -101,9 +101,9 @@ impl PipelineExecutor {
                 graph,
                 threads_num,
                 workers_condvar,
+                query_need_abort,
                 global_tasks_queue,
                 async_runtime: async_rt,
-                query_need_abort,
             }))
         }
     }
