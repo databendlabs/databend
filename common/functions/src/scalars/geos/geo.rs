@@ -20,6 +20,6 @@ pub struct GeoFunction;
 
 impl GeoFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("geoToH3", GeoToH3Function::desc());
+        factory.register("geo_to_h3", GeoToH3Function::desc());
     }
 }

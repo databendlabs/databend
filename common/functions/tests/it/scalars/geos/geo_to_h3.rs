@@ -31,5 +31,5 @@ fn test_geo_to_h3_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions("geoToH3", &tests)
+    test_scalar_functions("geo_to_h3", &tests)
 }

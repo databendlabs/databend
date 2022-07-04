@@ -7,7 +7,7 @@ Returns [H3](https://eng.uber.com/h3/) point index **(lon, lat)** with specified
 ## Syntax
 
 ```sql
-geoToH3(lon, lat, resolution)
+geo_to_h3(lon, lat, resolution)
 ```
 
 ## Arguments
@@ -28,7 +28,7 @@ Type: UInt64
 ## Examples
 
 ```sql
-SELECT geoToH3(37.79506683, 55.71290588, 15) AS h3Index;
+SELECT geo_to_h3(37.79506683, 55.71290588, 15) AS h3Index;
 +-------------------------------+
 |        h3Index                |
 +-------------------------------+

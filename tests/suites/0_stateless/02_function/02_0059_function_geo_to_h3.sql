@@ -10,7 +10,7 @@ INSERT INTO t1 VALUES(55.72076200, 37.59813500, 15);
 INSERT INTO t1 VALUES(55.72076201, 37.59813500, 15);
 INSERT INTO t1 VALUES(55.72076200, 37.59813500, 14);
 
-select geoToH3(37.63098076, 55.77922738, 15);
-select geoToH3(lon, lat, resolution) from t1 order by lat, lon, resolution;
+select geo_to_h3(37.63098076, 55.77922738, 15);
+select geo_to_h3(lon, lat, resolution) from t1 order by lat, lon, resolution;
 
 DROP TABLE t1;
