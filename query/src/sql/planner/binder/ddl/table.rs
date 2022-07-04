@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt::Write;
 use std::collections::BTreeMap;
 
 use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
@@ -32,7 +33,6 @@ use common_meta_app::schema::TableMeta;
 use common_planners::OptimizeTableAction;
 use common_planners::*;
 
-use crate::catalogs::DatabaseCatalog;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::is_reserved_opt_key;
@@ -74,35 +74,34 @@ impl SelectBuilder {
     }
 
     fn build(self) -> String {
-        let columns = {
-            let s = self.columns.join(",");
-            if !s.is_empty() {
-                s
-            } else {
-                "*".to_owned()
-            }
-        };
+        let mut query = String::new();
+        let mut columns = String::new();
+        let s = self.columns.join(",");
+        if s.is_empty() {
+            write!(columns, "*").unwrap();
+        } else {
+            write!(columns, "{s}").unwrap();
+        }
 
-        let order_bys = {
-            let s = self.order_bys.join(",");
-            if !s.is_empty() {
-                format!("ORDER BY {s}")
-            } else {
-                s
-            }
-        };
+        let mut order_bys = String::new();
+        let s = self.order_bys.join(",");
+        if s.is_empty() {
+            write!(order_bys, "{s}").unwrap();
+        } else {
+            write!(order_bys, "ORDER BY {s}").unwrap();
+        }
 
-        let filters = {
-            let s = self.filters.join(" and ");
-            if !s.is_empty() {
-                format!("where {s}")
-            } else {
-                "".to_owned()
-            }
-        };
+        let mut filters = String::new();
+        let s = self.filters.join(" and ");
+        if !s.is_empty() {
+            write!(filters, "where {s}").unwrap();
+        } else {
+            write!(filters, "").unwrap();
+        }
 
         let from = self.from;
-        format!("SELECT {columns} FROM {from} {filters} {order_bys} ")
+        write!(query, "SELECT {columns} FROM {from} {filters} {order_bys} ").unwrap();
+        query
     }
 }
 
@@ -113,20 +112,16 @@ impl<'a> Binder {
         stmt: &ShowTablesStmt<'a>,
     ) -> Result<Plan> {
         let ShowTablesStmt {
-            database: db,
+            database,
             full,
             limit,
             with_history,
         } = stmt;
 
-        let mut database = self.ctx.get_current_database();
-        if let Some(ident) = db {
-            database = ident.name.to_lowercase()
-        }
-
-        if DatabaseCatalog::is_case_insensitive_db(&database) {
-            database = database.to_uppercase()
-        }
+        let database = database
+            .clone()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_database());
 
         let mut select_builder = SelectBuilder::from("information_schema.tables");
 
@@ -167,20 +162,18 @@ impl<'a> Binder {
                 select_builder.with_filter(format!("table_schema = '{database}'"));
                 select_builder.build()
             }
-            Some(predicate) => match predicate {
-                ShowLimit::Like { pattern } => {
-                    select_builder
-                        .with_filter(format!("table_schema = '{database}'"))
-                        .with_filter(format!("table_name LIKE '{pattern}'"));
-                    select_builder.build()
-                }
-                ShowLimit::Where { selection } => {
-                    select_builder
-                        .with_filter(format!("table_schema = '{database}'"))
-                        .with_filter(format!("({selection})"));
-                    select_builder.build()
-                }
-            },
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder
+                    .with_filter(format!("table_schema = '{database}'"))
+                    .with_filter(format!("table_name LIKE '{pattern}'"));
+                select_builder.build()
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder
+                    .with_filter(format!("table_schema = '{database}'"))
+                    .with_filter(format!("({selection})"));
+                select_builder.build()
+            }
         };
         let tokens = tokenize_sql(query.as_str())?;
         let backtrace = Backtrace::new();
@@ -265,14 +258,10 @@ impl<'a> Binder {
             limit,
         } = stmt;
 
-        let mut database = self.ctx.get_current_database();
-        if let Some(ident) = db {
-            database = ident.name.to_lowercase()
-        }
-
-        if DatabaseCatalog::is_case_insensitive_db(&database) {
-            database = database.to_uppercase()
-        }
+        let database = db
+            .clone()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_database());
 
         let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
         NULL AS Row_format, num_rows AS Rows, NULL AS Avg_row_length, data_size AS Data_length, \
@@ -293,18 +282,16 @@ impl<'a> Binder {
                 ORDER BY Name",
                 select_cols, database
             ),
-            Some(predicate) => match predicate {
-                ShowLimit::Like { pattern } => format!(
-                    "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
-                WHERE Name LIKE '{}' ORDER BY Name",
-                    select_cols, database, pattern
-                ),
-                ShowLimit::Where { selection } => format!(
-                    "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
-                WHERE ({}) ORDER BY Name",
-                    select_cols, database, selection
-                ),
-            },
+            Some(ShowLimit::Like { pattern }) => format!(
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+            WHERE Name LIKE '{}' ORDER BY Name",
+                select_cols, database, pattern
+            ),
+            Some(ShowLimit::Where { selection }) => format!(
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+            WHERE ({}) ORDER BY Name",
+                select_cols, database, selection
+            ),
         };
         let tokens = tokenize_sql(query.as_str())?;
         let backtrace = Backtrace::new();

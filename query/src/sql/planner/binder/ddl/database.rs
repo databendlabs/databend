@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt::Write;
 use std::collections::BTreeMap;
 
 use common_ast::ast::AlterDatabaseAction;
@@ -49,24 +50,18 @@ impl<'a> Binder {
         stmt: &ShowDatabasesStmt<'a>,
     ) -> Result<Plan> {
         let ShowDatabasesStmt { limit } = stmt;
-        let query = format!(
-            "SELECT name AS Database FROM system.databases {} ORDER BY name",
-            match limit {
-                None => {
-                    "".to_string()
-                }
-                Some(predicate) => {
-                    match predicate {
-                        ShowLimit::Like { pattern } => {
-                            format!("WHERE name LIKE '{}'", pattern)
-                        }
-                        ShowLimit::Where { selection } => {
-                            format!("WHERE {}", selection)
-                        }
-                    }
-                }
+        let mut query = String::new();
+        write!(query, "SELECT name AS Database FROM system.databases").unwrap();
+        match limit {
+            Some(ShowLimit::Like { pattern }) => {
+                write!(query, " WHERE name LIKE '{pattern}'").unwrap();
             }
-        );
+            Some(ShowLimit::Where { selection }) => {
+                write!(query, " WHERE {selection}").unwrap();
+            }
+            None => (),
+        }
+        write!(query, " ORDER BY name").unwrap();
         let tokens = tokenize_sql(query.as_str())?;
         let backtrace = Backtrace::new();
         let (stmt, _) = parse_sql(&tokens, &backtrace)?;
