@@ -237,6 +237,8 @@ pub enum TokenKind {
     //    reserved list.
     #[token("ALL", ignore(ascii_case))]
     ALL,
+    #[token("ANY", ignore(ascii_case))]
+    ANY,
     #[token("ALTER", ignore(ascii_case))]
     ALTER,
     #[token("ANALYZE", ignore(ascii_case))]
@@ -745,7 +747,7 @@ impl TokenKind {
             // | TokenKind::ANALYSE
             | TokenKind::ANALYZE
             | TokenKind::AND
-            // | TokenKind::ANY
+            | TokenKind::ANY
             | TokenKind::ASC
             // | TokenKind::ASYMMETRIC
             | TokenKind::BETWEEN
@@ -884,7 +886,7 @@ impl TokenKind {
             // | TokenKind::ANALYSE
             | TokenKind::ANALYZE
             | TokenKind::AND
-            // | TokenKind::ANY
+            | TokenKind::ANY
             | TokenKind::ASC
             // | TokenKind::ASYMMETRIC
             // | TokenKind::AUTHORIZATION

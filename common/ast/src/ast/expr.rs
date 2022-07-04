@@ -59,6 +59,20 @@ pub enum Expr<'a> {
         subquery: Box<Query<'a>>,
         not: bool,
     },
+    /// `expr op ANY (SELECT ...)`
+    AnySubquery {
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
+        subquery: Box<Query<'a>>,
+        op: ComparisonOperator,
+    },
+    /// `expr op ALL (SELECT ...)`
+    AllSubquery {
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
+        subquery: Box<Query<'a>>,
+        op: ComparisonOperator,
+    },
     /// `BETWEEN ... AND ...`
     Between {
         span: &'a [Token<'a>],
@@ -260,6 +274,16 @@ pub enum TrimWhere {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ComparisonOperator {
+    Gt,
+    Lt,
+    Gte,
+    Lte,
+    Eq,
+    NotEq,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryOperator {
     Plus,
     Minus,
@@ -302,35 +326,37 @@ pub enum UnaryOperator {
 impl<'a> Expr<'a> {
     pub fn span(&self) -> &'a [Token<'a>] {
         match self {
-            Expr::ColumnRef { span, .. } => span,
-            Expr::IsNull { span, .. } => span,
-            Expr::IsDistinctFrom { span, .. } => span,
-            Expr::InList { span, .. } => span,
-            Expr::InSubquery { span, .. } => span,
-            Expr::Between { span, .. } => span,
-            Expr::BinaryOp { span, .. } => span,
-            Expr::UnaryOp { span, .. } => span,
-            Expr::Cast { span, .. } => span,
-            Expr::TryCast { span, .. } => span,
-            Expr::Extract { span, .. } => span,
-            Expr::Position { span, .. } => span,
-            Expr::Substring { span, .. } => span,
-            Expr::Trim { span, .. } => span,
-            Expr::Literal { span, .. } => span,
-            Expr::CountAll { span } => span,
-            Expr::Tuple { span, .. } => span,
-            Expr::FunctionCall { span, .. } => span,
-            Expr::Case { span, .. } => span,
-            Expr::Exists { span, .. } => span,
-            Expr::Subquery { span, .. } => span,
-            Expr::MapAccess { span, .. } => span,
-            Expr::Array { span, .. } => span,
-            Expr::Interval { span, .. } => span,
-            Expr::DateAdd { span, .. } => span,
-            Expr::DateSub { span, .. } => span,
-            Expr::NullIf { span, .. } => span,
-            Expr::Coalesce { span, .. } => span,
-            Expr::IfNull { span, .. } => span,
+            Expr::ColumnRef { span, .. }
+            | Expr::IsNull { span, .. }
+            | Expr::IsDistinctFrom { span, .. }
+            | Expr::InList { span, .. }
+            | Expr::InSubquery { span, .. }
+            | Expr::Between { span, .. }
+            | Expr::BinaryOp { span, .. }
+            | Expr::UnaryOp { span, .. }
+            | Expr::Cast { span, .. }
+            | Expr::TryCast { span, .. }
+            | Expr::Extract { span, .. }
+            | Expr::Position { span, .. }
+            | Expr::Substring { span, .. }
+            | Expr::Trim { span, .. }
+            | Expr::Literal { span, .. }
+            | Expr::CountAll { span }
+            | Expr::Tuple { span, .. }
+            | Expr::FunctionCall { span, .. }
+            | Expr::Case { span, .. }
+            | Expr::Exists { span, .. }
+            | Expr::Subquery { span, .. }
+            | Expr::MapAccess { span, .. }
+            | Expr::Array { span, .. }
+            | Expr::Interval { span, .. }
+            | Expr::DateAdd { span, .. }
+            | Expr::DateSub { span, .. }
+            | Expr::NullIf { span, .. }
+            | Expr::Coalesce { span, .. }
+            | Expr::IfNull { span, .. }
+            | Expr::AnySubquery { span, .. }
+            | Expr::AllSubquery { span, .. } => span,
         }
     }
 }
@@ -346,6 +372,31 @@ impl Display for UnaryOperator {
             }
             UnaryOperator::Not => {
                 write!(f, "NOT")
+            }
+        }
+    }
+}
+
+impl Display for ComparisonOperator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ComparisonOperator::Gt => {
+                write!(f, ">")
+            }
+            ComparisonOperator::Lt => {
+                write!(f, "<")
+            }
+            ComparisonOperator::Gte => {
+                write!(f, ">=")
+            }
+            ComparisonOperator::Lte => {
+                write!(f, "<=")
+            }
+            ComparisonOperator::Eq => {
+                write!(f, "=")
+            }
+            ComparisonOperator::NotEq => {
+                write!(f, "<>")
             }
         }
     }
@@ -603,6 +654,16 @@ impl<'a> Display for Expr<'a> {
                     write!(f, " NOT")?;
                 }
                 write!(f, " IN({subquery})")?;
+            }
+            Expr::AnySubquery {
+                expr, subquery, op, ..
+            } => {
+                write!(f, "{expr} {op} Any({subquery})")?;
+            }
+            Expr::AllSubquery {
+                expr, subquery, op, ..
+            } => {
+                write!(f, "{expr} {op} All({subquery})")?;
             }
             Expr::Between {
                 expr,
