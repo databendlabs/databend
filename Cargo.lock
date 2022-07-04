@@ -1109,6 +1109,17 @@ dependencies = [
 [[package]]
 name = "common-formats"
 version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-io",
+ "once_cell",
+ "pretty_assertions",
+ "strum",
+ "strum_macros",
+]
 
 [[package]]
 name = "common-functions"
@@ -2033,6 +2044,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-formats",
  "common-functions",
  "common-grpc",
  "common-hive-meta-store",

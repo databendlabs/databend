@@ -24,7 +24,6 @@ pub mod catalogs;
 pub mod clusters;
 pub mod common;
 pub mod databases;
-pub mod formats;
 pub mod interpreters;
 pub mod metrics;
 pub mod optimizers;

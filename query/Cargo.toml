@@ -35,6 +35,7 @@ common-contexts = { path = "../common/contexts" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
+common-formats = { path = "../common/formats" }
 common-functions = { path = "../common/functions" }
 common-grpc = { path = "../common/grpc" }
 common-hive-meta-store = { path = "../common/hive-meta-store", optional = true }
