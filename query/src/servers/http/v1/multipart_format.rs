@@ -95,6 +95,7 @@ impl MultipartFormat {
                 Compression::Zstd => Some(CompressAlgorithm::Zstd),
                 Compression::Deflate => Some(CompressAlgorithm::Zlib),
                 Compression::RawDeflate => Some(CompressAlgorithm::Deflate),
+                Compression::Xz => Some(CompressAlgorithm::Xz),
                 Compression::Lzo => {
                     return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"));
                 }
