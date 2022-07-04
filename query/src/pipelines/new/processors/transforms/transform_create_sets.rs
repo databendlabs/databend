@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
+use common_base::base::tokio::task::JoinHandle;
+use common_base::base::Runtime;
+use common_base::base::TrySpawn;
 use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -29,16 +33,25 @@ use crate::interpreters::SelectInterpreter;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::transforms::transform::Transform;
-use crate::pipelines::new::processors::transforms::transform::Transformer;
+use crate::pipelines::new::processors::Processor;
 use crate::sessions::QueryContext;
 
 pub struct TransformCreateSets {
     initialized: bool,
     schema: DataSchemaRef,
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+
+    input_data: Option<DataBlock>,
+    output_data: Option<DataBlock>,
+
     sub_queries_result: Vec<DataValue>,
     sub_queries_puller: Arc<SubQueriesPuller>,
+
+    runtime: Arc<Runtime>,
+    sub_queries_res_handle: Option<JoinHandle<Result<Vec<DataValue>>>>,
 }
 
 impl TransformCreateSets {
@@ -48,39 +61,117 @@ impl TransformCreateSets {
         schema: DataSchemaRef,
         puller: Arc<SubQueriesPuller>,
     ) -> Result<ProcessorPtr> {
-        Ok(Transformer::create(input, output, TransformCreateSets {
+        Ok(ProcessorPtr::create(Box::new(TransformCreateSets {
             schema,
+            input,
+            output,
+            input_data: None,
             initialized: false,
             sub_queries_result: vec![],
             sub_queries_puller: puller,
-        }))
+            output_data: None,
+            sub_queries_res_handle: None,
+            runtime: Arc::new(Runtime::with_worker_threads(1, None)?),
+        })))
     }
 }
 
-impl Transform for TransformCreateSets {
-    const NAME: &'static str = "TransformCreateSets";
+#[async_trait::async_trait]
+impl Processor for TransformCreateSets {
+    fn name(&self) -> &'static str {
+        "TransformCreateSets"
+    }
 
-    fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        if data_block.is_empty() {
-            return Ok(DataBlock::empty_with_schema(self.schema.clone()));
-        }
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
 
+    fn event(&mut self) -> Result<Event> {
         if !self.initialized {
+            let sub_queries_puller = self.sub_queries_puller.clone();
+            self.sub_queries_res_handle = Some(
+                self.runtime
+                    .spawn(async move { sub_queries_puller.execute_sub_queries().await }),
+            );
+            return Ok(Event::Async);
+        }
+
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if let Some(output_data) = self.output_data.take() {
+            self.output.push_data(Ok(output_data));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input_data.is_some() {
+            return Ok(Event::Sync);
+        }
+
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        if self.input.has_data() {
+            self.input_data = Some(self.input.pull_data().unwrap()?);
+            return Ok(Event::Sync);
+        }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
+    }
+
+    fn process(&mut self) -> Result<()> {
+        if let Some(input_data) = self.input_data.take() {
+            let num_rows = input_data.num_rows();
+            let mut new_columns = input_data.columns().to_vec();
+            let start_index = self.schema.fields().len() - self.sub_queries_result.len();
+
+            for (index, result) in self.sub_queries_result.iter().enumerate() {
+                let data_type = self.schema.field(start_index + index).data_type();
+                let col = data_type.create_constant_column(result, num_rows)?;
+                new_columns.push(col);
+            }
+
+            self.output_data = Some(DataBlock::create(self.schema.clone(), new_columns));
+        }
+
+        Ok(())
+    }
+
+    async fn async_process(&mut self) -> Result<()> {
+        if let Some(handler) = self.sub_queries_res_handle.take() {
+            self.sub_queries_result = match handler.await {
+                Ok(Ok(res)) => Ok(res),
+                Ok(Err(error_code)) => Err(error_code),
+                Err(join_error) => {
+                    if !join_error.is_panic() {
+                        return Err(ErrorCode::TokioError("Join handler is canceled."));
+                    }
+
+                    let panic_error = join_error.into_panic();
+                    return match panic_error.downcast_ref::<&'static str>() {
+                        None => match panic_error.downcast_ref::<String>() {
+                            None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+                            Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                        },
+                        Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                    };
+                }
+            }?;
+
             self.initialized = true;
-            self.sub_queries_result = self.sub_queries_puller.execute_sub_queries()?;
         }
 
-        let num_rows = data_block.num_rows();
-        let mut new_columns = data_block.columns().to_vec();
-        let start_index = self.schema.fields().len() - self.sub_queries_result.len();
-
-        for (index, result) in self.sub_queries_result.iter().enumerate() {
-            let data_type = self.schema.field(start_index + index).data_type();
-            let col = data_type.create_constant_column(result, num_rows)?;
-            new_columns.push(col);
-        }
-
-        Ok(DataBlock::create(self.schema.clone(), new_columns))
+        Ok(())
     }
 }
 
@@ -99,15 +190,16 @@ impl SubQueriesPuller {
         })
     }
 
-    fn receive_subquery(&self, plan: SelectPlan) -> Result<DataValue> {
+    async fn receive_subquery(&self, plan: SelectPlan) -> Result<DataValue> {
         let schema = plan.schema();
         let subquery_ctx = QueryContext::create_from(self.ctx.clone());
         let async_runtime = subquery_ctx.get_storage_runtime();
+        let query_need_abort = subquery_ctx.query_need_abort();
 
         let interpreter = SelectInterpreter::try_create(subquery_ctx, plan)?;
-        let query_pipeline = interpreter.create_new_pipeline()?;
+        let query_pipeline = interpreter.create_new_pipeline().await?;
         let mut query_executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_pipeline)?;
+            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
 
         let mut columns = Vec::with_capacity(schema.fields().len());
 
@@ -137,16 +229,17 @@ impl SubQueriesPuller {
         }
     }
 
-    fn receive_scalar_subquery(&self, plan: SelectPlan) -> Result<DataValue> {
+    async fn receive_scalar_subquery(&self, plan: SelectPlan) -> Result<DataValue> {
         let schema = plan.schema();
         let subquery_ctx = QueryContext::create_from(self.ctx.clone());
         let async_runtime = subquery_ctx.get_storage_runtime();
+        let query_need_abort = subquery_ctx.query_need_abort();
 
         let interpreter = SelectInterpreter::try_create(subquery_ctx, plan)?;
-        let query_pipeline = interpreter.create_new_pipeline()?;
+        let query_pipeline = interpreter.create_new_pipeline().await?;
 
         let mut query_executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_pipeline)?;
+            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
 
         query_executor.start();
         match query_executor.pull_data()? {
@@ -175,43 +268,44 @@ impl SubQueriesPuller {
         }
     }
 
-    pub fn execute_sub_queries(&self) -> Result<Vec<DataValue>> {
-        let mut sub_queries_result = self.sub_queries_result.lock();
-
-        if sub_queries_result.is_empty() {
-            for sub_query_expr in &self.expressions {
-                match sub_query_expr {
-                    Expression::Subquery { query_plan, .. } => match query_plan.as_ref() {
-                        PlanNode::Select(select_plan) => {
-                            let select_plan = select_plan.clone();
-                            sub_queries_result.push(self.receive_subquery(select_plan)?);
-                        }
-                        _ => {
-                            return Err(ErrorCode::LogicalError(
-                                "Subquery must be select plan. It's a bug.",
-                            ));
-                        }
-                    },
-                    Expression::ScalarSubquery { query_plan, .. } => match query_plan.as_ref() {
-                        PlanNode::Select(select_plan) => {
-                            let select_plan = select_plan.clone();
-                            sub_queries_result.push(self.receive_scalar_subquery(select_plan)?);
-                        }
-                        _ => {
-                            return Err(ErrorCode::LogicalError(
-                                "Subquery must be select plan. It's a bug.",
-                            ));
-                        }
-                    },
+    pub async fn execute_sub_queries(&self) -> Result<Vec<DataValue>> {
+        for sub_query_expr in &self.expressions {
+            match sub_query_expr {
+                Expression::Subquery { query_plan, .. } => match query_plan.as_ref() {
+                    PlanNode::Select(select_plan) => {
+                        let select_plan = select_plan.clone();
+                        let subquery_res = self.receive_subquery(select_plan).await?;
+                        let mut sub_queries_result = self.sub_queries_result.lock();
+                        sub_queries_result.push(subquery_res);
+                    }
                     _ => {
-                        return Result::Err(ErrorCode::LogicalError(
-                            "Expression must be Subquery or ScalarSubquery",
+                        return Err(ErrorCode::LogicalError(
+                            "Subquery must be select plan. It's a bug.",
                         ));
                     }
-                };
-            }
+                },
+                Expression::ScalarSubquery { query_plan, .. } => match query_plan.as_ref() {
+                    PlanNode::Select(select_plan) => {
+                        let select_plan = select_plan.clone();
+                        let query_result = self.receive_scalar_subquery(select_plan).await?;
+                        let mut sub_queries_result = self.sub_queries_result.lock();
+                        sub_queries_result.push(query_result);
+                    }
+                    _ => {
+                        return Err(ErrorCode::LogicalError(
+                            "Subquery must be select plan. It's a bug.",
+                        ));
+                    }
+                },
+                _ => {
+                    return Err(ErrorCode::LogicalError(
+                        "Expression must be Subquery or ScalarSubquery",
+                    ));
+                }
+            };
         }
 
+        let sub_queries_result = self.sub_queries_result.lock();
         Ok(sub_queries_result.to_owned())
     }
 }

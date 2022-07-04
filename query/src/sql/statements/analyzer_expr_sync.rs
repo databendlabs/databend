@@ -20,6 +20,7 @@ use common_ast::udfs::UDFFetcher;
 use common_ast::udfs::UDFParser;
 use common_ast::udfs::UDFTransformer;
 use common_datavalues::prelude::*;
+use common_datavalues::type_coercion::merge_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -265,12 +266,11 @@ impl ExpressionSyncAnalyzer {
                         k @ Value::Number(_, _) => format!("[{}]", k),
                         Value::SingleQuotedString(s) => format!("[\"{}\"]", s),
                         Value::ColonString(s) => {
-                            let key = if i == 0 {
+                            if i == 0 {
                                 s.to_string()
                             } else {
                                 format!(":{}", s)
-                            };
-                            key
+                            }
                         }
                         Value::PeriodString(s) => format!(".{}", s),
                         _ => format!("[{}]", k),
@@ -296,14 +296,19 @@ impl ExpressionSyncAnalyzer {
 
     fn analyze_array(&self, nums: usize, args: &mut Vec<Expression>) -> Result<()> {
         let mut values = Vec::with_capacity(nums);
+        let mut types = Vec::with_capacity(nums);
         for _ in 0..nums {
             match args.pop() {
                 None => {
                     break;
                 }
                 Some(inner_expr) => {
-                    if let Expression::Literal { value, .. } = inner_expr {
+                    if let Expression::Literal {
+                        value, data_type, ..
+                    } = inner_expr
+                    {
                         values.push(value);
+                        types.push(data_type);
                     }
                 }
             };
@@ -314,9 +319,20 @@ impl ExpressionSyncAnalyzer {
                 nums
             )));
         }
+        let inner_type = if types.is_empty() {
+            NullType::new_impl()
+        } else {
+            types
+                .iter()
+                .fold(Ok(types[0].clone()), |acc, v| merge_types(&acc?, v))
+                .map_err(|e| ErrorCode::LogicalError(e.message()))?
+        };
         values.reverse();
 
-        let array_value = Expression::create_literal(DataValue::Array(values));
+        let array_value = Expression::create_literal_with_type(
+            DataValue::Array(values),
+            ArrayType::new_impl(inner_type),
+        );
         args.push(array_value);
         Ok(())
     }

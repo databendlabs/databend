@@ -1,2 +1,2 @@
-SELECT database();
+SELECT database(), currentDatabase();
 

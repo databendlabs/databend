@@ -77,7 +77,7 @@ pub enum SetExpr<'a> {
     SetOperation(Box<SetOperation<'a>>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SetOperator {
     Union,
     Except,
@@ -112,7 +112,7 @@ pub type QualifiedName<'a> = Vec<Indirection<'a>>;
 
 /// Indirection of a select result, like a part of `db.table.column`.
 /// Can be a database name, table name, field name or wildcard star(`*`).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Indirection<'a> {
     // Field name
     Identifier(Identifier<'a>),
@@ -122,8 +122,9 @@ pub enum Indirection<'a> {
 
 /// Time Travel specification
 #[derive(Debug, Clone, PartialEq)]
-pub enum TimeTravelPoint {
+pub enum TimeTravelPoint<'a> {
     Snapshot(String),
+    Timestamp(Box<Expr<'a>>),
 }
 
 /// A table name or a parenthesized subquery with an optional alias
@@ -131,27 +132,33 @@ pub enum TimeTravelPoint {
 pub enum TableReference<'a> {
     // Table name
     Table {
+        span: &'a [Token<'a>],
         catalog: Option<Identifier<'a>>,
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
         alias: Option<TableAlias<'a>>,
-        travel_point: Option<TimeTravelPoint>,
+        travel_point: Option<TimeTravelPoint<'a>>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
+        span: &'a [Token<'a>],
         subquery: Box<Query<'a>>,
         alias: Option<TableAlias<'a>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
+        span: &'a [Token<'a>],
         name: Identifier<'a>,
         params: Vec<Expr<'a>>,
         alias: Option<TableAlias<'a>>,
     },
-    Join(Join<'a>),
+    Join {
+        span: &'a [Token<'a>],
+        join: Join<'a>,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableAlias<'a> {
     pub name: Identifier<'a>,
     pub columns: Vec<Identifier<'a>>,
@@ -165,7 +172,7 @@ pub struct Join<'a> {
     pub right: Box<TableReference<'a>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JoinOperator {
     Inner,
     // Outer joins can not work with `JoinCondition::None`
@@ -221,6 +228,7 @@ impl<'a> Display for TableReference<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TableReference::Table {
+                span: _,
                 catalog,
                 database,
                 table,
@@ -236,17 +244,26 @@ impl<'a> Display for TableReference<'a> {
                     write!(f, " AT (SNAPSHOT => {sid})")?;
                 }
 
+                if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
+                    write!(f, " AT (TIMESTAMP => {ts})")?;
+                }
+
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
             }
-            TableReference::Subquery { subquery, alias } => {
+            TableReference::Subquery {
+                span: _,
+                subquery,
+                alias,
+            } => {
                 write!(f, "({subquery})")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
             }
             TableReference::TableFunction {
+                span: _,
                 name,
                 params,
                 alias,
@@ -258,7 +275,7 @@ impl<'a> Display for TableReference<'a> {
                     write!(f, " AS {alias}")?;
                 }
             }
-            TableReference::Join(join) => {
+            TableReference::Join { span: _, join } => {
                 write!(f, "{}", join.left)?;
                 if join.condition == JoinCondition::Natural {
                     write!(f, " NATURAL")?;

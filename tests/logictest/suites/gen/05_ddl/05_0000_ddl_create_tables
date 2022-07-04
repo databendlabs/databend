@@ -1,4 +1,7 @@
 statement ok
+use default;
+
+statement ok
 DROP TABLE IF EXISTS t;
 
 statement ok

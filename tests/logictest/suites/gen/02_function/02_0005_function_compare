@@ -1,7 +1,7 @@
-statement query IIIBB label(mysql,http)
+statement query IIIBB label(http)
 SELECT number ,number-1 , number*100 , 1> 100 ,1 < 10 FROM numbers_mt (10) order by number;
 
-----  mysql
+----  
 0 -1 0 0 1
 1 0 100 0 1
 2 1 200 0 1
@@ -57,19 +57,19 @@ select * from system.databases where name like '_ef_ul_';
 ----  
 default
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '%' like '\%';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '%' like '\\%';
 
-----  mysql
+----  
 1
 
 ----  http
@@ -89,10 +89,10 @@ select * from system.databases where name not like '_ef_ul_' order by name;
 INFORMATION_SCHEMA
 system
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '\%' not like '\%';
 
-----  mysql
+----  
 1
 
 ----  http
@@ -122,10 +122,10 @@ select * from system.databases where name regexp 'ef+.ul+.';
 ----  
 default
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'foo' regexp 'FOO';
 
-----  mysql
+----  
 1
 
 ----  http
@@ -143,406 +143,412 @@ select * from system.databases where name rlike 'ef+.ul+.';
 ----  
 default
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'foo' rlike 'FOO';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Michael!' regexp '.*';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'new*\n*line' regexp 'new\\*.\\*line';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'a' regexp '^[a-d]';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'fo\nfo' regexp '^fo$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'fofo' regexp '^fo';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'fo\no' regexp '^fo\no$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'fo\no' regexp '^fo$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'fofo' regexp '^f.*$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'fo\r\nfo' regexp '^f.*$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'fo\r\nfo' regexp '(?m)^f.*$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Ban' regexp '^Ba*n';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Baaan' regexp '^Ba*n';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Bn' regexp '^Ba*n';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Ban' regexp '^Ba+n';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Bn' regexp '^Ba+n';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Bn' regexp '^Ba?n';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Ban' regexp '^Ba?n';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Baan' regexp '^Ba?n';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pi' regexp 'pi|apa';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'axe' regexp 'pi|apa';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'apa' regexp 'pi|apa';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'apa' regexp '^(pi|apa)$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pi' regexp '^(pi|apa)$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pix' regexp '^(pi|apa)$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pi' regexp '^(pi)*$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pip' regexp '^(pi)*$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pipi' regexp '^(pi)*$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'abcde' regexp 'a[bcd]{2}e';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'abcde' regexp 'a[bcd]{3}e';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'abcde' regexp 'a[bcd]{1,10}e';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'aXbc' regexp '[a-dXYZ]';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'aXbc' regexp '^[a-dXYZ]$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'aXbc' regexp '^[a-dXYZ]+$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'aXbc' regexp '^[^a-dXYZ]+$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'gheis' regexp '^[^a-dXYZ]+$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'gheisa' regexp '^[^a-dXYZ]+$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'justalnums' regexp '[[:alnum:]]+';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '!!' regexp '[[:alnum:]]+';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '1+2' regexp '1+2';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '1+2' regexp '1\\+2';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '🍣🍣b' regexp 'b';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'бжb' regexp 'b';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'µå周çб' regexp '周';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '周周周周' regexp '.*';
 
-----  mysql
+----  
 1
 
 ----  http
@@ -554,397 +560,403 @@ select '==compare_not_regexp==';
 ----  
 ==compare_not_regexp==
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Michael!' not regexp '.*';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'new*\n*line' not regexp 'new\\*.\\*line';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'a' not regexp '^[a-d]';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'fo\nfo' not regexp '^fo$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'fofo' not regexp '^fo';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'fo\no' not regexp '^fo\no$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'fo\no' not regexp '^fo$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'fofo' not regexp '^f.*$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'fo\r\nfo' not regexp '^f.*$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+skipif clickhouse
+statement query B label(http)
 select 'fo\r\nfo' not regexp '(?m)^f.*$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Ban' not regexp '^Ba*n';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Baaan' not regexp '^Ba*n';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Bn' not regexp '^Ba*n';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Ban' not regexp '^Ba+n';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Bn' not regexp '^Ba+n';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Bn' not regexp '^Ba?n';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Ban' not regexp '^Ba?n';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'Baan' not regexp '^Ba?n';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pi' not regexp 'pi|apa';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'axe' not regexp 'pi|apa';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'apa' not regexp 'pi|apa';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'apa' not regexp '^(pi|apa)$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pi' not regexp '^(pi|apa)$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pix' not regexp '^(pi|apa)$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pi' not regexp '^(pi)*$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pip' not regexp '^(pi)*$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'pipi' not regexp '^(pi)*$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'abcde' not regexp 'a[bcd]{2}e';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'abcde' not regexp 'a[bcd]{3}e';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'abcde' not regexp 'a[bcd]{1,10}e';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'aXbc' not regexp '[a-dXYZ]';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'aXbc' not regexp '^[a-dXYZ]$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'aXbc' not regexp '^[a-dXYZ]+$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'aXbc' not regexp '^[^a-dXYZ]+$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'gheis' not regexp '^[^a-dXYZ]+$';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'gheisa' not regexp '^[^a-dXYZ]+$';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'justalnums' not regexp '[[:alnum:]]+';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '!!' not regexp '[[:alnum:]]+';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '1+2' not regexp '1+2';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '1+2' not regexp '1\\+2';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '🍣🍣b' not regexp 'b';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'бжb' not regexp 'b';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select 'µå周çб' not regexp '周';
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '周周周周' not regexp '.*';
 
-----  mysql
+----  
 0
 
 ----  http
@@ -956,37 +968,37 @@ select '==compare_number_string==';
 ----  
 ==compare_number_string==
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '333' = '333';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select to_varchar(1) = '1';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select to_varchar(111) = '111';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select to_varchar(3 + 4) = '7';
 
-----  mysql
+----  
 1
 
 ----  http
@@ -995,37 +1007,37 @@ true
 statement error 1010
 select '123 ab' = 123; 
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '123' = 123;
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '7.4' = 7.4;
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '7.4' > 7;
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 select '777.4' < 778;
 
-----  mysql
+----  
 1
 
 ----  http
@@ -1037,73 +1049,73 @@ select '==compare_datetime==';
 ----  
 ==compare_datetime==
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT '2021-03-05' = to_date('2021-03-05');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT '2021-03-05 01:01:01' = to_datetime('2021-03-05 01:01:01');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT '2021-03-05 01:01:02' > to_datetime('2021-03-05 01:01:01');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT '2021-03-06' > to_date('2021-03-05');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_datetime('2021-03-05 00:00:00') = to_date('2021-03-05');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_datetime('2021-03-05 00:00:01') > to_date('2021-03-05');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_datetime('2021-03-04 00:00:01') < to_date('2021-03-05');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_datetime(to_date('2021-03-05')) = to_date('2021-03-05');
 
-----  mysql
+----  
 1
 
 ----  http

@@ -14,11 +14,10 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::OptimizeTableAction;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct OptimizeTablePlan {
     pub catalog: String,
     pub database: String,
@@ -30,4 +29,11 @@ impl OptimizeTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
+pub enum OptimizeTableAction {
+    All,
+    Purge,
+    Compact,
 }

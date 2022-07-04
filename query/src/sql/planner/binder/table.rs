@@ -19,10 +19,12 @@ use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
-use common_ast::parser::error::Backtrace;
-use common_ast::parser::error::DisplayError;
+use common_ast::ast::TimeTravelPoint;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
+use common_ast::DisplayError;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -32,12 +34,14 @@ use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
+use crate::sql::planner::semantic::TypeChecker;
 use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
 use crate::sql::IndexType;
 use crate::storages::view::view_table::QUERY;
+use crate::storages::NavigationPoint;
 use crate::storages::Table;
 use crate::storages::ToReadDataSourcePlan;
 use crate::table_functions::TableFunction;
@@ -83,6 +87,7 @@ impl<'a> Binder {
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
             TableReference::Table {
+                span: _,
                 catalog,
                 database,
                 table,
@@ -107,6 +112,11 @@ impl<'a> Binder {
                 let table = table.to_lowercase();
                 let tenant = self.ctx.get_tenant();
 
+                let navigation_point = match travel_point {
+                    Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
+                    None => None,
+                };
+
                 // Resolve table with catalog
                 let table_meta: Arc<dyn Table> = self
                     .resolve_data_source(
@@ -114,7 +124,7 @@ impl<'a> Binder {
                         catalog.as_str(),
                         database.as_str(),
                         table.as_str(),
-                        travel_point,
+                        &navigation_point,
                     )
                     .await?;
                 match table_meta.engine() {
@@ -125,7 +135,7 @@ impl<'a> Binder {
                             .ok_or_else(|| ErrorCode::LogicalError("Invalid VIEW object"))?;
                         let tokens = tokenize_sql(query.as_str())?;
                         let backtrace = Backtrace::new();
-                        let stmt = parse_sql(&tokens, &backtrace)?;
+                        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
                         if let Statement::Query(query) = &stmt {
                             self.bind_query(bind_context, query).await
                         } else {
@@ -154,6 +164,7 @@ impl<'a> Binder {
                 }
             }
             TableReference::TableFunction {
+                span: _,
                 name,
                 params,
                 alias,
@@ -205,8 +216,12 @@ impl<'a> Binder {
                 }
                 Ok((s_expr, bind_context))
             }
-            TableReference::Join(join) => self.bind_join(bind_context, join).await,
-            TableReference::Subquery { subquery, alias } => {
+            TableReference::Join { span: _, join } => self.bind_join(bind_context, join).await,
+            TableReference::Subquery {
+                span: _,
+                subquery,
+                alias,
+            } => {
                 let (s_expr, mut bind_context) = self.bind_query(bind_context, subquery).await?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias)?;
@@ -245,5 +260,51 @@ impl<'a> Binder {
             ),
             bind_context,
         ))
+    }
+
+    async fn resolve_data_source(
+        &self,
+        tenant: &str,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        travel_point: &Option<NavigationPoint>,
+    ) -> Result<Arc<dyn Table>> {
+        // Resolve table with catalog
+        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
+
+        if let Some(tp) = travel_point {
+            table_meta = table_meta.navigate_to(self.ctx.clone(), tp).await?;
+        }
+        Ok(table_meta)
+    }
+
+    async fn resolve_data_travel_point(
+        &self,
+        bind_context: &BindContext,
+        travel_point: &TimeTravelPoint<'a>,
+    ) -> Result<NavigationPoint> {
+        match travel_point {
+            TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),
+            TimeTravelPoint::Timestamp(expr) => {
+                let mut type_checker =
+                    TypeChecker::new(bind_context, self.ctx.clone(), self.metadata.clone());
+                let (scalar, data_type) = type_checker
+                    .resolve(expr, Some(TimestampType::new_impl(6)))
+                    .await?;
+
+                if let Scalar::ConstantExpr(ConstantExpr { value, .. }) = scalar {
+                    if let DataTypeImpl::Timestamp(datatime_64) = data_type {
+                        return Ok(NavigationPoint::TimePoint(
+                            datatime_64.utc_timestamp(value.as_i64()?),
+                        ));
+                    }
+                }
+                Err(ErrorCode::InvalidArgument(
+                    "TimeTravelPoint must be constant timestamp",
+                ))
+            }
+        }
     }
 }

@@ -20,7 +20,7 @@ use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatSettings {
     pub record_delimiter: Vec<u8>,
     pub field_delimiter: Vec<u8>,
@@ -31,9 +31,13 @@ pub struct FormatSettings {
     pub true_bytes: Vec<u8>,
     pub false_bytes: Vec<u8>,
     pub null_bytes: Vec<u8>,
+    pub nan_bytes: Vec<u8>,
+    pub inf_bytes: Vec<u8>,
 
     pub csv_null_bytes: Vec<u8>,
     pub tsv_null_bytes: Vec<u8>,
+    pub json_quote_denormals: bool,
+    pub json_escape_forward_slashes: bool,
 }
 
 impl Default for FormatSettings {
@@ -48,13 +52,17 @@ impl Default for FormatSettings {
             true_bytes: vec![b'1'],
             false_bytes: vec![b'0'],
             null_bytes: vec![b'N', b'U', b'L', b'L'],
+            nan_bytes: vec![b'N', b'a', b'N'],
+            inf_bytes: vec![b'i', b'n', b'f'],
             csv_null_bytes: vec![b'\\', b'N'],
             tsv_null_bytes: vec![b'\\', b'N'],
+            json_quote_denormals: false,
+            json_escape_forward_slashes: true,
         }
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Compression {
     None,
     Auto,
@@ -69,6 +77,7 @@ pub enum Compression {
     RawDeflate,
     Lzo,
     Snappy,
+    Xz,
 }
 
 impl Default for Compression {
@@ -91,6 +100,7 @@ impl FromStr for Compression {
             "rawdeflate" | "raw_deflate" => Ok(Compression::RawDeflate),
             "lzo" => Ok(Compression::Lzo),
             "snappy" => Ok(Compression::Snappy),
+            "xz" => Ok(Compression::Xz),
             "none" => Ok(Compression::None),
             _ => Err(ErrorCode::UnknownCompressionType(format!(
                 "Unknown compression: {s}"

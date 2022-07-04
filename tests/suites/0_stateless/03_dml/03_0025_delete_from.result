@@ -1,0 +1,26 @@
+selection not match, nothing deleted
+1
+delete one rows
+the row should be deleted
+1
+other rows should be kept
+1
+deleted unconditionally
+1
+nullable column cases
+delete with condition "const false"
+1
+normal deletion
+expects one row deleted
+1
+expects null valued row kept
+1
+delete all null valued rows
+expects no null valued row kept
+1
+expects 1 null valued row kept
+1
+deleted unconditionally (with const true)
+1
+deleted with nullary expr now()
+1

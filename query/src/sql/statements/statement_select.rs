@@ -45,7 +45,7 @@ use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::QueryRelation;
 use crate::storages::ToReadDataSourcePlan;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfQueryStatement {
     pub distinct: bool,
     pub from: Vec<TableWithJoins>,
@@ -301,9 +301,6 @@ impl DfQueryStatement {
                 name_parts,
                 ..
             } => {
-                // TODO
-                // shall we put the catalog name in the table_info?
-                // table already resolved here
                 let catalog_name = Self::resolve_catalog(&ctx, &name_parts)?;
                 let source_plan = table
                     .read_plan_with_catalog(ctx.clone(), catalog_name, push_downs)

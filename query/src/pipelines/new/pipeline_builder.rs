@@ -27,7 +27,7 @@ use common_planners::PlanNode;
 use common_planners::PlanVisitor;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
-use common_planners::SelectPlan;
+use common_planners::RemotePlan;
 use common_planners::SortPlan;
 use common_planners::SubQueriesSetPlan;
 use common_planners::WindowFuncPlan;
@@ -49,6 +49,7 @@ use crate::pipelines::new::processors::TransformSortMerge;
 use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
+
 /// Builder for query pipeline
 /// ```
 /// # let builder = QueryPipelineBuilder::create(ctx);
@@ -71,11 +72,12 @@ impl QueryPipelineBuilder {
             offset: 0,
         }
     }
+
     /// The core of generating the pipeline
     /// It will recursively visit the entire plan tree, and create a `SimplePipe` for each node,
     /// adding it to the pipeline
-    pub fn finalize(mut self, plan: &SelectPlan) -> Result<NewPipeline> {
-        self.visit_select(plan)?;
+    pub fn finalize(mut self, plan: &PlanNode) -> Result<NewPipeline> {
+        self.visit_plan_node(plan)?;
         Ok(self.pipeline)
     }
 }
@@ -95,8 +97,12 @@ impl PlanVisitor for QueryPipelineBuilder {
             PlanNode::LimitBy(n) => self.visit_limit_by(n),
             PlanNode::ReadSource(n) => self.visit_read_data_source(n),
             PlanNode::Select(n) => self.visit_select(n),
+            PlanNode::Remote(n) => self.visit_remote(n),
             PlanNode::SubQueryExpression(n) => self.visit_sub_queries_sets(n),
-            _ => Err(ErrorCode::UnImplement("")),
+            node => Err(ErrorCode::UnImplement(format!(
+                "Unknown plan type, {:?}",
+                node
+            ))),
         }
     }
 
@@ -167,6 +173,26 @@ impl PlanVisitor for QueryPipelineBuilder {
                     self.ctx.clone(),
                 )
             })
+    }
+
+    fn visit_remote(&mut self, plan: &RemotePlan) -> Result<()> {
+        let schema = plan.schema();
+        match plan {
+            RemotePlan::V1(_) => Err(ErrorCode::LogicalError(
+                "Use version 1 remote plan in version 2 framework.",
+            )),
+            RemotePlan::V2(plan) => {
+                let fragment_id = plan.receive_fragment_id;
+                let query_id = plan.receive_query_id.to_owned();
+                let exchange_manager = self.ctx.get_exchange_manager();
+                exchange_manager.get_fragment_source(
+                    query_id,
+                    fragment_id,
+                    schema,
+                    &mut self.pipeline,
+                )
+            }
+        }
     }
 
     fn visit_expression(&mut self, plan: &ExpressionPlan) -> Result<()> {

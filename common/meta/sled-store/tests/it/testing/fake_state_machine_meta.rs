@@ -23,7 +23,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StateMachineMetaKey {
     /// The last applied log id in the state machine.
     LastApplied,
@@ -34,7 +34,7 @@ pub enum StateMachineMetaKey {
     /// The last membership config
     LastMembership,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StateMachineMetaValue {
     LogId(LogId),
     Bool(bool),

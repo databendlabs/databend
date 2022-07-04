@@ -22,7 +22,7 @@ use common_planners::Expression;
 use crate::storages::index::IndexSchemaVersion;
 
 /// Min and Max index.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MinMaxIndex {
     pub col: String,
     pub min: DataValue,

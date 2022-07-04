@@ -71,7 +71,7 @@ impl ArithmeticMinusFunction {
                 },{
                     // Argument of type Interval cannot be first.
                     if right_type.is_interval() {
-                        let interval = args[1].as_any().downcast_ref::<IntervalType>().unwrap();
+                        let interval: IntervalType = args[1].to_owned().try_into()?;
                         let kind = interval.kind();
                         let function_name = format!("subtract{}s", kind);
                         return FunctionFactory::instance().get(function_name, &[args[0], &Int64Type::new_impl()]);

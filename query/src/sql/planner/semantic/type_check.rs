@@ -14,19 +14,21 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::vec;
 
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
+use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::UnaryOperator;
-use common_ast::parser::error::Backtrace;
-use common_ast::parser::error::DisplayError;
 use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
+use common_ast::DisplayError;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
 use common_datavalues::BooleanType;
@@ -46,7 +48,7 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 
-use crate::common::ScalarEvaluator;
+use crate::common::Evaluator;
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::RelExpr;
@@ -106,10 +108,12 @@ impl<'a> TypeChecker<'a> {
         data_type: &DataTypeImpl,
     ) -> Result<(Scalar, DataTypeImpl)> {
         // Try constant folding
-        if let Ok((value, value_type)) = ScalarEvaluator::try_create(scalar).and_then(|evaluator| {
-            let func_ctx = self.ctx.try_get_function_context()?;
-            evaluator.try_eval_const(&func_ctx)
-        }) {
+        if let Ok((value, value_type)) =
+            Evaluator::eval_scalar::<String>(scalar).and_then(|evaluator| {
+                let func_ctx = self.ctx.try_get_function_context()?;
+                evaluator.try_eval_const(&func_ctx)
+            })
+        {
             Ok((
                 ConstantExpr {
                     value,
@@ -159,6 +163,72 @@ impl<'a> TypeChecker<'a> {
 
                 self.resolve_function(span, func_name.as_str(), &[&**expr], required_type)
                     .await?
+            }
+
+            Expr::IsDistinctFrom {
+                span,
+                left,
+                right,
+                not,
+            } => {
+                let left_null_expr = Box::new(Expr::IsNull {
+                    span,
+                    expr: left.clone(),
+                    not: false,
+                });
+                let right_null_expr = Box::new(Expr::IsNull {
+                    span,
+                    expr: right.clone(),
+                    not: false,
+                });
+                let op = if *not {
+                    BinaryOperator::Eq
+                } else {
+                    BinaryOperator::NotEq
+                };
+                let (scalar, data_type) = self
+                    .resolve_function(
+                        span,
+                        "multi_if",
+                        &[
+                            &Expr::BinaryOp {
+                                span,
+                                op: BinaryOperator::And,
+                                left: left_null_expr.clone(),
+                                right: right_null_expr.clone(),
+                            },
+                            &Expr::Literal {
+                                span,
+                                lit: Literal::Boolean(*not),
+                            },
+                            &Expr::BinaryOp {
+                                span,
+                                op: BinaryOperator::Or,
+                                left: left_null_expr.clone(),
+                                right: right_null_expr.clone(),
+                            },
+                            &Expr::Literal {
+                                span,
+                                lit: Literal::Boolean(!*not),
+                            },
+                            &Expr::BinaryOp {
+                                span,
+                                op,
+                                left: left.clone(),
+                                right: right.clone(),
+                            },
+                        ],
+                        None,
+                    )
+                    .await?;
+                self.resolve_scalar_function_call(
+                    span,
+                    "assume_not_null",
+                    vec![scalar],
+                    vec![data_type],
+                    required_type,
+                )
+                .await?
             }
 
             Expr::InList {
@@ -586,6 +656,48 @@ impl<'a> TypeChecker<'a> {
                 .await?
             }
 
+            Expr::Coalesce { span, exprs } => {
+                // coalesce(arg0, arg1, ..., argN) is essentially
+                // multiIf(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)
+                // with constant Literal::NULL arguments removed.
+                let mut args = Vec::with_capacity(exprs.len() * 2 + 1);
+
+                for expr in exprs.iter().filter(|expr| {
+                    !matches!(expr, Expr::Literal {
+                        span: _,
+                        lit: Literal::Null,
+                    })
+                }) {
+                    let is_not_null_expr = Expr::IsNull {
+                        span,
+                        expr: Box::new(expr.clone()),
+                        not: true,
+                    };
+
+                    let assume_not_null_expr = Expr::FunctionCall {
+                        span,
+                        distinct: false,
+                        name: Identifier {
+                            name: "assume_not_null".to_string(),
+                            quote: None,
+                            span: span[0].clone(),
+                        },
+                        args: vec![expr.clone()],
+                        params: vec![],
+                    };
+
+                    args.push(is_not_null_expr);
+                    args.push(assume_not_null_expr);
+                }
+                args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
+                let args_ref: Vec<&Expr> = args.iter().collect();
+                self.resolve_function(span, "multi_if", &args_ref, None)
+                    .await?
+            }
+
             Expr::IfNull {
                 span, expr1, expr2, ..
             } => {
@@ -643,6 +755,31 @@ impl<'a> TypeChecker<'a> {
                 arguments: args,
                 func_name: func_name.to_string(),
                 arg_types: arg_types.to_vec(),
+                return_type: func.return_type(),
+            }
+            .into(),
+            func.return_type(),
+        ))
+    }
+
+    pub async fn resolve_scalar_function_call(
+        &mut self,
+        span: &[Token<'_>],
+        func_name: &str,
+        arguments: Vec<Scalar>,
+        arguments_types: Vec<DataTypeImpl>,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        let arg_types_ref: Vec<&DataTypeImpl> = arguments_types.iter().collect();
+        let func = FunctionFactory::instance()
+            .get(func_name, &arg_types_ref)
+            .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
+
+        Ok((
+            FunctionCall {
+                arguments,
+                func_name: func_name.to_string(),
+                arg_types: arguments_types.to_vec(),
                 return_type: func.return_type(),
             }
             .into(),

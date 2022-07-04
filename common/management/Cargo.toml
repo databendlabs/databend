@@ -25,10 +25,10 @@ common-proto-conv = { path = "../proto-conv" }
 common-protos = { path = "../protos" }
 
 async-trait = "0.1.56"
-serde_json = "1.0.79"
+serde_json = "1.0.81"
 
 [dev-dependencies]
 common-base = { path = "../base" }
 common-meta-embedded = { path = "../meta/embedded" }
 
-mockall = "0.11.0"
+mockall = "0.11.1"

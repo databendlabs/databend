@@ -752,6 +752,49 @@ MapAccess {
 
 
 ---------- Input ----------
+((1 = 1) or 1)
+---------- Output ---------
+1 = 1 OR 1
+---------- AST ------------
+BinaryOp {
+    span: [
+        OR(9..11),
+    ],
+    op: Or,
+    left: BinaryOp {
+        span: [
+            Eq(4..5),
+        ],
+        op: Eq,
+        left: Literal {
+            span: [
+                LiteralInteger(2..3),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+        right: Literal {
+            span: [
+                LiteralInteger(6..7),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+    },
+    right: Literal {
+        span: [
+            LiteralInteger(12..13),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+}
+
+
+---------- Input ----------
 typeof(1 + 2)
 ---------- Output ---------
 typeof(1 + 2)
@@ -2599,6 +2642,108 @@ NullIf {
 
 
 ---------- Input ----------
+coalesce(1, 2, 3)
+---------- Output ---------
+COALESCE(1, 2, 3)
+---------- AST ------------
+Coalesce {
+    span: [
+        COALESCE(0..8),
+        LParen(8..9),
+        LiteralInteger(9..10),
+        Comma(10..11),
+        LiteralInteger(12..13),
+        Comma(13..14),
+        LiteralInteger(15..16),
+        RParen(16..17),
+    ],
+    exprs: [
+        Literal {
+            span: [
+                LiteralInteger(9..10),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralInteger(12..13),
+            ],
+            lit: Integer(
+                2,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralInteger(15..16),
+            ],
+            lit: Integer(
+                3,
+            ),
+        },
+    ],
+}
+
+
+---------- Input ----------
+coalesce(a, b, c)
+---------- Output ---------
+COALESCE(a, b, c)
+---------- AST ------------
+Coalesce {
+    span: [
+        COALESCE(0..8),
+        LParen(8..9),
+        Ident(9..10),
+        Comma(10..11),
+        Ident(12..13),
+        Comma(13..14),
+        Ident(15..16),
+        RParen(16..17),
+    ],
+    exprs: [
+        ColumnRef {
+            span: [
+                Ident(9..10),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(9..10),
+            },
+        },
+        ColumnRef {
+            span: [
+                Ident(12..13),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(12..13),
+            },
+        },
+        ColumnRef {
+            span: [
+                Ident(15..16),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(15..16),
+            },
+        },
+    ],
+}
+
+
+---------- Input ----------
 ifnull(1, 1)
 ---------- Output ---------
 IFNULL(1, 1)
@@ -2669,6 +2814,106 @@ IfNull {
             span: Ident(10..11),
         },
     },
+}
+
+
+---------- Input ----------
+1 is distinct from 2
+---------- Output ---------
+1 IS DISTINCT FROM 2
+---------- AST ------------
+IsDistinctFrom {
+    span: [
+        IS(2..4),
+        DISTINCT(5..13),
+        FROM(14..18),
+    ],
+    left: Literal {
+        span: [
+            LiteralInteger(0..1),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+    right: Literal {
+        span: [
+            LiteralInteger(19..20),
+        ],
+        lit: Integer(
+            2,
+        ),
+    },
+    not: false,
+}
+
+
+---------- Input ----------
+a is distinct from b
+---------- Output ---------
+a IS DISTINCT FROM b
+---------- AST ------------
+IsDistinctFrom {
+    span: [
+        IS(2..4),
+        DISTINCT(5..13),
+        FROM(14..18),
+    ],
+    left: ColumnRef {
+        span: [
+            Ident(0..1),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(0..1),
+        },
+    },
+    right: ColumnRef {
+        span: [
+            Ident(19..20),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(19..20),
+        },
+    },
+    not: false,
+}
+
+
+---------- Input ----------
+1 is not distinct from null
+---------- Output ---------
+1 IS NOT DISTINCT FROM NULL
+---------- AST ------------
+IsDistinctFrom {
+    span: [
+        IS(2..4),
+        NOT(5..8),
+        DISTINCT(9..17),
+        FROM(18..22),
+    ],
+    left: Literal {
+        span: [
+            LiteralInteger(0..1),
+        ],
+        lit: Integer(
+            1,
+        ),
+    },
+    right: Literal {
+        span: [
+            NULL(23..27),
+        ],
+        lit: Null,
+    },
+    not: true,
 }
 
 

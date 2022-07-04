@@ -49,7 +49,6 @@ pub fn serialize_kv_variant(kv: &KeySpaceKV) -> Result<(sled::IVec, sled::IVec),
     match kv {
         KeySpaceKV::Logs { key, value } => ser!(Logs, key, value),
         KeySpaceKV::Nodes { key, value } => ser!(Nodes, key, value),
-        KeySpaceKV::MetaSrvAddrs { key, value } => ser!(MetaSrvAddrs, key, value),
         KeySpaceKV::StateMachineMeta { key, value } => ser!(StateMachineMeta, key, value),
         KeySpaceKV::RaftStateKV { key, value } => ser!(RaftStateKV, key, value),
         KeySpaceKV::GenericKV { key, value } => ser!(GenericKV, key, value),
@@ -73,7 +72,6 @@ pub fn deserialize_to_kv_variant(d: &[Vec<u8>]) -> Result<KeySpaceKV, MetaStorag
         // Avaliable key spaces:
         Logs,
         Nodes,
-        MetaSrvAddrs,
         StateMachineMeta,
         RaftStateKV,
         GenericKV,

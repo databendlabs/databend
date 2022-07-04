@@ -14,6 +14,8 @@
 
 mod block_stream_writer;
 mod block_writer;
+mod meta_writer;
+mod segment_writer;
 
 // for testing only
 pub use block_stream_writer::BlockCompactor;
@@ -21,3 +23,6 @@ pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
 pub use block_writer::serialize_data_blocks;
 pub use block_writer::write_block;
+pub use block_writer::BlockWriter;
+pub use meta_writer::write_meta;
+pub use segment_writer::SegmentWriter;

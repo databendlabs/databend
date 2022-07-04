@@ -22,16 +22,18 @@ use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
+use url::Url;
 
-use super::error::ErrorKind;
 use crate::ast::*;
+use crate::input::Input;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::token::*;
-use crate::parser::util::*;
 use crate::rule;
+use crate::util::*;
+use crate::ErrorKind;
 
-pub fn statement(i: Input) -> IResult<Statement> {
+pub fn statement(i: Input) -> IResult<StatementMsg> {
     let explain = map(
         rule! {
             EXPLAIN ~ ( PIPELINE | GRAPH )? ~ #statement
@@ -43,7 +45,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 None => ExplainKind::Syntax,
                 _ => unreachable!(),
             },
-            query: Box::new(statement),
+            query: Box::new(statement.stmt),
         },
     );
     let insert = map(
@@ -53,18 +55,40 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ #insert_source
         },
-        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| Statement::Insert {
+        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| {
+            Statement::Insert(InsertStmt {
+                catalog,
+                database,
+                table,
+                columns: opt_columns
+                    .map(|(_, columns, _)| columns)
+                    .unwrap_or_default(),
+                source,
+                overwrite: overwrite.kind == OVERWRITE,
+            })
+        },
+    );
+
+    let delete = map(
+        rule! {
+            DELETE ~ FROM ~ #peroid_separated_idents_1_to_3
+            ~ ( WHERE ~ ^#expr )?
+        },
+        |(_, _, (catalog, database, table), opt_where_block)| Statement::Delete {
             catalog,
             database,
             table,
-            columns: opt_columns
-                .map(|(_, columns, _)| columns)
-                .unwrap_or_default(),
-            source,
-            overwrite: overwrite.kind == OVERWRITE,
+            selection: opt_where_block.map(|(_, selection)| selection),
         },
     );
-    let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
+    let show_settings = map(
+        rule! {
+            SHOW ~ SETTINGS ~ (LIKE ~ #literal_string)?
+        },
+        |(_, _, opt_like)| Statement::ShowSettings {
+            like: opt_like.map(|(_, like)| like),
+        },
+    );
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
     let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
     let show_metrics = value(Statement::ShowMetrics, rule! { SHOW ~ METRICS });
@@ -323,6 +347,18 @@ pub fn statement(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let exists_table = map(
+        rule! {
+            EXISTS ~ TABLE ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, table))| {
+            Statement::ExistsTable(ExistsTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
     let create_view = map(
         rule! {
             CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
@@ -395,15 +431,17 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )? )?
             ~ ( WITH ~ ^#role_option+ )?
         },
-        |(_, _, user, opt_auth_option, opt_role_options)| Statement::AlterUser {
-            user,
-            auth_option: opt_auth_option.map(|(_, opt_auth_type, opt_password)| AuthOption {
-                auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
-                password: opt_password.map(|(_, password)| password),
-            }),
-            role_options: opt_role_options
-                .map(|(_, role_options)| role_options)
-                .unwrap_or_default(),
+        |(_, _, user, opt_auth_option, opt_role_options)| {
+            Statement::AlterUser(AlterUserStmt {
+                user,
+                auth_option: opt_auth_option.map(|(_, opt_auth_type, opt_password)| AuthOption {
+                    auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
+                    password: opt_password.map(|(_, password)| password),
+                }),
+                role_options: opt_role_options
+                    .map(|(_, role_options)| role_options)
+                    .unwrap_or_default(),
+            })
         },
     );
     let drop_user = map(
@@ -434,12 +472,12 @@ pub fn statement(i: Input) -> IResult<Statement> {
             role_name,
         },
     );
-    let grant_priv = map(
+    let grant = map(
         rule! {
             GRANT ~ #grant_source ~ TO ~ #grant_option
         },
         |(_, source, _, grant_option)| {
-            Statement::Grant(GrantStatement {
+            Statement::Grant(GrantStmt {
                 source,
                 principal: grant_option,
             })
@@ -451,6 +489,17 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
         |(_, _, opt_principal)| Statement::ShowGrants {
             principal: opt_principal.map(|(_, principal)| principal),
+        },
+    );
+    let revoke = map(
+        rule! {
+            REVOKE ~ #grant_source ~ FROM ~ #grant_option
+        },
+        |(_, source, _, grant_option)| {
+            Statement::Revoke(RevokeStmt {
+                source,
+                principal: grant_option,
+            })
         },
     );
     let create_udf = map(
@@ -605,12 +654,49 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
     );
 
+    let copy_into = map(
+        rule! {
+            COPY
+            ~ INTO ~ #copy_target
+            ~ FROM ~ #copy_target
+            ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")?
+            ~ ( PATTERN ~ "=" ~ #literal_string)?
+            ~ ( FILE_FORMAT ~ "=" ~ #options)?
+            ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
+            ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
+        },
+        |(_, _, dst, _, src, files, pattern, file_format, validation_mode, size_limit)| {
+            Statement::Copy(CopyStmt {
+                src,
+                dst,
+                files: files.map(|v| v.3).unwrap_or_default(),
+                pattern: pattern.map(|v| v.2).unwrap_or_default(),
+                file_format: file_format.map(|v| v.2).unwrap_or_default(),
+                validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
+                size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
+            })
+        },
+    );
+
+    let call = map(
+        rule! {
+            CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
+        },
+        |(_, name, _, args, _)| {
+            Statement::Call(CallStmt {
+                name: name.to_string(),
+                args,
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
-            | #show_settings : "`SHOW SETTINGS`"
+            | #delete : "`DELETE FROM <table> [WHERE ...]`"
+            | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
             | #show_metrics : "`SHOW METRICS`"
@@ -636,6 +722,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
+            | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
@@ -662,17 +749,35 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
         ),
+        rule! (
+            #copy_into: "`COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`"
+        ),
+        rule! (
+            #call: "`CALL <procedure_name>(<parameter>, ...)`"
+        ),
         rule!(
-            #grant_priv : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
+            #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS [FOR  { ROLE <role_name> | [USER] <user> }]`"
+            | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+
         ),
     ));
 
     map(
         rule! {
-            #statement_body ~ ";"? ~ &EOI
+            #statement_body ~ (FORMAT ~ #ident)? ~ ";"? ~ &EOI
         },
-        |(stmt, _, _)| stmt,
+        |(stmt, opt_format, _, _)| StatementMsg {
+            stmt,
+            format: opt_format.map(|(_, format)| format.name),
+        },
     )(i)
 }
 
@@ -768,25 +873,25 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     )(i)
 }
 
-pub fn grant_source(i: Input) -> IResult<GrantSource> {
+pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
     let role = map(
         rule! {
             ROLE ~ #literal_string
         },
-        |(_, role_name)| GrantSource::Role { role: role_name },
+        |(_, role_name)| AccountMgrSource::Role { role: role_name },
     );
     let privs = map(
         rule! {
             #comma_separated_list1(priv_type) ~ ON ~ #grant_level
         },
-        |(privs, _, level)| GrantSource::Privs {
+        |(privs, _, level)| AccountMgrSource::Privs {
             privileges: privs,
             level,
         },
     );
     let all = map(
         rule! { ALL ~ PRIVILEGES? ~ ON ~ #grant_level },
-        |(_, _, _, level)| GrantSource::ALL { level },
+        |(_, _, _, level)| AccountMgrSource::ALL { level },
     );
 
     rule!(
@@ -815,16 +920,16 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
     ))(i)
 }
 
-pub fn grant_level(i: Input) -> IResult<GrantLevel> {
+pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
     // *.*
-    let global = map(rule! { "*" ~ "." ~ "*" }, |_| GrantLevel::Global);
+    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
     // db.*
     // "*": as current db or "table" with current db
     let db = map(
         rule! {
             ( #ident ~ "." )? ~ "*"
         },
-        |(database, _)| GrantLevel::Database(database.map(|(database, _)| database.name)),
+        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
     );
     // db.table
     let table = map(
@@ -832,7 +937,7 @@ pub fn grant_level(i: Input) -> IResult<GrantLevel> {
             ( #ident ~ "." )? ~ #ident
         },
         |(database, table)| {
-            GrantLevel::Table(database.map(|(database, _)| database.name), table.name)
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table.name)
         },
     );
 
@@ -945,6 +1050,87 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     ))(i)
 }
 
+/// Parse input into `CopyTarget`
+///
+/// # Notes
+///
+/// It's required to parse stage location first. Or stage could be parsed as table.
+pub fn copy_target(i: Input) -> IResult<CopyUnit> {
+    // Parse input like `@my_stage/path/to/dir`
+    let stage_location = |i| {
+        map(at_string, |location| {
+            let parsed = location.splitn(2, '/').collect::<Vec<_>>();
+            if parsed.len() == 1 {
+                CopyUnit::StageLocation {
+                    name: parsed[0].to_string(),
+                    path: "/".to_string(),
+                }
+            } else {
+                CopyUnit::StageLocation {
+                    name: parsed[0].to_string(),
+                    path: format!("/{}", parsed[1]),
+                }
+            }
+        })(i)
+    };
+
+    // Parse input like `mytable`
+    let table = |i| {
+        map(
+            peroid_separated_idents_1_to_3,
+            |(catalog, database, table)| CopyUnit::Table {
+                catalog,
+                database,
+                table,
+            },
+        )(i)
+    };
+
+    // Parse input like `( SELECT * from mytable )`
+    let query = |i| {
+        map(parenthesized_query, |query| {
+            CopyUnit::Query(Box::new(query))
+        })(i)
+    };
+
+    // Parse input like `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
+    let uri_location = |i| {
+        map_res(
+            rule! {
+                #literal_string
+                ~ (CREDENTIALS ~ "=" ~ #options)?
+                ~ (ENCRYPTION ~ "=" ~ #options)?
+            },
+            |(location, credentials_opt, encryption_opt)| {
+                let parsed =
+                    Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
+
+                Ok(CopyUnit::UriLocation {
+                    protocol: parsed.scheme().to_string(),
+                    name: parsed
+                        .host_str()
+                        .ok_or(ErrorKind::Other("invalid uri location"))?
+                        .to_string(),
+                    path: if parsed.path().is_empty() {
+                        "/".to_string()
+                    } else {
+                        parsed.path().to_string()
+                    },
+                    credentials: credentials_opt.map(|v| v.2).unwrap_or_default(),
+                    encryption: encryption_opt.map(|v| v.2).unwrap_or_default(),
+                })
+            },
+        )(i)
+    };
+
+    rule!(
+       #stage_location: "@<stage_name> { <path> }"
+        | #uri_location: "'<protocol>://<name> {<path>} { CREDENTIALS = ({ AWS_ACCESS_KEY = 'aws_access_key' }) } '"
+        | #table: "{ { <catalog>. } <database>. }<table>"
+        | #query: "( <query> )"
+    )(i)
+}
+
 pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     let limit_like = map(
         rule! {
@@ -1048,20 +1234,31 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
     ))(i)
 }
 
+pub fn ident_to_string(i: Input) -> IResult<String> {
+    map_res(ident, |ident| {
+        if ident.quote.is_none() {
+            Ok(ident.to_string())
+        } else {
+            Err(ErrorKind::Other(
+                "unexpected quoted identifier, try to remove the quote",
+            ))
+        }
+    })(i)
+}
+
+pub fn u64_to_string(i: Input) -> IResult<String> {
+    map(literal_u64, |v| v.to_string())(i)
+}
+
+pub fn parameter_to_string(i: Input) -> IResult<String> {
+    map(
+        rule! { ( #literal_string | #ident_to_string | #u64_to_string ) },
+        |parameter| parameter,
+    )(i)
+}
+
 // parse: (k = v ...)* into a map
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let ident_to_string = |i| {
-        map_res(ident, |ident| {
-            if ident.quote.is_none() {
-                Ok(ident.to_string())
-            } else {
-                Err(ErrorKind::Other(
-                    "unexpected quoted identifier, try to remove the quote",
-                ))
-            }
-        })(i)
-    };
-
     let ident_with_format = alt((
         ident_to_string,
         map(rule! { FORMAT }, |_| "FORMAT".to_string()),
@@ -1069,8 +1266,10 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     map(
         rule! {
-            "(" ~ ( #ident_with_format ~ "=" ~ (#ident_to_string | #literal_string) )* ~ ")"
+            "(" ~ ( #ident_with_format ~ "=" ~ #parameter_to_string )* ~ ")"
         },
-        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.clone(), v.clone()))),
+        |(_, opts, _)| {
+            BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))
+        },
     )(i)
 }

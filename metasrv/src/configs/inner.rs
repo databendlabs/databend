@@ -14,10 +14,11 @@
 
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_types::MetaResult;
+use common_meta_types::Node;
 
 use super::outer_v0::Config as OuterV0Config;
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Config {
     pub cmd: String,
     pub config_file: String,
@@ -72,6 +73,15 @@ impl Config {
     /// - tests
     pub fn into_outer(self) -> OuterV0Config {
         OuterV0Config::from(self)
+    }
+
+    /// Create `Node` from config
+    pub fn get_node(&self) -> Node {
+        Node {
+            name: self.raft_config.id.to_string(),
+            endpoint: self.raft_config.raft_api_advertise_host_endpoint(),
+            grpc_api_addr: Some(self.grpc_api_address.clone()),
+        }
     }
 
     pub fn tls_rpc_server_enabled(&self) -> bool {

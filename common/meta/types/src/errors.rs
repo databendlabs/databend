@@ -17,7 +17,7 @@ use serde::Serialize;
 
 use crate::MatchSeq;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum ConflictSeq {
     NotMatch { want: MatchSeq, got: u64 },
 }

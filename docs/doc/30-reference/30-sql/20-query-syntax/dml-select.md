@@ -12,11 +12,12 @@ SELECT
     select_expr [[AS] alias], ...
     [INTO variable [, ...]]
     [ FROM table_references
+    [AT ...]
     [WHERE expr]
-    [GROUP BY {{col_name | expr | position}, ...
+    [GROUP BY {{col_name | expr | col_alias | col_position}, ...
     | extended_grouping_expr}]
     [HAVING expr]
-    [ORDER BY {col_name | expr} [ASC | DESC], ...]
+    [ORDER BY {col_name | expr | col_alias | col_position} [ASC | DESC], ...]
     [LIMIT row_count]
     [OFFSET row_count]
     ]
@@ -52,6 +53,10 @@ SELECT number FROM numbers(3) AS a;
 +--------+
 ```
 
+## AT Clause
+
+The AT clause enables you to query previous versions of your data. For more information, see [AT](./dml-at.md).
+
 ## WHERE Clause
 
 ```sql
@@ -66,6 +71,7 @@ SELECT number FROM numbers(3) WHERE number > 1;
 ## GROUP BY Clause
 
 ```sql
+--Group the rows of the result set by column alias
 SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY c1, c2;
 +------+------+-------------+
 | c1   | c2   | MAX(number) |
@@ -77,6 +83,20 @@ SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY 
 |    0 |    0 |        9996 |
 |    1 |    0 |        9999 |
 +------+------+-------------+
+
+--Group the rows of the result set by column position in the SELECT list
+SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY 1, 2;
++------+------+-------------+
+| c1   | c2   | MAX(number) |
++------+------+-------------+
+|    1 |    2 |        9995 |
+|    1 |    1 |        9997 |
+|    0 |    2 |        9998 |
+|    0 |    1 |        9994 |
+|    0 |    0 |        9996 |
+|    1 |    0 |        9999 |
++------+------+-------------+
+
 ```
 
 ## HAVING Clause
@@ -92,9 +112,10 @@ SELECT number%2 as c1, number%3 as c2, MAX(number) as max FROM numbers(10000) GR
 +------+------+------+
 ```
 
-## ORDER By Clause
+## ORDER BY Clause
 
 ```sql
+--Sort by column name in ascending order.
 SELECT number FROM numbers(5) ORDER BY number ASC;
 +--------+
 | number |
@@ -106,6 +127,7 @@ SELECT number FROM numbers(5) ORDER BY number ASC;
 |      4 |
 +--------+
 
+--Sort by column name in descending order.
 SELECT number FROM numbers(5) ORDER BY number DESC;
 +--------+
 | number |
@@ -117,6 +139,7 @@ SELECT number FROM numbers(5) ORDER BY number DESC;
 |      0 |
 +--------+
 
+--Sort by column alias.
 SELECT number%2 AS c1, number%3 AS c2  FROM numbers(5) ORDER BY c1 ASC, c2 DESC;
 +------+------+
 | c1   | c2   |
@@ -127,6 +150,24 @@ SELECT number%2 AS c1, number%3 AS c2  FROM numbers(5) ORDER BY c1 ASC, c2 DESC;
 |    1 |    1 |
 |    1 |    0 |
 +------+------+
+
+--Sort by column position in the SELECT list
+SELECT * FROM t1 ORDER BY 2 DESC;
++------+------+
+| a    | b    |
++------+------+
+|    2 |    3 |
+|    1 |    2 |
++------+------+
+
+SELECT a FROM t1 ORDER BY 1 DESC;
++------+
+| a    |
++------+
+|    2 |
+|    1 |
++------+
+
 ```
 
 ## LIMIT Clause

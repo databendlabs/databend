@@ -34,6 +34,7 @@ use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUserUDFPlan;
 use crate::CreateViewPlan;
+use crate::DeletePlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
@@ -45,6 +46,7 @@ use crate::DropUserStagePlan;
 use crate::DropUserUDFPlan;
 use crate::DropViewPlan;
 use crate::EmptyPlan;
+use crate::ExistsTablePlan;
 use crate::ExplainPlan;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
@@ -109,6 +111,9 @@ pub enum PlanNode {
     // Insert.
     Insert(InsertPlan),
 
+    // Delete.
+    Delete(DeletePlan),
+
     // Copy.
     Copy(CopyPlan),
 
@@ -139,6 +144,7 @@ pub enum PlanNode {
     RenameTable(RenameTablePlan),
     TruncateTable(TruncateTablePlan),
     OptimizeTable(OptimizeTablePlan),
+    ExistsTable(ExistsTablePlan),
     DescribeTable(DescribeTablePlan),
     ShowCreateTable(ShowCreateTablePlan),
 
@@ -217,6 +223,9 @@ impl PlanNode {
             // Insert.
             PlanNode::Insert(v) => v.schema(),
 
+            // Delete.
+            PlanNode::Delete(v) => v.schema(),
+
             // Copy.
             PlanNode::Copy(v) => v.schema(),
 
@@ -240,6 +249,7 @@ impl PlanNode {
             PlanNode::RenameTable(v) => v.schema(),
             PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::OptimizeTable(v) => v.schema(),
+            PlanNode::ExistsTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
 
@@ -324,6 +334,9 @@ impl PlanNode {
             // Insert.
             PlanNode::Insert(_) => "InsertPlan",
 
+            // Delete.
+            PlanNode::Delete(_) => "DeletePlan",
+
             // Copy.
             PlanNode::Copy(_) => "CopyPlan",
 
@@ -347,6 +360,7 @@ impl PlanNode {
             PlanNode::RenameTable(_) => "RenameTablePlan",
             PlanNode::TruncateTable(_) => "TruncateTablePlan",
             PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
+            PlanNode::ExistsTable(_) => "ExistsTablePlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
 

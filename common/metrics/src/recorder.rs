@@ -87,7 +87,9 @@ fn init_prometheus_recorder() {
     let recorder = PrometheusBuilder::new().build_recorder();
     let mut h = PROMETHEUS_HANDLE.as_ref().write();
     *h = Some(recorder.handle());
-    metrics::clear_recorder();
+    unsafe {
+        metrics::clear_recorder();
+    }
     match metrics::set_boxed_recorder(Box::new(recorder)) {
         Ok(_) => (),
         Err(err) => tracing::warn!("Install prometheus recorder failed, cause: {}", err),

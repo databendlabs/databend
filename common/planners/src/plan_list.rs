@@ -23,7 +23,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone)]
 pub struct ListPlan {
     pub stage: UserStageInfo,
     pub path: String,

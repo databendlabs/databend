@@ -65,9 +65,18 @@ impl SQLCommon {
                     )))
                 }
             }
-            SQLDataType::Array(sql_type) => {
+            SQLDataType::Array(sql_type, nullable) => {
                 let inner_data_type = Self::make_data_type(sql_type)?;
-                Ok(ArrayType::new_impl(inner_data_type))
+                if *nullable {
+                    if inner_data_type.is_null() {
+                        return Result::Err(ErrorCode::IllegalDataType(
+                            "The SQL data type ARRAY(NULL, NULL) is invalid",
+                        ));
+                    }
+                    Ok(ArrayType::new_impl(NullableType::new_impl(inner_data_type)))
+                } else {
+                    Ok(ArrayType::new_impl(inner_data_type))
+                }
             }
 
             // Custom types for databend:
@@ -91,7 +100,8 @@ impl SQLCommon {
     }
 
     pub fn short_sql(query: &str) -> String {
-        if query.len() >= 64 && query[..=6].eq_ignore_ascii_case("INSERT") {
+        let query = query.trim_start();
+        if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
             format!("{}...", &query[..64])
         } else {
             query.to_string()

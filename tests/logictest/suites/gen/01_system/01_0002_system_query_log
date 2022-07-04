@@ -7,10 +7,10 @@ select * from numbers(100) where number > 95;
 98
 99
 
-statement query B label(mysql,http)
+statement query B label(http)
 select count(*) > 0 from system.query_log;
 
-----  mysql
+---- 
 1
 
 ----  http

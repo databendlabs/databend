@@ -19,9 +19,9 @@ mod subquery;
 use std::io::Write;
 use std::sync::Arc;
 
-use common_ast::parser::error::Backtrace;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
 use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -42,7 +42,7 @@ pub(super) struct Suite {
 async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     let tokens = tokenize_sql(&suite.query)?;
     let bt = Backtrace::new();
-    let stmt = parse_sql(&tokens, &bt)?;
+    let (stmt, _) = parse_sql(&tokens, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
         ctx.get_catalogs(),

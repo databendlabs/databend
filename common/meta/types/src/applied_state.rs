@@ -28,7 +28,7 @@ use crate::TxnReply;
 /// Normally it includes two fields: the state before applying and the state after applying the log.
 #[allow(clippy::large_enum_variant)]
 #[derive(
-    Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::From, derive_more::TryInto,
+    Serialize, Deserialize, Debug, Clone, PartialEq, Eq, derive_more::From, derive_more::TryInto,
 )]
 pub enum AppliedState {
     Seq {

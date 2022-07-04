@@ -26,7 +26,7 @@ use crate::TxnRequest;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Cmd {
     /// Increment the sequence number generator specified by `key` and returns the new value.
@@ -43,17 +43,6 @@ pub enum Cmd {
     /// Remove node
     RemoveNode {
         node_id: NodeId,
-    },
-
-    /// Add MetaSrv addr if absent
-    AddMetaSrvAddr {
-        metasrv_name: String,
-        metasrv_addr: String,
-    },
-
-    /// Remove MetaSrv addr
-    RemoveMetaSrvAddr {
-        metasrv_name: String,
     },
 
     /// Update or insert a general purpose kv store
@@ -87,15 +76,6 @@ impl fmt::Display for Cmd {
             }
             Cmd::RemoveNode { node_id } => {
                 write!(f, "remove_node:{}", node_id)
-            }
-            Cmd::AddMetaSrvAddr {
-                metasrv_name,
-                metasrv_addr,
-            } => {
-                write!(f, "add_metasrv_addr: {}={}", metasrv_name, metasrv_addr)
-            }
-            Cmd::RemoveMetaSrvAddr { metasrv_name } => {
-                write!(f, "remove_metasrv_addr: {}", metasrv_name)
             }
             Cmd::UpsertKV {
                 key,

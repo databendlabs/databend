@@ -40,7 +40,7 @@ pub const MICROSECONDS: i64 = 1_000_000;
 
 #[inline]
 pub fn check_timestamp(micros: i64) -> Result<()> {
-    if micros >= TIMESTAMP_MIN && micros <= TIMESTAMP_MAX {
+    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
         return Ok(());
     }
     Err(ErrorCode::InvalidTimestamp(
@@ -152,7 +152,7 @@ impl DataType for TimestampType {
     }
 
     fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        Ok(TimestampSerializer::<'a>::try_create(col)?.into())
+        Ok(TimestampSerializer::<'a>::try_create(self.precision, col)?.into())
     }
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         TimestampDeserializer {

@@ -1,0 +1,34 @@
+name: "Build MacOS"
+description: "Build in MacOS"
+inputs:
+  target:
+    description: ""
+    required: true
+  profile:
+    description: "debug/release"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Rust setup
+      shell: bash
+      run: |
+        bash ./scripts/setup/dev_setup.sh -yb
+        rustup target add ${{ inputs.target }}
+
+    - name: Build Debug
+      if: inputs.profile == 'debug'
+      shell: bash
+      run: cargo build --target ${{ inputs.target }}
+
+    - name: Build Release
+      if: inputs.profile == 'release'
+      shell: bash
+      run: cargo build --target ${{ inputs.target }} --release
+
+    - name: Upload artifact
+      uses: ./.github/actions/artifact_upload
+      with:
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}

@@ -19,9 +19,9 @@ use logos::Logos;
 use logos::Span;
 
 pub use self::TokenKind::*;
-use crate::parser::error::DisplayError;
+use crate::DisplayError;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Token<'a> {
     pub source: &'a str,
     pub kind: TokenKind,
@@ -267,6 +267,8 @@ pub enum TokenKind {
     BOTH,
     #[token("BY", ignore(ascii_case))]
     BY,
+    #[token("CALL", ignore(ascii_case))]
+    CALL,
     #[token("CASE", ignore(ascii_case))]
     CASE,
     #[token("CAST", ignore(ascii_case))]
@@ -319,6 +321,8 @@ pub enum TokenKind {
     DECADE,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
+    #[token("DELETE", ignore(ascii_case))]
+    DELETE,
     #[token("DESC", ignore(ascii_case))]
     DESC,
     #[token("DESCRIBE", ignore(ascii_case))]
@@ -535,6 +539,8 @@ pub enum TokenKind {
     PRIVILEGES,
     #[token("REMOVE", ignore(ascii_case))]
     REMOVE,
+    #[token("REVOKE", ignore(ascii_case))]
+    REVOKE,
     #[token("GRANTS", ignore(ascii_case))]
     GRANTS,
     #[token("RIGHT", ignore(ascii_case))]
@@ -575,8 +581,6 @@ pub enum TokenKind {
     USAGE,
     #[token("UPDATE", ignore(ascii_case))]
     UPDATE,
-    #[token("DELETE", ignore(ascii_case))]
-    DELETE,
     #[token("SUPER", ignore(ascii_case))]
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
@@ -669,6 +673,8 @@ pub enum TokenKind {
     YEAR,
     #[token("NULLIF", ignore(ascii_case))]
     NULLIF,
+    #[token("COALESCE", ignore(ascii_case))]
+    COALESCE,
     #[token("RANDOM", ignore(ascii_case))]
     RANDOM,
     #[token("IFNULL", ignore(ascii_case))]
@@ -750,7 +756,7 @@ impl TokenKind {
             | TokenKind::CASE
             | TokenKind::CAST
             // | TokenKind::CHECK
-            // | TokenKind::COALESCE
+            | TokenKind::COALESCE
             // | TokenKind::COLLATE
             // | TokenKind::COLUMN
             // | TokenKind::CONSTRAINT
@@ -967,7 +973,7 @@ impl TokenKind {
             | TokenKind::OFFSET
             | TokenKind::ON
             | TokenKind::ORDER
-            // | TokenKind::OVERLAPS 
+            // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
             | TokenKind::TO

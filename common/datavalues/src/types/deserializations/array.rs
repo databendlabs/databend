@@ -79,7 +79,11 @@ impl TypeDeserializer for ArrayDeserializer {
         }
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut R, format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut NestedCheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         reader.must_ignore_byte(b'[')?;
         let mut idx = 0;
         loop {
@@ -107,7 +111,7 @@ impl TypeDeserializer for ArrayDeserializer {
 
     fn de_text_csv<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'[')?;
@@ -137,7 +141,7 @@ impl TypeDeserializer for ArrayDeserializer {
 
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
         let reader = BufferReader::new(reader);
-        let mut reader = CheckpointReader::new(Box::new(reader));
+        let mut reader = NestedCheckpointReader::new(Box::new(reader));
         self.de_text(&mut reader, format)
     }
 

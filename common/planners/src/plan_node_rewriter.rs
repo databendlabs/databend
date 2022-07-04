@@ -40,6 +40,7 @@ use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUserUDFPlan;
 use crate::CreateViewPlan;
+use crate::DeletePlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
@@ -51,6 +52,7 @@ use crate::DropUserStagePlan;
 use crate::DropUserUDFPlan;
 use crate::DropViewPlan;
 use crate::EmptyPlan;
+use crate::ExistsTablePlan;
 use crate::ExplainPlan;
 use crate::Expression;
 use crate::ExpressionPlan;
@@ -138,6 +140,9 @@ pub trait PlanRewriter: Sized {
             // Insert.
             PlanNode::Insert(plan) => self.rewrite_insert_into(plan),
 
+            // Delete.
+            PlanNode::Delete(plan) => self.rewrite_delete_into(plan),
+
             // Copy.
             PlanNode::Copy(plan) => self.rewrite_copy(plan),
 
@@ -160,6 +165,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::RenameTable(plan) => self.rewrite_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
+            PlanNode::ExistsTable(plan) => self.rewrite_exists_table(plan),
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
 
@@ -386,6 +392,10 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::OptimizeTable(plan.clone()))
     }
 
+    fn rewrite_exists_table(&mut self, plan: &ExistsTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ExistsTable(plan.clone()))
+    }
+
     fn rewrite_create_view(&mut self, plan: &CreateViewPlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateView(plan.clone()))
     }
@@ -440,6 +450,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_insert_into(&mut self, plan: &InsertPlan) -> Result<PlanNode> {
         Ok(PlanNode::Insert(plan.clone()))
+    }
+
+    fn rewrite_delete_into(&mut self, plan: &DeletePlan) -> Result<PlanNode> {
+        Ok(PlanNode::Delete(plan.clone()))
     }
 
     fn rewrite_copy(&mut self, plan: &CopyPlan) -> Result<PlanNode> {

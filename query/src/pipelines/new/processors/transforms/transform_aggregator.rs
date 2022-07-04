@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -309,6 +310,10 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
 impl<TAggregator: Aggregator + 'static> Processor for AggregatorTransform<TAggregator> {
     fn name(&self) -> &'static str {
         TAggregator::NAME
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

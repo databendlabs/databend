@@ -20,6 +20,7 @@ use common_base::base::Stoppable;
 use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
+use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
 use poem::Endpoint;
 use poem::EndpointExt;
@@ -53,8 +54,8 @@ impl HttpService {
                 get(super::http::v1::cluster_state::nodes_handler),
             )
             .at(
-                "/v1/cluster/state",
-                get(super::http::v1::cluster_state::state_handler),
+                "/v1/cluster/status",
+                get(super::http::v1::cluster_state::status_handler),
             )
             .at(
                 "/v1/metrics",
@@ -86,12 +87,10 @@ impl HttpService {
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
         let conf = config.clone();
-        let tls_cert = conf.admin_tls_server_cert;
-        let tls_key = conf.admin_tls_server_key;
-
-        let cfg = RustlsConfig::new()
-            .cert(std::fs::read(tls_cert.as_str())?)
-            .key(std::fs::read(tls_key.as_str())?);
+        let tls_cert = std::fs::read(conf.admin_tls_server_cert.as_str())?;
+        let tls_key = std::fs::read(conf.admin_tls_server_key)?;
+        let certificate = RustlsCertificate::new().cert(tls_cert).key(tls_key);
+        let cfg = RustlsConfig::new().fallback(certificate);
         Ok(cfg)
     }
 

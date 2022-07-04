@@ -20,7 +20,6 @@ use std::time::Instant;
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
 use common_base::base::ProgressValues;
-use common_cache::Cache;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -124,7 +123,7 @@ impl FuseTable {
                 {
                     Some(d) => {
                         let name = tbl.table_info.name.clone();
-                        tracing::warn!(
+                        tracing::debug!(
                                 "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                                 d.as_millis(),
                                 name.as_str(),
@@ -198,40 +197,17 @@ impl FuseTable {
             )?
         };
 
-        let uuid = new_snapshot.snapshot_id;
-        let snapshot_loc = self
-            .meta_location_generator()
-            .snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
-        let bytes = serde_json::to_vec(&new_snapshot)?;
-        let operator = ctx.get_storage_operator()?;
-        operator.object(&snapshot_loc).write(bytes).await?;
+        let mut new_table_meta = self.get_table_info().meta.clone();
+        // update statistics
+        new_table_meta.statistics = TableStatistics {
+            number_of_rows: new_snapshot.summary.row_count,
+            data_bytes: new_snapshot.summary.uncompressed_byte_size,
+            compressed_data_bytes: new_snapshot.summary.compressed_byte_size,
+            index_data_bytes: 0, // TODO we do not have it yet
+        };
 
-        let result = Self::commit_to_meta_server(
-            ctx,
-            catalog_name,
-            self.get_table_info(),
-            snapshot_loc.clone(),
-            &new_snapshot.summary,
-        )
-        .await;
-
-        match result {
-            Ok(_) => {
-                if let Some(snapshot_cache) =
-                    ctx.get_storage_cache_manager().get_table_snapshot_cache()
-                {
-                    let cache = &mut snapshot_cache.write().await;
-                    cache.put(snapshot_loc, Arc::new(new_snapshot));
-                }
-                Ok(())
-            }
-            Err(e) => {
-                // commit snapshot to meta server failed, try to delete it.
-                // "major GC" will collect this, if deletion failure (even after DAL retried)
-                let _ = operator.object(&snapshot_loc).delete().await;
-                Err(e)
-            }
-        }
+        self.update_table_meta(ctx, catalog_name, &new_snapshot, &mut new_table_meta)
+            .await
     }
 
     fn merge_table_operations(
@@ -270,7 +246,7 @@ impl FuseTable {
         Ok(new_snapshot)
     }
 
-    async fn commit_to_meta_server(
+    pub async fn commit_to_meta_server(
         ctx: &QueryContext,
         catalog_name: &str,
         table_info: &TableInfo,
@@ -327,7 +303,7 @@ impl FuseTable {
                 acc.col_stats = if acc.col_stats.is_empty() {
                     stats.col_stats.clone()
                 } else {
-                    statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats])?
+                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
                 };
                 seg_acc.push(loc.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))

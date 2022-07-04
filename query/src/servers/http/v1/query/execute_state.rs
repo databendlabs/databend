@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -20,6 +21,8 @@ use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
@@ -30,6 +33,7 @@ use common_tracing::tracing;
 use futures::future::AbortHandle;
 use futures::future::Abortable;
 use futures::StreamExt;
+use futures_util::FutureExt;
 use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
@@ -43,9 +47,12 @@ use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::NewPipe;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sql::exec::PhysicalPlan;
 use crate::sql::exec::PipelineBuilder;
+use crate::sql::ColumnBinding;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
@@ -56,7 +63,7 @@ use crate::storages::result::block_buffer::BlockBufferWriterWithResultTable;
 use crate::storages::result::ResultQueryInfo;
 use crate::storages::result::ResultTableSink;
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
     Running,
     Failed,
@@ -189,7 +196,7 @@ impl ExecuteState {
             && matches!(stmts.get(0), Some(DfStatement::Query(_)))
         {
             let mut planner = Planner::new(ctx.clone());
-            let (plan, _) = planner.plan_sql(sql).await?;
+            let (plan, _, _) = planner.plan_sql(sql).await?;
             let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
             // Write Start to query log table.
@@ -243,18 +250,29 @@ impl ExecuteState {
             let ctx_clone = ctx.clone();
             let block_buffer_clone = block_buffer.clone();
             ctx.try_spawn(async move {
-                if let Err(err) = execute(
+                let res = execute(
                     interpreter,
                     ctx_clone,
                     block_buffer,
                     executor_clone.clone(),
                     Arc::new(plan),
-                )
-                .await
-                {
-                    Executor::stop(&executor_clone, Err(err), false).await;
-                    block_buffer_clone.stop_push().await.unwrap();
-                };
+                );
+                match AssertUnwindSafe(res).catch_unwind().await {
+                    Ok(Err(err)) => {
+                        Executor::stop(&executor_clone, Err(err), false).await;
+                        block_buffer_clone.stop_push().await.unwrap();
+                    }
+                    Err(_) => {
+                        Executor::stop(
+                            &executor_clone,
+                            Err(ErrorCode::PanicError("interpreter panic!")),
+                            false,
+                        )
+                        .await;
+                        block_buffer_clone.stop_push().await.unwrap();
+                    }
+                    _ => {}
+                }
             })?;
 
             Ok(executor)
@@ -271,6 +289,8 @@ async fn execute(
 ) -> Result<()> {
     let data_stream: Result<SendableDataBlockStream> =
         if ctx.get_settings().get_enable_async_insert()? != 0
+            && ctx.get_settings().get_enable_new_processor_framework()? != 0
+            && ctx.get_cluster().is_empty()
             && matches!(&*plan, PlanNode::Insert(_))
         {
             match &*plan {
@@ -370,15 +390,31 @@ impl HttpQueryHandle {
     pub async fn execute(
         self,
         ctx: Arc<QueryContext>,
-        pb: PipelineBuilder,
+        physical_plan: &PhysicalPlan,
+        result_columns: &[ColumnBinding],
     ) -> Result<SendableDataBlockStream> {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
-        let (mut root_pipeline, pipelines, schema) = pb.spawn()?;
+        let mut pb = PipelineBuilder::new();
+        let mut root_pipeline = NewPipeline::create();
+        pb.build_pipeline(ctx.clone(), physical_plan, &mut root_pipeline)?;
+        let mut pipelines = pb.pipelines;
         let async_runtime = ctx.get_storage_runtime();
+
+        root_pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+        for pipeline in pipelines.iter_mut() {
+            pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+        }
 
         root_pipeline.resize(1)?;
         let input = InputPort::create();
+
+        let schema = DataSchemaRefExt::create(
+            result_columns
+                .iter()
+                .map(|v| DataField::new(&v.column_name, v.data_type.clone()))
+                .collect(),
+        );
 
         let query_info = ResultQueryInfo {
             query_id: ctx.get_id(),
@@ -399,14 +435,24 @@ impl HttpQueryHandle {
             inputs_port: vec![input],
             processors: vec![sink],
         });
-        let pipeline_executor =
-            PipelineCompleteExecutor::try_create(async_runtime.clone(), root_pipeline)?;
+
         let async_runtime_clone = async_runtime.clone();
+        let query_need_abort = ctx.query_need_abort();
+
         let run = move || -> Result<()> {
             for pipeline in pipelines {
-                let executor = PipelineExecutor::create(async_runtime_clone.clone(), pipeline)?;
+                let executor = PipelineExecutor::create(
+                    async_runtime_clone.clone(),
+                    query_need_abort.clone(),
+                    pipeline,
+                )?;
                 executor.execute()?;
             }
+            let pipeline_executor = PipelineCompleteExecutor::try_create(
+                async_runtime_clone,
+                query_need_abort.clone(),
+                root_pipeline,
+            )?;
             pipeline_executor.execute()
         };
 

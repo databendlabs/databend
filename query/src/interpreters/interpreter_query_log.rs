@@ -56,7 +56,7 @@ pub struct LogEvent {
     pub query_kind: String,
     pub query_text: String,
     pub event_date: i32,
-    pub event_time: u64,
+    pub event_time: i64,
 
     // Schema.
     pub current_database: String,
@@ -241,8 +241,8 @@ impl InterpreterQueryLog {
         let event_time = now
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
-            .as_millis() as u64;
-        let event_date = (event_time / (24 * 3600000)) as i32;
+            .as_micros() as i64;
+        let event_date = (event_time / (24 * 3600000000)) as i32;
 
         let written_rows = 0u64;
         let written_bytes = 0u64;
@@ -345,8 +345,8 @@ impl InterpreterQueryLog {
         let event_time = now
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
-            .as_millis() as u64;
-        let event_date = (event_time / (24 * 3600000)) as i32;
+            .as_micros() as i64;
+        let event_date = (event_time / (24 * 3600000000)) as i32;
         let dal_metrics = self.ctx.get_dal_metrics();
 
         let written_rows = self.ctx.get_write_progress_value().rows as u64;

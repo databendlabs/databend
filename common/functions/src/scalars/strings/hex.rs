@@ -108,12 +108,10 @@ impl Function for HexFunction {
                 });
                 Ok(Arc::new(StringColumn::from_owned_iterator(iter)))
             }
-            _ => {
-                return Err(ErrorCode::IllegalDataType(format!(
-                    "Expected integer but got {}",
-                    columns[0].data_type().data_type_id()
-                )));
-            }
+            _ => Err(ErrorCode::IllegalDataType(format!(
+                "Expected integer but got {}",
+                columns[0].data_type().data_type_id()
+            ))),
         }
     }
 }

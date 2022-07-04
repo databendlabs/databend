@@ -1,5 +1,7 @@
 #!/bin/sh
 
+BUILD_PROFILE="${BUILD_PROFILE:-debug}"
+
 cargo build
 
 killall databend-meta
@@ -16,7 +18,7 @@ killall databend-query
 sleep 2
 
 # Export all meta data from metasrv dir
-./target/debug/databend-metactl --export --raft-dir _meta1 > tests/metactl/meta.json
+./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir _meta1 >tests/metactl/meta.json
 
 # Optional: run the test
 make metactl-test

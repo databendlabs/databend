@@ -20,7 +20,9 @@ use std::sync::Once;
 use once_cell::sync::Lazy;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
+use sentry_tracing::EventFilter;
 use tracing::Event;
+use tracing::Level;
 use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
@@ -48,7 +50,12 @@ pub fn init_default_ut_tracing() {
 
     START.call_once(|| {
         let mut g = GLOBAL_UT_LOG_GUARD.as_ref().lock().unwrap();
-        *g = Some(init_global_tracing("unittest", "_logs_unittest", "DEBUG"));
+        *g = Some(init_global_tracing(
+            "unittest",
+            "_logs_unittest",
+            "DEBUG",
+            None,
+        ));
     });
 }
 
@@ -67,7 +74,12 @@ static GLOBAL_UT_LOG_GUARD: Lazy<Arc<Mutex<Option<Vec<WorkerGuard>>>>> =
 /// DATABEND_JAEGER=on RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
 ///
 // TODO(xp): use DATABEND_JAEGER to assign jaeger server address.
-pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<WorkerGuard> {
+pub fn init_global_tracing(
+    app_name: &str,
+    dir: &str,
+    level: &str,
+    enable_stdout: Option<bool>,
+) -> Vec<WorkerGuard> {
     let mut guards = vec![];
 
     // Enable log compatible layer to convert log record to tracing span.
@@ -82,28 +94,56 @@ pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<Worker
 
     // Jaeger layer.
     let mut jaeger_layer = None;
-    let fuse_jaeger_env = env::var("DATABEND_JAEGER").unwrap_or_else(|_| "".to_string());
-    if !fuse_jaeger_env.is_empty() {
+    let jaeger_agent_endpoint =
+        env::var("DATABEND_JAEGER_AGENT_ENDPOINT").unwrap_or_else(|_| "".to_string());
+    if !jaeger_agent_endpoint.is_empty() {
         global::set_text_map_propagator(TraceContextPropagator::new());
 
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_service_name(app_name)
+            .with_agent_endpoint(jaeger_agent_endpoint)
             .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 
         jaeger_layer = Some(tracing_opentelemetry::layer().with_tracer(tracer));
     }
 
+    // Sentry Layer.
+    let mut sentry_layer = None;
+    let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());
+    if !bend_sentry_env.is_empty() {
+        sentry_layer = Some(
+            sentry_tracing::layer()
+                .event_filter(|metadata| match metadata.level() {
+                    &Level::ERROR | &Level::WARN => EventFilter::Event,
+                    &Level::INFO | &Level::DEBUG | &Level::TRACE => EventFilter::Breadcrumb,
+                })
+                .span_filter(|metadata| {
+                    matches!(
+                        metadata.level(),
+                        &Level::ERROR | &Level::WARN | &Level::INFO | &Level::DEBUG
+                    )
+                }),
+        );
+    }
+
+    let stdout_layer = if enable_stdout == Some(false) {
+        None
+    } else {
+        Some(fmt::layer().with_ansi(atty::is(atty::Stream::Stdout)))
+    };
+
     // Use env RUST_LOG to initialize log if present.
     // Otherwise, use the specified level.
     let directives = env::var(EnvFilter::DEFAULT_ENV).unwrap_or_else(|_x| level.to_string());
     let env_filter = EnvFilter::new(directives);
     let subscriber = Registry::default()
-        .with(fmt::layer().with_ansi(atty::is(atty::Stream::Stdout)))
+        .with(stdout_layer)
         .with(env_filter)
         .with(JsonStorageLayer)
         .with(file_logging_layer)
-        .with(jaeger_layer);
+        .with(jaeger_layer)
+        .with(sentry_layer);
 
     // For tokio-console
     #[cfg(feature = "console")]

@@ -22,6 +22,7 @@ pub use flight_service::DatabendQueryFlightService;
 pub use flight_tickets::FlightTicket;
 pub use flight_tickets::StreamTicket;
 
+mod exchange;
 mod flight_actions;
 mod flight_client;
 mod flight_client_stream;
@@ -32,3 +33,14 @@ mod flight_scatter_hash;
 mod flight_service;
 mod flight_service_stream;
 mod flight_tickets;
+mod packets;
+
+pub use exchange::DataExchange;
+pub use exchange::DataExchangeManager;
+pub use exchange::MergeExchange;
+pub use exchange::ShuffleDataExchange;
+pub use packets::ExecutePartialQueryPacket;
+pub use packets::FragmentPlanPacket;
+pub use packets::InitNodesChannelPacket;
+pub use packets::Packet;
+pub use packets::QueryFragmentsPlanPacket;

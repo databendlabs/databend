@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -47,16 +48,44 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     if conf.meta.address.is_empty() {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
-
+    let tenant = conf.query.tenant_id.clone();
+    let cluster_id = conf.query.cluster_id.clone();
+    let flight_addr = conf.query.flight_api_address.clone();
     let app_name = format!(
-        "databend-query-{}@{}:{}",
-        conf.query.cluster_id, conf.query.mysql_handler_host, conf.query.mysql_handler_port
+        "databend-query-{}-{}@{}",
+        tenant.clone(),
+        cluster_id.clone(),
+        flight_addr.clone()
     );
+
+    let mut _sentry_guard = None;
+    let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());
+    if !bend_sentry_env.is_empty() {
+        // NOTE: `traces_sample_rate` is 0.0 by default, which disable sentry tracing.
+        let traces_sample_rate = env::var("SENTRY_TRACES_SAMPLE_RATE")
+            .ok()
+            .map(|s| {
+                s.parse()
+                    .unwrap_or_else(|_| panic!("`{}` was defined but could not be parsed", s))
+            })
+            .unwrap_or(0.0);
+
+        _sentry_guard = Some(sentry::init((bend_sentry_env, sentry::ClientOptions {
+            release: common_tracing::databend_semver!(),
+            traces_sample_rate,
+            ..Default::default()
+        })));
+        sentry::configure_scope(|scope| scope.set_tag("tenant", tenant));
+        sentry::configure_scope(|scope| scope.set_tag("cluster_id", cluster_id));
+        sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
+    }
+
     //let _guards = init_tracing_with_file(
     let _guards = init_global_tracing(
         app_name.as_str(),
         conf.log.dir.as_str(),
         conf.log.level.as_str(),
+        None,
     );
 
     init_default_metrics_recorder();

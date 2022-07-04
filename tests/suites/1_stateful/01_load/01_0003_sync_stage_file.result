@@ -1,0 +1,10 @@
+=== List files in internal stage ===
+ontime_200.csv
+=== List stage files after sync ===
+ontime_200.csv
+ontime_200.csv.gz
+dir/ontime_200.csv
+dir/ontime_200.csv.gz
+dir/ontime_200.csv.zst
+ontime_200.csv
+ontime_200.csv.gz

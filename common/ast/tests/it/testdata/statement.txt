@@ -1,4 +1,32 @@
 ---------- Input ----------
+show databases
+---------- Output ---------
+SHOW DATABASES
+---------- AST ------------
+ShowDatabases(
+    ShowDatabasesStmt {
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show databases format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+SHOW DATABASES
+---------- AST ------------
+ShowDatabases(
+    ShowDatabasesStmt {
+        limit: None,
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
+---------- Input ----------
 show tables
 ---------- Output ---------
 SHOW TABLES
@@ -13,6 +41,25 @@ ShowTables(
 )
 
 
+---------- Input ----------
+show tables format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+SHOW TABLES
+---------- AST ------------
+ShowTables(
+    ShowTablesStmt {
+        database: None,
+        full: false,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
 ---------- Input ----------
 show processlist;
 ---------- Output ---------
@@ -45,6 +92,34 @@ ShowCreateTable(
 )
 
 
+---------- Input ----------
+show create table a.b format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+SHOW CREATE TABLE a.b
+---------- AST ------------
+ShowCreateTable(
+    ShowCreateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(18..19),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(20..21),
+        },
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
 ---------- Input ----------
 explain pipeline select a from b;
 ---------- Output ---------
@@ -88,6 +163,9 @@ Explain {
                     ],
                     from: [
                         Table {
+                            span: [
+                                Ident(31..32),
+                            ],
                             catalog: None,
                             database: None,
                             table: Identifier {
@@ -131,6 +209,28 @@ DescribeTable(
 )
 
 
+---------- Input ----------
+describe a format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+DESCRIBE a
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(9..10),
+        },
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
 ---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
@@ -284,6 +384,9 @@ CreateTable(
                         ],
                         from: [
                             Table {
+                                span: [
+                                    Ident(90..91),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -786,6 +889,12 @@ CreateView(
                     ],
                     from: [
                         TableFunction {
+                            span: [
+                                Ident(45..52),
+                                LParen(52..53),
+                                LiteralInteger(53..57),
+                                RParen(57..58),
+                            ],
                             name: Identifier {
                                 name: "numbers",
                                 quote: None,
@@ -901,6 +1010,12 @@ AlterView(
                     ],
                     from: [
                         TableFunction {
+                            span: [
+                                Ident(44..51),
+                                LParen(51..52),
+                                LiteralInteger(52..56),
+                                RParen(56..57),
+                            ],
                             name: Identifier {
                                 name: "numbers",
                                 quote: None,
@@ -1366,6 +1481,9 @@ Query(
                 ],
                 from: [
                     Table {
+                        span: [
+                            Ident(33..34),
+                        ],
                         catalog: None,
                         database: None,
                         table: Identifier {
@@ -1538,6 +1656,9 @@ Query(
                 ],
                 from: [
                     Table {
+                        span: [
+                            Ident(14..16),
+                        ],
                         catalog: None,
                         database: None,
                         table: Identifier {
@@ -1597,6 +1718,11 @@ Query(
                 ],
                 from: [
                     Table {
+                        span: [
+                            Ident(14..16),
+                            Period(16..17),
+                            Ident(17..19),
+                        ],
                         catalog: None,
                         database: Some(
                             Identifier {
@@ -1666,6 +1792,9 @@ Query(
                 ],
                 from: [
                     Table {
+                        span: [
+                            Ident(14..15),
+                        ],
                         catalog: None,
                         database: None,
                         table: Identifier {
@@ -1677,6 +1806,9 @@ Query(
                         travel_point: None,
                     },
                     Table {
+                        span: [
+                            Ident(17..18),
+                        ],
                         catalog: None,
                         database: None,
                         table: Identifier {
@@ -1688,6 +1820,9 @@ Query(
                         travel_point: None,
                     },
                     Table {
+                        span: [
+                            Ident(20..21),
+                        ],
                         catalog: None,
                         database: None,
                         table: Identifier {
@@ -1705,6 +1840,146 @@ Query(
             },
         ),
         order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a, b, c order by `db`.`a`.`c1`;
+---------- Output ---------
+SELECT * FROM a, b, c ORDER BY `db`.`a`.`c1`
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            Comma(15..16),
+            Ident(17..18),
+            Comma(18..19),
+            Ident(20..21),
+            ORDER(22..27),
+            BY(28..30),
+            QuotedString(31..35),
+            Period(35..36),
+            QuotedString(36..39),
+            Period(39..40),
+            QuotedString(40..44),
+        ],
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    Comma(15..16),
+                    Ident(17..18),
+                    Comma(18..19),
+                    Ident(20..21),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(14..15),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(14..15),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                    Table {
+                        span: [
+                            Ident(17..18),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Ident(17..18),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                    Table {
+                        span: [
+                            Ident(20..21),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Ident(20..21),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [
+            OrderByExpr {
+                expr: ColumnRef {
+                    span: [
+                        QuotedString(31..35),
+                        Period(35..36),
+                        QuotedString(36..39),
+                        Period(39..40),
+                        QuotedString(40..44),
+                    ],
+                    database: Some(
+                        Identifier {
+                            name: "db",
+                            quote: Some(
+                                '`',
+                            ),
+                            span: QuotedString(31..35),
+                        },
+                    ),
+                    table: Some(
+                        Identifier {
+                            name: "a",
+                            quote: Some(
+                                '`',
+                            ),
+                            span: QuotedString(36..39),
+                        },
+                    ),
+                    column: Identifier {
+                        name: "c1",
+                        quote: Some(
+                            '`',
+                        ),
+                        span: QuotedString(40..44),
+                    },
+                },
+                asc: None,
+                nulls_first: None,
+            },
+        ],
         limit: [],
         offset: None,
         format: None,
@@ -1762,8 +2037,21 @@ Query(
                     ),
                 ],
                 from: [
-                    Join(
-                        Join {
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            JOIN(16..20),
+                            Ident(21..22),
+                            ON(23..25),
+                            Ident(26..27),
+                            Period(27..28),
+                            Ident(28..29),
+                            Eq(30..31),
+                            Ident(32..33),
+                            Period(33..34),
+                            Ident(34..35),
+                        ],
+                        join: Join {
                             op: Inner,
                             condition: On(
                                 BinaryOp {
@@ -1814,6 +2102,9 @@ Query(
                                 },
                             ),
                             left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -1825,6 +2116,9 @@ Query(
                                 travel_point: None,
                             },
                             right: Table {
+                                span: [
+                                    Ident(21..22),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -1836,7 +2130,7 @@ Query(
                                 travel_point: None,
                             },
                         },
-                    ),
+                    },
                 ],
                 selection: None,
                 group_by: [],
@@ -1905,8 +2199,23 @@ Query(
                     ),
                 ],
                 from: [
-                    Join(
-                        Join {
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            LEFT(16..20),
+                            OUTER(21..26),
+                            JOIN(27..31),
+                            Ident(32..33),
+                            ON(34..36),
+                            Ident(37..38),
+                            Period(38..39),
+                            Ident(39..40),
+                            Eq(41..42),
+                            Ident(43..44),
+                            Period(44..45),
+                            Ident(45..46),
+                        ],
+                        join: Join {
                             op: LeftOuter,
                             condition: On(
                                 BinaryOp {
@@ -1957,6 +2266,9 @@ Query(
                                 },
                             ),
                             left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -1968,6 +2280,9 @@ Query(
                                 travel_point: None,
                             },
                             right: Table {
+                                span: [
+                                    Ident(32..33),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -1979,7 +2294,7 @@ Query(
                                 travel_point: None,
                             },
                         },
-                    ),
+                    },
                 ],
                 selection: None,
                 group_by: [],
@@ -2048,8 +2363,23 @@ Query(
                     ),
                 ],
                 from: [
-                    Join(
-                        Join {
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            RIGHT(16..21),
+                            OUTER(22..27),
+                            JOIN(28..32),
+                            Ident(33..34),
+                            ON(35..37),
+                            Ident(38..39),
+                            Period(39..40),
+                            Ident(40..41),
+                            Eq(42..43),
+                            Ident(44..45),
+                            Period(45..46),
+                            Ident(46..47),
+                        ],
+                        join: Join {
                             op: RightOuter,
                             condition: On(
                                 BinaryOp {
@@ -2100,6 +2430,9 @@ Query(
                                 },
                             ),
                             left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2111,6 +2444,9 @@ Query(
                                 travel_point: None,
                             },
                             right: Table {
+                                span: [
+                                    Ident(33..34),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2122,7 +2458,7 @@ Query(
                                 travel_point: None,
                             },
                         },
-                    ),
+                    },
                 ],
                 selection: None,
                 group_by: [],
@@ -2191,8 +2527,23 @@ Query(
                     ),
                 ],
                 from: [
-                    Join(
-                        Join {
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            FULL(16..20),
+                            OUTER(21..26),
+                            JOIN(27..31),
+                            Ident(32..33),
+                            ON(34..36),
+                            Ident(37..38),
+                            Period(38..39),
+                            Ident(39..40),
+                            Eq(41..42),
+                            Ident(43..44),
+                            Period(44..45),
+                            Ident(45..46),
+                        ],
+                        join: Join {
                             op: FullOuter,
                             condition: On(
                                 BinaryOp {
@@ -2243,6 +2594,9 @@ Query(
                                 },
                             ),
                             left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2254,6 +2608,9 @@ Query(
                                 travel_point: None,
                             },
                             right: Table {
+                                span: [
+                                    Ident(32..33),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2265,7 +2622,7 @@ Query(
                                 travel_point: None,
                             },
                         },
-                    ),
+                    },
                 ],
                 selection: None,
                 group_by: [],
@@ -2332,8 +2689,22 @@ Query(
                     ),
                 ],
                 from: [
-                    Join(
-                        Join {
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            INNER(16..21),
+                            JOIN(22..26),
+                            Ident(27..28),
+                            ON(29..31),
+                            Ident(32..33),
+                            Period(33..34),
+                            Ident(34..35),
+                            Eq(36..37),
+                            Ident(38..39),
+                            Period(39..40),
+                            Ident(40..41),
+                        ],
+                        join: Join {
                             op: Inner,
                             condition: On(
                                 BinaryOp {
@@ -2384,6 +2755,9 @@ Query(
                                 },
                             ),
                             left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2395,6 +2769,9 @@ Query(
                                 travel_point: None,
                             },
                             right: Table {
+                                span: [
+                                    Ident(27..28),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2406,7 +2783,7 @@ Query(
                                 travel_point: None,
                             },
                         },
-                    ),
+                    },
                 ],
                 selection: None,
                 group_by: [],
@@ -2467,8 +2844,19 @@ Query(
                     ),
                 ],
                 from: [
-                    Join(
-                        Join {
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            LEFT(16..20),
+                            OUTER(21..26),
+                            JOIN(27..31),
+                            Ident(32..33),
+                            USING(34..39),
+                            LParen(39..40),
+                            Ident(40..41),
+                            RParen(41..42),
+                        ],
+                        join: Join {
                             op: LeftOuter,
                             condition: Using(
                                 [
@@ -2480,6 +2868,9 @@ Query(
                                 ],
                             ),
                             left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2491,6 +2882,9 @@ Query(
                                 travel_point: None,
                             },
                             right: Table {
+                                span: [
+                                    Ident(32..33),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2502,7 +2896,7 @@ Query(
                                 travel_point: None,
                             },
                         },
-                    ),
+                    },
                 ],
                 selection: None,
                 group_by: [],
@@ -2563,8 +2957,19 @@ Query(
                     ),
                 ],
                 from: [
-                    Join(
-                        Join {
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            RIGHT(16..21),
+                            OUTER(22..27),
+                            JOIN(28..32),
+                            Ident(33..34),
+                            USING(35..40),
+                            LParen(40..41),
+                            Ident(41..42),
+                            RParen(42..43),
+                        ],
+                        join: Join {
                             op: RightOuter,
                             condition: Using(
                                 [
@@ -2576,6 +2981,9 @@ Query(
                                 ],
                             ),
                             left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2587,6 +2995,9 @@ Query(
                                 travel_point: None,
                             },
                             right: Table {
+                                span: [
+                                    Ident(33..34),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2598,7 +3009,7 @@ Query(
                                 travel_point: None,
                             },
                         },
-                    ),
+                    },
                 ],
                 selection: None,
                 group_by: [],
@@ -2659,8 +3070,19 @@ Query(
                     ),
                 ],
                 from: [
-                    Join(
-                        Join {
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            FULL(16..20),
+                            OUTER(21..26),
+                            JOIN(27..31),
+                            Ident(32..33),
+                            USING(34..39),
+                            LParen(39..40),
+                            Ident(40..41),
+                            RParen(41..42),
+                        ],
+                        join: Join {
                             op: FullOuter,
                             condition: Using(
                                 [
@@ -2672,6 +3094,9 @@ Query(
                                 ],
                             ),
                             left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2683,6 +3108,9 @@ Query(
                                 travel_point: None,
                             },
                             right: Table {
+                                span: [
+                                    Ident(32..33),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2694,7 +3122,7 @@ Query(
                                 travel_point: None,
                             },
                         },
-                    ),
+                    },
                 ],
                 selection: None,
                 group_by: [],
@@ -2753,8 +3181,18 @@ Query(
                     ),
                 ],
                 from: [
-                    Join(
-                        Join {
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            INNER(16..21),
+                            JOIN(22..26),
+                            Ident(27..28),
+                            USING(29..34),
+                            LParen(34..35),
+                            Ident(35..36),
+                            RParen(36..37),
+                        ],
+                        join: Join {
                             op: Inner,
                             condition: Using(
                                 [
@@ -2766,6 +3204,9 @@ Query(
                                 ],
                             ),
                             left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2777,6 +3218,9 @@ Query(
                                 travel_point: None,
                             },
                             right: Table {
+                                span: [
+                                    Ident(27..28),
+                                ],
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
@@ -2788,9 +3232,146 @@ Query(
                                 travel_point: None,
                             },
                         },
-                    ),
+                    },
                 ],
                 selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select 1 from numbers(1) where ((1 = 1) or 1)
+---------- Output ---------
+SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            LiteralInteger(7..8),
+            FROM(9..13),
+            Ident(14..21),
+            LParen(21..22),
+            LiteralInteger(22..23),
+            RParen(23..24),
+            WHERE(25..30),
+            LParen(31..32),
+            LParen(32..33),
+            LiteralInteger(33..34),
+            Eq(35..36),
+            LiteralInteger(37..38),
+            RParen(38..39),
+            OR(40..42),
+            LiteralInteger(43..44),
+            RParen(44..45),
+        ],
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    LiteralInteger(7..8),
+                    FROM(9..13),
+                    Ident(14..21),
+                    LParen(21..22),
+                    LiteralInteger(22..23),
+                    RParen(23..24),
+                    WHERE(25..30),
+                    LParen(31..32),
+                    LParen(32..33),
+                    LiteralInteger(33..34),
+                    Eq(35..36),
+                    LiteralInteger(37..38),
+                    RParen(38..39),
+                    OR(40..42),
+                    LiteralInteger(43..44),
+                    RParen(44..45),
+                ],
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: [
+                                LiteralInteger(7..8),
+                            ],
+                            lit: Integer(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: [
+                            Ident(14..21),
+                            LParen(21..22),
+                            LiteralInteger(22..23),
+                            RParen(23..24),
+                        ],
+                        name: Identifier {
+                            name: "numbers",
+                            quote: None,
+                            span: Ident(14..21),
+                        },
+                        params: [
+                            Literal {
+                                span: [
+                                    LiteralInteger(22..23),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        ],
+                        alias: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: [
+                            OR(40..42),
+                        ],
+                        op: Or,
+                        left: BinaryOp {
+                            span: [
+                                Eq(35..36),
+                            ],
+                            op: Eq,
+                            left: Literal {
+                                span: [
+                                    LiteralInteger(33..34),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                            right: Literal {
+                                span: [
+                                    LiteralInteger(37..38),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: [
+                                LiteralInteger(43..44),
+                            ],
+                            lit: Integer(
+                                1,
+                            ),
+                        },
+                    },
+                ),
                 group_by: [],
                 having: None,
             },
@@ -2808,44 +3389,46 @@ insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
 ---------- AST ------------
-Insert {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(12..13),
-    },
-    columns: [
-        Identifier {
-            name: "c1",
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
             quote: None,
-            span: Ident(15..17),
+            span: Ident(12..13),
         },
-        Identifier {
-            name: "c2",
-            quote: None,
-            span: Ident(19..21),
-        },
-    ],
-    source: Values {
-        rest_tokens: [
-            LParen(30..31),
-            LiteralInteger(31..32),
-            Comma(32..33),
-            LiteralInteger(34..35),
-            RParen(35..36),
-            Comma(36..37),
-            LParen(38..39),
-            LiteralInteger(39..40),
-            Comma(40..41),
-            LiteralInteger(42..43),
-            RParen(43..44),
-            SemiColon(44..45),
+        columns: [
+            Identifier {
+                name: "c1",
+                quote: None,
+                span: Ident(15..17),
+            },
+            Identifier {
+                name: "c2",
+                quote: None,
+                span: Ident(19..21),
+            },
         ],
+        source: Values {
+            rest_tokens: [
+                LParen(30..31),
+                LiteralInteger(31..32),
+                Comma(32..33),
+                LiteralInteger(34..35),
+                RParen(35..36),
+                Comma(36..37),
+                LParen(38..39),
+                LiteralInteger(39..40),
+                Comma(40..41),
+                LiteralInteger(42..43),
+                RParen(43..44),
+                SemiColon(44..45),
+            ],
+        },
+        overwrite: false,
     },
-    overwrite: false,
-}
+)
 
 
 ---------- Input ----------
@@ -2853,23 +3436,25 @@ insert into table t format json;
 ---------- Output ---------
 INSERT INTO t FORMAT json ;
 ---------- AST ------------
-Insert {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(18..19),
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(18..19),
+        },
+        columns: [],
+        source: Streaming {
+            format: "json",
+            rest_tokens: [
+                SemiColon(31..32),
+            ],
+        },
+        overwrite: false,
     },
-    columns: [],
-    source: Streaming {
-        format: "json",
-        rest_tokens: [
-            SemiColon(31..32),
-        ],
-    },
-    overwrite: false,
-}
+)
 
 
 ---------- Input ----------
@@ -2877,65 +3462,70 @@ insert into table t select * from t2;
 ---------- Output ---------
 INSERT INTO t SELECT * FROM t2
 ---------- AST ------------
-Insert {
-    catalog: None,
-    database: None,
-    table: Identifier {
-        name: "t",
-        quote: None,
-        span: Ident(18..19),
-    },
-    columns: [],
-    source: Select {
-        query: Query {
-            span: [
-                SELECT(20..26),
-                Multiply(27..28),
-                FROM(29..33),
-                Ident(34..36),
-            ],
-            body: Select(
-                SelectStmt {
-                    span: [
-                        SELECT(20..26),
-                        Multiply(27..28),
-                        FROM(29..33),
-                        Ident(34..36),
-                    ],
-                    distinct: false,
-                    select_list: [
-                        QualifiedName(
-                            [
-                                Star,
-                            ],
-                        ),
-                    ],
-                    from: [
-                        Table {
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                name: "t2",
-                                quote: None,
-                                span: Ident(34..36),
-                            },
-                            alias: None,
-                            travel_point: None,
-                        },
-                    ],
-                    selection: None,
-                    group_by: [],
-                    having: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            format: None,
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(18..19),
         },
+        columns: [],
+        source: Select {
+            query: Query {
+                span: [
+                    SELECT(20..26),
+                    Multiply(27..28),
+                    FROM(29..33),
+                    Ident(34..36),
+                ],
+                body: Select(
+                    SelectStmt {
+                        span: [
+                            SELECT(20..26),
+                            Multiply(27..28),
+                            FROM(29..33),
+                            Ident(34..36),
+                        ],
+                        distinct: false,
+                        select_list: [
+                            QualifiedName(
+                                [
+                                    Star,
+                                ],
+                            ),
+                        ],
+                        from: [
+                            Table {
+                                span: [
+                                    Ident(34..36),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "t2",
+                                    quote: None,
+                                    span: Ident(34..36),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: [],
+                        having: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                format: None,
+            },
+        },
+        overwrite: false,
     },
-    overwrite: false,
-}
+)
 
 
 ---------- Input ----------
@@ -3044,7 +3634,7 @@ Query(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( FORMAT = 'CSV' compression = 'GZIP' record_delimiter = ',' )
+CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( compression = 'GZIP' format = 'CSV' record_delimiter = ',' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -3057,8 +3647,8 @@ CreateStage(
         },
         encryption_options: {},
         file_format_options: {
-            "FORMAT": "CSV",
             "compression": "GZIP",
+            "format": "CSV",
             "record_delimiter": ",",
         },
         on_error: "",
@@ -3122,23 +3712,25 @@ alter user 'test-e'@'localhost' identified by 'new-password';
 ---------- Output ---------
 ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password'
 ---------- AST ------------
-AlterUser {
-    user: Some(
-        UserIdentity {
-            username: "test-e",
-            hostname: "localhost",
-        },
-    ),
-    auth_option: Some(
-        AuthOption {
-            auth_type: None,
-            password: Some(
-                "new-password",
-            ),
-        },
-    ),
-    role_options: [],
-}
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "test-e",
+                hostname: "localhost",
+            },
+        ),
+        auth_option: Some(
+            AuthOption {
+                auth_type: None,
+                password: Some(
+                    "new-password",
+                ),
+            },
+        ),
+        role_options: [],
+    },
+)
 
 
 ---------- Input ----------
@@ -3355,10 +3947,10 @@ CreateTable(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
 ---------- Output ---------
-GRANT SELECT, CREATE ON TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3381,10 +3973,10 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
 ---------- Output ---------
-GRANT SELECT, CREATE ON TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3407,10 +3999,10 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO ROLE 'role1';
 ---------- Output ---------
-GRANT SELECT, CREATE ON TO ROLE role1
+GRANT SELECT, CREATE ON * TO ROLE role1
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3433,7 +4025,7 @@ GRANT ALL ON *.* TO 'test-grant'@'localhost';
 GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: ALL {
             level: Global,
         },
@@ -3453,7 +4045,7 @@ GRANT ALL ON *.* TO ROLE 'role2';
 GRANT ALL PRIVILEGES ON *.* TO ROLE role2
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: ALL {
             level: Global,
         },
@@ -3470,7 +4062,7 @@ GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
 GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: ALL {
             level: Database(
                 None,
@@ -3492,7 +4084,7 @@ GRANT ALL PRIVILEGES ON * TO ROLE 'role3';
 GRANT ALL PRIVILEGES ON * TO ROLE role3
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: ALL {
             level: Database(
                 None,
@@ -3511,7 +4103,7 @@ GRANT ROLE 'test' TO 'test-user';
 GRANT ROLE test TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Role {
             role: "test",
         },
@@ -3531,7 +4123,7 @@ GRANT ROLE 'test' TO USER 'test-user';
 GRANT ROLE test TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Role {
             role: "test",
         },
@@ -3551,7 +4143,7 @@ GRANT ROLE 'test' TO ROLE 'test-user';
 GRANT ROLE test TO ROLE test-user
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Role {
             role: "test",
         },
@@ -3568,7 +4160,7 @@ GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
 GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3595,7 +4187,7 @@ GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';
 GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3622,7 +4214,7 @@ GRANT SELECT ON db01.* TO ROLE 'role1'
 GRANT SELECT ON db01.* TO ROLE role1
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3646,7 +4238,7 @@ GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
 GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3674,7 +4266,7 @@ GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';
 GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3702,7 +4294,7 @@ GRANT SELECT ON db01.tb1 TO ROLE 'role1';
 GRANT SELECT ON db01.tb1 TO ROLE role1
 ---------- AST ------------
 Grant(
-    GrantStatement {
+    GrantStmt {
         source: Privs {
             privileges: [
                 Select,
@@ -3716,6 +4308,52 @@ Grant(
         },
         principal: Role(
             "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON tb1 TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT ON tb1 TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON tb1 TO 'u1';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON tb1 TO USER 'u1'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: ALL {
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
         ),
     },
 )
@@ -3775,6 +4413,356 @@ ShowGrants {
         Role(
             "role1",
         ),
+    ),
+}
+
+
+---------- Input ----------
+REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';
+---------- Output ---------
+REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'localhost'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE SELECT ON tb1 FROM ROLE 'role1';
+---------- Output ---------
+REVOKE SELECT ON tb1 FROM ROLE role1
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE ALL ON tb1 FROM 'u1';
+---------- Output ---------
+REVOKE ALL PRIVILEGES ON tb1 FROM USER 'u1'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: ALL {
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {},
+            encryption: {},
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO 's3://mybucket/data.csv'
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(56..63),
+            },
+        },
+        dst: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {},
+            encryption: {},
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO @my_stage
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(41..48),
+            },
+        },
+        dst: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CREDENTIALS = (
+                    AWS_KEY_ID = 'access_key'
+                    AWS_SECRET_KEY = 'secret_key'
+                )
+                ENCRYPTION = (
+                    MASTER_KEY = 'master_key'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' CREDENTIALS = ( aws_key_id='access_key' aws_secret_key='secret_key' ) ENCRYPTION = ( master_key='master_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation {
+            protocol: "s3",
+            name: "mybucket",
+            path: "/data.csv",
+            credentials: {
+                "aws_key_id": "access_key",
+                "aws_secret_key": "secret_key",
+            },
+            encryption: {
+                "master_key": "master_key",
+            },
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+CALL system$test(a)
+---------- Output ---------
+CALL system$test(a)
+---------- AST ------------
+Call(
+    CallStmt {
+        name: "system$test",
+        args: [
+            "a",
+        ],
+    },
+)
+
+
+---------- Input ----------
+CALL system$test('a')
+---------- Output ---------
+CALL system$test(a)
+---------- AST ------------
+Call(
+    CallStmt {
+        name: "system$test",
+        args: [
+            "a",
+        ],
+    },
+)
+
+
+---------- Input ----------
+show settings like 'enable%'
+---------- Output ---------
+SHOW SETTINGS LIKE 'enable%'
+---------- AST ------------
+ShowSettings {
+    like: Some(
+        "enable%",
     ),
 }
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_base::base::Progress;
@@ -65,6 +66,10 @@ impl<T: 'static + SyncSource> SyncSourcer<T> {
 impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
     fn name(&self) -> &'static str {
         T::NAME
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

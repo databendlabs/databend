@@ -18,29 +18,35 @@ pub use aggregate::AggregateInfo;
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
-use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserDefinedFunction;
+use common_planners::AlterUserUDFPlan;
+use common_planners::CallPlan;
 use common_planners::CreateRolePlan;
+use common_planners::CreateUserUDFPlan;
 use common_planners::DescribeUserStagePlan;
 use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
+use common_planners::DropUserUDFPlan;
 use common_planners::ShowGrantsPlan;
+pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 
 use super::plans::Plan;
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::planner::metadata::MetadataRef;
-use crate::storages::NavigationPoint;
-use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod copy;
 mod ddl;
+mod delete;
 mod distinct;
+mod insert;
 mod join;
 mod limit;
 mod project;
@@ -108,9 +114,11 @@ impl<'a> Binder {
                 self.bind_show_functions(bind_context, limit).await?
             }
 
+            Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
+
             Statement::ShowMetrics => Plan::ShowMetrics,
             Statement::ShowProcessList => Plan::ShowProcessList,
-            Statement::ShowSettings => Plan::ShowSettings,
+            Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(stmt).await?,
@@ -131,6 +139,7 @@ impl<'a> Binder {
             Statement::RenameTable(stmt) => self.bind_rename_table(stmt).await?,
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(stmt).await?,
+            Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
@@ -144,14 +153,7 @@ impl<'a> Binder {
                 user: user.clone(),
             })),
             Statement::ShowUsers => Plan::ShowUsers,
-            Statement::AlterUser {
-                user,
-                auth_option,
-                role_options,
-            } => {
-                self.bind_alter_user(user, auth_option, role_options)
-                    .await?
-            }
+            Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
             Statement::ShowRoles => Plan::ShowRoles,
@@ -191,11 +193,63 @@ impl<'a> Binder {
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
+            Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
+            Statement::Delete {
+                catalog,
+                database,
+                table,
+                selection,
+            } => {
+                self.bind_delete(bind_context, catalog, database, table, selection)
+                    .await?
+            }
 
+            // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
-
             Statement::ShowGrants { principal } => Plan::ShowGrants(Box::new(ShowGrantsPlan {
                 principal: principal.clone(),
+            })),
+            Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
+
+            // UDFs
+            Statement::CreateUDF {
+                if_not_exists,
+                udf_name,
+                parameters,
+                definition,
+                description,
+            } => Plan::CreateUDF(Box::new(CreateUserUDFPlan {
+                if_not_exists: *if_not_exists,
+                udf: UserDefinedFunction {
+                    name: udf_name.to_string(),
+                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
+                    definition: definition.to_string(),
+                    description: description.clone().unwrap_or_default(),
+                },
+            })),
+            Statement::AlterUDF {
+                udf_name,
+                parameters,
+                definition,
+                description,
+            } => Plan::AlterUDF(Box::new(AlterUserUDFPlan {
+                udf: UserDefinedFunction {
+                    name: udf_name.to_string(),
+                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
+                    description: definition.to_string(),
+                    definition: description.clone().unwrap_or_default(),
+                },
+            })),
+            Statement::DropUDF {
+                if_exists,
+                udf_name,
+            } => Plan::DropUDF(Box::new(DropUserUDFPlan {
+                if_exists: *if_exists,
+                name: udf_name.to_string(),
+            })),
+            Statement::Call(stmt) => Plan::Call(Box::new(CallPlan {
+                name: stmt.name.clone(),
+                args: stmt.args.clone(),
             })),
 
             _ => {
@@ -204,27 +258,7 @@ impl<'a> Binder {
                 )))
             }
         };
-
         Ok(plan)
-    }
-
-    async fn resolve_data_source(
-        &self,
-        tenant: &str,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-        travel_point: &Option<TimeTravelPoint>,
-    ) -> Result<Arc<dyn Table>> {
-        // Resolve table with catalog
-        let catalog = self.catalogs.get_catalog(catalog_name)?;
-        let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
-        if let Some(TimeTravelPoint::Snapshot(s)) = travel_point {
-            table_meta = table_meta
-                .navigate_to(self.ctx.clone(), &NavigationPoint::SnapshotID(s.to_owned()))
-                .await?;
-        }
-        Ok(table_meta)
     }
 
     /// Create a new ColumnBinding with assigned index

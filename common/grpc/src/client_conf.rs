@@ -37,6 +37,9 @@ pub struct RpcClientConf {
 
     /// Timeout for an RPC
     pub timeout: Option<Duration>,
+    /// AutoSyncInterval is the interval to update endpoints with its latest members.
+    /// None disables auto-sync.
+    pub auto_sync_interval: Option<Duration>,
 }
 
 impl RpcClientConf {

@@ -33,6 +33,7 @@ use common_exception::Result;
 use common_planners::PartInfoPtr;
 use common_tracing::tracing;
 use common_tracing::tracing::debug_span;
+use common_tracing::tracing::warn;
 use common_tracing::tracing::Instrument;
 use futures::AsyncReadExt;
 use futures::StreamExt;
@@ -42,6 +43,9 @@ use opendal::Operator;
 
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
+use crate::storages::fuse::io::retry;
+use crate::storages::fuse::io::retry::Retryable;
+use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::Compression;
 
 #[derive(Clone)]
@@ -59,7 +63,7 @@ impl BlockReader {
         schema: DataSchemaRef,
         projection: Vec<usize>,
     ) -> Result<Arc<BlockReader>> {
-        let projected_schema = DataSchemaRef::new(schema.project(projection.clone()));
+        let projected_schema = DataSchemaRef::new(schema.project(&projection));
 
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
@@ -72,7 +76,7 @@ impl BlockReader {
         }))
     }
 
-    fn to_deserialize(
+    fn to_array_iter(
         meta: &ColumnMeta,
         chunk: Vec<u8>,
         rows: usize,
@@ -103,22 +107,33 @@ impl BlockReader {
         )?)
     }
 
-    async fn read_columns(&self, part: PartInfoPtr) -> Result<(usize, Vec<ArrayIter<'static>>)> {
-        let part = FusePartInfo::from_part(&part)?;
+    // TODO refine these
 
-        let rows = part.nums_rows;
-        // TODO: add prefetch column data.
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<DataBlock> {
+        let (num_rows, columns_array_iter) = self.read_columns_with_block_meta(meta).await?;
+        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
+        self.try_next_block(&mut deserializer)
+    }
+    // TODO refine these
+
+    pub async fn read_columns_with_block_meta(
+        &self,
+        meta: &BlockMeta,
+    ) -> Result<(usize, Vec<ArrayIter<'static>>)> {
+        let rows = meta.row_count as usize;
         let num_cols = self.projection.len();
         let mut column_chunk_futs = Vec::with_capacity(num_cols);
         let mut col_idx = Vec::with_capacity(num_cols);
         for index in &self.projection {
-            let column_meta = &part.columns_meta[index];
-            let column_reader = self.operator.object(&part.location);
+            let column_meta = meta
+                .col_metas
+                .get(&(*index as u32))
+                .ok_or_else(|| ErrorCode::LogicalError(format!("index out of bound {}", index)))?;
+            let column_reader = self.operator.object(&meta.location.0);
             let fut = async move {
-                // NOTE: move chunk inside future so that alloc only
-                // happen when future is ready to go.
                 let column_chunk = column_reader
-                    .range_read(column_meta.offset..column_meta.offset + column_meta.length)
+                    .range_read(column_meta.offset..column_meta.offset + column_meta.len)
                     .await?;
                 Ok::<_, ErrorCode>(column_chunk)
             }
@@ -137,8 +152,59 @@ impl BlockReader {
             let idx = *col_idx[i];
             let field = self.arrow_schema.fields[idx].clone();
             let column_descriptor = &self.parquet_schema_descriptor.columns()[idx];
+            let column_meta = &meta
+                .col_metas
+                .get(&(i as u32))
+                .ok_or_else(|| ErrorCode::LogicalError(format!("index out of bound {}", i)))?;
+            let part_col_meta =
+                ColumnMeta::create(column_meta.offset, column_meta.len, column_meta.num_values);
+            columns_array_iter.push(Self::to_array_iter(
+                &part_col_meta,
+                column_chunk,
+                rows,
+                column_descriptor,
+                field,
+                &meta.compression(),
+            )?);
+        }
+
+        Ok((rows, columns_array_iter))
+    }
+
+    async fn read_columns(&self, part: PartInfoPtr) -> Result<(usize, Vec<ArrayIter<'static>>)> {
+        let part = FusePartInfo::from_part(&part)?;
+
+        let rows = part.nums_rows;
+        // TODO: add prefetch column data.
+        let num_cols = self.projection.len();
+        let mut column_chunk_futs = Vec::with_capacity(num_cols);
+        let mut col_idx = Vec::with_capacity(num_cols);
+        for index in &self.projection {
+            let column_meta = &part.columns_meta[index];
+            let column_reader = self.operator.object(&part.location);
+            let fut = async move {
+                let column_chunk =
+                    Self::read_column(column_reader, column_meta.offset, column_meta.length)
+                        .await?;
+                Ok::<_, ErrorCode>(column_chunk)
+            }
+            .instrument(debug_span!("read_col_chunk"));
+            column_chunk_futs.push(fut);
+            col_idx.push(index);
+        }
+
+        let chunks = futures::stream::iter(column_chunk_futs)
+            .buffered(std::cmp::min(10, num_cols))
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        let mut columns_array_iter = Vec::with_capacity(num_cols);
+        for (i, column_chunk) in chunks.into_iter().enumerate() {
+            let idx = *col_idx[i];
+            let field = self.arrow_schema.fields[idx].clone();
+            let column_descriptor = &self.parquet_schema_descriptor.columns()[idx];
             let column_meta = &part.columns_meta[&idx];
-            columns_array_iter.push(Self::to_deserialize(
+            columns_array_iter.push(Self::to_array_iter(
                 column_meta,
                 column_chunk,
                 rows,
@@ -167,7 +233,7 @@ impl BlockReader {
             let field = self.arrow_schema.fields[index].clone();
             let column_descriptor = &self.parquet_schema_descriptor.columns()[index];
             let column_meta = &part.columns_meta[&index];
-            columns_array_iter.push(Self::to_deserialize(
+            columns_array_iter.push(Self::to_array_iter(
                 column_meta,
                 column_chunk,
                 num_rows,
@@ -199,11 +265,29 @@ impl BlockReader {
         futures::future::try_join_all(join_handlers).await
     }
 
-    async fn read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
+    pub async fn read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
         let handler = common_base::base::tokio::spawn(async move {
-            let mut chunk = vec![0; length as usize];
-            let mut r = o.range_reader(offset..offset + length).await?;
-            r.read_exact(&mut chunk).await?;
+            let op = || async {
+                let mut chunk = vec![0; length as usize];
+                // Sine error conversion DO matters: retry depends on the conversion
+                // to distinguish transient errors from permanent ones.
+                // Explict error conversion is used here, to make the code easy to be followed
+                let mut r = o
+                    .range_reader(offset..offset + length)
+                    .await
+                    .map_err(retry::from_io_error)?;
+                r.read_exact(&mut chunk).await?;
+                Ok(chunk)
+            };
+
+            let notify = |e: std::io::Error, duration| {
+                warn!(
+                    "transient error encountered while reading column, at duration {:?} : {}",
+                    duration, e,
+                )
+            };
+
+            let chunk = op.retry_with_notify(notify).await?;
             Ok(chunk)
         });
 

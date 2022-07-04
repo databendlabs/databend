@@ -16,11 +16,15 @@
 use std::sync::Arc;
 
 use common_cache::Cache;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing::log::warn;
 
 use crate::storages::fuse::cache::CacheDeferMetrics;
 use crate::storages::fuse::cache::MemoryCache;
 use crate::storages::fuse::cache::TenantLabel;
+use crate::storages::fuse::io::retry;
+use crate::storages::fuse::io::retry::Retryable;
 
 /// Loads an object from a source
 #[async_trait::async_trait]
@@ -95,7 +99,23 @@ where L: Loader<T> + HasTenantLabel
     }
 
     async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
-        let val = self.loader.load(loc, len_hint, version).await?;
+        let op = || async {
+            // Sine error conversion DO matters: retry depends on the conversion
+            // to distinguish transient errors from permanent ones.
+            let v = self
+                .loader
+                .load(loc, len_hint, version)
+                .await
+                .map_err(retry::from_error_code)?;
+            Ok(v)
+        };
+        let notify = |e: ErrorCode, duration| {
+            warn!(
+                "transient error encountered while reading location {}, at duration {:?} : {}",
+                loc, duration, e,
+            )
+        };
+        let val = op.retry_with_notify(notify).await?;
         let item = Arc::new(val);
         Ok(item)
     }

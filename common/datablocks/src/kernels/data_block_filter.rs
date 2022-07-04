@@ -22,34 +22,61 @@ use common_exception::Result;
 use crate::DataBlock;
 
 impl DataBlock {
-    pub fn filter_block(block: &DataBlock, predicate: &ColumnRef) -> Result<DataBlock> {
-        if block.num_columns() == 0 || block.num_rows() == 0 {
-            return Ok(block.clone());
-        }
-
+    // check if the predicate has any valid row
+    pub fn filter_exists(predicate: &ColumnRef) -> Result<bool> {
         let predict_boolean_nonull = Self::cast_to_nonull_boolean(predicate)?;
         // faster path for constant filter
         if predict_boolean_nonull.is_const() {
-            let flag = predict_boolean_nonull.get_bool(0)?;
-            if flag {
-                return Ok(block.clone());
-            } else {
-                return Ok(DataBlock::empty_with_schema(block.schema().clone()));
-            }
+            return predict_boolean_nonull.get_bool(0);
         }
 
         let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
         let rows = boolean_col.len();
         let count_zeros = boolean_col.values().null_count();
+        Ok(count_zeros != rows)
+    }
+
+    pub fn filter_block(block: DataBlock, predicate: &ColumnRef) -> Result<DataBlock> {
+        if block.num_columns() == 0 || block.num_rows() == 0 {
+            return Ok(block);
+        }
+
+        let predict_boolean_nonull = Self::cast_to_nonull_boolean(predicate)?;
+        // faster path for constant filter
+        if let Ok(Some(const_bool)) = Self::try_as_const_bool(&predict_boolean_nonull) {
+            return if const_bool {
+                Ok(block)
+            } else {
+                Ok(DataBlock::empty_with_schema(block.schema().clone()))
+            };
+        }
+        let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
+        Self::filter_block_with_bool_column(block, boolean_col)
+    }
+
+    pub fn try_as_const_bool(column_reference: &ColumnRef) -> Result<Option<bool>> {
+        if column_reference.is_const() {
+            Ok(Some(column_reference.get_bool(0)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn filter_block_with_bool_column(
+        block: DataBlock,
+        filter: &BooleanColumn,
+    ) -> Result<DataBlock> {
+        let rows = filter.len();
+        let count_zeros = filter.values().null_count();
         match count_zeros {
-            0 => Ok(block.clone()),
+            0 => Ok(block),
             _ => {
                 if count_zeros == rows {
                     return Ok(DataBlock::empty_with_schema(block.schema().clone()));
                 }
                 let mut after_columns = Vec::with_capacity(block.num_columns());
                 for data_column in block.columns() {
-                    after_columns.push(data_column.filter(boolean_col));
+                    after_columns.push(data_column.filter(filter));
                 }
 
                 Ok(DataBlock::create(block.schema().clone(), after_columns))
@@ -91,10 +118,10 @@ impl DataBlock {
                 return Ok(Arc::new(col));
             },
             {
-                return Err(ErrorCode::BadDataValueType(format!(
+                Err(ErrorCode::BadDataValueType(format!(
                     "Filter predict column does not support type '{:?}'",
                     data_type_id
-                )));
+                )))
             })
         }
     }

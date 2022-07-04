@@ -28,7 +28,7 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
     let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
-    let ver = match (build_semver, git_sha, rustc_semver, timestamp) {
+    match (build_semver, git_sha, rustc_semver, timestamp) {
         #[cfg(not(feature = "simd"))]
         (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
         #[cfg(feature = "simd")]
@@ -36,11 +36,10 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
             format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
         }
         _ => String::new(),
-    };
-    ver
+    }
 });
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct RaftConfig {
     /// Identify a config.
     /// This is only meant to make debugging easier with more than one Config involved.
@@ -91,6 +90,16 @@ pub struct RaftConfig {
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
     pub join: Vec<String>,
 
+    /// Do not run databend-meta, but just remove a node from its cluster.
+    ///
+    /// The value is one or more addresses of a node in the cluster, to which this node sends a `leave` request.
+    pub leave_via: Vec<String>,
+
+    /// The node id to leave from the cluster.
+    ///
+    /// It will be ignored if `--leave` is absent.
+    pub leave_id: Option<NodeId>,
+
     /// The node id. Only used when this server is not initialized,
     ///  e.g. --boot or --single for the first time.
     ///  Otherwise this argument is ignored.
@@ -129,6 +138,8 @@ impl Default for RaftConfig {
             max_applied_log_to_keep: 1000,
             single: false,
             join: vec![],
+            leave_via: vec![],
+            leave_id: None,
             id: 0,
             sled_tree_prefix: "".to_string(),
             cluster_name: "foo_cluster".to_string(),
@@ -181,6 +192,11 @@ impl RaftConfig {
     }
 
     pub fn check(&self) -> MetaResult<()> {
+        // If just leaving, does not need to check other config
+        if !self.leave_via.is_empty() {
+            return Ok(());
+        }
+
         // There two cases:
         // - both join and single is set
         // - neither join nor single is set

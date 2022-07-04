@@ -45,6 +45,8 @@ Data type reference:
 * [Semi-structured Data Types](../../../10-data-types/40-data-type-semi-structured-types.md)
 :::
 
+For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../70-clusterkey/dml-set-cluster-key.md).
+
 ### Create Table LIKE
 
 Creates an empty copy of an existing table, the new table automatically copies all column names, their data types, and their not-null constraints.

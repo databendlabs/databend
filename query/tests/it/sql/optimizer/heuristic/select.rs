@@ -79,6 +79,11 @@ pub async fn test_heuristic_optimizer_select() -> Result<()> {
             query: "select a from (select number as a, number as b from numbers(1))".to_string(),
             rules: DEFAULT_REWRITE_RULES.clone(),
         },
+        Suite {
+            comment: "".to_string(),
+            query: "select a from (select number as a, number+1 as b from numbers(1))".to_string(),
+            rules: DEFAULT_REWRITE_RULES.clone(),
+        },
     ];
 
     run_suites(ctx, &mut file, &suites).await

@@ -38,6 +38,13 @@ pub enum Expr<'a> {
         expr: Box<Expr<'a>>,
         not: bool,
     },
+    /// `IS [NOT] DISTINCT` expression
+    IsDistinctFrom {
+        span: &'a [Token<'a>],
+        left: Box<Expr<'a>>,
+        right: Box<Expr<'a>>,
+        not: bool,
+    },
     /// `[ NOT ] IN (expr, ...)`
     InList {
         span: &'a [Token<'a>],
@@ -187,6 +194,11 @@ pub enum Expr<'a> {
         expr1: Box<Expr<'a>>,
         expr2: Box<Expr<'a>>,
     },
+    // Coalesce(<expr>, <expr>, ...)
+    Coalesce {
+        span: &'a [Token<'a>],
+        exprs: Vec<Expr<'a>>,
+    },
     /// IFNULL(<expr>, <expr>)
     IfNull {
         span: &'a [Token<'a>],
@@ -240,14 +252,14 @@ pub enum TypeName {
     Variant,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrimWhere {
     Both,
     Leading,
     Trailing,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryOperator {
     Plus,
     Minus,
@@ -280,7 +292,7 @@ pub enum BinaryOperator {
     BitwiseXor,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryOperator {
     Plus,
     Minus,
@@ -292,6 +304,7 @@ impl<'a> Expr<'a> {
         match self {
             Expr::ColumnRef { span, .. } => span,
             Expr::IsNull { span, .. } => span,
+            Expr::IsDistinctFrom { span, .. } => span,
             Expr::InList { span, .. } => span,
             Expr::InSubquery { span, .. } => span,
             Expr::Between { span, .. } => span,
@@ -316,6 +329,7 @@ impl<'a> Expr<'a> {
             Expr::DateAdd { span, .. } => span,
             Expr::DateSub { span, .. } => span,
             Expr::NullIf { span, .. } => span,
+            Expr::Coalesce { span, .. } => span,
             Expr::IfNull { span, .. } => span,
         }
     }
@@ -557,6 +571,16 @@ impl<'a> Display for Expr<'a> {
                 }
                 write!(f, " NULL")?;
             }
+            Expr::IsDistinctFrom {
+                left, right, not, ..
+            } => {
+                write!(f, "{left} IS")?;
+                if *not {
+                    write!(f, " NOT")?;
+                }
+                write!(f, " DISTINCT FROM {right}")?;
+            }
+
             Expr::InList {
                 expr, list, not, ..
             } => {
@@ -747,6 +771,11 @@ impl<'a> Display for Expr<'a> {
             }
             Expr::NullIf { expr1, expr2, .. } => {
                 write!(f, "NULLIF({expr1}, {expr2})")?;
+            }
+            Expr::Coalesce { exprs, .. } => {
+                write!(f, "COALESCE(")?;
+                write_comma_separated_list(f, exprs)?;
+                write!(f, ")")?;
             }
             Expr::IfNull { expr1, expr2, .. } => {
                 write!(f, "IFNULL({expr1}, {expr2})")?;

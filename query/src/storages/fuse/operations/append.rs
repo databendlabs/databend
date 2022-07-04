@@ -34,6 +34,7 @@ use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::operations::FuseTableSink;
@@ -77,7 +78,7 @@ impl FuseTable {
             self.meta_location_generator().clone(),
             cluster_key_info,
         )
-        .await;
+        .await?;
 
         let locs = self.meta_location_generator().clone();
         let segment_info_cache = ctx.get_storage_cache_manager().get_table_segment_cache();
@@ -87,10 +88,7 @@ impl FuseTable {
                 let log_entry_res = match segment {
                     Ok(seg) => {
                         let seg_loc = locs.gen_segment_info_location();
-                        let bytes = serde_json::to_vec(&seg)?;
-                        da.object(&seg_loc)
-                        .write(bytes)
-                        .await?;
+                        write_meta(&da, &seg_loc, &seg).await?;
                         let seg = Arc::new(seg);
                         let log_entry = AppendOperationLogEntry::new(seg_loc.clone(), seg.clone());
                         if let Some(ref cache) = segment_info_cache {
@@ -225,7 +223,7 @@ impl FuseTable {
         Ok(())
     }
 
-    fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
+    pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
         self.table_info
             .options()
             .get(opt_key)

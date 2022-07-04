@@ -27,7 +27,7 @@ use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfGrantObject;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfRevokePrivilegeStatement {
     pub principal: PrincipalIdentity,
     pub priv_types: UserPrivilegeSet,
@@ -56,7 +56,7 @@ impl AnalyzableStatement for DfRevokePrivilegeStatement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfRevokeRoleStatement {
     pub role: String,
     pub principal: PrincipalIdentity,

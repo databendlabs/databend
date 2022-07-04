@@ -149,7 +149,7 @@ pub async fn list_files_from_dal(
         .map(|(name, meta)| StageFile {
             path: name,
             size: meta.content_length(),
-            md5: meta.content_md5(),
+            md5: meta.content_md5().map(str::to_string),
             last_modified: meta
                 .last_modified()
                 .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),

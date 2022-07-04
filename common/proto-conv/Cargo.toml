@@ -17,14 +17,14 @@ common-meta-app = { path = "../meta/app" }
 common-meta-types = { path = "../../common/meta/types" }
 common-protos = { path = "../../common/protos" }
 
-num = "0.4"
-thiserror = "1.0.30"
+num = "0.4.0"
+thiserror = "1.0.31"
 
-enumflags2 = { version = "0.7.4", features = ["serde"] }
-serde_json = "1.0.79"
+enumflags2 = { version = "0.7.5", features = ["serde"] }
+serde_json = "1.0.81"
 
 [build-dependencies]
 
 [dev-dependencies]
-anyhow = "1.0.56"
+anyhow = "1.0.58"
 maplit = "1.0.2"

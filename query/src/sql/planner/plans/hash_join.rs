@@ -25,6 +25,7 @@ use crate::sql::plans::Scalar;
 pub struct PhysicalHashJoin {
     pub build_keys: Vec<Scalar>,
     pub probe_keys: Vec<Scalar>,
+    pub other_conditions: Vec<Scalar>,
     pub join_type: JoinType,
 }
 

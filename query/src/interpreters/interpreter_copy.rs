@@ -63,7 +63,7 @@ impl CopyInterpreter {
         from: &ReadDataSourcePlan,
         files: &Vec<String>,
     ) -> Result<Vec<String>> {
-        let files = match &from.source_info {
+        match &from.source_info {
             SourceInfo::StageSource(table_info) => {
                 let path = &table_info.path;
                 // Here we add the path to the file: /path/to/path/file1.
@@ -100,9 +100,7 @@ impl CopyInterpreter {
                 "Cannot list files for the source info: {:?}",
                 other
             ))),
-        };
-
-        files
+        }
     }
 
     // Rewrite the ReadDataSourcePlan.S3StageSource.file_name to new file name.
@@ -147,25 +145,27 @@ impl CopyInterpreter {
 
         let table = ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        if ctx.get_settings().get_enable_new_processor_framework()? != 0
-            && self.ctx.get_cluster().is_empty()
-        {
+        if ctx.get_settings().get_enable_new_processor_framework()? != 0 {
             table.append2(ctx.clone(), &mut pipeline)?;
             pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
             let async_runtime = ctx.get_storage_runtime();
-            let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
-            executor.execute()?;
+            let query_need_abort = ctx.query_need_abort();
+            let executor =
+                PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
 
+            executor.execute()?;
             return Ok(ctx.consume_precommit_blocks());
         }
 
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
         let async_runtime = ctx.get_storage_runtime();
-        let executor = PipelinePullingExecutor::try_create(async_runtime, pipeline)?;
-        let (handler, stream) = ProcessorExecutorStream::create(executor)?;
-        self.ctx.add_source_abort_handle(handler);
+        let query_need_abort = self.ctx.query_need_abort();
+        let executor =
+            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+
+        let stream = ProcessorExecutorStream::create(executor)?;
 
         let operations = table
             .append_data(ctx.clone(), Box::pin(stream))

@@ -22,10 +22,12 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::*;
+use crate::input::Input;
+use crate::input::WithSpan;
 use crate::parser::expr::*;
 use crate::parser::token::*;
-use crate::parser::util::*;
 use crate::rule;
+use crate::util::*;
 
 pub fn query(i: Input) -> IResult<Query> {
     map(
@@ -95,10 +97,10 @@ pub fn table_reference(i: Input) -> IResult<TableReference> {
 
 pub fn aliased_table(i: Input) -> IResult<TableReference> {
     map(
-        rule! {
+        consumed(rule! {
             #ident ~ ( "." ~ #ident )? ~ ( "." ~ #ident )? ~ #travel_point? ~ #table_alias?
-        },
-        |(fst, snd, third, travel_point, alias)| {
+        }),
+        |(input, (fst, snd, third, travel_point, alias))| {
             let (catalog, database, table) = match (fst, snd, third) {
                 (catalog, Some((_, database)), Some((_, table))) => {
                     (Some(catalog), Some(database), table)
@@ -109,6 +111,7 @@ pub fn aliased_table(i: Input) -> IResult<TableReference> {
             };
 
             TableReference::Table {
+                span: input.0,
                 catalog,
                 database,
                 table,
@@ -120,11 +123,17 @@ pub fn aliased_table(i: Input) -> IResult<TableReference> {
 }
 
 pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
-    map(
-        rule! {
-            AT ~ "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")"
-        },
+    let at_snapshot = map(
+        rule! { AT ~ "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
         |(_, _, _, _, s, _)| TimeTravelPoint::Snapshot(s),
+    );
+    let at_timestamp = map(
+        rule! { AT ~ "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
+    );
+
+    rule!(
+        #at_snapshot | #at_timestamp
     )(i)
 }
 
@@ -146,10 +155,11 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
 
 pub fn table_function(i: Input) -> IResult<TableReference> {
     map(
-        rule! {
+        consumed(rule! {
             #ident ~ "(" ~ #comma_separated_list0(expr) ~ ")" ~ #table_alias?
-        },
-        |(name, _, params, _, alias)| TableReference::TableFunction {
+        }),
+        |(input, (name, _, params, _, alias))| TableReference::TableFunction {
+            span: input.0,
             name,
             params,
             alias,
@@ -159,10 +169,11 @@ pub fn table_function(i: Input) -> IResult<TableReference> {
 
 pub fn subquery(i: Input) -> IResult<TableReference> {
     map(
-        rule! {
+        consumed(rule! {
             ( #parenthesized_query | #query ) ~ #table_alias?
-        },
-        |(subquery, alias)| TableReference::Subquery {
+        }),
+        |(input, (subquery, alias))| TableReference::Subquery {
+            span: input.0,
             subquery: Box::new(subquery),
             alias,
         },
@@ -238,22 +249,25 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
     );
 
     map(
-        rule!(
+        consumed(rule!(
             #table_ref_without_join ~ ( #join | #natural_join )+
-        ),
-        |(fst, joins)| {
+        )),
+        |(input, (fst, joins))| {
             joins.into_iter().fold(fst, |acc, elem| {
                 let JoinElement {
                     op,
                     condition,
                     right,
                 } = elem;
-                TableReference::Join(Join {
-                    op,
-                    condition,
-                    left: Box::new(acc),
-                    right,
-                })
+                TableReference::Join {
+                    span: input.0,
+                    join: Join {
+                        op,
+                        condition,
+                        left: Box::new(acc),
+                        right,
+                    },
+                }
             })
         },
     )(i)
@@ -357,7 +371,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
     let group = map(
         rule! {
            "("
-           ~ ^#set_operation
+           ~ #set_operation
            ~ ^")"
         },
         |(_, set_expr, _)| SetOperationElement::Group(set_expr),

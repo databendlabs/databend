@@ -14,15 +14,15 @@
 
 use std::io::Write;
 
-use common_ast::parser::error::Backtrace;
-use common_ast::parser::error::DisplayError as _;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
 use common_ast::parser::token::*;
 use common_ast::parser::tokenize_sql;
-use common_ast::parser::util::Input;
 use common_ast::rule;
+use common_ast::Backtrace;
+use common_ast::DisplayError;
+use common_ast::Input;
 use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
@@ -62,11 +62,16 @@ fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("statement.txt").unwrap();
     let cases = &[
+        r#"show databases"#,
+        r#"show databases format TabSeparatedWithNamesAndTypes;"#,
         r#"show tables"#,
+        r#"show tables format TabSeparatedWithNamesAndTypes;"#,
         r#"show processlist;"#,
         r#"show create table a.b;"#,
+        r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
         r#"explain pipeline select a from b;"#,
         r#"describe a;"#,
+        r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table a.b like c.d;"#,
@@ -99,6 +104,7 @@ fn test_statement() {
         r#"select * from t4;"#,
         r#"select * from aa.bb;"#,
         r#"select * from a, b, c;"#,
+        r#"select * from a, b, c order by `db`.`a`.`c1`;"#,
         r#"select * from a join b on a.a = b.a;"#,
         r#"select * from a left outer join b on a.a = b.a;"#,
         r#"select * from a right outer join b on a.a = b.a;"#,
@@ -108,6 +114,7 @@ fn test_statement() {
         r#"select * from a right outer join b using(a);"#,
         r#"select * from a full outer join b using(a);"#,
         r#"select * from a inner join b using(a);"#,
+        r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
@@ -141,16 +148,76 @@ fn test_statement() {
         r#"GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';"#,
         r#"GRANT SELECT ON db01.tb1 TO ROLE 'role1';"#,
+        r#"GRANT SELECT ON tb1 TO ROLE 'role1';"#,
+        r#"GRANT ALL ON tb1 TO 'u1';"#,
         r#"SHOW GRANTS;"#,
         r#"SHOW GRANTS FOR 'test-grant'@'localhost';"#,
         r#"SHOW GRANTS FOR USER 'test-grant'@'localhost';"#,
         r#"SHOW GRANTS FOR ROLE 'role1';"#,
+        r#"REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';"#,
+        r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
+        r#"REVOKE ALL ON tb1 FROM 'u1';"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO 's3://mybucket/data.csv'
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO @my_stage
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CREDENTIALS = (
+                    AWS_KEY_ID = 'access_key'
+                    AWS_SECRET_KEY = 'secret_key'
+                )
+                ENCRYPTION = (
+                    MASTER_KEY = 'master_key'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"CALL system$test(a)"#,
+        r#"CALL system$test('a')"#,
+        r#"show settings like 'enable%'"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let backtrace = Backtrace::new();
-        let stmt = parse_sql(&tokens, &backtrace).unwrap();
+        let (stmt, fmt) = parse_sql(&tokens, &backtrace).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -158,6 +225,10 @@ fn test_statement() {
         writeln!(file, "---------- AST ------------").unwrap();
         writeln!(file, "{:#?}", stmt).unwrap();
         writeln!(file, "\n").unwrap();
+        if fmt.is_some() {
+            writeln!(file, "---------- FORMAT ------------").unwrap();
+            writeln!(file, "{:#?}", fmt).unwrap();
+        }
     }
 }
 
@@ -175,6 +246,7 @@ fn test_statement_error() {
         r#"truncate a"#,
         r#"drop a"#,
         r#"insert into t format"#,
+        r#"show tables format"#,
         r#"alter database system x rename to db"#,
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
         r#"drop usar if exists 'test-j'@'localhost';"#,
@@ -187,6 +259,13 @@ fn test_statement_error() {
         r#"GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON *.c TO 'test-grant'@'localhost';"#,
         r#"SHOW GRANT FOR ROLE role1;"#,
+        r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';"#,
+        r#"REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
+        r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
+        r#"CALL system$test"#,
+        r#"CALL system$test(a"#,
+        r#"show settings ilike 'enable%'"#,
     ];
 
     for case in cases {
@@ -282,6 +361,7 @@ fn test_expr() {
         r#"[[1]]"#,
         r#"[[1],[2]]"#,
         r#"[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]"#,
+        r#"((1 = 1) or 1)"#,
         r#"typeof(1 + 2)"#,
         r#"- - + + - 1 + + - 2"#,
         r#"0XFF + 0xff + 0xa + x'ffff'"#,
@@ -316,8 +396,13 @@ fn test_expr() {
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
         r#"nullif(1, 1)"#,
         r#"nullif(a, b)"#,
+        r#"coalesce(1, 2, 3)"#,
+        r#"coalesce(a, b, c)"#,
         r#"ifnull(1, 1)"#,
         r#"ifnull(a, b)"#,
+        r#"1 is distinct from 2"#,
+        r#"a is distinct from b"#,
+        r#"1 is not distinct from null"#,
     ];
 
     for case in cases {

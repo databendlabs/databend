@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -93,6 +94,10 @@ impl Processor for FuseTableSink {
         "FuseSink"
     }
 
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn event(&mut self) -> Result<Event> {
         if matches!(
             &self.state,
@@ -135,8 +140,8 @@ impl Processor for FuseTableSink {
                 if let Some(v) = &self.cluster_key_info {
                     cluster_stats = BlockStatistics::clusters_statistics(
                         v.cluster_key_id,
-                        v.cluster_key_index.clone(),
-                        block.clone(),
+                        &v.cluster_key_index,
+                        &block,
                     )?;
 
                     // Remove unused columns before serialize

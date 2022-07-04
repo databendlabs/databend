@@ -169,6 +169,7 @@ select '=== Test offset ===';
 select number from numbers(10) order by number asc offset 5;
 select '===================';
 select number+number as number from numbers(10) order by number asc offset 5;
+select number from numbers(10000) limit 1;
 
 -- Memory engine
 select '====Memory Table====';
@@ -186,6 +187,8 @@ select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is nu
 );
 select case when number >= 2 then 'ge2' WHEN number >= 1 then 'ge1' ELSE null end from numbers(3);
 select case when 1 = 3 then null when 1 = 2 then 20.0 when 1 = 1 then 1 ELSE null END;
+
+select COALESCE(NULL, NULL, 1, 2);
 -- subquery in from
 select '=== Test Subquery In From ===';
 create table t(a int, b int);
@@ -259,6 +262,8 @@ select '===Explain===';
 create table t1(a int, b int);
 create table t2(a int, b int);
 explain select t1.a from t1 where a > 0;
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
 select '===Explain Pipeline===';
 explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
 drop table t1;
@@ -294,7 +299,7 @@ drop table t2;
 
 -- test error code hint
 
-select 3 as a, 4 as a; -- {ErrorCode 1002 }
+select 3 as a, 4 as a;
 -- udf
 select '====UDF====';
 CREATE FUNCTION a_plus_3 AS (a) -> a+3;
@@ -304,6 +309,10 @@ SELECT cal1(1, 2, 3, 4, 6);
 CREATE FUNCTION notnull1 AS (p) -> not(is_null(p));
 SELECT notnull1(null);
 SELECT notnull1('null');
+
+drop function a_plus_3;
+drop function cal1;
+drop function notnull1;
 
 --set operator
 select '====Intersect Distinct===';
@@ -325,6 +334,13 @@ insert into t1 values(1, 2), (3 ,4), (7, 8);
 insert into t2 values(1, 4), (2, 3), (6, 8);
 select * from t1 right join t2 on t1.a = t2.c;
 select * from t1 left join t2 on t1.a = t2.c;
+
+select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4 order by a,b,c,d;
+select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t2.c > 4 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a > t2.c order by a,b,c,d;
 drop table t1;
 drop table t2;
 
@@ -338,6 +354,9 @@ drop table n;
 -- Subquery SemiJoin and AntiJoin
 select * from numbers(5) as t where exists (select * from numbers(3) where number = t.number);
 select * from numbers(5) as t where not exists (select * from numbers(3) where number = t.number);
+
+select * from numbers(5) as t where exists (select number as a from numbers(3) where number = t.number and number > 0 and t.number < 2);
+select * from numbers(5) as t where exists (select * from numbers(3) where number > t.number);
 
 set enable_planner_v2 = 0;
 

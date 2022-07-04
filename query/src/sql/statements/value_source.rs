@@ -51,7 +51,10 @@ impl ValueSource {
         }
     }
 
-    pub async fn read<R: BufferRead>(&self, reader: &mut CheckpointReader<R>) -> Result<DataBlock> {
+    pub async fn read<R: BufferRead>(
+        &self,
+        reader: &mut NestedCheckpointReader<R>,
+    ) -> Result<DataBlock> {
         let mut desers = self
             .schema
             .fields()
@@ -93,16 +96,17 @@ impl ValueSource {
     /// Parse single row value, like ('111', 222, 1 + 1)
     async fn parse_next_row<R: BufferRead>(
         &self,
-        reader: &mut CheckpointReader<R>,
+        reader: &mut NestedCheckpointReader<R>,
         col_size: usize,
         desers: &mut [TypeDeserializerImpl],
         session_type: &SessionType,
     ) -> Result<()> {
         let _ = reader.ignore_white_spaces()?;
-        reader.checkpoint();
+        reader.push_checkpoint();
 
         // Start of the row --- '('
         if !reader.ignore_byte(b'(')? {
+            reader.pop_checkpoint();
             return Err(ErrorCode::BadDataValueType(
                 "Must start with parentheses".to_string(),
             ));
@@ -132,11 +136,10 @@ impl ValueSource {
                     deser.pop_data_value()?;
                 }
                 skip_to_next_row(reader, 1)?;
-
                 // Parse from expression and append all columns.
                 let buf = reader.get_checkpoint_buffer();
+
                 let exprs = parse_exprs(buf, session_type)?;
-                reader.reset_checkpoint();
 
                 let values =
                     exprs_to_datavalue(exprs, &self.analyzer, &self.schema, self.ctx.clone())
@@ -146,17 +149,19 @@ impl ValueSource {
                     deser.append_data_value(values[append_idx].clone(), &format)?;
                 }
 
+                reader.pop_checkpoint();
                 return Ok(());
             }
         }
 
+        reader.pop_checkpoint();
         Ok(())
     }
 }
 
 // Values |(xxx), (yyy), (zzz)
 pub fn skip_to_next_row<R: BufferRead>(
-    reader: &mut CheckpointReader<R>,
+    reader: &mut NestedCheckpointReader<R>,
     mut balance: i32,
 ) -> Result<()> {
     let _ = reader.ignore_white_spaces()?;

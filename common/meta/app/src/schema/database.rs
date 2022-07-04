@@ -154,7 +154,7 @@ impl Display for DbIdList {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,
     pub name_ident: DatabaseNameIdent,
@@ -176,7 +176,7 @@ pub struct CreateDatabaseReply {
     pub db_id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RenameDatabaseReq {
     pub if_exists: bool,
     pub name_ident: DatabaseNameIdent,
@@ -193,10 +193,10 @@ impl Display for RenameDatabaseReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RenameDatabaseReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabaseReq {
     pub if_exists: bool,
     pub name_ident: DatabaseNameIdent,
@@ -212,10 +212,10 @@ impl Display for DropDatabaseReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabaseReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabaseReq {
     pub name_ident: DatabaseNameIdent,
 }
@@ -239,10 +239,10 @@ impl UndropDatabaseReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabaseReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetDatabaseReq {
     pub inner: DatabaseNameIdent,
 }
@@ -266,7 +266,7 @@ impl GetDatabaseReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListDatabaseReq {
     pub tenant: String,
 }

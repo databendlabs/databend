@@ -52,7 +52,7 @@ use crate::DATABEND_COMMIT_VERSION;
 /// It's forbidden to do any breaking changes on this struct.
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Parser)]
 #[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
@@ -156,7 +156,7 @@ impl TryInto<InnerConfig> for Config {
 }
 
 /// Storage config group.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
     /// Current storage type: fs|s3
@@ -250,7 +250,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FsStorageConfig {
     /// fs storage backend data path
@@ -377,7 +377,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct AzblobStorageConfig {
     /// Account for Azblob
@@ -453,7 +453,7 @@ impl TryInto<InnerStorageAzblobConfig> for AzblobStorageConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Args, Debug)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args, Debug)]
 #[serde(default)]
 pub struct HdfsConfig {
     #[clap(long = "storage-hdfs-name-node", default_value_t)]
@@ -493,7 +493,7 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
 }
 
 /// Query config group.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
@@ -747,7 +747,7 @@ impl From<InnerQueryConfig> for QueryConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
@@ -794,7 +794,7 @@ impl From<InnerLogConfig> for LogConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct HiveCatalogConfig {
     #[clap(long = "hive-meta-store-address", default_value = "127.0.0.1:9083")]
@@ -831,7 +831,7 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
 
 /// Meta config group.
 /// TODO(xuanwo): All meta_xxx should be rename to xxx.
-#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
@@ -865,6 +865,12 @@ pub struct MetaConfig {
     #[serde(alias = "meta_client_timeout_in_second")]
     pub client_timeout_in_second: u64,
 
+    /// AutoSyncInterval is the interval to update endpoints with its latest members.
+    /// 0 disables auto-sync. By default auto-sync is disabled.
+    #[clap(long = "auto-sync-interval", default_value = "0")]
+    #[serde(alias = "auto_sync_interval")]
+    pub auto_sync_interval: u64,
+
     /// Certificate for client to identify meta rpc serve
     #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
     pub rpc_tls_meta_server_root_ca_cert: String,
@@ -890,6 +896,7 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             username: self.username,
             password: self.password,
             client_timeout_in_second: self.client_timeout_in_second,
+            auto_sync_interval: self.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
         })
@@ -905,6 +912,7 @@ impl From<InnerMetaConfig> for MetaConfig {
             username: inner.username,
             password: inner.password,
             client_timeout_in_second: inner.client_timeout_in_second,
+            auto_sync_interval: inner.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
         }
@@ -920,6 +928,7 @@ impl Debug for MetaConfig {
             .field("password", &mask_string(&self.password, 3))
             .field("embedded_dir", &self.embedded_dir)
             .field("client_timeout_in_second", &self.client_timeout_in_second)
+            .field("auto_sync_interval", &self.auto_sync_interval)
             .field(
                 "rpc_tls_meta_server_root_ca_cert",
                 &self.rpc_tls_meta_server_root_ca_cert,

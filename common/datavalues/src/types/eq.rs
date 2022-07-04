@@ -54,31 +54,31 @@ pub fn equal(lhs: &DataTypeImpl, rhs: &DataTypeImpl) -> bool {
         }
 
         Timestamp => {
-            let lhs: &TimestampType = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &TimestampType = rhs.as_any().downcast_ref().unwrap();
+            let lhs: TimestampType = lhs.to_owned().try_into().unwrap();
+            let rhs: TimestampType = rhs.to_owned().try_into().unwrap();
 
             lhs.precision() == rhs.precision()
         }
 
         Nullable => {
-            let lhs: &NullableType = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &NullableType = rhs.as_any().downcast_ref().unwrap();
+            let lhs: NullableType = lhs.to_owned().try_into().unwrap();
+            let rhs: NullableType = rhs.to_owned().try_into().unwrap();
 
-            *lhs.inner_type() == *rhs.inner_type()
+            lhs.inner_type() == rhs.inner_type()
         }
 
         Array => {
-            let lhs: &ArrayType = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &ArrayType = rhs.as_any().downcast_ref().unwrap();
+            let lhs: ArrayType = lhs.to_owned().try_into().unwrap();
+            let rhs: ArrayType = rhs.to_owned().try_into().unwrap();
 
-            *lhs.inner_type() == *rhs.inner_type()
+            lhs.inner_type() == rhs.inner_type()
         }
 
         Struct => {
-            let lhs: &StructType = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &StructType = rhs.as_any().downcast_ref().unwrap();
+            let lhs: StructType = lhs.to_owned().try_into().unwrap();
+            let rhs: StructType = rhs.to_owned().try_into().unwrap();
 
-            *lhs.types() == *rhs.types() && *lhs.names() == *rhs.names()
+            lhs.types() == rhs.types() && lhs.names() == rhs.names()
         }
     }
 }

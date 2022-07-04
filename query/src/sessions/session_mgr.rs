@@ -36,6 +36,7 @@ use futures::future::Either;
 use futures::StreamExt;
 use opendal::Operator;
 
+use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::AsyncInsertQueue;
@@ -55,6 +56,7 @@ pub struct SessionManager {
     pub(in crate::sessions) discovery: RwLock<Arc<ClusterDiscovery>>,
     pub(in crate::sessions) catalogs: RwLock<Arc<CatalogManager>>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
+    pub(in crate::sessions) data_exchange_manager: Arc<DataExchangeManager>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -112,6 +114,7 @@ impl SessionManager {
         let user_api_provider = UserApiProvider::create_global(conf.clone()).await?;
         let role_cache_manager = Arc::new(RoleCacheMgr::new(user_api_provider.clone()));
 
+        let exchange_manager = DataExchangeManager::create(conf.clone());
         let storage_runtime = Arc::new(storage_runtime);
 
         let async_insert_queue =
@@ -119,8 +122,8 @@ impl SessionManager {
                 Arc::new(RwLock::new(None)),
                 storage_runtime.clone(),
                 conf.clone().query.async_insert_max_data_size,
-                tokio::time::Duration::from_millis(conf.query.async_insert_busy_timeout),
-                tokio::time::Duration::from_millis(conf.query.async_insert_stale_timeout),
+                Duration::from_millis(conf.query.async_insert_busy_timeout),
+                Duration::from_millis(conf.query.async_insert_stale_timeout),
             )))));
 
         Ok(Arc::new(SessionManager {
@@ -130,6 +133,7 @@ impl SessionManager {
             http_query_manager,
             max_sessions,
             active_sessions,
+            data_exchange_manager: exchange_manager,
             storage_cache_manager: RwLock::new(storage_cache_manager),
             query_logger: RwLock::new(query_logger),
             status,
@@ -166,6 +170,10 @@ impl SessionManager {
 
     pub fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
         self.storage_cache_manager.read().clone()
+    }
+
+    pub fn get_data_exchange_manager(&self) -> Arc<DataExchangeManager> {
+        self.data_exchange_manager.clone()
     }
 
     pub fn get_storage_runtime(&self) -> Arc<Runtime> {
@@ -304,8 +312,12 @@ impl SessionManager {
             &config.query.cluster_id,
         );
 
-        let mut sessions = self.active_sessions.write();
-        sessions.remove(session_id);
+        // stop tracking session
+        {
+            let mut sessions = self.active_sessions.write();
+            sessions.remove(session_id);
+        }
+
         //also need remove mysql_conn_map
         let mut mysql_conns_map = self.mysql_conn_map.write();
         for (k, v) in mysql_conns_map.deref_mut().clone() {
@@ -381,7 +393,7 @@ impl SessionManager {
         let op = op.with_backoff(backon::ExponentialBackoff::default());
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
-        op.check(".databend").await.map_err(|e| {
+        op.check().await.map_err(|e| {
             ErrorCode::StorageUnavailable(format!(
                 "current configured storage is not available: {e}"
             ))

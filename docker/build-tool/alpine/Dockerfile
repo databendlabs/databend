@@ -32,7 +32,7 @@ VOLUME [ "/workspace", "/opt/rust/cargo/registry", "/opt/rust/cargo/git" ]
 
 FROM build-base as dev
 COPY scripts/setup/rust-tools.txt /build/scripts/setup/rust-tools.txt
-RUN /build/scripts/setup/dev_setup.sh -yd && \
+RUN /build/scripts/setup/dev_setup.sh -ycd && \
     rm -rf /opt/rust/cargo/git && \
     rm -rf /opt/rust/cargo/registry && \
     rm -rf /root/.cache/*

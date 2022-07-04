@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -20,44 +19,11 @@ use common_io::prelude::FormatSettings;
 use databend_query::formats::output_format::OutputFormatType;
 use pretty_assertions::assert_eq;
 
+use crate::formats::output_format_utils::get_simple_block;
+
 fn test_data_block(is_nullable: bool) -> Result<()> {
-    let schema = match is_nullable {
-        false => DataSchemaRefExt::create(vec![
-            DataField::new("c1", i32::to_data_type()),
-            DataField::new("c2", Vu8::to_data_type()),
-            DataField::new("c3", bool::to_data_type()),
-            DataField::new("c4", f64::to_data_type()),
-            DataField::new("c5", DateType::new_impl()),
-        ]),
-        true => DataSchemaRefExt::create(vec![
-            DataField::new_nullable("c1", i32::to_data_type()),
-            DataField::new_nullable("c2", Vu8::to_data_type()),
-            DataField::new_nullable("c3", bool::to_data_type()),
-            DataField::new_nullable("c4", f64::to_data_type()),
-            DataField::new_nullable("c5", DateType::new_impl()),
-        ]),
-    };
-
-    let mut columns = vec![
-        Series::from_data(vec![1i32, 2, 3]),
-        Series::from_data(vec!["a", "b\"", "c'"]),
-        Series::from_data(vec![true, true, false]),
-        Series::from_data(vec![1.1f64, 2.2, 3.3]),
-        Series::from_data(vec![1_i32, 2_i32, 3_i32]),
-    ];
-
-    if is_nullable {
-        columns = columns
-            .iter()
-            .map(|c| {
-                let mut validity = MutableBitmap::new();
-                validity.extend_constant(c.len(), true);
-                NullableColumn::wrap_inner(c.clone(), Some(validity.into()))
-            })
-            .collect();
-    }
-
-    let block = DataBlock::create(schema.clone(), columns);
+    let block = get_simple_block(is_nullable)?;
+    let schema = block.schema().clone();
     let mut format_setting = FormatSettings::default();
 
     {

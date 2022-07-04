@@ -176,7 +176,7 @@ impl HashMethodKind {
 }
 
 // A special case for Group by String
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSingleString {}
 
 impl HashMethodSingleString {
@@ -212,17 +212,17 @@ impl HashMethod for HashMethodSingleString {
     ) -> Result<Vec<&'a [u8]>> {
         debug_assert!(group_columns.len() == 1);
         let column = group_columns[0];
-        let str_column: &StringColumn = Series::check_get(column)?;
-
+        // may have constant case
+        let str_column = Vu8::try_create_viewer(column)?;
         let mut values = Vec::with_capacity(rows);
         for row in 0..rows {
-            values.push(str_column.get_data(row));
+            values.push(str_column.value_at(row));
         }
         Ok(values)
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSerializer {}
 
 impl HashMethodSerializer {

@@ -67,13 +67,14 @@ impl<'a> Binder {
                 .from
                 .iter()
                 .cloned()
-                .reduce(|left, right| {
-                    TableReference::Join(Join {
+                .reduce(|left, right| TableReference::Join {
+                    span: &[],
+                    join: Join {
                         op: JoinOperator::CrossJoin,
                         condition: JoinCondition::None,
                         left: Box::new(left),
                         right: Box::new(right),
-                    })
+                    },
                 })
                 .unwrap();
             self.bind_table_reference(bind_context, &cross_joins)
@@ -120,8 +121,10 @@ impl<'a> Binder {
         {
             s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
 
-            if let Some(having) = having {
-                s_expr = self.bind_having(&from_context, having, s_expr).await?;
+            if let Some((having, span)) = having {
+                s_expr = self
+                    .bind_having(&from_context, having, span, s_expr)
+                    .await?;
             }
         }
 
@@ -131,7 +134,13 @@ impl<'a> Binder {
 
         if !order_by.is_empty() {
             s_expr = self
-                .bind_order_by(&from_context, order_items, &mut scalar_items, s_expr)
+                .bind_order_by(
+                    &from_context,
+                    order_items,
+                    &select_list,
+                    &mut scalar_items,
+                    s_expr,
+                )
                 .await?;
         }
 
@@ -172,7 +181,7 @@ impl<'a> Binder {
         bind_context: &BindContext,
         query: &Query<'_>,
     ) -> Result<(SExpr, BindContext)> {
-        let (mut s_expr, bind_context) = match query.body {
+        let (mut s_expr, mut bind_context) = match query.body {
             SetExpr::Select(_) | SetExpr::Query(_) => {
                 self.bind_set_expr(bind_context, &query.body, &query.order_by)
                     .await?
@@ -210,6 +219,10 @@ impl<'a> Binder {
                 .await?;
         }
 
+        if let Some(format) = &query.format {
+            bind_context.resolve_format(format.clone())?
+        }
+
         Ok((s_expr, bind_context))
     }
 
@@ -239,9 +252,9 @@ impl<'a> Binder {
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {
         let (left_expr, mut left_bind_context) =
-            self.bind_set_expr(bind_context, &*left, &[]).await?;
+            self.bind_set_expr(bind_context, left, &[]).await?;
         let (right_expr, mut right_bind_context) =
-            self.bind_set_expr(bind_context, &*right, &[]).await?;
+            self.bind_set_expr(bind_context, right, &[]).await?;
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(
                 "SetOperation must have the same number of columns",
@@ -348,6 +361,7 @@ impl<'a> Binder {
             join_type,
             left_conditions,
             right_conditions,
+            vec![],
             left_expr,
             right_expr,
         )?;

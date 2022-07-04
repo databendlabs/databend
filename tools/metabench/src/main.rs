@@ -76,7 +76,7 @@ async fn main() {
 
         let handle = tokio::spawn(async move {
             let client =
-                MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None);
+                MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None);
             if client.is_err() {
                 return;
             }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
+use common_datavalues::serializations::write_escaped_string;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
@@ -68,12 +69,12 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
             if col_index != 0 {
                 buf.push(fd);
             }
-            if !TSV {
-                buf.push(b'\"')
-            };
-            buf.extend_from_slice(v.as_bytes());
-            if !TSV {
-                buf.push(b'\"')
+            if TSV {
+                write_escaped_string(v.as_bytes(), &mut buf, b'\'');
+            } else {
+                buf.push(b'\"');
+                write_escaped_string(v.as_bytes(), &mut buf, b'\"');
+                buf.push(b'\"');
             };
         }
 

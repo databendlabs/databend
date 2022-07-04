@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_ast::parser::error::Backtrace;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
 use common_base::infallible::RwLock;
 use common_exception::Result;
 pub use plans::ScalarExpr;
@@ -50,11 +50,11 @@ impl Planner {
         Planner { ctx }
     }
 
-    pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef)> {
+    pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef, Option<String>)> {
         // Step 1: parse SQL text into AST
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();
-        let stmt = parse_sql(&tokens, &backtrace)?;
+        let (stmt, format) = parse_sql(&tokens, &backtrace)?;
 
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
         let metadata = Arc::new(RwLock::new(Metadata::create()));
@@ -64,6 +64,6 @@ impl Planner {
         // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr
         let optimized_plan = optimize(self.ctx.clone(), plan)?;
 
-        Ok((optimized_plan, metadata.clone()))
+        Ok((optimized_plan, metadata.clone(), format))
     }
 }

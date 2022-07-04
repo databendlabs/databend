@@ -56,7 +56,7 @@ impl HiveParquetBlockReader {
         schema: DataSchemaRef,
         projection: Vec<usize>,
     ) -> Result<Arc<HiveParquetBlockReader>> {
-        let projected_schema = DataSchemaRef::new(schema.project(projection.clone()));
+        let projected_schema = DataSchemaRef::new(schema.project(&projection));
 
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;

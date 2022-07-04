@@ -27,7 +27,7 @@ use crate::storages::fuse::meta::SnapshotVersion;
 use crate::storages::fuse::meta::Versioned;
 
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
-static SNAPHOST_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
+static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -44,7 +44,7 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_block_location(&self) -> String {
-        let part_uuid = Uuid::new_v4().to_simple().to_string();
+        let part_uuid = Uuid::new_v4().simple().to_string();
         format!(
             "{}/{}/{}_v{}.parquet",
             &self.prefix,
@@ -55,7 +55,7 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_segment_info_location(&self) -> String where {
-        let segment_uuid = Uuid::new_v4().to_simple().to_string();
+        let segment_uuid = Uuid::new_v4().simple().to_string();
         format!(
             "{}/{}/{}_v{}.json",
             &self.prefix,
@@ -71,8 +71,8 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
-        if location.as_ref().ends_with(SNAPHOST_V1.suffix()) {
-            SNAPHOST_V1.version()
+        if location.as_ref().ends_with(SNAPSHOT_V1.suffix()) {
+            SNAPSHOT_V1.version()
         } else {
             SNAPSHOT_V0.version()
         }
@@ -90,7 +90,7 @@ impl SnapshotLocationCreator for SnapshotVersion {
             "{}/{}/{}{}",
             prefix.as_ref(),
             FUSE_TBL_SNAPSHOT_PREFIX,
-            id.to_simple(),
+            id.simple(),
             self.suffix(),
         )
     }

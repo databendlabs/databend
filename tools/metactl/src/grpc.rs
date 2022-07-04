@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::File;
+use std::io::Write;
+
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::protobuf::Empty;
 use tokio_stream::StreamExt;
 
-pub async fn export_meta(addr: &str) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None)?;
+pub async fn export_meta(addr: &str, save: String) -> anyhow::Result<()> {
+    let client =
+        MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
 
     let mut grpc_client = client.make_client().await?;
 
@@ -25,12 +29,28 @@ pub async fn export_meta(addr: &str) -> anyhow::Result<()> {
 
     let mut stream = exported.into_inner();
 
+    let file: Option<File> = if !save.is_empty() {
+        Some(File::create(&save)?)
+    } else {
+        None
+    };
+
     while let Some(chunk_res) = stream.next().await {
         let chunk = chunk_res?;
 
         for line in &chunk.data {
-            println!("{}", line);
+            if file.as_ref().is_none() {
+                println!("{}", line);
+            } else {
+                file.as_ref()
+                    .unwrap()
+                    .write_all(format!("{}\n", line).as_bytes())?;
+            }
         }
+    }
+
+    if file.as_ref().is_some() {
+        file.as_ref().unwrap().sync_all()?;
     }
 
     Ok(())

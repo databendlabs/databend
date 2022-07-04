@@ -17,7 +17,7 @@ use std::fmt;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Endpoint {
     pub addr: String,
     pub port: u32,

@@ -65,7 +65,7 @@ impl ShowTablesStatusInterpreter {
         //  `(select ${select_cols} from system.tables where ..)`
         // is used as a derived table.
         // (unlike mysql, alias of derived table is not required in databend).
-        return match &self.plan.kind {
+        match &self.plan.kind {
             PlanShowKind::All => Ok(format!(
                 "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
                 ORDER BY Name",
@@ -81,7 +81,7 @@ impl ShowTablesStatusInterpreter {
                 WHERE ({}) ORDER BY Name",
                 select_cols, database, v
             )),
-        };
+        }
     }
 }
 

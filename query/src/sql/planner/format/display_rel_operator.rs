@@ -85,15 +85,21 @@ impl Display for FormatContext {
 
 pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
     match scalar {
-        Scalar::BoundColumnRef(column_ref) => column_ref.column.column_name.clone(),
+        Scalar::BoundColumnRef(column_ref) => {
+            if let Some(table_name) = &column_ref.column.table_name {
+                format!("{}.{}", table_name, column_ref.column.column_name)
+            } else {
+                column_ref.column.column_name.to_string()
+            }
+        }
         Scalar::ConstantExpr(constant) => constant.value.to_string(),
         Scalar::AndExpr(and) => format!(
-            "{} AND {}",
+            "({}) AND ({})",
             format_scalar(metadata, &and.left),
             format_scalar(metadata, &and.right)
         ),
         Scalar::OrExpr(or) => format!(
-            "{} OR {}",
+            "({}) OR ({})",
             format_scalar(metadata, &or.left),
             format_scalar(metadata, &or.right)
         ),
@@ -191,6 +197,12 @@ pub fn format_hash_join(
         .map(|scalar| format_scalar(metadata, scalar))
         .collect::<Vec<String>>()
         .join(", ");
+    let join_filters = op
+        .other_conditions
+        .iter()
+        .map(|scalar| format_scalar(metadata, scalar))
+        .collect::<Vec<String>>()
+        .join(", ");
     match op.join_type {
         JoinType::Cross => {
             write!(f, "CrossJoin")
@@ -198,8 +210,8 @@ pub fn format_hash_join(
         _ => {
             write!(
                 f,
-                "HashJoin: {}, build keys: [{}], probe keys: [{}]",
-                &op.join_type, build_keys, probe_keys
+                "HashJoin: {}, build keys: [{}], probe keys: [{}], join filters: [{}]",
+                &op.join_type, build_keys, probe_keys, join_filters,
             )
         }
     }
@@ -320,9 +332,10 @@ pub fn format_sort(
 pub fn format_limit(
     f: &mut std::fmt::Formatter<'_>,
     _metadata: &MetadataRef,
-    _op: &Limit,
+    op: &Limit,
 ) -> std::fmt::Result {
-    write!(f, "Limit")
+    let limit = if let Some(val) = op.limit { val } else { 0 };
+    write!(f, "Limit: [{}], Offset: [{}]", limit, op.offset)
 }
 
 pub fn format_cross_apply(

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::SyncSender;
@@ -72,13 +73,14 @@ impl PipelinePullingExecutor {
 
     pub fn try_create(
         async_runtime: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
         mut pipeline: NewPipeline,
     ) -> Result<PipelinePullingExecutor> {
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
         let state = State::create(sender.clone());
 
         Self::wrap_pipeline(&mut pipeline, sender)?;
-        let executor = PipelineExecutor::create(async_runtime, pipeline)?;
+        let executor = PipelineExecutor::create(async_runtime, query_need_abort, pipeline)?;
         Ok(PipelinePullingExecutor {
             receiver,
             state,
@@ -93,17 +95,21 @@ impl PipelinePullingExecutor {
         std::thread::spawn(thread_function);
     }
 
+    pub fn get_inner(&self) -> Arc<PipelineExecutor> {
+        self.executor.clone()
+    }
+
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
         move || {
             if let Err(cause) = executor.execute() {
-                if let Err(send_err) = state.sender.send(Err(cause)) {
+                if let Err(send_err) = state.sender.try_send(Err(cause)) {
                     common_tracing::tracing::warn!("Send error {:?}", send_err);
                 }
 
                 return;
             }
 
-            if let Err(send_err) = state.sender.send(Ok(None)) {
+            if let Err(send_err) = state.sender.try_send(Ok(None)) {
                 common_tracing::tracing::warn!("Send finish event error {:?}", send_err);
             }
         }
@@ -136,14 +142,14 @@ impl PipelinePullingExecutor {
             }
             Ok(None)
         } else {
-            return match self.receiver.try_recv() {
+            match self.receiver.try_recv() {
                 Ok(data_block) => data_block,
                 // puller will not pull again once it received a None
                 Err(err) => Err(ErrorCode::LogicalError(format!(
                     "Logical error, try receiver error. after executor finish {}",
                     err
                 ))),
-            };
+            }
         }
     }
 }

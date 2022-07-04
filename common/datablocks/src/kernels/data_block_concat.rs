@@ -21,13 +21,13 @@ use crate::DataBlock;
 impl DataBlock {
     pub fn concat_blocks(blocks: &[DataBlock]) -> Result<DataBlock> {
         if blocks.is_empty() {
-            return Result::Err(ErrorCode::EmptyData("Can't concat empty blocks"));
+            return Err(ErrorCode::EmptyData("Can't concat empty blocks"));
         }
 
         let first_block = &blocks[0];
         for block in blocks.iter() {
             if block.schema().ne(first_block.schema()) {
-                return Result::Err(ErrorCode::DataStructMissMatch("Schema not matched"));
+                return Err(ErrorCode::DataStructMissMatch("Schema not matched"));
             }
         }
 

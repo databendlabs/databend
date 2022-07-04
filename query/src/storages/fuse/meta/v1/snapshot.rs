@@ -19,6 +19,7 @@ use chrono::Utc;
 use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::storages::fuse::meta::common::ClusterKey;
 use crate::storages::fuse::meta::common::FormatVersion;
@@ -35,7 +36,8 @@ pub struct TableSnapshot {
     /// id of snapshot
     pub snapshot_id: SnapshotId,
 
-    /// previous snapshot
+    /// timestamp of this snapshot
+    //  for backward compatibility, `Option` is used
     pub timestamp: Option<DateTime<Utc>>,
 
     /// previous snapshot
@@ -67,15 +69,13 @@ impl TableSnapshot {
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
     ) -> Self {
-        // timestamp of the snapshot should always larger than the previous one's
         let now = Utc::now();
-        let mut timestamp = Some(now);
-        if let Some(prev_instant) = prev_timestamp {
-            if prev_instant > &now {
-                // if local time is smaller, use the timestamp of previous snapshot, plus 1 ms
-                timestamp = Some(prev_instant.add(chrono::Duration::milliseconds(1)))
-            }
-        };
+        // make snapshot timestamp monotonically increased
+        let adjusted_timestamp = util::monotonically_increased_timestamp(now, prev_timestamp);
+
+        // trim timestamp to micro seconds
+        let trimmed_timestamp = util::trim_timestamp_to_micro_second(adjusted_timestamp);
+        let timestamp = Some(trimmed_timestamp);
 
         Self {
             format_version: TableSnapshot::VERSION,
@@ -87,6 +87,20 @@ impl TableSnapshot {
             segments,
             cluster_key_meta,
         }
+    }
+
+    pub fn from_previous(previous: &TableSnapshot) -> Self {
+        let id = Uuid::new_v4();
+        let clone = previous.clone();
+        Self::new(
+            id,
+            &clone.timestamp,
+            Some((clone.snapshot_id, clone.format_version)),
+            clone.schema,
+            clone.summary,
+            clone.segments,
+            clone.cluster_key_meta,
+        )
     }
 
     pub fn format_version(&self) -> u64 {
@@ -108,5 +122,35 @@ impl From<v0::TableSnapshot> for TableSnapshot {
             segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
             cluster_key_meta: None,
         }
+    }
+}
+
+mod util {
+    use chrono::Datelike;
+    use chrono::TimeZone;
+    use chrono::Timelike;
+
+    use super::*;
+    pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
+        Utc.ymd(ts.year(), ts.month(), ts.day()).and_hms_micro(
+            ts.hour(),
+            ts.minute(),
+            ts.second(),
+            ts.timestamp_subsec_micros(),
+        )
+    }
+
+    pub fn monotonically_increased_timestamp(
+        timestamp: DateTime<Utc>,
+        previous_timestamp: &Option<DateTime<Utc>>,
+    ) -> DateTime<Utc> {
+        if let Some(prev_instant) = previous_timestamp {
+            // timestamp of the snapshot should always larger than the previous one's
+            if prev_instant > &timestamp {
+                // if local time is smaller, use the timestamp of previous snapshot, plus 1 ms
+                return prev_instant.add(chrono::Duration::milliseconds(1));
+            }
+        }
+        timestamp
     }
 }

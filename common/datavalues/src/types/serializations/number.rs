@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::FpCategory;
+
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
@@ -51,12 +53,14 @@ where T: PrimitiveType
         + std::convert::Into<opensrv_clickhouse::types::Value>
         + std::convert::From<opensrv_clickhouse::types::Value>
         + lexical_core::ToLexical
+        + PrimitiveWithFormat
 {
     fn need_quote(&self) -> bool {
         false
     }
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
-        extend_lexical(self.values[row_index], buf);
+
+    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        self.values[row_index].write_field(buf, format)
     }
 
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
@@ -81,6 +85,7 @@ where T: PrimitiveType
         }
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
+
     fn serialize_clickhouse_column(
         &self,
         _format: &FormatSettings,
@@ -125,3 +130,49 @@ pub fn extend_lexical<N: lexical_core::ToLexical>(n: N, buf: &mut Vec<u8>) {
         buf.set_len(len0 + len);
     }
 }
+
+trait PrimitiveWithFormat {
+    fn write_field(self, buf: &mut Vec<u8>, _format: &FormatSettings);
+}
+
+macro_rules! impl_float {
+    ($ty:ident) => {
+        impl PrimitiveWithFormat for $ty {
+            fn write_field(self: $ty, buf: &mut Vec<u8>, format: &FormatSettings) {
+                // todo(youngsofun): output the sign optionally
+                match self.classify() {
+                    FpCategory::Nan => {
+                        buf.extend_from_slice(&format.nan_bytes);
+                    }
+                    FpCategory::Infinite => {
+                        buf.extend_from_slice(&format.inf_bytes);
+                    }
+                    _ => {
+                        extend_lexical(self, buf);
+                    }
+                }
+            }
+        }
+    };
+}
+
+macro_rules! impl_int {
+    ($ty:ident) => {
+        impl PrimitiveWithFormat for $ty {
+            fn write_field(self: $ty, buf: &mut Vec<u8>, _format: &FormatSettings) {
+                extend_lexical(self, buf);
+            }
+        }
+    };
+}
+
+impl_int!(i8);
+impl_int!(i16);
+impl_int!(i32);
+impl_int!(i64);
+impl_int!(u8);
+impl_int!(u16);
+impl_int!(u32);
+impl_int!(u64);
+impl_float!(f32);
+impl_float!(f64);

@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,10 +29,9 @@ use super::block_writer;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::ColumnId;
-use crate::storages::fuse::meta::ColumnMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
+use crate::storages::fuse::operations::column_metas;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::index::ClusterKeyInfo;
@@ -60,7 +57,7 @@ impl BlockStreamWriter {
         block_per_segment: usize,
         meta_locations: TableMetaLocationGenerator,
         cluster_key_info: Option<ClusterKeyInfo>,
-    ) -> SegmentInfoStream {
+    ) -> Result<SegmentInfoStream> {
         // filter out empty blocks
         let block_stream =
             block_stream.try_filter(|block| std::future::ready(block.num_rows() > 0));
@@ -75,21 +72,25 @@ impl BlockStreamWriter {
 
         // Write out the blocks.
         // And transform the stream of DataBlocks into Stream of SegmentInfo at the same time.
-        let block_writer =
-            BlockStreamWriter::new(block_per_segment, meta_locations, ctx, cluster_key_info);
+        let block_writer = BlockStreamWriter::try_create(
+            block_per_segment,
+            meta_locations,
+            ctx,
+            cluster_key_info,
+        )?;
         let segments = Self::transform(Box::pin(block_stream), block_writer);
 
-        Box::pin(segments)
+        Ok(Box::pin(segments))
     }
 
-    pub fn new(
+    pub fn try_create(
         num_block_threshold: usize,
         meta_locations: TableMetaLocationGenerator,
         ctx: Arc<QueryContext>,
         cluster_key_info: Option<ClusterKeyInfo>,
-    ) -> Self {
-        let data_accessor = ctx.get_storage_operator().unwrap();
-        Self {
+    ) -> Result<Self> {
+        let data_accessor = ctx.get_storage_operator()?;
+        Ok(Self {
             num_block_threshold,
             data_accessor,
             number_of_blocks_accumulated: 0,
@@ -97,7 +98,7 @@ impl BlockStreamWriter {
             meta_locations,
             cluster_key_info,
             ctx,
-        }
+        })
     }
 
     /// Transforms a stream of S to a stream of T
@@ -136,7 +137,7 @@ impl BlockStreamWriter {
         let mut block = data_block;
         if let Some(v) = self.cluster_key_info.as_mut() {
             let input_schema = block.schema().clone();
-            let cluster_key_index = if v.cluster_key_index.is_empty() {
+            if v.cluster_key_index.is_empty() {
                 let fields = input_schema.fields().clone();
                 let index = v
                     .exprs
@@ -146,16 +147,13 @@ impl BlockStreamWriter {
                         fields.iter().position(|f| f.name() == &cname).unwrap()
                     })
                     .collect::<Vec<_>>();
-                v.cluster_key_index = index.clone();
-                index
-            } else {
-                v.cluster_key_index.clone()
+                v.cluster_key_index = index;
             };
 
             cluster_stats = BlockStatistics::clusters_statistics(
                 v.cluster_key_id,
-                cluster_key_index,
-                block.clone(),
+                &v.cluster_key_index,
+                &block,
             )?;
 
             // Remove unused columns before serialize
@@ -188,12 +186,10 @@ impl BlockStreamWriter {
 
         let mut acc = self.statistics_accumulator.take().unwrap_or_default();
         let partial_acc = acc.begin(&block, cluster_stats)?;
-        let schema = block.schema().to_arrow();
         let location = self.meta_locations.gen_block_location();
         let (file_size, file_meta_data) =
-            block_writer::write_block(&schema, block, self.data_accessor.clone(), &location)
-                .await?;
-        let col_metas = Self::column_metas(&file_meta_data)?;
+            block_writer::write_block(block, &self.data_accessor, &location).await?;
+        let col_metas = column_metas(&file_meta_data)?;
         acc = partial_acc.end(file_size, location, col_metas);
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {
@@ -217,50 +213,6 @@ impl BlockStreamWriter {
 
             Ok(None)
         }
-    }
-
-    fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, ColumnMeta>> {
-        // currently we use one group only
-        let num_row_groups = file_meta.row_groups.len();
-        if num_row_groups != 1 {
-            return Err(ErrorCode::ParquetError(format!(
-                "invalid parquet file, expects only one row group, but got {}",
-                num_row_groups
-            )));
-        }
-        let row_group = &file_meta.row_groups[0];
-        let mut col_metas = HashMap::with_capacity(row_group.columns.len());
-        for (idx, col) in row_group.columns.iter().enumerate() {
-            match &col.meta_data {
-                Some(chunk_meta) => {
-                    let col_start =
-                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                            dict_page_offset
-                        } else {
-                            chunk_meta.data_page_offset
-                        };
-                    let col_len = chunk_meta.total_compressed_size;
-                    assert!(
-                        col_start >= 0 && col_len >= 0,
-                        "column start and length should not be negative"
-                    );
-                    let num_values = chunk_meta.num_values as u64;
-                    let res = ColumnMeta {
-                        offset: col_start as u64,
-                        len: col_len as u64,
-                        num_values,
-                    };
-                    col_metas.insert(idx as u32, res);
-                }
-                None => {
-                    return Err(ErrorCode::ParquetError(format!(
-                        "invalid parquet file, meta data of column idx {} is empty",
-                        idx
-                    )))
-                }
-            }
-        }
-        Ok(col_metas)
     }
 }
 

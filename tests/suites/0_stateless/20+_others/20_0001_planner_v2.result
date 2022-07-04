@@ -250,6 +250,7 @@ new_planner
 14
 16
 18
+0
 ====Memory Table====
 1
 === Test CASE-WHEN ===
@@ -258,6 +259,7 @@ NULL
 ge1
 ge2
 1.0
+1
 === Test Subquery In From ===
 1
 2
@@ -320,18 +322,26 @@ abc
 9
 ===Explain===
 Project: [a]
-    Filter: [a > 0]
+    Filter: [t1.a > 0]
         Scan: default.default.t1
+Filter: [(t1.a > 3) OR ((t2.a > 5) AND (t1.a > 1))]
+    HashJoin: INNER, build keys: [t2.a], probe keys: [t1.a], join filters: []
+        Scan: default.default.t1
+        Scan: default.default.t2
+HashJoin: INNER, build keys: [t2.a], probe keys: [t1.a], join filters: []
+    Scan: default.default.t1
+    Scan: default.default.t2
 ===Explain Pipeline===
-ProjectionTransform × 1 processor
-  ProjectionTransform × 1 processor
-    TransformHashJoin × 1 processor
-      ProjectionTransform × 1 processor
+Project × 1 processor
+  TransformHashJoin × 1 processor
+    Rename × 1 processor
+      Project × 1 processor
         FuseEngineSource × 1 processor
 
 BuildHashTable × 1 processor
-  ProjectionTransform × 1 processor
-    FuseEngineSource × 1 processor
+  Rename × 1 processor
+    Project × 1 processor
+      FuseEngineSource × 1 processor
 ===Position Function===
 4
 0
@@ -354,6 +364,7 @@ BuildHashTable × 1 processor
 3	4	2	2
 3	4	3	5
 3	4	7	8
+3	4
 ====UDF====
 5
 6.0
@@ -371,6 +382,29 @@ NULL	NULL	6	8
 1	2	1	4
 3	4	NULL	NULL
 7	8	NULL	NULL
+1	2	NULL	NULL
+3	4	NULL	NULL
+7	8	NULL	NULL
+1	2	NULL	NULL
+3	4	NULL	NULL
+7	8	NULL	NULL
+1	2	NULL	NULL
+3	4	NULL	NULL
+7	8	6	8
+1	2	NULL	NULL
+3	4	NULL	NULL
+7	8	1	4
+7	8	2	3
+7	8	6	8
+1	2	6	8
+3	4	6	8
+7	8	6	8
+1	2	NULL	NULL
+3	4	1	4
+3	4	2	3
+7	8	1	4
+7	8	2	3
+7	8	6	8
 ====NULL====
 0	0	0	0
 NULL	NULL	NULL	NULL
@@ -387,3 +421,6 @@ NULL	NULL	NULL	1
 2
 3
 4
+1
+0
+1

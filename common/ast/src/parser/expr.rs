@@ -25,13 +25,16 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::*;
-use crate::parser::error::Error;
-use crate::parser::error::ErrorKind;
+use crate::input::Input;
+use crate::input::WithSpan;
+use crate::match_token;
 use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::unescape::unescape;
-use crate::parser::util::*;
 use crate::rule;
+use crate::util::*;
+use crate::Error;
+use crate::ErrorKind;
 
 pub const BETWEEN_PREC: u32 = 20;
 pub const NOT_PREC: u32 = 15;
@@ -144,11 +147,14 @@ pub enum ExprElement<'a> {
         table: Option<Identifier<'a>>,
         column: Identifier<'a>,
     },
-    /// `IS NULL` expression
+    /// `IS [NOT] NULL` expression
     IsNull {
         not: bool,
     },
-    /// `IS NOT NULL` expression
+    /// `IS [NOT] DISTINCT FROM` expression
+    IsDistinctFrom {
+        not: bool,
+    },
     /// `[ NOT ] IN (list, ...)`
     InList {
         list: Vec<Expr<'a>>,
@@ -273,6 +279,9 @@ pub enum ExprElement<'a> {
         expr1: Expr<'a>,
         expr2: Expr<'a>,
     },
+    Coalesce {
+        exprs: Vec<Expr<'a>>,
+    },
     IfNull {
         expr1: Expr<'a>,
         expr2: Expr<'a>,
@@ -291,6 +300,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
             ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(10)),
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
             ExprElement::Between { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
+            ExprElement::IsDistinctFrom { .. } => {
+                Affix::Infix(Precedence(BETWEEN_PREC), Associativity::Left)
+            }
             ExprElement::InList { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::InSubquery { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::UnaryOp { op } => match op {
@@ -466,6 +478,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 expr1: Box::new(expr1),
                 expr2: Box::new(expr2),
             },
+            ExprElement::Coalesce { exprs } => Expr::Coalesce {
+                span: elem.span.0,
+                exprs,
+            },
             ExprElement::IfNull { expr1, expr2 } => Expr::IfNull {
                 span: elem.span.0,
                 expr1: Box::new(expr1),
@@ -488,6 +504,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 op,
+            },
+            ExprElement::IsDistinctFrom { not } => Expr::IsDistinctFrom {
+                span: elem.span.0,
+                left: Box::new(lhs),
+                right: Box::new(rhs),
+                not,
             },
             _ => unreachable!(),
         };
@@ -841,6 +863,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, _, expr1, _, expr2, _)| ExprElement::NullIf { expr1, expr2 },
     );
+    let coalesce = map(
+        rule! {
+            COALESCE ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ^")"
+        },
+        |(_, _, exprs, _)| ExprElement::Coalesce { exprs },
+    );
     let ifnull = map(
         rule! {
             IFNULL
@@ -851,6 +879,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ~ ^")"
         },
         |(_, _, expr1, _, expr2, _)| ExprElement::IfNull { expr1, expr2 },
+    );
+    let is_distinct_from = map(
+        rule! {
+            IS ~ NOT? ~ DISTINCT ~ FROM
+        },
+        |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
     );
     let (rest, (span, elem)) = consumed(alt((
         rule!(
@@ -872,7 +906,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #nullif: "`NULLIF(..., ...)`"
+            | #coalesce: "`COALESCE (<expr>, ...)`"
             | #ifnull: "`IFNULL(..., ...)`"
+            | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
         ),
         rule!(
             #count_all : "COUNT(*)"
