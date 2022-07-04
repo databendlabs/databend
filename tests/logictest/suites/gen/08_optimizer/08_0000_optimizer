@@ -1,4 +1,7 @@
 statement ok
+use default;
+
+statement ok
 SET max_threads=16;
 
 statement query T 

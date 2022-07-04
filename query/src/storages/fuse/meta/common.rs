@@ -44,7 +44,7 @@ where Self: Sized
     const VERSION: u64 = V;
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Compression {
     Lz4,
     Lz4Raw,

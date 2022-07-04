@@ -26,7 +26,7 @@ use crate::Partitions;
 use crate::StageTableInfo;
 use crate::Statistics;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SourceInfo {
     // Normal table source, `fuse/system`.
     TableSource(TableInfo),

@@ -21,7 +21,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BufferReader;
-use common_io::prelude::CheckpointReader;
+use common_io::prelude::NestedCheckpointReader;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
 use common_planners::InsertValueBlock;
@@ -46,7 +46,7 @@ use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::storages::Table;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfInsertStatement<'a> {
     pub or: Option<SqliteOnConflict>,
     /// TABLE
@@ -69,7 +69,7 @@ pub struct DfInsertStatement<'a> {
     pub on: Option<OnInsert>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InsertSource<'a> {
     /// for insert format
     Empty,
@@ -174,7 +174,7 @@ impl<'a> DfInsertStatement<'a> {
             Some("VALUES") | None => {
                 let bytes = stream_str.as_bytes();
                 let cursor = Cursor::new(bytes);
-                let mut reader = CheckpointReader::new(BufferReader::new(cursor));
+                let mut reader = NestedCheckpointReader::new(BufferReader::new(cursor));
                 let source = ValueSource::new(ctx.clone(), schema.clone());
                 let block = source.read(&mut reader).await?;
                 Ok(InsertInputSource::Values(InsertValueBlock { block }))

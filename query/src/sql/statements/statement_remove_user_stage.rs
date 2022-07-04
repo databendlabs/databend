@@ -24,7 +24,7 @@ use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DfRemoveStage {
     pub location: String,
     pub pattern: String,

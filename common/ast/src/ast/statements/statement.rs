@@ -35,8 +35,11 @@ pub enum Statement<'a> {
     },
 
     Copy(CopyStmt<'a>),
+    Call(CallStmt),
 
-    ShowSettings,
+    ShowSettings {
+        like: Option<String>,
+    },
     ShowProcessList,
     ShowMetrics,
     ShowFunctions {
@@ -152,6 +155,12 @@ pub enum Statement<'a> {
     },
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct StatementMsg<'a> {
+    pub(crate) stmt: Statement<'a>,
+    pub(crate) format: Option<String>,
+}
+
 impl<'a> Display for Statement<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -179,7 +188,12 @@ impl<'a> Display for Statement<'a> {
                 }
             }
             Statement::Copy(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowSettings => {}
+            Statement::ShowSettings { like } => {
+                write!(f, "SHOW SETTINGS")?;
+                if like.is_some() {
+                    write!(f, " LIKE '{}'", like.as_ref().unwrap())?;
+                }
+            }
             Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,
             Statement::ShowMetrics => write!(f, "SHOW METRICS")?,
             Statement::ShowFunctions { limit } => {
@@ -327,6 +341,7 @@ impl<'a> Display for Statement<'a> {
                 }
             }
             Statement::DescribeStage { stage_name } => write!(f, "DESC STAGE {stage_name}")?,
+            Statement::Call(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

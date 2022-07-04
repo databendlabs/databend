@@ -31,6 +31,8 @@ pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower
     zero_entity: Option<*mut Entity>,
     zero_entity_raw: Option<*mut u8>,
 
+    // set to true if the table is converted to other hash table
+    pub(crate) entity_swapped: bool,
     /// Generics hold
     generics_hold: PhantomData<Key>,
 }
@@ -56,11 +58,28 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
 {
     fn drop(&mut self) {
         unsafe {
-            let size = (self.grower.max_size() as usize) * mem::size_of::<Entity>();
+            let item_size = self.grower.max_size() as usize;
+
+            if std::mem::needs_drop::<Entity>() && !self.entity_swapped {
+                for off in 0..item_size {
+                    let entity = self.entities.add(off);
+
+                    if !entity.is_zero() {
+                        std::ptr::drop_in_place(entity);
+                    }
+                }
+            }
+
+            let size = item_size * mem::size_of::<Entity>();
             let layout = Layout::from_size_align_unchecked(size, std::mem::align_of::<Entity>());
             std::alloc::dealloc(self.entities_raw, layout);
 
             if let Some(zero_entity) = self.zero_entity_raw {
+                if std::mem::needs_drop::<Entity>() && !self.entity_swapped {
+                    let entity = self.zero_entity.unwrap();
+                    std::ptr::drop_in_place(entity);
+                }
+
                 let zero_layout = Layout::from_size_align_unchecked(
                     mem::size_of::<Entity>(),
                     std::mem::align_of::<Entity>(),
@@ -88,6 +107,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
                 zero_entity: None,
                 zero_entity_raw: None,
                 generics_hold: PhantomData::default(),
+                entity_swapped: false,
             }
         }
     }

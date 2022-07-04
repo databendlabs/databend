@@ -23,7 +23,7 @@ use common_planners::ReadDataSourcePlan;
 
 use crate::sql::plans::Plan;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
 pub enum ValidationMode {
     None,
     ReturnNRows(u64),

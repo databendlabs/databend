@@ -34,7 +34,7 @@ pub struct Slot {
     pub node_ids: Vec<NodeId>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Node {
     pub name: String,
     pub endpoint: Endpoint,

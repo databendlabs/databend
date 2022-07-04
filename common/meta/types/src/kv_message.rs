@@ -18,17 +18,17 @@ use crate::MatchSeq;
 use crate::Operation;
 use crate::SeqV;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetKVReq {
     pub key: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MGetKVReq {
     pub keys: Vec<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListKVReq {
     pub prefix: String,
 }
@@ -38,7 +38,7 @@ pub type GetKVReply = Option<SeqV<Vec<u8>>>;
 pub type MGetKVReply = Vec<Option<SeqV<Vec<u8>>>>;
 pub type ListKVReply = Vec<(String, SeqV<Vec<u8>>)>;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpsertKVReq {
     pub key: String,
     pub seq: MatchSeq,

@@ -79,7 +79,7 @@ impl UDFParser {
             return Ok(());
         }
 
-        return Err(ErrorCode::SyntaxException(format!(
+        Err(ErrorCode::SyntaxException(format!(
             "{}{}",
             if params_not_declared.is_empty() {
                 "".to_string()
@@ -91,7 +91,7 @@ impl UDFParser {
             } else {
                 format!("Parameters are not used: {:?}", params_not_used)
             },
-        )));
+        )))
     }
 }
 

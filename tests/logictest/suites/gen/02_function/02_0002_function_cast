@@ -85,19 +85,19 @@ SELECT CAST(Null as Varchar);
 statement error 1010
 SELECT CAST(Null as Boolean); 
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT CAST('33' as signed) = 33;
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT CAST('33' as unsigned) = 33;
 
-----  mysql
+----  
 1
 
 ----  http
@@ -118,19 +118,19 @@ SELECT CAST('aa' as unsigned) = 0;
 statement error 1010
 SELECT CAST('aa' as Float64) = 0; 
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT '33'::signed = 33;
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT '33'::unsigned = 33;
 
-----  mysql
+----  
 1
 
 ----  http
@@ -139,42 +139,50 @@ true
 statement error 1010
 SELECT '-33aa'::signed = 33; 
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT 33::string = '33';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+-- clickhouse sqlalchemy error with this sql
+skipif clickhouse
+statement query B label(http)
 select "truE"::boolean;
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+-- clickhouse sqlalchemy error with this sql
+skipif clickhouse
+statement query B label(http)
 select not "FalSe"::boolean;
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+-- clickhouse sqlalchemy error with this sql
+skipif clickhouse
+statement query B label(http)
 select "false"::boolean = not "true"::boolean;
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
+-- clickhouse sqlalchemy error with this sql
+skipif clickhouse
 statement error 1010
 select "FalSex"::boolean; 
 
@@ -184,73 +192,73 @@ SELECT '===DATE/DATETIME===';
 ----  
 ===DATE/DATETIME===
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT  to_timestamp('2021-03-05 01:01:01') + 1 = to_timestamp('2021-03-05 01:01:01.000001');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT  to_date('2021-03-05') + 1 = to_date('2021-03-06');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT  to_varchar(to_date('2021-03-05') + 1) = '2021-03-06';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_timestamp(to_date('2021-03-05')) = to_timestamp('2021-03-05 00:00:00');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_date(to_timestamp('2021-03-05 01:00:00')) = to_date('2021-03-05');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_varchar(to_timestamp(1640019661000000)) = '2021-12-20 17:01:01.000000';
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_date(to_timestamp(1640019661000000)) = to_date('2021-12-20');
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT to_timestamp(to_timestamp(1640019661000000)) = to_timestamp('2021-12-20 17:01:01.000000');
 
-----  mysql
+----  
 1
 
 ----  http
@@ -262,37 +270,37 @@ SELECT '===Variant===';
 ----  
 ===Variant===
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT parse_json(true)::boolean;
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT parse_json(false)::boolean;
 
-----  mysql
+----  
 0
 
 ----  http
 false
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT parse_json('"true"')::boolean;
 
-----  mysql
+----  
 1
 
 ----  http
 true
 
-statement query B label(mysql,http)
+statement query B label(http)
 SELECT parse_json('"false"')::boolean;
 
-----  mysql
+----  
 0
 
 ----  http
@@ -514,10 +522,10 @@ SELECT parse_json('"test"')::datetime;
 statement error 1010
 SELECT parse_json('null')::datetime; 
 
-statement query T label(mysql,http)
+statement query T label(http)
 SELECT parse_json('[1,2,3]')::array;
 
-----  mysql
+----  
 [1,2,3]
 
 ----  http
@@ -538,6 +546,7 @@ SELECT parse_json('"ab"')::array;
 statement error 1010
 SELECT parse_json('null')::array; 
 
+skipif clickhouse
 statement query T
 SELECT parse_json('{"a":1,"b":2}')::object;
 

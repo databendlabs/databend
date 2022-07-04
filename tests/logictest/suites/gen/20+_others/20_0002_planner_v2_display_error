@@ -1,12 +1,16 @@
+skipif clickhouse
 statement ok
 set enable_planner_v2 = 1;
 
+skipif clickhouse
 statement ok
 create table t(a int, b int);
 
+skipif clickhouse
 statement error 1065
 select aa from t;
 
+skipif clickhouse
 statement error 1065
 select *;
 

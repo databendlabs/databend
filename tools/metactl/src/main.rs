@@ -30,7 +30,7 @@ use serde::Serialize;
 /// TODO(xuanwo)
 ///
 /// We should make metactl config keeps backward compatibility too.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
 pub struct Config {
     /// Run a command
@@ -65,7 +65,7 @@ pub struct Config {
 }
 
 /// TODO: This is a temp copy of RaftConfig, we will migrate them in the future.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct RaftConfig {

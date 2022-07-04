@@ -28,6 +28,7 @@ use common_meta_types::MatchSeq;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
+use common_planners::OptimizeTablePlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -43,6 +44,7 @@ use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
+use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::ClusterKey;
@@ -170,7 +172,7 @@ impl FuseTable {
         }
     }
 
-    async fn update_table_meta(
+    pub async fn update_table_meta(
         &self,
         ctx: &QueryContext,
         catalog_name: &str,
@@ -181,9 +183,8 @@ impl FuseTable {
         let snapshot_loc = self
             .meta_location_generator()
             .snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
-        let bytes = serde_json::to_vec(snapshot)?;
         let operator = ctx.get_storage_operator()?;
-        operator.object(&snapshot_loc).write(bytes).await?;
+        write_meta(&operator, &snapshot_loc, snapshot).await?;
 
         // set new snapshot location
         meta.options
@@ -448,5 +449,10 @@ impl Table for FuseTable {
     #[tracing::instrument(level = "debug", name = "fuse_table_delete", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn delete(&self, ctx: Arc<QueryContext>, delete_plan: DeletePlan) -> Result<()> {
         self.do_delete(ctx, &delete_plan).await
+    }
+
+    #[tracing::instrument(level = "debug", name = "fuse_table_compact", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn compact(&self, ctx: Arc<QueryContext>, plan: OptimizeTablePlan) -> Result<()> {
+        self.do_compact(ctx, &plan).await
     }
 }

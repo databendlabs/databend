@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io::Cursor;
+use std::io::Read;
 
 use common_exception::Result;
 use common_io::prelude::*;
@@ -33,9 +34,9 @@ fn test_write_and_read_cp() -> Result<()> {
     buff.write_uvarint(1024u64)?;
 
     let reader: Box<dyn BufferRead> = Box::new(BufferReader::new(Cursor::new(buffer.as_slice())));
-    let mut read = CheckpointReader::new(reader);
+    let mut read = NestedCheckpointReader::new(reader);
 
-    read.checkpoint();
+    read.push_checkpoint();
 
     const N: i32 = 100;
 
@@ -44,7 +45,7 @@ fn test_write_and_read_cp() -> Result<()> {
         assert_eq!(res, 8);
 
         let res: u16 = read.read_scalar().unwrap();
-        assert_eq!(res, 16);
+        assert_eq!(res, 16, "{}", i);
 
         let res: u32 = read.read_scalar().unwrap();
         assert_eq!(res, 32);
@@ -63,7 +64,7 @@ fn test_write_and_read_cp() -> Result<()> {
     let res: Option<i64> = read.read_opt_scalar().unwrap();
     assert_eq!(res, Some(64));
 
-    read.checkpoint();
+    read.push_checkpoint();
 
     for i in 0..N {
         let res: Option<u8> = read.read_opt_scalar().unwrap();
@@ -77,5 +78,34 @@ fn test_write_and_read_cp() -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_nested_cp() -> Result<()> {
+    //impl Write for Cursor<&mut [u8]>
+    let buffer = "123456789".to_string();
+    let reader: Box<dyn BufferRead> = Box::new(BufferReader::new(Cursor::new(buffer.as_bytes())));
+    let mut reader = NestedCheckpointReader::new(reader);
+    let mut buf = [0u8; 1];
+    let _ = reader.read(&mut buf)?;
+    assert_eq!(buf[0], b'1');
+
+    reader.push_checkpoint();
+    assert_eq!(reader.read(&mut buf)?, 1);
+    assert_eq!(buf[0], b'2');
+
+    reader.push_checkpoint();
+    assert!(reader.ignore_insensitive_bytes(b"34")?);
+    reader.pop_checkpoint();
+    let inner = reader.fill_buf()?;
+    assert_eq!(inner[0], b'5');
+
+    reader.push_checkpoint();
+    assert!(!reader.ignore_insensitive_bytes(b"ab")?);
+    reader.rollback_to_checkpoint()?;
+    reader.pop_checkpoint();
+    let inner = reader.fill_buf()?;
+    assert_eq!(inner[0], b'5');
     Ok(())
 }

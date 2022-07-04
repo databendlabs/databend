@@ -195,10 +195,10 @@ fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparat
             if name == "Variant" || name == "VariantArray" || name == "VariantObject" {
                 compare_variant(left, right)
             } else {
-                return Err(ArrowError::NotYetImplemented(format!(
+                Err(ArrowError::NotYetImplemented(format!(
                     "Sort not supported for data type {:?}",
                     left.data_type()
-                )));
+                )))
             }
         }
         _ => arrow_ord::build_compare(left, right),

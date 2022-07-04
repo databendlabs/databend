@@ -14,7 +14,7 @@
 
 use crate::PlanShowKind;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct ShowTablesStatusPlan {
     pub kind: PlanShowKind,
     // show tables from db1 [or in db1]

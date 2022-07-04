@@ -71,60 +71,84 @@ impl TypeDeserializer for NullableDeserializer {
 
     fn de_text_json<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
+        reader.push_checkpoint();
         if reader.ignore_insensitive_bytes(b"null")? {
+            reader.pop_checkpoint();
             self.de_default(format);
             return Ok(());
         }
+        reader.rollback_to_checkpoint()?;
+        reader.pop_checkpoint();
         self.inner.de_text_json(reader, format)?;
         self.bitmap.push(true);
         Ok(())
     }
 
     // TODO: support null text setting
-    fn de_text<R: BufferRead>(&mut self, reader: &mut R, format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut NestedCheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
+        reader.push_checkpoint();
         if reader.ignore_insensitive_bytes(b"null")? {
+            reader.pop_checkpoint();
             self.de_default(format);
             return Ok(());
+        } else {
+            reader.rollback_to_checkpoint()?;
+            reader.pop_checkpoint();
+            self.inner.de_text(reader, format)?;
+            self.bitmap.push(true);
         }
-        self.inner.de_text(reader, format)?;
-        self.bitmap.push(true);
+
         Ok(())
     }
 
     fn de_text_quoted<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
+        reader.push_checkpoint();
         if reader.ignore_insensitive_bytes(b"null")? {
+            reader.pop_checkpoint();
             self.de_default(format);
-            return Ok(());
+        } else {
+            reader.rollback_to_checkpoint()?;
+            reader.pop_checkpoint();
+            self.inner.de_text_quoted(reader, format)?;
+            self.bitmap.push(true);
         }
-        self.inner.de_text_quoted(reader, format)?;
-        self.bitmap.push(true);
         Ok(())
     }
 
     fn de_text_csv<R: BufferRead>(
         &mut self,
-        reader: &mut R,
+        reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         if reader.eof()? {
             self.de_default(format);
         } else {
-            reader.ignore_insensitive_bytes(b"null")?;
-            let buffer = reader.fill_buf()?;
-            if !buffer.is_empty() && (buffer[0] == b'\r' || buffer[0] == b'\n' || buffer[0] == b',')
-            {
-                self.de_default(format);
-            } else {
-                self.inner.de_text_csv(reader, format)?;
-                self.bitmap.push(true);
+            reader.push_checkpoint();
+            if reader.ignore_insensitive_bytes(b"null")? {
+                let buffer = reader.fill_buf()?;
+                if !buffer.is_empty()
+                    && (buffer[0] == b'\r' || buffer[0] == b'\n' || buffer[0] == b',')
+                {
+                    self.de_default(format);
+                    reader.pop_checkpoint();
+                    return Ok(());
+                }
             }
+            reader.rollback_to_checkpoint()?;
+            reader.pop_checkpoint();
+            self.inner.de_text_csv(reader, format)?;
+            self.bitmap.push(true);
         }
         Ok(())
     }

@@ -23,7 +23,7 @@ use super::utils::mask_string;
 pub static AWS_S3_ENDPOINT: &str = "https://s3.amazonaws.com";
 
 /// Config for storage backend.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageConfig {
     pub num_cpus: u64,
 

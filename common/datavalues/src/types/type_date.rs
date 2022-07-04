@@ -34,7 +34,7 @@ pub const DATE_MIN: i32 = -354285;
 
 #[inline]
 pub fn check_date(days: i32) -> Result<()> {
-    if days >= DATE_MIN && days <= DATE_MAX {
+    if (DATE_MIN..=DATE_MAX).contains(&days) {
         return Ok(());
     }
     Err(ErrorCode::InvalidDate(

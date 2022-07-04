@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
 use common_planners::AlterUserUDFPlan;
+use common_planners::CallPlan;
 use common_planners::CreateRolePlan;
 use common_planners::CreateUserUDFPlan;
 use common_planners::DescribeUserStagePlan;
@@ -117,7 +118,7 @@ impl<'a> Binder {
 
             Statement::ShowMetrics => Plan::ShowMetrics,
             Statement::ShowProcessList => Plan::ShowProcessList,
-            Statement::ShowSettings => Plan::ShowSettings,
+            Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(stmt).await?,
@@ -245,6 +246,10 @@ impl<'a> Binder {
             } => Plan::DropUDF(Box::new(DropUserUDFPlan {
                 if_exists: *if_exists,
                 name: udf_name.to_string(),
+            })),
+            Statement::Call(stmt) => Plan::Call(Box::new(CallPlan {
+                name: stmt.name.clone(),
+                args: stmt.args.clone(),
             })),
 
             _ => {

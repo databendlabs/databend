@@ -1143,7 +1143,7 @@ impl SchemaApiTestSuite {
             table_meta: table_meta(created_on),
         };
         let tb_ident_2 = {
-            let tb_ident_2 = {
+            {
                 let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
                 let res = mt.create_table(req.clone()).await?;
                 let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
@@ -1165,8 +1165,7 @@ impl SchemaApiTestSuite {
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
                 ident
-            };
-            tb_ident_2
+            }
         };
 
         expected_tb_count += 1;

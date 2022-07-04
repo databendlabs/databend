@@ -459,9 +459,10 @@ impl QueryContext {
 
     pub fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
         let mut blocks = self.precommit_blocks.write();
-        let result = blocks.clone();
-        blocks.clear();
-        result
+
+        let mut swaped_precommit_blocks = vec![];
+        std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
+        swaped_precommit_blocks
     }
 
     pub fn try_get_function_context(&self) -> Result<FunctionContext> {

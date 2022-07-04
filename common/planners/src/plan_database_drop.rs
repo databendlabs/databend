@@ -19,7 +19,7 @@ use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DropDatabaseReq;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabasePlan {
     pub if_exists: bool,
     pub tenant: String,

@@ -29,7 +29,7 @@ use crate::ShowSettingsPlan;
 use crate::ShowTablesPlan;
 use crate::ShowUsersPlan;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum PlanShowKind {
     All,
 
@@ -40,7 +40,7 @@ pub enum PlanShowKind {
     Where(String),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ShowPlan {
     ShowDatabases(ShowDatabasesPlan),
     ShowTables(ShowTablesPlan),

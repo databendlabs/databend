@@ -201,6 +201,7 @@ impl StageSource {
             StageFileCompression::Zstd => Some(CompressAlgorithm::Zstd),
             StageFileCompression::Deflate => Some(CompressAlgorithm::Zlib),
             StageFileCompression::RawDeflate => Some(CompressAlgorithm::Deflate),
+            StageFileCompression::Xz => Some(CompressAlgorithm::Xz),
             StageFileCompression::Lzo => {
                 return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"))
             }

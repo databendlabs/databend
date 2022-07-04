@@ -10,32 +10,22 @@ inputs:
   target:
     description: "Release target"
     required: true
-  tag:
-    description: "Release tag"
-    required: true
   aws_access_key_id:
     description: "AWS access key id"
     required: true
   aws_secret_access_key:
     description: "AWS secret access key"
     required: true
-  changelog:
-    description: "Release changelog"
-    required: true
 
 runs:
   using: "composite"
   steps:
-    - name: Release databend
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ inputs.github_token }}
-        file: databend-${{ inputs.version }}-${{ inputs.target }}.*
-        asset_name: databend-${{ inputs.version }}-${{ inputs.target }}
-        tag: ${{ inputs.tag }}
-        file_glob: true
-        overwrite: true
-        body: ${{ inputs.changelog }}
+    - name: Update release to github
+      shell: bash
+      # Reference: https://cli.github.com/manual/gh_release_upload
+      run: gh release upload ${{ inputs.version }} databend-${{ inputs.version }}-${{ inputs.target }}.* --clobber
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v1

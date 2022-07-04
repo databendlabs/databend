@@ -53,7 +53,7 @@ impl Display for ShowTablesStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShowCreateTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
@@ -177,7 +177,7 @@ impl Display for CreateTableSource<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DescribeTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
@@ -196,7 +196,7 @@ impl Display for DescribeTableStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DropTableStmt<'a> {
     pub if_exists: bool,
     pub catalog: Option<Identifier<'a>>,
@@ -226,7 +226,7 @@ impl Display for DropTableStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UndropTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
@@ -296,7 +296,7 @@ impl Display for AlterTableAction<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenameTableStmt<'a> {
     pub if_exists: bool,
     pub catalog: Option<Identifier<'a>>,
@@ -331,7 +331,7 @@ impl Display for RenameTableStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TruncateTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
@@ -357,7 +357,7 @@ impl Display for TruncateTableStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OptimizeTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
@@ -383,7 +383,7 @@ impl Display for OptimizeTableStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExistsTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
@@ -403,7 +403,7 @@ impl Display for ExistsTableStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Engine {
     Null,
     Memory,
@@ -426,7 +426,7 @@ impl Display for Engine {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptimizeTableAction {
     All,
     Purge,
@@ -443,7 +443,7 @@ impl Display for OptimizeTableAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TableOption {
     Engine(Engine),
     Comment(String),

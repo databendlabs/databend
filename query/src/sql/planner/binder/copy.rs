@@ -343,8 +343,8 @@ impl<'a> Binder {
             format!("SELECT * FROM {src_catalog_name}.{src_database_name}.{src_table_name}");
         let tokens = tokenize_sql(&subquery)?;
         let backtrace = Backtrace::new();
-        let sub_stmt = parse_sql(&tokens, &backtrace)?;
-
+        let sub_stmt_msg = parse_sql(&tokens, &backtrace)?;
+        let sub_stmt = sub_stmt_msg.0;
         let query = match &sub_stmt {
             Statement::Query(query) => {
                 self.bind_statement(bind_context, &Statement::Query(query.clone()))
@@ -392,8 +392,8 @@ impl<'a> Binder {
             format!("SELECT * FROM {src_catalog_name}.{src_database_name}.{src_table_name}");
         let tokens = tokenize_sql(&subquery)?;
         let backtrace = Backtrace::new();
-        let sub_stmt = parse_sql(&tokens, &backtrace)?;
-
+        let sub_stmt_msg = parse_sql(&tokens, &backtrace)?;
+        let sub_stmt = sub_stmt_msg.0;
         let query = match &sub_stmt {
             Statement::Query(query) => {
                 self.bind_statement(bind_context, &Statement::Query(query.clone()))

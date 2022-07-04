@@ -20,19 +20,19 @@ use common_planners::PlanNode;
 use crate::api::DataExchange;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct FragmentPacket {
+pub struct FragmentPlanPacket {
     pub node: PlanNode,
     pub fragment_id: usize,
     pub data_exchange: Option<DataExchange>,
 }
 
-impl FragmentPacket {
+impl FragmentPlanPacket {
     pub fn create(
         fragment_id: usize,
         node: PlanNode,
         data_exchange: Option<DataExchange>,
-    ) -> FragmentPacket {
-        FragmentPacket {
+    ) -> FragmentPlanPacket {
+        FragmentPlanPacket {
             node,
             fragment_id,
             data_exchange,
@@ -40,7 +40,7 @@ impl FragmentPacket {
     }
 }
 
-impl Debug for FragmentPacket {
+impl Debug for FragmentPlanPacket {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FragmentPacket")
             .field("node", &self.node.name())

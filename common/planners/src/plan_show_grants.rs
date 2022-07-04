@@ -14,7 +14,7 @@
 
 use common_meta_types::PrincipalIdentity;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShowGrantsPlan {
     pub principal: Option<PrincipalIdentity>,
 }

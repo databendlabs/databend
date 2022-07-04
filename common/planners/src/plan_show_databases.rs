@@ -14,7 +14,7 @@
 
 use crate::PlanShowKind;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShowDatabasesPlan {
     pub kind: PlanShowKind,
 }

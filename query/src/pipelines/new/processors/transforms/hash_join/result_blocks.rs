@@ -22,7 +22,7 @@ use common_datavalues::NullableColumn;
 use common_datavalues::Series;
 use common_exception::Result;
 
-use super::ChainingHashTable;
+use super::JoinHashTable;
 use super::ProbeState;
 use crate::common::EvalNode;
 use crate::common::HashMap;
@@ -31,7 +31,7 @@ use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::exec::ColumnID;
 use crate::sql::planner::plans::JoinType;
 
-impl ChainingHashTable {
+impl JoinHashTable {
     pub(crate) fn result_blocks<Key>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
@@ -65,8 +65,19 @@ impl ChainingHashTable {
 
                 let build_block = self.row_space.gather(build_indexs)?;
                 let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
+                let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-                results.push(self.merge_eq_block(&build_block, &probe_block)?);
+                match &self.other_predicate {
+                    Some(other_predicate) => {
+                        let func_ctx = self.ctx.try_get_function_context()?;
+                        let filter_vector = other_predicate.eval(&func_ctx, &merged_block)?;
+                        results.push(DataBlock::filter_block(
+                            merged_block,
+                            filter_vector.vector(),
+                        )?);
+                    }
+                    None => results.push(merged_block),
+                }
             }
             JoinType::Semi => {
                 if self.other_predicate.is_none() {
@@ -315,6 +326,11 @@ impl ChainingHashTable {
         DataBlock::filter_block(merged_block, &predicate)
     }
 
+    // modify the bm by the value row_state
+    // keep the index of the first positive state
+    // bitmap: [1, 1, 1] with row_state [0, 0], probe_index: [0, 0, 0] (repeat the first element 3 times)
+    // bitmap will be [1, 1, 1] -> [1, 1, 1] -> [1, 0, 1] -> [1, 0, 0]
+    // row_state will be [0, 0] -> [1, 0] -> [1,0] -> [1, 0]
     fn fill_null_for_semi_join(
         bm: &mut MutableBitmap,
         probe_indexs: &[u32],
@@ -332,6 +348,10 @@ impl ChainingHashTable {
         }
     }
 
+    // keep the index of the negative state
+    // bitmap: [1, 1, 1] with row_state [3, 0], probe_index: [0, 0, 0] (repeat the first element 3 times)
+    // bitmap will be [1, 1, 1] -> [0, 1, 1] -> [0, 0, 1] -> [0, 0, 0]
+    // row_state will be [3, 0] -> [3, 0] -> [3, 0] -> [3, 0]
     fn fill_null_for_anti_join(
         bm: &mut MutableBitmap,
         probe_indexs: &[u32],
@@ -346,7 +366,7 @@ impl ChainingHashTable {
                 // if state has just one, anti reverse the result
                 row_state[row] -= 1;
                 bm.set(index, !bm.get(index))
-            } else if bm.get(index) {
+            } else if !bm.get(index) {
                 row_state[row] -= 1;
             } else {
                 bm.set(index, false);
@@ -354,6 +374,10 @@ impl ChainingHashTable {
         }
     }
 
+    // keep at least one index of the positive state and the null state
+    // bitmap: [1, 0, 1] with row_state [2, 0], probe_index: [0, 0, 1]
+    // bitmap will be [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1]
+    // row_state will be [2, 0] -> [2, 0] -> [1, 0] -> [1, 0]
     fn fill_null_for_left_join(
         bm: &mut MutableBitmap,
         probe_indexs: &[u32],

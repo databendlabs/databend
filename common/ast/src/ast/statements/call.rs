@@ -12,15 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod packet_data;
-mod packet_execute;
-mod packet_executor;
-mod packet_fragment;
-mod packet_publisher;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
-pub use packet_data::DataPacket;
-pub use packet_data::DataPacketStream;
-pub use packet_execute::ExecutePacket;
-pub use packet_executor::ExecutorPacket;
-pub use packet_fragment::FragmentPacket;
-pub use packet_publisher::PrepareChannel;
+use crate::ast::write_comma_separated_list;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallStmt {
+    pub name: String,
+    pub args: Vec<String>,
+}
+
+impl Display for CallStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CALL {}(", self.name)?;
+        write_comma_separated_list(f, self.args.clone())?;
+        write!(f, ")")?;
+        Ok(())
+    }
+}

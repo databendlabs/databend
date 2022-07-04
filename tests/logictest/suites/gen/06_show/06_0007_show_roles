@@ -1,6 +1,10 @@
 statement ok
+drop role if exists 'test';
+
+statement ok
 CREATE ROLE 'test';
 
+skipif clickhouse
 statement query TI 
 SHOW ROLES;
 
