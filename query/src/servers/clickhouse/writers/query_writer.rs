@@ -169,14 +169,17 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
             SqlType::UInt16 | SqlType::Date => {
                 Ok(UInt16Column::from_iterator(col.iter::<u16>()?.copied()).arc())
             }
-            SqlType::UInt32 | SqlType::DateTime(DateTimeType::DateTime32) => {
-                Ok(UInt32Column::from_iterator(col.iter::<u32>()?.copied()).arc())
+            SqlType::UInt32 => Ok(UInt32Column::from_iterator(col.iter::<u32>()?.copied()).arc()),
+            SqlType::DateTime(DateTimeType::DateTime32) => {
+                Ok(Int64Column::from_iterator(col.iter::<u32>()?.map(|v| *v as i64)).arc())
             }
             SqlType::UInt64 => Ok(UInt64Column::from_iterator(col.iter::<u64>()?.copied()).arc()),
             SqlType::Int8 => Ok(Int8Column::from_iterator(col.iter::<i8>()?.copied()).arc()),
             SqlType::Int16 => Ok(Int16Column::from_iterator(col.iter::<i16>()?.copied()).arc()),
             SqlType::Int32 => Ok(Int32Column::from_iterator(col.iter::<i32>()?.copied()).arc()),
-            SqlType::Int64 => Ok(Int64Column::from_iterator(col.iter::<i64>()?.copied()).arc()),
+            SqlType::Int64 | SqlType::DateTime(DateTimeType::DateTime64(_, _)) => {
+                Ok(Int64Column::from_iterator(col.iter::<i64>()?.copied()).arc())
+            }
             SqlType::Float32 => Ok(Float32Column::from_iterator(col.iter::<f32>()?.copied()).arc()),
             SqlType::Float64 => Ok(Float64Column::from_iterator(col.iter::<f64>()?.copied()).arc()),
             SqlType::String => Ok(StringColumn::from_iterator(col.iter::<&[u8]>()?).arc()),
@@ -188,9 +191,11 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
             SqlType::Nullable(SqlType::UInt16) | SqlType::Nullable(SqlType::Date) => Ok(
                 Series::from_data(col.iter::<Option<u16>>()?.map(|c| c.copied())),
             ),
-            SqlType::Nullable(SqlType::UInt32)
-            | SqlType::Nullable(SqlType::DateTime(DateTimeType::DateTime32)) => Ok(
-                Series::from_data(col.iter::<Option<u32>>()?.map(|c| c.copied())),
+            SqlType::Nullable(SqlType::UInt32) => Ok(Series::from_data(
+                col.iter::<Option<u32>>()?.map(|c| c.copied()),
+            )),
+            SqlType::Nullable(SqlType::DateTime(DateTimeType::DateTime32)) => Ok(
+                Series::from_data(col.iter::<Option<u32>>()?.map(|c| c.map(|v| *v as i64))),
             ),
             SqlType::Nullable(SqlType::UInt64) => Ok(Series::from_data(
                 col.iter::<Option<u64>>()?.map(|c| c.copied()),
@@ -204,9 +209,10 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
             SqlType::Nullable(SqlType::Int32) => Ok(Series::from_data(
                 col.iter::<Option<i32>>()?.map(|c| c.copied()),
             )),
-            SqlType::Nullable(SqlType::Int64) => Ok(Series::from_data(
-                col.iter::<Option<i64>>()?.map(|c| c.copied()),
-            )),
+            SqlType::Nullable(SqlType::Int64)
+            | SqlType::Nullable(SqlType::DateTime(DateTimeType::DateTime64(_, _))) => Ok(
+                Series::from_data(col.iter::<Option<i64>>()?.map(|c| c.copied())),
+            ),
             SqlType::Nullable(SqlType::Float32) => Ok(Series::from_data(
                 col.iter::<Option<f32>>()?.map(|c| c.copied()),
             )),

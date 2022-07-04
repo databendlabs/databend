@@ -113,7 +113,8 @@ impl TypeDeserializer for StringDeserializer {
     ) -> Result<()> {
         let mut read_buffer = reader.fill_buf()?;
         if read_buffer.is_empty() {
-            return Err(ErrorCode::BadBytes("Read string after eof."));
+            self.builder.append_default();
+            return Ok(());
         }
 
         let maybe_quote = read_buffer[0];
@@ -128,6 +129,11 @@ impl TypeDeserializer for StringDeserializer {
 
             if !settings.field_delimiter.is_empty() {
                 field_delimiter = settings.field_delimiter[0];
+            }
+
+            if maybe_quote == field_delimiter || maybe_quote == b'\r' || maybe_quote == b'\n' {
+                self.builder.append_default();
+                return Ok(());
             }
 
             if settings.record_delimiter.is_empty()

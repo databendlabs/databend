@@ -55,6 +55,7 @@ impl TypeDeserializer for NullDeserializer {
     }
 
     fn de_whole_text(&mut self, _reader: &[u8], _format: &FormatSettings) -> Result<()> {
+        self.builder.append_default();
         Ok(())
     }
 
