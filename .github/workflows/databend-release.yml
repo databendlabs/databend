@@ -317,4 +317,4 @@ jobs:
           platforms: linux/amd64
           context: ./tests/logictest/
           file: ./tests/logictest/Dockerfile
-          build-args: VERSION=$${{ needs.create_release.outputs.version }}
+          build-args: VERSION=${{ needs.create_release.outputs.version }}
