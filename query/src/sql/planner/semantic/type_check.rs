@@ -530,6 +530,7 @@ impl<'a> TypeChecker<'a> {
                 expr,
                 span,
             } => {
+                // Not in subquery will be transformed to not(Expr = Any(...))
                 if *not {
                     return self
                         .resolve_function(
@@ -539,7 +540,7 @@ impl<'a> TypeChecker<'a> {
                                 subquery: subquery.clone(),
                                 not: false,
                                 expr: expr.clone(),
-                                span: span.clone(),
+                                span: *span,
                             }],
                             required_type,
                         )
@@ -1131,10 +1132,13 @@ impl<'a> TypeChecker<'a> {
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
         let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
 
-        if typ == SubqueryType::Scalar && output_context.columns.len() > 1 {
-            return Err(ErrorCode::SemanticError(
-                "Scalar subquery must return only one column",
-            ));
+        if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
+            && output_context.columns.len() > 1
+        {
+            return Err(ErrorCode::SemanticError(format!(
+                "Subquery must return only one column, but got {} columns",
+                output_context.columns.len()
+            )));
         }
 
         let mut data_type = output_context.columns[0].data_type.clone();
@@ -1147,7 +1151,7 @@ impl<'a> TypeChecker<'a> {
             assert_eq!(output_context.columns.len(), 1);
             let (mut scalar, scalar_data_type) = self.resolve(&expr, None).await?;
             if scalar_data_type != data_type {
-                // Make compare type keep consistent
+                // Make comparison scalar type keep consistent
                 let coercion_type = merge_types(&scalar_data_type, &data_type)?;
                 scalar = wrap_cast_if_needed(scalar, &coercion_type);
                 data_type = coercion_type;

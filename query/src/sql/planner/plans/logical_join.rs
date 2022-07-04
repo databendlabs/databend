@@ -76,6 +76,7 @@ pub struct LogicalInnerJoin {
     pub right_conditions: Vec<Scalar>,
     pub other_conditions: Vec<Scalar>,
     pub join_type: JoinType,
+    // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
 }
 

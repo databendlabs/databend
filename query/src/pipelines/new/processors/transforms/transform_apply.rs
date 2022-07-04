@@ -70,7 +70,7 @@ impl OuterRefRewriter {
                 probe_keys: probe_keys.clone(),
                 other_conditions: other_conditions.clone(),
                 join_type: join_type.clone(),
-                marker_index: marker_index.clone(),
+                marker_index: *marker_index,
             }),
             PhysicalPlan::Limit {
                 input,

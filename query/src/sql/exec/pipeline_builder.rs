@@ -164,7 +164,7 @@ impl PipelineBuilder {
                     probe_keys,
                     other_conditions,
                     join_type.clone(),
-                    marker_index.clone(),
+                    *marker_index,
                     build_side_pipeline,
                     pipeline,
                 )?;

@@ -306,7 +306,7 @@ impl SubqueryRewriter {
                     .next()
                     .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
                 let column_name = format!("subquery_{}", index);
-                let right_condition = Scalar::BoundColumnRef(BoundColumnRef {
+                let left_condition = Scalar::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding {
                         table_name: None,
                         column_name,
@@ -316,14 +316,21 @@ impl SubqueryRewriter {
                     },
                 });
                 if prop.outer_columns.is_empty() {
+                    // Add a marker column to save comparison result.
+                    // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
+                    // If subquery contains NULL, the comparison result is TRUE or NULL. Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
+                    // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
                     let marker_index = self.metadata.write().add_column(
                         "marker".to_string(),
                         NullableType::new_impl(BooleanType::new_impl()),
                         None,
                     );
+                    // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
+                    // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
+                    // Note that subquery is the left table, and it'll be the probe side.
                     let mark_join = LogicalInnerJoin {
                         right_conditions: vec![*subquery.child_expr.as_ref().unwrap().clone()],
-                        left_conditions: vec![right_condition],
+                        left_conditions: vec![left_condition],
                         other_conditions: vec![],
                         join_type: JoinType::Mark,
                         marker_index: Some(marker_index),
@@ -334,7 +341,9 @@ impl SubqueryRewriter {
                         UnnestResult::MarkJoin { marker_index },
                     ))
                 } else {
-                    todo!()
+                    Err(ErrorCode::LogicalError(
+                        "Unsupported subquery type: Correlated AnySubquery",
+                    ))
                 }
             }
             _ => Err(ErrorCode::LogicalError(format!(
