@@ -12,17 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod format;
-pub mod format_csv;
-mod format_factory;
-mod format_parquet;
-pub mod format_tsv;
-pub mod output_format;
-pub mod output_format_csv;
-mod output_format_json_each_row;
-mod output_format_parquet;
-mod output_format_values;
+use std::any::Any;
 
-pub use format::InputFormat;
-pub use format::InputState;
-pub use format_factory::FormatFactory;
+use common_datablocks::DataBlock;
+use common_exception::Result;
+
+pub trait InputState: Send {
+    fn as_any(&mut self) -> &mut dyn Any;
+}
+
+pub trait InputFormat: Send + Sync {
+    fn support_parallel(&self) -> bool {
+        false
+    }
+
+    fn create_state(&self) -> Box<dyn InputState>;
+
+    fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>>;
+
+    fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
+
+    fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
+}

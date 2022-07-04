@@ -12,9 +12,16 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-
+common-arrow = { path = "../arrow" }
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../exception" }
+common-io = { path = "../io" }
 
 # Crates.io dependencies
-
+once_cell = "1.12.0"
+strum = "0.24.1"
+strum_macros = "0.24.0"
 
 [dev-dependencies]
+pretty_assertions = "1.2.1"
