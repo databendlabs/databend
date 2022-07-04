@@ -14,6 +14,7 @@
 
 mod decorrelate;
 mod implement;
+mod prune_columns;
 mod rule_list;
 mod subquery_rewriter;
 
@@ -75,7 +76,7 @@ impl HeuristicOptimizer {
     }
 
     fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
-        Ok(s_expr)
+        prune_columns::prune_columns(&s_expr)
     }
 
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {

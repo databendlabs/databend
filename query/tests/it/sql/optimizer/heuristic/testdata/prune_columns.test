@@ -1,0 +1,82 @@
+# Prune unused columns from Project
+select * from (select a from (select number as a, number + 1 as b from numbers(1)))
+----
+Project: [number]
+    EvalScalar: [numbers.a]
+        Project: [number]
+            EvalScalar: [numbers.a]
+                Project: [number]
+                    EvalScalar: [numbers.number]
+                        Scan: default.system.numbers
+
+
+# Prune unused columns from Aggregate
+select a from (select number as a, count(*) as b from numbers(1) group by a)
+----
+Project: [number]
+    EvalScalar: [numbers.a]
+        Project: [number]
+            EvalScalar: [group_item]
+                Aggregate: group items: [numbers.number], aggregate functions: []
+                    EvalScalar: [numbers.number]
+                        Scan: default.system.numbers
+
+
+# Prune unused columns for simple plan nodes (Project, Filter, Aggregate...)
+select a from (select number as a, count(*) as b, sum(number) as c, number as d, number as e from numbers(1) group by a, d, e) where b > 1 order by d limit 1
+----
+Limit: [1], Offset: [0]
+    Project: [number]
+        EvalScalar: [numbers.a]
+            Sort: [number DESC]
+                Filter: [b > 1]
+                    Project: [number,b]
+                        EvalScalar: [group_item, COUNT(*)]
+                            Aggregate: group items: [numbers.number, numbers.number, numbers.number], aggregate functions: [COUNT(*)]
+                                EvalScalar: [numbers.number, numbers.number, numbers.number, numbers.number]
+                                    Scan: default.system.numbers
+
+
+# Prune unused columns for join plan nodes (LogicalInnerJoin ...)
+select * from (select t1.a, t2.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t1, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t2 where t1.b = t2.b and t1.c = 1)
+----
+Project: [a,a]
+    EvalScalar: [t1.a, t2.a]
+        Project: [a,a]
+            EvalScalar: [t1.a, t2.a]
+                Filter: [t1.b = t2.b, t1.c = 1]
+                    CrossJoin
+                        Project: [a,b,c]
+                            EvalScalar: [+(numbers.number, 1), +(numbers.number, 1), +(numbers.number, 1)]
+                                Scan: default.system.numbers
+                        Project: [a,b]
+                            EvalScalar: [+(numbers.number, 1), +(numbers.number, 1)]
+                                Scan: default.system.numbers
+
+
+# Prune unused columns for correlated query (CrossApply ...)
+select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
+----
+Project: [a]
+    EvalScalar: [t1.a]
+        Filter: [t1.a = subquery_21]
+            CrossJoin
+                Project: [a]
+                    EvalScalar: [+(numbers.number, 1)]
+                        Scan: default.system.numbers
+                Max1Row
+                    Project: [COUNT(*)]
+                        EvalScalar: [COUNT(*)]
+                            Aggregate: group items: [], aggregate functions: [COUNT(*)]
+                                Project: []
+                                    EvalScalar: []
+                                        Filter: [t2.b = t3.b, t2.c = 1]
+                                            CrossJoin
+                                                Project: [b,c]
+                                                    EvalScalar: [+(numbers.number, 1), +(numbers.number, 1)]
+                                                        Scan: default.system.numbers
+                                                Project: [b]
+                                                    EvalScalar: [+(numbers.number, 1)]
+                                                        Scan: default.system.numbers
+
+

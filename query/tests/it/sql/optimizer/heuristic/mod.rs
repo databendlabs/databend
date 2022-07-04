@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod join;
+mod prune_columns;
 mod select;
 mod subquery;
 
