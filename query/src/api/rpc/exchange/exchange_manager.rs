@@ -151,20 +151,22 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn remove_query(&self, query_id: &str) {
+    pub fn on_finished_query(&self, query_id: &str, may_error: &Option<ErrorCode>) {
         let mut queries_coordinator = self.queries_coordinator.lock();
-        queries_coordinator.remove(query_id);
+        if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
+            query_coordinator.on_finished(may_error);
+        }
     }
 
     pub fn shutdown_query(&self, query_id: &str, cause: Option<ErrorCode>) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
-        match queries_coordinator.remove(query_id) {
+        match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::LogicalError(format!(
                 "Query {} not found in cluster.",
                 query_id
             ))),
-            Some(mut coordinator) => coordinator.shutdown(cause),
+            Some(coordinator) => coordinator.shutdown(cause),
         }
     }
 
@@ -330,11 +332,78 @@ impl QueryCoordinator {
 
         for fragment_id in fragments_id {
             if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-                coordinator.prepare_pipeline(&self.ctx)?;
+                coordinator.prepare_pipeline(&self.query_id, &self.ctx)?;
             }
         }
 
         Ok(())
+    }
+
+    pub fn on_finished(&mut self, may_error: &Option<ErrorCode>) {
+        if let Some(cause) = may_error {
+            if let Some(request_server_tx) = self.request_server_tx.take() {
+                futures::executor::block_on(async move {
+                    if request_server_tx
+                        .send(DataPacket::ErrorCode(cause.clone()))
+                        .await
+                        .is_err()
+                    {
+                        common_tracing::tracing::warn!(
+                            "Cannot send error code, request server channel is closed."
+                        );
+                    }
+
+                    drop(request_server_tx);
+                });
+            }
+        }
+
+        if let Some(cause) = self.shutdown_cause.lock().take() {
+            if let Some(request_server_tx) = self.request_server_tx.take() {
+                futures::executor::block_on(async move {
+                    if request_server_tx
+                        .send(DataPacket::ErrorCode(cause))
+                        .await
+                        .is_err()
+                    {
+                        common_tracing::tracing::warn!(
+                            "Cannot send error code, request server channel is closed."
+                        );
+                    }
+
+                    drop(request_server_tx);
+                });
+            }
+        }
+
+        // close request server channel.
+        drop(self.request_server_tx.take());
+
+        for receiver in &self.exchange_receivers {
+            receiver.shutdown();
+        }
+
+        for receiver in &self.exchange_receivers {
+            let receiver = receiver.clone();
+            futures::executor::block_on(async move {
+                if let Err(cause) = receiver.join().await {
+                    common_tracing::tracing::warn!("Receiver join failure {:?}", cause);
+                }
+            });
+        }
+
+        for sender in &self.exchange_senders {
+            sender.abort();
+        }
+
+        for sender in &self.exchange_senders {
+            let sender = sender.clone();
+            futures::executor::block_on(async move {
+                if let Err(cause) = sender.join().await {
+                    common_tracing::tracing::warn!("Sender join failure {:?}", cause);
+                }
+            });
+        }
     }
 
     pub fn shutdown(&mut self, cause: Option<ErrorCode>) -> Result<()> {
@@ -408,86 +477,14 @@ impl QueryCoordinator {
             }
         }
 
-        let query_id = self.query_id.clone();
         let async_runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
         let executor =
             PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
         self.executor = Some(executor.clone());
-        let senders = self.exchange_senders.clone();
-        let receivers = self.exchange_receivers.clone();
-        let shutdown_cause = self.shutdown_cause.clone();
-        let mut request_server_tx = self.request_server_tx.take();
-        let exchange_manager = self.ctx.get_exchange_manager();
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
-            if let Err(cause) = executor.execute() {
-                if let Some(request_server_tx) = request_server_tx.take() {
-                    futures::executor::block_on(async move {
-                        if request_server_tx
-                            .send(DataPacket::ErrorCode(cause))
-                            .await
-                            .is_err()
-                        {
-                            common_tracing::tracing::warn!(
-                                "Cannot send error code, request server channel is closed."
-                            );
-                        }
-                    });
-                }
-            }
-
-            if let Some(cause) = shutdown_cause.lock().take() {
-                if let Some(request_server_tx) = request_server_tx.take() {
-                    futures::executor::block_on(async move {
-                        if request_server_tx
-                            .send(DataPacket::ErrorCode(cause))
-                            .await
-                            .is_err()
-                        {
-                            common_tracing::tracing::warn!(
-                                "Cannot send error code, request server channel is closed."
-                            );
-                        }
-                    });
-                }
-            }
-
-            // close request server channel.
-            drop(request_server_tx);
-
-            for receiver in &receivers {
-                receiver.shutdown();
-            }
-
-            for receiver in &receivers {
-                let receiver = receiver.clone();
-                futures::executor::block_on(async move {
-                    if let Err(cause) = receiver.join().await {
-                        common_tracing::tracing::warn!("Receiver join failure {:?}", cause);
-                    }
-                });
-            }
-
-            for sender in &senders {
-                sender.abort();
-            }
-
-            for sender in &senders {
-                let sender = sender.clone();
-                futures::executor::block_on(async move {
-                    if let Err(cause) = sender.join().await {
-                        common_tracing::tracing::warn!("Sender join failure {:?}", cause);
-                    }
-                });
-            }
-
-            let mut queries_coordinator = exchange_manager.queries_coordinator.lock();
-            queries_coordinator.remove(&query_id);
-            println!(
-                "Pipeline execute successfully {}",
-                queries_coordinator.len()
-            );
+            executor.execute().ok();
         });
 
         Ok(())
@@ -594,7 +591,7 @@ impl QueryCoordinator {
 
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
-            fragment_coordinator.prepare_pipeline(&self.ctx)?;
+            fragment_coordinator.prepare_pipeline(&self.query_id, &self.ctx)?;
 
             if fragment_coordinator.pipeline.is_none() {
                 return Err(ErrorCode::LogicalError(
@@ -672,11 +669,20 @@ impl FragmentCoordinator {
         }
     }
 
-    pub fn prepare_pipeline(&mut self, ctx: &Arc<QueryContext>) -> Result<()> {
+    pub fn prepare_pipeline(&mut self, query_id: &str, ctx: &Arc<QueryContext>) -> Result<()> {
         if !self.initialized {
             self.initialized = true;
             let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
-            self.pipeline = Some(pipeline_builder.finalize(&self.node)?);
+            let mut pipeline = pipeline_builder.finalize(&self.node)?;
+
+            let ctx = ctx.clone();
+            let query_id = query_id.to_string();
+            pipeline.set_on_finished(move |may_error| {
+                let exchange_manager = ctx.get_exchange_manager();
+                exchange_manager.on_finished_query(&query_id, may_error);
+            });
+
+            self.pipeline = Some(pipeline);
         }
 
         Ok(())
