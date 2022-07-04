@@ -13,11 +13,10 @@ When deploying Databend, you specify a deployment mode, standalone, or cluster. 
 
 ### Supported Object Storage Solutions
 Databend works with self-hosted or cloud object storage solutions. You will need to prepare your own object storage before deploying Databend. The following is a list of compatible object storage solutions:
-- Self-hosted object storage solutions:
+- AWS S3 Compatible Services:
+  - Amazon S3
   - MinIO
   - SeaweedFS
-- Cloud storage solutions:
-  - Amazon S3
   - Tencent COS
   - Alibaba OSS
   - Wasabi
