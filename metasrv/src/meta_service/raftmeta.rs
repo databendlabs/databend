@@ -427,7 +427,7 @@ impl MetaNode {
                                     let _rst = mn.add_configured_non_voters().await;
 
                                     if _rst.is_err() {
-                                        tracing::info!(
+                                        tracing::warn!(
                                             "fail to add non-voter: my id={}, rst:{:?}",
                                             mn.sto.id,
                                             _rst
