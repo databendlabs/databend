@@ -117,6 +117,7 @@ fn test_statement() {
         r#"select * from a where a.a = any (select b.a from b);"#,
         r#"select * from a where a.a = all (select b.a from b);"#,
         r#"select * from a where a.a = some (select b.a from b);"#,
+        r#"select * from a where a.a > (select b.a from b);"#,
         r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,

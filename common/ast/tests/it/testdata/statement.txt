@@ -3848,6 +3848,201 @@ Query(
 
 
 ---------- Input ----------
+select * from a where a.a > (select b.a from b);
+---------- Output ---------
+SELECT * FROM a WHERE a.a > (SELECT b.a FROM b)
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            WHERE(16..21),
+            Ident(22..23),
+            Period(23..24),
+            Ident(24..25),
+            Gt(26..27),
+            LParen(28..29),
+            SELECT(29..35),
+            Ident(36..37),
+            Period(37..38),
+            Ident(38..39),
+            FROM(40..44),
+            Ident(45..46),
+            RParen(46..47),
+        ],
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    WHERE(16..21),
+                    Ident(22..23),
+                    Period(23..24),
+                    Ident(24..25),
+                    Gt(26..27),
+                    LParen(28..29),
+                    SELECT(29..35),
+                    Ident(36..37),
+                    Period(37..38),
+                    Ident(38..39),
+                    FROM(40..44),
+                    Ident(45..46),
+                    RParen(46..47),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(14..15),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(14..15),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: [
+                            Gt(26..27),
+                        ],
+                        op: Gt,
+                        left: ColumnRef {
+                            span: [
+                                Ident(22..23),
+                                Period(23..24),
+                                Ident(24..25),
+                            ],
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(22..23),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Ident(24..25),
+                            },
+                        },
+                        right: Subquery {
+                            span: [
+                                LParen(28..29),
+                                SELECT(29..35),
+                                Ident(36..37),
+                                Period(37..38),
+                                Ident(38..39),
+                                FROM(40..44),
+                                Ident(45..46),
+                                RParen(46..47),
+                            ],
+                            modifier: None,
+                            subquery: Query {
+                                span: [
+                                    SELECT(29..35),
+                                    Ident(36..37),
+                                    Period(37..38),
+                                    Ident(38..39),
+                                    FROM(40..44),
+                                    Ident(45..46),
+                                ],
+                                body: Select(
+                                    SelectStmt {
+                                        span: [
+                                            SELECT(29..35),
+                                            Ident(36..37),
+                                            Period(37..38),
+                                            Ident(38..39),
+                                            FROM(40..44),
+                                            Ident(45..46),
+                                        ],
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: ColumnRef {
+                                                    span: [
+                                                        Ident(36..37),
+                                                        Period(37..38),
+                                                        Ident(38..39),
+                                                    ],
+                                                    database: None,
+                                                    table: Some(
+                                                        Identifier {
+                                                            name: "b",
+                                                            quote: None,
+                                                            span: Ident(36..37),
+                                                        },
+                                                    ),
+                                                    column: Identifier {
+                                                        name: "a",
+                                                        quote: None,
+                                                        span: Ident(38..39),
+                                                    },
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [
+                                            Table {
+                                                span: [
+                                                    Ident(45..46),
+                                                ],
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    name: "b",
+                                                    quote: None,
+                                                    span: Ident(45..46),
+                                                },
+                                                alias: None,
+                                                travel_point: None,
+                                            },
+                                        ],
+                                        selection: None,
+                                        group_by: [],
+                                        having: None,
+                                    },
+                                ),
+                                order_by: [],
+                                limit: [],
+                                offset: None,
+                                format: None,
+                            },
+                        },
+                    },
+                ),
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
 select 1 from numbers(1) where ((1 = 1) or 1)
 ---------- Output ---------
 SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1

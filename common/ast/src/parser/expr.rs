@@ -801,15 +801,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ~ ^")"
         },
         |(modifier, _, subquery, _)| {
-            let modifier = match modifier {
-                Some(m) => match m.kind {
-                    TokenKind::ALL => Some(SubqueryModifier::All),
-                    TokenKind::ANY => Some(SubqueryModifier::Any),
-                    TokenKind::SOME => Some(SubqueryModifier::Some),
-                    _ => unreachable!(),
-                },
-                None => None,
-            };
+            let modifier = modifier.map(|m| match m.kind {
+                TokenKind::ALL => SubqueryModifier::All,
+                TokenKind::ANY => SubqueryModifier::Any,
+                TokenKind::SOME => SubqueryModifier::Some,
+                _ => unreachable!(),
+            });
             ExprElement::Subquery { modifier, subquery }
         },
     );

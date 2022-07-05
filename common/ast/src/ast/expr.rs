@@ -208,7 +208,7 @@ pub enum Expr<'a> {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubqueryModifier {
     Any,
     All,
