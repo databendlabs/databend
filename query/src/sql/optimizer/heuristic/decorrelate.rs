@@ -159,6 +159,7 @@ pub fn try_decorrelate_subquery(input: &SExpr, subquery: &SubqueryExpr) -> Resul
             SubqueryType::Exists => JoinType::Semi,
             SubqueryType::NotExists => JoinType::Anti,
         },
+        marker_index: None,
     };
 
     // Rewrite plan to semi-join.

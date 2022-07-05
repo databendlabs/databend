@@ -84,6 +84,7 @@ impl PhysicalPlanBuilder {
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
+                    marker_index: join.marker_index,
                 })
             }
             RelOperator::Project(project) => {
