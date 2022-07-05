@@ -22,23 +22,23 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use strum_macros::EnumIter;
 
-use super::output_format_json_each_row::JsonEachRowOutputFormat;
-use super::output_format_parquet::ParquetOutputFormat;
-use super::output_format_values::ValuesOutputFormat;
-use crate::formats::output_format_csv::CSVOutputFormat;
-use crate::formats::output_format_csv::CSVWithNamesAndTypesOutputFormat;
-use crate::formats::output_format_csv::CSVWithNamesOutputFormat;
-use crate::formats::output_format_csv::TSVOutputFormat;
-use crate::formats::output_format_csv::TSVWithNamesAndTypesOutputFormat;
-use crate::formats::output_format_csv::TSVWithNamesOutputFormat;
-use crate::formats::output_format_json_each_row::JsonCompactEachRowOutputFormat;
-use crate::formats::output_format_json_each_row::JsonCompactEachRowWithNamesAndTypesOutputFormat;
-use crate::formats::output_format_json_each_row::JsonCompactEachRowWithNamesOutputFormat;
-use crate::formats::output_format_json_each_row::JsonCompactStringsEachRowOutputFormat;
-use crate::formats::output_format_json_each_row::JsonCompactStringsEachRowWithNamesAndTypesOutputFormat;
-use crate::formats::output_format_json_each_row::JsonCompactStringsEachRowWithNamesOutputFormat;
-use crate::formats::output_format_json_each_row::JsonStringsEachRowOutputFormat;
-use crate::formats::FormatFactory;
+use crate::output_format_csv::CSVOutputFormat;
+use crate::output_format_csv::CSVWithNamesAndTypesOutputFormat;
+use crate::output_format_csv::CSVWithNamesOutputFormat;
+use crate::output_format_csv::TSVOutputFormat;
+use crate::output_format_csv::TSVWithNamesAndTypesOutputFormat;
+use crate::output_format_csv::TSVWithNamesOutputFormat;
+use crate::output_format_json_each_row::JsonCompactEachRowOutputFormat;
+use crate::output_format_json_each_row::JsonCompactEachRowWithNamesAndTypesOutputFormat;
+use crate::output_format_json_each_row::JsonCompactEachRowWithNamesOutputFormat;
+use crate::output_format_json_each_row::JsonCompactStringsEachRowOutputFormat;
+use crate::output_format_json_each_row::JsonCompactStringsEachRowWithNamesAndTypesOutputFormat;
+use crate::output_format_json_each_row::JsonCompactStringsEachRowWithNamesOutputFormat;
+use crate::output_format_json_each_row::JsonEachRowOutputFormat;
+use crate::output_format_json_each_row::JsonStringsEachRowOutputFormat;
+use crate::output_format_parquet::ParquetOutputFormat;
+use crate::output_format_values::ValuesOutputFormat;
+use crate::FormatFactory;
 
 pub trait OutputFormat: Send {
     fn serialize_block(&mut self, _data_block: &DataBlock) -> Result<Vec<u8>> {

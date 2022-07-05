@@ -21,7 +21,8 @@ use common_datavalues::TypeSerializer;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
-use crate::formats::output_format::OutputFormat;
+use crate::output_format::OutputFormat;
+
 pub type JsonEachRowOutputFormat = JsonEachRowOutputFormatBase<false, false, false, false>;
 pub type JsonStringsEachRowOutputFormat = JsonEachRowOutputFormatBase<true, false, false, false>;
 pub type JsonCompactEachRowOutputFormat = JsonEachRowOutputFormatBase<false, true, false, false>;

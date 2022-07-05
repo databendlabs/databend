@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
-use crate::formats::output_format::OutputFormat;
-use crate::storages::fuse::io::serialize_data_blocks;
+use crate::output_format::OutputFormat;
 
 #[derive(Default)]
 pub struct ParquetOutputFormat {

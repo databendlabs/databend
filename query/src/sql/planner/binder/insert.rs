@@ -33,6 +33,7 @@ use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::FormatFactory;
 use common_io::prelude::BufferReader;
 use common_io::prelude::*;
 use common_planners::Expression;
@@ -40,7 +41,6 @@ use common_streams::NDJsonSourceBuilder;
 use common_streams::Source;
 use common_tracing::tracing;
 
-use crate::formats::FormatFactory;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;

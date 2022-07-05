@@ -20,7 +20,7 @@ use common_datavalues::TypeSerializer;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
-use crate::formats::output_format::OutputFormat;
+use crate::output_format::OutputFormat;
 
 const FIELD_DELIMITER: u8 = b'\t';
 const ROW_DELIMITER: u8 = b'\n';

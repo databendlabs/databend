@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
-use databend_query::formats::output_format::OutputFormatType;
-use databend_query::formats::FormatFactory;
+use common_formats::output_format::OutputFormatType;
+use common_formats::FormatFactory;
 use strum::IntoEnumIterator;
 
 #[test]

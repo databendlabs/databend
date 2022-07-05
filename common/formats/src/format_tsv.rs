@@ -27,9 +27,9 @@ use common_io::prelude::FormatSettings;
 use common_io::prelude::MemoryReader;
 use common_io::prelude::NestedCheckpointReader;
 
-use crate::formats::FormatFactory;
-use crate::formats::InputFormat;
-use crate::formats::InputState;
+use crate::FormatFactory;
+use crate::InputFormat;
+use crate::InputState;
 
 pub struct TsvInputState {
     pub quotes: u8,
