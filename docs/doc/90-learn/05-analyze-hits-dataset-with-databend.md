@@ -76,7 +76,7 @@ Example Queries:
 | Number      | Query |
 | ----------- | ----------- |
 | Q1 | SELECT COUNT(*) FROM hits; |
-| Q2 | SELECT COUNT(*) FROM hits WHERE AdvEngineID <> 0; |
+| Q2 | `SELECT COUNT(*) FROM hits WHERE AdvEngineID <> 0;` |
 | Q3 | SELECT SUM(AdvEngineID), COUNT(*), AVG(ResolutionWidth) FROM hits; |
 | Q4 | SELECT AVG(UserID) FROM hits; |
 | Q5 | SELECT COUNT(DISTINCT UserID) FROM hits; |
