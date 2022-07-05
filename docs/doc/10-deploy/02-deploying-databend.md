@@ -23,9 +23,9 @@ a. Follow the [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart
 
 b. Open a terminal window and navigate to the folder where MinIO is stored.
 
-c. Run the command *vim server.sh* to create a file with the following content:
+c. Run the command `vim server.sh` to create a file with the following content:
 
-```curl
+```shell
 ~/minio$ cat server.sh
 export MINIO_ROOT_USER=minioadmin
 export MINIO_ROOT_PASSWORD=minioadmin
@@ -33,14 +33,14 @@ export MINIO_ROOT_PASSWORD=minioadmin
 ```
 d. Run the following commands to start the MinIO server:
 
-```curl
+```shell
 chmod +x server.sh
 ./server.sh
 ```
 
-e. In your browser, go to http://127.0.0.1:9900 and enter the credentials (minioadmin / minioadmin) to log in to the MinIO Console.
+e. In your browser, go to http://127.0.0.1:9900 and enter the credentials (`minioadmin` / `minioadmin`) to log in to the MinIO Console.
 
-f. In the MinIO Console, create a bucket named *databend*.
+f. In the MinIO Console, create a bucket named `databend`.
 
 </TabItem>
 
@@ -48,7 +48,7 @@ f. In the MinIO Console, create a bucket named *databend*.
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
 
-- Create a bucket or container named *databend*.
+- Create a bucket or container named `databend`.
 - Get the endpoint URL for connecting to the bucket or container you created.
 - Get the Access Key ID and Secret Access Key for your account.
 
@@ -63,7 +63,7 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
 
-- Create a bucket or container named *databend*.
+- Create a bucket or container named `databend`.
 - Get the endpoint URL for connecting to the bucket or container you created.
 - Get the Access Key ID and Secret Access Key for your account.
 
@@ -78,7 +78,7 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
 
-- Create a bucket or container named *databend*.
+- Create a bucket or container named `databend`.
 - Get the endpoint URL for connecting to the bucket or container you created.
 - Get the Access Key ID and Secret Access Key for your account.
 
@@ -93,7 +93,7 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
 
-- Create a bucket or container named *databend*.
+- Create a bucket or container named `databend`.
 - Get the endpoint URL for connecting to the bucket or container you created.
 - Get the Access Key ID and Secret Access Key for your account.
 
@@ -108,7 +108,7 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
 
-- Create a bucket or container named *databend*.
+- Create a bucket or container named `databend`.
 - Get the endpoint URL for connecting to the bucket or container you created.
 - Get the Access Key ID and Secret Access Key for your account.
 
@@ -123,7 +123,7 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
 
-- Create a bucket or container named *databend*.
+- Create a bucket or container named `databend`.
 - Get the endpoint URL for connecting to the bucket or container you created.
 - Get the Access Key ID and Secret Access Key for your account.
 
@@ -136,33 +136,33 @@ For information about how to manage buckets and Access Keys for your cloud objec
 </Tabs>
 
 ### Downloading Databend
-a. Create a folder named *databend* in the directory */usr/local*.
+a. Create a folder named `databend` in the directory `/usr/local`.
 
 b. Download and extract the latest Databend package for your platform from https://github.com/datafuselabs/databend/releases.
 
-c. Move the extracted folders *bin* and *etc* to the folder */usr/local/databend*.
+c. Move the extracted folders `bin` and `etc` to the folder `/usr/local/databend`.
 
 ### Deploying a Meta Node
-a. Open the file *databend-meta-node.toml* in the folder */usr/local/databend/etc*, and replace *0.0.0.0* with *127.0.0.1* within the whole file.
+a. Open the file `databend-meta-node.toml` in the folder `/usr/local/databend/etc`, and replace *0.0.0.0* with *127.0.0.1* within the whole file.
 
-b. Open a terminal window and navigate to the folder */usr/local/databend/bin*.
+b. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 
 c. Run the following command to start the Meta node:
 
-```curl
+```shell
 ./databend-meta -c ../etc/databend-meta.toml > meta.log 2>&1 &
 ```
 
 d. Run the following command to check if the Meta node was started successfully:
 
-```curl
+```shell
 curl -I  http://127.0.0.1:28101/v1/health
 ```
 
 ### Deploying a Query Node
-a. Open the file *databend-query-node.toml* in the folder */usr/local/databend/etc*, and replace *0.0.0.0* with *127.0.0.1* within the whole file.
+a. Open the file `databend-query-node.toml` in the folder `/usr/local/databend/etc`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
 
-b. In the file *databend-query-node.toml*, set the parameter *type* in [storage] block to *s3* if you're using a S3 compatible object storage, or *azblob* if you're using Azure Blob storage.
+b. In the file `databend-query-node.toml`, set the parameter `type` in [storage] block to `s3` if you're using a S3 compatible object storage, or `azblob` if you're using Azure Blob storage.
 
 ```toml
 [storage]
@@ -193,7 +193,7 @@ secret_access_key = "<your-account-key>"
 # account_key = "<your-account-key>"
 ```
 
-d. Set your values in the [storage.fs] or [storage.azblob] block. Please note that the field *endpoint_url* refers to the service URL of your storage region and varies depending on the object storage solution you use:
+d. Set your values in the [storage.fs] or [storage.azblob] block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
 
 <Tabs groupId="operating-systems">
 <TabItem value="MinIO" label="MinIO">
@@ -228,7 +228,7 @@ endpoint_url = "https://cos.ap-beijing.myqcloud.com"
 <TabItem value="Alibaba OSS" label="Alibaba OSS">
 
 Follow this format:
-```curl
+```shell
 https://<bucket-name>.<region-id>[-internal].aliyuncs.com
 ```
 
@@ -266,28 +266,30 @@ endpoint_url = "https://pek3b.qingstor.com"
 <TabItem value="Azure Blob Storage" label="Azure Blob Storage">
 
 Follow this format:
-```curl
+```shell
 https://<your-storage-account-name>.blob.core.windows.net
 ```
 
 </TabItem>
 </Tabs>
 
-e. Open a terminal window and navigate to the folder */usr/local/databend/bin*.
+e. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 
 f. Run the following command to start the Query node:
 
-```curl
+```shell
 ./databend-query -c ../etc/databend-query.toml > query.log 2>&1 &
 ```
 
 g. Run the following command to check if the Query node was started successfully:
+```shell
 curl -I  http://127.0.0.1:8081/v1/health
+```
 
 ### Verifying Deployment
 In this section, we will run MySQL queries from a SQL client installed on your local machine.
 
-a. Create a connection to 127.0.0.1 from your SQL client. In the connection, set the port to *3307*, and set the username to *root*.
+a. Create a connection to 127.0.0.1 from your SQL client. In the connection, set the port to `3307`, and set the username to `root`.
 
 b. Run the following commands to check if the query is successful:
 
