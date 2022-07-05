@@ -247,8 +247,9 @@ pub enum ExprElement<'a> {
         subquery: Query<'a>,
         not: bool,
     },
-    /// Scalar subquery, which will only return a single row with a single column.
+    /// Scalar/ANY/ALL/SOME subquery
     Subquery {
+        modifier: Option<SubqueryModifier>,
         subquery: Query<'a>,
     },
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
@@ -439,8 +440,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 not,
                 subquery: Box::new(subquery),
             },
-            ExprElement::Subquery { subquery } => Expr::Subquery {
+            ExprElement::Subquery { subquery, modifier } => Expr::Subquery {
                 span: elem.span.0,
+                modifier,
                 subquery: Box::new(subquery),
             },
             ExprElement::Group(expr) => expr,
@@ -793,11 +795,20 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let subquery = map(
         rule! {
+            (ANY | SOME | ALL)? ~
             "("
             ~ #query
             ~ ^")"
         },
-        |(_, subquery, _)| ExprElement::Subquery { subquery },
+        |(modifier, _, subquery, _)| {
+            let modifier = modifier.map(|m| match m.kind {
+                TokenKind::ALL => SubqueryModifier::All,
+                TokenKind::ANY => SubqueryModifier::Any,
+                TokenKind::SOME => SubqueryModifier::Some,
+                _ => unreachable!(),
+            });
+            ExprElement::Subquery { modifier, subquery }
+        },
     );
     let group = map(
         rule! {
