@@ -139,14 +139,16 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<(Scalar, DataTypeImpl)> {
         let (scalar, data_type) = match expr {
             Expr::ColumnRef {
-                database: _,
+                database,
                 table,
                 column,
                 ..
             } => {
-                let column = self
-                    .bind_context
-                    .resolve_column(table.clone().map(|ident| ident.name), column)?;
+                let column = self.bind_context.resolve_column(
+                    database.as_ref().map(|ident| ident.name.as_str()),
+                    table.as_ref().map(|ident| ident.name.as_str()),
+                    column,
+                )?;
                 let data_type = column.data_type.clone();
 
                 (BoundColumnRef { column }.into(), data_type)

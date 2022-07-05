@@ -160,7 +160,7 @@ impl WatcherManagerCore {
             incr_meta_metrics_meta_sent_bytes(resp.encoded_len() as u64);
 
             if let Err(err) = stream.send(resp).await {
-                tracing::info!(
+                tracing::warn!(
                     "close watcher stream {:?} cause send err: {:?}",
                     watcher_id,
                     err

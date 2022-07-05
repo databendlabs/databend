@@ -1390,6 +1390,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-meta-store"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common-exception",
+ "common-grpc",
+ "common-meta-api",
+ "common-meta-embedded",
+ "common-meta-grpc",
+ "common-meta-types",
+ "common-tracing",
+]
+
+[[package]]
 name = "common-meta-types"
 version = "0.1.0"
 dependencies = [
@@ -2066,6 +2080,7 @@ dependencies = [
  "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-store",
  "common-meta-types",
  "common-metrics",
  "common-planners",

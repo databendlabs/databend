@@ -34,6 +34,7 @@ use common_grpc::ConnectionFactory;
 use common_management::ClusterApi;
 use common_management::ClusterMgr;
 use common_meta_api::KVApi;
+use common_meta_store::MetaStoreProvider;
 use common_meta_types::NodeInfo;
 use common_metrics::label_counter_with_val_and_labels;
 use common_tracing::tracing;
@@ -46,7 +47,6 @@ use rand::thread_rng;
 use rand::Rng;
 
 use crate::api::FlightClient;
-use crate::common::MetaStoreProvider;
 use crate::Config;
 
 pub struct ClusterDiscovery {

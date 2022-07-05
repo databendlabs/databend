@@ -15,10 +15,7 @@
 pub mod context_function;
 mod evaluator;
 mod expression_evaluator;
-mod meta;
 pub mod service;
 
 pub use evaluator::*;
 pub use expression_evaluator::ExpressionEvaluator;
-pub use meta::MetaStore;
-pub use meta::MetaStoreProvider;

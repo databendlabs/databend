@@ -32,9 +32,9 @@ EOF
 cat << EOF > /tmp/databend_test_tsv_names_and_types.txt
 insert into a(a,b,c) format TabSeparatedWithNamesAndTypes a	b	c
 'int'	'varchar'	'double'
-100	'2'	100.3
-200	'3'	200.4
-300	'2'	300
+100	2	100.3
+200	3	200.4
+300	2	300
 
 EOF
 

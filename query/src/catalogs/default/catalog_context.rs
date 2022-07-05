@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_base::infallible::RwLock;
 use common_datablocks::InMemoryData;
+use common_meta_store::MetaStore;
 
-use crate::common::MetaStore;
 use crate::databases::DatabaseFactory;
 use crate::storages::StorageFactory;
 
