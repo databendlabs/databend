@@ -154,9 +154,10 @@ pub enum Expr<'a> {
         not: bool,
         subquery: Box<Query<'a>>,
     },
-    /// Scalar subquery, which will only return a single row with a single column.
+    /// Scalar/ANY/ALL/SOME subquery
     Subquery {
         span: &'a [Token<'a>],
+        modifier: Option<SubqueryModifier>,
         subquery: Box<Query<'a>>,
     },
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
@@ -205,6 +206,13 @@ pub enum Expr<'a> {
         expr1: Box<Expr<'a>>,
         expr2: Box<Expr<'a>>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubqueryModifier {
+    Any,
+    All,
+    Some,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -302,35 +310,45 @@ pub enum UnaryOperator {
 impl<'a> Expr<'a> {
     pub fn span(&self) -> &'a [Token<'a>] {
         match self {
-            Expr::ColumnRef { span, .. } => span,
-            Expr::IsNull { span, .. } => span,
-            Expr::IsDistinctFrom { span, .. } => span,
-            Expr::InList { span, .. } => span,
-            Expr::InSubquery { span, .. } => span,
-            Expr::Between { span, .. } => span,
-            Expr::BinaryOp { span, .. } => span,
-            Expr::UnaryOp { span, .. } => span,
-            Expr::Cast { span, .. } => span,
-            Expr::TryCast { span, .. } => span,
-            Expr::Extract { span, .. } => span,
-            Expr::Position { span, .. } => span,
-            Expr::Substring { span, .. } => span,
-            Expr::Trim { span, .. } => span,
-            Expr::Literal { span, .. } => span,
-            Expr::CountAll { span } => span,
-            Expr::Tuple { span, .. } => span,
-            Expr::FunctionCall { span, .. } => span,
-            Expr::Case { span, .. } => span,
-            Expr::Exists { span, .. } => span,
-            Expr::Subquery { span, .. } => span,
-            Expr::MapAccess { span, .. } => span,
-            Expr::Array { span, .. } => span,
-            Expr::Interval { span, .. } => span,
-            Expr::DateAdd { span, .. } => span,
-            Expr::DateSub { span, .. } => span,
-            Expr::NullIf { span, .. } => span,
-            Expr::Coalesce { span, .. } => span,
-            Expr::IfNull { span, .. } => span,
+            Expr::ColumnRef { span, .. }
+            | Expr::IsNull { span, .. }
+            | Expr::IsDistinctFrom { span, .. }
+            | Expr::InList { span, .. }
+            | Expr::InSubquery { span, .. }
+            | Expr::Between { span, .. }
+            | Expr::BinaryOp { span, .. }
+            | Expr::UnaryOp { span, .. }
+            | Expr::Cast { span, .. }
+            | Expr::TryCast { span, .. }
+            | Expr::Extract { span, .. }
+            | Expr::Position { span, .. }
+            | Expr::Substring { span, .. }
+            | Expr::Trim { span, .. }
+            | Expr::Literal { span, .. }
+            | Expr::CountAll { span }
+            | Expr::Tuple { span, .. }
+            | Expr::FunctionCall { span, .. }
+            | Expr::Case { span, .. }
+            | Expr::Exists { span, .. }
+            | Expr::Subquery { span, .. }
+            | Expr::MapAccess { span, .. }
+            | Expr::Array { span, .. }
+            | Expr::Interval { span, .. }
+            | Expr::DateAdd { span, .. }
+            | Expr::DateSub { span, .. }
+            | Expr::NullIf { span, .. }
+            | Expr::Coalesce { span, .. }
+            | Expr::IfNull { span, .. } => span,
+        }
+    }
+}
+
+impl Display for SubqueryModifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SubqueryModifier::Any => write!(f, "ANY"),
+            SubqueryModifier::All => write!(f, "ALL"),
+            SubqueryModifier::Some => write!(f, "SOME"),
         }
     }
 }
@@ -734,7 +752,12 @@ impl<'a> Display for Expr<'a> {
             Expr::Exists { subquery, .. } => {
                 write!(f, "EXITS ({subquery})")?;
             }
-            Expr::Subquery { subquery, .. } => {
+            Expr::Subquery {
+                subquery, modifier, ..
+            } => {
+                if let Some(m) = modifier {
+                    write!(f, "{m} ")?;
+                }
                 write!(f, "({subquery})")?;
             }
             Expr::MapAccess { expr, accessor, .. } => {
