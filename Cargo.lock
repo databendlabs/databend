@@ -2055,6 +2055,7 @@ dependencies = [
  "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-store",
  "common-meta-types",
  "common-metrics",
  "common-planners",
