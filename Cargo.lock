@@ -1367,6 +1367,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-meta-store"
+version = "0.1.0"
+
+[[package]]
 name = "common-meta-types"
 version = "0.1.0"
 dependencies = [
