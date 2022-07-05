@@ -3250,7 +3250,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = any (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = Any(SELECT b.a FROM b)
+SELECT * FROM a WHERE a.a = ANY (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -3346,7 +3346,7 @@ Query(
                                 span: Ident(24..25),
                             },
                         },
-                        right: AnyOp {
+                        right: Subquery {
                             span: [
                                 ANY(28..31),
                                 LParen(32..33),
@@ -3358,7 +3358,10 @@ Query(
                                 Ident(49..50),
                                 RParen(50..51),
                             ],
-                            expr: Query {
+                            modifier: Some(
+                                Any,
+                            ),
+                            subquery: Query {
                                 span: [
                                     SELECT(33..39),
                                     Ident(40..41),
@@ -3447,7 +3450,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = all (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = All(SELECT b.a FROM b)
+SELECT * FROM a WHERE a.a = ALL (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -3543,7 +3546,7 @@ Query(
                                 span: Ident(24..25),
                             },
                         },
-                        right: AllOp {
+                        right: Subquery {
                             span: [
                                 ALL(28..31),
                                 LParen(32..33),
@@ -3555,7 +3558,10 @@ Query(
                                 Ident(49..50),
                                 RParen(50..51),
                             ],
-                            expr: Query {
+                            modifier: Some(
+                                All,
+                            ),
+                            subquery: Query {
                                 span: [
                                     SELECT(33..39),
                                     Ident(40..41),
@@ -3644,7 +3650,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = some (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = Some(SELECT b.a FROM b)
+SELECT * FROM a WHERE a.a = SOME (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -3740,7 +3746,7 @@ Query(
                                 span: Ident(24..25),
                             },
                         },
-                        right: SomeOp {
+                        right: Subquery {
                             span: [
                                 SOME(28..32),
                                 LParen(33..34),
@@ -3752,7 +3758,10 @@ Query(
                                 Ident(50..51),
                                 RParen(51..52),
                             ],
-                            expr: Query {
+                            modifier: Some(
+                                Some,
+                            ),
+                            subquery: Query {
                                 span: [
                                     SELECT(34..40),
                                     Ident(41..42),

@@ -165,18 +165,6 @@ pub enum ExprElement<'a> {
         subquery: Box<Query<'a>>,
         not: bool,
     },
-    /// Any operation
-    AnyOp {
-        subquery: Query<'a>,
-    },
-    /// All operation
-    AllOp {
-        subquery: Query<'a>,
-    },
-    /// Some operation
-    SomeOp {
-        subquery: Query<'a>,
-    },
     /// `BETWEEN ... AND ...`
     Between {
         low: Box<Expr<'a>>,
@@ -259,8 +247,9 @@ pub enum ExprElement<'a> {
         subquery: Query<'a>,
         not: bool,
     },
-    /// Scalar subquery, which will only return a single row with a single column.
+    /// Scalar/ANY/ALL/SOME subquery
     Subquery {
+        modifier: Option<SubqueryModifier>,
         subquery: Query<'a>,
     },
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
@@ -451,8 +440,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 not,
                 subquery: Box::new(subquery),
             },
-            ExprElement::Subquery { subquery } => Expr::Subquery {
+            ExprElement::Subquery { subquery, modifier } => Expr::Subquery {
                 span: elem.span.0,
+                modifier,
                 subquery: Box::new(subquery),
             },
             ExprElement::Group(expr) => expr,
@@ -498,18 +488,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 span: elem.span.0,
                 expr1: Box::new(expr1),
                 expr2: Box::new(expr2),
-            },
-            ExprElement::AllOp { subquery } => Expr::AllOp {
-                span: elem.span.0,
-                expr: Box::new(subquery),
-            },
-            ExprElement::AnyOp { subquery } => Expr::AnyOp {
-                span: elem.span.0,
-                expr: Box::new(subquery),
-            },
-            ExprElement::SomeOp { subquery } => Expr::SomeOp {
-                span: elem.span.0,
-                expr: Box::new(subquery),
             },
             _ => unreachable!(),
         };
@@ -637,24 +615,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             subquery: Box::new(subquery),
             not: opt_not.is_some(),
         },
-    );
-    let any_op = map(
-        rule! {
-           ANY ~ "(" ~ #query ~ ^")"
-        },
-        |(_, _, subquery, _)| ExprElement::AnyOp { subquery },
-    );
-    let all_op = map(
-        rule! {
-            ALL ~ "(" ~ #query  ~ ^")"
-        },
-        |(_, _, subquery, _)| ExprElement::AllOp { subquery },
-    );
-    let some_op = map(
-        rule! {
-            SOME ~ "(" ~ #query ~ ^")"
-        },
-        |(_, _, subquery, _)| ExprElement::SomeOp { subquery },
     );
     let between = map(
         rule! {
@@ -835,11 +795,23 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let subquery = map(
         rule! {
+            (ANY | SOME | ALL)? ~
             "("
             ~ #query
             ~ ^")"
         },
-        |(_, subquery, _)| ExprElement::Subquery { subquery },
+        |(modifier, _, subquery, _)| {
+            let modifier = match modifier {
+                Some(m) => match m.kind {
+                    TokenKind::ALL => Some(SubqueryModifier::All),
+                    TokenKind::ANY => Some(SubqueryModifier::Any),
+                    TokenKind::SOME => Some(SubqueryModifier::Some),
+                    _ => unreachable!(),
+                },
+                None => None,
+            };
+            ExprElement::Subquery { modifier, subquery }
+        },
     );
     let group = map(
         rule! {
@@ -960,9 +932,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #literal : "<literal>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
-            | #any_op : "`ANY (SELECT ...)`"
-            | #all_op : "`ALL (SELECT ...)`"
-            | #some_op: "`SOME (SELECT ...)`"
             | #group
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"
