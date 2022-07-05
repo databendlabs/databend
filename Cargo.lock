@@ -2055,6 +2055,7 @@ dependencies = [
  "common-formats",
  "common-functions",
  "common-grpc",
+ "common-hashtable",
  "common-hive-meta-store",
  "common-io",
  "common-macros",

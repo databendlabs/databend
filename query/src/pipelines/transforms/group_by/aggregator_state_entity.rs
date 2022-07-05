@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common::HashTableEntity;
-use crate::common::HashTableKeyable;
-use crate::common::KeyValueEntity;
+use common_hashtable::HashTableEntity;
+use common_hashtable::HashTableKeyable;
+use common_hashtable::KeyValueEntity;
 
 pub trait StateEntity<Key> {
     fn get_state_key<'a>(self: *mut Self) -> &'a Key;

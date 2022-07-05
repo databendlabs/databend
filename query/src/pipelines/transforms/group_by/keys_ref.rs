@@ -15,8 +15,7 @@
 use std::hash::Hasher;
 
 use ahash::AHasher;
-
-use crate::common::HashTableKeyable;
+use common_hashtable::HashTableKeyable;
 
 #[derive(Clone, Copy)]
 pub struct KeysRef {

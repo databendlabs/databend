@@ -24,13 +24,13 @@ use common_datablocks::HashMethodSerializer;
 use common_datablocks::HashMethodSingleString;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_hashtable::HashMapKind;
 use primitive_types::U256;
 use primitive_types::U512;
 
 use super::aggregator_groups_builder::SingleStringGroupColumnsBuilder;
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
-use crate::common::HashMapKind;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
 use crate::pipelines::transforms::group_by::aggregator_groups_builder::GroupColumnsBuilder;
