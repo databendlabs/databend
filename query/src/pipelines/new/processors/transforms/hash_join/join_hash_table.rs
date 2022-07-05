@@ -110,7 +110,7 @@ pub enum MarkerKind {
     Null,
 }
 
-pub struct HashJoinUtil {
+pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<EvalNode<ColumnID>>,
     pub(crate) probe_keys: Vec<EvalNode<ColumnID>>,
     pub(crate) join_type: JoinType,
@@ -127,7 +127,7 @@ pub struct JoinHashTable {
     /// A shared big hash table stores all the rows from build side
     pub(crate) hash_table: RwLock<HashTable>,
     pub(crate) row_space: RowSpace,
-    pub(crate) hash_join_util: HashJoinUtil,
+    pub(crate) hash_join_desc: HashJoinDesc,
 }
 
 impl JoinHashTable {
@@ -143,7 +143,7 @@ impl JoinHashTable {
         let hash_key_types: Vec<DataTypeImpl> =
             build_keys.iter().map(|expr| expr.data_type()).collect();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
-        let hash_join_util = HashJoinUtil {
+        let hash_join_desc = HashJoinDesc {
             build_keys: build_keys
                 .iter()
                 .map(Evaluator::eval_physical_scalar)
@@ -168,7 +168,7 @@ impl JoinHashTable {
                         hash_method: HashMethodSerializer::default(),
                     }),
                     build_schema,
-                    hash_join_util,
+                    hash_join_desc,
                 )?)
             }
             HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
@@ -178,7 +178,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
-                hash_join_util,
+                hash_join_desc,
             )?),
             HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -187,7 +187,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
-                hash_join_util,
+                hash_join_desc,
             )?),
             HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -196,7 +196,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
-                hash_join_util,
+                hash_join_desc,
             )?),
             HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -205,7 +205,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
-                hash_join_util,
+                hash_join_desc,
             )?),
             HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -214,7 +214,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
-                hash_join_util,
+                hash_join_desc,
             )?),
             HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -223,7 +223,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
-                hash_join_util,
+                hash_join_desc,
             )?),
             HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -232,7 +232,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
-                hash_join_util,
+                hash_join_desc,
             )?),
         })
     }
@@ -241,9 +241,9 @@ impl JoinHashTable {
         ctx: Arc<QueryContext>,
         hash_table: HashTable,
         mut build_data_schema: DataSchemaRef,
-        hash_join_util: HashJoinUtil,
+        hash_join_desc: HashJoinDesc,
     ) -> Result<Self> {
-        if hash_join_util.join_type == JoinType::Left {
+        if hash_join_desc.join_type == JoinType::Left {
             let mut nullable_field = Vec::with_capacity(build_data_schema.fields().len());
             for field in build_data_schema.fields().iter() {
                 nullable_field.push(DataField::new_nullable(
@@ -257,7 +257,7 @@ impl JoinHashTable {
             row_space: RowSpace::new(build_data_schema),
             ref_count: Mutex::new(0),
             is_finished: Mutex::new(false),
-            hash_join_util,
+            hash_join_desc,
             ctx,
             hash_table: RwLock::new(hash_table),
         })
@@ -330,7 +330,7 @@ impl JoinHashTable {
     ) -> Result<Vec<DataBlock>> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let probe_keys = self
-            .hash_join_util
+            .hash_join_desc
             .probe_keys
             .iter()
             .map(|expr| Ok(expr.eval(&func_ctx, input)?.vector().clone()))
@@ -398,7 +398,7 @@ impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let build_cols = self
-            .hash_join_util
+            .hash_join_desc
             .build_keys
             .iter()
             .map(|expr| Ok(expr.eval(&func_ctx, &input)?.vector().clone()))
@@ -421,12 +421,12 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
-        match self.hash_join_util.join_type {
+        match self.hash_join_desc.join_type {
             JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left | JoinType::Mark => {
                 self.probe_join(input, probe_state)
             }
             JoinType::Cross => self.probe_cross_join(input, probe_state),
-            _ => unimplemented!("{} is unimplemented", self.hash_join_util.join_type),
+            _ => unimplemented!("{} is unimplemented", self.hash_join_desc.join_type),
         }
     }
 
@@ -455,14 +455,14 @@ impl HashJoinState for JoinHashTable {
 
     fn finish(&self) -> Result<()> {
         let chunks = self.row_space.chunks.read().unwrap();
-        let mut marker = self.hash_join_util.marker.write();
+        let mut marker = self.hash_join_desc.marker.write();
         for chunk_index in 0..chunks.len() {
             let chunk = &chunks[chunk_index];
             let mut columns = vec![];
             if let Some(cols) = chunk.cols.as_ref() {
                 columns = Vec::with_capacity(cols.len());
                 for col in cols.iter() {
-                    if self.hash_join_util.join_type == JoinType::Mark {
+                    if self.hash_join_desc.join_type == JoinType::Mark {
                         assert_eq!(cols.len(), 1);
                         for row_idx in 0..col.len() {
                             if col.get(row_idx) == DataValue::Null {

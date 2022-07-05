@@ -56,7 +56,7 @@ impl JoinHashTable {
         let build_indexs = &mut probe_state.build_indexs;
 
         let mut results: Vec<DataBlock> = vec![];
-        match self.hash_join_util.join_type {
+        match self.hash_join_desc.join_type {
             JoinType::Inner => {
                 for (i, key) in keys.iter().enumerate() {
                     let probe_result_ptr = hash_table.find_key(key);
@@ -77,7 +77,7 @@ impl JoinHashTable {
                 let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
                 let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-                match &self.hash_join_util.other_predicate {
+                match &self.hash_join_desc.other_predicate {
                     Some(other_predicate) => {
                         let func_ctx = self.ctx.try_get_function_context()?;
                         let filter_vector = other_predicate.eval(&func_ctx, &merged_block)?;
@@ -90,7 +90,7 @@ impl JoinHashTable {
                 }
             }
             JoinType::Semi => {
-                if self.hash_join_util.other_predicate.is_none() {
+                if self.hash_join_desc.other_predicate.is_none() {
                     let result =
                         self.semi_anti_join::<true, _>(hash_table, probe_state, keys, input)?;
                     return Ok(vec![result]);
@@ -105,7 +105,7 @@ impl JoinHashTable {
                 }
             }
             JoinType::Anti => {
-                if self.hash_join_util.other_predicate.is_none() {
+                if self.hash_join_desc.other_predicate.is_none() {
                     let result =
                         self.semi_anti_join::<false, _>(hash_table, probe_state, keys, input)?;
                     return Ok(vec![result]);
@@ -122,7 +122,7 @@ impl JoinHashTable {
 
             // probe_blocks left join build blocks
             JoinType::Left => {
-                if self.hash_join_util.other_predicate.is_none() {
+                if self.hash_join_desc.other_predicate.is_none() {
                     let result =
                         self.left_join::<false, _>(hash_table, probe_state, keys, input)?;
                     return Ok(vec![result]);
@@ -143,14 +143,14 @@ impl JoinHashTable {
                     let probe_result_ptr = hash_table.find_key(key);
                     if let Some(v) = probe_result_ptr {
                         let probe_result_ptrs = v.get_value();
-                        let mut marker = self.hash_join_util.marker.write();
+                        let mut marker = self.hash_join_desc.marker.write();
                         for ptr in probe_result_ptrs {
                             // If find join partner, set the marker to true.
                             marker[ptr.row_index as usize] = MarkerKind::True;
                         }
                     }
                 }
-                let mut marker = self.hash_join_util.marker.write();
+                let mut marker = self.hash_join_desc.marker.write();
                 let mut validity = MutableBitmap::new();
                 let mut boolean_bit_map = MutableBitmap::new();
                 for m in marker.iter_mut() {
@@ -173,7 +173,7 @@ impl JoinHashTable {
                 let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
                 let marker_schema = DataSchema::new(vec![DataField::new(
                     &self
-                        .hash_join_util
+                        .hash_join_desc
                         .marker_index
                         .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
                         .to_string(),
@@ -278,7 +278,7 @@ impl JoinHashTable {
 
         let (bm, all_true, all_false) = self.get_other_filters(
             &merged_block,
-            self.hash_join_util.other_predicate.as_ref().unwrap(),
+            self.hash_join_desc.other_predicate.as_ref().unwrap(),
         )?;
 
         let mut bm = match (bm, all_true, all_false) {
@@ -369,7 +369,7 @@ impl JoinHashTable {
 
         let (bm, all_true, all_false) = self.get_other_filters(
             &merged_block,
-            self.hash_join_util.other_predicate.as_ref().unwrap(),
+            self.hash_join_desc.other_predicate.as_ref().unwrap(),
         )?;
 
         if all_true {
