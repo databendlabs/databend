@@ -15,11 +15,11 @@
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_formats::output_format::OutputFormatType;
 use common_io::prelude::FormatSettings;
-use databend_query::formats::output_format::OutputFormatType;
 use pretty_assertions::assert_eq;
 
-use crate::formats::output_format_utils::get_simple_block;
+use crate::output_format_utils::get_simple_block;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
     let block = get_simple_block(is_nullable)?;

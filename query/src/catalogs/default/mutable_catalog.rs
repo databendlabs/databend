@@ -48,12 +48,12 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
 use common_tracing::tracing;
 
 use super::catalog_context::CatalogContext;
 use crate::catalogs::catalog::Catalog;
-use crate::common::MetaStoreProvider;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;

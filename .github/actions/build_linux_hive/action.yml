@@ -18,12 +18,12 @@ runs:
     - name: Build Debug
       if: inputs.profile == 'debug'
       shell: bash
-      run: cargo build --target ${{ inputs.target }} --bin databend-query --features hive
+      run: cargo -Z sparse-registry build --target ${{ inputs.target }} --bin databend-query --features hive
 
     - name: Build Release
       if: inputs.profile == 'release'
       shell: bash
-      run: cargo build --target ${{ inputs.target }} --bin databend-query --features hive --release
+      run: cargo -Z sparse-registry build --target ${{ inputs.target }} --bin databend-query --features hive --release
 
     - shell: bash
       run: readelf -p .comment ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-query

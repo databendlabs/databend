@@ -31,9 +31,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
-use crate::formats::FormatFactory;
-use crate::formats::InputFormat;
-use crate::formats::InputState;
+use crate::FormatFactory;
+use crate::InputFormat;
+use crate::InputState;
 
 pub struct ParquetInputState {
     pub memory: Vec<u8>,

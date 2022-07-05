@@ -18,7 +18,7 @@ use common_datavalues::TypeSerializer;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
-use crate::formats::output_format::OutputFormat;
+use crate::output_format::OutputFormat;
 
 #[derive(Default)]
 pub struct ValuesOutputFormat {

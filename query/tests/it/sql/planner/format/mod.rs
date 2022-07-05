@@ -113,6 +113,7 @@ fn test_format() {
                 arguments: vec![
                     BoundColumnRef {
                         column: ColumnBinding {
+                            database_name: None,
                             table_name: None,
                             column_name: "col1".to_string(),
                             index: col1,
@@ -132,6 +133,7 @@ fn test_format() {
             .into()],
             probe_keys: vec![BoundColumnRef {
                 column: ColumnBinding {
+                    database_name: None,
                     table_name: None,
                     column_name: "col2".to_string(),
                     index: col2,

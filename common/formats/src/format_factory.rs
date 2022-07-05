@@ -24,10 +24,10 @@ use once_cell::sync::Lazy;
 use strum::IntoEnumIterator;
 
 use super::format_tsv::TsvInputFormat;
-use crate::formats::format::InputFormat;
-use crate::formats::format_csv::CsvInputFormat;
-use crate::formats::format_parquet::ParquetInputFormat;
-use crate::formats::output_format::OutputFormatType;
+use crate::format::InputFormat;
+use crate::format_csv::CsvInputFormat;
+use crate::format_parquet::ParquetInputFormat;
+use crate::output_format::OutputFormatType;
 
 pub type InputFormatFactoryCreator =
     Box<dyn Fn(&str, DataSchemaRef, FormatSettings) -> Result<Box<dyn InputFormat>> + Send + Sync>;
@@ -49,7 +49,7 @@ static FORMAT_FACTORY: Lazy<Arc<FormatFactory>> = Lazy::new(|| {
 });
 
 impl FormatFactory {
-    pub(in crate::formats::format_factory) fn create() -> FormatFactory {
+    pub(in crate::format_factory) fn create() -> FormatFactory {
         FormatFactory {
             case_insensitive_desc: Default::default(),
             outputs: Default::default(),

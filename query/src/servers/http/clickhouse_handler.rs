@@ -21,6 +21,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_formats::output_format::OutputFormatType;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -42,7 +43,6 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::formats::output_format::OutputFormatType;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::pipelines::new::processors::port::OutputPort;

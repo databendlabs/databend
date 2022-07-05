@@ -21,9 +21,9 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::StringType;
 use common_exception::Result;
+use common_formats::format_csv::CsvInputFormat;
+use common_formats::format_csv::CsvInputState;
 use common_io::prelude::FormatSettings;
-use databend_query::formats::format_csv::CsvInputFormat;
-use databend_query::formats::format_csv::CsvInputState;
 
 #[test]
 fn test_accepted_multi_lines() -> Result<()> {
