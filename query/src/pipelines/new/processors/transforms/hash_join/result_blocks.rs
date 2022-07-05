@@ -133,8 +133,11 @@ impl JoinHashTable {
             }
             Mark => {
                 let mut has_null = false;
-                // Check if there is any null in the probe block.
-                if let Some(validity) = input.column(0).validity().1 {
+                // `probe_column` is the subquery result column.
+                // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
+                let probe_column = input.column(0);
+                // Check if there is any null in the probe column.
+                if let Some(validity) = probe_column.validity().1 {
                     if validity.null_count() > 0 {
                         has_null = true;
                     }
