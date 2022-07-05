@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::io::Cursor;
-use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
@@ -92,7 +91,7 @@ impl ParquetInputFormat {
     fn deserialize(
         num_rows: usize,
         arrays: Vec<ArrayIter<'static>>,
-    ) -> Result<Chunk<Arc<dyn Array>>> {
+    ) -> Result<Chunk<Box<dyn Array>>> {
         match RowGroupDeserializer::new(arrays, num_rows, None).next() {
             None => Err(ErrorCode::ParquetError("fail to get a chunk")),
             Some(Ok(chunk)) => Ok(chunk),

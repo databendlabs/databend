@@ -237,7 +237,7 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
                     let chunks = data_block.try_into()?;
                     let options = &self.serialize_params.options;
                     let ipc_fields = &self.serialize_params.ipc_fields;
-                    let (dicts, values) = serialize_batch(&chunks, ipc_fields, options);
+                    let (dicts, values) = serialize_batch(&chunks, ipc_fields, options)?;
 
                     if !dicts.is_empty() {
                         return Err(ErrorCode::UnImplement(

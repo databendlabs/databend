@@ -87,7 +87,7 @@ impl Column for BooleanColumn {
 
     fn as_arrow_array(&self) -> ArrayRef {
         let array = BooleanArray::from_data(ArrowType::Boolean, self.values.clone(), None);
-        Arc::new(array)
+        Box::new(array)
     }
 
     fn arc(&self) -> ColumnRef {

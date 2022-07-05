@@ -33,8 +33,8 @@ use criterion::Criterion;
 
 fn add_benchmark(c: &mut Criterion) {
     let size = 1048576;
-    let lhs: ArrayRef = Arc::new(create_primitive_array::<i32>(size, 0.2));
-    let rhs: ArrayRef = Arc::new(create_primitive_array::<i32>(size, 0.3));
+    let lhs: ArrayRef = Box::new(create_primitive_array::<i32>(size, 0.2));
+    let rhs: ArrayRef = Box::new(create_primitive_array::<i32>(size, 0.3));
 
     c.bench_function("arrow2_eq", |b| {
         b.iter(|| criterion::black_box(arrow2_eq(&lhs, &rhs)))
@@ -51,7 +51,7 @@ fn add_benchmark(c: &mut Criterion) {
         b.iter(|| criterion::black_box(databend_eq_simd(&lhs, &rhs)))
     });
 
-    let rhs: ArrayRef = Arc::new(create_primitive_array::<u32>(size, 0.3));
+    let rhs: ArrayRef = Box::new(create_primitive_array::<u32>(size, 0.3));
     let rhs: ColumnRef = rhs.into_nullable_column();
 
     c.bench_function("databend_diff_type_eq", |b| {
@@ -143,7 +143,7 @@ fn cast(column: &ColumnRef, data_type: &DataTypeImpl) -> Result<ColumnRef> {
         partial: false,
     };
     let result = cast::cast(arrow_array.as_ref(), &data_type.arrow_type(), arrow_options)?;
-    let result: ArrayRef = Arc::from(result);
+    let result: ArrayRef = result;
     Ok(result.into_column())
 }
 

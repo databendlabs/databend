@@ -191,11 +191,11 @@ pub fn cast_with_type(
     }
 
     if let Some(bitmap) = bitmap {
-        let null_cnt = bitmap.null_count();
+        let null_cnt = bitmap.unset_bits();
         let source_null_cnt = match (all_nulls, source_valids) {
             (true, _) => column.len(),
             (false, None) => 0,
-            (false, Some(b)) => b.null_count(),
+            (false, Some(b)) => b.unset_bits(),
         };
 
         if cast_options.exception_mode == ExceptionMode::Throw
@@ -317,8 +317,8 @@ pub fn arrow_cast_compute(
 
     let arrow_array = column.as_arrow_array();
     let arrow_options = cast_options.as_arrow();
-    let result = cast::cast(arrow_array.as_ref(), &data_type.arrow_type(), arrow_options)?;
-    let result: ArrayRef = Arc::from(result);
+    let result: ArrayRef =
+        cast::cast(arrow_array.as_ref(), &data_type.arrow_type(), arrow_options)?;
     let bitmap = result.validity().cloned();
     Ok((result.into_column(), bitmap))
 }

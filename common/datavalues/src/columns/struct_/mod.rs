@@ -1,5 +1,3 @@
-// Copyright 2021 Datafuse Labs.
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -92,7 +90,7 @@ impl Column for StructColumn {
     fn as_arrow_array(&self) -> ArrayRef {
         let arrow_type = self.data_type().arrow_type();
         let arrays = self.values.iter().map(|v| v.as_arrow_array()).collect();
-        Arc::new(StructArray::from_data(arrow_type, arrays, None))
+        Box::new(StructArray::from_data(arrow_type, arrays, None))
     }
 
     fn arc(&self) -> ColumnRef {

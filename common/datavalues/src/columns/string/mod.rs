@@ -154,7 +154,7 @@ impl Column for StringColumn {
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
-        Arc::new(LargeBinaryArray::from_data(
+        Box::new(LargeBinaryArray::from_data(
             ArrowType::LargeBinary,
             self.offsets.clone(),
             self.values.clone(),

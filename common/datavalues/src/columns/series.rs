@@ -122,7 +122,7 @@ impl Series {
             .collect::<Vec<_>>();
 
         let arrays = arrays.iter().map(|a| a.as_ref()).collect::<Vec<_>>();
-        let array: ArrayRef = Arc::from(concatenate::concatenate(&arrays)?);
+        let array: ArrayRef = concatenate::concatenate(&arrays)?;
         Ok(match is_nullable {
             true => array.into_nullable_column(),
             false => array.into_column(),

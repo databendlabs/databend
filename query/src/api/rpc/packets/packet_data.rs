@@ -177,7 +177,8 @@ impl From<PrecommitBlock> for FlightData {
         let options = WriteOptions { compression: None };
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let chunks = data_block.try_into().unwrap();
-        let (_dicts, data_flight) = serialize_batch(&chunks, &ipc_fields, &options);
+        // TODO use try_from instead
+        let (_dicts, data_flight) = serialize_batch(&chunks, &ipc_fields, &options).unwrap();
 
         let header_len = schema.len() + data_flight.data_header.len();
         let mut data_header = Vec::with_capacity(header_len + 8);

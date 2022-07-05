@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::array::growable::make_growable;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
@@ -66,8 +64,7 @@ impl DataBlock {
             growable.extend(index.0, index.1, 1);
         }
 
-        let result = growable.as_box();
-        let result: ArrayRef = Arc::from(result);
+        let result: ArrayRef = growable.as_box();
 
         match nullable {
             false => Ok(result.into_column()),

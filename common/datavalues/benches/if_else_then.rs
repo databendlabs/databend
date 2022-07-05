@@ -27,9 +27,9 @@ use criterion::Criterion;
 
 fn add_benchmark(c: &mut Criterion) {
     let size = 1048576;
-    let lhs: ArrayRef = Arc::new(create_primitive_array::<i32>(size, 0.2));
-    let rhs: ArrayRef = Arc::new(create_primitive_array::<i32>(size, 0.3));
-    let ifs: ArrayRef = Arc::new(create_boolean_array(size, 0.0, 0.3));
+    let lhs: ArrayRef = Box::new(create_primitive_array::<i32>(size, 0.2));
+    let rhs: ArrayRef = Box::new(create_primitive_array::<i32>(size, 0.3));
+    let ifs: ArrayRef = Box::new(create_boolean_array(size, 0.0, 0.3));
 
     c.bench_function("arrow2_if_else_then", |b| {
         b.iter(|| criterion::black_box(arrow2_if_else_then(&lhs, &rhs, &ifs)))
