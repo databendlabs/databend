@@ -92,7 +92,7 @@ impl ExchangeReceiver {
                                 if Self::send_error(&mut fragments_receiver, &cause).await {
                                     Self::shutdown_query(&this, cause);
                                 }
-                                break;
+                                return;
                             }
                         } else {
                             // This ok. we will close the channel when the data transmission is completed.
@@ -100,16 +100,16 @@ impl ExchangeReceiver {
                         }
                     }
                     Either::Right((_notified, _recv)) => {
-                        while let Ok(recv_data) = rx.try_recv() {
-                            let txs = &mut fragments_receiver;
-                            if let Err(_cause) = this.on_packet(recv_data, txs).await {
-                                break;
-                            }
-                        }
-
                         break;
                     }
                 };
+
+                while let Ok(recv_data) = rx.try_recv() {
+                    let txs = &mut fragments_receiver;
+                    if let Err(_cause) = this.on_packet(recv_data, txs).await {
+                        break;
+                    }
+                }
             }
         });
 
@@ -153,6 +153,7 @@ impl ExchangeReceiver {
     pub fn shutdown(self: &Arc<Self>) {
         self.finished.store(true, Ordering::SeqCst);
         self.shutdown_notify.notify_one();
+
     }
 
     pub async fn join(self: &Arc<Self>) -> Result<()> {
@@ -226,8 +227,11 @@ impl ExchangeReceiver {
                 Ok(())
             }
             DataPacket::FragmentData(FragmentData::End(fragment_id)) => {
+                println!("receive fragment end message {}", fragment_id);
                 if fragment_id < fragments_receiver.len() {
+                    println!("process fragment end message {}", fragment_id);
                     if let Some(tx) = fragments_receiver[fragment_id].take() {
+                        println!("drop fragment end message {}", fragment_id);
                         drop(tx);
                         std::sync::atomic::fence(Acquire);
                     }

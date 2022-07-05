@@ -41,11 +41,13 @@ use crate::sessions::QueryContext;
 use crate::Config;
 
 pub struct ExchangeSender {
+    config: Config,
     query_id: String,
+    target_address: String,
     target_fragments: Vec<usize>,
     target_fragments_finished: HashMap<usize, Arc<AtomicBool>>,
     join_handlers: Mutex<Vec<JoinHandle<()>>>,
-    flight_client: Mutex<Option<FlightClient>>,
+    flight_client: Arc<Mutex<Option<FlightClient>>>,
     target_is_request_server: bool,
 }
 
@@ -56,8 +58,8 @@ impl ExchangeSender {
         target: &str,
     ) -> Result<ExchangeSender> {
         let target_node_info = &packet.target_nodes_info[target];
-        let address = target_node_info.flight_address.to_string();
-        let flight_client = Self::create_client(config, &address).await?;
+        let target_address = target_node_info.flight_address.to_string();
+        // let flight_client = Self::create_client(config, &address).await?;
         let target_fragments_id = &packet.target_2_fragments[target];
 
         let mut target_fragments_finished = HashMap::with_capacity(target_fragments_id.len());
@@ -67,13 +69,46 @@ impl ExchangeSender {
         }
 
         Ok(ExchangeSender {
+            config,
+            target_address,
             target_fragments_finished,
             query_id: packet.query_id.clone(),
             target_fragments: target_fragments_id.to_owned(),
             join_handlers: Mutex::new(vec![]),
-            flight_client: Mutex::new(Some(flight_client)),
+            flight_client: Arc::new(Mutex::new(None)),
             target_is_request_server: target == packet.request_server,
         })
+    }
+
+    pub fn connect_flight(&mut self, runtime: &Arc<Runtime>) -> Result<()> {
+        // let config = self.config.clone();
+        // let target_address = self.target_address.clone();
+        // let flight_client = self.flight_client.clone();
+        // let connect_res_future = runtime.spawn(async move {
+        //     let mut flight_client = flight_client.lock();
+        //     *flight_client = Some(Self::create_client(config, &target_address).await?);
+        //     Ok(())
+        // });
+        //
+        // futures::executor::block_on(async move {
+        //     match connect_res_future.await {
+        //         Ok(res) => res,
+        //         Err(join_error) => match join_error.is_panic() {
+        //             false => Err(ErrorCode::TokioError("Cancel tokio task.")),
+        //             true => {
+        //                 let cause = join_error.into_panic();
+        //                 match cause.downcast_ref::<&'static str>() {
+        //                     None => match cause.downcast_ref::<String>() {
+        //                         None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+        //                         Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+        //                     },
+        //                     Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+        //                 }
+        //             }
+        //         }
+        //     }
+        // })
+        unimplemented!()
     }
 
     pub fn is_to_request_server(&self) -> bool {
@@ -117,6 +152,7 @@ impl ExchangeSender {
 
         join_handlers.push(runtime.spawn(async move {
             // flight connect is closed if c_tx is closed.
+            println!("Begin listen fragment sender {}", fragment_id);
             'fragment_loop: while !is_finished.load(Ordering::Relaxed) && !c_tx.is_closed() {
                 let sleep_future = Box::pin(sleep(Duration::from_millis(500)));
 
@@ -154,7 +190,12 @@ impl ExchangeSender {
             }
 
             let fragment_end = FragmentData::End(fragment_id);
-            c_tx.send(DataPacket::FragmentData(fragment_end)).await.ok();
+            if let Err(_cause) = c_tx.send(DataPacket::FragmentData(fragment_end)).await {
+                common_tracing::tracing::warn!("Cannot send fragment end, because channel is closed.");
+            }
+            // c_tx.send(DataPacket::FragmentData(fragment_end)).await.ok();
+
+            println!("Finished fragment sender {}", fragment_id);
         }));
 
         Ok(f_tx)
@@ -259,13 +300,17 @@ impl ExchangeSender {
     ) -> Result<Sender<DataPacket>> {
         let source = source.to_owned();
         let query_id = self.query_id.clone();
-        let mut connection = self.get_flight_client()?;
+        // let mut connection = self.get_flight_client()?;
+        let config = self.config.clone();
+        let target_address = self.target_address.clone();
 
         let (flight_tx, rx) = async_channel::bounded(2);
 
         let mut join_handlers = self.join_handlers.lock();
         join_handlers.push(runtime.spawn(async move {
+            let mut connection = Self::create_client(config, &target_address).await.unwrap();
             if let Err(status) = connection.do_put(&query_id, &source, rx).await {
+                println!("Flight connection failure: {:?}", status);
                 common_tracing::tracing::warn!("Flight connection failure: {:?}", status);
 
                 // Shutdown all query fragments executor and report error to request server.
@@ -274,6 +319,8 @@ impl ExchangeSender {
                     common_tracing::tracing::warn!("Cannot shutdown query, cause {:?}", cause);
                 }
             }
+
+            println!("Listen flight finished");
         }));
 
         Ok(flight_tx)
@@ -296,7 +343,7 @@ impl ExchangeSender {
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                .await?,
+                    .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,

@@ -29,7 +29,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use futures::StreamExt;
+use futures_util::future::Either;
 use tonic::Streaming;
+use common_base::base::tokio::sync::Notify;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentReceiver;
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
@@ -287,6 +289,7 @@ struct QueryCoordinator {
     executor: Option<Arc<PipelineCompleteExecutor>>,
     exchange_senders: Vec<Arc<ExchangeSender>>,
     exchange_receivers: Vec<Arc<ExchangeReceiver>>,
+    subscribe_flight_shutdown_notify: Vec<Arc<Notify>>,
 }
 
 impl QueryCoordinator {
@@ -320,6 +323,7 @@ impl QueryCoordinator {
                 2,
                 Some(String::from("Cluster-Pub-Sub")),
             )?),
+            subscribe_flight_shutdown_notify: vec![],
         })
     }
 
@@ -342,9 +346,10 @@ impl QueryCoordinator {
     pub fn on_finished(&mut self, may_error: &Option<ErrorCode>) {
         if let Some(cause) = may_error {
             if let Some(request_server_tx) = self.request_server_tx.take() {
+                let may_error = cause.clone();
                 futures::executor::block_on(async move {
                     if request_server_tx
-                        .send(DataPacket::ErrorCode(cause.clone()))
+                        .send(DataPacket::ErrorCode(may_error))
                         .await
                         .is_err()
                     {
@@ -491,11 +496,12 @@ impl QueryCoordinator {
     }
 
     pub fn init_publisher(&mut self, senders: HashMap<String, ExchangeSender>) -> Result<()> {
-        for (target, exchange_sender) in senders.into_iter() {
+        for (target, mut exchange_sender) in senders.into_iter() {
+            let runtime = self.runtime.clone();
             let exchange_sender = Arc::new(exchange_sender);
+
             let ctx = self.ctx.clone();
             let source = self.executor_id.clone();
-            let runtime = self.runtime.clone();
             let (flight_tx, fragments_sender) = exchange_sender.listen(ctx, source, runtime)?;
 
             for (fragment_id, fragment_sender) in fragments_sender.into_iter() {
@@ -539,6 +545,9 @@ impl QueryCoordinator {
         if let Some(subscribe_channel) = self.subscribe_channel.remove(source) {
             let source = source.to_string();
             let target = self.executor_id.clone();
+            let notify = Arc::new(Notify::new());
+            self.subscribe_flight_shutdown_notify.push(notify.clone());
+
             return Ok(self.runtime.spawn(async move {
                 'fragment_loop: while let Some(flight_data) = stream.next().await {
                     let data_packet = match flight_data {

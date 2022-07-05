@@ -48,7 +48,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub type FlightStream<T> =
-    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
+Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
     sessions: Arc<SessionManager>,
@@ -161,7 +161,8 @@ impl FlightService for DatabendQueryFlightService {
 
         if let Err(cause) = join_handler.await {
             if !cause.is_panic() {
-                return Err(Status::internal("Put stream is canceled."));
+                println!("Put stream is canceled {:?}", cause);
+                return Err(Status::internal(format!("Put stream is canceled. {:?}", cause)));
             }
 
             if cause.is_panic() {
