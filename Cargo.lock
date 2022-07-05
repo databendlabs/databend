@@ -4733,7 +4733,7 @@ dependencies = [
 [[package]]
 name = "parquet2"
 version = "0.14.1"
-source = "git+https://github.com/datafuse-extras/parquet2?rev=4b67922#4b679228122aa0ba840a6cf468b4a5c028861562"
+source = "git+https://github.com/datafuse-extras/parquet2?tag=v0.14.1-patched#4b679228122aa0ba840a6cf468b4a5c028861562"
 dependencies = [
  "async-stream",
  "bitpacking",
