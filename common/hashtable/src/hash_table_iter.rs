@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use crate::common::HashTableEntity;
+use crate::HashTableEntity;
 
 pub enum HashTableIteratorKind<Key, Entity: HashTableEntity<Key>> {
     HashMapIterator(HashTableIter<Key, Entity>),

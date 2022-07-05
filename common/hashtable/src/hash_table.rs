@@ -18,10 +18,10 @@ use std::alloc::Layout;
 use std::marker::PhantomData;
 use std::mem;
 
-use crate::common::hashtable::hash_table_grower::HashTableGrower;
-use crate::common::HashTableEntity;
-use crate::common::HashTableIteratorKind;
-use crate::common::HashTableKeyable;
+use crate::hash_table_grower::HashTableGrower;
+use crate::HashTableEntity;
+use crate::HashTableIteratorKind;
+use crate::HashTableKeyable;
 
 pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower> {
     size: usize,

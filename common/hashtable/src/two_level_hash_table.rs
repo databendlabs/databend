@@ -14,11 +14,11 @@
 //
 // Reference the ClickHouse HashTable to implement the Databend HashTable
 
-use crate::common::HashTable;
-use crate::common::HashTableEntity;
-use crate::common::HashTableGrower;
-use crate::common::HashTableIteratorKind;
-use crate::common::HashTableKeyable;
+use crate::HashTable;
+use crate::HashTableEntity;
+use crate::HashTableGrower;
+use crate::HashTableIteratorKind;
+use crate::HashTableKeyable;
 
 static BITS_FOR_BUCKET: u8 = 8;
 static NUM_BUCKETS: usize = 1 << BITS_FOR_BUCKET;

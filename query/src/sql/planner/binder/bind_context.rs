@@ -100,7 +100,7 @@ impl BindContext {
     pub fn apply_table_alias(&mut self, alias: &TableAlias) -> Result<()> {
         for column in self.columns.iter_mut() {
             column.database_name = None;
-            column.table_name = Some(alias.name.to_string());
+            column.table_name = Some(alias.name.name.to_lowercase());
         }
 
         if alias.columns.len() > self.columns.len() {

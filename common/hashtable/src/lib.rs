@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(core_intrinsics)]
+#![feature(arbitrary_self_types)]
+
 pub use hash_table::HashTable;
 pub use hash_table_entity::HashTableEntity;
 pub use hash_table_entity::KeyValueEntity;
