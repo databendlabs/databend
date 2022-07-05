@@ -21,7 +21,7 @@ arrow-default = [
     "arrow/compute_filter",
 ]
 default = ["arrow-default", "parquet-default"]
-parquet-default = ["parquet2/lz4"]
+parquet-default = ["parquet2/lz4", "parquet2/non_standard_legacy_lz4"]
 simd = ["arrow/simd"]
 
 [dependencies] # In alphabetical order
