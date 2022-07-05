@@ -95,6 +95,7 @@ impl TsvInputFormat {
     ) -> Result<Box<dyn InputFormat>> {
         settings.field_delimiter = vec![b'\t'];
         settings.record_delimiter = vec![b'\n'];
+        settings.null_bytes = settings.tsv_null_bytes.clone();
 
         Ok(Box::new(TsvInputFormat {
             schema,
@@ -196,8 +197,7 @@ impl InputFormat for TsvInputFormat {
                 if checkpoint_reader.ignore_white_spaces_and_byte(b'\t')? {
                     deserializers[column_index].de_default(&self.settings);
                 } else {
-                    deserializers[column_index]
-                        .de_text(&mut checkpoint_reader, &self.settings)?;
+                    deserializers[column_index].de_text(&mut checkpoint_reader, &self.settings)?;
 
                     if column_index + 1 != deserializers.len() {
                         checkpoint_reader.must_ignore_white_spaces_and_byte(b'\t')?;

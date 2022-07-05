@@ -87,7 +87,7 @@ impl CsvInputFormat {
     pub fn try_create(
         _name: &str,
         schema: DataSchemaRef,
-        settings: FormatSettings,
+        mut settings: FormatSettings,
         skip_rows: usize,
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
@@ -105,6 +105,8 @@ impl CsvInputFormat {
         {
             record_delimiter = Some(settings.record_delimiter[0]);
         }
+
+        settings.null_bytes = settings.csv_null_bytes.clone();
 
         Ok(Box::new(CsvInputFormat {
             schema,
