@@ -7,10 +7,17 @@ from log import log
 
 default_database = "default"
 
+
 class ClickhouseConnector():
 
-    def connect(self, host, port, user="root",password="", database=default_database):
-        self._uri = "clickhouse+http://{}:{}@{}:{}/{}".format(user,password,host,port,database)
+    def connect(self,
+                host,
+                port,
+                user="root",
+                password="",
+                database=default_database):
+        self._uri = "clickhouse+http://{}:{}@{}:{}/{}".format(
+            user, password, host, port, database)
         log.debug(self._uri)
         e = environs.Env()
         self._additonal_headers = dict()
@@ -18,10 +25,11 @@ class ClickhouseConnector():
             headers = e.dict("CLICKHOUSE_ADDITIONAL_HEADERS")
             for key in headers:
                 self._additonal_headers["header__" + key] = headers[key]
-        self._engine = create_engine(self._uri, connect_args=self._additonal_headers)
+        self._engine = create_engine(self._uri,
+                                     connect_args=self._additonal_headers)
         self._session = None
 
-    def query_with_session(self,statement):
+    def query_with_session(self, statement):
 
         def parseSQL(sql):
             # for cases like:
@@ -30,7 +38,8 @@ class ClickhouseConnector():
             # https://stackoverflow.com/questions/49902843/avoid-parameter-binding-when-executing-query-with-sqlalchemy/49913328#49913328
             if '"' in sql:
                 if '\'' in sql:
-                    return sql.replace('"', '\\\"').replace(':','\\:') #  "  -> \"   : ->  \\:
+                    return sql.replace('"', '\\\"').replace(
+                        ':', '\\:')  #  "  -> \"   : ->  \\:
                 return sql.replace('"', '\'')
             else:
                 return sql  #  do nothing
@@ -52,6 +61,7 @@ class ClickhouseConnector():
             data_list.append(list(item))
         cursor.close()
         return data_list
+
 
 # if __name__ == '__main__':
 #     from config import clickhouse_config

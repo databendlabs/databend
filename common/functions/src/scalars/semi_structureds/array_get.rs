@@ -64,7 +64,11 @@ impl Function for ArrayGetFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        NullableType::new_impl(self.array_type.inner_type().clone())
+        if self.array_type.inner_type().is_null() || self.array_type.inner_type().is_nullable() {
+            self.array_type.inner_type().clone()
+        } else {
+            NullableType::new_impl(self.array_type.inner_type().clone())
+        }
     }
 
     fn eval(
@@ -73,6 +77,9 @@ impl Function for ArrayGetFunction {
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
+        if self.array_type.inner_type().is_null() {
+            return Ok(NullColumn::new(input_rows).arc());
+        }
         let array_column: &ArrayColumn = if columns[0].column().is_const() {
             let const_column: &ConstColumn = Series::check_get(columns[0].column())?;
             Series::check_get(const_column.inner())?
@@ -80,13 +87,17 @@ impl Function for ArrayGetFunction {
             Series::check_get(columns[0].column())?
         };
 
-        let inner_type = self.array_type.inner_type().data_type_id();
-        let index_type = columns[1].data_type().data_type_id();
-        with_match_scalar_types_error!(inner_type.to_physical_type(), |$T1| {
-            with_match_integer_types_error!(index_type, |$T2| {
-                let inner_column: &<$T1 as Scalar>::ColumnType = Series::check_get(array_column.values())?;
-                let meta = if inner_type.is_array() {
-                    let inner_array_type: ArrayType = self.array_type.inner_type().clone().try_into()?;
+        let inner_column = array_column.values();
+        let (_, validity) = inner_column.validity();
+        let inner_column = Series::remove_nullable(inner_column);
+        let inner_type = remove_nullable(self.array_type.inner_type());
+        let index_type = columns[1].data_type();
+
+        with_match_scalar_types_error!(inner_type.data_type_id().to_physical_type(), |$T1| {
+            with_match_integer_types_error!(index_type.data_type_id(), |$T2| {
+                let inner_column: &<$T1 as Scalar>::ColumnType = Series::check_get(&inner_column)?;
+                let meta = if inner_type.data_type_id().is_array() {
+                    let inner_array_type: ArrayType = inner_type.clone().try_into()?;
                     ColumnMeta::Array {
                         inner_type: inner_array_type.inner_type().clone(),
                     }
@@ -107,7 +118,10 @@ impl Function for ArrayGetFunction {
                         if index >= len {
                             builder.append_null();
                         } else {
-                            builder.append(inner_column.get_data(index), true);
+                            match validity.filter(|v| !v.get_bit(index)) {
+                                Some(_) => builder.append_null(),
+                                None => builder.append(inner_column.get_data(index), true),
+                            }
                         }
                     }
                 } else if columns[1].column().is_const() {
@@ -119,7 +133,10 @@ impl Function for ArrayGetFunction {
                         if index >= len {
                             builder.append_null();
                         } else {
-                            builder.append(inner_column.get_data(offset + index), true);
+                            match validity.filter(|v| !v.get_bit(offset + index)) {
+                                Some(_) => builder.append_null(),
+                                None => builder.append(inner_column.get_data(offset + index), true),
+                            }
                         }
                         offset += len;
                     }
@@ -133,7 +150,10 @@ impl Function for ArrayGetFunction {
                         if index >= len {
                             builder.append_null();
                         } else {
-                            builder.append(inner_column.get_data(offset + index), true);
+                            match validity.filter(|v| !v.get_bit(offset + index)) {
+                                Some(_) => builder.append_null(),
+                                None => builder.append(inner_column.get_data(offset + index), true),
+                            }
                         }
                         offset += len;
                     }

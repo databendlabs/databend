@@ -21,6 +21,7 @@ use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::output_format::OutputFormatType;
 use common_meta_app::schema::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -31,7 +32,6 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
 use super::StageSource;
-use crate::formats::output_format::OutputFormatType;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::TransformLimit;
 use crate::pipelines::new::NewPipeline;

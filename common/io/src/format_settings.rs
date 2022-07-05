@@ -77,6 +77,7 @@ pub enum Compression {
     RawDeflate,
     Lzo,
     Snappy,
+    Xz,
 }
 
 impl Default for Compression {
@@ -99,6 +100,7 @@ impl FromStr for Compression {
             "rawdeflate" | "raw_deflate" => Ok(Compression::RawDeflate),
             "lzo" => Ok(Compression::Lzo),
             "snappy" => Ok(Compression::Snappy),
+            "xz" => Ok(Compression::Xz),
             "none" => Ok(Compression::None),
             _ => Err(ErrorCode::UnknownCompressionType(format!(
                 "Unknown compression: {s}"

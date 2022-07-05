@@ -23,6 +23,7 @@ clickhouse_config = {
     'database': 'default',
 }
 
+
 def config_from_env():
     mysql_host = os.getenv("QUERY_MYSQL_HANDLER_HOST")
     if mysql_host is not None:
@@ -66,5 +67,6 @@ def config_from_env():
     if mysql_user is not None:
         mysql_config['user'] = mysql_user
         http_config['user'] = mysql_user
+
 
 config_from_env()

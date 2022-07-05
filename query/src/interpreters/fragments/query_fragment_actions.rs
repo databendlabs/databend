@@ -25,10 +25,10 @@ use common_meta_types::NodeInfo;
 use common_planners::PlanNode;
 
 use crate::api::DataExchange;
-use crate::api::ExecutePacket;
-use crate::api::ExecutorPacket;
-use crate::api::FragmentPacket;
-use crate::api::PrepareChannel;
+use crate::api::ExecutePartialQueryPacket;
+use crate::api::FragmentPlanPacket;
+use crate::api::InitNodesChannelPacket;
+use crate::api::QueryFragmentsPlanPacket;
 use crate::sessions::QueryContext;
 
 // Query plan fragment with executor name
@@ -146,16 +146,16 @@ impl QueryFragmentsActions {
         Ok(())
     }
 
-    pub fn prepare_packets(&self, ctx: Arc<QueryContext>) -> Result<Vec<ExecutorPacket>> {
+    pub fn get_query_fragments_plan_packets(&self) -> Result<Vec<QueryFragmentsPlanPacket>> {
         let fragments_packets = self.get_executors_fragments();
-        let mut executors_packets = Vec::with_capacity(fragments_packets.len());
+        let mut query_fragments_plan_packets = Vec::with_capacity(fragments_packets.len());
 
-        let nodes_info = Self::nodes_info(&ctx);
+        let nodes_info = Self::nodes_info(&self.ctx);
         let source_2_fragments = self.get_source_2_fragments();
 
-        let cluster = ctx.get_cluster();
+        let cluster = self.ctx.get_cluster();
         for (executor, fragments) in fragments_packets.into_iter() {
-            let query_id = ctx.get_id();
+            let query_id = self.ctx.get_id();
             let executors_info = nodes_info.clone();
 
             let source_2_fragments = match source_2_fragments.get(&executor) {
@@ -163,7 +163,7 @@ impl QueryFragmentsActions {
                 Some(source_2_fragments) => source_2_fragments.clone(),
             };
 
-            executors_packets.push(ExecutorPacket::create(
+            query_fragments_plan_packets.push(QueryFragmentsPlanPacket::create(
                 query_id,
                 executor,
                 fragments,
@@ -173,15 +173,15 @@ impl QueryFragmentsActions {
             ));
         }
 
-        Ok(executors_packets)
+        Ok(query_fragments_plan_packets)
     }
 
-    pub fn prepare_channel(&self, ctx: Arc<QueryContext>) -> Result<Vec<PrepareChannel>> {
-        let nodes_info = Self::nodes_info(&ctx);
-        let mut prepare_channel = Vec::with_capacity(nodes_info.len());
+    pub fn get_init_nodes_channel_packets(&self) -> Result<Vec<InitNodesChannelPacket>> {
+        let nodes_info = Self::nodes_info(&self.ctx);
+        let mut init_nodes_channel_packets = Vec::with_capacity(nodes_info.len());
         let connections_info = self.get_target_2_fragments();
 
-        let cluster = ctx.get_cluster();
+        let cluster = self.ctx.get_cluster();
         for node_id in nodes_info.keys() {
             let mut target_nodes_info = HashMap::new();
             let mut target_2_fragments = HashMap::new();
@@ -201,8 +201,8 @@ impl QueryFragmentsActions {
                 }
             }
 
-            prepare_channel.push(PrepareChannel::create(
-                ctx.get_id(),
+            init_nodes_channel_packets.push(InitNodesChannelPacket::create(
+                self.ctx.get_id(),
                 node_id.to_owned(),
                 cluster.local_id(),
                 nodes_info.clone(),
@@ -211,7 +211,22 @@ impl QueryFragmentsActions {
             ));
         }
 
-        Ok(prepare_channel)
+        Ok(init_nodes_channel_packets)
+    }
+
+    pub fn get_execute_partial_query_packets(&self) -> Result<Vec<ExecutePartialQueryPacket>> {
+        let nodes_info = Self::nodes_info(&self.ctx);
+        let mut execute_partial_query_packets = Vec::with_capacity(nodes_info.len());
+
+        for node_id in nodes_info.keys() {
+            execute_partial_query_packets.push(ExecutePartialQueryPacket::create(
+                self.ctx.get_id(),
+                node_id.to_owned(),
+                nodes_info.clone(),
+            ));
+        }
+
+        Ok(execute_partial_query_packets)
     }
 
     // map(source, map(target, vec(fragment_id)))
@@ -282,21 +297,6 @@ impl QueryFragmentsActions {
         source_2_fragments
     }
 
-    pub fn execute_packets(&self, ctx: Arc<QueryContext>) -> Result<Vec<ExecutePacket>> {
-        let nodes_info = Self::nodes_info(&ctx);
-        let mut execute_packets = Vec::with_capacity(nodes_info.len());
-
-        for node_id in nodes_info.keys() {
-            execute_packets.push(ExecutePacket::create(
-                ctx.get_id(),
-                node_id.to_owned(),
-                nodes_info.clone(),
-            ));
-        }
-
-        Ok(execute_packets)
-    }
-
     fn nodes_info(ctx: &Arc<QueryContext>) -> HashMap<String, Arc<NodeInfo>> {
         let nodes = ctx.get_cluster().get_nodes();
         let mut nodes_info = HashMap::with_capacity(nodes.len());
@@ -308,11 +308,11 @@ impl QueryFragmentsActions {
         nodes_info
     }
 
-    fn get_executors_fragments(&self) -> HashMap<String, Vec<FragmentPacket>> {
+    fn get_executors_fragments(&self) -> HashMap<String, Vec<FragmentPlanPacket>> {
         let mut fragments_packets = HashMap::new();
         for fragment_actions in &self.fragments_actions {
             for fragment_action in &fragment_actions.fragment_actions {
-                let fragment_packet = FragmentPacket::create(
+                let fragment_packet = FragmentPlanPacket::create(
                     fragment_actions.fragment_id,
                     fragment_action.node.clone(),
                     fragment_actions.data_exchange.clone(),

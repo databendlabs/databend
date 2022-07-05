@@ -99,17 +99,10 @@ Let's run some [benchmark queries](https://databend.rs/doc/performance/local-vec
 
 ### Deployment
 
-- [How to Deploy Databend With MinIO](https://databend.rs/doc/deploy/minio)
-- [How to Deploy Databend With AWS S3](https://databend.rs/doc/deploy/s3)
-- [How to Deploy Databend With Azure Blob Storage](https://databend.rs/doc/deploy/azure)
-- [How to Deploy Databend With Wasabi Object Storage](https://databend.rs/doc/deploy/wasabi)
-- [How to Deploy Databend With Scaleway OS](https://databend.rs/doc/deploy/scw)
-- [How to Deploy Databend With Tencent COS](https://databend.rs/doc/deploy/cos)
-- [How to Deploy Databend With Alibaba OSS](https://databend.rs/doc/deploy/oss)
-- [How to Deploy Databend With QingCloud QingStore](https://databend.rs/doc/deploy/qingstore)
-- [How to Deploy a Databend Local Cluster With MinIO](https://databend.rs/doc/deploy/local)
-- [How to Deploy a Databend K8s Cluster With MinIO](https://databend.rs/doc/deploy/cluster-minio)
-- [Databend Cloud (beta)](https://databend.rs/doc/deploy/databend-cloud)
+- [Understanding Deployment Modes](https://databend.rs/doc/deploy/understanding-deployment-modes)
+- [Deploying a Standalone Databend](https://databend.rs/doc/deploy/deploying-databend)
+- [Expanding a Standalone Databend](https://databend.rs/doc/deploy/expanding-to-a-databend-cluster)
+- [Databend Cloud (Beta)](https://databend.rs/doc/deploy/databend-cloud)
  
 ### Connect
 

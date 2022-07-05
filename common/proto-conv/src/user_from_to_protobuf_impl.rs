@@ -347,6 +347,7 @@ impl FromToProto<pb::user_stage_info::StageFileCompression> for mt::StageFileCom
                 Ok(mt::StageFileCompression::Snappy)
             }
             pb::user_stage_info::StageFileCompression::None => Ok(mt::StageFileCompression::None),
+            pb::user_stage_info::StageFileCompression::Xz => Ok(mt::StageFileCompression::Xz),
         }
     }
 
@@ -370,6 +371,7 @@ impl FromToProto<pb::user_stage_info::StageFileCompression> for mt::StageFileCom
                 Ok(pb::user_stage_info::StageFileCompression::Snappy)
             }
             mt::StageFileCompression::None => Ok(pb::user_stage_info::StageFileCompression::None),
+            mt::StageFileCompression::Xz => Ok(pb::user_stage_info::StageFileCompression::Xz),
         }
     }
 }

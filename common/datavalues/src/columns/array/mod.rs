@@ -39,10 +39,15 @@ pub struct ArrayColumn {
 impl ArrayColumn {
     pub fn new(array: LargeListArray) -> Self {
         let ty = array.data_type();
-
-        let data_type = if let ArrowType::LargeList(f) = ty {
-            let ty = from_arrow_field(f);
-            DataTypeImpl::Array(ArrayType::create(ty))
+        let (data_type, values) = if let ArrowType::LargeList(f) = ty {
+            let inner_type = from_arrow_field(f);
+            let values = if inner_type.is_nullable() {
+                array.values().clone().into_nullable_column()
+            } else {
+                array.values().clone().into_column()
+            };
+            let data_type = ArrayType::new_impl(inner_type);
+            (data_type, values)
         } else {
             unreachable!()
         };
@@ -50,7 +55,7 @@ impl ArrayColumn {
         Self {
             data_type,
             offsets: array.offsets().clone(),
-            values: array.values().clone().into_column(),
+            values,
         }
     }
 

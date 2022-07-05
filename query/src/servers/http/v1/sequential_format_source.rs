@@ -24,12 +24,12 @@ use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::InputFormat;
+use common_formats::InputState;
 use opendal::io_util::DecompressDecoder;
 use opendal::io_util::DecompressState;
 use poem::web::Multipart;
 
-use crate::formats::InputFormat;
-use crate::formats::InputState;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;

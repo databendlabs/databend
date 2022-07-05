@@ -20,6 +20,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::FormatFactory;
 use common_io::prelude::BufferReader;
 use common_io::prelude::NestedCheckpointReader;
 use common_planners::InsertInputSource;
@@ -36,7 +37,6 @@ use sqlparser::ast::OnInsert;
 use sqlparser::ast::Query;
 use sqlparser::ast::SqliteOnConflict;
 
-use crate::formats::FormatFactory;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

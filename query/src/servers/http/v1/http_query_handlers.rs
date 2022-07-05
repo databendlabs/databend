@@ -16,6 +16,7 @@ use std::str::FromStr;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
+use common_formats::output_format::OutputFormatType;
 use common_tracing::tracing;
 use poem::error::BadRequest;
 use poem::error::Error as PoemError;
@@ -38,7 +39,6 @@ use serde_json::Value as JsonValue;
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
-use crate::formats::output_format::OutputFormatType;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::JsonBlock;

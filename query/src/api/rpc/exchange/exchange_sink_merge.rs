@@ -24,7 +24,8 @@ use common_exception::Result;
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
-use crate::api::rpc::packet::DataPacket;
+use crate::api::rpc::packets::DataPacket;
+use crate::api::rpc::packets::FragmentData;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -150,7 +151,8 @@ impl Processor for ExchangeMergeSink {
             }
 
             // FlightData
-            self.output_data = Some(DataPacket::Data(self.fragment_id, values));
+            let data = FragmentData::Data(self.fragment_id, values);
+            self.output_data = Some(DataPacket::FragmentData(data));
         }
 
         Ok(())
