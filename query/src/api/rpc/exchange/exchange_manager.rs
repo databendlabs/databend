@@ -290,6 +290,7 @@ struct QueryCoordinator {
     exchange_senders: Vec<Arc<ExchangeSender>>,
     exchange_receivers: Vec<Arc<ExchangeReceiver>>,
     subscribe_flight_shutdown_notify: Vec<Arc<Notify>>,
+    subscribe_flight_finished_notify: Vec<Arc<Notify>>,
 }
 
 impl QueryCoordinator {
@@ -324,6 +325,7 @@ impl QueryCoordinator {
                 Some(String::from("Cluster-Pub-Sub")),
             )?),
             subscribe_flight_shutdown_notify: vec![],
+            subscribe_flight_finished_notify: vec![],
         })
     }
 
@@ -380,6 +382,17 @@ impl QueryCoordinator {
                 });
             }
         }
+
+        for shutdown_notify in &self.subscribe_flight_shutdown_notify {
+            shutdown_notify.notify_one();
+        }
+
+        for finished_notify in &self.subscribe_flight_finished_notify {
+            let finished_notify = finished_notify.clone();
+            futures::executor::block_on(async move { finished_notify.notified().await });
+        }
+
+        println!("after finished notify");
 
         // close request server channel.
         drop(self.request_server_tx.take());
@@ -545,29 +558,47 @@ impl QueryCoordinator {
         if let Some(subscribe_channel) = self.subscribe_channel.remove(source) {
             let source = source.to_string();
             let target = self.executor_id.clone();
-            let notify = Arc::new(Notify::new());
-            self.subscribe_flight_shutdown_notify.push(notify.clone());
+            let shutdown_notify = Arc::new(Notify::new());
+            let finished_notify = Arc::new(Notify::new());
+            self.subscribe_flight_shutdown_notify.push(shutdown_notify.clone());
+            self.subscribe_flight_finished_notify.push(finished_notify.clone());
 
             return Ok(self.runtime.spawn(async move {
-                'fragment_loop: while let Some(flight_data) = stream.next().await {
-                    let data_packet = match flight_data {
-                        Err(status) => DataPacket::ErrorCode(ErrorCode::from(status)),
-                        Ok(flight_data) => match DataPacket::try_from(flight_data) {
-                            Ok(data_packet) => data_packet,
-                            Err(error_code) => DataPacket::ErrorCode(error_code),
-                        },
-                    };
+                let mut shutdown_notified = Box::pin(shutdown_notify.notified());
 
-                    if let Err(_cause) = subscribe_channel.send(Ok(data_packet)).await {
-                        common_tracing::tracing::warn!(
-                            "Subscribe channel closed, source {}, target {}",
-                            source,
-                            target
-                        );
+                'fragment_loop: loop {
+                    match futures::future::select(shutdown_notified, stream.next()).await {
+                        Either::Left((_, _)) => {
+                            break 'fragment_loop;
+                        }
+                        Either::Right((None, _)) => {
+                            break 'fragment_loop;
+                        }
+                        Either::Right((Some(flight_data), n)) => {
+                            shutdown_notified = n;
 
-                        break 'fragment_loop;
+                            let data_packet = match flight_data {
+                                Err(status) => DataPacket::ErrorCode(ErrorCode::from(status)),
+                                Ok(flight_data) => match DataPacket::try_from(flight_data) {
+                                    Ok(data_packet) => data_packet,
+                                    Err(error_code) => DataPacket::ErrorCode(error_code),
+                                },
+                            };
+
+                            if let Err(_cause) = subscribe_channel.send(Ok(data_packet)).await {
+                                common_tracing::tracing::warn!(
+                                    "Subscribe channel closed, source {}, target {}",
+                                    source,
+                                    target
+                                );
+
+                                break 'fragment_loop;
+                            }
+                        }
                     }
                 }
+
+                finished_notify.notify_one();
             }));
         };
 
