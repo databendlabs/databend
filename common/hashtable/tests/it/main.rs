@@ -16,10 +16,10 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_query::common::HashMap;
-use databend_query::common::HashMapKind;
-use databend_query::common::HashTableGrower;
-use databend_query::common::SingleLevelGrower;
+use common_hashtable::HashMap;
+use common_hashtable::HashMapKind;
+use common_hashtable::HashTableGrower;
+use common_hashtable::SingleLevelGrower;
 use rand::Rng;
 
 #[test]

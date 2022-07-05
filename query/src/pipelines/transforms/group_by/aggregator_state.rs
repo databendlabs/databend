@@ -22,12 +22,12 @@ use common_datablocks::HashMethodSerializer;
 use common_datablocks::HashMethodSingleString;
 use common_datavalues::prelude::*;
 use common_functions::aggregates::StateAddr;
+use common_hashtable::HashMapIteratorKind;
+use common_hashtable::HashMapKind;
+use common_hashtable::HashTableEntity;
+use common_hashtable::HashTableKeyable;
+use common_hashtable::KeyValueEntity;
 
-use crate::common::HashMapIteratorKind;
-use crate::common::HashMapKind;
-use crate::common::HashTableEntity;
-use crate::common::HashTableKeyable;
-use crate::common::KeyValueEntity;
 use crate::pipelines::new::processors::AggregatorParams as NewAggregatorParams;
 use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedKeyable;
 use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedKeysStateEntity;

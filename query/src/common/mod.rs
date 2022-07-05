@@ -15,9 +15,7 @@
 pub mod context_function;
 mod evaluator;
 mod expression_evaluator;
-mod hashtable;
 pub mod service;
 
 pub use evaluator::*;
 pub use expression_evaluator::ExpressionEvaluator;
-pub use hashtable::*;

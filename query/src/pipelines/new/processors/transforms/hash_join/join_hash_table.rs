@@ -32,14 +32,14 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
+use common_hashtable::HashMap;
+use common_hashtable::HashTableKeyable;
 use primitive_types::U256;
 use primitive_types::U512;
 
 use super::ProbeState;
 use crate::common::EvalNode;
 use crate::common::Evaluator;
-use crate::common::HashMap;
-use crate::common::HashTableKeyable;
 use crate::pipelines::new::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;

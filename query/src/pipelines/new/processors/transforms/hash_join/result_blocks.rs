@@ -21,12 +21,12 @@ use common_datavalues::ColumnRef;
 use common_datavalues::NullableColumn;
 use common_datavalues::Series;
 use common_exception::Result;
+use common_hashtable::HashMap;
+use common_hashtable::HashTableKeyable;
 
 use super::JoinHashTable;
 use super::ProbeState;
 use crate::common::EvalNode;
-use crate::common::HashMap;
-use crate::common::HashTableKeyable;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::exec::ColumnID;
 use crate::sql::planner::plans::JoinType;
