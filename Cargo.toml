@@ -68,7 +68,7 @@ object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
 
 [patch.crates-io]
-parquet2 = { version = "0.14", optional = true, git = "https://github.com/datafuse-extras/parquet2", rev = "7be3cd" }
+parquet2 = { version = "0.14", optional = true, git = "https://github.com/datafuse-extras/parquet2", rev = "4b67922" }
 chrono = { git = "https://github.com/datafuse-extras/chrono", rev = "279f590" }
 # https://github.com/calder/rust-goldenfile/pull/7
 goldenfile = { git = "https://github.com/datafuse-extras/rust-goldenfile", rev = "16c5783" }
