@@ -116,7 +116,7 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
         self.values.len() * std::mem::size_of::<T>()
     }
 
-    fn as_arrow_array(&self) -> common_arrow::arrow::array::ArrayRef {
+    fn as_arrow_array(&self) -> common_arrow::ArrayRef {
         let mut offsets: Vec<i64> = Vec::with_capacity(self.values.len());
         let mut values: Vec<u8> = Vec::with_capacity(self.values.len());
 

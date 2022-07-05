@@ -14,7 +14,7 @@
 
 use common_arrow::arrow::array::growable::make_growable;
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
+use common_arrow::ArrayRef;
 use common_datavalues::ColumnRef;
 use common_datavalues::IntoColumn;
 use common_exception::Result;

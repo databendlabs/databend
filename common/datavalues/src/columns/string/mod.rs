@@ -23,6 +23,7 @@ use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast::binary_to_large_binary;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::types::Index;
+use common_arrow::ArrayRef;
 pub use iterator::*;
 pub use mutable::*;
 

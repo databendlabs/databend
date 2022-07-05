@@ -92,11 +92,13 @@ fn databend_if_else_then(
 criterion_group!(benches, add_benchmark);
 criterion_main!(benches);
 
+use common_arrow::ArrayRef;
 use rand::distributions::Distribution;
 use rand::distributions::Standard;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+
 /// Returns fixed seedable RNG
 pub fn seedable_rng() -> StdRng {
     StdRng::seed_from_u64(42)

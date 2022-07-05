@@ -173,7 +173,7 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         self.values.len() * std::mem::size_of::<T>()
     }
 
-    fn as_arrow_array(&self) -> common_arrow::arrow::array::ArrayRef {
+    fn as_arrow_array(&self) -> common_arrow::ArrayRef {
         let data_type = self.data_type().arrow_type();
         Box::new(PrimitiveArray::<T>::from_data(
             data_type,

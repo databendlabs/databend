@@ -18,6 +18,7 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::types::Index;
+use common_arrow::ArrayRef;
 
 use crate::prelude::*;
 
