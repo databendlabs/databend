@@ -239,6 +239,8 @@ pub enum TokenKind {
     ALL,
     #[token("ANY", ignore(ascii_case))]
     ANY,
+    #[token("SOME", ignore(ascii_case))]
+    SOME,
     #[token("ALTER", ignore(ascii_case))]
     ALTER,
     #[token("ANALYZE", ignore(ascii_case))]
@@ -818,7 +820,7 @@ impl TokenKind {
             // | TokenKind::SESSION_USER
             // | TokenKind::SETOF
             | TokenKind::SMALLINT
-            // | TokenKind::SOME
+            | TokenKind::SOME
             | TokenKind::SUBSTRING
             // | TokenKind::SYMMETRIC
             | TokenKind::TABLE
@@ -943,7 +945,7 @@ impl TokenKind {
             | TokenKind::SELECT
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
-            // | TokenKind::SOME
+            | TokenKind::SOME
             // | TokenKind::SYMMETRIC
             | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE

@@ -173,6 +173,10 @@ pub enum ExprElement<'a> {
     AllOp {
         subquery: Query<'a>,
     },
+    /// Some operation
+    SomeOp {
+        subquery: Query<'a>,
+    },
     /// `BETWEEN ... AND ...`
     Between {
         low: Box<Expr<'a>>,
@@ -503,6 +507,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 span: elem.span.0,
                 expr: Box::new(subquery),
             },
+            ExprElement::SomeOp { subquery } => Expr::SomeOp {
+                span: elem.span.0,
+                expr: Box::new(subquery),
+            },
             _ => unreachable!(),
         };
         Ok(expr)
@@ -641,6 +649,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ALL ~ "(" ~ #query  ~ ^")"
         },
         |(_, _, subquery, _)| ExprElement::AllOp { subquery },
+    );
+    let some_op = map(
+        rule! {
+            SOME ~ "(" ~ #query ~ ^")"
+        },
+        |(_, _, subquery, _)| ExprElement::SomeOp { subquery },
     );
     let between = map(
         rule! {
@@ -948,6 +962,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #subquery : "`(SELECT ...)`"
             | #any_op : "`ANY (SELECT ...)`"
             | #all_op : "`ALL (SELECT ...)`"
+            | #some_op: "`SOME (SELECT ...)`"
             | #group
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"

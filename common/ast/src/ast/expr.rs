@@ -69,6 +69,11 @@ pub enum Expr<'a> {
         span: &'a [Token<'a>],
         expr: Box<Query<'a>>,
     },
+    /// Some operator
+    SomeOp {
+        span: &'a [Token<'a>],
+        expr: Box<Query<'a>>,
+    },
     /// `BETWEEN ... AND ...`
     Between {
         span: &'a [Token<'a>],
@@ -342,7 +347,8 @@ impl<'a> Expr<'a> {
             | Expr::Coalesce { span, .. }
             | Expr::IfNull { span, .. }
             | Expr::AnyOp { span, .. }
-            | Expr::AllOp { span, .. } => span,
+            | Expr::AllOp { span, .. }
+            | Expr::SomeOp { span, .. } => span,
         }
     }
 }
@@ -621,6 +627,9 @@ impl<'a> Display for Expr<'a> {
             }
             Expr::AllOp { expr, .. } => {
                 write!(f, "All({expr})")?;
+            }
+            Expr::SomeOp { expr, .. } => {
+                write!(f, "Some({expr})")?;
             }
             Expr::Between {
                 expr,
