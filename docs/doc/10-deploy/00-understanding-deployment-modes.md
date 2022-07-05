@@ -24,7 +24,7 @@ Databend works with self-hosted or cloud object storage solutions. You will need
 - Azure Blob Storage
 
 ## Standalone Deployment
-This topic describes the standalone deployment architecture and environments.
+This topic describes the standalone deployment architecture and environments.
 
 ### Deployment Architecture
 When you deploy Databend in standalone mode, you host a Meta node and a Query node on the same machine or separately. For more information about how to deploy Databend in standalone mode with various object storage solutions, see [Deploying a Standalone Databend](./02-deploying-databend.md).
@@ -44,7 +44,7 @@ The following list provides recommended hardware specifications for the server r
 - Network Interface Card: 10 Gbps or above
 
 ## Cluster Deployment
-This topic describes the cluster deployment architecture and environments.
+This topic describes the cluster deployment architecture and environments.
 
 ### Deployment Architecture
 When you deploy Databend in cluster mode, you set up multiple Meta and Query nodes, and host each node on separate machine. Please note that you must have a minimum of three Meta nodes in a cluster.
