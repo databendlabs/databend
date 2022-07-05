@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::broadcast;
@@ -94,7 +95,7 @@ impl HttpService {
         Ok(cfg)
     }
 
-    async fn start_with_tls(&mut self, listening: String) -> Result<()> {
+    async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<()> {
         tracing::info!("Http API TLS enabled");
 
         let tls_config = Self::build_tls(&self.cfg.clone())?;
@@ -104,7 +105,7 @@ impl HttpService {
         Ok(())
     }
 
-    async fn start_without_tls(&mut self, listening: String) -> Result<()> {
+    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<()> {
         tracing::warn!("Http API TLS not set");
 
         self.shutdown_handler
@@ -118,9 +119,10 @@ impl HttpService {
 impl Stoppable for HttpService {
     async fn start(&mut self) -> Result<()> {
         let conf = self.cfg.clone();
+        let listening = conf.admin_api_address.parse::<SocketAddr>()?;
         match conf.admin_tls_server_key.is_empty() || conf.admin_tls_server_cert.is_empty() {
-            true => self.start_without_tls(conf.admin_api_address).await,
-            false => self.start_with_tls(conf.admin_api_address).await,
+            true => self.start_without_tls(listening).await,
+            false => self.start_with_tls(listening).await,
         }
     }
 
