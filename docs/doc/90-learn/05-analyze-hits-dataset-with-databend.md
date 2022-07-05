@@ -72,13 +72,13 @@ Example Queries:
 
 | Number      | Query |
 | ----------- | ----------- |
-| Q1 | SELECT COUNT(*) FROM hits; |
+| Q1 | `SELECT COUNT(*) FROM hits;` |
 | Q2 | `SELECT COUNT(*) FROM hits WHERE AdvEngineID <> 0;` |
-| Q3 | SELECT SUM(AdvEngineID), COUNT(*), AVG(ResolutionWidth) FROM hits; |
-| Q4 | SELECT AVG(UserID) FROM hits; |
-| Q5 | SELECT COUNT(DISTINCT UserID) FROM hits; |
-| Q6 | SELECT COUNT(DISTINCT SearchPhrase) FROM hits; |
-| Q7 | SELECT MIN(EventDate), MAX(EventDate) FROM hits; |
-| Q8 | SELECT AdvEngineID, COUNT(*) FROM hits WHERE AdvEngineID <> 0 GROUP BY AdvEngineID ORDER BY COUNT(*) DESC; |
-| Q9 | SELECT RegionID, COUNT(DISTINCT UserID) AS u FROM hits GROUP BY RegionID ORDER BY u DESC LIMIT 10; |
-| Q10 | SELECT RegionID, SUM(AdvEngineID), COUNT(*) AS c, AVG(ResolutionWidth), COUNT(DISTINCT UserID) FROM hits GROUP BY RegionID ORDER BY c DESC LIMIT 10; |
+| Q3 | `SELECT SUM(AdvEngineID), COUNT(*), AVG(ResolutionWidth) FROM hits;` |
+| Q4 | `SELECT AVG(UserID) FROM hits;` |
+| Q5 | `SELECT COUNT(DISTINCT UserID) FROM hits;` |
+| Q6 | `SELECT COUNT(DISTINCT SearchPhrase) FROM hits;` |
+| Q7 | `SELECT MIN(EventDate), MAX(EventDate) FROM hits;` |
+| Q8 | `SELECT AdvEngineID, COUNT(*) FROM hits WHERE AdvEngineID <> 0 GROUP BY AdvEngineID ORDER BY COUNT(*) DESC;` |
+| Q9 | `SELECT RegionID, COUNT(DISTINCT UserID) AS u FROM hits GROUP BY RegionID ORDER BY u DESC LIMIT 10;` |
+| Q10 | `SELECT RegionID, SUM(AdvEngineID), COUNT(*) AS c, AVG(ResolutionWidth), COUNT(DISTINCT UserID) FROM hits GROUP BY RegionID ORDER BY c DESC LIMIT 10;` |
