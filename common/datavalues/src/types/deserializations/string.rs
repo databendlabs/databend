@@ -130,7 +130,6 @@ impl TypeDeserializer for StringDeserializer {
             if !settings.field_delimiter.is_empty() {
                 field_delimiter = settings.field_delimiter[0];
             }
-
             if maybe_quote == field_delimiter || maybe_quote == b'\r' || maybe_quote == b'\n' {
                 self.builder.append_default();
                 return Ok(());

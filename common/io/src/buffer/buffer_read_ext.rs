@@ -63,11 +63,6 @@ pub trait BufferReadExt: BufferRead {
                 let c = b[0];
                 self.ignore_byte(c)?;
 
-                // "abc\",1234,"434"
-                if c == quota {
-                    buf.push(b'\\');
-                    return Ok(());
-                }
                 match c {
                     b'n' => buf.push(b'\n'),
                     b't' => buf.push(b'\t'),
