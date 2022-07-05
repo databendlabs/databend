@@ -22,7 +22,7 @@ with NativeClient(name='client1>') as client1:
     client1.send("drop stage if exists named_external_stage;")
     client1.expect(prompt)
 
-    create_sql_f = os.path.join(CURDIR, '../ontime/create_table.sql')
+    create_sql_f = os.path.join(CURDIR, '../ddl/ontime.sql')
     read = open(create_sql_f, 'r')
     create_sql = read.read().replace("ontime", "ontime200")
     read.close()
