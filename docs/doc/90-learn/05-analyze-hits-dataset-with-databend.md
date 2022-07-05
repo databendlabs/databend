@@ -39,14 +39,11 @@ See also [How To Create User](../30-reference/30-sql/00-ddl/30-user/01-user-crea
 
 ### 2.3 Load Data Into hits Table
 
-```shell title='hits.tsv'
+```shell title='hits_1m.tsv.gz'
 wget --no-check-certificate https://repo.databend.rs/hits/hits_1m.tsv.gz
 ## If you want to load full version of hits dataset, please download from clickhouse's dataset:
 ##  wget --continue 'https://datasets.clickhouse.com/hits_compatible/hits.tsv.gz'
-gzip -d hits.csv.gz
-
-```shell title='Unzip'
-gzip -d hits_1m.tsv.gz
+gzip -d hits_1m.csv.gz
 ```
 
 ```shell title='Load CSV files into Databend'
