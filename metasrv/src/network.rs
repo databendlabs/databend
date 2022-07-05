@@ -97,7 +97,7 @@ impl Network {
                 incr_meta_metrics_active_peers(target, &endpoint.clone().into(), 1);
                 let client = RaftServiceClient::new(channel);
 
-                tracing::info!("connected: target={}: {}", target, addr);
+                tracing::debug!("connected: target={}: {}", target, addr);
 
                 Ok((client, endpoint))
             }
@@ -190,7 +190,7 @@ impl RaftNetwork<LogEntry> for Network {
         self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
 
         let resp = client.vote(req).await;
-        tracing::info!("vote: resp from target={} {:?}", target, resp);
+        tracing::debug!("vote: resp from target={} {:?}", target, resp);
 
         if resp.is_err() {
             incr_meta_metrics_sent_failure_to_peer(&target);
