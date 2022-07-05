@@ -16,7 +16,6 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_datavalues::prelude::*;
-use common_datavalues::with_match_primitive_type_id;
 use common_datavalues::ColumnBuilder;
 use common_datavalues::ColumnRef;
 use common_datavalues::ColumnsWithField;
@@ -67,7 +66,7 @@ impl GeoToH3Function {
         arg = args[2];
         if arg.data_type_id() != TypeID::UInt8 {
             return Err(ErrorCode::IllegalDataType(format!(
-                "Invalid type {} of argument {} for function '{}'. Must be Float64",
+                "Invalid type {} of argument {} for function '{}'. Must be UInt8",
                 arg.data_type_id(),
                 1,
                 display_name,
@@ -100,37 +99,26 @@ impl Function for GeoToH3Function {
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> common_exception::Result<ColumnRef> {
-        with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-            with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
-                with_match_primitive_type_id!(columns[2].data_type().data_type_id(), |$R| {
-                    let data_lon = Series::check_get_scalar::<f64>(columns[0].column())?;
-                    let data_lat = Series::check_get_scalar::<f64>(columns[1].column())?;
-                    let data_res = Series::check_get_scalar::<u8>(columns[2].column())?;
+        // Already force check args type in `try_create`, no need re-check here.
+        let data_lon = Series::check_get_scalar::<f64>(columns[0].column())?;
+        let data_lat = Series::check_get_scalar::<f64>(columns[1].column())?;
+        let data_res = Series::check_get_scalar::<u8>(columns[2].column())?;
 
-                    let mut builder: ColumnBuilder<u64> = ColumnBuilder::with_capacity(input_rows);
+        let mut builder: ColumnBuilder<u64> = ColumnBuilder::with_capacity(input_rows);
 
-                    for i in 0..input_rows {
-                        let lon = data_lon.get_data(i);
-                        let lat = data_lat.get_data(i);
-                        let res = data_res.get_data(i);
+        for i in 0..input_rows {
+            let lon = data_lon.get_data(i);
+            let lat = data_lat.get_data(i);
+            let res = data_res.get_data(i);
 
-                        // x must be Longitude and y must be Latitude
-                        // `h3ron` will transform `Coordinate{x, y}` to `GeoCoord{lat:y, lon:x}` internally.
-                        let coord = Coordinate { x: lon, y: lat };
-                        let h3_cell = H3Cell::from_coordinate_unchecked(&coord, res);
-                        builder.append(h3_cell.h3index());
-                    }
+            // x must be Longitude and y must be Latitude
+            // `h3ron` will transform `Coordinate{x, y}` to `GeoCoord{lat:y, lon:x}` internally.
+            let coord = Coordinate { x: lon, y: lat };
+            let h3_cell = H3Cell::from_coordinate_unchecked(&coord, res);
+            builder.append(h3_cell.h3index());
+        }
 
-                    Ok(builder.build(input_rows))
-                },{
-                    unreachable!()
-                })
-            },{
-                unreachable!()
-            })
-        },{
-            unreachable!()
-        })
+        Ok(builder.build(input_rows))
     }
 }
 
