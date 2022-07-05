@@ -24,6 +24,8 @@ use crate::sql::common::IndexType;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ColumnBinding {
+    /// Database name of this `ColumnBinding` in current context
+    pub database_name: Option<String>,
     /// Table name of this `ColumnBinding` in current context
     pub table_name: Option<String>,
     /// Column name of this `ColumnBinding` in current context
@@ -97,7 +99,8 @@ impl BindContext {
     /// This method will rename column bindings according to table alias.
     pub fn apply_table_alias(&mut self, alias: &TableAlias) -> Result<()> {
         for column in self.columns.iter_mut() {
-            column.table_name = Some(alias.name.to_string());
+            column.database_name = None;
+            column.table_name = Some(alias.name.name.to_lowercase());
         }
 
         if alias.columns.len() > self.columns.len() {
@@ -117,7 +120,8 @@ impl BindContext {
     /// This method will return error if the given names are ambiguous or invalid.
     pub fn resolve_column(
         &self,
-        table: Option<String>,
+        database: Option<&str>,
+        table: Option<&str>,
         column: &Identifier,
     ) -> Result<ColumnBinding> {
         let mut result = vec![];
@@ -126,21 +130,34 @@ impl BindContext {
         // Lookup parent context to support correlated subquery
         loop {
             for column_binding in bind_context.columns.iter() {
-                match (&table, &column_binding.table_name) {
+                match (
+                    (database, column_binding.database_name.as_ref()),
+                    (table, column_binding.table_name.as_ref()),
+                ) {
                     // No qualified table name specified
-                    (None, None) | (None, Some(_))
+                    ((None, _), (None, None)) | ((None, _), (None, Some(_)))
                         if column.name.to_lowercase() == column_binding.column_name =>
                     {
                         result.push(column_binding.clone());
                     }
 
-                    // Qualified column reference
-                    (Some(table), Some(table_name))
-                        if table == table_name
+                    // Qualified column reference without database name
+                    ((None, _), (Some(table), Some(table_name)))
+                        if &table.to_lowercase() == table_name
                             && column.name.to_lowercase() == column_binding.column_name =>
                     {
                         result.push(column_binding.clone());
                     }
+
+                    // Qualified column reference with database name
+                    ((Some(db), Some(db_name)), (Some(table), Some(table_name)))
+                        if &db.to_lowercase() == db_name
+                            && &table.to_lowercase() == table_name
+                            && column.name.to_lowercase() == column_binding.column_name =>
+                    {
+                        result.push(column_binding.clone());
+                    }
+
                     _ => {}
                 }
             }

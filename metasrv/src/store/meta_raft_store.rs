@@ -453,7 +453,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
     async fn get_current_snapshot(
         &self,
     ) -> Result<Option<openraft::storage::Snapshot<Self::SnapshotData>>, StorageError> {
-        tracing::info!("got snapshot start");
+        tracing::info!("get snapshot start");
         let snap = match &*self.current_snapshot.read().await {
             Some(snapshot) => {
                 let data = snapshot.data.clone();
@@ -465,7 +465,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
             None => Ok(None),
         };
 
-        tracing::info!("got snapshot complete");
+        tracing::info!("get snapshot complete");
 
         snap
     }

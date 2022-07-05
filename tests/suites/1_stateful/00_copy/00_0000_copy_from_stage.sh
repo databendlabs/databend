@@ -8,7 +8,7 @@ echo "drop stage if exists s1" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists named_external_stage" | $MYSQL_CLIENT_CONNECT
 
 ## Create table
-cat $CURDIR/../ontime/create_table.sql | sed 's/ontime/ontime200/g' | $MYSQL_CLIENT_CONNECT
+cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime200/g' | $MYSQL_CLIENT_CONNECT
 
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv s3://testbucket/admin/stage/s1/ontime_200.csv >/dev/null 2>&1
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.gz s3://testbucket/admin/stage/s1/ontime_200.csv.gz >/dev/null 2>&1

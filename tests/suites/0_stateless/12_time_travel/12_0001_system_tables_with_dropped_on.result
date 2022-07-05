@@ -1,4 +1,8 @@
-column 'dropped_on' of system.tables should work
+system.tables should contain the newly created table
 1
-dropped table has history
+system.tables_with_history should contain the newly created table, and dropped_on should be NULL
+1
+system.tables should NOT contain the dropped table
+1
+system.tables_with_history should contain the dropped table, and dropped_on should NOT be NULL
 1

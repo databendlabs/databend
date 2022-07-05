@@ -16,7 +16,6 @@ mod catalogs;
 mod clusters;
 mod common;
 mod configs;
-mod formats;
 mod functions;
 mod interpreters;
 mod metrics;

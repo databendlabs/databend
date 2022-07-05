@@ -1107,6 +1107,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-formats"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-io",
+ "once_cell",
+ "pretty_assertions",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
 name = "common-functions"
 version = "0.1.0"
 dependencies = [
@@ -1364,6 +1379,20 @@ dependencies = [
  "serde_json",
  "sled",
  "tempfile",
+]
+
+[[package]]
+name = "common-meta-store"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common-exception",
+ "common-grpc",
+ "common-meta-api",
+ "common-meta-embedded",
+ "common-meta-grpc",
+ "common-meta-types",
+ "common-tracing",
 ]
 
 [[package]]
@@ -2029,6 +2058,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-formats",
  "common-functions",
  "common-grpc",
  "common-hive-meta-store",
@@ -2041,6 +2071,7 @@ dependencies = [
  "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-store",
  "common-meta-types",
  "common-metrics",
  "common-planners",

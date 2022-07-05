@@ -26,8 +26,8 @@ use common_management::UdfMgr;
 use common_management::UserApi;
 use common_management::UserMgr;
 use common_meta_api::KVApi;
+use common_meta_store::MetaStoreProvider;
 
-use crate::common::MetaStoreProvider;
 use crate::Config;
 
 pub struct UserApiProvider {

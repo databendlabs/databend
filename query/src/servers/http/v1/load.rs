@@ -23,6 +23,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_formats::FormatFactory;
 use common_io::prelude::parse_escape_string;
 use common_io::prelude::FormatSettings;
 use common_planners::InsertInputSource;
@@ -45,7 +46,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
-use crate::formats::FormatFactory;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSourceV2;
