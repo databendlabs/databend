@@ -1183,6 +1183,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-hashtable"
+version = "0.1.0"
+
+[[package]]
 name = "common-hive-meta-store"
 version = "0.1.0"
 dependencies = [
