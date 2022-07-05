@@ -117,7 +117,9 @@ impl From<DataPacket> for FlightData {
             DataPacket::ErrorCode(error) => FlightData::from(error),
             DataPacket::Progress(progress_info) => FlightData::from(progress_info),
             DataPacket::FragmentData(fragment_data) => FlightData::from(fragment_data),
-            DataPacket::PrecommitBlock(precommit_block) => FlightData::from(precommit_block),
+            DataPacket::PrecommitBlock(precommit_block) => {
+                FlightData::try_from(precommit_block).unwrap_or_else(FlightData::from)
+            }
         }
     }
 }
@@ -167,38 +169,34 @@ impl From<ProgressInfo> for FlightData {
     }
 }
 
-impl From<PrecommitBlock> for FlightData {
-    fn from(block: PrecommitBlock) -> Self {
+impl TryFrom<PrecommitBlock> for FlightData {
+    type Error = ErrorCode;
+    fn try_from(block: PrecommitBlock) -> Result<Self> {
         let data_block = block.0;
         let arrow_schema = data_block.schema().to_arrow();
-        let schema = serialize_schema_to_info(&arrow_schema, None).unwrap();
+        let schema = serialize_schema_to_info(&arrow_schema, None)?;
 
         // schema_flight
         let options = WriteOptions { compression: None };
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        let chunks = data_block.try_into().unwrap();
-        // TODO use try_from instead
-        let (_dicts, data_flight) = serialize_batch(&chunks, &ipc_fields, &options).unwrap();
+        let chunks = data_block.try_into()?;
+        let (_dicts, data_flight) = serialize_batch(&chunks, &ipc_fields, &options)?;
 
         let header_len = schema.len() + data_flight.data_header.len();
         let mut data_header = Vec::with_capacity(header_len + 8);
 
-        data_header
-            .write_u64::<BigEndian>(schema.len() as u64)
-            .unwrap();
-        data_header
-            .write_u64::<BigEndian>(data_flight.data_header.len() as u64)
-            .unwrap();
+        data_header.write_u64::<BigEndian>(schema.len() as u64)?;
+        data_header.write_u64::<BigEndian>(data_flight.data_header.len() as u64)?;
 
-        data_header.write_all(&schema).unwrap();
-        data_header.write_all(&data_flight.data_header).unwrap();
+        data_header.write_all(&schema)?;
+        data_header.write_all(&data_flight.data_header)?;
 
-        FlightData {
+        Ok(FlightData {
             data_header,
             data_body: data_flight.data_body,
             flight_descriptor: None,
             app_metadata: vec![0x04],
-        }
+        })
     }
 }
 
