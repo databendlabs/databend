@@ -13,7 +13,15 @@ test = false
 
 [dependencies]
 # Workspace dependencies
+common-exception = { path = "../../exception" }
+common-grpc = { path = "../../grpc" }
+common-meta-api = { path = "../api" }
+common-meta-embedded = { path = "../embedded" }
+common-meta-grpc = { path = "../grpc" }
+common-meta-types = { path = "../types" }
+common-tracing = { path = "../../tracing" }
 
 # Crates.io dependencies
+async-trait = "0.1.56"
 
 [dev-dependencies]
