@@ -75,7 +75,7 @@ impl TypeDeserializer for NullableDeserializer {
         format: &FormatSettings,
     ) -> Result<()> {
         reader.push_checkpoint();
-        if reader.ignore_insensitive_bytes(b"null")? {
+        if reader.ignore_insensitive_bytes(&format.null_bytes)? {
             reader.pop_checkpoint();
             self.de_default(format);
             return Ok(());
@@ -87,24 +87,30 @@ impl TypeDeserializer for NullableDeserializer {
         Ok(())
     }
 
-    // TODO: support null text setting
     fn de_text<R: BufferRead>(
         &mut self,
         reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
-        reader.push_checkpoint();
-        if reader.ignore_insensitive_bytes(b"null")? {
-            reader.pop_checkpoint();
+        if reader.eof()? {
             self.de_default(format);
-            return Ok(());
         } else {
+            reader.push_checkpoint();
+            if reader.ignore_insensitive_bytes(&format.null_bytes)? {
+                let buffer = reader.fill_buf()?;
+                if buffer.is_empty()
+                    || (buffer[0] == b'\r' || buffer[0] == b'\n' || buffer[0] == b'\t')
+                {
+                    self.de_default(format);
+                    reader.pop_checkpoint();
+                    return Ok(());
+                }
+            }
             reader.rollback_to_checkpoint()?;
             reader.pop_checkpoint();
             self.inner.de_text(reader, format)?;
             self.bitmap.push(true);
         }
-
         Ok(())
     }
 
@@ -114,7 +120,7 @@ impl TypeDeserializer for NullableDeserializer {
         format: &FormatSettings,
     ) -> Result<()> {
         reader.push_checkpoint();
-        if reader.ignore_insensitive_bytes(b"null")? {
+        if reader.ignore_insensitive_bytes(&format.null_bytes)? {
             reader.pop_checkpoint();
             self.de_default(format);
         } else {
@@ -135,10 +141,13 @@ impl TypeDeserializer for NullableDeserializer {
             self.de_default(format);
         } else {
             reader.push_checkpoint();
-            if reader.ignore_insensitive_bytes(b"null")? {
+            if reader.ignore_insensitive_bytes(&format.null_bytes)? {
                 let buffer = reader.fill_buf()?;
-                if !buffer.is_empty()
-                    && (buffer[0] == b'\r' || buffer[0] == b'\n' || buffer[0] == b',')
+
+                if buffer.is_empty()
+                    || (buffer[0] == b'\r'
+                        || buffer[0] == b'\n'
+                        || buffer[0] == format.field_delimiter[0])
                 {
                     self.de_default(format);
                     reader.pop_checkpoint();
@@ -154,7 +163,7 @@ impl TypeDeserializer for NullableDeserializer {
     }
 
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
-        if reader.eq_ignore_ascii_case(b"null") {
+        if reader.eq_ignore_ascii_case(&format.null_bytes) {
             self.de_default(format);
             return Ok(());
         }
