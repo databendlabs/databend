@@ -308,6 +308,7 @@ impl SubqueryRewriter {
                 let column_name = format!("subquery_{}", index);
                 let left_condition = Scalar::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding {
+                        database_name: None,
                         table_name: None,
                         column_name,
                         index: *index,

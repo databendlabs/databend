@@ -33,8 +33,6 @@ use common_hashtable::HashTableKeyable;
 use super::JoinHashTable;
 use super::ProbeState;
 use crate::common::EvalNode;
-use crate::common::HashMap;
-use crate::common::HashTableKeyable;
 use crate::pipelines::new::processors::transforms::hash_join::join_hash_table::MarkerKind;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::exec::ColumnID;
