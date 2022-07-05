@@ -636,6 +636,7 @@ impl<'a> Binder {
         let mut bind_context = BindContext::new();
         for field in schema.fields() {
             let column = ColumnBinding {
+                database_name: None,
                 table_name: None,
                 column_name: field.name().clone(),
                 // A dummy index is fine, since we won't actually evaluate the expression

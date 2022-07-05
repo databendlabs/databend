@@ -50,6 +50,7 @@ use common_functions::scalars::TupleFunction;
 
 use crate::common::Evaluator;
 use crate::sessions::QueryContext;
+use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::planner::metadata::optimize_remove_count_args;
@@ -139,14 +140,16 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<(Scalar, DataTypeImpl)> {
         let (scalar, data_type) = match expr {
             Expr::ColumnRef {
-                database: _,
+                database,
                 table,
                 column,
                 ..
             } => {
-                let column = self
-                    .bind_context
-                    .resolve_column(table.clone().map(|ident| ident.name), column)?;
+                let column = self.bind_context.resolve_column(
+                    database.as_ref().map(|ident| ident.name.as_str()),
+                    table.as_ref().map(|ident| ident.name.as_str()),
+                    column,
+                )?;
                 let data_type = column.data_type.clone();
 
                 (BoundColumnRef { column }.into(), data_type)
@@ -510,13 +513,49 @@ impl<'a> TypeChecker<'a> {
                     subquery,
                     true,
                     None,
+                    None,
+                    None,
                 )
                 .await?
             }
 
             Expr::Subquery { subquery, .. } => {
-                self.resolve_subquery(SubqueryType::Scalar, subquery, false, None)
+                self.resolve_subquery(SubqueryType::Scalar, subquery, false, None, None, None)
                     .await?
+            }
+
+            Expr::InSubquery {
+                subquery,
+                not,
+                expr,
+                span,
+            } => {
+                // Not in subquery will be transformed to not(Expr = Any(...))
+                if *not {
+                    return self
+                        .resolve_function(
+                            span,
+                            "not",
+                            &[&Expr::InSubquery {
+                                subquery: subquery.clone(),
+                                not: false,
+                                expr: expr.clone(),
+                                span: *span,
+                            }],
+                            required_type,
+                        )
+                        .await;
+                }
+                // InSubquery will be transformed to Expr = Any(...)
+                self.resolve_subquery(
+                    SubqueryType::Any,
+                    subquery,
+                    true,
+                    Some(*expr.clone()),
+                    Some(ComparisonOp::Equal),
+                    None,
+                )
+                .await?
             }
 
             Expr::MapAccess {
@@ -718,11 +757,6 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await?
             }
-
-            _ => Err(ErrorCode::UnImplement(format!(
-                "Unsupported expr: {:?}",
-                expr
-            )))?,
         };
 
         self.post_resolve(&scalar, &data_type)
@@ -1084,6 +1118,8 @@ impl<'a> TypeChecker<'a> {
         typ: SubqueryType,
         subquery: &Query<'_>,
         allow_multi_rows: bool,
+        child_expr: Option<Expr<'_>>,
+        compare_op: Option<ComparisonOp>,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         let mut binder = Binder::new(
@@ -1096,19 +1132,37 @@ impl<'a> TypeChecker<'a> {
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
         let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
 
-        if typ == SubqueryType::Scalar && output_context.columns.len() > 1 {
-            return Err(ErrorCode::SemanticError(
-                "Scalar subquery must return only one column",
-            ));
+        if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
+            && output_context.columns.len() > 1
+        {
+            return Err(ErrorCode::SemanticError(format!(
+                "Subquery must return only one column, but got {} columns",
+                output_context.columns.len()
+            )));
         }
 
-        let data_type = output_context.columns[0].data_type.clone();
+        let mut data_type = output_context.columns[0].data_type.clone();
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
         let rel_prop = rel_expr.derive_relational_prop()?;
 
+        let mut child_scalar = None;
+        if let Some(expr) = child_expr {
+            assert_eq!(output_context.columns.len(), 1);
+            let (mut scalar, scalar_data_type) = self.resolve(&expr, None).await?;
+            if scalar_data_type != data_type {
+                // Make comparison scalar type keep consistent
+                let coercion_type = merge_types(&scalar_data_type, &data_type)?;
+                scalar = wrap_cast_if_needed(scalar, &coercion_type);
+                data_type = coercion_type;
+            }
+            child_scalar = Some(Box::new(scalar));
+        }
+
         let subquery_expr = SubqueryExpr {
             subquery: s_expr,
+            child_expr: child_scalar,
+            compare_op,
             data_type: data_type.clone(),
             allow_multi_rows,
             typ,

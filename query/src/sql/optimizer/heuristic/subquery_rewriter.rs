@@ -14,6 +14,7 @@
 
 use common_datavalues::BooleanType;
 use common_datavalues::DataValue;
+use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -45,12 +46,14 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
+use crate::sql::IndexType;
 use crate::sql::MetadataRef;
 
 enum UnnestResult {
     Uncorrelated,
     Apply,
     SimpleJoin, // SemiJoin or AntiJoin
+    MarkJoin { marker_index: IndexType },
 }
 
 /// Rewrite subquery into `Apply` operator
@@ -142,6 +145,7 @@ impl SubqueryRewriter {
                             right_conditions: vec![],
                             other_conditions: vec![],
                             join_type: JoinType::Cross,
+                            marker_index: None,
                         }
                         .into(),
                         UnnestResult::Uncorrelated,
@@ -217,6 +221,7 @@ impl SubqueryRewriter {
                     left: Box::new(
                         BoundColumnRef {
                             column: ColumnBinding {
+                                database_name: None,
                                 table_name: None,
                                 column_name: "count(*)".to_string(),
                                 index: agg_func_index,
@@ -271,6 +276,7 @@ impl SubqueryRewriter {
                             right_conditions: vec![],
                             other_conditions: vec![],
                             join_type: JoinType::Cross,
+                            marker_index: None,
                         }
                         .into(),
                         UnnestResult::Uncorrelated,
@@ -289,6 +295,57 @@ impl SubqueryRewriter {
                     SExpr::create_binary(rel_op, left.clone(), rewritten_subquery),
                     result,
                 ))
+            }
+            SubqueryType::Any => {
+                let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
+                let prop = rel_expr.derive_relational_prop()?;
+                let output_columns = prop.output_columns.clone();
+                let index = output_columns
+                    .iter()
+                    .take(1)
+                    .next()
+                    .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
+                let column_name = format!("subquery_{}", index);
+                let left_condition = Scalar::BoundColumnRef(BoundColumnRef {
+                    column: ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        column_name,
+                        index: *index,
+                        data_type: subquery.data_type.clone(),
+                        visible_in_unqualified_wildcard: false,
+                    },
+                });
+                if prop.outer_columns.is_empty() {
+                    // Add a marker column to save comparison result.
+                    // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
+                    // If subquery contains NULL, the comparison result is TRUE or NULL. Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
+                    // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
+                    let marker_index = self.metadata.write().add_column(
+                        "marker".to_string(),
+                        NullableType::new_impl(BooleanType::new_impl()),
+                        None,
+                    );
+                    // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
+                    // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
+                    // Note that subquery is the left table, and it'll be the probe side.
+                    let mark_join = LogicalInnerJoin {
+                        right_conditions: vec![*subquery.child_expr.as_ref().unwrap().clone()],
+                        left_conditions: vec![left_condition],
+                        other_conditions: vec![],
+                        join_type: JoinType::Mark,
+                        marker_index: Some(marker_index),
+                    }
+                    .into();
+                    Ok((
+                        SExpr::create_binary(mark_join, subquery.subquery.clone(), left.clone()),
+                        UnnestResult::MarkJoin { marker_index },
+                    ))
+                } else {
+                    Err(ErrorCode::LogicalError(
+                        "Unsupported subquery type: Correlated AnySubquery",
+                    ))
+                }
             }
             _ => Err(ErrorCode::LogicalError(format!(
                 "Unsupported subquery type: {:?}",
@@ -409,19 +466,27 @@ impl SubqueryRewriter {
                         s_expr,
                     ));
                 }
-
-                let rel_expr = RelExpr::with_s_expr(s_expr.child(1)?);
+                let rel_expr = if subquery.typ == SubqueryType::Any {
+                    RelExpr::with_s_expr(s_expr.child(0)?)
+                } else {
+                    RelExpr::with_s_expr(s_expr.child(1)?)
+                };
                 let prop = rel_expr.derive_relational_prop()?;
 
                 // Extract the subquery and replace it with the ColumnBinding from it.
-                let index = *prop
-                    .output_columns
-                    .iter()
-                    .take(1)
-                    .next()
-                    .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
-                let name = format!("subquery_{}", index);
+                let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
+                    (marker_index, "marker".to_string())
+                } else {
+                    let index = *prop
+                        .output_columns
+                        .iter()
+                        .take(1)
+                        .next()
+                        .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
+                    (index, format!("subquery_{}", index))
+                };
                 let column_ref = ColumnBinding {
+                    database_name: None,
                     table_name: None,
                     column_name: name,
                     index,

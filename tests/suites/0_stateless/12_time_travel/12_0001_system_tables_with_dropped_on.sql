@@ -2,12 +2,16 @@ DROP DATABASE IF EXISTS db_12_0001;
 CREATE DATABASE db_12_0001;
 USE db_12_0001;
 
-select "column 'dropped_on' of system.tables should work";
 CREATE TABLE t(c1 int);
-SELECT COUNT(1) from system.tables where name = 't' and database = 'db_12_0001' and dropped_on = 'NULL';
+select "system.tables should contain the newly created table";
+SELECT COUNT(*)=1 from system.tables where name = 't' and database = 'db_12_0001';
+select "system.tables_with_history should contain the newly created table, and dropped_on should be NULL";
+SELECT COUNT(*)=1 from system.tables_with_history where name = 't' and database = 'db_12_0001' and dropped_on = 'NULL';
 
-select "dropped table has history";
 DROP TABLE t;
-SELECT COUNT(1) from system.tables where name = 't' and database = 'db_12_0001' and dropped_on != 'NULL';
+select "system.tables should NOT contain the dropped table";
+SELECT COUNT(*)=0 from system.tables where name = 't' and database = 'db_12_0001';
+select "system.tables_with_history should contain the dropped table, and dropped_on should NOT be NULL";
+SELECT COUNT(*)=1 from system.tables_with_history where name = 't' and database = 'db_12_0001' and dropped_on != 'NULL';
 
 DROP database db_12_0001;

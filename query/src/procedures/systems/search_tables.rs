@@ -27,7 +27,7 @@ use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
-use crate::storages::system::TablesTable;
+use crate::storages::system::TablesTableWithoutHistory;
 
 pub struct SearchTablesProcedure {}
 
@@ -72,6 +72,6 @@ impl Procedure for SearchTablesProcedure {
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        TablesTable::schema()
+        TablesTableWithoutHistory::schema()
     }
 }
