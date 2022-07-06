@@ -947,7 +947,7 @@ impl TokenKind {
             // | TokenKind::SIMILAR
             | TokenKind::SOME
             // | TokenKind::SYMMETRIC
-            | TokenKind::TABLE
+            // | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
