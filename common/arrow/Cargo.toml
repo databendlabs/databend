@@ -21,7 +21,14 @@ arrow-default = [
     "arrow/compute_filter",
 ]
 default = ["arrow-default", "parquet-default"]
-parquet-default = ["parquet2/lz4", "parquet2/non_standard_legacy_lz4"]
+parquet-default = [
+    "parquet2/non_standard_legacy_lz4",
+    "parquet2/lz4",
+    "parquet2/zstd",
+    "parquet2/snappy",
+    "parquet2/gzip",
+    "parquet2/brotli",
+]
 simd = ["arrow/simd"]
 
 [dependencies] # In alphabetical order
@@ -30,7 +37,7 @@ simd = ["arrow/simd"]
 # Github dependencies
 arrow = { package = "arrow2", git = "https://github.com/datafuse-extras/arrow2", default-features = false, features = [
     "io_parquet",
-    "io_parquet_compression",
+    "io_avro_compression",
 ], rev = "f5f6b7e3" }
 
 # Crates.io dependencies

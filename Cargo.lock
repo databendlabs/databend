@@ -18,6 +18,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "adler32"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234"
+
+[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -139,6 +145,7 @@ dependencies = [
  "base64 0.13.0",
  "bytemuck",
  "chrono",
+ "crc",
  "csv",
  "csv-core",
  "dyn-clone",
@@ -150,11 +157,13 @@ dependencies = [
  "itertools",
  "json-deserializer",
  "lexical-core",
+ "libflate",
  "multiversion",
  "num-traits",
  "parquet2",
  "regex",
  "simdutf8",
+ "snap",
  "streaming-iterator",
  "strength_reduce",
 ]
@@ -1662,6 +1671,21 @@ checksum = "59a6001667ab124aebae2a495118e11d30984c3a653e99d86d58971708cf5e4b"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crc"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49fc9a695bca7f35f5f4c15cddc84415f66a74ea78eef08e90c5024f2b540e23"
+dependencies = [
+ "crc-catalog",
+]
+
+[[package]]
+name = "crc-catalog"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccaeedb56da03b09f598226e25e80088cb4cd25f316e6e4df7d695f0feeb1403"
 
 [[package]]
 name = "crc32fast"
@@ -3640,6 +3664,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
 
 [[package]]
+name = "libflate"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05605ab2bce11bcfc0e9c635ff29ef8b2ea83f29be257ee7d730cac3ee373093"
+dependencies = [
+ "adler32",
+ "crc32fast",
+ "libflate_lz77",
+]
+
+[[package]]
+name = "libflate_lz77"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39a734c0493409afcd49deee13c006a04e3586b9761a03543c6272c9c51f2f5a"
+dependencies = [
+ "rle-decode-fast",
+]
+
+[[package]]
 name = "libgit2-sys"
 version = "0.13.4+1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4749,7 +4793,7 @@ dependencies = [
 [[package]]
 name = "parquet2"
 version = "0.14.1"
-source = "git+https://github.com/datafuse-extras/parquet2?tag=v0.14.1-patched#4b679228122aa0ba840a6cf468b4a5c028861562"
+source = "git+https://github.com/datafuse-extras/parquet2?rev=3a468fc3c4#3a468fc3c43154b11c22800aff0b83cd22fd4d3c"
 dependencies = [
  "async-stream",
  "bitpacking",
@@ -5666,6 +5710,12 @@ dependencies = [
  "griddle",
  "hashbrown 0.11.2",
 ]
+
+[[package]]
+name = "rle-decode-fast"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
 name = "rsa"
