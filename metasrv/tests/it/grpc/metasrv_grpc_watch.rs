@@ -105,29 +105,19 @@ async fn test_watch() -> anyhow::Result<()> {
 
         let key_a = "a".to_string();
         let key_b = "b".to_string();
-        let key_z = "z".to_string();
 
         let val_a = "a".as_bytes().to_vec();
         let val_b = "b".as_bytes().to_vec();
         let val_new = "new".as_bytes().to_vec();
         let val_z = "z".as_bytes().to_vec();
 
-        let events = vec![
+        let watch_events = vec![
             // set a->a
             Event {
                 key: key_a.clone(),
                 current: Some(SeqV {
                     seq,
                     data: val_a.clone(),
-                }),
-                prev: None,
-            },
-            // set z->z
-            Event {
-                key: key_z.clone(),
-                current: Some(SeqV {
-                    seq: seq + 1,
-                    data: val_z.clone(),
                 }),
                 prev: None,
             },
@@ -167,12 +157,13 @@ async fn test_watch() -> anyhow::Result<()> {
         // update kv
         let updates = vec![
             UpsertKVReq::new("a", MatchSeq::Any, Operation::Update(val_a), None),
+            // upsert key z, because z in key_end and the range is [key_start, key_end), so key z MUST not be notified in watche events.
             UpsertKVReq::new("z", MatchSeq::Any, Operation::Update(val_z), None),
             UpsertKVReq::new("b", MatchSeq::Any, Operation::Update(val_b), None),
             UpsertKVReq::new("b", MatchSeq::Any, Operation::Update(val_new), None),
             UpsertKVReq::new("b", MatchSeq::Any, Operation::Delete, None),
         ];
-        test_watch_main(addr.clone(), watch, events, updates).await?;
+        test_watch_main(addr.clone(), watch, watch_events, updates).await?;
     }
 
     // 2. test filter
@@ -190,7 +181,7 @@ async fn test_watch() -> anyhow::Result<()> {
         let val_new = "new".as_bytes().to_vec();
 
         // has only delete events
-        let events = vec![
+        let watch_events = vec![
             // delete 1 first time
             Event {
                 key: key.clone(),
@@ -218,7 +209,7 @@ async fn test_watch() -> anyhow::Result<()> {
             UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Update(val_new), None),
             UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Delete, None),
         ];
-        test_watch_main(addr.clone(), watch, events, updates).await?;
+        test_watch_main(addr.clone(), watch, watch_events, updates).await?;
     }
 
     Ok(())

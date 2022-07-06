@@ -30,6 +30,8 @@ use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::new::pipeline::NewPipeline;
 
+pub type FinishedCallback = Arc<Box<dyn Fn(&Option<ErrorCode>) + Send + Sync + 'static>>;
+
 pub struct PipelineExecutor {
     threads_num: usize,
     graph: RunningGraph,
@@ -37,6 +39,7 @@ pub struct PipelineExecutor {
     query_need_abort: Arc<AtomicBool>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
+    on_finished_callback: FinishedCallback,
 }
 
 impl PipelineExecutor {
@@ -46,12 +49,15 @@ impl PipelineExecutor {
         pipeline: NewPipeline,
     ) -> Result<Arc<PipelineExecutor>> {
         let threads_num = pipeline.get_max_threads();
+        let on_finished_callback = pipeline.get_on_finished();
+
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(
             async_rt,
             query_need_abort,
             RunningGraph::create(pipeline)?,
             threads_num,
+            on_finished_callback,
         )
     }
 
@@ -70,12 +76,22 @@ impl PipelineExecutor {
             .max()
             .unwrap_or(0);
 
+        let on_finished_callbacks = pipelines
+            .iter()
+            .map(|x| x.get_on_finished())
+            .collect::<Vec<_>>();
+
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(
             async_rt,
             query_need_abort,
             RunningGraph::from_pipelines(pipelines)?,
             threads_num,
+            Arc::new(Box::new(move |may_error| {
+                for on_finished_callback in &on_finished_callbacks {
+                    on_finished_callback(may_error);
+                }
+            })),
         )
     }
 
@@ -84,6 +100,7 @@ impl PipelineExecutor {
         query_need_abort: Arc<AtomicBool>,
         graph: RunningGraph,
         threads_num: usize,
+        on_finished_callback: FinishedCallback,
     ) -> Result<Arc<PipelineExecutor>> {
         unsafe {
             let workers_condvar = WorkersCondvar::create(threads_num);
@@ -103,6 +120,7 @@ impl PipelineExecutor {
                 workers_condvar,
                 query_need_abort,
                 global_tasks_queue,
+                on_finished_callback,
                 async_runtime: async_rt,
             }))
         }
@@ -122,7 +140,7 @@ impl PipelineExecutor {
 
         while let Some(join_handle) = thread_join_handles.pop() {
             // flatten error.
-            match join_handle.join() {
+            let join_res = match join_handle.join() {
                 Ok(Ok(_)) => Ok(()),
                 Ok(Err(cause)) => Err(cause),
                 Err(cause) => match cause.downcast_ref::<&'static str>() {
@@ -132,9 +150,16 @@ impl PipelineExecutor {
                     },
                     Some(message) => Err(ErrorCode::PanicError(message.to_string())),
                 },
-            }?;
+            };
+
+            if let Err(error_code) = join_res {
+                let may_error = Some(error_code);
+                (self.on_finished_callback)(&may_error);
+                return Err(may_error.unwrap());
+            }
         }
 
+        (self.on_finished_callback)(&None);
         Ok(())
     }
 

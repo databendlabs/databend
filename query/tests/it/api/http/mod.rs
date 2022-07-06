@@ -14,6 +14,5 @@
 
 mod cluster;
 mod config;
-mod health;
 mod logs;
 mod status;

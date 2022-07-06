@@ -16,10 +16,10 @@ use common_base::base::tokio::time::Duration;
 use common_base::base::Profiling;
 use common_tracing::tracing;
 use poem::error::InternalServerError;
-use poem::web::IntoResponse;
 use poem::web::Query;
+use poem::IntoResponse;
 
-use crate::api::http::debug::PProfRequest;
+use crate::debug::PProfRequest;
 
 // run pprof
 // example: /debug/pprof/profile?seconds=5&frequency=99

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod derive;
-mod format;
 mod malloc_size;
 mod mutex;
 mod pool;

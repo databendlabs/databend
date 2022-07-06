@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod home;
-pub mod pprof;
-pub use home::PProfRequest;
+use crate::scalars::geos::GeoToH3Function;
+use crate::FunctionFactory;
 
-#[cfg(feature = "memory-profiling")]
-pub mod jeprof;
+#[derive(Clone)]
+pub struct GeoFunction;
+
+impl GeoFunction {
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("geo_to_h3", GeoToH3Function::desc());
+    }
+}

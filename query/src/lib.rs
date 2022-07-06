@@ -18,6 +18,7 @@
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 #![feature(assert_matches)]
+#![feature(box_patterns)]
 
 pub mod api;
 pub mod catalogs;
