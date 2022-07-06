@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use async_channel::Sender;
 use common_arrow::arrow_format::flight::data::FlightData;
+use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
 use common_base::base::Thread;
@@ -31,7 +32,6 @@ use common_planners::PlanNode;
 use futures::StreamExt;
 use futures_util::future::Either;
 use tonic::Streaming;
-use common_base::base::tokio::sync::Notify;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentReceiver;
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
@@ -392,8 +392,6 @@ impl QueryCoordinator {
             futures::executor::block_on(async move { finished_notify.notified().await });
         }
 
-        println!("after finished notify");
-
         // close request server channel.
         drop(self.request_server_tx.take());
 
@@ -511,6 +509,7 @@ impl QueryCoordinator {
     pub fn init_publisher(&mut self, senders: HashMap<String, ExchangeSender>) -> Result<()> {
         for (target, mut exchange_sender) in senders.into_iter() {
             let runtime = self.runtime.clone();
+            exchange_sender.connect_flight(&runtime)?;
             let exchange_sender = Arc::new(exchange_sender);
 
             let ctx = self.ctx.clone();
@@ -560,8 +559,10 @@ impl QueryCoordinator {
             let target = self.executor_id.clone();
             let shutdown_notify = Arc::new(Notify::new());
             let finished_notify = Arc::new(Notify::new());
-            self.subscribe_flight_shutdown_notify.push(shutdown_notify.clone());
-            self.subscribe_flight_finished_notify.push(finished_notify.clone());
+            self.subscribe_flight_shutdown_notify
+                .push(shutdown_notify.clone());
+            self.subscribe_flight_finished_notify
+                .push(finished_notify.clone());
 
             return Ok(self.runtime.spawn(async move {
                 let mut shutdown_notified = Box::pin(shutdown_notify.notified());

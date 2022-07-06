@@ -153,7 +153,6 @@ impl ExchangeReceiver {
     pub fn shutdown(self: &Arc<Self>) {
         self.finished.store(true, Ordering::SeqCst);
         self.shutdown_notify.notify_one();
-
     }
 
     pub async fn join(self: &Arc<Self>) -> Result<()> {
@@ -227,11 +226,8 @@ impl ExchangeReceiver {
                 Ok(())
             }
             DataPacket::FragmentData(FragmentData::End(fragment_id)) => {
-                println!("receive fragment end message {}", fragment_id);
                 if fragment_id < fragments_receiver.len() {
-                    println!("process fragment end message {}", fragment_id);
                     if let Some(tx) = fragments_receiver[fragment_id].take() {
-                        println!("drop fragment end message {}", fragment_id);
                         drop(tx);
                         std::sync::atomic::fence(Acquire);
                     }
