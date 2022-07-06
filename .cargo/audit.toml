@@ -1,12 +1,7 @@
 [advisories]
 ignore = [
-    # https://github.com/datafuselabs/databend/issues/2565
-    # need to fix upstream rusoto dependencies on credential and sts for this issue as well
-    "RUSTSEC-2020-0159",
-    "RUSTSEC-2020-0071",
-    # https://github.com/datafuselabs/databend/issues/2690
-    "RUSTSEC-2021-0122",
-    # https://github.com/datafuselabs/databend/issues/4335
-    "RUSTSEC-2022-0012"
-
+    # time: Potential segfault in the time crate
+    # We are not accected by this CVE.
+    # And there is no actions we can take, waiting for upstream.
+    "RUSTSEC-2020-0071"
 ]

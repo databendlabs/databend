@@ -2,7 +2,7 @@
 <div align="center">
  
 <h4 align="center">
-  <a href="https://databend.rs/doc/deploy/databend-cloud">Databend Cloud (beta)</a>  |
+  <a href="https://databend.rs/doc/cloud">Databend Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
   <a href="https://perf.databend.rs">Benchmarking</a>  |
   <a href="https://github.com/datafuselabs/databend/issues/4591">Roadmap (v0.8)</a>
@@ -102,7 +102,7 @@ Let's run some [benchmark queries](https://databend.rs/doc/performance/local-vec
 - [Understanding Deployment Modes](https://databend.rs/doc/deploy/understanding-deployment-modes)
 - [Deploying a Standalone Databend](https://databend.rs/doc/deploy/deploying-databend)
 - [Expanding a Standalone Databend](https://databend.rs/doc/deploy/expanding-to-a-databend-cluster)
-- [Databend Cloud (Beta)](https://databend.rs/doc/deploy/databend-cloud)
+- [Databend Cloud (Beta)](https://databend.rs/doc/cloud)
  
 ### Connect
 

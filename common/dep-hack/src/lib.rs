@@ -11,5 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-mod http_shutdown_handles;
-pub use http_shutdown_handles::HttpShutdownHandler;
+
+//! This crate is used to hack our dependencies to resolve CVEs and so on.
+//!
+//! PLEASE DON'T TRY TO USE OR LINK THIS CRATE.

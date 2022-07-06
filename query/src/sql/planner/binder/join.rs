@@ -63,14 +63,14 @@ impl<'a> Binder {
                 }
                 for column in right_context.all_column_bindings().iter() {
                     let mut nullable_column = column.clone();
-                    nullable_column.data_type = wrap_nullable(&column.data_type);
+                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
                     bind_context.add_column_binding(nullable_column);
                 }
             }
             JoinOperator::RightOuter => {
                 for column in left_context.all_column_bindings() {
                     let mut nullable_column = column.clone();
-                    nullable_column.data_type = wrap_nullable(&column.data_type);
+                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
                     bind_context.add_column_binding(nullable_column);
                 }
                 for column in right_context.all_column_bindings().iter() {
@@ -189,6 +189,7 @@ impl<'a> Binder {
             right_conditions,
             other_conditions,
             join_type,
+            marker_index: None,
         };
         let expr = SExpr::create_binary(inner_join.into(), left_child, right_child);
 
