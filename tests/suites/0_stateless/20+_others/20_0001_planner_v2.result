@@ -424,3 +424,7 @@ NULL	NULL	NULL	1
 1
 0
 1
+====Database====
+default	default	default
+====User====
+'default'@'127.0.0.1'	'default'@'127.0.0.1'	'default'@'127.0.0.1'

@@ -358,5 +358,10 @@ select * from numbers(5) as t where not exists (select * from numbers(3) where n
 select * from numbers(5) as t where exists (select number as a from numbers(3) where number = t.number and number > 0 and t.number < 2);
 select * from numbers(5) as t where exists (select * from numbers(3) where number > t.number);
 
+select '====Database====';
+select database(), currentDatabase(), current_database();
+select '====User====';
+select user(), currentuser(), current_user();
+
 set enable_planner_v2 = 0;
 
