@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod port_test;
+mod resize;
 // use super::processor
 
 use databend_query::pipelines::new::processors;
