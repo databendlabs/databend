@@ -19,8 +19,10 @@ mod data_block;
 mod data_block_debug;
 mod kernels;
 mod memory;
+mod utils;
 
 pub use data_block::DataBlock;
 pub use data_block_debug::*;
 pub use kernels::*;
 pub use memory::InMemoryData;
+pub use utils::*;

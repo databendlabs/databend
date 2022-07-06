@@ -77,7 +77,7 @@ impl<'a> Binder {
             source,
         );
 
-        self.bind_base_table(bind_context, table_index)
+        self.bind_base_table(bind_context, database, table_index)
     }
 
     pub(super) async fn bind_table_reference(
@@ -149,13 +149,15 @@ impl<'a> Binder {
                         let source = table_meta
                             .read_plan_with_catalog(self.ctx.clone(), catalog.clone(), None)
                             .await?;
-                        let table_index = self
-                            .metadata
-                            .write()
-                            .add_table(catalog, database, table_meta, source);
+                        let table_index = self.metadata.write().add_table(
+                            catalog,
+                            database.clone(),
+                            table_meta,
+                            source,
+                        );
 
                         let (s_expr, mut bind_context) =
-                            self.bind_base_table(bind_context, table_index)?;
+                            self.bind_base_table(bind_context, database.as_str(), table_index)?;
                         if let Some(alias) = alias {
                             bind_context.apply_table_alias(alias)?;
                         }
@@ -210,7 +212,8 @@ impl<'a> Binder {
                     source,
                 );
 
-                let (s_expr, mut bind_context) = self.bind_base_table(bind_context, table_index)?;
+                let (s_expr, mut bind_context) =
+                    self.bind_base_table(bind_context, "system", table_index)?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias)?;
                 }
@@ -234,6 +237,7 @@ impl<'a> Binder {
     fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
+        database_name: &str,
         table_index: IndexType,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
@@ -242,6 +246,7 @@ impl<'a> Binder {
         let table = metadata.table(table_index);
         for column in columns.iter() {
             let column_binding = ColumnBinding {
+                database_name: Some(database_name.to_string()),
                 table_name: Some(table.name.clone()),
                 column_name: column.name.to_lowercase(),
                 index: column.column_index,

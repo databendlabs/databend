@@ -1089,6 +1089,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-dep-hack"
+version = "0.1.0"
+dependencies = [
+ "openssl-src",
+]
+
+[[package]]
 name = "common-exception"
 version = "0.1.0"
 dependencies = [
@@ -1104,6 +1111,21 @@ dependencies = [
  "thiserror",
  "time 0.3.11",
  "tonic",
+]
+
+[[package]]
+name = "common-formats"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-io",
+ "once_cell",
+ "pretty_assertions",
+ "strum",
+ "strum_macros",
 ]
 
 [[package]]
@@ -1165,6 +1187,14 @@ dependencies = [
  "thiserror",
  "tonic",
  "trust-dns-resolver",
+]
+
+[[package]]
+name = "common-hashtable"
+version = "0.1.0"
+dependencies = [
+ "primitive-types",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -1364,6 +1394,20 @@ dependencies = [
  "serde_json",
  "sled",
  "tempfile",
+]
+
+[[package]]
+name = "common-meta-store"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common-exception",
+ "common-grpc",
+ "common-meta-api",
+ "common-meta-embedded",
+ "common-meta-grpc",
+ "common-meta-types",
+ "common-tracing",
 ]
 
 [[package]]
@@ -2029,8 +2073,10 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-formats",
  "common-functions",
  "common-grpc",
+ "common-hashtable",
  "common-hive-meta-store",
  "common-io",
  "common-macros",
@@ -2041,6 +2087,7 @@ dependencies = [
  "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-store",
  "common-meta-types",
  "common-metrics",
  "common-planners",
@@ -2093,6 +2140,7 @@ dependencies = [
  "sha1",
  "sha2 0.10.2",
  "smallvec",
+ "snailquote",
  "sqlparser",
  "strum",
  "strum_macros",
@@ -4485,9 +4533,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-src"
-version = "111.21.0+1.1.1p"
+version = "111.22.0+1.1.1q"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d0a8313729211913936f1b95ca47a5fc7f2e04cd658c115388287f8a8361008"
+checksum = "8f31f0d509d1c1ae9cada2f9539ff8f37933831fd5098879e482aa687d659853"
 dependencies = [
  "cc",
 ]
@@ -6291,6 +6339,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "snailquote"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec62a949bda7f15800481a711909f946e1204f2460f89210eaf7f57730f88f86"
+dependencies = [
+ "thiserror",
+ "unicode_categories",
+]
+
+[[package]]
 name = "snap"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6340,7 +6398,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=d44a8e1#d44a8e16ab1bef5789558fa6b96de83de4858447"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=269dffd#269dffd338e59605b82662405676cccb3b107e6c"
 dependencies = [
  "hashbrown 0.12.1",
  "log",
@@ -7198,6 +7256,12 @@ name = "unicode-xid"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "957e51f3646910546462e67d5f7599b9e4fb8acdd304b087a6494730f9eebf04"
+
+[[package]]
+name = "unicode_categories"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
 
 [[package]]
 name = "untrusted"

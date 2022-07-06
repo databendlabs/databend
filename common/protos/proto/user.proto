@@ -155,7 +155,10 @@ message UserStageInfo {
     RawDeflate = 6;
     Lzo = 7;
     Snappy = 8;
+    // We used to assign `None` as 9, it's a mistake.
+    // Please change this value to 0 instead in next version bump.
     None = 9;
+    Xz = 10;
   }
 
   message FileFormatOptions {

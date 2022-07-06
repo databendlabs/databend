@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use snailquote::escape;
 
 use crate::sessions::QueryContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
@@ -51,9 +52,9 @@ impl SyncSystemTable for SettingsTable {
                 // Name.
                 names.push(format!("{:?}", vals[0]));
                 // Value.
-                values.push(format!("{:?}", vals[1]));
+                values.push(escape(format!("{:?}", vals[1]).as_str()).to_string());
                 // Default Value.
-                defaults.push(format!("{:?}", vals[2]));
+                defaults.push(escape(format!("{:?}", vals[2]).as_str()).to_string());
                 // Scope level.
                 levels.push(format!("{:?}", vals[3]));
                 // Desc.

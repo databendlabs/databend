@@ -47,14 +47,14 @@ impl HttpShutdownHandler {
 
     pub async fn start_service(
         &mut self,
-        listening: String,
+        listening: SocketAddr,
         tls_config: Option<RustlsConfig>,
         ep: impl Endpoint + 'static,
     ) -> Result<SocketAddr> {
         assert!(self.join_handle.is_none());
         assert!(self.abort_handle.is_none());
 
-        let mut acceptor = TcpListener::bind(listening.clone())
+        let mut acceptor = TcpListener::bind(listening)
             .into_acceptor()
             .await
             .map_err(|err| ErrorCode::CannotListenerPort(format!("{}:{}", err, listening)))?
@@ -143,5 +143,24 @@ impl HttpShutdownHandler {
             );
         }
         Ok(())
+    }
+
+    pub async fn shutdown(&mut self, graceful: bool) {
+        if graceful {
+            if let Some(abort_handle) = self.abort_handle.take() {
+                let _ = abort_handle.send(());
+            }
+            if let Some(join_handle) = self.join_handle.take() {
+                if let Err(error) = join_handle.await {
+                    tracing::error!(
+                        "Unexpected error during shutdown Http Server {}. cause {}",
+                        self.service_name,
+                        error
+                    );
+                }
+            }
+        } else if let Some(join_handle) = self.join_handle.take() {
+            join_handle.abort();
+        }
     }
 }

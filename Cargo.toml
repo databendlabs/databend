@@ -10,8 +10,10 @@ members = [
     "common/datablocks",
     "common/datavalues",
     "common/exception",
+    "common/formats",
     "common/functions",
     "common/grpc",
+    "common/hashtable",
     "common/hive-meta-store",
     "common/io",
     "common/macros",
@@ -20,6 +22,7 @@ members = [
     "common/meta/embedded",
     "common/meta/raft-store",
     "common/meta/sled-store",
+    "common/meta/store",
     "common/meta/types",
     "common/metrics",
     "common/planners",
@@ -39,6 +42,10 @@ members = [
     "tools/fuzz",
     "tools/metabench",
     "tools/metactl",
+
+    # Hack
+    # This crate is used to hack our cargo.lock to resovle CVEs and so on.
+    "common/dep-hack",
 ]
 
 [profile.release]

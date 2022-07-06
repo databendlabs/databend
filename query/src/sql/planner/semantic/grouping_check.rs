@@ -49,6 +49,7 @@ impl<'a> GroupingChecker<'a> {
         {
             let column = &self.bind_context.aggregate_info.group_items[*index];
             let column_binding = ColumnBinding {
+                database_name: None,
                 table_name: None,
                 column_name: "group_item".to_string(),
                 index: column.index,
@@ -122,6 +123,7 @@ impl<'a> GroupingChecker<'a> {
                 {
                     let agg_func = &self.bind_context.aggregate_info.aggregate_functions[*column];
                     let column_binding = ColumnBinding {
+                        database_name: None,
                         table_name: None,
                         column_name: agg.display_name.clone(),
                         index: agg_func.index,

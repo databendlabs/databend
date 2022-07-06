@@ -43,6 +43,7 @@ async fn test_scalar_evaluator() -> Result<()> {
                     arguments: vec![
                         BoundColumnRef {
                             column: ColumnBinding {
+                                database_name: None,
                                 table_name: None,
                                 column_name: "".to_string(),
                                 index: 0,
@@ -53,6 +54,7 @@ async fn test_scalar_evaluator() -> Result<()> {
                         .into(),
                         BoundColumnRef {
                             column: ColumnBinding {
+                                database_name: None,
                                 table_name: None,
                                 column_name: "".to_string(),
                                 index: 1,

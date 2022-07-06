@@ -113,7 +113,7 @@ impl Settings {
                 default_value: DataValue::String("\n".as_bytes().to_vec()),
                 user_setting: UserSetting::create("record_delimiter", DataValue::String("\n".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
-                desc: "Format record_delimiter, default value: \n",
+                desc: "Format record_delimiter, default value: \"\\n\"",
             },
             SettingValue {
                 default_value: DataValue::String(",".as_bytes().to_vec()),

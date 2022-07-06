@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
@@ -22,7 +23,6 @@ use futures::StreamExt;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::serialize_data_blocks;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics as FuseMetaStatistics;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;

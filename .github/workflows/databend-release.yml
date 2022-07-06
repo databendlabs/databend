@@ -59,7 +59,7 @@ jobs:
         # Reference: https://cli.github.com/manual/gh_release_create
         run: |
           echo "Create a release for ${{ steps.generated-tag.outputs.tag }}"
-          gh release create ${{ steps.generated-tag.outputs.tag }} --discussion-category "general" --generate-notes -p
+          gh release create ${{ steps.generated-tag.outputs.tag }} --generate-notes -p
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -286,4 +286,35 @@ jobs:
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/${{ matrix.distro }}/${{ matrix.service }}.Dockerfile
+          build-args: VERSION=${{ needs.create_release.outputs.version }}
+
+  release_logic_test_docker_image:
+    name: release logic test docker image
+    runs-on: ubuntu-latest
+    needs: [create_release]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - uses: ./.github/actions/setup_docker
+        id: login
+        with:
+          repo: sqllogictest
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          tags: |
+            ${{ steps.login.outputs.dockerhub_repo }}:latest
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}
+            ${{ steps.login.outputs.ecr_repo }}:latest
+            ${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}
+          platforms: linux/amd64
+          context: ./tests/logictest/
+          file: ./tests/logictest/Dockerfile
           build-args: VERSION=${{ needs.create_release.outputs.version }}

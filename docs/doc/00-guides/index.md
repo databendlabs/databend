@@ -4,17 +4,10 @@ title: Guides
 
 ## Deployment
 
-* [How to Deploy Databend With Local File System(For Test)](../10-deploy/00-local.md)
-* [How to Deploy Databend With MinIO](../10-deploy/04-minio.md)
-* [How to Deploy Databend With AWS S3](../10-deploy/01-s3.md)
-* [How to Deploy Databend With Azure Blob Storage](../10-deploy/08-azure.md)
-* [How to Deploy Databend With Tencent COS](../10-deploy/02-cos.md)
-* [How to Deploy Databend With Alibaba OSS](../10-deploy/03-oss.md)
-* [How to Deploy Databend With QingCloud QingStore](../10-deploy/07-qingstore.md)
-* [How to Deploy Databend With Wasabi Object Storage](../10-deploy/05-wasabi.md)
-* [How to Deploy Databend With Scaleway OS](../10-deploy/06-scw.md)
-* [How to Deploy a Databend Local Cluster With MinIO](../10-deploy/00-local.md)
-* [How to Deploy a Databend K8s Cluster With MinIO](../10-deploy/10-cluster-minio.md)
+* [Understanding Deployment Modes](../10-deploy/00-understanding-deployment-modes.md)
+* [Deploying a Standalone Databend](../10-deploy/02-deploying-databend.md)
+* [Expanding a Standalone Databend](../10-deploy/03-expanding-to-a-databend-cluster.md)
+* [Databend Cloud (Beta)](../01-cloud/index.md)
 
 
 ## Connect

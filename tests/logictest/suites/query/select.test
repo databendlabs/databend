@@ -6,3 +6,35 @@ select 'Hello, world!';
 
 ----
 Hello, world!
+
+statement ok
+create database db;
+
+statement ok
+create table db.t(a int);
+
+statement ok
+insert into db.t values(1),(2);
+
+onlyif http
+statement query I
+select db.t.a from db.t;
+
+----
+1
+2
+
+onlyif http
+statement query I
+select t1.a from db.t as t1;
+
+----
+1
+2
+
+onlyif http
+statement error column doesn't exist
+select db.t1.a from db.t as t1;
+
+statement ok
+drop database db;
