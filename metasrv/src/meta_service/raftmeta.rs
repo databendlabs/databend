@@ -427,7 +427,7 @@ impl MetaNode {
                                     let _rst = mn.add_configured_non_voters().await;
 
                                     if _rst.is_err() {
-                                        tracing::info!(
+                                        tracing::warn!(
                                             "fail to add non-voter: my id={}, rst:{:?}",
                                             mn.sto.id,
                                             _rst
@@ -545,7 +545,7 @@ impl MetaNode {
         // Try to join a cluster only when this node is just created.
         // Joining a node with log has risk messing up the data in this node and in the target cluster.
         if self.is_opened() {
-            tracing::info!("meta node is opened");
+            tracing::info!("meta node is already initialized, skip joining it to a cluster");
             return Ok(());
         }
 
@@ -555,7 +555,7 @@ impl MetaNode {
         let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
         #[allow(clippy::never_loop)]
         for addr in addrs {
-            tracing::info!("try to join cluster accross {}...", addr);
+            tracing::info!("try to join cluster via {}...", addr);
 
             let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
             let mut raft_client = match conn_res {

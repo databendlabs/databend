@@ -65,9 +65,18 @@ impl SQLCommon {
                     )))
                 }
             }
-            SQLDataType::Array(sql_type) => {
+            SQLDataType::Array(sql_type, nullable) => {
                 let inner_data_type = Self::make_data_type(sql_type)?;
-                Ok(ArrayType::new_impl(inner_data_type))
+                if *nullable {
+                    if inner_data_type.is_null() {
+                        return Result::Err(ErrorCode::IllegalDataType(
+                            "The SQL data type ARRAY(NULL, NULL) is invalid",
+                        ));
+                    }
+                    Ok(ArrayType::new_impl(NullableType::new_impl(inner_data_type)))
+                } else {
+                    Ok(ArrayType::new_impl(inner_data_type))
+                }
             }
 
             // Custom types for databend:

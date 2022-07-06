@@ -67,13 +67,13 @@ static GLOBAL_UT_LOG_GUARD: Lazy<Arc<Mutex<Option<Vec<WorkerGuard>>>>> =
 /// A local tracing collection(maybe for testing) can be done with a local jaeger server.
 /// To report tracing data and view it:
 ///   docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
-///   DATABEND_JAEGER=on RUST_LOG=trace cargo test
+///   DATABEND_JAEGER_AGENT_ENDPOINT=localhost:6831 RUST_LOG=trace cargo test
 ///   open http://localhost:16686/
 ///
 /// To adjust batch sending delay, use `OTEL_BSP_SCHEDULE_DELAY`:
-/// DATABEND_JAEGER=on RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
+/// DATABEND_JAEGER_AGENT_ENDPOINT=localhost:6831 RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
 ///
-// TODO(xp): use DATABEND_JAEGER to assign jaeger server address.
+// TODO(xp): use DATABEND_JAEGER_AGENT_ENDPOINT to assign jaeger server address.
 pub fn init_global_tracing(
     app_name: &str,
     dir: &str,

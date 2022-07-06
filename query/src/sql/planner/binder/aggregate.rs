@@ -164,6 +164,7 @@ impl<'a> AggregateRewriter<'a> {
 
                 // Generate a ColumnBinding for each argument of aggregates
                 let column_binding = ColumnBinding {
+                    database_name: None,
                     table_name: None,
 
                     // TODO(leiysky): use a more reasonable name, since aggregate arguments
@@ -269,7 +270,12 @@ impl<'a> Binder {
                     column.column_name = item.alias.clone();
                     column
                 } else {
-                    self.create_column_binding(None, item.alias.clone(), item.scalar.data_type())
+                    self.create_column_binding(
+                        None,
+                        None,
+                        item.alias.clone(),
+                        item.scalar.data_type(),
+                    )
                 };
                 available_aliases.push((column, item.scalar.clone()));
             }
@@ -360,7 +366,7 @@ impl<'a> Binder {
                     let column_binding = if let Scalar::BoundColumnRef(ref column_ref) = scalar {
                         column_ref.column.clone()
                     } else {
-                        self.create_column_binding(None, alias, scalar.data_type())
+                        self.create_column_binding(None, None, alias, scalar.data_type())
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar,

@@ -5,3 +5,6 @@ PyHamcrest
 requests
 environs
 fire
+
+# Clickhouse sqlalchemy
+https://github.com/youngsofun/clickhouse-sqlalchemy/archive/a116e3162c699c12e63a689385b547f639c13018.zip

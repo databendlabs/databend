@@ -49,6 +49,8 @@ pub use roles_table::RolesTable;
 pub use settings_table::SettingsTable;
 pub use stages_table::StagesTable;
 pub use tables_table::TablesTable;
+pub use tables_table::TablesTableWithHistory;
+pub use tables_table::TablesTableWithoutHistory;
 pub use tracing_table::TracingTable;
 pub use tracing_table_stream::TracingTableStream;
 pub use users_table::UsersTable;

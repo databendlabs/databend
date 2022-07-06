@@ -18,16 +18,20 @@ state_regex = r"^\s*statement\s+(?P<statement>((?P<ok>OK)|((?P<error>)ERROR\s*(?
 result_regex = r"^----\s*(?P<label>.*)?$"
 condition_regex = r"^(skipif\s+(?P<skipDatabase>.*))|(onlyif\s+(?P<onlyDatabase>.*))$"
 
+
 # return the statement type
 # `None` represent that the current format is not a statement type
 def get_statement_type(line):
     return re.match(state_regex, line, re.MULTILINE | re.IGNORECASE)
 
+
 def get_result_label(line):
     return re.match(result_regex, line, re.MULTILINE | re.IGNORECASE)
 
+
 def get_statement_condition(line):
-    return re.match(condition_regex, line, re.IGNORECASE) 
+    return re.match(condition_regex, line, re.IGNORECASE)
+
 
 # return false if the line is not empty
 def is_empty_line(line):
@@ -200,7 +204,10 @@ def get_statements(suite_path, suite_name):
             if condition_matched.group("skipDatabase") is not None:
                 runs_on.remove(condition_matched.group("skipDatabase"))
             if condition_matched.group("onlyDatabase") is not None:
-                runs_on = {x for x in runs_on if x == condition_matched.group("onlyDatabase")}
+                runs_on = {
+                    x for x in runs_on
+                    if x == condition_matched.group("onlyDatabase")
+                }
             condition_matched = None
         log.debug("runs_on: {}".format(runs_on))
         if s.type == "query" and s.query_type is not None:
@@ -290,7 +297,9 @@ class SuiteRunner(object):
 
     def execute_statement(self, statement):
         if self.kind not in statement.runs_on:
-            log.info("Skip execute statement with {} SuiteRunner, only runs on {}".format(self.kind, statement.runs_on))
+            log.info(
+                "Skip execute statement with {} SuiteRunner, only runs on {}".
+                format(self.kind, statement.runs_on))
             return
         if self.show_query_on_execution:
             log.info("executing statement, type {}\n{}\n".format(
@@ -332,7 +341,8 @@ class SuiteRunner(object):
         try:
             f = format_value(actual, len(statement.s_type.query_type))
         except Exception:
-            assert "{} statement type is query but get no result".format(statement)
+            assert "{} statement type is query but get no result".format(
+                statement)
         assert statement.results is not None and len(
             statement.results) > 0, "No result found {}".format(statement)
         hasResult = False
