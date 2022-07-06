@@ -136,7 +136,7 @@ impl JoinHashTable {
                 let probe_column = input.column(0);
                 // Check if there is any null in the probe column.
                 if let Some(validity) = probe_column.validity().1 {
-                    if validity.null_count() > 0 {
+                    if validity.unset_bits() > 0 {
                         has_null = true;
                     }
                 }
