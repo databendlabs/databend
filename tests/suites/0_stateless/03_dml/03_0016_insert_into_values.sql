@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS t1(a Int8 null, b UInt32 null, c DateTime null, d Str
 INSERT INTO t1 (a,b,c,d,e) VALUES(-1, 33, '2021-08-15 10:00:00', 'string1234', 1.4e5),
                                        (101, 67, '2021-11-15 10:00:00', 'string5678', 9.9e-3);
 
+INSERT INTO t1 (a,b,c,d,e) VALUES(1, 10, '0000-00-00 00:00:00', 'test)', 12.34);  -- {ErrorCode 1105}
+
 select * from t1;
 select sum(a),sum(b) from t1;
 
