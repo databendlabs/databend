@@ -243,8 +243,8 @@ async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
     }
     let watch = WatchRequest {
         key: "__fd_table_by_id/".to_string(),
-        key_end: Some("__fd_table_by_id0".to_string()),
-        filter_type: FilterType::All.into(),
+        key_end: Some(prefix_of_string("__fd_table_by_id")),
+        filter_type: FilterType::Update.into(),
     };
     let client = MetaGrpcClient::try_new(&rpc_conf)?;
     
@@ -259,4 +259,10 @@ async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
             }
         }
     }
+}
+
+pub fn prefix_of_string(s: &str) -> String {
+    let l = s.len();
+    let a = s.chars().nth(l - 1).unwrap();
+    return format!("{}{}", s[..l - 2].to_string(), (a as u8 + 1) as char);
 }
