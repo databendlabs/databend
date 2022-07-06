@@ -36,7 +36,7 @@ async fn test_resize_output_not_need() -> Result<()> {
     assert!(matches!(resize_processor.event()?, Event::NeedConsume));
 
     for input in &resize_inputs {
-        assert_eq!(input.can_push(), false);
+        assert!(!input.can_push());
     }
 
     Ok(())
@@ -48,7 +48,7 @@ fn connect_inputs(inputs: &[Arc<InputPort>]) -> Vec<Arc<OutputPort>> {
     unsafe {
         for input in inputs {
             let output = OutputPort::create();
-            connect(&input, &output);
+            connect(input, &output);
             outputs.push(output);
         }
     }
@@ -62,7 +62,7 @@ fn connect_outputs(outputs: &[Arc<OutputPort>]) -> Vec<Arc<InputPort>> {
     unsafe {
         for output in outputs {
             let input = InputPort::create();
-            connect(&input, &output);
+            connect(&input, output);
             inputs.push(input);
         }
     }
