@@ -1178,7 +1178,7 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
     ) -> Option<Result<(Scalar, DataTypeImpl)>> {
         match func_name.to_lowercase().as_str() {
-            name @("database" | "currentdatabase" | "current_database") => {
+            name @ ("database" | "currentdatabase" | "current_database") => {
                 let arg = Expr::Literal {
                     span: &[],
                     lit: Literal::String(self.ctx.get_current_database()),
@@ -1192,7 +1192,7 @@ impl<'a> TypeChecker<'a> {
                 };
                 Some(self.resolve_function(span, "version", &[&arg], None).await)
             }
-            name @("user" | "currentuser" | "current_user") => match self.ctx.get_current_user() {
+            name @ ("user" | "currentuser" | "current_user") => match self.ctx.get_current_user() {
                 Ok(user) => {
                     let arg = Expr::Literal {
                         span: &[],
