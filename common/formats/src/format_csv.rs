@@ -146,14 +146,18 @@ impl CsvInputFormat {
             let position = pos + position4::<true, b'"', b'\'', b'\r', b'\n'>(&buf[pos..]);
 
             if position != buf.len() {
-                if buf[position] == b'"' || buf[position] == b'\'' {
-                    state.quotes = buf[position];
-                    return position + 1;
-                } else if buf[position] == b'\r' {
-                    return self.accept_row::<b'\n'>(buf, pos, state, position);
-                } else if buf[position] == b'\n' {
-                    return self.accept_row::<b'\r'>(buf, pos, state, position);
-                }
+                return match buf[position] {
+                    b'"' | b'\'' => {
+                        state.quotes = buf[position];
+                         position + 1
+                    },
+                    b'\n' => {
+                        self.accept_row::<0>(buf, pos, state, position)
+                    },
+                    _ => { // b'\r'
+                        self.accept_row::<b'\n'>(buf, pos, state, position)
+                    }
+                };
             }
         }
 
