@@ -11,7 +11,7 @@ description:
 
 ### Before You Begin
 
-* **Databend :** Make sure Databend is running and accessible, see [Deploy Databend With MinIO](/doc/deploy/minio).
+* **Databend :** Make sure Databend is running and accessible, see [Deploy Databend With MinIO](../10-deploy/02-deploying-databend.md).
 
 ### Step 1. Create Stage Object
 
@@ -153,7 +153,7 @@ CREATE TABLE books
 
 ### Step 5. Copy Data into the Target Tables
 
-Execute [COPY](/doc/reference/sql/dml/dml-copy) to load staged files to the target table.
+Execute [COPY](../30-reference/30-sql/10-dml/dml-copy-into-table.md) to load staged files to the target table.
 
 <Tabs groupId="sample-data">
 
