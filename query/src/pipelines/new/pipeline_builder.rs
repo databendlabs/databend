@@ -169,8 +169,8 @@ impl PlanVisitor for QueryPipelineBuilder {
                     plan.input.schema(),
                 );
                 TransformWindowFunc::try_create(
-                    transform_input_port.clone(),
-                    transform_output_port.clone(),
+                    transform_input_port,
+                    transform_output_port,
                     compactor,
                 )
             })
