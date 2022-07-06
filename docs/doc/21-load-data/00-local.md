@@ -16,7 +16,7 @@ Currently, we support CSV, JSON and Parquet file format.
 
 ### Before You Begin
 
-* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
+* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](../10-deploy/02-deploying-databend.md).
 
 ### Step 1. Data Files for Loading
 

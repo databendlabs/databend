@@ -1090,6 +1090,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-dep-hack"
+version = "0.1.0"
+dependencies = [
+ "openssl-src",
+]
+
+[[package]]
 name = "common-exception"
 version = "0.1.0"
 dependencies = [
