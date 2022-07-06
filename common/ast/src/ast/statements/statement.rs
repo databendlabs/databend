@@ -153,6 +153,8 @@ pub enum Statement<'a> {
         location: String,
         pattern: String,
     },
+
+    Presign(PresignStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -342,6 +344,7 @@ impl<'a> Display for Statement<'a> {
             }
             Statement::DescribeStage { stage_name } => write!(f, "DESC STAGE {stage_name}")?,
             Statement::Call(stmt) => write!(f, "{stmt}")?,
+            Statement::Presign(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

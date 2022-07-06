@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use common_meta_types::AuthType;
 use common_meta_types::PrincipalIdentity;
@@ -690,6 +691,21 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let presign = map(
+        rule! {
+            PRESIGN ~ ( #presign_action )?
+                ~ #presign_location
+                ~ (EXPIRE ~ "=" ~ #literal_u64)?
+        },
+        |(_, action, location, expire)| {
+            Statement::Presign(PresignStmt {
+                action: action.unwrap_or_default(),
+                location,
+                expire: expire.map(|(_, _, v)| Duration::from_secs(v)),
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -766,7 +782,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS [FOR  { ROLE <role_name> | [USER] <user> }]`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
-
+        ),
+        rule!(
+            #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
         ),
     ));
 
@@ -1272,4 +1290,28 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
             BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))
         },
     )(i)
+}
+
+pub fn presign_action(i: Input) -> IResult<PresignAction> {
+    alt((
+        value(PresignAction::Download, rule! { DOWNLOAD }),
+        value(PresignAction::Upload, rule! { UPLOAD }),
+    ))(i)
+}
+
+pub fn presign_location(i: Input) -> IResult<PresignLocation> {
+    map(at_string, |location| {
+        let parsed = location.splitn(2, '/').collect::<Vec<_>>();
+        if parsed.len() == 1 {
+            PresignLocation::StageLocation {
+                name: parsed[0].to_string(),
+                path: "/".to_string(),
+            }
+        } else {
+            PresignLocation::StageLocation {
+                name: parsed[0].to_string(),
+                path: format!("/{}", parsed[1]),
+            }
+        }
+    })(i)
 }

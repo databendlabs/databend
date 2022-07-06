@@ -59,8 +59,9 @@ impl Display for PresignLocation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PresignStmt {
-    location: PresignLocation,
-    expire: Option<Duration>,
+    pub action: PresignAction,
+    pub location: PresignLocation,
+    pub expire: Option<Duration>,
 }
 
 impl Display for PresignStmt {
