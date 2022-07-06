@@ -58,6 +58,7 @@ use crate::sql::exec::PhysicalScalar;
 use crate::sql::exec::SortDesc;
 use crate::sql::plans::JoinType;
 use crate::sql::ColumnBinding;
+use crate::sql::IndexType;
 
 #[derive(Default)]
 pub struct PipelineBuilder {
@@ -149,6 +150,7 @@ impl PipelineBuilder {
                 probe_keys,
                 other_conditions,
                 join_type,
+                marker_index,
             } => {
                 let mut build_side_pipeline = NewPipeline::create();
                 let build_side_context = QueryContext::create_from(context.clone());
@@ -162,6 +164,7 @@ impl PipelineBuilder {
                     probe_keys,
                     other_conditions,
                     join_type.clone(),
+                    *marker_index,
                     build_side_pipeline,
                     pipeline,
                 )?;
@@ -491,6 +494,7 @@ impl PipelineBuilder {
         probe_keys: &[PhysicalScalar],
         other_conditions: &[PhysicalScalar],
         join_type: JoinType,
+        marker_index: Option<IndexType>,
         mut child_pipeline: NewPipeline,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
@@ -524,6 +528,7 @@ impl PipelineBuilder {
             probe_keys,
             predicate.as_ref(),
             build_schema,
+            marker_index,
         )?;
 
         // Build side

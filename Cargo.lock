@@ -1184,6 +1184,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-hashtable"
+version = "0.1.0"
+dependencies = [
+ "primitive-types",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "common-hive-meta-store"
 version = "0.1.0"
 dependencies = [
@@ -2062,6 +2070,7 @@ dependencies = [
  "common-formats",
  "common-functions",
  "common-grpc",
+ "common-hashtable",
  "common-hive-meta-store",
  "common-io",
  "common-macros",

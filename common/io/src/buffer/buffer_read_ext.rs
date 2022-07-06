@@ -56,11 +56,13 @@ pub trait BufferReadExt: BufferRead {
                 if b.is_empty() {
                     return Err(std::io::Error::new(
                         ErrorKind::InvalidData,
-                        "Expected to have terminated string literal.".to_string(),
+                        "Expected to have terminated string literal after escaped char '\' ."
+                            .to_string(),
                     ));
                 }
                 let c = b[0];
                 self.ignore_byte(c)?;
+
                 match c {
                     b'n' => buf.push(b'\n'),
                     b't' => buf.push(b'\t'),
@@ -80,13 +82,17 @@ pub trait BufferReadExt: BufferRead {
         }
         Err(std::io::Error::new(
             ErrorKind::InvalidData,
-            "Expected to have terminated string literal.".to_string(),
+            format!("Expected to have terminated string literal after quota {:?}, while consumed buf: {:?}", quota as char, buf),
         ))
     }
 
     fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>) -> Result<()> {
         self.keep_read(buf, |f| f != b'\t' && f != b'\n' && f != b'\\')?;
-        // TODO judge escaped '\\'
+        if self.ignore_byte(b'\\')? {
+            // TODO parse complex escape sequence
+            buf.push(b'\\');
+            self.read_escaped_string_text(buf)?;
+        }
         Ok(())
     }
 

@@ -14,4 +14,3 @@
 
 mod evaluator;
 mod expression_evaluator;
-mod hashtable;

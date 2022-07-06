@@ -21,19 +21,59 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
+use crate::catalogs::Catalog;
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
 
-pub struct TablesTable {
+pub struct TablesTable<const WITH_HISTROY: bool> {
     table_info: TableInfo,
 }
 
+pub type TablesTableWithHistory = TablesTable<true>;
+pub type TablesTableWithoutHistory = TablesTable<false>;
+
 #[async_trait::async_trait]
-impl AsyncSystemTable for TablesTable {
-    const NAME: &'static str = "system.tables";
+pub trait HistoryAware {
+    const TABLE_NAME: &'static str;
+    async fn list_tables(
+        catalog: &Arc<dyn Catalog>,
+        tenant: &str,
+        db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>>;
+}
+
+#[async_trait::async_trait]
+impl HistoryAware for TablesTable<true> {
+    const TABLE_NAME: &'static str = "tables_with_history";
+    async fn list_tables(
+        catalog: &Arc<dyn Catalog>,
+        tenant: &str,
+        database_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        catalog.list_tables_history(tenant, database_name).await
+    }
+}
+
+#[async_trait::async_trait]
+impl HistoryAware for TablesTable<false> {
+    const TABLE_NAME: &'static str = "tables";
+    async fn list_tables(
+        catalog: &Arc<dyn Catalog>,
+        tenant: &str,
+        database_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        catalog.list_tables(tenant, database_name).await
+    }
+}
+
+#[async_trait::async_trait]
+impl<const T: bool> AsyncSystemTable for TablesTable<T>
+where TablesTable<T>: HistoryAware
+{
+    const NAME: &'static str = Self::TABLE_NAME;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
@@ -41,14 +81,14 @@ impl AsyncSystemTable for TablesTable {
 
     async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        // TODO pass catalog in or embed catalog in table info?
         let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
 
         let mut database_tables = vec![];
         for database in databases {
             let name = database.name();
-            for table in catalog.list_tables_history(tenant.as_str(), name).await? {
+            let tables = Self::list_tables(&catalog, tenant.as_str(), name).await?;
+            for table in tables {
                 database_tables.push((name.to_string(), table));
             }
         }
@@ -122,7 +162,9 @@ impl AsyncSystemTable for TablesTable {
     }
 }
 
-impl TablesTable {
+impl<const T: bool> TablesTable<T>
+where TablesTable<T>: HistoryAware
+{
     pub fn schema() -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
             DataField::new("database", Vu8::to_data_type()),
@@ -139,18 +181,19 @@ impl TablesTable {
     }
 
     pub fn create(table_id: u64) -> Arc<dyn Table> {
+        let name = Self::TABLE_NAME;
         let table_info = TableInfo {
-            desc: "'system'.'tables'".to_string(),
-            name: "tables".to_string(),
+            desc: format!("'system'.'{name}'"),
+            name: Self::NAME.to_owned(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
-                schema: TablesTable::schema(),
+                schema: TablesTable::<T>::schema(),
                 engine: "SystemTables".to_string(),
 
                 ..Default::default()
             },
         };
 
-        AsyncOneBlockSystemTable::create(TablesTable { table_info })
+        AsyncOneBlockSystemTable::create(TablesTable::<T> { table_info })
     }
 }

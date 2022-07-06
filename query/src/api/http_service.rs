@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
+use common_base::base::HttpShutdownHandler;
 use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
@@ -25,7 +26,6 @@ use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
 
-use crate::common::service::HttpShutdownHandler;
 use crate::servers::Server;
 use crate::sessions::SessionManager;
 use crate::Config;

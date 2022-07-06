@@ -124,7 +124,8 @@ async fn test_show_tables_interpreter() -> Result<()> {
 
     // show tables != 'data'.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show tables where table_name != 'data'").await?;
+        let plan =
+            PlanParser::parse(ctx.clone(), "show tables where Tables_in_db1 != 'data'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
         let stream = executor.execute(None).await?;
@@ -141,8 +142,11 @@ async fn test_show_tables_interpreter() -> Result<()> {
 
     // show full tables != 'data'.
     {
-        let plan =
-            PlanParser::parse(ctx.clone(), "show full tables where table_name != 'data'").await?;
+        let plan = PlanParser::parse(
+            ctx.clone(),
+            "show full tables where Tables_in_db1 != 'data'",
+        )
+        .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
         let stream = executor.execute(None).await?;
