@@ -206,9 +206,16 @@ impl WindowFuncCompact {
 
         let window_col = Series::concat(&window_col_per_tuple).unwrap();
 
+        // Drop the aggregate states
+        {
+            for state in segment_tree_state.view() {
+                unsafe { function.drop_state(*state) }
+            }
+        }
+
         block.add_column(
             window_col,
-            self.window_func.to_data_field(&self.input_schema).unwrap(),
+            self.window_func.to_data_field(&self.input_schema)?,
         )
     }
 
