@@ -51,12 +51,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     let tenant = conf.query.tenant_id.clone();
     let cluster_id = conf.query.cluster_id.clone();
     let flight_addr = conf.query.flight_api_address.clone();
-    let app_name = format!(
-        "databend-query-{}-{}@{}",
-        tenant.clone(),
-        cluster_id.clone(),
-        flight_addr.clone()
-    );
+    let app_name = format!("databend-query-{}-{}", &tenant, &cluster_id);
 
     let mut _sentry_guard = None;
     let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());

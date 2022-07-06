@@ -25,6 +25,7 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
+use crate::sql::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
@@ -35,6 +36,7 @@ pub enum JoinType {
     Semi,
     Anti,
     Cross,
+    Mark,
 }
 
 impl Display for JoinType {
@@ -61,6 +63,9 @@ impl Display for JoinType {
             JoinType::Cross => {
                 write!(f, "CROSS")
             }
+            JoinType::Mark => {
+                write!(f, "MARK")
+            }
         }
     }
 }
@@ -71,6 +76,8 @@ pub struct LogicalInnerJoin {
     pub right_conditions: Vec<Scalar>,
     pub other_conditions: Vec<Scalar>,
     pub join_type: JoinType,
+    // marker_index is for MarkJoin only.
+    pub marker_index: Option<IndexType>,
 }
 
 impl Operator for LogicalInnerJoin {

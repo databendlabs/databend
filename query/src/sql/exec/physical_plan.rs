@@ -17,17 +17,20 @@ use std::collections::BTreeSet;
 
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
+use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::NullableType;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 
 use crate::sql::plans::JoinType;
+use crate::sql::IndexType;
 
 pub type ColumnID = String;
 
@@ -76,6 +79,7 @@ pub enum PhysicalPlan {
         probe_keys: Vec<PhysicalScalar>,
         other_conditions: Vec<PhysicalScalar>,
         join_type: JoinType,
+        marker_index: Option<IndexType>,
     },
     CrossApply {
         input: Box<PhysicalPlan>,
@@ -179,6 +183,15 @@ impl PhysicalPlan {
 
                     JoinType::Semi | JoinType::Anti => {
                         // Do nothing
+                    }
+
+                    JoinType::Mark => {
+                        fields.clear();
+                        fields = build.output_schema()?.fields().clone();
+                        fields.push(DataField::new(
+                            "marker",
+                            NullableType::new_impl(BooleanType::new_impl()),
+                        ));
                     }
 
                     _ => {

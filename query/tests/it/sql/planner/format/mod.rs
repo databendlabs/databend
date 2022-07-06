@@ -144,6 +144,7 @@ fn test_format() {
             .into()],
             other_conditions: vec![],
             join_type: JoinType::Inner,
+            marker_index: None,
         }
         .into(),
         SExpr::create_unary(
