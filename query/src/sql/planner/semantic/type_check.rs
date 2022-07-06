@@ -1178,26 +1178,12 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
     ) -> Option<Result<(Scalar, DataTypeImpl)>> {
         match func_name.to_lowercase().as_str() {
-            "database" => {
+            "database" | "currentdatabase" | "current_database" => {
                 let arg = Expr::Literal {
                     span: &[],
                     lit: Literal::String(self.ctx.get_current_database()),
                 };
-                Some(self.resolve_function(span, "database", &[&arg], None).await)
-            }
-            "currentdatabase" => {
-                let arg = Expr::Literal {
-                    span: &[],
-                    lit: Literal::String(self.ctx.get_current_database()),
-                };
-                Some(self.resolve_function(span, "currentdatabase", &[&arg], None).await)
-            }
-            "current_database" => {
-                let arg = Expr::Literal {
-                    span: &[],
-                    lit: Literal::String(self.ctx.get_current_database()),
-                };
-                Some(self.resolve_function(span, "current_database", &[&arg], None).await)
+                Some(self.resolve_function(span, func_name.to_lowercase().as_str(), &[&arg], None).await)
             }
             "version" => {
                 let arg = Expr::Literal {
@@ -1206,39 +1192,13 @@ impl<'a> TypeChecker<'a> {
                 };
                 Some(self.resolve_function(span, "version", &[&arg], None).await)
             }
-            "user" => match self.ctx.get_current_user() {
+            "user" | "currentuser" | "current_user" => match self.ctx.get_current_user() {
                 Ok(user) => {
                     let arg = Expr::Literal {
                         span: &[],
                         lit: Literal::String(user.identity().to_string()),
                     };
-                    Some(self.resolve_function(span, "user", &[&arg], None).await)
-                }
-                Err(e) => Some(Err(e)),
-            },
-            "currentuser" => match self.ctx.get_current_user() {
-                Ok(user) => {
-                    let arg = Expr::Literal {
-                        span: &[],
-                        lit: Literal::String(user.identity().to_string()),
-                    };
-                    Some(
-                        self.resolve_function(span, "currentuser", &[&arg], None)
-                            .await,
-                    )
-                }
-                Err(e) => Some(Err(e)),
-            },
-            "current_user" => match self.ctx.get_current_user() {
-                Ok(user) => {
-                    let arg = Expr::Literal {
-                        span: &[],
-                        lit: Literal::String(user.identity().to_string()),
-                    };
-                    Some(
-                        self.resolve_function(span, "current_user", &[&arg], None)
-                            .await,
-                    )
+                    Some(self.resolve_function(span, func_name.to_lowercase().as_str(), &[&arg], None).await)
                 }
                 Err(e) => Some(Err(e)),
             },
