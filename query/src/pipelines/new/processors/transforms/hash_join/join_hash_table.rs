@@ -18,20 +18,26 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
+use common_datavalues::BooleanColumn;
+use common_datavalues::BooleanType;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::NullableType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashTableKeyable;
@@ -110,13 +116,18 @@ pub enum MarkerKind {
     Null,
 }
 
+pub struct MarkJoinDesc {
+    pub(crate) marker: RwLock<Vec<MarkerKind>>,
+    pub(crate) marker_index: Option<IndexType>,
+    pub(crate) has_null: RwLock<bool>,
+}
+
 pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<EvalNode<ColumnID>>,
     pub(crate) probe_keys: Vec<EvalNode<ColumnID>>,
     pub(crate) join_type: JoinType,
     pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
-    pub(crate) marker: RwLock<Vec<MarkerKind>>,
-    pub(crate) marker_index: Option<IndexType>,
+    pub(crate) marker_join_desc: MarkJoinDesc,
 }
 
 pub struct JoinHashTable {
@@ -156,8 +167,11 @@ impl JoinHashTable {
             other_predicate: other_predicate
                 .map(Evaluator::eval_physical_scalar)
                 .transpose()?,
-            marker: RwLock::new(vec![]),
-            marker_index,
+            marker_join_desc: MarkJoinDesc {
+                marker: RwLock::new(vec![]),
+                marker_index,
+                has_null: RwLock::new(false),
+            },
         };
         Ok(match method {
             HashMethodKind::SingleString(_) | HashMethodKind::Serializer(_) => {
@@ -261,6 +275,88 @@ impl JoinHashTable {
             ctx,
             hash_table: RwLock::new(hash_table),
         })
+    }
+
+    fn mark_join_block(&self, probe_state: &mut ProbeState) -> Result<DataBlock> {
+        let hash_table = self.hash_table.read();
+        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
+        let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
+        let mut validity = MutableBitmap::with_capacity(marker.len());
+        let mut boolean_bit_map = MutableBitmap::with_capacity(marker.len());
+        for m in marker.iter_mut() {
+            if m == &mut MarkerKind::False && *has_null {
+                *m = MarkerKind::Null;
+            }
+            if m == &mut MarkerKind::Null {
+                validity.push(false);
+            } else {
+                validity.push(true);
+            }
+            if m == &mut MarkerKind::True {
+                boolean_bit_map.push(true);
+            } else {
+                boolean_bit_map.push(false);
+            }
+        }
+        // transfer marker to a Nullable(BooleanColumn)
+        let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
+        let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
+        let marker_schema = DataSchema::new(vec![DataField::new(
+            &self
+                .hash_join_desc
+                .marker_join_desc
+                .marker_index
+                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
+                .to_string(),
+            NullableType::new_impl(BooleanType::new_impl()),
+        )]);
+        let marker_block =
+            DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
+        let build_indexes = &mut probe_state.build_indexs;
+        match *hash_table {
+            HashTable::SerializerHashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU8HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU16HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU32HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU64HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU128HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU256HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU512HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+        };
+        let build_block = self.row_space.gather(build_indexes)?;
+        self.merge_eq_block(&marker_block, &build_block)
     }
 
     // Merge build block and probe block that have the same number of rows
@@ -440,7 +536,7 @@ impl HashJoinState for JoinHashTable {
         let mut count = self.ref_count.lock().unwrap();
         *count -= 1;
         if *count == 0 {
-            self.finish()?;
+            self.build_finish()?;
             let mut is_finished = self.is_finished.lock().unwrap();
             *is_finished = true;
             Ok(())
@@ -453,9 +549,9 @@ impl HashJoinState for JoinHashTable {
         Ok(*self.is_finished.lock().unwrap())
     }
 
-    fn finish(&self) -> Result<()> {
+    fn build_finish(&self) -> Result<()> {
         let chunks = self.row_space.chunks.read().unwrap();
-        let mut marker = self.hash_join_desc.marker.write();
+        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
         for chunk_index in 0..chunks.len() {
             let chunk = &chunks[chunk_index];
             let mut columns = vec![];
@@ -547,6 +643,14 @@ impl HashJoinState for JoinHashTable {
         }
 
         Ok(())
+    }
+
+    fn probe_finish(&self, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+        let mut results = Vec::new();
+        if self.hash_join_desc.join_type == JoinType::Mark {
+            results.push(self.mark_join_block(probe_state)?);
+        }
+        Ok(results)
     }
 }
 

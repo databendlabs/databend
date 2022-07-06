@@ -139,6 +139,14 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.is_finished() {
+                    self.output_data_blocks
+                        .append(&mut self.join_state.probe_finish(&mut self.probe_state)?);
+                    if !self.output_data_blocks.is_empty() {
+                        self.output_port
+                            .push_data(Ok(self.output_data_blocks.remove(0)));
+                        self.step = HashJoinStep::Finished;
+                        return Ok(Event::NeedConsume);
+                    }
                     self.output_port.finish();
                     self.step = HashJoinStep::Finished;
                     return Ok(Event::Finished);
@@ -152,7 +160,10 @@ impl Processor for TransformHashJoinProbe {
                 self.input_port.set_need_data();
                 Ok(Event::NeedData)
             }
-            HashJoinStep::Finished => Ok(Event::Finished),
+            HashJoinStep::Finished => {
+                self.output_port.finish();
+                Ok(Event::Finished)
+            }
         }
     }
 

@@ -130,7 +130,7 @@ impl JoinHashTable {
                 }
             }
             Mark => {
-                let mut has_null = false;
+                let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
                 // `probe_column` is the subquery result column.
                 // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
                 let probe_column = input.column(0);
@@ -144,51 +144,13 @@ impl JoinHashTable {
                     let probe_result_ptr = hash_table.find_key(key);
                     if let Some(v) = probe_result_ptr {
                         let probe_result_ptrs = v.get_value();
-                        let mut marker = self.hash_join_desc.marker.write();
+                        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
                         for ptr in probe_result_ptrs {
                             // If find join partner, set the marker to true.
                             marker[ptr.row_index as usize] = MarkerKind::True;
                         }
                     }
                 }
-                let mut marker = self.hash_join_desc.marker.write();
-                let mut validity = MutableBitmap::with_capacity(marker.len());
-                let mut boolean_bit_map = MutableBitmap::with_capacity(marker.len());
-                for m in marker.iter_mut() {
-                    if m == &mut MarkerKind::False && has_null {
-                        *m = MarkerKind::Null;
-                    }
-                    if m == &mut MarkerKind::Null {
-                        validity.push(false);
-                    } else {
-                        validity.push(true);
-                    }
-                    if m == &mut MarkerKind::True {
-                        boolean_bit_map.push(true);
-                    } else {
-                        boolean_bit_map.push(false);
-                    }
-                }
-                // transfer marker to a Nullable(BooleanColumn)
-                let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
-                let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
-                let marker_schema = DataSchema::new(vec![DataField::new(
-                    &self
-                        .hash_join_desc
-                        .marker_index
-                        .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
-                        .to_string(),
-                    NullableType::new_impl(BooleanType::new_impl()),
-                )]);
-                let marker_block =
-                    DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
-                let build_indexs = &mut probe_state.build_indexs;
-                for entity in hash_table.iter() {
-                    build_indexs.extend_from_slice(entity.get_value());
-                }
-                let build_block = self.row_space.gather(build_indexs)?;
-                let result = self.merge_eq_block(&marker_block, &build_block)?;
-                results.push(result);
             }
             _ => unreachable!(),
         }
@@ -399,6 +361,17 @@ impl JoinHashTable {
         DataBlock::filter_block(merged_block, &predicate)
     }
 
+    fn mark_join_with_other_condition<Key>(
+        &self,
+        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        input: &DataBlock,
+    ) -> Result<DataBlock>
+    where
+        Key: HashTableKeyable + Clone + 'static,
+    {
+        todo!()
+    }
+
     // modify the bm by the value row_state
     // keep the index of the first positive state
     // bitmap: [1, 1, 1] with row_state [0, 0], probe_index: [0, 0, 0] (repeat the first element 3 times)
@@ -504,7 +477,7 @@ impl JoinHashTable {
         ))
     }
 
-    fn set_validity(column: &ColumnRef, validity: &Bitmap) -> Result<ColumnRef> {
+    pub(crate) fn set_validity(column: &ColumnRef, validity: &Bitmap) -> Result<ColumnRef> {
         if column.is_null() {
             Ok(column.clone())
         } else if column.is_nullable() {
