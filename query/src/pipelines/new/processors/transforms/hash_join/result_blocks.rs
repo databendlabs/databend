@@ -152,8 +152,8 @@ impl JoinHashTable {
                     }
                 }
                 let mut marker = self.hash_join_desc.marker.write();
-                let mut validity = MutableBitmap::new();
-                let mut boolean_bit_map = MutableBitmap::new();
+                let mut validity = MutableBitmap::with_capacity(marker.len());
+                let mut boolean_bit_map = MutableBitmap::with_capacity(marker.len());
                 for m in marker.iter_mut() {
                     if m == &mut MarkerKind::False && has_null {
                         *m = MarkerKind::Null;

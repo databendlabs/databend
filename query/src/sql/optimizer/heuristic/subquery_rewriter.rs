@@ -316,10 +316,25 @@ impl SubqueryRewriter {
                         visible_in_unqualified_wildcard: false,
                     },
                 });
+                let right_condition = *subquery.child_expr.as_ref().unwrap().clone();
+                let op = subquery.compare_op.as_ref().unwrap().clone();
+                let (left_conditions, right_conditions, other_conditions) =
+                    if op == ComparisonOp::Equal {
+                        (vec![left_condition], vec![right_condition], vec![])
+                    } else {
+                        let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
+                            op,
+                            left: Box::new(left_condition),
+                            right: Box::new(right_condition),
+                            return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                        });
+                        (vec![], vec![], vec![other_condition])
+                    };
                 if prop.outer_columns.is_empty() {
                     // Add a marker column to save comparison result.
                     // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
-                    // If subquery contains NULL, the comparison result is TRUE or NULL. Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
+                    // If subquery contains NULL, the comparison result is TRUE or NULL.
+                    // Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
                     // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
                     let marker_index = self.metadata.write().add_column(
                         "marker".to_string(),
@@ -330,9 +345,9 @@ impl SubqueryRewriter {
                     // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
                     // Note that subquery is the left table, and it'll be the probe side.
                     let mark_join = LogicalInnerJoin {
-                        right_conditions: vec![*subquery.child_expr.as_ref().unwrap().clone()],
-                        left_conditions: vec![left_condition],
-                        other_conditions: vec![],
+                        left_conditions,
+                        right_conditions,
+                        other_conditions,
                         join_type: JoinType::Mark,
                         marker_index: Some(marker_index),
                     }

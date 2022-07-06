@@ -22,6 +22,7 @@ use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
+use common_ast::ast::SubqueryModifier;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
@@ -312,8 +313,54 @@ impl<'a> TypeChecker<'a> {
                 right,
                 ..
             } => {
-                self.resolve_binary_op(span, op, left.as_ref(), right.as_ref(), required_type)
-                    .await?
+                if let Expr::Subquery {
+                    subquery, modifier, ..
+                } = &**right
+                {
+                    if let Some(subquery_modifier) = modifier {
+                        match subquery_modifier {
+                            SubqueryModifier::Any | SubqueryModifier::Some => {
+                                let comparison_op = ComparisonOp::try_from(op)?;
+                                self.resolve_subquery(
+                                    SubqueryType::Any,
+                                    &*subquery,
+                                    true,
+                                    Some(*left.clone()),
+                                    Some(comparison_op),
+                                    None,
+                                )
+                                .await?
+                            }
+                            SubqueryModifier::All => {
+                                let contrary_op = op.to_contrary()?;
+                                let rewritten_subquery = Expr::Subquery {
+                                    span: right.span(),
+                                    modifier: Some(SubqueryModifier::Any),
+                                    subquery: (*subquery).clone(),
+                                };
+                                self.resolve_function(
+                                    span,
+                                    "not",
+                                    &[&Expr::BinaryOp {
+                                        span,
+                                        op: contrary_op,
+                                        left: (*left).clone(),
+                                        right: Box::new(rewritten_subquery),
+                                    }],
+                                    None,
+                                )
+                                .await?
+                            }
+                        }
+                    } else {
+                        return Err(ErrorCode::SemanticError(
+                            "subquery modifier shouldn't be None",
+                        ));
+                    }
+                } else {
+                    self.resolve_binary_op(span, op, left.as_ref(), right.as_ref(), required_type)
+                        .await?
+                }
             }
 
             Expr::UnaryOp { span, op, expr, .. } => {
