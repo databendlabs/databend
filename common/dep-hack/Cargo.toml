@@ -1,0 +1,7 @@
+[package]
+name = "common-dep-hack"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+openssl-src = { version = "111.22" }
