@@ -14,7 +14,7 @@ runs:
         bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
 
     - shell: bash
-      run: cargo -Z sparse-registry test --no-fail-fast
+      run: cargo test --no-fail-fast
       env:
         RUST_TEST_THREADS: "2"
         RUST_LOG: ERROR

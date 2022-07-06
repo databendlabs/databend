@@ -28,17 +28,17 @@ runs:
 
     - name: Clippy
       shell: bash
-      run: cargo -Z sparse-registry clippy --workspace --all-targets -- -D warnings
+      run: cargo clippy --workspace --all-targets -- -D warnings
 
     - name: Audit dependencies
       shell: bash
       if: "!contains(github.event.head_commit.message, 'skip audit')"
-      run: cargo -Z sparse-registry audit --db ./target/advisory-db
+      run: cargo audit --db ./target/advisory-db
 
     - name: Check udeps
       shell: bash
       if: "!contains(github.event.head_commit.message, 'skip udeps')"
-      run: cargo -Z sparse-registry udeps --workspace
+      run: cargo udeps --workspace
 
     - name: Check toml format
       shell: bash

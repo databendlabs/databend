@@ -18,12 +18,12 @@ runs:
     - name: Build Debug
       if: inputs.profile == 'debug'
       shell: bash
-      run: cargo -Z sparse-registry build --target ${{ inputs.target }}
+      run: cargo build --target ${{ inputs.target }}
 
     - name: Build Release
       if: inputs.profile == 'release'
       shell: bash
-      run: cargo -Z sparse-registry build --target ${{ inputs.target }} --release
+      run: cargo build --target ${{ inputs.target }} --release
 
     - shell: bash
       run: readelf -p .comment ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-query
