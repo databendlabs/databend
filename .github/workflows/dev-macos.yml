@@ -2,6 +2,7 @@ name: Dev MacOS
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
     paths-ignore:
       - "docs/**"
       - "website/**"
@@ -20,6 +21,7 @@ env:
 jobs:
   build_macos:
     name: "build_${{ matrix.arch }}_macos(optional)"
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: macos-11
     strategy:
       matrix:
@@ -46,6 +48,7 @@ jobs:
 
   test_stateless_cluster_macos:
     name: "test_stateless_cluster_macos(optional)"
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: macos-11
     needs: build_macos
     steps:
@@ -54,6 +57,7 @@ jobs:
 
   test_sqllogic_standalone_macos:
     name: "test_sqllogic_standalone_macos(optional)"
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: macos-11
     needs: build_macos
     steps:
