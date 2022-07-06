@@ -20,12 +20,15 @@ use common_base::base::RuntimeTracker;
 use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::MIN_METASRV_SEMVER;
+use common_meta_types::protobuf::watch_request::FilterType;
+use common_meta_types::protobuf::WatchRequest;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_global_tracing;
 use common_tracing::set_panic_hook;
 use common_tracing::tracing;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
+use common_meta_grpc::MetaGrpcClient;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::HttpHandler;
@@ -41,7 +44,20 @@ use databend_query::QUERY_SEMVER;
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     let conf: Config = Config::load()?;
 
-    if run_cmd(&conf) {
+    if !conf.cmd.is_empty() {
+        match conf.cmd.as_str() {
+            "ver" => {
+                println!("version: {}", QUERY_SEMVER.deref());
+                println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
+            }
+            "compaction" => run_compaction_cmd(&conf).await?,
+            _ => {
+                eprintln!("Invalid cmd: {}", conf.cmd);
+                eprintln!("Available cmds:");
+                eprintln!("  --cmd ver");
+                eprintln!("    Print version and the min compatible databend-meta version");
+            }
+        }
         return Ok(());
     }
 
@@ -220,23 +236,27 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     Ok(())
 }
 
-fn run_cmd(conf: &Config) -> bool {
-    if conf.cmd.is_empty() {
-        return false;
+async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
+    let rpc_conf = conf.meta.to_meta_grpc_client_conf();
+    if rpc_conf.local_mode() {
+        todo!();
     }
+    let watch = WatchRequest {
+        key: "__fd_table_by_id/".to_string(),
+        key_end: Some("__fd_table_by_id0".to_string()),
+        filter_type: FilterType::All.into(),
+    };
+    let client = MetaGrpcClient::try_new(&rpc_conf)?;
+    
+    let mut client_stream = client.request(watch).await?;
+    println!("compaction watch started.");
 
-    match conf.cmd.as_str() {
-        "ver" => {
-            println!("version: {}", QUERY_SEMVER.deref());
-            println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
-        }
-        _ => {
-            eprintln!("Invalid cmd: {}", conf.cmd);
-            eprintln!("Available cmds:");
-            eprintln!("  --cmd ver");
-            eprintln!("    Print version and the min compatible databend-meta version");
+    loop {
+        if let Ok(Some(resp)) = client_stream.message().await {
+            if let Some(event) = resp.event {
+                println!("watch");
+                println!("{:?}", event);
+            }
         }
     }
-
-    true
 }
