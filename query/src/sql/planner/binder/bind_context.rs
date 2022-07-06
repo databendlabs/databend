@@ -33,7 +33,7 @@ pub struct ColumnBinding {
     /// Column index of ColumnBinding
     pub index: IndexType,
 
-    pub data_type: DataTypeImpl,
+    pub data_type: Box<DataTypeImpl>,
 
     /// Consider the sql: `select * from t join t1 using(a)`.
     /// The result should only contain one `a` column.
@@ -219,7 +219,7 @@ impl BindContext {
             .map(|column_binding| {
                 DataField::new(
                     &column_binding.column_name,
-                    column_binding.data_type.clone(),
+                    *column_binding.data_type.clone(),
                 )
             })
             .collect();

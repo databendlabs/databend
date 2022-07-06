@@ -210,7 +210,7 @@ impl WatcherManagerCore {
                 if &key > key_end {
                     return Err(false);
                 }
-                Ok(key..format!("{}\x00", key_end))
+                Ok(key..key_end.to_string())
             }
             None => Ok(key.clone()..key),
         }

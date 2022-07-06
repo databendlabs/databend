@@ -15,9 +15,9 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_base::base::HttpShutdownHandler;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_http::HttpShutdownHandler;
 use common_metrics::PrometheusHandle;
 use poem::web::Data;
 use poem::EndpointExt;

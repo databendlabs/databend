@@ -14,6 +14,9 @@
 
 use std::net::SocketAddr;
 
+use common_base::base::tokio::sync::broadcast;
+use common_base::base::tokio::sync::oneshot;
+use common_base::base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -26,9 +29,6 @@ use poem::listener::Listener;
 use poem::listener::RustlsConfig;
 use poem::listener::TcpListener;
 use poem::Endpoint;
-use tokio::sync::broadcast;
-use tokio::sync::oneshot;
-use tokio::task::JoinHandle;
 
 pub struct HttpShutdownHandler {
     service_name: String,
@@ -78,7 +78,7 @@ impl HttpShutdownHandler {
         }
 
         let (tx, rx) = oneshot::channel();
-        let join_handle = tokio::spawn(
+        let join_handle = common_base::base::tokio::spawn(
             poem::Server::new_with_acceptor(acceptor).run_with_graceful_shutdown(
                 ep,
                 rx.map(|_| ()),

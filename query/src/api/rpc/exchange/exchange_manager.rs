@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use async_channel::Sender;
 use common_arrow::arrow_format::flight::data::FlightData;
+use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
 use common_base::base::Thread;
@@ -29,6 +30,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use futures::StreamExt;
+use futures_util::future::Either;
 use tonic::Streaming;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentReceiver;
@@ -151,20 +153,22 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn remove_query(&self, query_id: &str) {
+    pub fn on_finished_query(&self, query_id: &str, may_error: &Option<ErrorCode>) {
         let mut queries_coordinator = self.queries_coordinator.lock();
-        queries_coordinator.remove(query_id);
+        if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
+            query_coordinator.on_finished(may_error);
+        }
     }
 
     pub fn shutdown_query(&self, query_id: &str, cause: Option<ErrorCode>) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
-        match queries_coordinator.remove(query_id) {
+        match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::LogicalError(format!(
                 "Query {} not found in cluster.",
                 query_id
             ))),
-            Some(mut coordinator) => coordinator.shutdown(cause),
+            Some(coordinator) => coordinator.shutdown(cause),
         }
     }
 
@@ -285,6 +289,8 @@ struct QueryCoordinator {
     executor: Option<Arc<PipelineCompleteExecutor>>,
     exchange_senders: Vec<Arc<ExchangeSender>>,
     exchange_receivers: Vec<Arc<ExchangeReceiver>>,
+    subscribe_flight_shutdown_notify: Vec<Arc<Notify>>,
+    subscribe_flight_finished_notify: Vec<Arc<Notify>>,
 }
 
 impl QueryCoordinator {
@@ -318,6 +324,8 @@ impl QueryCoordinator {
                 2,
                 Some(String::from("Cluster-Pub-Sub")),
             )?),
+            subscribe_flight_shutdown_notify: vec![],
+            subscribe_flight_finished_notify: vec![],
         })
     }
 
@@ -330,11 +338,88 @@ impl QueryCoordinator {
 
         for fragment_id in fragments_id {
             if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-                coordinator.prepare_pipeline(&self.ctx)?;
+                coordinator.prepare_pipeline(&self.query_id, &self.ctx)?;
             }
         }
 
         Ok(())
+    }
+
+    pub fn on_finished(&mut self, may_error: &Option<ErrorCode>) {
+        if let Some(cause) = may_error {
+            if let Some(request_server_tx) = self.request_server_tx.take() {
+                let may_error = cause.clone();
+                futures::executor::block_on(async move {
+                    if request_server_tx
+                        .send(DataPacket::ErrorCode(may_error))
+                        .await
+                        .is_err()
+                    {
+                        common_tracing::tracing::warn!(
+                            "Cannot send error code, request server channel is closed."
+                        );
+                    }
+
+                    drop(request_server_tx);
+                });
+            }
+        }
+
+        if let Some(cause) = self.shutdown_cause.lock().take() {
+            if let Some(request_server_tx) = self.request_server_tx.take() {
+                futures::executor::block_on(async move {
+                    if request_server_tx
+                        .send(DataPacket::ErrorCode(cause))
+                        .await
+                        .is_err()
+                    {
+                        common_tracing::tracing::warn!(
+                            "Cannot send error code, request server channel is closed."
+                        );
+                    }
+
+                    drop(request_server_tx);
+                });
+            }
+        }
+
+        for shutdown_notify in &self.subscribe_flight_shutdown_notify {
+            shutdown_notify.notify_one();
+        }
+
+        for finished_notify in &self.subscribe_flight_finished_notify {
+            let finished_notify = finished_notify.clone();
+            futures::executor::block_on(async move { finished_notify.notified().await });
+        }
+
+        // close request server channel.
+        drop(self.request_server_tx.take());
+
+        for receiver in &self.exchange_receivers {
+            receiver.shutdown();
+        }
+
+        for receiver in &self.exchange_receivers {
+            let receiver = receiver.clone();
+            futures::executor::block_on(async move {
+                if let Err(cause) = receiver.join().await {
+                    common_tracing::tracing::warn!("Receiver join failure {:?}", cause);
+                }
+            });
+        }
+
+        for sender in &self.exchange_senders {
+            sender.abort();
+        }
+
+        for sender in &self.exchange_senders {
+            let sender = sender.clone();
+            futures::executor::block_on(async move {
+                if let Err(cause) = sender.join().await {
+                    common_tracing::tracing::warn!("Sender join failure {:?}", cause);
+                }
+            });
+        }
     }
 
     pub fn shutdown(&mut self, cause: Option<ErrorCode>) -> Result<()> {
@@ -408,97 +493,27 @@ impl QueryCoordinator {
             }
         }
 
-        let query_id = self.query_id.clone();
         let async_runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
         let executor =
             PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
         self.executor = Some(executor.clone());
-        let senders = self.exchange_senders.clone();
-        let receivers = self.exchange_receivers.clone();
-        let shutdown_cause = self.shutdown_cause.clone();
-        let mut request_server_tx = self.request_server_tx.take();
-        let exchange_manager = self.ctx.get_exchange_manager();
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
-            if let Err(cause) = executor.execute() {
-                if let Some(request_server_tx) = request_server_tx.take() {
-                    futures::executor::block_on(async move {
-                        if request_server_tx
-                            .send(DataPacket::ErrorCode(cause))
-                            .await
-                            .is_err()
-                        {
-                            common_tracing::tracing::warn!(
-                                "Cannot send error code, request server channel is closed."
-                            );
-                        }
-                    });
-                }
-            }
-
-            if let Some(cause) = shutdown_cause.lock().take() {
-                if let Some(request_server_tx) = request_server_tx.take() {
-                    futures::executor::block_on(async move {
-                        if request_server_tx
-                            .send(DataPacket::ErrorCode(cause))
-                            .await
-                            .is_err()
-                        {
-                            common_tracing::tracing::warn!(
-                                "Cannot send error code, request server channel is closed."
-                            );
-                        }
-                    });
-                }
-            }
-
-            // close request server channel.
-            drop(request_server_tx);
-
-            for receiver in &receivers {
-                receiver.shutdown();
-            }
-
-            for receiver in &receivers {
-                let receiver = receiver.clone();
-                futures::executor::block_on(async move {
-                    if let Err(cause) = receiver.join().await {
-                        common_tracing::tracing::warn!("Receiver join failure {:?}", cause);
-                    }
-                });
-            }
-
-            for sender in &senders {
-                sender.abort();
-            }
-
-            for sender in &senders {
-                let sender = sender.clone();
-                futures::executor::block_on(async move {
-                    if let Err(cause) = sender.join().await {
-                        common_tracing::tracing::warn!("Sender join failure {:?}", cause);
-                    }
-                });
-            }
-
-            let mut queries_coordinator = exchange_manager.queries_coordinator.lock();
-            queries_coordinator.remove(&query_id);
-            println!(
-                "Pipeline execute successfully {}",
-                queries_coordinator.len()
-            );
+            executor.execute().ok();
         });
 
         Ok(())
     }
 
     pub fn init_publisher(&mut self, senders: HashMap<String, ExchangeSender>) -> Result<()> {
-        for (target, exchange_sender) in senders.into_iter() {
+        for (target, mut exchange_sender) in senders.into_iter() {
+            let runtime = self.runtime.clone();
+            exchange_sender.connect_flight(&runtime)?;
             let exchange_sender = Arc::new(exchange_sender);
+
             let ctx = self.ctx.clone();
             let source = self.executor_id.clone();
-            let runtime = self.runtime.clone();
             let (flight_tx, fragments_sender) = exchange_sender.listen(ctx, source, runtime)?;
 
             for (fragment_id, fragment_sender) in fragments_sender.into_iter() {
@@ -542,26 +557,49 @@ impl QueryCoordinator {
         if let Some(subscribe_channel) = self.subscribe_channel.remove(source) {
             let source = source.to_string();
             let target = self.executor_id.clone();
+            let shutdown_notify = Arc::new(Notify::new());
+            let finished_notify = Arc::new(Notify::new());
+            self.subscribe_flight_shutdown_notify
+                .push(shutdown_notify.clone());
+            self.subscribe_flight_finished_notify
+                .push(finished_notify.clone());
+
             return Ok(self.runtime.spawn(async move {
-                'fragment_loop: while let Some(flight_data) = stream.next().await {
-                    let data_packet = match flight_data {
-                        Err(status) => DataPacket::ErrorCode(ErrorCode::from(status)),
-                        Ok(flight_data) => match DataPacket::try_from(flight_data) {
-                            Ok(data_packet) => data_packet,
-                            Err(error_code) => DataPacket::ErrorCode(error_code),
-                        },
-                    };
+                let mut shutdown_notified = Box::pin(shutdown_notify.notified());
 
-                    if let Err(_cause) = subscribe_channel.send(Ok(data_packet)).await {
-                        common_tracing::tracing::warn!(
-                            "Subscribe channel closed, source {}, target {}",
-                            source,
-                            target
-                        );
+                'fragment_loop: loop {
+                    match futures::future::select(shutdown_notified, stream.next()).await {
+                        Either::Left((_, _)) => {
+                            break 'fragment_loop;
+                        }
+                        Either::Right((None, _)) => {
+                            break 'fragment_loop;
+                        }
+                        Either::Right((Some(flight_data), n)) => {
+                            shutdown_notified = n;
 
-                        break 'fragment_loop;
+                            let data_packet = match flight_data {
+                                Err(status) => DataPacket::ErrorCode(ErrorCode::from(status)),
+                                Ok(flight_data) => match DataPacket::try_from(flight_data) {
+                                    Ok(data_packet) => data_packet,
+                                    Err(error_code) => DataPacket::ErrorCode(error_code),
+                                },
+                            };
+
+                            if let Err(_cause) = subscribe_channel.send(Ok(data_packet)).await {
+                                common_tracing::tracing::warn!(
+                                    "Subscribe channel closed, source {}, target {}",
+                                    source,
+                                    target
+                                );
+
+                                break 'fragment_loop;
+                            }
+                        }
                     }
                 }
+
+                finished_notify.notify_one();
             }));
         };
 
@@ -594,7 +632,7 @@ impl QueryCoordinator {
 
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
-            fragment_coordinator.prepare_pipeline(&self.ctx)?;
+            fragment_coordinator.prepare_pipeline(&self.query_id, &self.ctx)?;
 
             if fragment_coordinator.pipeline.is_none() {
                 return Err(ErrorCode::LogicalError(
@@ -672,11 +710,20 @@ impl FragmentCoordinator {
         }
     }
 
-    pub fn prepare_pipeline(&mut self, ctx: &Arc<QueryContext>) -> Result<()> {
+    pub fn prepare_pipeline(&mut self, query_id: &str, ctx: &Arc<QueryContext>) -> Result<()> {
         if !self.initialized {
             self.initialized = true;
             let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
-            self.pipeline = Some(pipeline_builder.finalize(&self.node)?);
+            let mut pipeline = pipeline_builder.finalize(&self.node)?;
+
+            let ctx = ctx.clone();
+            let query_id = query_id.to_string();
+            pipeline.set_on_finished(move |may_error| {
+                let exchange_manager = ctx.get_exchange_manager();
+                exchange_manager.on_finished_query(&query_id, may_error);
+            });
+
+            self.pipeline = Some(pipeline);
         }
 
         Ok(())

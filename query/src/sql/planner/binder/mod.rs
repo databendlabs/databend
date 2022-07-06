@@ -278,7 +278,7 @@ impl<'a> Binder {
             table_name,
             column_name,
             index,
-            data_type,
+            data_type: Box::new(data_type),
             visible_in_unqualified_wildcard: true,
         }
     }

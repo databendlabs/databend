@@ -47,7 +47,7 @@ async fn test_scalar_evaluator() -> Result<()> {
                                 table_name: None,
                                 column_name: "".to_string(),
                                 index: 0,
-                                data_type: Int32Type::new_impl(),
+                                data_type: Box::new(Int32Type::new_impl()),
                                 visible_in_unqualified_wildcard: false,
                             },
                         }
@@ -58,7 +58,7 @@ async fn test_scalar_evaluator() -> Result<()> {
                                 table_name: None,
                                 column_name: "".to_string(),
                                 index: 1,
-                                data_type: Int32Type::new_impl(),
+                                data_type: Box::new(Int32Type::new_impl()),
                                 visible_in_unqualified_wildcard: false,
                             },
                         }
@@ -66,22 +66,22 @@ async fn test_scalar_evaluator() -> Result<()> {
                     ],
                     func_name: "plus".to_string(),
                     arg_types: vec![Int32Type::new_impl(), Int32Type::new_impl()],
-                    return_type: Int32Type::new_impl(),
+                    return_type: Box::new(Int32Type::new_impl()),
                 }
                 .into(),
                 ConstantExpr {
                     value: DataValue::Int64(2),
-                    data_type: Int64Type::new_impl(),
+                    data_type: Box::new(Int64Type::new_impl()),
                 }
                 .into(),
             ],
             func_name: "pow".to_string(),
             arg_types: vec![Int64Type::new_impl(), Int64Type::new_impl()],
-            return_type: Float64Type::new_impl(),
+            return_type: Box::new(Float64Type::new_impl()),
         }
         .into()],
         arg_types: vec![Float64Type::new_impl()],
-        return_type: Float64Type::new_impl(),
+        return_type: Box::new(Float64Type::new_impl()),
     });
 
     // Block layout:
@@ -120,29 +120,29 @@ async fn test_eval_const() -> Result<()> {
                 arguments: vec![
                     ConstantExpr {
                         value: DataValue::Int64(1),
-                        data_type: Int32Type::new_impl(),
+                        data_type: Box::new(Int32Type::new_impl()),
                     }
                     .into(),
                     ConstantExpr {
                         value: DataValue::Int64(3),
-                        data_type: Int32Type::new_impl(),
+                        data_type: Box::new(Int32Type::new_impl()),
                     }
                     .into(),
                 ],
                 func_name: "plus".to_string(),
                 arg_types: vec![Int32Type::new_impl(), Int32Type::new_impl()],
-                return_type: Int32Type::new_impl(),
+                return_type: Box::new(Int32Type::new_impl()),
             }
             .into(),
             ConstantExpr {
                 value: DataValue::Int64(2),
-                data_type: Int32Type::new_impl(),
+                data_type: Box::new(Int32Type::new_impl()),
             }
             .into(),
         ],
         func_name: "pow".to_string(),
         arg_types: vec![Int32Type::new_impl(), Int32Type::new_impl()],
-        return_type: Float64Type::new_impl(),
+        return_type: Box::new(Float64Type::new_impl()),
     });
 
     let func_ctx = create_query_context().await?.try_get_function_context()?;
