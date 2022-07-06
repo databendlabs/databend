@@ -12,4 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod v1;
+mod debug;
+mod health;
+mod http_shutdown_handlers;
+
+pub use debug::*;
+pub use health::*;
+pub use http_shutdown_handlers::HttpShutdownHandler;

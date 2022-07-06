@@ -47,6 +47,6 @@ impl<'a> ScalarBinder<'a> {
     pub async fn bind(&mut self, expr: &Expr<'a>) -> Result<(Scalar, DataTypeImpl)> {
         let mut type_checker =
             TypeChecker::new(self.bind_context, self.ctx.clone(), self.metadata.clone());
-        type_checker.resolve(expr, None).await
+        Ok(*type_checker.resolve(expr, None).await?)
     }
 }

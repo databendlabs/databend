@@ -267,8 +267,8 @@ impl<'a> Binder {
             {
                 if left_col.data_type != right_col.data_type {
                     let coercion_type = merge_types(&left_col.data_type, &right_col.data_type)?;
-                    left_col.data_type = coercion_type.clone();
-                    right_col.data_type = coercion_type;
+                    left_col.data_type = Box::new(coercion_type.clone());
+                    right_col.data_type = Box::new(coercion_type);
                 }
                 if left_col.data_type != right_col.data_type {
                     return Err(ErrorCode::SemanticError(

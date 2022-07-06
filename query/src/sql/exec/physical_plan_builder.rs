@@ -139,7 +139,7 @@ impl PhysicalPlanBuilder {
                                     s.data_type()
                                 }).collect(),
                                 params: agg.params.clone(),
-                                return_type: agg.return_type.clone(),
+                                return_type: *agg.return_type.clone(),
                             },
                             column_id: v.index.to_string(),
                             args: agg.args.iter().map(|arg| {
@@ -220,7 +220,7 @@ impl PhysicalScalarBuilder {
             }),
             Scalar::ConstantExpr(constant) => Ok(PhysicalScalar::Constant {
                 value: constant.value.clone(),
-                data_type: constant.data_type.clone(),
+                data_type: *constant.data_type.clone(),
             }),
             Scalar::AndExpr(and) => Ok(PhysicalScalar::Function {
                 name: "and".to_string(),
@@ -254,11 +254,11 @@ impl PhysicalScalarBuilder {
                     .zip(func.arg_types.iter())
                     .map(|(arg, typ)| Ok((self.build(arg)?, typ.clone())))
                     .collect::<Result<_>>()?,
-                return_type: func.return_type.clone(),
+                return_type: *func.return_type.clone(),
             }),
             Scalar::CastExpr(cast) => Ok(PhysicalScalar::Cast {
                 input: Box::new(self.build(&cast.argument)?),
-                target: cast.target_type.clone(),
+                target: *cast.target_type.clone(),
             }),
 
             _ => Err(ErrorCode::LogicalError(format!(
