@@ -358,13 +358,16 @@ select * from numbers(5) as t where not exists (select * from numbers(3) where n
 select * from numbers(5) as t where exists (select number as a from numbers(3) where number = t.number and number > 0 and t.number < 2);
 select * from numbers(5) as t where exists (select * from numbers(3) where number > t.number);
 
--- (Not)IN Subquery
+-- (Not)IN/ANY/SOME/ALL Subquery
 create table t1(a int, b int);
 create table t2(a int, b int);
 insert into t1 values(1, 2), (2, 3);
 insert into t2 values(3, 4), (2, 3);
 select * from t1 where t1.a not in (select t2.a from t2);
 select * from t1 where t1.a in (select t2.a from t2);
+select * from t1 where t1.a = any (select t2.a from t2);
+select * from t1 where t1.a = some (select t2.a from t2);
+select * from t1 where t1.a != all (select t2.a from t2);
 drop table t1;
 drop table t2;
 

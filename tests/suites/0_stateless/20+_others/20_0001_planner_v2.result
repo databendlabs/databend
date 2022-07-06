@@ -425,7 +425,11 @@ NULL	NULL	NULL	1
 0
 1
 1	2
+2	3		
 2	3
+2	3
+1	2
+1000
 ====Database====
 default	default	default
 ====User====
@@ -436,4 +440,4 @@ system	settings	description	VARCHAR
 system	settings	level	VARCHAR			
 system	settings	name	VARCHAR			
 system	settings	type	VARCHAR			
-system	settings	value	VARCHAR			
+system	settings	value	VARCHAR		

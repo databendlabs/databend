@@ -353,9 +353,14 @@ impl<'a> TypeChecker<'a> {
                             }
                         }
                     } else {
-                        return Err(ErrorCode::SemanticError(
-                            "subquery modifier shouldn't be None",
-                        ));
+                        self.resolve_binary_op(
+                            span,
+                            op,
+                            left.as_ref(),
+                            right.as_ref(),
+                            required_type,
+                        )
+                        .await?
                     }
                 } else {
                     self.resolve_binary_op(span, op, left.as_ref(), right.as_ref(), required_type)
