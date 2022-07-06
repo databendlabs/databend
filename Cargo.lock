@@ -1199,6 +1199,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-http"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-exception",
+ "common-tracing",
+ "futures",
+ "poem",
+ "pretty_assertions",
+ "serde",
+ "tempfile",
+]
+
+[[package]]
 name = "common-io"
 version = "0.1.0"
 dependencies = [
@@ -1965,6 +1979,7 @@ dependencies = [
  "common-building",
  "common-exception",
  "common-grpc",
+ "common-http",
  "common-macros",
  "common-meta-api",
  "common-meta-grpc",
