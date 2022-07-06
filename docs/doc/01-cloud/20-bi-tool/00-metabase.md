@@ -7,7 +7,7 @@ description:
 
 [Metabase](https://www.metabase.com/) is a simple but powerful analytics tool that enables everyone to make business decisions using their data without requiring any technical skills.
 
-Before connecting to Metabase, sign in to your account on [Databend Cloud](../../10-deploy/20-databend-cloud.md).
+Before connecting to Metabase, sign in to your account on [Databend Cloud](../index.md).
 
 ## Install Metabase
 
@@ -45,7 +45,7 @@ Because Databend is compatible with the [ClickHouse protocol](../../30-reference
 
 <img src="/img/cloud/bi/metabase_add_database.png"/>
 
-3. Enter the connection details of your Databend database. The host is provided by [Databend Cloud](../../10-deploy/20-databend-cloud.md#connect-to-a-serverless-warehouse-on-databend-cloud). For example:
+3. Enter the connection details of your Databend database. The host is provided by [Databend Cloud](../index.md#connect-to-a-serverless-warehouse-on-databend-cloud). For example:
 
 <img src="/img/cloud/bi/metabase_conn_databend.png"/>
 
