@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetics;
-mod common;
-mod comparisons;
-mod conditionals;
-mod dates;
-mod expressions;
-mod geos;
-mod hashes;
-mod logics;
-mod maths;
-mod nullables;
-mod others;
-mod scalar_function_test;
-mod semi_structureds;
-mod strings;
-mod tuples;
-mod udfs;
-mod uuids;
+use crate::scalars::geos::GeoToH3Function;
+use crate::FunctionFactory;
+
+#[derive(Clone)]
+pub struct GeoFunction;
+
+impl GeoFunction {
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("geo_to_h3", GeoToH3Function::desc());
+    }
+}
