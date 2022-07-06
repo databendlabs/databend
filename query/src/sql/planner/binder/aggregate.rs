@@ -171,7 +171,7 @@ impl<'a> AggregateRewriter<'a> {
                     // can not be referenced, the name is only for debug
                     column_name: name,
                     index,
-                    data_type: arg.data_type(),
+                    data_type: Box::new(arg.data_type()),
                     visible_in_unqualified_wildcard: true,
                 };
                 replaced_args.push(
@@ -189,7 +189,7 @@ impl<'a> AggregateRewriter<'a> {
 
         let index = self.metadata.write().add_column(
             aggregate.display_name.clone(),
-            aggregate.return_type.clone(),
+            *aggregate.return_type.clone(),
             None,
         );
 

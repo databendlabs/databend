@@ -107,7 +107,7 @@ impl ExpressionBuilder {
                 let arg = self.build(argument)?;
                 Ok(Expression::Cast {
                     expr: Box::new(arg),
-                    data_type: target_type.clone(),
+                    data_type: *target_type.clone(),
                     pg_style: false,
                 })
             }

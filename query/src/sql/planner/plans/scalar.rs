@@ -273,7 +273,7 @@ pub struct BoundColumnRef {
 
 impl ScalarExpr for BoundColumnRef {
     fn data_type(&self) -> DataTypeImpl {
-        self.column.data_type.clone()
+        *self.column.data_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -289,12 +289,12 @@ impl ScalarExpr for BoundColumnRef {
 pub struct ConstantExpr {
     pub value: DataValue,
 
-    pub data_type: DataTypeImpl,
+    pub data_type: Box<DataTypeImpl>,
 }
 
 impl ScalarExpr for ConstantExpr {
     fn data_type(&self) -> DataTypeImpl {
-        self.data_type.clone()
+        *self.data_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -310,12 +310,12 @@ impl ScalarExpr for ConstantExpr {
 pub struct AndExpr {
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
-    pub return_type: DataTypeImpl,
+    pub return_type: Box<DataTypeImpl>,
 }
 
 impl ScalarExpr for AndExpr {
     fn data_type(&self) -> DataTypeImpl {
-        self.return_type.clone()
+        *self.return_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -333,12 +333,12 @@ impl ScalarExpr for AndExpr {
 pub struct OrExpr {
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
-    pub return_type: DataTypeImpl,
+    pub return_type: Box<DataTypeImpl>,
 }
 
 impl ScalarExpr for OrExpr {
     fn data_type(&self) -> DataTypeImpl {
-        self.return_type.clone()
+        *self.return_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -408,12 +408,12 @@ pub struct ComparisonExpr {
     pub op: ComparisonOp,
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
-    pub return_type: DataTypeImpl,
+    pub return_type: Box<DataTypeImpl>,
 }
 
 impl ScalarExpr for ComparisonExpr {
     fn data_type(&self) -> DataTypeImpl {
-        self.return_type.clone()
+        *self.return_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -440,12 +440,12 @@ pub struct AggregateFunction {
     pub distinct: bool,
     pub params: Vec<DataValue>,
     pub args: Vec<Scalar>,
-    pub return_type: DataTypeImpl,
+    pub return_type: Box<DataTypeImpl>,
 }
 
 impl ScalarExpr for AggregateFunction {
     fn data_type(&self) -> DataTypeImpl {
-        self.return_type.clone()
+        *self.return_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -467,12 +467,12 @@ pub struct FunctionCall {
 
     pub func_name: String,
     pub arg_types: Vec<DataTypeImpl>,
-    pub return_type: DataTypeImpl,
+    pub return_type: Box<DataTypeImpl>,
 }
 
 impl ScalarExpr for FunctionCall {
     fn data_type(&self) -> DataTypeImpl {
-        self.return_type.clone()
+        *self.return_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -495,13 +495,13 @@ impl ScalarExpr for FunctionCall {
 #[derive(Clone, PartialEq, Debug)]
 pub struct CastExpr {
     pub argument: Box<Scalar>,
-    pub from_type: DataTypeImpl,
-    pub target_type: DataTypeImpl,
+    pub from_type: Box<DataTypeImpl>,
+    pub target_type: Box<DataTypeImpl>,
 }
 
 impl ScalarExpr for CastExpr {
     fn data_type(&self) -> DataTypeImpl {
-        self.target_type.clone()
+        *self.target_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -525,12 +525,12 @@ pub enum SubqueryType {
 #[derive(Clone, Debug)]
 pub struct SubqueryExpr {
     pub typ: SubqueryType,
-    pub subquery: SExpr,
+    pub subquery: Box<SExpr>,
     // The expr that is used to compare the result of the subquery (IN/ANY/ALL), such as `t1.a in (select t2.a from t2)`, t1.a is `child_expr`.
     pub child_expr: Option<Box<Scalar>>,
     // Comparison operator for Any/All, such as t1.a = Any (...), `compare_op` is `=`.
     pub compare_op: Option<ComparisonOp>,
-    pub data_type: DataTypeImpl,
+    pub data_type: Box<DataTypeImpl>,
     pub allow_multi_rows: bool,
     pub outer_columns: ColumnSet,
 }
@@ -538,7 +538,7 @@ pub struct SubqueryExpr {
 impl ScalarExpr for SubqueryExpr {
     fn data_type(&self) -> DataTypeImpl {
         match &self.typ {
-            SubqueryType::Scalar => self.data_type.clone(),
+            SubqueryType::Scalar => *self.data_type.clone(),
 
             SubqueryType::Any
             | SubqueryType::All

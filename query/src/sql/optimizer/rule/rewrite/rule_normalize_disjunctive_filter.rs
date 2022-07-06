@@ -72,13 +72,13 @@ fn normalize_predicate_scalar(
             let mut and_expr = Scalar::AndExpr(AndExpr {
                 left: Box::new(left),
                 right: Box::new(right),
-                return_type: return_type.clone(),
+                return_type: Box::new(return_type.clone()),
             });
             for arg in args.iter().skip(2) {
                 and_expr = Scalar::AndExpr(AndExpr {
                     left: Box::new(and_expr),
                     right: Box::new(normalize_predicate_scalar(arg, return_type.clone())?),
-                    return_type: return_type.clone(),
+                    return_type: Box::new(return_type.clone()),
                 });
             }
             Ok(and_expr)
@@ -90,13 +90,13 @@ fn normalize_predicate_scalar(
             let mut or_expr = Scalar::OrExpr(OrExpr {
                 left: Box::new(left),
                 right: Box::new(right),
-                return_type: return_type.clone(),
+                return_type: Box::new(return_type.clone()),
             });
             for arg in args.iter().skip(2) {
                 or_expr = Scalar::OrExpr(OrExpr {
                     left: Box::new(or_expr),
                     right: Box::new(normalize_predicate_scalar(arg, return_type.clone())?),
-                    return_type: return_type.clone(),
+                    return_type: Box::new(return_type.clone()),
                 });
             }
             Ok(or_expr)
@@ -239,7 +239,7 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> Result<(PredicateS
             PredicateScalar::Other {
                 expr: Box::from(Scalar::ConstantExpr(ConstantExpr {
                     value: DataValue::Boolean(false),
-                    data_type: BooleanType::new_impl(),
+                    data_type: Box::new(BooleanType::new_impl()),
                 })),
             },
             false,

@@ -215,7 +215,7 @@ impl<'a> Binder {
                     .map(|column_binding| {
                         DataField::new(
                             &column_binding.column_name,
-                            column_binding.data_type.clone(),
+                            *column_binding.data_type.clone(),
                         )
                     })
                     .collect();
@@ -641,7 +641,7 @@ impl<'a> Binder {
                 column_name: field.name().clone(),
                 // A dummy index is fine, since we won't actually evaluate the expression
                 index: 0,
-                data_type: field.data_type().clone(),
+                data_type: Box::new(field.data_type().clone()),
                 visible_in_unqualified_wildcard: false,
             };
             bind_context.columns.push(column);
