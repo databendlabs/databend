@@ -2086,6 +2086,7 @@ dependencies = [
  "common-grpc",
  "common-hashtable",
  "common-hive-meta-store",
+ "common-http",
  "common-io",
  "common-macros",
  "common-management",
