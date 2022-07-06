@@ -701,7 +701,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             Statement::Presign(PresignStmt {
                 action: action.unwrap_or_default(),
                 location,
-                expire: expire.map(|(_, _, v)| Duration::from_secs(v)),
+                expire: expire
+                    .map(|(_, _, v)| Duration::from_secs(v))
+                    .unwrap_or_else(|| Duration::from_secs(3600)),
             })
         },
     );

@@ -61,15 +61,16 @@ impl Display for PresignLocation {
 pub struct PresignStmt {
     pub action: PresignAction,
     pub location: PresignLocation,
-    pub expire: Option<Duration>,
+    pub expire: Duration,
 }
 
 impl Display for PresignStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "PRESIGN {}", self.location)?;
-        if let Some(dur) = self.expire {
-            write!(f, " EXPIRE = {}", dur.as_secs())?;
-        }
-        Ok(())
+        write!(
+            f,
+            "PRESIGN {} EXPIRE = {}",
+            self.location,
+            self.expire.as_secs()
+        )
     }
 }

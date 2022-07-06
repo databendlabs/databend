@@ -314,3 +314,15 @@ error:
   |               ^^^^^ expected `LIKE`, `FORMAT`, or `;`
 
 
+---------- Input ----------
+PRESIGN INVALID @my_stage/path/to/file
+---------- Output ---------
+error: 
+  --> SQL:1:9
+  |
+1 | PRESIGN INVALID @my_stage/path/to/file
+  | ------- ^^^^^^^ expected `AtString`, `DOWNLOAD`, or `UPLOAD`
+  | |        
+  | while parsing `PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`
+
+
