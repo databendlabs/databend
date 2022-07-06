@@ -1,9 +1,5 @@
 [advisories]
 ignore = [
-    # openssl-src: AES OCB fails to encrypt some bytes
-    # We are not accected by this CVE.
-    # And there is no actions we can take, waiting for upstream.
-    "RUSTSEC-2022-0032",
     # time: Potential segfault in the time crate
     # We are not accected by this CVE.
     # And there is no actions we can take, waiting for upstream.
