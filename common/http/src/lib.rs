@@ -12,23 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use poem::web::Json;
-use poem::IntoResponse;
+mod debug;
+mod health;
+mod http_shutdown_handlers;
 
-#[derive(serde::Serialize)]
-pub struct HealthCheckResponse {
-    pub status: HealthCheckStatus,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum HealthCheckStatus {
-    Pass,
-}
-
-#[poem::handler]
-pub async fn health_handler() -> impl IntoResponse {
-    Json(HealthCheckResponse {
-        status: HealthCheckStatus::Pass,
-    })
-}
+pub use debug::*;
+pub use health::*;
+pub use http_shutdown_handlers::HttpShutdownHandler;

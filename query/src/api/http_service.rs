@@ -16,8 +16,13 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
-use common_base::base::HttpShutdownHandler;
 use common_exception::Result;
+use common_http::health_handler;
+use common_http::home::debug_home_handler;
+#[cfg(feature = "memory-profiling")]
+use common_http::jeprof::debug_jeprof_dump_handler;
+use common_http::pprof::debug_pprof_handler;
+use common_http::HttpShutdownHandler;
 use common_tracing::tracing;
 use poem::get;
 use poem::listener::RustlsCertificate;
@@ -46,7 +51,7 @@ impl HttpService {
     fn build_router(&self) -> impl Endpoint {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
         let mut route = Route::new()
-            .at("/v1/health", get(super::http::v1::health::health_handler))
+            .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at("/v1/logs", get(super::http::v1::logs::logs_handler))
             .at("/v1/status", get(super::http::v1::status::status_handler))
@@ -54,14 +59,8 @@ impl HttpService {
                 "/v1/cluster/list",
                 get(super::http::v1::cluster::cluster_list_handler),
             )
-            .at(
-                "/debug/home",
-                get(super::http::debug::home::debug_home_handler),
-            )
-            .at(
-                "/debug/pprof/profile",
-                get(super::http::debug::pprof::debug_pprof_handler),
-            );
+            .at("/debug/home", get(debug_home_handler))
+            .at("/debug/pprof/profile", get(debug_pprof_handler));
 
         #[cfg(feature = "memory-profiling")]
         {
@@ -72,7 +71,7 @@ impl HttpService {
                 // and jeprof will translate the above url into sth like:
                 //    "http://localhost:8080/debug/mem/pprof/profile?seconds=30"
                 "/debug/mem/pprof/profile",
-                get(super::http::debug::jeprof::debug_jeprof_dump_handler),
+                get(debug_jeprof_dump_handler),
             );
         };
         route.data(self.sessions.clone())

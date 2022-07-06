@@ -1019,18 +1019,13 @@ dependencies = [
  "common-tracing",
  "ctrlc",
  "futures",
- "hyper",
  "libc",
  "parking_lot 0.12.1",
- "poem",
  "pprof",
  "serde",
- "serde_json",
- "serde_yaml",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tokio",
- "toml",
  "uuid 1.1.2",
 ]
 
@@ -1234,6 +1229,20 @@ version = "0.1.0"
 dependencies = [
  "thrift",
  "which",
+]
+
+[[package]]
+name = "common-http"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-exception",
+ "common-tracing",
+ "futures",
+ "poem",
+ "pretty_assertions",
+ "serde",
+ "tempfile",
 ]
 
 [[package]]
@@ -2003,6 +2012,7 @@ dependencies = [
  "common-building",
  "common-exception",
  "common-grpc",
+ "common-http",
  "common-macros",
  "common-meta-api",
  "common-meta-grpc",
@@ -2109,6 +2119,7 @@ dependencies = [
  "common-grpc",
  "common-hashtable",
  "common-hive-meta-store",
+ "common-http",
  "common-io",
  "common-macros",
  "common-management",
@@ -6253,18 +6264,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_yaml"
-version = "0.8.24"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "707d15895415db6628332b737c838b88c598522e4dc70647e59b72312924aebc"
-dependencies = [
- "indexmap",
- "ryu",
- "serde",
- "yaml-rust",
-]
-
-[[package]]
 name = "serfig"
 version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7842,15 +7841,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388c44dc09d76f1536602ead6d325eb532f5c122f17782bd57fb47baeeb767e2"
 dependencies = [
  "lzma-sys",
-]
-
-[[package]]
-name = "yaml-rust"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
-dependencies = [
- "linked-hash-map",
 ]
 
 [[package]]
