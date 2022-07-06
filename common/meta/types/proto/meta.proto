@@ -48,7 +48,7 @@ message WatchRequest {
   // key is the key to register for watching.
   string key = 1;
 
-  // key_end is the end of the range [key, key_end] to watch.
+  // key_end is the end of the range [key, key_end) to watch.
   // if key_end is None, then watch only key.
   optional string key_end = 2;
 
