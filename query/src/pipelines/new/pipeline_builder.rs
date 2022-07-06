@@ -32,6 +32,8 @@ use common_planners::SortPlan;
 use common_planners::SubQueriesSetPlan;
 use common_planners::WindowFuncPlan;
 
+use super::processors::transforms::TransformWindowFunc;
+use super::processors::transforms::WindowFuncCompact;
 use super::processors::SortMergeCompactor;
 use crate::pipelines::new::pipeline::NewPipeline;
 use crate::pipelines::new::processors::AggregatorParams;
@@ -157,7 +159,21 @@ impl PlanVisitor for QueryPipelineBuilder {
 
     fn visit_window_func(&mut self, plan: &WindowFuncPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
-        unimplemented!("window function cannot work in new scheduler framework now")
+        self.pipeline.resize(1)?;
+
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                let compactor = WindowFuncCompact::create(
+                    plan.window_func.clone(),
+                    plan.schema.clone(),
+                    plan.input.schema(),
+                );
+                TransformWindowFunc::try_create(
+                    transform_input_port.clone(),
+                    transform_output_port.clone(),
+                    compactor,
+                )
+            })
     }
 
     fn visit_projection(&mut self, plan: &ProjectionPlan) -> Result<()> {
