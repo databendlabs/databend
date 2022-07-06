@@ -3,5 +3,8 @@ name = "common-dep-hack"
 version = "0.1.0"
 edition = "2021"
 
+[package.metadata.cargo-udeps.ignore]
+normal = ["openssl-src"]
+
 [dependencies]
 openssl-src = { version = "111.22" }
