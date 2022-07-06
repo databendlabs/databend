@@ -143,7 +143,7 @@ b. Download and extract the latest Databend package for your platform from https
 c. Move the extracted folders `bin` and `etc` to the folder `/usr/local/databend`.
 
 ### Deploying a Meta Node
-a. Open the file `databend-meta-node.toml` in the folder `/usr/local/databend/etc`, and replace *0.0.0.0* with *127.0.0.1* within the whole file.
+a. Open the file `databend-meta-node.toml` in the folder `/usr/local/databend/etc`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
 
 b. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 
