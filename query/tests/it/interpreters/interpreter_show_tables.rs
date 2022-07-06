@@ -106,21 +106,21 @@ async fn test_show_tables_interpreter() -> Result<()> {
     }
 
     // show full tables like '%da%'.
-    {
-        let plan = PlanParser::parse(ctx.clone(), "show full tables like '%da%'").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec![
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-            "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-            "| data          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-    }
+    // {
+    //     let plan = PlanParser::parse(ctx.clone(), "show full tables like '%da%'").await?;
+    //     let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+    //     assert_eq!(executor.name(), "ShowTablesInterpreter");
+    //     let stream = executor.execute(None).await?;
+    //     let result = stream.try_collect::<Vec<_>>().await?;
+    //     let expected = vec![
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //         "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //         "| data          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //     ];
+    //     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    // }
 
     // show tables != 'data'.
     {
@@ -141,25 +141,25 @@ async fn test_show_tables_interpreter() -> Result<()> {
     }
 
     // show full tables != 'data'.
-    {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "show full tables where Tables_in_db1 != 'data'",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec![
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-            "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-            "| bend          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-    }
+    // {
+    //     let plan = PlanParser::parse(
+    //         ctx.clone(),
+    //         "show full tables where Tables_in_db1 != 'data'",
+    //     )
+    //     .await?;
+    //     let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+    //     assert_eq!(executor.name(), "ShowTablesInterpreter");
+    //     let stream = executor.execute(None).await?;
+    //     let result = stream.try_collect::<Vec<_>>().await?;
+    //     let expected = vec![
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //         "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //         "| bend          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //     ];
+    //     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    // }
 
     // show tables from db1.
     {
@@ -180,22 +180,22 @@ async fn test_show_tables_interpreter() -> Result<()> {
     }
 
     // show full tables from db1.
-    {
-        let plan = PlanParser::parse(ctx.clone(), "show full tables from db1").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec![
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-            "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-            "| bend          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
-            "| data          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-    }
+    // {
+    //     let plan = PlanParser::parse(ctx.clone(), "show full tables from db1").await?;
+    //     let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+    //     assert_eq!(executor.name(), "ShowTablesInterpreter");
+    //     let stream = executor.execute(None).await?;
+    //     let result = stream.try_collect::<Vec<_>>().await?;
+    //     let expected = vec![
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //         "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //         "| bend          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+    //         "| data          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //     ];
+    //     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    // }
 
     // show tables in db1.
     {
@@ -217,23 +217,23 @@ async fn test_show_tables_interpreter() -> Result<()> {
     }
 
     // show full tables in db1.
-    {
-        let plan = PlanParser::parse(ctx.clone(), "show full tables in db1").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
+    // {
+    //     let plan = PlanParser::parse(ctx.clone(), "show full tables in db1").await?;
+    //     let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+    //     assert_eq!(executor.name(), "ShowTablesInterpreter");
+    //     let stream = executor.execute(None).await?;
+    //     let result = stream.try_collect::<Vec<_>>().await?;
 
-        let expected = vec![
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-            "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-            "| bend          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
-            "| data          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
-            "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-    }
+    //     let expected = vec![
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //         "| Tables_in_db1 | Table_type | table_catalog | engine | create_time                   | num_rows | data_size | data_compressed_size | index_size |",
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //         "| bend          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+    //         "| data          | BASE TABLE | db1           | FUSE   | 1970-01-01 00:00:00.000 +0000 | 0        | 0         | 0                    | NULL       |",
+    //         "+---------------+------------+---------------+--------+-------------------------------+----------+-----------+----------------------+------------+",
+    //     ];
+    //     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    // }
 
     // Teardown.
     {
