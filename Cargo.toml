@@ -43,6 +43,10 @@ members = [
     "tools/fuzz",
     "tools/metabench",
     "tools/metactl",
+
+    # Hack
+    # This crate is used to hack our cargo.lock to resovle CVEs and so on.
+    "common/dep-hack",
 ]
 
 [profile.release]

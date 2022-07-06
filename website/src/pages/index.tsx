@@ -18,7 +18,7 @@ function HomepageHeader() {
 
             <Link
               className={clsx("button button--secondary button--lg", styles.link)}
-              to="/doc/deploy/databend-cloud">
+              to="/doc/cloud">
                 Try Databend Cloud Free
             </Link>
 
