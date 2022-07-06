@@ -33,7 +33,7 @@ impl Evaluator {
             }),
             Scalar::ConstantExpr(constant) => Ok(EvalNode::Constant {
                 value: constant.value.clone(),
-                data_type: constant.data_type.clone(),
+                data_type: *constant.data_type.clone(),
             }),
             Scalar::AndExpr(and) => {
                 let args = vec![
@@ -76,7 +76,7 @@ impl Evaluator {
                 let func = CastFunction::create_try(
                     "",
                     cast.target_type.name().as_str(),
-                    cast.from_type.clone(),
+                    *cast.from_type.clone(),
                 )?;
                 Ok(EvalNode::Function {
                     func,

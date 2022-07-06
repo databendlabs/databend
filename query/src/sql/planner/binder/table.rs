@@ -185,7 +185,7 @@ impl<'a> Binder {
                             Ok(Expression::Literal {
                                 value,
                                 column_name: None,
-                                data_type,
+                                data_type: *data_type,
                             })
                         }
                         _ => Err(ErrorCode::UnImplement(format!(
@@ -250,7 +250,7 @@ impl<'a> Binder {
                 table_name: Some(table.name.clone()),
                 column_name: column.name.to_lowercase(),
                 index: column.column_index,
-                data_type: column.data_type.clone(),
+                data_type: Box::new(column.data_type.clone()),
                 visible_in_unqualified_wildcard: true,
             };
             bind_context.add_column_binding(column_binding);
@@ -295,7 +295,7 @@ impl<'a> Binder {
             TimeTravelPoint::Timestamp(expr) => {
                 let mut type_checker =
                     TypeChecker::new(bind_context, self.ctx.clone(), self.metadata.clone());
-                let (scalar, data_type) = type_checker
+                let box (scalar, data_type) = type_checker
                     .resolve(expr, Some(TimestampType::new_impl(6)))
                     .await?;
 
