@@ -28,7 +28,7 @@ Users can generate a URL for reading:
 ```sql
 MySQL [(none)]> PRESIGN @my_stage/books.csv
 +--------+---------+---------------------------------------------------------------------------------+
-| method | headers | URL                                                                             |
+| method | headers | url                                                                             |
 +--------+---------+---------------------------------------------------------------------------------+
 | GET    | []      | https://example.s3.amazonaws.com/books.csv?X-Amz-Algorithm=AWS4-HMAC-SHA256&... |
 +--------+---------+---------------------------------------------------------------------------------+
@@ -39,7 +39,7 @@ By default, the presigned URL will be expired in 1 hour. Users can specify the e
 ```sql
 MySQL [(none)]> PRESIGN @my_stage/books.csv EXPIRE=7200
 +--------+---------+---------------------------------------------------------------------------------+
-| method | headers | URL                                                                             |
+| method | headers | url                                                                             |
 +--------+---------+---------------------------------------------------------------------------------+
 | GET    | []      | https://example.s3.amazonaws.com/books.csv?X-Amz-Algorithm=AWS4-HMAC-SHA256&... |
 +--------+---------+---------------------------------------------------------------------------------+
@@ -50,7 +50,7 @@ A presigned URL is generated for the `read` action by default. Users can create 
 ```sql
 MySQL [(none)]> PRESIGN @my_stage/books.csv EXPIRE=7200 ACTION=WRITE
 +--------+---------+---------------------------------------------------------------------------------+
-| method | headers | URL                                                                             |
+| method | headers | url                                                                             |
 +--------+---------+---------------------------------------------------------------------------------+
 | PUT    | []      | https://example.s3.amazonaws.com/books.csv?X-Amz-Algorithm=AWS4-HMAC-SHA256&... |
 +--------+---------+---------------------------------------------------------------------------------+
@@ -61,7 +61,7 @@ If the `headers` returned by `presign` is not empty, users should include them i
 ```sql
 MySQL [(none)]> PRESIGN @my_stage/books.csv ACTION=WRITE
 +--------+--------------------------+---------------------------------------------------------------------------------+
-| method | headers                  | URL                                                                             |
+| method | headers                  | url                                                                             |
 +--------+--------------------------+---------------------------------------------------------------------------------+
 | PUT    | [['x-amz-key', 'value']] | https://example.s3.amazonaws.com/books.csv?X-Amz-Algorithm=AWS4-HMAC-SHA256&... |
 +--------+--------------------------+---------------------------------------------------------------------------------+
