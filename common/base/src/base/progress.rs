@@ -57,12 +57,3 @@ impl Progress {
         ProgressValues { rows, bytes }
     }
 }
-
-impl ProgressValues {
-    pub fn diff(&self, other: &Self) -> ProgressValues {
-        ProgressValues {
-            rows: self.rows - other.rows,
-            bytes: self.bytes - other.bytes,
-        }
-    }
-}
