@@ -2114,7 +2114,6 @@ dependencies = [
  "opensrv-clickhouse",
  "opensrv-mysql",
  "openssl",
- "openssl-src",
  "paste",
  "petgraph",
  "poem",
