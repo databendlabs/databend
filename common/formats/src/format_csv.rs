@@ -31,11 +31,13 @@ use crate::InputFormat;
 use crate::InputState;
 
 pub struct CsvInputState {
+    // quotes == 0u8 means not in quote
     pub quotes: u8,
     pub memory: Vec<u8>,
     pub accepted_rows: usize,
     pub accepted_bytes: usize,
     pub need_more_data: bool,
+    // used to ignore \n in \r\n
     pub ignore_if_first: Option<u8>,
 }
 
