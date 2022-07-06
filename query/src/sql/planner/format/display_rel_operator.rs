@@ -162,7 +162,7 @@ pub fn format_logical_inner_join(
                 op: ComparisonOp::Equal,
                 left: Box::new(left.clone()),
                 right: Box::new(right.clone()),
-                return_type: func.return_type(),
+                return_type: Box::new(func.return_type()),
             }
             .into()
         })
@@ -174,7 +174,7 @@ pub fn format_logical_inner_join(
         Scalar::AndExpr(AndExpr {
             left: Box::new(prev),
             right: Box::new(next.clone()),
-            return_type: func.return_type(),
+            return_type: Box::new(func.return_type()),
         })
     });
     write!(f, "LogicalInnerJoin: {}", format_scalar(metadata, &pred))
