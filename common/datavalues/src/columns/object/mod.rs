@@ -116,7 +116,7 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
         self.values.len() * std::mem::size_of::<T>()
     }
 
-    fn as_arrow_array(&self) -> common_arrow::arrow::array::ArrayRef {
+    fn as_arrow_array(&self) -> common_arrow::ArrayRef {
         let mut offsets: Vec<i64> = Vec::with_capacity(self.values.len());
         let mut values: Vec<u8> = Vec::with_capacity(self.values.len());
 
@@ -129,7 +129,7 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
             offsets.push(offset);
         }
 
-        Arc::new(LargeBinaryArray::from_data(
+        Box::new(LargeBinaryArray::from_data(
             self.data_type().arrow_type(),
             Buffer::from(offsets),
             Buffer::from(values),
@@ -149,7 +149,7 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
     }
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        let length = filter.values().len() - filter.values().null_count();
+        let length = filter.values().len() - filter.values().unset_bits();
         if length == self.len() {
             return Arc::new(self.clone());
         }

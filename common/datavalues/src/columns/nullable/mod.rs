@@ -16,9 +16,9 @@ mod mutable;
 
 use std::sync::Arc;
 
-use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::ArrayRef;
 pub use mutable::*;
 
 use crate::prelude::*;
@@ -107,7 +107,7 @@ impl Column for NullableColumn {
     }
 
     fn only_null(&self) -> bool {
-        self.validity.null_count() == self.validity.len()
+        self.validity.unset_bits() == self.validity.len()
     }
 
     fn validity(&self) -> (bool, Option<&Bitmap>) {
@@ -120,7 +120,7 @@ impl Column for NullableColumn {
 
     fn as_arrow_array(&self) -> ArrayRef {
         let result = self.column.as_arrow_array();
-        Arc::from(result.with_validity(Some(self.validity.clone())))
+        result.with_validity(Some(self.validity.clone()))
     }
 
     fn arc(&self) -> ColumnRef {
@@ -135,7 +135,7 @@ impl Column for NullableColumn {
     }
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        if filter.values().null_count() == 0 {
+        if filter.values().unset_bits() == 0 {
             return Arc::new(self.clone());
         }
         let inner = self.inner().filter(filter);

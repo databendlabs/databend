@@ -18,6 +18,7 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::types::Index;
+use common_arrow::ArrayRef;
 
 use crate::prelude::*;
 
@@ -124,7 +125,7 @@ impl Column for ArrayColumn {
     fn as_arrow_array(&self) -> ArrayRef {
         let arrow_type = self.data_type().arrow_type();
         let array = self.values.as_arrow_array();
-        Arc::new(LargeListArray::from_data(
+        Box::new(LargeListArray::from_data(
             arrow_type,
             self.offsets.clone(),
             array,

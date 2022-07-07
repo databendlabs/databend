@@ -55,14 +55,16 @@ impl Stream for FlightDataStream {
             Some(Ok(block)) => match block.try_into() {
                 Err(error) => Some(Err(Status::from(error))),
                 Ok(record_batch) => {
-                    let (dicts, values) =
-                        serialize_batch(&record_batch, &self.ipc_fields, &self.options);
-
-                    match dicts.is_empty() {
-                        true => Some(Ok(values)),
-                        false => Some(Err(Status::unimplemented(
-                            "DatabendQuery does not implement dicts.",
-                        ))),
+                    match serialize_batch(&record_batch, &self.ipc_fields, &self.options) {
+                        Ok((dicts, values)) => match dicts.is_empty() {
+                            true => Some(Ok(values)),
+                            false => Some(Err(Status::unimplemented(
+                                "DatabendQuery does not implement dicts.",
+                            ))),
+                        },
+                        Err(error) => {
+                            Some(Err(Status::from(common_exception::ErrorCode::from(error))))
+                        }
                     }
                 }
             },

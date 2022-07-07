@@ -109,7 +109,7 @@ where
         } else {
             sum_primitive::<T, SumT>(&columns[0], validity)?
         };
-        let cnt = input_rows - validity.map(|v| v.null_count()).unwrap_or(0);
+        let cnt = input_rows - validity.map(|v| v.unset_bits()).unwrap_or(0);
         state.add_assume(sum, cnt as u64);
         Ok(())
     }

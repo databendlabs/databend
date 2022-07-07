@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use common_arrow::parquet::FileMetaData;
+use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::Result;
@@ -70,7 +70,7 @@ pub async fn write_block(
     block: DataBlock,
     data_accessor: &Operator,
     location: &str,
-) -> Result<(u64, FileMetaData)> {
+) -> Result<(u64, ThriftFileMetaData)> {
     // we need a configuration of block size threshold here
     let mut buf = Vec::with_capacity(100 * 1024 * 1024);
 

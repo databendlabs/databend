@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::ArrayRef;
 
 use crate::prelude::*;
 
@@ -103,7 +103,7 @@ impl Column for ConstColumn {
     }
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        let length = filter.values().len() - filter.values().null_count();
+        let length = filter.values().len() - filter.values().unset_bits();
         if length == self.len() {
             return Arc::new(self.clone());
         }

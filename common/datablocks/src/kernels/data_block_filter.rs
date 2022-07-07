@@ -32,7 +32,7 @@ impl DataBlock {
 
         let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
         let rows = boolean_col.len();
-        let count_zeros = boolean_col.values().null_count();
+        let count_zeros = boolean_col.values().unset_bits();
         Ok(count_zeros != rows)
     }
 
@@ -67,7 +67,7 @@ impl DataBlock {
         filter: &BooleanColumn,
     ) -> Result<DataBlock> {
         let rows = filter.len();
-        let count_zeros = filter.values().null_count();
+        let count_zeros = filter.values().unset_bits();
         match count_zeros {
             0 => Ok(block),
             _ => {
