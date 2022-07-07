@@ -103,3 +103,34 @@ pub fn mask_string(s: &str, unmask_len: usize) -> String {
         ret
     }
 }
+
+/// Replace idx-th char as new char
+/// If idx is out of len(s) range, then no replacement is performed.
+/// replace_nth_char("a13", 1, '2') -> 'a23'
+/// replace_nth_char("a13", 10, '2') -> 'a13'
+pub fn replace_nth_char(s: &str, idx: usize, newchar: char) -> String {
+    s.chars()
+        .enumerate()
+        .map(|(i, c)| if i == idx { newchar } else { c })
+        .collect()
+}
+
+/// Return prefix of string.
+/// "a" -> "b"
+/// "1" -> "2"
+/// [96,97,127] -> [96,98,127]
+/// [127] -> [127, 127]
+/// [127,127,127, 127] -> [127,127,127, 127, 127]
+pub fn prefix_of_string(s: &str) -> String {
+    let mut l = s.len();
+    while l > 0 {
+        l -= 1;
+        if let Some(c) = s.chars().nth(l) {
+            if c == 127 as char {
+                continue;
+            }
+            return replace_nth_char(s, l, (c as u8 + 1) as char);
+        }
+    }
+    format!("{}{}", s, 127 as char)
+}

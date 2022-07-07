@@ -36,3 +36,32 @@ fn mask_string_test() {
     assert_eq!(mask_string("string", 3), "******ing".to_string());
     assert_eq!(mask_string("string", 20), "string".to_string());
 }
+
+#[test]
+fn prefix_of_string_test() {
+    assert_eq!("b".to_string(), prefix_of_string("a"));
+    assert_eq!("2".to_string(), prefix_of_string("1"));
+    assert_eq!(
+        "__fd_table_by_ie".to_string(),
+        prefix_of_string("__fd_table_by_id")
+    );
+    {
+        let str = 127 as char;
+        let s = str.to_string();
+        let ret = prefix_of_string(&s);
+        for byte in ret.as_bytes() {
+            assert_eq!(*byte, 127 as u8);
+        }
+    }
+    {
+        let s = format!("ab{}", 127 as char);
+        let ret = prefix_of_string(&s);
+        assert_eq!(ret, format!("ac{}", 127 as char));
+    }
+}
+
+#[test]
+fn replace_nth_char_test() {
+    assert_eq!("a23".to_string(), replace_nth_char("a13", 1, '2'));
+    assert_eq!("a13".to_string(), replace_nth_char("a13", 10, '2'));
+}

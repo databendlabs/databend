@@ -374,7 +374,7 @@ async fn test_watch() -> anyhow::Result<()> {
             Event {
                 key: delete_key.to_string(),
                 prev: Some(SeqV {
-                    seq: seq,
+                    seq,
                     data: delete_key.as_bytes().to_vec(),
                 }),
                 current: None,
@@ -392,5 +392,26 @@ async fn test_watch() -> anyhow::Result<()> {
         test_watch_txn_main(addr.clone(), watch, watch_events, txn).await?;
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_get_start_and_end_of_prefix() -> anyhow::Result<()> {
+    assert_eq!(
+        ("aa".to_string(), "ab".to_string()),
+        get_start_and_end_of_prefix("aa")
+    );
+    assert_eq!(
+        ("a1".to_string(), "a2".to_string()),
+        get_start_and_end_of_prefix("a1")
+    );
+    {
+        let str = 127 as char;
+        let s = str.to_string();
+        let (_, end) = get_start_and_end_of_prefix(&s);
+        for byte in end.as_bytes() {
+            assert_eq!(*byte, 127 as u8);
+        }
+    }
     Ok(())
 }

@@ -16,6 +16,7 @@
 use std::ops::Deref;
 
 use async_trait::async_trait;
+use common_base::base::prefix_of_string;
 use common_meta_types::GetKVReply;
 use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
@@ -33,24 +34,6 @@ pub trait ApiBuilder<T>: Clone {
 
     /// Create a cluster of T
     async fn build_cluster(&self) -> Vec<T>;
-}
-
-fn prefix_of_string(s: &str) -> String {
-    let mut ret = s.to_string();
-    let mut l = s.len();
-    let bytes = s.as_bytes();
-    while l > 0 {
-        l -= 1;
-        let a = bytes[l];
-        if a == 255 {
-            continue;
-        }
-        unsafe {
-            ret.as_mut_str().as_bytes_mut()[l] = a + 1;
-        }
-        return ret;
-    }
-    format!("{}{}", s, 255 as char)
 }
 
 // return watch prefix (start, end) tuple

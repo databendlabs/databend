@@ -42,6 +42,8 @@ pub use stop_handle::StopHandle;
 pub use stoppable::Stoppable;
 pub use string_func::escape_for_key;
 pub use string_func::mask_string;
+pub use string_func::prefix_of_string;
+pub use string_func::replace_nth_char;
 pub use string_func::unescape_for_key;
 pub use thread::Thread;
 pub use tokio;
