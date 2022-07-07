@@ -18,17 +18,21 @@ use std::sync::Arc;
 
 use common_base::base::RuntimeTracker;
 use common_macros::databend_main;
+use common_meta_api::PREFIX_TABLE_BY_ID;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_grpc::MetaGrpcClient;
 use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchRequest;
 use common_metrics::init_default_metrics_recorder;
+use common_planners::OptimizeTableAction;
+use common_planners::OptimizeTablePlan;
 use common_tracing::init_global_tracing;
 use common_tracing::set_panic_hook;
 use common_tracing::tracing;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
-use common_meta_grpc::MetaGrpcClient;
+use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::HttpHandler;
@@ -36,7 +40,10 @@ use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
+use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionManager;
+use databend_query::sessions::SessionType;
+use databend_query::storages::Table;
 use databend_query::Config;
 use databend_query::QUERY_SEMVER;
 
@@ -237,32 +244,71 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 }
 
 async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
-    let rpc_conf = conf.meta.to_meta_grpc_client_conf();
+    let sessions = SessionManager::from_conf(conf.clone()).await?;
+    let executor_session = sessions.create_session(SessionType::Dummy).await?;
+    let ctx = executor_session.create_query_context().await?;
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
+    let databases = catalog.list_databases(tenant.as_str()).await?;
+
+    for database in databases {
+        let name = database.name();
+        if is_system_database(name) {
+            continue;
+        }
+        let tables = catalog.list_tables(tenant.as_str(), name).await?;
+        for table in tables {
+            do_compaction(ctx.clone(), table, name.to_string()).await?;
+        }
+    }
+    Ok(())
+
+    /*let rpc_conf = conf.meta.to_meta_grpc_client_conf();
     if rpc_conf.local_mode() {
         todo!();
     }
     let watch = WatchRequest {
-        key: "__fd_table_by_id/".to_string(),
-        key_end: Some(prefix_of_string("__fd_table_by_id")),
+        key: PREFIX_TABLE_BY_ID.to_string(),
+        key_end: Some(prefix_of_string(PREFIX_TABLE_BY_ID)),
         filter_type: FilterType::Update.into(),
     };
     let client = MetaGrpcClient::try_new(&rpc_conf)?;
-    
+
     let mut client_stream = client.request(watch).await?;
-    println!("compaction watch started.");
 
     loop {
         if let Ok(Some(resp)) = client_stream.message().await {
-            if let Some(event) = resp.event {
-                println!("watch");
-                println!("{:?}", event);
+            if let Some(_) = resp.event {
+                todo!();
             }
         }
-    }
+    }*/
 }
 
-pub fn prefix_of_string(s: &str) -> String {
+fn prefix_of_string(s: &str) -> String {
     let l = s.len();
     let a = s.chars().nth(l - 1).unwrap();
-    return format!("{}{}", s[..l - 2].to_string(), (a as u8 + 1) as char);
+    return format!("{}{}", s[..l - 1].to_string(), (a as u8 + 1) as char);
+}
+
+fn is_system_database(name: &str) -> bool {
+    return name == "INFORMATION_SCHEMA" || name == "system";
+}
+
+async fn do_compaction(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    database: String,
+) -> common_exception::Result<()> {
+    if !table.auto_compaction() {
+        return Ok(());
+    }
+    let plan = OptimizeTablePlan {
+        catalog: ctx.get_current_catalog(),
+        database,
+        table: table.name().to_string(),
+        action: OptimizeTableAction::Compact,
+    };
+
+    table.compact(ctx.clone(), plan).await
 }

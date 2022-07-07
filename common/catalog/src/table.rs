@@ -82,6 +82,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn auto_compaction(&self) -> bool {
+        false
+    }
+
     fn cluster_keys(&self) -> Vec<Expression> {
         vec![]
     }

@@ -248,6 +248,10 @@ impl Table for FuseTable {
         true
     }
 
+    fn auto_compaction(&self) -> bool {
+        true
+    }
+
     fn cluster_keys(&self) -> Vec<Expression> {
         self.cluster_keys.clone()
     }

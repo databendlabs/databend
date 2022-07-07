@@ -52,7 +52,11 @@ pub use kv_api_utils::TXN_MAX_RETRY_TIMES;
 pub use schema_api::SchemaApi;
 pub use schema_api_keys::DatabaseIdGen;
 pub use schema_api_keys::TableIdGen;
+<<<<<<< HEAD
 pub(crate) use schema_api_keys::PREFIX_ID_GEN;
+=======
+pub use schema_api_keys::PREFIX_TABLE_BY_ID;
+>>>>>>> 83e109e0f (add compaction)
 pub use schema_api_test_suite::SchemaApiTestSuite;
 pub use share_api::ShareApi;
 pub(crate) use share_api_impl::get_share_account_meta_or_err;
