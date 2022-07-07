@@ -10,7 +10,7 @@ Analyzing `OnTime` datasets on S3 with Databend step by step.
 
 Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend](../00-guides/index.md#deployment)
+* [How to Deploy Databend](../01-guides/index.md#deployment)
 
 ## Step 2. Load OnTime Datasets
 
