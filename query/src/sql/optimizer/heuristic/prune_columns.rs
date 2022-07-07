@@ -45,21 +45,12 @@ pub fn prune_columns(expr: &SExpr) -> Result<SExpr> {
         }
         // For the other plan nodes, keep searching for Project node.
         p => {
-            let len = expr.arity();
-            if len == 0 {
-                return Ok(expr.clone());
-            }
-            if len == 1 {
-                return Ok(SExpr::create_unary(
-                    p.clone(),
-                    prune_columns(expr.child(0)?)?,
-                ));
-            }
-            Ok(SExpr::create_binary(
-                p.clone(),
-                prune_columns(expr.child(0)?)?,
-                prune_columns(expr.child(1)?)?,
-            ))
+            let children = expr
+                .children()
+                .iter()
+                .map(|child| prune_columns(child))
+                .collect::<Result<Vec<_>>>()?;
+            Ok(SExpr::create(p.clone(), children, None))
         }
     }
 }

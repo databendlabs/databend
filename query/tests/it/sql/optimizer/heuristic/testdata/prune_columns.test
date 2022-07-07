@@ -31,19 +31,19 @@ Limit: [1], Offset: [0]
             Sort: [number DESC]
                 Filter: [b > 1]
                     Project: [number,b]
-                        EvalScalar: [group_item, COUNT(*)]
+                        EvalScalar: [COUNT(*), group_item]
                             Aggregate: group items: [numbers.number, numbers.number, numbers.number], aggregate functions: [COUNT(*)]
                                 EvalScalar: [numbers.number, numbers.number, numbers.number, numbers.number]
                                     Scan: default.system.numbers
 
 
 # Prune unused columns for join plan nodes (LogicalInnerJoin ...)
-select * from (select t1.a, t2.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t1, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t2 where t1.b = t2.b and t1.c = 1)
+select * from (select t1.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t1, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t2 where t1.b = t2.b and t1.c = 1)
 ----
 Project: [a,a]
     EvalScalar: [t1.a, t2.a]
         Project: [a,a]
-            EvalScalar: [t1.a, t2.a]
+            EvalScalar: [t2.a, t1.a]
                 Filter: [t1.b = t2.b, t1.c = 1]
                     CrossJoin
                         Project: [a,b,c]
@@ -78,5 +78,3 @@ Project: [a]
                                                 Project: [b]
                                                     EvalScalar: [+(numbers.number, 1)]
                                                         Scan: default.system.numbers
-
-

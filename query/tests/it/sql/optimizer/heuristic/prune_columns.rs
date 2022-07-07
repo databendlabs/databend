@@ -46,7 +46,7 @@ pub async fn test_heuristic_optimizer_prune_columns() -> Result<()> {
         },
         Suite {
             comment: "# Prune unused columns for join plan nodes (LogicalInnerJoin ...)".to_string(),
-            query: "select * from (select t1.a, t2.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t1, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t2 where t1.b = t2.b and t1.c = 1)".to_string(),
+            query: "select * from (select t1.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t1, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t2 where t1.b = t2.b and t1.c = 1)".to_string(),
             rules: vec![],
         },
         Suite {
