@@ -36,9 +36,21 @@ pub trait ApiBuilder<T>: Clone {
 }
 
 fn prefix_of_string(s: &str) -> String {
-    let l = s.len();
-    let a = s.chars().nth(l - 1).unwrap();
-    format!("{}{}", s[..l - 2].to_string(), (a as u8 + 1) as char)
+    let mut ret = s.to_string();
+    let mut l = s.len();
+    let bytes = s.as_bytes();
+    while l > 0 {
+        l -= 1;
+        let a = bytes[l];
+        if a == 255 {
+            continue;
+        }
+        unsafe {
+            ret.as_mut_str().as_bytes_mut()[l] = a + 1;
+        }
+        return ret;
+    }
+    format!("{}{}", 255 as char, s)
 }
 
 // return watch prefix (start, end) tuple
