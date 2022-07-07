@@ -15,6 +15,7 @@ title: SQL Function Reference
 * [String Functions (Regular Expressions)](/doc/reference/functions/string-functions)
 * [UUID Functions](/doc/reference/functions/uuid-functions)
 * [Aggregate Window Functions](/doc/reference/functions/aggregate-window-functions)
+* [File Functions](/doc/reference/functions/file-functions)
 
 ## Aggregate Functions
 * [All Aggregate Functions](/doc/reference/functions/aggregate-functions)
