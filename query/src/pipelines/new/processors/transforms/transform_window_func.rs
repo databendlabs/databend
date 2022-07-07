@@ -17,7 +17,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use common_arrow::arrow::array::ArrayRef;
+use common_arrow::ArrayRef;
 use common_arrow::arrow::compute::partition::lexicographical_partition_ranges;
 use common_arrow::arrow::compute::sort::SortColumn;
 use common_datablocks::DataBlock;
