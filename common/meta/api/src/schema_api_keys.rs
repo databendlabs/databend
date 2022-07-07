@@ -276,14 +276,3 @@ impl KVApiKey for CountTablesKey {
         Ok(CountTablesKey { tenant })
     }
 }
-
-fn prefix_of_string(s: &str) -> String {
-    let l = s.len();
-    let a = s.chars().nth(l - 1).unwrap();
-    return format!("{}{}", s[..l - 2].to_string(), (a as u8 + 1) as char);
-}
-
-// return watch prefix (start, end) tuple
-pub fn get_start_and_end_of_prefix(prefix: &str) -> (String, String) {
-    return (prefix.to_string(), prefix_of_string(prefix));
-}

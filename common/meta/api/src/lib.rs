@@ -23,6 +23,7 @@ mod schema_api_impl;
 mod schema_api_keys;
 mod schema_api_test_suite;
 
+pub use kv_api::get_start_and_end_of_prefix;
 pub use kv_api::ApiBuilder;
 pub use kv_api::AsKVApi;
 pub use kv_api::KVApi;
@@ -35,7 +36,6 @@ pub(crate) use schema_api_impl::serialize_struct;
 pub use schema_api_impl::txn_cond_seq;
 pub use schema_api_impl::txn_op_del;
 pub use schema_api_impl::txn_op_put;
-pub use schema_api_keys::get_start_and_end_of_prefix;
 pub use schema_api_keys::DatabaseIdGen;
 pub use schema_api_keys::TableIdGen;
 pub use schema_api_test_suite::SchemaApiTestSuite;
