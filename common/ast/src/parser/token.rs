@@ -343,6 +343,8 @@ pub enum TokenKind {
     DOW,
     #[token("DOY", ignore(ascii_case))]
     DOY,
+    #[token("DOWNLOAD", ignore(ascii_case))]
+    DOWNLOAD,
     #[token("DROP", ignore(ascii_case))]
     DROP,
     #[token("EXCEPT", ignore(ascii_case))]
@@ -363,6 +365,8 @@ pub enum TokenKind {
     EXISTS,
     #[token("EXPLAIN", ignore(ascii_case))]
     EXPLAIN,
+    #[token("EXPIRE", ignore(ascii_case))]
+    EXPIRE,
     #[token("EXTRACT", ignore(ascii_case))]
     EXTRACT,
     #[token("FALSE", ignore(ascii_case))]
@@ -539,6 +543,8 @@ pub enum TokenKind {
     GRANT,
     #[token("ROLE", ignore(ascii_case))]
     ROLE,
+    #[token("PRESIGN", ignore(ascii_case))]
+    PRESIGN,
     #[token("PRIVILEGES", ignore(ascii_case))]
     PRIVILEGES,
     #[token("REMOVE", ignore(ascii_case))]
@@ -585,6 +591,8 @@ pub enum TokenKind {
     USAGE,
     #[token("UPDATE", ignore(ascii_case))]
     UPDATE,
+    #[token("UPLOAD", ignore(ascii_case))]
+    UPLOAD,
     #[token("SUPER", ignore(ascii_case))]
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
@@ -947,7 +955,7 @@ impl TokenKind {
             // | TokenKind::SIMILAR
             | TokenKind::SOME
             // | TokenKind::SYMMETRIC
-            | TokenKind::TABLE
+            // | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING

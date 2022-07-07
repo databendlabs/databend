@@ -372,5 +372,9 @@ select '====Database====';
 select database(), currentDatabase(), current_database();
 select '====User====';
 select user(), currentuser(), current_user();
+
+-- Query has keyword
+SELECT '====WITH_KEYWORD====';
+SELECT database, table, name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;
 set enable_planner_v2 = 0;
 
