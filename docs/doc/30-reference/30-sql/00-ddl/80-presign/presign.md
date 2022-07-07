@@ -4,7 +4,7 @@ description:
   Generates the pre-signed URL for a staged file.
 ---
 
-Generates the pre-signed URL for a staged file by the stage name and file path you provide. The pre-signed URL enables you to access the file through a web browswer or an API request.
+Generates the pre-signed URL for a staged file by the stage name and file path you provide. The pre-signed URL enables you to access the file through a web browser or an API request.
 
 :::tip
 This statement currently works with files stored at Amazon S3 only.
@@ -21,7 +21,7 @@ Where：
 
 `[ { DOWNLOAD | UPLOAD }]`: Specifies that the pre-signed URL is used for download or upload. The default value is `DOWNLOAD`.
 
-`[ EXPIRE = <expire_in_seconds> ]`: Speicifies the length of time (in seconds) after which the pre-signed URL expires. The default value is 3,600 seconds.
+`[ EXPIRE = <expire_in_seconds> ]`: Specifies the length of time (in seconds) after which the pre-signed URL expires. The default value is 3,600 seconds.
 
 ## Examples
 
@@ -36,7 +36,7 @@ PRESIGN @my_stage/books.csv
 +--------+---------+---------------------------------------------------------------------------------+
 ```
 
-This example functions in the same way as the proceding example:
+This example functions in the same way as the preceding one:
 
 ```sql
 PRESIGN DOWNLOAD @my_stage/books.csv
