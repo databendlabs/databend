@@ -50,7 +50,7 @@ fn prefix_of_string(s: &str) -> String {
         }
         return ret;
     }
-    format!("{}{}", 255 as char, s)
+    format!("{}{}", s, 255 as char)
 }
 
 // return watch prefix (start, end) tuple
