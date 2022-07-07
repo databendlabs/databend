@@ -16,16 +16,10 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
-use common_datavalues::BooleanType;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
 use common_datavalues::NullableColumn;
-use common_datavalues::NullableType;
 use common_datavalues::Series;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashTableKeyable;
@@ -130,24 +124,36 @@ impl JoinHashTable {
                 }
             }
             Mark => {
-                let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+                results.push(DataBlock::empty());
                 // `probe_column` is the subquery result column.
                 // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
                 let probe_column = input.column(0);
                 // Check if there is any null in the probe column.
                 if let Some(validity) = probe_column.validity().1 {
                     if validity.unset_bits() > 0 {
-                        has_null = true;
+                        let mut has_null =
+                                self.hash_join_desc.marker_join_desc.has_null.write();
+                        *has_null = true;
                     }
                 }
                 for key in keys.iter() {
                     let probe_result_ptr = hash_table.find_key(key);
                     if let Some(v) = probe_result_ptr {
                         let probe_result_ptrs = v.get_value();
-                        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
                         for ptr in probe_result_ptrs {
                             // If find join partner, set the marker to true.
-                            marker[ptr.row_index as usize] = MarkerKind::True;
+                            let mut offset;
+                            {
+                                let chunks = self.row_space.chunks.read().unwrap();
+                                offset = chunks
+                                    .iter()
+                                    .by_ref()
+                                    .take(ptr.chunk_index as usize)
+                                    .fold(0, |acc, c| acc + c.num_rows());
+                            }
+                            let mut marker =
+                                self.hash_join_desc.marker_join_desc.marker.lock().unwrap();
+                            marker[offset + ptr.row_index as usize] = MarkerKind::True;
                         }
                     }
                 }
@@ -359,17 +365,6 @@ impl JoinHashTable {
         Self::fill_null_for_left_join(&mut bm, probe_indexs, row_state);
         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
         DataBlock::filter_block(merged_block, &predicate)
-    }
-
-    fn mark_join_with_other_condition<Key>(
-        &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
-        input: &DataBlock,
-    ) -> Result<DataBlock>
-    where
-        Key: HashTableKeyable + Clone + 'static,
-    {
-        todo!()
     }
 
     // modify the bm by the value row_state

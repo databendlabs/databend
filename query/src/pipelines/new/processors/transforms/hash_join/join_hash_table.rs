@@ -117,7 +117,7 @@ pub enum MarkerKind {
 }
 
 pub struct MarkJoinDesc {
-    pub(crate) marker: RwLock<Vec<MarkerKind>>,
+    pub(crate) marker: Mutex<Vec<MarkerKind>>,
     pub(crate) marker_index: Option<IndexType>,
     pub(crate) has_null: RwLock<bool>,
 }
@@ -168,7 +168,7 @@ impl JoinHashTable {
                 .map(Evaluator::eval_physical_scalar)
                 .transpose()?,
             marker_join_desc: MarkJoinDesc {
-                marker: RwLock::new(vec![]),
+                marker: Mutex::new(vec![]),
                 marker_index,
                 has_null: RwLock::new(false),
             },
@@ -275,88 +275,6 @@ impl JoinHashTable {
             ctx,
             hash_table: RwLock::new(hash_table),
         })
-    }
-
-    fn mark_join_block(&self, probe_state: &mut ProbeState) -> Result<DataBlock> {
-        let hash_table = self.hash_table.read();
-        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
-        let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
-        let mut validity = MutableBitmap::with_capacity(marker.len());
-        let mut boolean_bit_map = MutableBitmap::with_capacity(marker.len());
-        for m in marker.iter_mut() {
-            if m == &mut MarkerKind::False && *has_null {
-                *m = MarkerKind::Null;
-            }
-            if m == &mut MarkerKind::Null {
-                validity.push(false);
-            } else {
-                validity.push(true);
-            }
-            if m == &mut MarkerKind::True {
-                boolean_bit_map.push(true);
-            } else {
-                boolean_bit_map.push(false);
-            }
-        }
-        // transfer marker to a Nullable(BooleanColumn)
-        let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
-        let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
-        let marker_schema = DataSchema::new(vec![DataField::new(
-            &self
-                .hash_join_desc
-                .marker_join_desc
-                .marker_index
-                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
-                .to_string(),
-            NullableType::new_impl(BooleanType::new_impl()),
-        )]);
-        let marker_block =
-            DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
-        let build_indexes = &mut probe_state.build_indexs;
-        match *hash_table {
-            HashTable::SerializerHashTable(ref hash_table) => {
-                for entity in hash_table.hash_table.iter() {
-                    build_indexes.extend_from_slice(entity.get_value());
-                }
-            }
-            HashTable::KeyU8HashTable(ref hash_table) => {
-                for entity in hash_table.hash_table.iter() {
-                    build_indexes.extend_from_slice(entity.get_value());
-                }
-            }
-            HashTable::KeyU16HashTable(ref hash_table) => {
-                for entity in hash_table.hash_table.iter() {
-                    build_indexes.extend_from_slice(entity.get_value());
-                }
-            }
-            HashTable::KeyU32HashTable(ref hash_table) => {
-                for entity in hash_table.hash_table.iter() {
-                    build_indexes.extend_from_slice(entity.get_value());
-                }
-            }
-            HashTable::KeyU64HashTable(ref hash_table) => {
-                for entity in hash_table.hash_table.iter() {
-                    build_indexes.extend_from_slice(entity.get_value());
-                }
-            }
-            HashTable::KeyU128HashTable(ref hash_table) => {
-                for entity in hash_table.hash_table.iter() {
-                    build_indexes.extend_from_slice(entity.get_value());
-                }
-            }
-            HashTable::KeyU256HashTable(ref hash_table) => {
-                for entity in hash_table.hash_table.iter() {
-                    build_indexes.extend_from_slice(entity.get_value());
-                }
-            }
-            HashTable::KeyU512HashTable(ref hash_table) => {
-                for entity in hash_table.hash_table.iter() {
-                    build_indexes.extend_from_slice(entity.get_value());
-                }
-            }
-        };
-        let build_block = self.row_space.gather(build_indexes)?;
-        self.merge_eq_block(&marker_block, &build_block)
     }
 
     // Merge build block and probe block that have the same number of rows
@@ -536,7 +454,7 @@ impl HashJoinState for JoinHashTable {
         let mut count = self.ref_count.lock().unwrap();
         *count -= 1;
         if *count == 0 {
-            self.build_finish()?;
+            self.finish()?;
             let mut is_finished = self.is_finished.lock().unwrap();
             *is_finished = true;
             Ok(())
@@ -549,9 +467,9 @@ impl HashJoinState for JoinHashTable {
         Ok(*self.is_finished.lock().unwrap())
     }
 
-    fn build_finish(&self) -> Result<()> {
+    fn finish(&self) -> Result<()> {
         let chunks = self.row_space.chunks.read().unwrap();
-        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
+        let mut marker = self.hash_join_desc.marker_join_desc.marker.lock().unwrap();
         for chunk_index in 0..chunks.len() {
             let chunk = &chunks[chunk_index];
             let mut columns = vec![];
@@ -645,12 +563,86 @@ impl HashJoinState for JoinHashTable {
         Ok(())
     }
 
-    fn probe_finish(&self, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
-        let mut results = Vec::new();
-        if self.hash_join_desc.join_type == JoinType::Mark {
-            results.push(self.mark_join_block(probe_state)?);
+    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>> {
+        let hash_table = self.hash_table.read();
+        let mut marker = self.hash_join_desc.marker_join_desc.marker.lock().unwrap();
+        let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
+        let mut validity = MutableBitmap::with_capacity(marker.len());
+        let mut boolean_bit_map = MutableBitmap::with_capacity(marker.len());
+        for m in marker.iter_mut() {
+            if m == &mut MarkerKind::False && *has_null {
+                *m = MarkerKind::Null;
+            }
+            if m == &mut MarkerKind::Null {
+                validity.push(false);
+            } else {
+                validity.push(true);
+            }
+            if m == &mut MarkerKind::True {
+                boolean_bit_map.push(true);
+            } else {
+                boolean_bit_map.push(false);
+            }
         }
-        Ok(results)
+        // transfer marker to a Nullable(BooleanColumn)
+        let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
+        let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
+        let marker_schema = DataSchema::new(vec![DataField::new(
+            &self
+                .hash_join_desc
+                .marker_join_desc
+                .marker_index
+                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
+                .to_string(),
+            NullableType::new_impl(BooleanType::new_impl()),
+        )]);
+        let marker_block =
+            DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
+        let mut build_indexes = Vec::new();
+        match *hash_table {
+            HashTable::SerializerHashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU8HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU16HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU32HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU64HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU128HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU256HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU512HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+        };
+        let build_block = self.row_space.gather(&build_indexes)?;
+        Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
     }
 }
 

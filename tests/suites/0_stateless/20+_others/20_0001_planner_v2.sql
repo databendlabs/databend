@@ -368,8 +368,14 @@ select * from t1 where t1.a in (select t2.a from t2);
 select * from t1 where t1.a = any (select t2.a from t2);
 select * from t1 where t1.a = some (select t2.a from t2);
 select * from t1 where t1.a != all (select t2.a from t2);
+set enable_planner_v2 = 0;
+create table t3 as select *  from numbers(10000);
+insert into t3 values(1);
+set enable_planner_v2 = 1;
+select count(*) from numbers(10000) as t4 where t4.number in (select t3.number from t3);
 drop table t1;
 drop table t2;
+drop table t3;
 
 select '====Database====';
 select database(), currentDatabase(), current_database();
