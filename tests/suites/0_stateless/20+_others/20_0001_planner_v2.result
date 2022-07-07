@@ -426,3 +426,10 @@ NULL	NULL	NULL	1
 1
 1	2
 2	3
+====WITH_KEYWORD====
+system	settings	default	VARCHAR			
+system	settings	description	VARCHAR			
+system	settings	level	VARCHAR			
+system	settings	name	VARCHAR			
+system	settings	type	VARCHAR			
+system	settings	value	VARCHAR			
