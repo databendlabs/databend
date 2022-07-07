@@ -123,7 +123,7 @@ impl CsvInputFormat {
     fn find_quote(buf: &[u8], pos: usize, state: &mut CsvInputState, quote: u8) -> usize {
         for (index, item) in buf.iter().enumerate().skip(pos) {
             if *item == quote {
-                state.quotes = *item;
+                state.quotes = 0;
                 return index + 1;
             }
         }
