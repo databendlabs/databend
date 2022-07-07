@@ -117,18 +117,18 @@ fn test_format() {
                             table_name: None,
                             column_name: "col1".to_string(),
                             index: col1,
-                            data_type: BooleanType::new_impl(),
+                            data_type: Box::new(BooleanType::new_impl()),
                             visible_in_unqualified_wildcard: false,
                         },
                     }
                     .into(),
                     ConstantExpr {
                         value: DataValue::UInt64(123),
-                        data_type: BooleanType::new_impl(),
+                        data_type: Box::new(BooleanType::new_impl()),
                     }
                     .into(),
                 ],
-                return_type: BooleanType::new_impl(),
+                return_type: Box::new(BooleanType::new_impl()),
             }
             .into()],
             probe_keys: vec![BoundColumnRef {
@@ -137,7 +137,7 @@ fn test_format() {
                     table_name: None,
                     column_name: "col2".to_string(),
                     index: col2,
-                    data_type: BooleanType::new_impl(),
+                    data_type: Box::new(BooleanType::new_impl()),
                     visible_in_unqualified_wildcard: false,
                 },
             }
@@ -151,7 +151,7 @@ fn test_format() {
             Filter {
                 predicates: vec![ConstantExpr {
                     value: DataValue::Boolean(true),
-                    data_type: BooleanType::new_impl(),
+                    data_type: Box::new(BooleanType::new_impl()),
                 }
                 .into()],
                 is_having: false,

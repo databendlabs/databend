@@ -53,7 +53,7 @@ impl<'a> GroupingChecker<'a> {
                 table_name: None,
                 column_name: "group_item".to_string(),
                 index: column.index,
-                data_type: column.scalar.data_type(),
+                data_type: Box::new(column.scalar.data_type()),
                 visible_in_unqualified_wildcard: true,
             };
             return Ok(BoundColumnRef {
@@ -127,7 +127,7 @@ impl<'a> GroupingChecker<'a> {
                         table_name: None,
                         column_name: agg.display_name.clone(),
                         index: agg_func.index,
-                        data_type: agg_func.scalar.data_type(),
+                        data_type: Box::new(agg_func.scalar.data_type()),
                         visible_in_unqualified_wildcard: true,
                     };
                     return Ok(BoundColumnRef {

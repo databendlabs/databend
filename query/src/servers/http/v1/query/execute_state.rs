@@ -412,7 +412,7 @@ impl HttpQueryHandle {
         let schema = DataSchemaRefExt::create(
             result_columns
                 .iter()
-                .map(|v| DataField::new(&v.column_name, v.data_type.clone()))
+                .map(|v| DataField::new(&v.column_name, *v.data_type.clone()))
                 .collect(),
         );
 

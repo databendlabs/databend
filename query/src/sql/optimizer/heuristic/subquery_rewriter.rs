@@ -163,7 +163,7 @@ impl SubqueryRewriter {
                     SExpr::create_binary(
                         rel_op,
                         left.clone(),
-                        SExpr::create_unary(Max1Row.into(), subquery.subquery.clone()),
+                        SExpr::create_unary(Max1Row.into(), *subquery.subquery.clone()),
                     ),
                     result,
                 ))
@@ -174,7 +174,7 @@ impl SubqueryRewriter {
                         return Ok((result, UnnestResult::SimpleJoin));
                     }
                 }
-                let mut subquery_expr = subquery.subquery.clone();
+                let mut subquery_expr = *subquery.subquery.clone();
                 // Wrap Limit to current subquery
                 let limit = Limit {
                     limit: Some(1),
@@ -202,7 +202,7 @@ impl SubqueryRewriter {
                             distinct: false,
                             params: vec![],
                             args: vec![],
-                            return_type: agg_func.return_type()?,
+                            return_type: Box::new(agg_func.return_type()?),
                         }
                         .into(),
                         index: agg_func_index,
@@ -225,7 +225,7 @@ impl SubqueryRewriter {
                                 table_name: None,
                                 column_name: "count(*)".to_string(),
                                 index: agg_func_index,
-                                data_type: agg_func.return_type()?,
+                                data_type: Box::new(agg_func.return_type()?),
                                 visible_in_unqualified_wildcard: false,
                             },
                         }
@@ -238,11 +238,11 @@ impl SubqueryRewriter {
                             } else {
                                 DataValue::Int64(0)
                             },
-                            data_type: agg_func.return_type()?,
+                            data_type: Box::new(agg_func.return_type()?),
                         }
                         .into(),
                     ),
-                    return_type: agg_func.return_type()?,
+                    return_type: Box::new(agg_func.return_type()?),
                 };
                 let eval_scalar = EvalScalar {
                     items: vec![ScalarItem {
@@ -338,7 +338,7 @@ impl SubqueryRewriter {
                     }
                     .into();
                     Ok((
-                        SExpr::create_binary(mark_join, subquery.subquery.clone(), left.clone()),
+                        SExpr::create_binary(mark_join, *subquery.subquery.clone(), left.clone()),
                         UnnestResult::MarkJoin { marker_index },
                     ))
                 } else {
@@ -450,7 +450,7 @@ impl SubqueryRewriter {
             Scalar::SubqueryExpr(subquery) => {
                 // Rewrite subquery recursively
                 let mut subquery = subquery.clone();
-                subquery.subquery = self.rewrite(&subquery.subquery)?;
+                subquery.subquery = Box::new(self.rewrite(&subquery.subquery)?);
 
                 let (s_expr, result) =
                     self.unnest_subquery(s_expr, &subquery, is_conjunctive_predicate)?;
@@ -461,7 +461,7 @@ impl SubqueryRewriter {
                     return Ok((
                         Scalar::ConstantExpr(ConstantExpr {
                             value: DataValue::Boolean(true),
-                            data_type: BooleanType::new_impl(),
+                            data_type: Box::new(BooleanType::new_impl()),
                         }),
                         s_expr,
                     ));

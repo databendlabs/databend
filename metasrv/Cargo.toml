@@ -19,7 +19,7 @@ test = false
 
 [features]
 default = ["simd"]
-memory-profiling = ["common-base/memory-profiling"]
+memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling"]
 simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 
@@ -29,6 +29,7 @@ common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
 common-exception = { path = "../common/exception" }
 common-grpc = { path = "../common/grpc" }
+common-http = { path = "../common/http" }
 common-macros = { path = "../common/macros" }
 common-meta-api = { path = "../common/meta/api" }
 common-meta-grpc = { path = "../common/meta/grpc" }

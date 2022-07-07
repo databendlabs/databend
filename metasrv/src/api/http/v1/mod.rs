@@ -14,5 +14,4 @@
 
 pub mod cluster_state;
 pub mod config;
-pub mod health;
 pub mod metrics;
