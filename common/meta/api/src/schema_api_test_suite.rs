@@ -84,6 +84,14 @@ struct DroponInfo {
     pub non_drop_on_cnt: i32,
 }
 
+macro_rules! assert_meta_eq_without_updated {
+    ($a: expr, $b: expr, $msg: expr) => {
+        let mut aa = $a.clone();
+        aa.meta.updated_on = $b.meta.updated_on;
+        assert_eq!(aa, $b, $msg);
+    };
+}
+
 fn calc_and_compare_drop_on_db_result(result: Vec<Arc<DatabaseInfo>>, expected: Vec<DroponInfo>) {
     let mut expected_map = BTreeMap::new();
     for expected_item in expected {
@@ -1040,6 +1048,7 @@ impl SchemaApiTestSuite {
             schema: schema(),
             engine: "JSON".to_string(),
             options: options(),
+            updated_on: created_on,
             created_on,
             ..TableMeta::default()
         };
@@ -1163,7 +1172,7 @@ impl SchemaApiTestSuite {
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                 };
-                assert_eq!(want, got.as_ref().clone(), "get created table");
+                assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
                 ident
             }
         };
@@ -1190,7 +1199,7 @@ impl SchemaApiTestSuite {
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
             };
-            assert_eq!(want, got.as_ref().clone(), "get created table");
+            assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
         }
 
         // check table count
@@ -1225,7 +1234,7 @@ impl SchemaApiTestSuite {
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
             };
-            assert_eq!(want, got.as_ref().clone(), "get old table");
+            assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get old table");
         }
 
         // check table count
@@ -1437,7 +1446,8 @@ impl SchemaApiTestSuite {
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
             };
-            assert_eq!(want, got.as_ref().clone(), "get renamed table");
+
+            assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get renamed table");
 
             tracing::info!("--- get old table after rename");
             {
@@ -1570,7 +1580,7 @@ impl SchemaApiTestSuite {
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
             };
-            assert_eq!(want, got.as_ref().clone(), "get renamed table");
+            assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get renamed table");
         }
 
         Ok(())
@@ -1650,7 +1660,7 @@ impl SchemaApiTestSuite {
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                 };
-                assert_eq!(want, got.as_ref().clone(), "get created table");
+                assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
                 ident
             };
         }
@@ -1780,7 +1790,7 @@ impl SchemaApiTestSuite {
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                 };
-                assert_eq!(want, got.as_ref().clone(), "get created table");
+                assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
                 ident
             };
         }
@@ -2714,7 +2724,7 @@ impl SchemaApiTestSuite {
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                 };
-                assert_eq!(want, got.as_ref().clone(), "get created table");
+                assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
                 ident
             };
         }
