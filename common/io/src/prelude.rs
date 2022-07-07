@@ -23,6 +23,7 @@ pub use crate::buffer::BufferRead;
 pub use crate::buffer::BufferReadDateTimeExt;
 pub use crate::buffer::BufferReadExt;
 pub use crate::buffer::BufferReadNumberExt;
+pub use crate::buffer::BufferReadStringExt;
 pub use crate::buffer::BufferReader;
 pub use crate::buffer::CheckpointRead;
 pub use crate::buffer::MemoryReader;
