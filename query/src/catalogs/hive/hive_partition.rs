@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
 pub struct HivePartInfo {
     pub location: String,
 }

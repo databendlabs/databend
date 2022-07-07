@@ -2599,6 +2599,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "279fb028e20b3c4c320317955b77c5e0c9701f05a1d309905d6fc702cdc5053e"
 
 [[package]]
+name = "flagset"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cda653ca797810c02f7ca4b804b40b8b95ae046eb989d356bce17919a8c25499"
+
+[[package]]
 name = "flate2"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4549,9 +4555,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.9.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9e982034fd0b4f142efba461604f5ccb1fb1f962c4e84c8e44ce369f0e3d1f2"
+checksum = "d6ce886835b8a98dd969901d278509c96e0800a2c550d5df445738f58426ea87"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -4560,6 +4566,7 @@ dependencies = [
  "backon",
  "base64 0.13.0",
  "bytes 1.1.0",
+ "flagset",
  "futures",
  "hdrs",
  "http",
@@ -5686,9 +5693,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.1.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a6b48d7d1f390bcb0149b4d7a3022f5a927fca173c19413ba17e74936716e39"
+checksum = "3e8cdb1fd992664b9ec136dc07ea1d4b6e9debc099a1ad691c2eaad1b1efdb08"
 dependencies = [
  "anyhow",
  "backon",

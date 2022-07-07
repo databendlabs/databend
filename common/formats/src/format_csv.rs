@@ -20,7 +20,6 @@ use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::position2;
 use common_io::prelude::position4;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
@@ -32,11 +31,13 @@ use crate::InputFormat;
 use crate::InputState;
 
 pub struct CsvInputState {
+    // quotes == 0u8 means not in quote
     pub quotes: u8,
     pub memory: Vec<u8>,
     pub accepted_rows: usize,
     pub accepted_bytes: usize,
     pub need_more_data: bool,
+    // used to ignore \n in \r\n
     pub ignore_if_first: Option<u8>,
 }
 
@@ -119,14 +120,13 @@ impl CsvInputFormat {
         }))
     }
 
-    fn find_quotes(buf: &[u8], pos: usize, state: &mut CsvInputState) -> usize {
-        let index = pos + position2::<true, b'"', b'\''>(&buf[pos..]);
-
-        if index != buf.len() {
-            state.quotes = 0;
-            return index + 1;
+    fn find_quote(buf: &[u8], pos: usize, state: &mut CsvInputState, quote: u8) -> usize {
+        for (index, item) in buf.iter().enumerate().skip(pos) {
+            if *item == quote {
+                state.quotes = 0;
+                return index + 1;
+            }
         }
-
         buf.len()
     }
 
@@ -146,14 +146,17 @@ impl CsvInputFormat {
             let position = pos + position4::<true, b'"', b'\'', b'\r', b'\n'>(&buf[pos..]);
 
             if position != buf.len() {
-                if buf[position] == b'"' || buf[position] == b'\'' {
-                    state.quotes = buf[position];
-                    return position + 1;
-                } else if buf[position] == b'\r' {
-                    return self.accept_row::<b'\n'>(buf, pos, state, position);
-                } else if buf[position] == b'\n' {
-                    return self.accept_row::<b'\r'>(buf, pos, state, position);
-                }
+                return match buf[position] {
+                    b'"' | b'\'' => {
+                        state.quotes = buf[position];
+                        position + 1
+                    }
+                    b'\n' => self.accept_row::<0>(buf, pos, state, position),
+                    _ => {
+                        // b'\r'
+                        self.accept_row::<b'\n'>(buf, pos, state, position)
+                    }
+                };
             }
         }
 
@@ -284,7 +287,7 @@ impl InputFormat for CsvInputFormat {
         state.need_more_data = true;
         while index < buf.len() && state.need_more_data {
             index = match state.quotes != 0 {
-                true => Self::find_quotes(buf, index, state),
+                true => Self::find_quote(buf, index, state, state.quotes),
                 false => self.find_delimiter(buf, index, state),
             }
         }
@@ -300,7 +303,7 @@ impl InputFormat for CsvInputFormat {
 
             while index < buf.len() {
                 index = match state.quotes != 0 {
-                    true => Self::find_quotes(buf, index, state),
+                    true => Self::find_quote(buf, index, state, state.quotes),
                     false => self.find_delimiter(buf, index, state),
                 };
 

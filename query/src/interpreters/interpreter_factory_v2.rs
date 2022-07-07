@@ -22,6 +22,7 @@ use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
+use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
@@ -255,6 +256,8 @@ impl InterpreterFactoryV2 {
             Plan::DropUDF(drop_udf) => {
                 DropUserUDFInterpreter::try_create(ctx.clone(), *drop_udf.clone())
             }
+
+            Plan::Presign(presign) => PresignInterpreter::try_create(ctx.clone(), *presign.clone()),
         }?;
 
         Ok(Arc::new(InterceptorInterpreter::create(

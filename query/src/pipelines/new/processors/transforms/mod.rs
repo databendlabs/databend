@@ -35,6 +35,7 @@ mod transform_project;
 mod transform_rename;
 mod transform_sort_merge;
 mod transform_sort_partial;
+mod transform_window_func;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
@@ -76,3 +77,5 @@ pub use transform_rename::TransformRename;
 pub use transform_sort_merge::SortMergeCompactor;
 pub use transform_sort_merge::TransformSortMerge;
 pub use transform_sort_partial::TransformSortPartial;
+pub use transform_window_func::TransformWindowFunc;
+pub use transform_window_func::WindowFuncCompact;
