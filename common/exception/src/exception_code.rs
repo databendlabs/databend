@@ -237,6 +237,7 @@ build_exceptions! {
     StorageNotFound(3001),
     StoragePermissionDenied(3002),
     StorageUnavailable(3901),
+    StorageUnsupported(3902),
     StorageOther(4000),
 }
 

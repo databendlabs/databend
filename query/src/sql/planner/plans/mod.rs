@@ -26,6 +26,7 @@ mod max_one_row;
 mod operator;
 mod pattern;
 mod physical_scan;
+mod presign;
 mod project;
 mod scalar;
 mod sort;
@@ -100,6 +101,8 @@ pub use max_one_row::Max1Row;
 pub use operator::*;
 pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
+pub use presign::PresignAction;
+pub use presign::PresignPlan;
 pub use project::Project;
 pub use scalar::*;
 pub use sort::Sort;
@@ -192,6 +195,9 @@ pub enum Plan {
     CreateStage(Box<CreateUserStagePlan>),
     DropStage(Box<DropUserStagePlan>),
     RemoveStage(Box<RemoveUserStagePlan>),
+
+    // Presign
+    Presign(Box<PresignPlan>),
 }
 
 impl Display for Plan {
@@ -248,6 +254,7 @@ impl Display for Plan {
             Plan::Insert(_) => write!(f, "Insert"),
             Plan::Delete(_) => write!(f, "Delete"),
             Plan::Call(_) => write!(f, "Call"),
+            Plan::Presign(_) => write!(f, "Presign"),
         }
     }
 }
@@ -312,6 +319,7 @@ impl Plan {
             Plan::Insert(plan) => plan.schema(),
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
             Plan::Call(_) => Arc::new(DataSchema::empty()),
+            Plan::Presign(plan) => plan.schema(),
         }
     }
 }

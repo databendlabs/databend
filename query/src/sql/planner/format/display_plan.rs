@@ -97,6 +97,8 @@ impl Plan {
             Plan::ShowRoles => Ok("SHOW ROLES".to_string()),
             Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
             Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
+
+            Plan::Presign(presign) => Ok(format!("{:?}", presign)),
         }
     }
 }

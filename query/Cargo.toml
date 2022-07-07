@@ -95,7 +95,7 @@ num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.16.0"
 once_cell = "1.12.0"
-opendal = { version = "0.9.1", features = ["retry", "compress"] }
+opendal = { version = "0.10.0", features = ["retry", "compress"] }
 opensrv-clickhouse = "0.1.0"
 opensrv-mysql = "0.1.0"
 openssl = { version = "0.10.40", features = ["vendored"] }
