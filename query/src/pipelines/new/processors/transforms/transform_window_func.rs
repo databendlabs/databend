@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::cmp::Ordering;
 use std::ops::Range;
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::partition::lexicographical_partition_ranges;
 use common_arrow::arrow::compute::sort::SortColumn;
-use common_arrow::ArrayRef;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_datavalues::ColumnWithField;
@@ -37,43 +36,68 @@ use common_functions::window::WindowFrame;
 use common_functions::window::WindowFrameBound;
 use common_functions::window::WindowFrameUnits;
 use common_planners::Expression;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use enum_extract::let_extract;
-use futures::StreamExt;
 use segment_tree::ops::Commutative;
 use segment_tree::ops::Identity;
 use segment_tree::ops::Operation;
 use segment_tree::SegmentPoint;
 
-use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::Processor;
+use super::Compactor;
+use super::TransformCompact;
 use crate::pipelines::transforms::get_sort_descriptions;
 
-// deprecated by the new processor, to be removed in the future.
-pub struct WindowFuncTransform {
+pub struct WindowFuncCompact {
     window_func: Expression,
     schema: DataSchemaRef,
-    input: Arc<dyn Processor>,
     input_schema: DataSchemaRef,
 }
 
-impl WindowFuncTransform {
+pub type TransformWindowFunc = TransformCompact<WindowFuncCompact>;
+
+impl Compactor for WindowFuncCompact {
+    fn name() -> &'static str {
+        "WindowFuncTransform"
+    }
+
+    fn compact_final(&self, blocks: &[DataBlock]) -> common_exception::Result<Vec<DataBlock>> {
+        if blocks.is_empty() {
+            let block = DataBlock::empty_with_schema(self.schema.clone());
+            return Ok(vec![block]);
+        }
+        // combine blocks
+        let combined_columns = (0..self.input_schema.num_fields())
+            .map(|i| {
+                blocks
+                    .iter()
+                    .map(|block| block.column(i).clone())
+                    .collect::<Vec<_>>()
+            })
+            .map(|columns| Series::concat(&columns).unwrap())
+            .collect::<Vec<_>>();
+
+        let block = DataBlock::create(self.input_schema.clone(), combined_columns);
+        let block = self.evaluate_window_func(&block)?;
+        Ok(vec![block])
+    }
+}
+
+impl WindowFuncCompact {
     pub fn create(
         window_func: Expression,
         schema: DataSchemaRef,
         input_schema: DataSchemaRef,
     ) -> Self {
-        WindowFuncTransform {
+        WindowFuncCompact {
             window_func,
             schema,
-            input: Arc::new(EmptyProcessor::create()),
             input_schema,
         }
     }
 
     /// evaluate window function for each frame and return the result block
+    /// TO BE IMPROVED:
+    /// we just transform a big block into another bigblock, which is not efficient.
+    /// need to be integrated with the group by aggregation partial/final transform.
     fn evaluate_window_func(&self, block: &DataBlock) -> common_exception::Result<DataBlock> {
         // extract the window function
         let_extract!(
@@ -182,9 +206,16 @@ impl WindowFuncTransform {
 
         let window_col = Series::concat(&window_col_per_tuple).unwrap();
 
+        // Drop the aggregate states
+        {
+            for state in segment_tree_state.view() {
+                unsafe { function.drop_state(*state) }
+            }
+        }
+
         block.add_column(
             window_col,
-            self.window_func.to_data_field(&self.input_schema).unwrap(),
+            self.window_func.to_data_field(&self.input_schema)?,
         )
     }
 
@@ -464,68 +495,6 @@ impl WindowFuncTransform {
             })
             .collect::<Vec<_>>();
         SegmentPoint::build(state_per_tuple, Agg { func, arena })
-    }
-}
-
-#[async_trait::async_trait]
-impl Processor for WindowFuncTransform {
-    fn name(&self) -> &str {
-        "WindowFuncTransform"
-    }
-
-    fn connect_to(&mut self, input: Arc<dyn Processor>) -> common_exception::Result<()> {
-        self.input = input;
-        Ok(())
-    }
-
-    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
-        vec![self.input.clone()]
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    #[tracing::instrument(level = "debug", name = "window_func_execute", skip(self))]
-    async fn execute(&self) -> common_exception::Result<SendableDataBlockStream> {
-        let mut stream: SendableDataBlockStream = self.input.execute().await?;
-        let mut blocks: Vec<DataBlock> = vec![];
-        while let Some(block) = stream.next().await {
-            let block = block?;
-            blocks.push(block);
-        }
-
-        if blocks.is_empty() {
-            return Ok(Box::pin(DataBlockStream::create(
-                self.schema.clone(),
-                None,
-                vec![],
-            )));
-        }
-
-        // combine blocks
-        let schema = blocks[0].schema();
-
-        let combined_columns = (0..schema.num_fields())
-            .map(|i| {
-                blocks
-                    .iter()
-                    .map(|block| block.column(i).clone())
-                    .collect::<Vec<_>>()
-            })
-            .map(|columns| Series::concat(&columns).unwrap())
-            .collect::<Vec<_>>();
-
-        let block = DataBlock::create(schema.clone(), combined_columns);
-
-        // evaluate the window function column
-        let block = self.evaluate_window_func(&block).unwrap();
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
-            None,
-            vec![block],
-        )))
     }
 }
 
