@@ -50,30 +50,7 @@ impl ColumnsTable {
             NULL AS collation_name,
             NULL AS domain_catalog,
             NULL AS domain_schema,
-            NULL AS domain_name,
-            database AS TABLE_CATALOG,
-            database AS TABLE_SCHEMA,
-            table AS TABLE_NAME,
-            name AS COLUMN_NAME,
-            1 AS ORDINAL_POSITION,
-            NULL AS COLUMN_DEFAULT,
-            is_nullable AS IS_NULLABLE,
-            type AS DATA_TYPE,
-            NULL AS CHARACTER_MAXIMUM_LENGTH,
-            NULL AS CHARACTER_OCTET_LENGTH,
-            NULL AS NUMERIC_PRECISION,
-            NULL AS NUMERIC_PRECISION_RADIX,
-            NULL AS NUMERIC_SCALE,
-            NULL AS DATETIME_PRECISION,
-            NULL AS CHARACTER_SET_CATALOG,
-            NULL AS CHARACTER_SET_SCHEMA,
-            NULL AS CHARACTER_SET_NAME,
-            NULL AS COLLATION_CATALOG,
-            NULL AS COLLATION_SCHEMA,
-            NULL AS COLLATION_NAME,
-            NULL AS DOMAIN_CATALOG,
-            NULL AS DOMAIN_SCHEMA,
-            NULL AS DOMAIN_NAME
+            NULL AS domain_name
         FROM system.columns;";
 
         let mut options = BTreeMap::new();
