@@ -323,7 +323,7 @@ impl<'a> TypeChecker<'a> {
                                 let comparison_op = ComparisonOp::try_from(op)?;
                                 self.resolve_subquery(
                                     SubqueryType::Any,
-                                    &*subquery,
+                                    subquery,
                                     true,
                                     Some(*left.clone()),
                                     Some(comparison_op),

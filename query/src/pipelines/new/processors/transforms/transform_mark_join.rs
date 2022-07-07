@@ -36,6 +36,7 @@ impl Compactor for MarkJoinCompactor {
         "MarkJoin"
     }
 
+    // `compact_final` is called when all the blocks are pushed
     fn compact_final(&self, _blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         self.hash_join_state.mark_join_blocks()
     }

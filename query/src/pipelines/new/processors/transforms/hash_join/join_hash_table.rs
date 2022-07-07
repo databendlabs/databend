@@ -117,7 +117,7 @@ pub enum MarkerKind {
 }
 
 pub struct MarkJoinDesc {
-    pub(crate) marker: Mutex<Vec<MarkerKind>>,
+    pub(crate) marker: RwLock<Vec<MarkerKind>>,
     pub(crate) marker_index: Option<IndexType>,
     pub(crate) has_null: RwLock<bool>,
 }
@@ -168,7 +168,7 @@ impl JoinHashTable {
                 .map(Evaluator::eval_physical_scalar)
                 .transpose()?,
             marker_join_desc: MarkJoinDesc {
-                marker: Mutex::new(vec![]),
+                marker: RwLock::new(vec![]),
                 marker_index,
                 has_null: RwLock::new(false),
             },
@@ -469,7 +469,7 @@ impl HashJoinState for JoinHashTable {
 
     fn finish(&self) -> Result<()> {
         let chunks = self.row_space.chunks.read().unwrap();
-        let mut marker = self.hash_join_desc.marker_join_desc.marker.lock().unwrap();
+        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
         for chunk_index in 0..chunks.len() {
             let chunk = &chunks[chunk_index];
             let mut columns = vec![];
@@ -565,7 +565,7 @@ impl HashJoinState for JoinHashTable {
 
     fn mark_join_blocks(&self) -> Result<Vec<DataBlock>> {
         let hash_table = self.hash_table.read();
-        let mut marker = self.hash_join_desc.marker_join_desc.marker.lock().unwrap();
+        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
         let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
         let mut validity = MutableBitmap::with_capacity(marker.len());
         let mut boolean_bit_map = MutableBitmap::with_capacity(marker.len());

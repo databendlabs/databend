@@ -150,8 +150,7 @@ impl JoinHashTable {
                                     .take(ptr.chunk_index as usize)
                                     .fold(0, |acc, c| acc + c.num_rows());
                             }
-                            let mut marker =
-                                self.hash_join_desc.marker_join_desc.marker.lock().unwrap();
+                            let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
                             marker[offset + ptr.row_index as usize] = MarkerKind::True;
                         }
                     }
