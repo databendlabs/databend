@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Write;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
+use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::position2;
@@ -27,6 +29,8 @@ use common_io::prelude::FormatSettings;
 use common_io::prelude::MemoryReader;
 use common_io::prelude::NestedCheckpointReader;
 
+use super::format_diagnostic::FormatDiagnostic;
+use crate::format_diagnostic::verbose_string;
 use crate::FormatFactory;
 use crate::InputFormat;
 use crate::InputState;
@@ -193,33 +197,19 @@ impl InputFormat for TsvInputFormat {
 
         let mut row_index = 0;
         while !checkpoint_reader.eof()? {
-            for column_index in 0..deserializers.len() {
-                if checkpoint_reader.ignore_white_spaces_and_byte(b'\t')? {
-                    deserializers[column_index].de_default(&self.settings);
-                } else {
-                    deserializers[column_index].de_text(&mut checkpoint_reader, &self.settings)?;
-
-                    if column_index + 1 != deserializers.len() {
-                        checkpoint_reader.must_ignore_white_spaces_and_byte(b'\t')?;
-                    }
-                }
+            checkpoint_reader.push_checkpoint();
+            if let Err(err) = self.read_row(&mut checkpoint_reader, &mut deserializers, row_index) {
+                let checkpoint_buffer = checkpoint_reader.get_checkpoint_buffer_end();
+                let msg = self.get_diagnostic_info(
+                    checkpoint_buffer,
+                    row_index,
+                    self.schema.clone(),
+                    self.min_accepted_rows,
+                    self.settings.clone(),
+                )?;
+                let err = err.add_message_back(msg);
+                return Err(err);
             }
-
-            checkpoint_reader.ignore_white_spaces_and_byte(b'\t')?;
-
-            if (!checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?
-                & !checkpoint_reader.ignore_white_spaces_and_byte(b'\r')?)
-                && !checkpoint_reader.eof()?
-            {
-                return Err(ErrorCode::BadBytes(format!(
-                    "Parse Tsv error at line {}",
-                    row_index
-                )));
-            }
-
-            // \r\n
-            checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?;
-
             row_index += 1;
         }
 
@@ -229,6 +219,42 @@ impl InputFormat for TsvInputFormat {
         }
 
         Ok(vec![DataBlock::create(self.schema.clone(), columns)])
+    }
+
+    fn read_row(
+        &self,
+        checkpoint_reader: &mut NestedCheckpointReader<MemoryReader>,
+        deserializers: &mut Vec<common_datavalues::TypeDeserializerImpl>,
+        row_index: usize,
+    ) -> Result<()> {
+        for column_index in 0..deserializers.len() {
+            if checkpoint_reader.ignore_white_spaces_and_byte(b'\t')? {
+                deserializers[column_index].de_default(&self.settings);
+            } else {
+                deserializers[column_index].de_text(checkpoint_reader, &self.settings)?;
+
+                if column_index + 1 != deserializers.len() {
+                    checkpoint_reader.must_ignore_white_spaces_and_byte(b'\t')?;
+                }
+            }
+        }
+
+        checkpoint_reader.ignore_white_spaces_and_byte(b'\t')?;
+
+        if (!checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?
+            & !checkpoint_reader.ignore_white_spaces_and_byte(b'\r')?)
+            && !checkpoint_reader.eof()?
+        {
+            return Err(ErrorCode::BadBytes(format!(
+                "Parse Tsv error at line {}",
+                row_index
+            )));
+        }
+
+        // \r\n
+        checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?;
+
+        Ok(())
     }
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
@@ -270,5 +296,113 @@ impl InputFormat for TsvInputFormat {
             }
         }
         Ok(0)
+    }
+}
+
+impl FormatDiagnostic for TsvInputFormat {
+    fn deserialize_field_and_print_diagnositc_info(
+        &self,
+        col_index: usize,
+        deserializer: &mut TypeDeserializerImpl,
+        checkpint_reader: &mut NestedCheckpointReader<MemoryReader>,
+        settings: FormatSettings,
+        out: &mut String,
+    ) -> Result<bool> {
+        let col_name = self.schema.field(col_index).name();
+        let data_type = self.schema.field(col_index).data_type();
+
+        write!(
+            out,
+            "\tColumn: {}, Name: {}, Type: {}",
+            col_index,
+            col_name,
+            data_type.data_type_id()
+        )
+        .unwrap();
+
+        checkpint_reader.push_checkpoint();
+        let has_err: Result<()> = deserializer.de_text(checkpint_reader, &settings);
+
+        let data_type_id = data_type.data_type_id();
+        if (data_type_id.is_integer() || data_type_id.is_date_or_date_time())
+            && checkpint_reader.get_top_checkpoint_pos() == checkpint_reader.pos
+        {
+            out.push_str("\tError: text ");
+            let mut buf: Vec<u8> = Vec::new();
+            checkpint_reader.positionn(10, &mut buf)?;
+            verbose_string(&buf, out);
+            writeln!(out, " is not like {}", data_type_id).unwrap();
+            return Ok(false);
+        }
+
+        out.push_str(", Parsed text: ");
+        verbose_string(checkpint_reader.get_checkpoint_buffer(), out);
+        out.push('\n');
+        checkpint_reader.pop_checkpoint();
+
+        if has_err.is_err() {
+            if data_type.data_type_id().is_date_time() {
+                out.push_str("\tERROR: DateTime must be in YYYY-MM-DD hh:mm:ss format.\n");
+            } else if data_type.data_type_id().is_date() {
+                out.push_str("\tERROR: Date must be in YYYY-MM-DD format.\n");
+            } else {
+                out.push_str("\tERROR\n")
+            }
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    fn parse_field_delimiter_with_diagnostic_info(
+        &self,
+        checkpoint_reader: &mut NestedCheckpointReader<MemoryReader>,
+        out: &mut String,
+    ) -> Result<bool> {
+        let result = checkpoint_reader.must_ignore_byte(b'\t');
+        if result.is_err() {
+            let position = checkpoint_reader.position()?;
+            if position == b'\n' {
+                out.push_str("\tError: Line feed found where tab is expected.\n");
+            } else if position == b'\r' {
+                out.push_str("\tError: Carriage return found where tab is expected.\n");
+            } else {
+                out.push_str("\tError: There is no tab. ");
+                verbose_string(&[position], out);
+                out.push_str(" found instead.\n");
+            }
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    fn parse_row_end_with_diagnostic_info(
+        &self,
+        checkpoint_reader: &mut NestedCheckpointReader<MemoryReader>,
+        out: &mut String,
+    ) -> Result<bool> {
+        checkpoint_reader.ignore_white_spaces()?;
+
+        if checkpoint_reader.eof()? {
+            return Ok(true);
+        }
+
+        let result = checkpoint_reader.must_ignore_byte(b'\n');
+        if result.is_err() {
+            let position = checkpoint_reader.position()?;
+            if position == b'\t' {
+                out.push_str("\tError: Tab found where line feed is expected.\n");
+            } else if position == b'\r' {
+                out.push_str("\tError: Carriage return found where line feed is expected.");
+            } else {
+                out.push_str("\tError: There is no line feed. ");
+                verbose_string(&[position], out);
+                out.push_str(" found instead.\n");
+            }
+            return Ok(false);
+        }
+
+        Ok(true)
     }
 }

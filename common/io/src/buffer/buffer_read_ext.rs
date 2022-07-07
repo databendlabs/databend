@@ -29,6 +29,38 @@ pub trait BufferReadExt: BufferRead {
 
     fn keep_read(&mut self, buf: &mut Vec<u8>, f: impl Fn(u8) -> bool) -> Result<usize>;
 
+    fn position(&mut self) -> Result<u8> {
+        let available = self.fill_buf()?;
+        if available.is_empty() {
+            todo!()
+        }
+        Ok(available[0])
+    }
+
+    fn positionn(&mut self, n: usize, buf: &mut Vec<u8>) -> Result<usize> {
+        let mut bytes = 0;
+        let mut cnt = n;
+        loop {
+            let available = self.fill_buf()?;
+            if available.is_empty() {
+                break;
+            }
+            let size = available.len();
+            if cnt <= size {
+                buf.extend_from_slice(&available[0..n]);
+                bytes += cnt;
+                self.consume(n);
+                break;
+            } else {
+                buf.extend_from_slice(available);
+                bytes += size;
+                cnt -= size;
+                self.consume(size);
+            }
+        }
+        Ok(bytes)
+    }
+
     fn drain(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
         let mut bytes = 0;
         loop {
