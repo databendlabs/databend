@@ -12,7 +12,7 @@ Use Databend analyzing Github repository step by step.
 
 Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend](../00-guides/index.md#deployment)
+* [How to Deploy Databend](../01-guides/index.md#deployment)
 
 ## Step 2
 
