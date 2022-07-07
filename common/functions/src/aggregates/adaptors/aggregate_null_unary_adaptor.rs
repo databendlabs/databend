@@ -127,7 +127,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         if !all_null {
             match validity {
                 Some(v) => {
-                    if v.null_count() != input_rows {
+                    if v.unset_bits() != input_rows {
                         Self::set_flag(place);
                     }
                 }

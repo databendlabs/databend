@@ -184,7 +184,7 @@ impl Column for NullableColumn {..}
 - No extra cost convert from or into Arrow's column format.
 
 ```rust
- fn as_arrow_array(&self) -> common_arrow::arrow::array::ArrayRef {
+ fn as_arrow_array(&self) -> common_arrow::ArrayRef {
     let data_type = self.data_type().arrow_type();
     Arc::new(PrimitiveArray::<T>::from_data(
         data_type,

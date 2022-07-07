@@ -18,8 +18,8 @@ use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::encoding::Encoding;
+use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_arrow::parquet::write::Version;
-use common_arrow::parquet::FileMetaData;
 use common_arrow::write_parquet_file;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -31,7 +31,7 @@ pub fn serialize_data_blocks(
     blocks: Vec<DataBlock>,
     schema: &DataSchemaRef,
     buf: &mut Vec<u8>,
-) -> Result<(u64, FileMetaData)> {
+) -> Result<(u64, ThriftFileMetaData)> {
     let arrow_schema = schema.to_arrow();
 
     let row_group_write_options = WriteOptions {

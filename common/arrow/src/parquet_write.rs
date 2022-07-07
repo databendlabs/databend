@@ -20,9 +20,9 @@ use arrow::datatypes::Schema;
 use arrow::error::Result;
 use arrow::io::parquet::write::to_parquet_schema;
 use arrow::io::parquet::write::RowGroupIterator;
+use parquet2::metadata::ThriftFileMetaData;
 use parquet2::write::FileWriter;
 use parquet2::write::WriteOptions;
-use parquet2::FileMetaData;
 
 // a simple wrapper for code reuse
 pub fn write_parquet_file<W: Write, A, I>(
@@ -30,7 +30,7 @@ pub fn write_parquet_file<W: Write, A, I>(
     row_groups: RowGroupIterator<A, I>,
     schema: Schema,
     options: WriteOptions,
-) -> Result<(u64, FileMetaData)>
+) -> Result<(u64, ThriftFileMetaData)>
 where
     W: Write,
     A: AsRef<dyn Array> + 'static + Send + Sync,
@@ -45,6 +45,7 @@ where
     for group in row_groups {
         file_writer.write(group?)?;
     }
-    let (size, file_meta_data) = file_writer.end_ext(None)?;
-    Ok((size, file_meta_data))
+    let file_size = file_writer.end(None)?;
+    let (_meta_size, thrift_file_meta_data) = file_writer.into_inner_and_metadata();
+    Ok((file_size, thrift_file_meta_data))
 }

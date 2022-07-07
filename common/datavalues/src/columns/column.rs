@@ -16,8 +16,8 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
