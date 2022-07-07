@@ -111,106 +111,14 @@ impl TypeDeserializer for StringDeserializer {
         reader: &mut NestedCheckpointReader<R>,
         settings: &FormatSettings,
     ) -> Result<()> {
-        let mut read_buffer = reader.fill_buf()?;
-        if read_buffer.is_empty() {
+        self.buffer.clear();
+        reader.read_csv_string(&mut self.buffer, settings)?;
+        if self.buffer.is_empty() {
             self.builder.append_default();
-            return Ok(());
-        }
-
-        let maybe_quote = read_buffer[0];
-        if maybe_quote == b'\'' || maybe_quote == b'"' {
-            self.buffer.clear();
-            reader.read_quoted_text(&mut self.buffer, maybe_quote)?;
-            self.builder.append_value(self.buffer.as_slice());
-            Ok(())
         } else {
-            // Unquoted case. Look for field_delimiter or record_delimiter.
-            let mut field_delimiter = b',';
-
-            if !settings.field_delimiter.is_empty() {
-                field_delimiter = settings.field_delimiter[0];
-            }
-            if maybe_quote == field_delimiter || maybe_quote == b'\r' || maybe_quote == b'\n' {
-                self.builder.append_default();
-                return Ok(());
-            }
-
-            if settings.record_delimiter.is_empty()
-                || settings.record_delimiter[0] == b'\r'
-                || settings.record_delimiter[0] == b'\n'
-            {
-                let mut index = 0;
-                let mut bytes = 0;
-
-                'outer1: loop {
-                    while index < read_buffer.len() {
-                        if read_buffer[index] == field_delimiter
-                            || read_buffer[index] == b'\r'
-                            || read_buffer[index] == b'\n'
-                        {
-                            break 'outer1;
-                        }
-                        index += 1;
-                    }
-
-                    bytes += index;
-                    self.builder
-                        .values_mut()
-                        .extend_from_slice(&read_buffer[..index]);
-                    reader.consume(index);
-
-                    index = 0;
-                    read_buffer = reader.fill_buf()?;
-
-                    if read_buffer.is_empty() {
-                        break 'outer1;
-                    }
-                }
-
-                self.builder
-                    .values_mut()
-                    .extend_from_slice(&read_buffer[..index]);
-                self.builder.add_offset(bytes + index);
-                reader.consume(index);
-            } else {
-                let record_delimiter = settings.record_delimiter[0];
-
-                let mut index = 0;
-                let mut bytes = 0;
-
-                'outer2: loop {
-                    while index < read_buffer.len() {
-                        if read_buffer[index] == field_delimiter
-                            || read_buffer[index] == record_delimiter
-                        {
-                            break 'outer2;
-                        }
-                        index += 1;
-                    }
-
-                    bytes += index;
-                    self.builder
-                        .values_mut()
-                        .extend_from_slice(&read_buffer[..index]);
-                    reader.consume(index);
-
-                    index = 0;
-                    read_buffer = reader.fill_buf()?;
-
-                    if read_buffer.is_empty() {
-                        break 'outer2;
-                    }
-                }
-
-                self.builder
-                    .values_mut()
-                    .extend_from_slice(&read_buffer[..index]);
-                self.builder.add_offset(bytes + index);
-                reader.consume(index);
-            }
-
-            Ok(())
+            self.builder.append_value(self.buffer.as_slice());
         }
+        Ok(())
     }
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
