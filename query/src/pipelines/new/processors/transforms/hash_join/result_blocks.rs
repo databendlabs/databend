@@ -142,7 +142,7 @@ impl JoinHashTable {
                         let probe_result_ptrs = v.get_value();
                         for ptr in probe_result_ptrs {
                             // If find join partner, set the marker to true.
-                            let mut offset;
+                            let offset;
                             {
                                 let chunks = self.row_space.chunks.read().unwrap();
                                 offset = chunks
