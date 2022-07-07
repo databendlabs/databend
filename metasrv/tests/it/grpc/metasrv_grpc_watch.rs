@@ -15,14 +15,24 @@
 use std::time::Duration;
 
 use common_base::base::tokio;
+use common_meta_api::get_start_and_end_of_prefix;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::SeqV;
+use common_meta_types::protobuf::TxnRequest;
 use common_meta_types::protobuf::WatchRequest;
+use common_meta_types::txn_condition;
+use common_meta_types::txn_op;
+use common_meta_types::ConditionResult;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
+use common_meta_types::TxnCondition;
+use common_meta_types::TxnDeleteByPrefixRequest;
+use common_meta_types::TxnDeleteRequest;
+use common_meta_types::TxnOp;
+use common_meta_types::TxnPutRequest;
 use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 
@@ -42,6 +52,21 @@ async fn upsert_kv_client_main(addr: String, updates: Vec<UpsertKVReq>) -> anyho
     for update in updates.iter() {
         let _ = client.upsert_kv(update.clone()).await;
     }
+
+    Ok(())
+}
+
+async fn txn_client_main(addr: String, txn: TxnRequest) -> anyhow::Result<()> {
+    let client = MetaGrpcClient::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Some(Duration::from_secs(10)),
+        None,
+    )?;
+
+    let _ = client.transaction(txn).await;
 
     Ok(())
 }
@@ -66,6 +91,43 @@ async fn test_watch_main(
     let mut client_stream = client.request(watch).await?;
 
     let _h = tokio::spawn(upsert_kv_client_main(addr, updates));
+
+    loop {
+        if let Ok(Some(resp)) = client_stream.message().await {
+            if let Some(event) = resp.event {
+                assert!(!watch_events.is_empty());
+
+                assert_eq!(watch_events.get(0), Some(&event));
+                watch_events.remove(0);
+
+                if watch_events.is_empty() {
+                    break;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn test_watch_txn_main(
+    addr: String,
+    watch: WatchRequest,
+    mut watch_events: Vec<Event>,
+    txn: TxnRequest,
+) -> anyhow::Result<()> {
+    let client = MetaGrpcClient::try_create(
+        vec![addr.clone()],
+        "root",
+        "xxx",
+        None,
+        Some(Duration::from_secs(10)),
+        None,
+    )?;
+
+    let mut client_stream = client.request(watch).await?;
+
+    let _h = tokio::spawn(txn_client_main(addr, txn));
 
     loop {
         if let Ok(Some(resp)) = client_stream.message().await {
@@ -210,6 +272,124 @@ async fn test_watch() -> anyhow::Result<()> {
             UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Delete, None),
         ];
         test_watch_main(addr.clone(), watch, watch_events, updates).await?;
+    }
+    // 3. test watch transaction
+    {
+        // first construct test kv
+        let delete_key = "watch_delete_key";
+        let watch_delete_by_prefix_key = "watch_delete_by_prefix_key";
+
+        {
+            let client = MetaGrpcClient::try_create(
+                vec![addr.clone()],
+                "root",
+                "xxx",
+                None,
+                Some(Duration::from_secs(10)),
+                None,
+            )?;
+
+            let updates = vec![
+                UpsertKVReq::new(
+                    delete_key,
+                    MatchSeq::Any,
+                    Operation::Update(delete_key.as_bytes().to_vec()),
+                    None,
+                ),
+                UpsertKVReq::new(
+                    watch_delete_by_prefix_key,
+                    MatchSeq::Any,
+                    Operation::Update(watch_delete_by_prefix_key.as_bytes().to_vec()),
+                    None,
+                ),
+            ];
+
+            for update in updates {
+                let _ = client.upsert_kv(update.clone()).await;
+            }
+        }
+        seq += 2;
+
+        let watch_prefix = "watch";
+
+        let k1 = "watch_txn_key";
+
+        let txn_key = k1.to_string();
+        let txn_val = "txn_val".as_bytes().to_vec();
+
+        let (start, end) = get_start_and_end_of_prefix(watch_prefix);
+
+        let watch = WatchRequest {
+            key: start,
+            key_end: Some(end),
+            filter_type: FilterType::All.into(),
+        };
+
+        let conditions = vec![TxnCondition {
+            key: txn_key.clone(),
+            expected: ConditionResult::Eq as i32,
+            target: Some(txn_condition::Target::Seq(0)),
+        }];
+
+        let if_then: Vec<TxnOp> = vec![
+            TxnOp {
+                request: Some(txn_op::Request::Put(TxnPutRequest {
+                    key: txn_key.clone(),
+                    value: txn_val.clone(),
+                    prev_value: true,
+                })),
+            },
+            TxnOp {
+                request: Some(txn_op::Request::Delete(TxnDeleteRequest {
+                    key: delete_key.to_string(),
+                    prev_value: true,
+                })),
+            },
+            TxnOp {
+                request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
+                    prefix: watch_delete_by_prefix_key.to_string(),
+                })),
+            },
+        ];
+
+        let else_then: Vec<TxnOp> = vec![];
+
+        let txn = TxnRequest {
+            condition: conditions,
+            if_then,
+            else_then,
+        };
+
+        seq += 1;
+
+        let watch_events = vec![
+            Event {
+                key: txn_key.clone(),
+                current: Some(SeqV {
+                    seq: seq + 2,
+                    data: txn_val,
+                }),
+                prev: None,
+            },
+            Event {
+                key: delete_key.to_string(),
+                prev: Some(SeqV {
+                    seq: seq,
+                    data: delete_key.as_bytes().to_vec(),
+                }),
+                current: None,
+            },
+            Event {
+                key: watch_delete_by_prefix_key.to_string(),
+                prev: Some(SeqV {
+                    seq: seq + 1,
+                    data: watch_delete_by_prefix_key.as_bytes().to_vec(),
+                }),
+                current: None,
+            },
+        ];
+
+        test_watch_txn_main(addr.clone(), watch, watch_events, txn).await?;
     }
 
     Ok(())
