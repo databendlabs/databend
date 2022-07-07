@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::ArrayRef;
 
 use crate::prelude::*;
 
@@ -84,7 +85,7 @@ impl Column for NullColumn {
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
-        Arc::new(NullArray::new_null(ArrowType::Null, self.length))
+        Box::new(NullArray::new_null(ArrowType::Null, self.length))
     }
 
     fn arc(&self) -> ColumnRef {
@@ -96,7 +97,7 @@ impl Column for NullColumn {
     }
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        let length = filter.values().len() - filter.values().null_count();
+        let length = filter.values().len() - filter.values().unset_bits();
         Arc::new(Self { length })
     }
 

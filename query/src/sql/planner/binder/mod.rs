@@ -49,6 +49,7 @@ mod distinct;
 mod insert;
 mod join;
 mod limit;
+mod presign;
 mod project;
 mod scalar;
 mod scalar_common;
@@ -251,6 +252,8 @@ impl<'a> Binder {
                 name: stmt.name.clone(),
                 args: stmt.args.clone(),
             })),
+
+            Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
             _ => {
                 return Err(ErrorCode::UnImplement(format!(

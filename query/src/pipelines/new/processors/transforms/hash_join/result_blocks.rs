@@ -136,7 +136,7 @@ impl JoinHashTable {
                 let probe_column = input.column(0);
                 // Check if there is any null in the probe column.
                 if let Some(validity) = probe_column.validity().1 {
-                    if validity.null_count() > 0 {
+                    if validity.unset_bits() > 0 {
                         has_null = true;
                     }
                 }
@@ -495,7 +495,7 @@ impl JoinHashTable {
 
         let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
         let rows = boolean_col.len();
-        let count_zeros = boolean_col.values().null_count();
+        let count_zeros = boolean_col.values().unset_bits();
 
         Ok((
             Some(boolean_col.values().clone()),

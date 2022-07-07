@@ -23,6 +23,7 @@ use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast::binary_to_large_binary;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::types::Index;
+use common_arrow::ArrayRef;
 pub use iterator::*;
 pub use mutable::*;
 
@@ -154,7 +155,7 @@ impl Column for StringColumn {
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
-        Arc::new(LargeBinaryArray::from_data(
+        Box::new(LargeBinaryArray::from_data(
             ArrowType::LargeBinary,
             self.offsets.clone(),
             self.values.clone(),

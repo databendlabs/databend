@@ -1189,12 +1189,12 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
     ) -> Option<Result<Box<(Scalar, DataTypeImpl)>>> {
         match func_name.to_lowercase().as_str() {
-            "database" => {
+            name @ ("database" | "currentdatabase" | "current_database") => {
                 let arg = Expr::Literal {
                     span: &[],
                     lit: Literal::String(self.ctx.get_current_database()),
                 };
-                Some(self.resolve_function(span, "database", &[&arg], None).await)
+                Some(self.resolve_function(span, name, &[&arg], None).await)
             }
             "version" => {
                 let arg = Expr::Literal {
@@ -1203,26 +1203,13 @@ impl<'a> TypeChecker<'a> {
                 };
                 Some(self.resolve_function(span, "version", &[&arg], None).await)
             }
-            "current_user" => match self.ctx.get_current_user() {
+            name @ ("user" | "currentuser" | "current_user") => match self.ctx.get_current_user() {
                 Ok(user) => {
                     let arg = Expr::Literal {
                         span: &[],
                         lit: Literal::String(user.identity().to_string()),
                     };
-                    Some(
-                        self.resolve_function(span, "current_user", &[&arg], None)
-                            .await,
-                    )
-                }
-                Err(e) => Some(Err(e)),
-            },
-            "user" => match self.ctx.get_current_user() {
-                Ok(user) => {
-                    let arg = Expr::Literal {
-                        span: &[],
-                        lit: Literal::String(user.identity().to_string()),
-                    };
-                    Some(self.resolve_function(span, "user", &[&arg], None).await)
+                    Some(self.resolve_function(span, name, &[&arg], None).await)
                 }
                 Err(e) => Some(Err(e)),
             },

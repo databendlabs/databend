@@ -187,13 +187,13 @@ impl AggregateIfCombinator {
             .map(|c| c.filter(predicate))
             .collect::<Vec<_>>();
 
-        let rows = predicate.len() - predicate.values().null_count();
+        let rows = predicate.len() - predicate.values().unset_bits();
 
         (columns, rows)
     }
 
     fn filter_place(places: &[StateAddr], predicate: &BooleanColumn) -> StateAddrs {
-        if predicate.values().null_count() == 0 {
+        if predicate.values().unset_bits() == 0 {
             return places.to_vec();
         }
         let it = predicate

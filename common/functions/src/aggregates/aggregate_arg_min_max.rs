@@ -98,7 +98,7 @@ where
         let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(column) };
 
         if let Some(bit) = validity {
-            if bit.null_count() == column.len() {
+            if bit.unset_bits() == column.len() {
                 return Ok(());
             }
             let mut v = S::default();

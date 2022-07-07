@@ -31,7 +31,6 @@ fn test_accepted_multi_lines() -> Result<()> {
     assert_complete_line("first,second\n")?;
     assert_complete_line("first,second\r")?;
     assert_complete_line("first,second\r\n")?;
-    assert_complete_line("first,second\n\r")?;
     assert_complete_line("first,\"\n\"second\n")?;
     assert_complete_line("first,\"\r\"second\n")?;
 
@@ -97,7 +96,7 @@ fn test_deserialize_multi_lines() -> Result<()> {
     let mut csv_input_state = csv_input_format.create_state();
 
     csv_input_format.read_buf(
-        "1,\"{\\\"second\\\" : 33}\"\n".as_bytes(),
+        "1,\"{\"\"second\"\" : 33}\"\n".as_bytes(),
         &mut csv_input_state,
     )?;
     assert_blocks_eq(

@@ -368,6 +368,11 @@ select * from t1 where t1.a in (select t2.a from t2);
 drop table t1;
 drop table t2;
 
+select '====Database====';
+select database(), currentDatabase(), current_database();
+select '====User====';
+select user(), currentuser(), current_user();
+
 -- Query has keyword
 SELECT '====WITH_KEYWORD====';
 SELECT database, table, name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;

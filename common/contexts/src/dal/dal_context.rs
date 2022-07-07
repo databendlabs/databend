@@ -25,10 +25,13 @@ use opendal::io_util::WriteEvent;
 use opendal::ops::OpCreate;
 use opendal::ops::OpDelete;
 use opendal::ops::OpList;
+use opendal::ops::OpPresign;
 use opendal::ops::OpRead;
 use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
+use opendal::ops::PresignedRequest;
 use opendal::Accessor;
+use opendal::AccessorMetadata;
 use opendal::BytesReader;
 use opendal::BytesWriter;
 use opendal::DirStreamer;
@@ -77,6 +80,16 @@ impl Layer for DalContext {
 
 #[async_trait]
 impl Accessor for DalContext {
+    fn metadata(&self) -> AccessorMetadata {
+        self.get_inner()
+            .expect("must have valid accessor")
+            .metadata()
+    }
+
+    fn presign(&self, args: &OpPresign) -> Result<PresignedRequest> {
+        self.get_inner()?.presign(args)
+    }
+
     async fn create(&self, args: &OpCreate) -> Result<()> {
         self.get_inner()?.create(args).await
     }

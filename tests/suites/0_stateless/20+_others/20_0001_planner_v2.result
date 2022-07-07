@@ -426,6 +426,10 @@ NULL	NULL	NULL	1
 1
 1	2
 2	3
+====Database====
+default	default	default
+====User====
+'default'@'127.0.0.1'	'default'@'127.0.0.1'	'default'@'127.0.0.1'
 ====WITH_KEYWORD====
 system	settings	default	VARCHAR			
 system	settings	description	VARCHAR			

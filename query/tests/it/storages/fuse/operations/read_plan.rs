@@ -39,7 +39,7 @@ fn test_to_partitions() -> Result<()> {
     let col_stats_gen = |col_size| ColumnStatistics {
         min: DataValue::Int64(1),
         max: DataValue::Int64(2),
-        null_count: 0,
+        unset_bits: 0,
         in_memory_size: col_size as u64,
     };
 

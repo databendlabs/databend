@@ -19,7 +19,7 @@ use crate::prelude::*;
 
 pub fn filter_scalar_column<C: ScalarColumn>(c: &C, filter: &BooleanColumn) -> ColumnRef {
     let meta = c.column_meta();
-    let length = filter.values().len() - filter.values().null_count();
+    let length = filter.values().len() - filter.values().unset_bits();
     if length == c.len() {
         return c.convert_full_column();
     }
