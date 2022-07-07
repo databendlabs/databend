@@ -16,11 +16,5 @@ echo "CREATE STAGE presign_stage;" | $MYSQL_CLIENT_CONNECT
 # cut -f 3: get the third value of output - the url.
 curl -s -w "%{http_code}\n" -o /dev/null "`echo "set enable_planner_v2 = 1; PRESIGN @presign_stage/ontime_200.csv" | $MYSQL_CLIENT_CONNECT | cut -f 3`"
 
-# Most arguements is the same with previous, except:
-# -X PUT: Specify the http method
-curl -s -w "%{http_code}\n" -X PUT -o /dev/null "`echo "set enable_planner_v2 = 1; PRESIGN UPLOAD @presign_stage/hello_world.txt" | $MYSQL_CLIENT_CONNECT | cut -f 3`" "Hello, World!"
-
-echo "set enable_planner_v2 = 1; LIST @presign_stage/" | $MYSQL_CLIENT_CONNECT | awk '{print $1,$2,$3}';
-
 ## Drop table.
 echo "drop stage if exists presign_stage" | $MYSQL_CLIENT_CONNECT
