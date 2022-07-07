@@ -56,6 +56,7 @@ use crate::sessions::QueryContext;
 use crate::sql::exec::ColumnID;
 use crate::sql::exec::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
+use crate::sql::plans::JoinType::Mark;
 use crate::sql::IndexType;
 
 pub struct SerializerHashTable {
@@ -318,7 +319,7 @@ impl JoinHashTable {
         Ok(replicated_probe_block)
     }
 
-    fn probe_cross_join(
+    pub(crate) fn probe_cross_join(
         &self,
         input: &DataBlock,
         _probe_state: &mut ProbeState,
@@ -470,6 +471,10 @@ impl HashJoinState for JoinHashTable {
     fn finish(&self) -> Result<()> {
         let chunks = self.row_space.chunks.read().unwrap();
         let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
+        if self.hash_join_desc.join_type == Mark && self.hash_join_desc.other_predicate.is_some() {
+            let row_nums = chunks.iter().fold(0, |acc, chunk| acc + chunk.num_rows());
+            marker.append(&mut vec![MarkerKind::False; row_nums])
+        }
         for chunk_index in 0..chunks.len() {
             let chunk = &chunks[chunk_index];
             let mut columns = vec![];

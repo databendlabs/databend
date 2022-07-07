@@ -324,8 +324,8 @@ impl SubqueryRewriter {
                     } else {
                         let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
                             op,
-                            left: Box::new(left_condition),
-                            right: Box::new(right_condition),
+                            left: Box::new(right_condition),
+                            right: Box::new(left_condition),
                             return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
                         });
                         (vec![], vec![], vec![other_condition])

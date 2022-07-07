@@ -368,6 +368,8 @@ select * from t1 where t1.a in (select t2.a from t2);
 select * from t1 where t1.a = any (select t2.a from t2);
 select * from t1 where t1.a = some (select t2.a from t2);
 select * from t1 where t1.a != all (select t2.a from t2);
+select * from t1 where t1.a >= any (select t2.a from t2);
+select * from t1 where t1.a = all (select t2.a from t2);
 set enable_planner_v2 = 0;
 create table t3 as select *  from numbers(10000);
 insert into t3 values(1);

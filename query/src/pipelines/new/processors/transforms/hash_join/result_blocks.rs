@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
+use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
 use common_datavalues::Series;
 use common_exception::Result;
@@ -125,40 +126,95 @@ impl JoinHashTable {
             }
             Mark => {
                 results.push(DataBlock::empty());
-                // `probe_column` is the subquery result column.
-                // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
-                let probe_column = input.column(0);
-                // Check if there is any null in the probe column.
-                if let Some(validity) = probe_column.validity().1 {
-                    if validity.unset_bits() > 0 {
-                        let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
-                        *has_null = true;
-                    }
-                }
-                for key in keys.iter() {
-                    let probe_result_ptr = hash_table.find_key(key);
-                    if let Some(v) = probe_result_ptr {
-                        let probe_result_ptrs = v.get_value();
-                        for ptr in probe_result_ptrs {
-                            // If find join partner, set the marker to true.
-                            let offset;
-                            {
-                                let chunks = self.row_space.chunks.read().unwrap();
-                                offset = chunks
-                                    .iter()
-                                    .by_ref()
-                                    .take(ptr.chunk_index as usize)
-                                    .fold(0, |acc, c| acc + c.num_rows());
-                            }
-                            let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
-                            marker[offset + ptr.row_index as usize] = MarkerKind::True;
-                        }
-                    }
+                // Either there is only non-equi condition, or there is only equi-condition
+                // It's impossible for both to coexist.
+                if self.hash_join_desc.other_predicate.is_some() {
+                    self.mark_join_with_other_condition(input, probe_state)?;
+                } else {
+                    self.mark_join_without_other_condition(hash_table, keys, input)?;
                 }
             }
             _ => unreachable!(),
         }
         Ok(results)
+    }
+
+    fn mark_join_without_other_condition<Key>(
+        &self,
+        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        keys: Vec<Key>,
+        input: &DataBlock,
+    ) -> Result<()>
+    where
+        Key: HashTableKeyable + Clone + 'static,
+    {
+        // `probe_column` is the subquery result column.
+        // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
+        let probe_column = input.column(0);
+        // Check if there is any null in the probe column.
+        if let Some(validity) = probe_column.validity().1 {
+            if validity.unset_bits() > 0 {
+                let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+                *has_null = true;
+            }
+        }
+        for key in keys.iter() {
+            let probe_result_ptr = hash_table.find_key(key);
+            if let Some(v) = probe_result_ptr {
+                let probe_result_ptrs = v.get_value();
+                for ptr in probe_result_ptrs {
+                    // If find join partner, set the marker to true.
+                    let offset = {
+                        let chunks = self.row_space.chunks.read().unwrap();
+                        chunks
+                            .iter()
+                            .by_ref()
+                            .take(ptr.chunk_index as usize)
+                            .fold(0, |acc, c| acc + c.num_rows())
+                    };
+                    let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
+                    marker[offset + ptr.row_index as usize] = MarkerKind::True;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn mark_join_with_other_condition(
+        &self,
+        input: &DataBlock,
+        probe_state: &mut ProbeState,
+    ) -> Result<()> {
+        let cross_join_blocks = self.probe_cross_join(input, probe_state)?;
+        let func_ctx = self.ctx.try_get_function_context()?;
+        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
+        for block in cross_join_blocks.iter() {
+            let type_vector = self
+                .hash_join_desc
+                .other_predicate
+                .as_ref()
+                .unwrap()
+                .eval(&func_ctx, block)?;
+            let filter_column = type_vector.vector();
+            dbg!(marker.len());
+            assert_eq!(filter_column.len(), block.num_rows());
+            for idx in 0..filter_column.len() {
+                match filter_column.get(idx) {
+                    DataValue::Null => {
+                        if (*marker)[idx] == MarkerKind::False {
+                            (*marker)[idx] = MarkerKind::Null;
+                        }
+                    }
+                    DataValue::Boolean(value) => {
+                        if value {
+                            (*marker)[idx] = MarkerKind::True;
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+        Ok(())
     }
 
     fn semi_anti_join<const SEMI: bool, Key>(
