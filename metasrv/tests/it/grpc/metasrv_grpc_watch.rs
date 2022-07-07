@@ -410,7 +410,7 @@ fn test_get_start_and_end_of_prefix() -> anyhow::Result<()> {
         let s = str.to_string();
         let (_, end) = get_start_and_end_of_prefix(&s);
         for byte in end.as_bytes() {
-            assert_eq!(*byte, 127 as u8);
+            assert_eq!(*byte, 127_u8);
         }
     }
     Ok(())

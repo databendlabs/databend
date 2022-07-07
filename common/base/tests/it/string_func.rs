@@ -50,7 +50,7 @@ fn prefix_of_string_test() {
         let s = str.to_string();
         let ret = prefix_of_string(&s);
         for byte in ret.as_bytes() {
-            assert_eq!(*byte, 127 as u8);
+            assert_eq!(*byte, 127_u8);
         }
     }
     {
