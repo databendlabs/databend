@@ -18,7 +18,7 @@ In Databend, it's **easy** and **performance** to do it using [WINDOW_FUNNEL FUN
 
 Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend](../00-guides/index.md#deployment)
+* [How to Deploy Databend](../01-guides/index.md#deployment)
 
 ### 1.2 Create a Databend User
 

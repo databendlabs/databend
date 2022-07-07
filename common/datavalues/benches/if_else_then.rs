@@ -27,9 +27,9 @@ use criterion::Criterion;
 
 fn add_benchmark(c: &mut Criterion) {
     let size = 1048576;
-    let lhs: ArrayRef = Arc::new(create_primitive_array::<i32>(size, 0.2));
-    let rhs: ArrayRef = Arc::new(create_primitive_array::<i32>(size, 0.3));
-    let ifs: ArrayRef = Arc::new(create_boolean_array(size, 0.0, 0.3));
+    let lhs: ArrayRef = Box::new(create_primitive_array::<i32>(size, 0.2));
+    let rhs: ArrayRef = Box::new(create_primitive_array::<i32>(size, 0.3));
+    let ifs: ArrayRef = Box::new(create_boolean_array(size, 0.0, 0.3));
 
     c.bench_function("arrow2_if_else_then", |b| {
         b.iter(|| criterion::black_box(arrow2_if_else_then(&lhs, &rhs, &ifs)))
@@ -92,11 +92,13 @@ fn databend_if_else_then(
 criterion_group!(benches, add_benchmark);
 criterion_main!(benches);
 
+use common_arrow::ArrayRef;
 use rand::distributions::Distribution;
 use rand::distributions::Standard;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+
 /// Returns fixed seedable RNG
 pub fn seedable_rng() -> StdRng {
     StdRng::seed_from_u64(42)

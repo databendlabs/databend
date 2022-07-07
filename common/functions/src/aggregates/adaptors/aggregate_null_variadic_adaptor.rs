@@ -134,7 +134,7 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
         if !is_all_null {
             match validity {
                 Some(v) => {
-                    if v.null_count() != input_rows {
+                    if v.unset_bits() != input_rows {
                         Self::set_flag(place);
                     }
                 }

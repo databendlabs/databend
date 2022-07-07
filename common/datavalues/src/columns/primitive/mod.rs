@@ -173,9 +173,9 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         self.values.len() * std::mem::size_of::<T>()
     }
 
-    fn as_arrow_array(&self) -> common_arrow::arrow::array::ArrayRef {
+    fn as_arrow_array(&self) -> common_arrow::ArrayRef {
         let data_type = self.data_type().arrow_type();
-        Arc::new(PrimitiveArray::<T>::from_data(
+        Box::new(PrimitiveArray::<T>::from_data(
             data_type,
             self.values.clone(),
             None,
@@ -194,7 +194,7 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
         assert_eq!(self.len(), filter.values().len());
 
-        let selected = filter.values().len() - filter.values().null_count();
+        let selected = filter.values().len() - filter.values().unset_bits();
         if selected == self.len() {
             return Arc::new(self.clone());
         }

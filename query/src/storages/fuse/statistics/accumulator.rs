@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use common_arrow::parquet::FileMetaData;
+use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -70,7 +70,7 @@ impl StatisticsAccumulator {
     pub fn add_block(
         &mut self,
         file_size: u64,
-        meta: FileMetaData,
+        meta: ThriftFileMetaData,
         statistics: BlockStatistics,
     ) -> Result<()> {
         self.file_size += file_size;
@@ -98,6 +98,47 @@ impl StatisticsAccumulator {
         ));
 
         Ok(())
+    }
+
+    pub fn acc_columns(data_block: &DataBlock) -> common_exception::Result<StatisticsOfColumns> {
+        let mut statistics = StatisticsOfColumns::new();
+
+        let rows = data_block.num_rows();
+        for idx in 0..data_block.num_columns() {
+            let col = data_block.column(idx);
+            let field = data_block.schema().field(idx);
+            let column_field = ColumnWithField::new(col.clone(), field.clone());
+
+            let mut min = DataValue::Null;
+            let mut max = DataValue::Null;
+
+            let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
+            let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
+
+            if mins.len() > 0 {
+                min = mins.get(0);
+            }
+            if maxs.len() > 0 {
+                max = maxs.get(0);
+            }
+            let (is_all_null, bitmap) = col.validity();
+            let unset_bits = match (is_all_null, bitmap) {
+                (true, _) => rows,
+                (false, Some(bitmap)) => bitmap.unset_bits(),
+                (false, None) => 0,
+            };
+
+            let in_memory_size = col.memory_size() as u64;
+            let col_stats = ColumnStatistics {
+                min,
+                max,
+                unset_bits: unset_bits as u64,
+                in_memory_size,
+            };
+
+            statistics.insert(idx as u32, col_stats);
+        }
+        Ok(statistics)
     }
 
     pub fn summary(&self) -> Result<StatisticsOfColumns> {
@@ -230,9 +271,9 @@ pub fn columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns>
             max = maxs.get(0);
         }
         let (is_all_null, bitmap) = col.validity();
-        let null_count = match (is_all_null, bitmap) {
+        let unset_bits = match (is_all_null, bitmap) {
             (true, _) => rows,
-            (false, Some(bitmap)) => bitmap.null_count(),
+            (false, Some(bitmap)) => bitmap.unset_bits(),
             (false, None) => 0,
         };
 
@@ -240,7 +281,7 @@ pub fn columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns>
         let col_stats = ColumnStatistics {
             min,
             max,
-            null_count: null_count as u64,
+            unset_bits: unset_bits as u64,
             in_memory_size,
         };
 
