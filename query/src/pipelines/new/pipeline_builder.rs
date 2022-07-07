@@ -34,8 +34,6 @@ use common_planners::WindowFuncPlan;
 
 use super::processors::transforms::TransformWindowFunc;
 use super::processors::transforms::WindowFuncCompact;
-use super::processors::MarkJoinCompactor;
-
 use super::processors::SortMergeCompactor;
 use crate::pipelines::new::pipeline::NewPipeline;
 use crate::pipelines::new::processors::AggregatorParams;

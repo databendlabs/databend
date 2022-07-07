@@ -131,8 +131,7 @@ impl JoinHashTable {
                 // Check if there is any null in the probe column.
                 if let Some(validity) = probe_column.validity().1 {
                     if validity.unset_bits() > 0 {
-                        let mut has_null =
-                                self.hash_join_desc.marker_join_desc.has_null.write();
+                        let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
                         *has_null = true;
                     }
                 }

@@ -17,14 +17,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 
-
-
-
-
-
 use crate::pipelines::new::processors::transforms::Compactor;
 use crate::pipelines::new::processors::HashJoinState;
-
 use crate::pipelines::new::processors::TransformCompact;
 
 pub struct MarkJoinCompactor {
