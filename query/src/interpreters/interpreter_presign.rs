@@ -12,41 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserStageInfo;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
-use common_planners::StageTableInfo;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-use futures::TryStreamExt;
-use poem::EndpointExt;
-use regex::Regex;
-use serde_json::Map;
 use serde_json::Value;
 
-use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::interpreters::SelectInterpreterV2;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::executor::PipelinePullingExecutor;
-use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
-use crate::sql::plans::CopyPlanV2;
-use crate::sql::plans::Plan;
 use crate::sql::plans::PresignAction;
 use crate::sql::plans::PresignPlan;
 use crate::storages::stage::StageSource;
-use crate::storages::stage::StageTable;
 
 pub struct PresignInterpreter {
     ctx: Arc<QueryContext>,
