@@ -156,7 +156,7 @@ impl QueryNormalizer {
                 .push(Expression::Sort {
                     expr: Box::new(expression.clone()),
                     asc: order_by_expr.asc.unwrap_or(true),
-                    nulls_first: order_by_expr.asc.unwrap_or(true),
+                    nulls_first: order_by_expr.nulls_first.unwrap_or(true),
                     origin_expr: Box::new(expression),
                 });
         }
