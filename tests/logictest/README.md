@@ -47,7 +47,7 @@ docker build -t sqllogic/test:latest .
 
 ### Run with docker
 
-1. Image release: public.ecr.aws/k3y0u5f2/sqllogic/test:latest
+1. Image release: datafuselabs/sqllogictest:latest
 2. Set envs
 - SKIP_TEST_FILES (skip test case, set file name here split by `,` )
 - QUERY_MYSQL_HANDLER_HOST
@@ -57,7 +57,7 @@ docker build -t sqllogic/test:latest .
 - MYSQL_DATABASE
 - MYSQL_USER
 - ADDITIONAL_HEADERS (for security scenario)
-3. docker run --name logictest --rm --network host public.ecr.aws/k3y0u5f2/sqllogic/test:latest
+3. docker run --name logictest --rm --network host datafuselabs/sqllogictest:latest
 
 ## Write logic test tips
 
@@ -89,6 +89,9 @@ select 1;
 ----
 1
 ```
+
+**tips** If you do not care about result, use statement ok instead of statement query
+**warning** A statement query need result, and even if you want to skip a case, you still need to keep the results in the test content
 
 # Learn More
 

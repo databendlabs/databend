@@ -1,4 +1,5 @@
 from abc import ABC
+from log import log
 from mysql.connector.errors import Error
 
 import logictest
@@ -38,7 +39,7 @@ class TestClickhouse(logictest.SuiteRunner, ABC):
 
     def execute_query(self, statement):
         results = self.get_connection().fetch_all(statement.text)
-        print(results)
+        log.debug(results)
         # query_type = statement.s_type.query_type
         vals = []
         for (ri, row) in enumerate(results):
