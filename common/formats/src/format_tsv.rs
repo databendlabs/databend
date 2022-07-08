@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::fmt::Write;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -322,47 +321,46 @@ impl InputFormat for TsvInputFormat {
     }
 }
 
+#[allow(clippy::format_push_string)]
 impl FormatDiagnostic for TsvInputFormat {
     fn deserialize_field_and_print_diagnositc_info(
         &self,
         col_index: usize,
         deserializer: &mut TypeDeserializerImpl,
-        checkpint_reader: &mut NestedCheckpointReader<MemoryReader>,
+        checkpoint_reader: &mut NestedCheckpointReader<MemoryReader>,
         settings: FormatSettings,
         out: &mut String,
     ) -> Result<bool> {
         let col_name = self.schema.field(col_index).name();
         let data_type = self.schema.field(col_index).data_type();
 
-        write!(
-            out,
+        out.push_str(&format!(
             "\tColumn: {}, Name: {}, Type: {}",
             col_index,
             col_name,
             data_type.data_type_id()
-        )
-        .unwrap();
+        ));
 
-        checkpint_reader.push_checkpoint();
-        let has_err: Result<()> = deserializer.de_text(checkpint_reader, &settings);
+        checkpoint_reader.push_checkpoint();
+        let has_err: Result<()> = deserializer.de_text(checkpoint_reader, &settings);
 
         let data_type_id = data_type.data_type_id();
         if (data_type_id.is_integer() || data_type_id.is_date_or_date_time())
-            && checkpint_reader.get_top_checkpoint_pos() == checkpint_reader.pos
+            && checkpoint_reader.get_top_checkpoint_pos() == checkpoint_reader.pos
         {
             out.push_str("\tError: text ");
             let mut buf: Vec<u8> = Vec::new();
-            checkpint_reader.positionn(10, &mut buf)?;
+            checkpoint_reader.positionn(10, &mut buf)?;
             verbose_string(&buf, out);
-            writeln!(out, " is not like {}", data_type_id).unwrap();
-            checkpint_reader.pop_checkpoint();
+            out.push_str(&format!(" is not like {}\n", data_type_id));
+            checkpoint_reader.pop_checkpoint();
             return Ok(false);
         }
 
         out.push_str(", Parsed text: ");
-        verbose_string(checkpint_reader.get_checkpoint_buffer(), out);
+        verbose_string(checkpoint_reader.get_checkpoint_buffer(), out);
         out.push('\n');
-        checkpint_reader.pop_checkpoint();
+        checkpoint_reader.pop_checkpoint();
 
         if has_err.is_err() {
             if data_type.data_type_id().is_date_time() {

@@ -32,7 +32,7 @@ pub trait BufferReadExt: BufferRead {
     fn position(&mut self) -> Result<u8> {
         let available = self.fill_buf()?;
         if available.is_empty() {
-            todo!()
+            return Ok(b'\0');
         }
         Ok(available[0])
     }

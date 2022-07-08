@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Write;
-
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::TypeDeserializerImpl;
@@ -23,6 +21,137 @@ use common_io::prelude::FormatSettings;
 use common_io::prelude::MemoryReader;
 use common_io::prelude::NestedCheckpointReader;
 
+static ASCII_TABLE: [&str; 128] = [
+    "<NUL>",
+    "<SOH>",
+    "<STX>",
+    "<ETX>",
+    "<EOT>",
+    "<ENQ>",
+    "<ACK>",
+    "<BEL>",
+    "<BACKSPACE>",
+    "<HORIZONTAL TAB>",
+    "<LINE FEED>",
+    "<VERTICAL TAB>",
+    "<FROM FEED>",
+    "<CARRIAGE RETURN>",
+    "<SO>",
+    "<SI>",
+    "<DLE>",
+    "<DC1/XON>",
+    "<DC2>",
+    "<DC3/XOFF>",
+    "<DC4>",
+    "<NAK>",
+    "<SYN>",
+    "<ETB>",
+    "<CAN>",
+    "<EM>",
+    "<SUB>",
+    "<ESC>",
+    "<FS>",
+    "<GS>",
+    "<RS>",
+    "<US>",
+    " ",
+    "!",
+    "<DOUBLE QUOTE>",
+    "#",
+    "$",
+    "%",
+    "&",
+    "<SINGLE QUOTE>",
+    "(",
+    ")",
+    "*",
+    "+",
+    ",",
+    "-",
+    ".",
+    "/",
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    ":",
+    ";",
+    "<",
+    "=",
+    ">",
+    "?",
+    "@",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z",
+    "[",
+    "<BACKSLASH>",
+    "]",
+    "^",
+    "_",
+    "`",
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l",
+    "m",
+    "n",
+    "o",
+    "p",
+    "q",
+    "r",
+    "s",
+    "t",
+    "u",
+    "v",
+    "w",
+    "x",
+    "y",
+    "z",
+    "{",
+    "|",
+    "}",
+    "~",
+    "<DEL>",
+];
+
 pub fn verbose_string(buf: &[u8], out: &mut String) {
     out.push('"');
 
@@ -30,35 +159,18 @@ pub fn verbose_string(buf: &[u8], out: &mut String) {
         out.push_str("<EMPTY>");
     }
 
-    for c in buf.iter() {
-        match *c {
-            b'\0' => {
-                out.push_str("<ASCII NUL>");
-            }
-            b'\n' => {
-                out.push_str("<LINE FEED>");
-            }
-            b'\r' => out.push_str("<CARRIAGE RETURN>"),
-            b'\t' => {
-                out.push_str("<TAB>");
-            }
-            b'\\' => {
-                out.push_str("<BACKSLASH>");
-            }
-            b'"' => {
-                out.push_str("<DOUBLE QUOTE>");
-            }
-            b'\'' => {
-                out.push_str("<SINGLE QUOTE>");
-            }
-            _ => {
-                out.push(*c as char);
-            }
+    for &c in buf.iter() {
+        if c < 128 {
+            out.push_str(ASCII_TABLE[c as usize]);
+        } else {
+            out.push(c as char);
         }
     }
+
     out.push('"');
 }
 
+#[allow(clippy::format_push_string)]
 pub trait FormatDiagnostic {
     fn get_diagnostic_info(
         &self,
@@ -72,15 +184,13 @@ pub trait FormatDiagnostic {
         let mut out = String::new();
         match file_name {
             Some(file_name) => {
-                write!(
-                    out,
+                out.push_str(&format!(
                     "\nError occurs at file: {}, row: {}:\n",
                     file_name, row_index
-                )
-                .unwrap();
+                ));
             }
             None => {
-                write!(out, "\nError occurs at row: {}:\n", row_index).unwrap();
+                out.push_str(&format!("\nError occurs at row: {}:\n", row_index));
             }
         }
         self.parse_row_and_print_diagnostic_info(

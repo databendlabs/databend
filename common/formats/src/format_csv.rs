@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::fmt::Write;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -361,6 +360,7 @@ impl InputFormat for CsvInputFormat {
     }
 }
 
+#[allow(clippy::format_push_string)]
 impl FormatDiagnostic for CsvInputFormat {
     fn deserialize_field_and_print_diagnositc_info(
         &self,
@@ -373,14 +373,12 @@ impl FormatDiagnostic for CsvInputFormat {
         let col_name = self.schema.field(col_index).name();
         let data_type = self.schema.field(col_index).data_type();
 
-        write!(
-            out,
+        out.push_str(&format!(
             "\tColumn: {}, Name: {}, Type: {}",
             col_index,
             col_name,
             data_type.data_type_id()
-        )
-        .unwrap();
+        ));
 
         checkpint_reader.ignore_white_spaces()?;
 
@@ -395,7 +393,7 @@ impl FormatDiagnostic for CsvInputFormat {
             let mut buf: Vec<u8> = Vec::new();
             checkpint_reader.positionn(10, &mut buf)?;
             verbose_string(&buf, out);
-            writeln!(out, " is not like {}", data_type_id).unwrap();
+            out.push_str(&format!(" is not like {}\n", data_type_id));
             checkpint_reader.pop_checkpoint();
             return Ok(false);
         }
@@ -429,14 +427,12 @@ impl FormatDiagnostic for CsvInputFormat {
         let result = checkpoint_reader.must_ignore_byte(delimiter);
         if result.is_err() {
             if checkpoint_reader.position()? == b'\n' || checkpoint_reader.position()? == b'\r' {
-                writeln!(
-                    out,
-                    "\tError: Line feed found where delimiter (\"{}\") is expected.",
+                out.push_str(&format!(
+                    "\tError: Line feed found where delimiter (\"{}\") is expected.\n",
                     delimiter
-                )
-                .unwrap();
+                ));
             } else {
-                write!(out, "\tError: There is no delimiter ({}). ", delimiter).unwrap();
+                out.push_str(&format!("\tError: There is no delimiter ({}). ", delimiter));
                 verbose_string(&[checkpoint_reader.position()?], out);
                 out.push_str(" found instead.\n");
             }

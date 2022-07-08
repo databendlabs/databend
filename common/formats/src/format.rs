@@ -16,6 +16,7 @@ use std::any::Any;
 
 use common_datablocks::DataBlock;
 use common_datavalues::TypeDeserializerImpl;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::MemoryReader;
 use common_io::prelude::NestedCheckpointReader;
@@ -37,7 +38,7 @@ pub trait InputFormat: Send + Sync {
         _file_name: String,
         _start_row_index: usize,
     ) -> Result<()> {
-        unimplemented!()
+        Err(ErrorCode::UnImplement("Unimplement error"))
     }
 
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>>;
@@ -52,10 +53,10 @@ pub trait InputFormat: Send + Sync {
         _deserializers: &mut Vec<TypeDeserializerImpl>,
         _row_index: usize,
     ) -> Result<()> {
-        unimplemented!()
+        Err(ErrorCode::UnImplement("Unimplement error"))
     }
 
     fn read_row_num(&self, _state: &mut Box<dyn InputState>) -> Result<usize> {
-        unimplemented!()
+        Err(ErrorCode::UnImplement("Unimplement error"))
     }
 }
