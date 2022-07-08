@@ -16,6 +16,7 @@ use std::time::Duration;
 
 use common_base::base::tokio;
 use common_meta_api::get_start_and_end_of_prefix;
+use common_meta_api::prefix_of_string;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::protobuf::watch_request::FilterType;
@@ -390,6 +391,48 @@ async fn test_watch() -> common_exception::Result<()> {
         ];
 
         test_watch_txn_main(addr.clone(), watch, watch_events, txn).await?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn prefix_of_string_test() -> common_exception::Result<()> {
+    assert_eq!("b".to_string(), prefix_of_string("a")?);
+    assert_eq!("2".to_string(), prefix_of_string("1")?);
+    assert_eq!(
+        "__fd_table_by_ie".to_string(),
+        prefix_of_string("__fd_table_by_id")?
+    );
+    {
+        let str = 127 as char;
+        let s = str.to_string();
+        let ret = prefix_of_string(&s)?;
+        for byte in ret.as_bytes() {
+            assert_eq!(*byte, 127_u8);
+        }
+    }
+    {
+        let s = format!("ab{}", 127 as char);
+        let ret = prefix_of_string(&s)?;
+        assert_eq!(ret, format!("ac{}", 127 as char));
+    }
+    {
+        let s = "我".to_string();
+        let ret = prefix_of_string(&s);
+        match ret {
+            Err(e) => {
+                assert_eq!(
+                    e.to_string(),
+                    common_exception::ErrorCode::OnlySupportAsciiChars(format!(
+                        "Only support ASCII characters: {}",
+                        "我"
+                    ))
+                    .to_string()
+                );
+            }
+            Ok(_) => panic!("MUST return error "),
+        }
     }
 
     Ok(())

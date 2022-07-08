@@ -38,48 +38,6 @@ fn mask_string_test() {
 }
 
 #[test]
-fn prefix_of_string_test() -> common_exception::Result<()> {
-    assert_eq!("b".to_string(), prefix_of_string("a")?);
-    assert_eq!("2".to_string(), prefix_of_string("1")?);
-    assert_eq!(
-        "__fd_table_by_ie".to_string(),
-        prefix_of_string("__fd_table_by_id")?
-    );
-    {
-        let str = 127 as char;
-        let s = str.to_string();
-        let ret = prefix_of_string(&s)?;
-        for byte in ret.as_bytes() {
-            assert_eq!(*byte, 127_u8);
-        }
-    }
-    {
-        let s = format!("ab{}", 127 as char);
-        let ret = prefix_of_string(&s)?;
-        assert_eq!(ret, format!("ac{}", 127 as char));
-    }
-    {
-        let s = "我".to_string();
-        let ret = prefix_of_string(&s);
-        match ret {
-            Err(e) => {
-                assert_eq!(
-                    e.to_string(),
-                    common_exception::ErrorCode::OnlySupportAsciiChars(format!(
-                        "Only support ASCII characters: {}",
-                        "我"
-                    ))
-                    .to_string()
-                );
-            }
-            Ok(_) => panic!("MUST return error "),
-        }
-    }
-
-    Ok(())
-}
-
-#[test]
 fn replace_nth_char_test() {
     assert_eq!("a23".to_string(), replace_nth_char("a13", 1, '2'));
     assert_eq!("a13".to_string(), replace_nth_char("a13", 10, '2'));

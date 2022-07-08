@@ -14,8 +14,6 @@
 
 use std::string::FromUtf8Error;
 
-use common_exception::ErrorCode;
-
 /// Function that escapes special characters in a string.
 ///
 /// All characters except digit, alphabet and '_' are treated as special characters.
@@ -115,32 +113,4 @@ pub fn replace_nth_char(s: &str, idx: usize, newchar: char) -> String {
         .enumerate()
         .map(|(i, c)| if i == idx { newchar } else { c })
         .collect()
-}
-
-/// Return prefix of string(only support ASCII char).
-/// "a" -> "b"
-/// "1" -> "2"
-/// [96,97,127] -> [96,98,127]
-/// [127] -> [127, 127]
-/// [127,127,127, 127] -> [127,127,127, 127, 127]
-pub fn prefix_of_string(s: &str) -> common_exception::Result<String> {
-    for c in s.chars() {
-        if !c.is_ascii() {
-            return common_exception::Result::Err(ErrorCode::OnlySupportAsciiChars(format!(
-                "Only support ASCII characters: {}",
-                c
-            )));
-        }
-    }
-    let mut l = s.len();
-    while l > 0 {
-        l -= 1;
-        if let Some(c) = s.chars().nth(l) {
-            if c == 127 as char {
-                continue;
-            }
-            return Ok(replace_nth_char(s, l, (c as u8 + 1) as char));
-        }
-    }
-    Ok(format!("{}{}", s, 127 as char))
 }

@@ -16,7 +16,8 @@
 use std::ops::Deref;
 
 use async_trait::async_trait;
-use common_base::base::prefix_of_string;
+use common_base::base::replace_nth_char;
+use common_exception::ErrorCode;
 use common_meta_types::GetKVReply;
 use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
@@ -34,6 +35,34 @@ pub trait ApiBuilder<T>: Clone {
 
     /// Create a cluster of T
     async fn build_cluster(&self) -> Vec<T>;
+}
+
+/// Return a string that bigger than all the string prefix with input string(only support ASCII char).
+/// "a" -> "b"
+/// "1" -> "2"
+/// [96,97,127] -> [96,98,127]
+/// [127] -> [127, 127]
+/// [127,127,127, 127] -> [127,127,127, 127, 127]
+pub fn prefix_of_string(s: &str) -> common_exception::Result<String> {
+    for c in s.chars() {
+        if !c.is_ascii() {
+            return common_exception::Result::Err(ErrorCode::OnlySupportAsciiChars(format!(
+                "Only support ASCII characters: {}",
+                c
+            )));
+        }
+    }
+    let mut l = s.len();
+    while l > 0 {
+        l -= 1;
+        if let Some(c) = s.chars().nth(l) {
+            if c == 127 as char {
+                continue;
+            }
+            return Ok(replace_nth_char(s, l, (c as u8 + 1) as char));
+        }
+    }
+    Ok(format!("{}{}", s, 127 as char))
 }
 
 // return watch prefix (start, end) tuple(only support ASCII characters)
