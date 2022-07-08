@@ -148,7 +148,7 @@ async fn test_watch_txn_main(
 }
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_watch() -> anyhow::Result<()> {
+async fn test_watch() -> common_exception::Result<()> {
     // - Start a metasrv server.
     // - Watch some key.
     // - Write some data.
@@ -317,7 +317,7 @@ async fn test_watch() -> anyhow::Result<()> {
         let txn_key = k1.to_string();
         let txn_val = "txn_val".as_bytes().to_vec();
 
-        let (start, end) = get_start_and_end_of_prefix(watch_prefix);
+        let (start, end) = get_start_and_end_of_prefix(watch_prefix)?;
 
         let watch = WatchRequest {
             key: start,
@@ -396,21 +396,37 @@ async fn test_watch() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_get_start_and_end_of_prefix() -> anyhow::Result<()> {
+fn test_get_start_and_end_of_prefix() -> common_exception::Result<()> {
     assert_eq!(
         ("aa".to_string(), "ab".to_string()),
-        get_start_and_end_of_prefix("aa")
+        get_start_and_end_of_prefix("aa")?
     );
     assert_eq!(
         ("a1".to_string(), "a2".to_string()),
-        get_start_and_end_of_prefix("a1")
+        get_start_and_end_of_prefix("a1")?
     );
     {
         let str = 127 as char;
         let s = str.to_string();
-        let (_, end) = get_start_and_end_of_prefix(&s);
+        let (_, end) = get_start_and_end_of_prefix(&s)?;
         for byte in end.as_bytes() {
             assert_eq!(*byte, 127_u8);
+        }
+    }
+    {
+        let ret = get_start_and_end_of_prefix("我");
+        match ret {
+            Err(e) => {
+                assert_eq!(
+                    e.to_string(),
+                    common_exception::ErrorCode::OnlySupportAsciiChars(format!(
+                        "Only support ASCII characters: {}",
+                        "我"
+                    ))
+                    .to_string()
+                );
+            }
+            Ok(_) => panic!("MUST return error "),
         }
     }
     Ok(())

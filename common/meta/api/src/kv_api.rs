@@ -36,9 +36,9 @@ pub trait ApiBuilder<T>: Clone {
     async fn build_cluster(&self) -> Vec<T>;
 }
 
-// return watch prefix (start, end) tuple
-pub fn get_start_and_end_of_prefix(prefix: &str) -> (String, String) {
-    (prefix.to_string(), prefix_of_string(prefix))
+// return watch prefix (start, end) tuple(only support ASCII characters)
+pub fn get_start_and_end_of_prefix(prefix: &str) -> common_exception::Result<(String, String)> {
+    Ok((prefix.to_string(), prefix_of_string(prefix)?))
 }
 
 #[async_trait]
