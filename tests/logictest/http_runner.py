@@ -18,7 +18,8 @@ class TestHttp(logictest.SuiteRunner, ABC):
         return self._http
 
     def reset_connection(self):
-        self._http.reset_session()
+        if self._http is not None:
+            self._http.reset_session()
 
     def batch_execute(self, statement_list):
         for statement in statement_list:
