@@ -48,7 +48,7 @@ pub fn prune_columns(expr: &SExpr) -> Result<SExpr> {
             let children = expr
                 .children()
                 .iter()
-                .map(|child| prune_columns(child))
+                .map(prune_columns)
                 .collect::<Result<Vec<_>>>()?;
             Ok(SExpr::create(p.clone(), children, None))
         }

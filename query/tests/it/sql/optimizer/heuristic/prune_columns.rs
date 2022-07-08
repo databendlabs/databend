@@ -41,7 +41,7 @@ pub async fn test_heuristic_optimizer_prune_columns() -> Result<()> {
         },
         Suite {
             comment: "# Prune unused columns for simple plan nodes (Project, Filter, Aggregate...)".to_string(),
-            query: "select a from (select number as a, count(*) as b, sum(number) as c, number as d, number as e from numbers(1) group by a, d, e) where b > 1 order by d limit 1".to_string(),
+            query: "select a from (select number as a, number b, sum(number) as c, number as d, number as e from numbers(1) group by a, b, d, e) where b > 1 order by d limit 1".to_string(),
             rules: vec![],
         },
         Suite {
