@@ -227,6 +227,7 @@ impl InputFormat for TsvInputFormat {
                 let err = err.add_message_back(msg);
                 return Err(err);
             }
+            checkpoint_reader.pop_checkpoint();
             row_index += 1;
         }
 
@@ -354,6 +355,7 @@ impl FormatDiagnostic for TsvInputFormat {
             checkpint_reader.positionn(10, &mut buf)?;
             verbose_string(&buf, out);
             writeln!(out, " is not like {}", data_type_id).unwrap();
+            checkpint_reader.pop_checkpoint();
             return Ok(false);
         }
 
