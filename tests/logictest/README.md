@@ -90,6 +90,9 @@ select 1;
 1
 ```
 
+**tips** If you do not care about result, use statement ok instead of statement query
+**warning** A statement query need result, even you want skip a case, keep results in test content
+
 # Learn More
 
 Ref pr: https://github.com/datafuselabs/databend/pull/5048
