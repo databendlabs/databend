@@ -314,6 +314,11 @@ impl InputFormat for TsvInputFormat {
         }
         Ok(0)
     }
+
+    fn read_row_num(&self, state: &mut Box<dyn InputState>) -> Result<usize> {
+        let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
+        Ok(state.accepted_rows)
+    }
 }
 
 impl FormatDiagnostic for TsvInputFormat {
