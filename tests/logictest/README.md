@@ -91,7 +91,7 @@ select 1;
 ```
 
 **tips** If you do not care about result, use statement ok instead of statement query
-**warning** A statement query need result, even you want skip a case, keep results in test content
+**warning** A statement query need result, and even if you want to skip a case, you still need to keep the results in the test content
 
 # Learn More
 
