@@ -416,7 +416,6 @@ impl FormatDiagnostic for CsvInputFormat {
             return Ok(false);
         }
 
-
         Ok(true)
     }
 
