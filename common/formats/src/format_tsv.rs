@@ -186,6 +186,18 @@ impl InputFormat for TsvInputFormat {
         })
     }
 
+    fn set_state(
+        &self,
+        state: &mut Box<dyn InputState>,
+        file_name: String,
+        start_row_index: usize,
+    ) -> Result<()> {
+        let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
+        state.file_name = Some(file_name);
+        state.start_row_index = start_row_index;
+        Ok(())
+    }
+
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>> {
         let mut deserializers = Vec::with_capacity(self.schema.num_fields());
         for field in self.schema.fields() {
