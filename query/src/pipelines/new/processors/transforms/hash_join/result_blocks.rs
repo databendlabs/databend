@@ -196,7 +196,6 @@ impl JoinHashTable {
                 .unwrap()
                 .eval(&func_ctx, block)?;
             let filter_column = type_vector.vector();
-            dbg!(marker.len());
             assert_eq!(filter_column.len(), block.num_rows());
             for idx in 0..filter_column.len() {
                 match filter_column.get(idx) {
