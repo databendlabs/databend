@@ -9,6 +9,7 @@ select number as a, number + 1 as b from numbers(1) group by a, number order by 
 
 select '====SCALAR_EXPRESSION====';
 select extract(day from to_date('2022-05-13'));
+select date_trunc(month, to_date('2022-07-07'));
 
 -- Comparison expressions
 select '====COMPARISON====';

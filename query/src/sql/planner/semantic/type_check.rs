@@ -649,6 +649,12 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await?
             }
+            Expr::DateTrunc {
+                span, unit, date, ..
+            } => {
+                self.resolve_date_trunc(span, date, unit, required_type)
+                    .await?
+            }
             Expr::Trim {
                 span,
                 expr,
@@ -1121,6 +1127,73 @@ impl<'a> TypeChecker<'a> {
             .into(),
             func.return_type(),
         )))
+    }
+
+    #[async_recursion::async_recursion]
+    pub async fn resolve_date_trunc(
+        &mut self,
+        span: &[Token<'_>],
+        date: &Expr<'_>,
+        kind: &IntervalKind,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<Box<(Scalar, DataTypeImpl)>> {
+        match kind {
+            IntervalKind::Year => {
+                self.resolve_function(
+                    span,
+                    "toStartOfYear",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            IntervalKind::Month => {
+                self.resolve_function(
+                    span,
+                    "toStartOfMonth",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            IntervalKind::Day => {
+                self.resolve_function(
+                    span,
+                    "toStartOfDay",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            IntervalKind::Hour => {
+                self.resolve_function(
+                    span,
+                    "toStartOfHour",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            IntervalKind::Minute => {
+                self.resolve_function(
+                    span,
+                    "toStartOfMinute",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            IntervalKind::Second => {
+                self.resolve_function(
+                    span,
+                    "toStartOfSecond",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            _ => Err(ErrorCode::UnsupportedIntervalKind("Only these interval types are currently supported: year, month, day, hour, minute, second")),
+        }
     }
 
     pub async fn resolve_subquery(
