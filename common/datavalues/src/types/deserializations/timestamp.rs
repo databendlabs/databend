@@ -112,10 +112,17 @@ impl TypeDeserializer for TimestampDeserializer {
         reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
-        let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
+        let maybe_single_quote = reader.ignore_byte(b'\'')?;
+        let maybe_double_quote = if !maybe_single_quote {
+            reader.ignore_byte(b'"')?
+        } else {
+            false
+        };
         let ts = reader.read_timestamp_text(&format.timezone);
-        if maybe_quote {
-            reader.must_ignore(|f| f == b'\'' || f == b'"')?;
+        if maybe_single_quote {
+            reader.must_ignore_byte(b'\'')?;
+        } else if maybe_double_quote {
+            reader.must_ignore_byte(b'"')?;
         }
         if ts.is_err() {
             return Err(ts.err().unwrap());
