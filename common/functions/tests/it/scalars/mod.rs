@@ -18,6 +18,7 @@ mod comparisons;
 mod conditionals;
 mod dates;
 mod expressions;
+mod geos;
 mod hashes;
 mod logics;
 mod maths;

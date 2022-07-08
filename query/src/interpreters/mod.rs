@@ -40,6 +40,7 @@ mod interpreter_insert_v2;
 mod interpreter_insert_with_stream;
 mod interpreter_kill;
 mod interpreter_list;
+mod interpreter_presign;
 mod interpreter_privilege_grant;
 mod interpreter_privilege_revoke;
 mod interpreter_query_log;

@@ -20,3 +20,5 @@ pub use arrow_format;
 pub use parquet2 as parquet;
 pub use parquet_read::read_columns_many_async;
 pub use parquet_write::write_parquet_file;
+
+pub type ArrayRef = Box<dyn ::arrow::array::Array>;

@@ -123,10 +123,6 @@ impl UpdateList {
             .updated_triggers
             .push(Arc::new(UnsafeCell::new(update_trigger)));
         inner.updated_triggers.last().unwrap().get()
-        // let update_trigger = UnsafeCell::new(UpdateTrigger::create(edge_index, self.clone()));
-        // let res = update_trigger.get();
-        // inner.updated_triggers.push(update_trigger);
-        // res
     }
 }
 

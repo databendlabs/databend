@@ -1,0 +1,2 @@
+fuzzingbook
+mysql-connector

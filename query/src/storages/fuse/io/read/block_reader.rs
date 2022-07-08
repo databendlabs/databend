@@ -103,7 +103,7 @@ impl BlockReader {
             vec![decompressor],
             vec![primitive_type],
             field,
-            rows,
+            Some(rows),
         )?)
     }
 

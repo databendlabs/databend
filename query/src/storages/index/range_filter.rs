@@ -39,7 +39,7 @@ pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;
 pub struct ColumnStatistics {
     pub min: DataValue,
     pub max: DataValue,
-    pub null_count: u64,
+    pub unset_bits: u64,
     pub in_memory_size: u64,
 }
 
@@ -238,7 +238,7 @@ impl StatColumn {
                     k
                 ))
             })?;
-            return Ok(Some(Series::from_data(vec![stat.null_count])));
+            return Ok(Some(Series::from_data(vec![stat.unset_bits])));
         }
 
         let mut single_point = true;

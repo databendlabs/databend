@@ -5562,3 +5562,54 @@ ShowSettings {
 }
 
 
+---------- Input ----------
+PRESIGN @my_stage/path/to/file
+---------- Output ---------
+PRESIGN @my_stage/path/to/file EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation {
+            name: "my_stage",
+            path: "/path/to/file",
+        },
+        expire: 3600s,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN DOWNLOAD @my_stage/path/to/file
+---------- Output ---------
+PRESIGN @my_stage/path/to/file EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation {
+            name: "my_stage",
+            path: "/path/to/file",
+        },
+        expire: 3600s,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200
+---------- Output ---------
+PRESIGN @my_stage/path/to/file EXPIRE = 7200
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Upload,
+        location: StageLocation {
+            name: "my_stage",
+            path: "/path/to/file",
+        },
+        expire: 7200s,
+    },
+)
+
+

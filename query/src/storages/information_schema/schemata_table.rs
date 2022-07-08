@@ -34,14 +34,7 @@ impl SchemataTable {
             NULL AS default_character_set_catalog,
             NULL AS default_character_set_schema,
             NULL AS default_character_set_name,
-            NULL AS sql_path,
-            name AS CATALOG_NAME,
-            name AS SCHEMA_NAME,
-            'default' AS SCHEMA_OWNER,
-            NULL AS DEFAULT_CHARACTER_SET_CATALOG,
-            NULL AS DEFAULT_CHARACTER_SET_SCHEMA,
-            NULL AS DEFAULT_CHARACTER_SET_NAME,
-            NULL AS SQL_PATH
+            NULL AS sql_path
         FROM system.databases;";
 
         let mut options = BTreeMap::new();

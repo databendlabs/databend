@@ -49,6 +49,7 @@ mod distinct;
 mod insert;
 mod join;
 mod limit;
+mod presign;
 mod project;
 mod scalar;
 mod scalar_common;
@@ -121,17 +122,19 @@ impl<'a> Binder {
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
 
             // Databases
-            Statement::ShowDatabases(stmt) => self.bind_show_databases(stmt).await?,
+            Statement::ShowDatabases(stmt) => self.bind_show_databases(bind_context, stmt).await?,
             Statement::ShowCreateDatabase(stmt) => self.bind_show_create_database(stmt).await?,
             Statement::CreateDatabase(stmt) => self.bind_create_database(stmt).await?,
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
 
             // Tables
-            Statement::ShowTables(stmt) => self.bind_show_tables(stmt).await?,
+            Statement::ShowTables(stmt) => self.bind_show_tables(bind_context, stmt).await?,
             Statement::ShowCreateTable(stmt) => self.bind_show_create_table(stmt).await?,
             Statement::DescribeTable(stmt) => self.bind_describe_table(stmt).await?,
-            Statement::ShowTablesStatus(stmt) => self.bind_show_tables_status(stmt).await?,
+            Statement::ShowTablesStatus(stmt) => {
+                self.bind_show_tables_status(bind_context, stmt).await?
+            }
             Statement::CreateTable(stmt) => self.bind_create_table(stmt).await?,
             Statement::DropTable(stmt) => self.bind_drop_table(stmt).await?,
             Statement::UndropTable(stmt) => self.bind_undrop_table(stmt).await?,
@@ -252,6 +255,8 @@ impl<'a> Binder {
                 args: stmt.args.clone(),
             })),
 
+            Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
+
             _ => {
                 return Err(ErrorCode::UnImplement(format!(
                     "UnImplemented stmt {stmt} in binder"
@@ -278,7 +283,7 @@ impl<'a> Binder {
             table_name,
             column_name,
             index,
-            data_type,
+            data_type: Box::new(data_type),
             visible_in_unqualified_wildcard: true,
         }
     }

@@ -91,10 +91,13 @@ where
         _format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
-        let date = reader.read_date_text()?;
-        let days = uniform(date);
-        check_date(days.as_i32())?;
+        let date = reader.read_date_text();
         reader.must_ignore_byte(b'\'')?;
+        if date.is_err() {
+            return Err(date.err().unwrap());
+        }
+        let days = uniform(date.unwrap());
+        check_date(days.as_i32())?;
 
         self.builder.append_value(days);
         Ok(())
@@ -118,12 +121,15 @@ where
         _format: &FormatSettings,
     ) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
-        let date = reader.read_date_text()?;
-        let days = uniform(date);
-        check_date(days.as_i32())?;
+        let date = reader.read_date_text();
         if maybe_quote {
             reader.must_ignore(|f| f == b'\'' || f == b'"')?;
         }
+        if date.is_err() {
+            return Err(date.err().unwrap());
+        }
+        let days = uniform(date.unwrap());
+        check_date(days.as_i32())?;
         self.builder.append_value(days);
         Ok(())
     }

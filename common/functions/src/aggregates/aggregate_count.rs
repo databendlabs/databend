@@ -86,7 +86,7 @@ impl AggregateFunction for AggregateCountFunction {
         let state = place.get::<AggregateCountState>();
 
         let nulls = match validity {
-            Some(b) => b.null_count(),
+            Some(b) => b.unset_bits(),
             None => 0,
         };
 

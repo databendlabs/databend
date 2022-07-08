@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::ArrayRef;
 
 use crate::prelude::*;
 
@@ -92,7 +93,7 @@ impl Column for StructColumn {
     fn as_arrow_array(&self) -> ArrayRef {
         let arrow_type = self.data_type().arrow_type();
         let arrays = self.values.iter().map(|v| v.as_arrow_array()).collect();
-        Arc::new(StructArray::from_data(arrow_type, arrays, None))
+        Box::new(StructArray::from_data(arrow_type, arrays, None))
     }
 
     fn arc(&self) -> ColumnRef {

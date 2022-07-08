@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt::Write;
 use std::collections::BTreeMap;
 
 use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::*;
+use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -38,9 +42,73 @@ use crate::sql::ColumnBinding;
 use crate::sql::ScalarExpr;
 use crate::sql::OPT_KEY_DATABASE_ID;
 
+struct SelectBuilder {
+    from: String,
+    columns: Vec<String>,
+    filters: Vec<String>,
+    order_bys: Vec<String>,
+}
+
+impl SelectBuilder {
+    fn from(table_name: &str) -> SelectBuilder {
+        SelectBuilder {
+            from: table_name.to_owned(),
+            columns: vec![],
+            filters: vec![],
+            order_bys: vec![],
+        }
+    }
+    fn with_column(&mut self, col_name: impl Into<String>) -> &mut Self {
+        self.columns.push(col_name.into());
+        self
+    }
+
+    fn with_filter(&mut self, col_name: impl Into<String>) -> &mut Self {
+        self.filters.push(col_name.into());
+        self
+    }
+
+    fn with_order_by(&mut self, order_by: &str) -> &mut Self {
+        self.order_bys.push(order_by.to_owned());
+        self
+    }
+
+    fn build(self) -> String {
+        let mut query = String::new();
+        let mut columns = String::new();
+        let s = self.columns.join(",");
+        if s.is_empty() {
+            write!(columns, "*").unwrap();
+        } else {
+            write!(columns, "{s}").unwrap();
+        }
+
+        let mut order_bys = String::new();
+        let s = self.order_bys.join(",");
+        if s.is_empty() {
+            write!(order_bys, "{s}").unwrap();
+        } else {
+            write!(order_bys, "ORDER BY {s}").unwrap();
+        }
+
+        let mut filters = String::new();
+        let s = self.filters.join(" and ");
+        if !s.is_empty() {
+            write!(filters, "where {s}").unwrap();
+        } else {
+            write!(filters, "").unwrap();
+        }
+
+        let from = self.from;
+        write!(query, "SELECT {columns} FROM {from} {filters} {order_bys} ").unwrap();
+        query
+    }
+}
+
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_show_tables(
         &mut self,
+        bind_context: &BindContext,
         stmt: &ShowTablesStmt<'a>,
     ) -> Result<Plan> {
         let ShowTablesStmt {
@@ -50,19 +118,67 @@ impl<'a> Binder {
             with_history,
         } = stmt;
 
-        let database = database.as_ref().map(|ident| ident.name.to_lowercase());
-        let kind = match limit {
-            Some(ShowLimit::Like { pattern }) => PlanShowKind::Like(pattern.clone()),
-            Some(ShowLimit::Where { selection }) => PlanShowKind::Like(selection.to_string()),
-            None => PlanShowKind::All,
+        let database = database
+            .clone()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_database());
+
+        let mut select_builder = SelectBuilder::from("information_schema.tables");
+
+        if *full {
+            select_builder
+                .with_column(format!("table_name as Tables_in_{database}"))
+                .with_column("table_type as Table_type")
+                .with_column("table_catalog")
+                .with_column("engine")
+                .with_column("create_time");
+            if *with_history {
+                select_builder.with_column("drop_time");
+            } else {
+                select_builder
+                    .with_column("num_rows")
+                    .with_column("data_size")
+                    .with_column("data_compressed_size")
+                    .with_column("index_size");
+            };
+        } else {
+            select_builder.with_column(format!("table_name as Tables_in_{database}"));
+            if *with_history {
+                select_builder.with_column("drop_time");
+            };
+        }
+
+        select_builder
+            .with_order_by("table_schema")
+            .with_order_by("table_name");
+
+        // filter out dropped tables if not showing history
+        if !with_history {
+            select_builder.with_filter("drop_time = 'NULL'");
         };
 
-        Ok(Plan::ShowTables(Box::new(ShowTablesPlan {
-            kind,
-            showfull: *full,
-            fromdb: database,
-            with_history: *with_history,
-        })))
+        let query = match limit {
+            None => {
+                select_builder.with_filter(format!("table_schema = '{database}'"));
+                select_builder.build()
+            }
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder
+                    .with_filter(format!("table_schema = '{database}'"))
+                    .with_filter(format!("table_name LIKE '{pattern}'"));
+                select_builder.build()
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder
+                    .with_filter(format!("table_schema = '{database}'"))
+                    .with_filter(format!("({selection})"));
+                select_builder.build()
+            }
+        };
+        let tokens = tokenize_sql(query.as_str())?;
+        let backtrace = Backtrace::new();
+        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
+        self.bind_statement(bind_context, &stmt).await
     }
 
     pub(in crate::sql::planner::binder) async fn bind_show_create_table(
@@ -134,21 +250,53 @@ impl<'a> Binder {
 
     pub(in crate::sql::planner::binder) async fn bind_show_tables_status(
         &mut self,
+        bind_context: &BindContext,
         stmt: &ShowTablesStatusStmt<'a>,
     ) -> Result<Plan> {
-        let ShowTablesStatusStmt { database, limit } = stmt;
+        let ShowTablesStatusStmt {
+            database: db,
+            limit,
+        } = stmt;
 
-        let database = database.as_ref().map(|ident| ident.name.to_lowercase());
-        let kind = match limit {
-            Some(ShowLimit::Like { pattern }) => PlanShowKind::Like(pattern.clone()),
-            Some(ShowLimit::Where { selection }) => PlanShowKind::Like(selection.to_string()),
-            None => PlanShowKind::All,
+        let database = db
+            .clone()
+            .map(|ident| ident.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_database());
+
+        let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
+        NULL AS Row_format, num_rows AS Rows, NULL AS Avg_row_length, data_size AS Data_length, \
+        NULL AS Max_data_length, NULL AS Index_length, NULL AS Data_free, NULL AS Auto_increment, \
+        created_on AS Create_time, NULL AS Update_time, NULL AS Check_time, NULL AS Collation, \
+        NULL AS Checksum, '' AS Comment"
+            .to_string();
+
+        // Use `system.tables` as the "base" table to construct the result-set of `SHOW TABLE STATUS ..`
+        //
+        // To constraint the schema of the final result-set,
+        //  `(select ${select_cols} from system.tables where ..)`
+        // is used as a derived table.
+        // (unlike mysql, alias of derived table is not required in databend).
+        let query = match limit {
+            None => format!(
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                ORDER BY Name",
+                select_cols, database
+            ),
+            Some(ShowLimit::Like { pattern }) => format!(
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+            WHERE Name LIKE '{}' ORDER BY Name",
+                select_cols, database, pattern
+            ),
+            Some(ShowLimit::Where { selection }) => format!(
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+            WHERE ({}) ORDER BY Name",
+                select_cols, database, selection
+            ),
         };
-
-        Ok(Plan::ShowTablesStatus(Box::new(ShowTablesStatusPlan {
-            kind,
-            fromdb: database,
-        })))
+        let tokens = tokenize_sql(query.as_str())?;
+        let backtrace = Backtrace::new();
+        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
+        self.bind_statement(bind_context, &stmt).await
     }
 
     pub(in crate::sql::planner::binder) async fn bind_create_table(
@@ -215,7 +363,7 @@ impl<'a> Binder {
                     .map(|column_binding| {
                         DataField::new(
                             &column_binding.column_name,
-                            column_binding.data_type.clone(),
+                            *column_binding.data_type.clone(),
                         )
                     })
                     .collect();
@@ -641,7 +789,7 @@ impl<'a> Binder {
                 column_name: field.name().clone(),
                 // A dummy index is fine, since we won't actually evaluate the expression
                 index: 0,
-                data_type: field.data_type().clone(),
+                data_type: Box::new(field.data_type().clone()),
                 visible_in_unqualified_wildcard: false,
             };
             bind_context.columns.push(column);

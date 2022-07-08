@@ -31,6 +31,7 @@ use common_planners::SelectPlan;
 use common_planners::SinkPlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
+use common_planners::WindowFuncPlan;
 
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
@@ -79,6 +80,7 @@ impl BuilderVisitor {
             PlanNode::Sink(node) => self.visit_sink(node),
             PlanNode::Having(node) => self.visit_having(node),
             PlanNode::Expression(node) => self.visit_expression(node),
+            PlanNode::WindowFunc(node) => self.visit_window_func(node),
             _ => Err(ErrorCode::UnknownPlan("Unknown plan type")),
         }
     }
@@ -128,6 +130,10 @@ impl BuilderVisitor {
     }
 
     fn visit_aggr_part(&self, node: &AggregatorPartialPlan) -> Result<Box<dyn QueryFragment>> {
+        self.visit(&node.input)
+    }
+
+    fn visit_window_func(&self, node: &WindowFuncPlan) -> Result<Box<dyn QueryFragment>> {
         self.visit(&node.input)
     }
 

@@ -68,6 +68,7 @@ impl ResizeProcessor {
 
             if !input.is_finished() {
                 finished = false;
+                input.set_need_data();
 
                 if input.has_data() {
                     self.cur_input_index = index;
@@ -125,12 +126,6 @@ impl ResizeProcessor {
         }
     }
 
-    fn inputs_need_data(&mut self) {
-        for input in &self.inputs {
-            input.set_need_data();
-        }
-    }
-
     fn inputs_not_need_data(&mut self) {
         for input in &self.inputs {
             input.set_not_need_data();
@@ -155,13 +150,16 @@ impl Processor for ResizeProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if let Some(cur_output) = self.get_current_output() {
+        let current_input = self.get_current_input();
+        let current_output = self.get_current_output();
+
+        if let Some(cur_output) = current_output {
             if cur_output.is_finished() {
                 self.finish_inputs();
                 return Ok(Event::Finished);
             }
 
-            if let Some(cur_input) = self.get_current_input() {
+            if let Some(cur_input) = current_input {
                 if cur_input.is_finished() {
                     self.finish_outputs();
                     return Ok(Event::Finished);
@@ -171,7 +169,6 @@ impl Processor for ResizeProcessor {
                 return Ok(Event::NeedConsume);
             }
 
-            self.inputs_need_data();
             return Ok(Event::NeedData);
         }
 
