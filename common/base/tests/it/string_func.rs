@@ -36,3 +36,9 @@ fn mask_string_test() {
     assert_eq!(mask_string("string", 3), "******ing".to_string());
     assert_eq!(mask_string("string", 20), "string".to_string());
 }
+
+#[test]
+fn replace_nth_char_test() {
+    assert_eq!("a23".to_string(), replace_nth_char("a13", 1, '2'));
+    assert_eq!("a13".to_string(), replace_nth_char("a13", 10, '2'));
+}
