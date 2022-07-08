@@ -317,6 +317,8 @@ pub enum TokenKind {
     DATE_ADD,
     #[token("DATE_SUB", ignore(ascii_case))]
     DATE_SUB,
+    #[token("DATE_TRUNC", ignore(ascii_case))]
+    DATE_TRUNC,
     #[token("DATETIME", ignore(ascii_case))]
     DATETIME,
     #[token("DAY", ignore(ascii_case))]
@@ -885,6 +887,7 @@ impl TokenKind {
             | TokenKind::WITH
             | TokenKind::DATE_ADD
             | TokenKind::DATE_SUB
+            | TokenKind::DATE_TRUNC
             if !after_as => true,
             _ => false
         }
