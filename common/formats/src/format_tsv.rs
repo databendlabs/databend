@@ -42,6 +42,8 @@ pub struct TsvInputState {
     pub accepted_bytes: usize,
     pub need_more_data: bool,
     pub ignore_if_first: Option<u8>,
+    pub start_row_index: usize,
+    pub file_name: Option<String>,
 }
 
 impl InputState for TsvInputState {
@@ -179,6 +181,8 @@ impl InputFormat for TsvInputFormat {
             accepted_bytes: 0,
             need_more_data: false,
             ignore_if_first: None,
+            start_row_index: 0,
+            file_name: None,
         })
     }
 
@@ -202,7 +206,8 @@ impl InputFormat for TsvInputFormat {
                 let checkpoint_buffer = checkpoint_reader.get_checkpoint_buffer_end();
                 let msg = self.get_diagnostic_info(
                     checkpoint_buffer,
-                    row_index,
+                    &state.file_name,
+                    row_index + state.start_row_index,
                     self.schema.clone(),
                     self.min_accepted_rows,
                     self.settings.clone(),

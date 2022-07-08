@@ -63,13 +63,26 @@ pub trait FormatDiagnostic {
     fn get_diagnostic_info(
         &self,
         buf: &[u8],
+        file_name: &Option<String>,
         row_index: usize,
         schema: DataSchemaRef,
         min_accepted_rows: usize,
         settings: FormatSettings,
     ) -> Result<String> {
         let mut out = String::new();
-        write!(out, "\nError occurs at row {}:\n", row_index).unwrap();
+        match file_name {
+            Some(file_name) => {
+                write!(
+                    out,
+                    "\nError occurs at file: {}, row: {}:\n",
+                    file_name, row_index
+                )
+                .unwrap();
+            }
+            None => {
+                write!(out, "\nError occurs at row: {}:\n", row_index).unwrap();
+            }
+        }
         self.parse_row_and_print_diagnostic_info(
             buf,
             schema,

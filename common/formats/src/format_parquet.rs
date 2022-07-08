@@ -37,6 +37,8 @@ use crate::InputState;
 
 pub struct ParquetInputState {
     pub memory: Vec<u8>,
+    pub start_row_index: usize,
+    pub file_name: String,
 }
 
 impl InputState for ParquetInputState {
@@ -102,7 +104,11 @@ impl ParquetInputFormat {
 
 impl InputFormat for ParquetInputFormat {
     fn create_state(&self) -> Box<dyn InputState> {
-        Box::new(ParquetInputState { memory: vec![] })
+        Box::new(ParquetInputState {
+            memory: vec![],
+            start_row_index: 0,
+            file_name: "".to_string(),
+        })
     }
 
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>> {

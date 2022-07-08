@@ -31,6 +31,15 @@ pub trait InputFormat: Send + Sync {
 
     fn create_state(&self) -> Box<dyn InputState>;
 
+    fn set_state(
+        &self,
+        _state: &mut Box<dyn InputState>,
+        _file_name: String,
+        _start_row_index: usize,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>>;
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
@@ -43,6 +52,10 @@ pub trait InputFormat: Send + Sync {
         _deserializers: &mut Vec<TypeDeserializerImpl>,
         _row_index: usize,
     ) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn read_row_num(&self, _state: &mut Box<dyn InputState>) -> Result<usize> {
         unimplemented!()
     }
 }

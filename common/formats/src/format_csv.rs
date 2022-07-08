@@ -42,6 +42,8 @@ pub struct CsvInputState {
     pub accepted_bytes: usize,
     pub need_more_data: bool,
     pub ignore_if_first: Option<u8>,
+    pub start_row_index: usize,
+    pub file_name: Option<String>,
 }
 
 impl InputState for CsvInputState {
@@ -206,7 +208,21 @@ impl InputFormat for CsvInputFormat {
             accepted_bytes: 0,
             need_more_data: false,
             ignore_if_first: None,
+            start_row_index: 0,
+            file_name: None,
         })
+    }
+
+    fn set_state(
+        &self,
+        state: &mut Box<dyn InputState>,
+        file_name: String,
+        start_row_index: usize,
+    ) -> Result<()> {
+        let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
+        state.file_name = Some(file_name);
+        state.start_row_index = start_row_index;
+        Ok(())
     }
 
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>> {
@@ -230,7 +246,8 @@ impl InputFormat for CsvInputFormat {
                 let checkpoint_buffer = checkpoint_reader.get_checkpoint_buffer_end();
                 let msg = self.get_diagnostic_info(
                     checkpoint_buffer,
-                    row_index,
+                    &state.file_name,
+                    row_index + state.start_row_index,
                     self.schema.clone(),
                     self.min_accepted_rows,
                     self.settings.clone(),
@@ -336,6 +353,11 @@ impl InputFormat for CsvInputFormat {
         }
         Ok(0)
     }
+
+    fn read_row_num(&self, state: &mut Box<dyn InputState>) -> Result<usize> {
+        let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
+        Ok(state.accepted_rows)
+    }
 }
 
 impl FormatDiagnostic for CsvInputFormat {
@@ -358,6 +380,8 @@ impl FormatDiagnostic for CsvInputFormat {
             data_type.data_type_id()
         )
         .unwrap();
+
+        checkpint_reader.ignore_white_spaces()?;
 
         checkpint_reader.push_checkpoint();
         let has_err: Result<()> = deserializer.de_text_csv(checkpint_reader, &settings);

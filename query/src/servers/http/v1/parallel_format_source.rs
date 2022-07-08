@@ -137,7 +137,12 @@ impl MultipartWorker for ParallelMultipartWorker {
                                         continue 'read;
                                     }
 
+                                    let mut read_row_num = 0;
+
                                     while !buf_slice.is_empty() {
+                                        self.input_format
+                                            .set_state(&mut state, filename.clone(), read_row_num)
+                                            .unwrap();
                                         let read_size =
                                             match self.input_format.read_buf(buf_slice, &mut state)
                                             {
@@ -147,6 +152,9 @@ impl MultipartWorker for ParallelMultipartWorker {
                                                     break 'outer;
                                                 }
                                             };
+
+                                        read_row_num +=
+                                            self.input_format.read_row_num(&mut state).unwrap();
 
                                         has_data_in_state = true;
                                         if read_size < buf_slice.len() {
