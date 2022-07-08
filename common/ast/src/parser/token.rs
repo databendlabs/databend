@@ -677,6 +677,12 @@ pub enum TokenKind {
     RANDOM,
     #[token("IFNULL", ignore(ascii_case))]
     IFNULL,
+    #[token("NULLS", ignore(ascii_case))]
+    NULLS,
+    #[token("FIRST", ignore(ascii_case))]
+    FIRST,
+    #[token("LAST", ignore(ascii_case))]
+    LAST,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

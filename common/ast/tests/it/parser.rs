@@ -288,7 +288,7 @@ fn test_query() {
                         c_custkey
                 ) as c_orders
             group by c_count
-            order by custdist desc, c_count asc, totacctbal
+            order by custdist desc nulls first, c_count asc, totacctbal nulls last
             limit 10, totacctbal"#,
         r#"select * from t1 union select * from t2"#,
         r#"select * from t1 union select * from t2 union select * from t3"#,
