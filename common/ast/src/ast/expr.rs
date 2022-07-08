@@ -16,6 +16,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_datavalues::IntervalKind;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
@@ -303,6 +305,22 @@ pub enum BinaryOperator {
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
+}
+
+impl BinaryOperator {
+    pub fn to_contrary(&self) -> Result<Self> {
+        match &self {
+            BinaryOperator::Gt => Ok(BinaryOperator::Lte),
+            BinaryOperator::Lt => Ok(BinaryOperator::Gte),
+            BinaryOperator::Gte => Ok(BinaryOperator::Lt),
+            BinaryOperator::Lte => Ok(BinaryOperator::Gt),
+            BinaryOperator::Eq => Ok(BinaryOperator::NotEq),
+            BinaryOperator::NotEq => Ok(BinaryOperator::Eq),
+            _ => Err(ErrorCode::UnImplement(format!(
+                "Converting {self} to its relative is not currently supported"
+            ))),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
