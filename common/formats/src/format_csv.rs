@@ -362,59 +362,22 @@ impl InputFormat for CsvInputFormat {
 
 #[allow(clippy::format_push_string)]
 impl FormatDiagnostic for CsvInputFormat {
-    fn deserialize_field_and_print_diagnositc_info(
+    fn parse_field_start_with_diagnostic_info(
         &self,
-        col_index: usize,
-        deserializer: &mut TypeDeserializerImpl,
-        checkpint_reader: &mut NestedCheckpointReader<MemoryReader>,
-        settings: FormatSettings,
-        out: &mut String,
+        checkpoint_reader: &mut NestedCheckpointReader<MemoryReader>,
+        _out: &mut String,
     ) -> Result<bool> {
-        let col_name = self.schema.field(col_index).name();
-        let data_type = self.schema.field(col_index).data_type();
-
-        out.push_str(&format!(
-            "\tColumn: {}, Name: {}, Type: {}",
-            col_index,
-            col_name,
-            data_type.data_type_id()
-        ));
-
-        checkpint_reader.ignore_white_spaces()?;
-
-        checkpint_reader.push_checkpoint();
-        let has_err: Result<()> = deserializer.de_text_csv(checkpint_reader, &settings);
-
-        let data_type_id = data_type.data_type_id();
-        if (data_type_id.is_integer() || data_type_id.is_date_or_date_time())
-            && checkpint_reader.get_top_checkpoint_pos() == checkpint_reader.pos
-        {
-            out.push_str("\tError: text ");
-            let mut buf: Vec<u8> = Vec::new();
-            checkpint_reader.positionn(10, &mut buf)?;
-            verbose_string(&buf, out);
-            out.push_str(&format!(" is not like {}\n", data_type_id));
-            checkpint_reader.pop_checkpoint();
-            return Ok(false);
-        }
-
-        out.push_str(", Parsed text: ");
-        verbose_string(checkpint_reader.get_checkpoint_buffer(), out);
-        out.push('\n');
-        checkpint_reader.pop_checkpoint();
-
-        if has_err.is_err() {
-            if data_type.data_type_id().is_date_time() {
-                out.push_str("\tERROR: DateTime must be in YYYY-MM-DD hh:mm:ss format.\n");
-            } else if data_type.data_type_id().is_date() {
-                out.push_str("\tERROR: Date must be in YYYY-MM-DD format.\n");
-            } else {
-                out.push_str("\tERROR\n")
-            }
-            return Ok(false);
-        }
-
+        checkpoint_reader.ignore_white_spaces()?;
         Ok(true)
+    }
+
+    fn deserialize_field(
+        &self,
+        deserializer: &mut TypeDeserializerImpl,
+        checkpoint_reader: &mut NestedCheckpointReader<MemoryReader>,
+        settings: FormatSettings,
+    ) -> Result<()> {
+        deserializer.de_text_csv(checkpoint_reader, &settings)
     }
 
     fn parse_field_delimiter_with_diagnostic_info(

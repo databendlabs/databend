@@ -237,7 +237,12 @@ pub trait FormatDiagnostic {
         }
 
         for (column_index, deserializer) in deserializers.iter_mut().enumerate() {
+            if !self.parse_field_start_with_diagnostic_info(&mut checkpoint_reader, out)? {
+                return Ok(false);
+            }
+
             if !self.deserialize_field_and_print_diagnositc_info(
+                schema.clone(),
                 column_index,
                 deserializer,
                 &mut checkpoint_reader,
@@ -265,14 +270,75 @@ pub trait FormatDiagnostic {
         Ok(true)
     }
 
+    fn parse_field_start_with_diagnostic_info(
+        &self,
+        _checkpoint_reader: &mut NestedCheckpointReader<MemoryReader>,
+        _out: &mut String,
+    ) -> Result<bool> {
+        Ok(true)
+    }
+
     fn deserialize_field_and_print_diagnositc_info(
         &self,
+        schema: DataSchemaRef,
         col_index: usize,
         deserializer: &mut TypeDeserializerImpl,
         checkpoint_reader: &mut NestedCheckpointReader<MemoryReader>,
         settings: FormatSettings,
         out: &mut String,
-    ) -> Result<bool>;
+    ) -> Result<bool> {
+        let col_name = schema.field(col_index).name();
+        let data_type = schema.field(col_index).data_type();
+
+        out.push_str(&format!(
+            "\tColumn: {}, Name: {}, Type: {}",
+            col_index,
+            col_name,
+            data_type.data_type_id()
+        ));
+
+        checkpoint_reader.push_checkpoint();
+
+        let has_err = self.deserialize_field(deserializer, checkpoint_reader, settings);
+
+        let data_type_id = data_type.data_type_id();
+        if (data_type_id.is_integer() || data_type_id.is_date_or_date_time())
+            && checkpoint_reader.get_top_checkpoint_pos() == checkpoint_reader.pos
+        {
+            out.push_str("\tError: text ");
+            let mut buf: Vec<u8> = Vec::new();
+            checkpoint_reader.positionn(10, &mut buf)?;
+            verbose_string(&buf, out);
+            out.push_str(&format!(" is not like {}\n", data_type_id));
+            checkpoint_reader.pop_checkpoint();
+            return Ok(false);
+        }
+
+        out.push_str(", Parsed text: ");
+        verbose_string(checkpoint_reader.get_checkpoint_buffer(), out);
+        out.push('\n');
+        checkpoint_reader.pop_checkpoint();
+
+        if has_err.is_err() {
+            if data_type.data_type_id().is_date_time() {
+                out.push_str("\tERROR: DateTime must be in YYYY-MM-DD hh:mm:ss format.\n");
+            } else if data_type.data_type_id().is_date() {
+                out.push_str("\tERROR: Date must be in YYYY-MM-DD format.\n");
+            } else {
+                out.push_str("\tERROR\n")
+            }
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    fn deserialize_field(
+        &self,
+        deserializer: &mut TypeDeserializerImpl,
+        checkpoint_reader: &mut NestedCheckpointReader<MemoryReader>,
+        settings: FormatSettings,
+    ) -> Result<()>;
 
     fn parse_field_delimiter_with_diagnostic_info(
         &self,
