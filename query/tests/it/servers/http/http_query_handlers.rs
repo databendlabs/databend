@@ -1107,6 +1107,20 @@ async fn test_download(v2: u64) -> Result<()> {
             fmt
         );
     }
+
+    // test download with limits
+    let uri = format!("/v1/query/{query_id}/download?limit=1");
+    let resp = get_uri(&ep, &uri).await;
+    assert_eq!(resp.status(), StatusCode::OK, "{:?}", resp);
+    let exp = "0,1\n";
+    assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
+
+    let uri = format!("/v1/query/{query_id}/download?limit=0");
+    let resp = get_uri(&ep, &uri).await;
+    assert_eq!(resp.status(), StatusCode::OK, "{:?}", resp);
+    let exp = "0,1\n1,2\n";
+    assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
+
     Ok(())
 }
 

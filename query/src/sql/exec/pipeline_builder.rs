@@ -32,12 +32,14 @@ use crate::common::Evaluator;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::transforms::ExpressionTransformV2;
 use crate::pipelines::new::processors::transforms::TransformFilterV2;
+use crate::pipelines::new::processors::transforms::TransformMarkJoin;
 use crate::pipelines::new::processors::transforms::TransformProject;
 use crate::pipelines::new::processors::transforms::TransformRename;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
 use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::new::processors::JoinHashTable;
+use crate::pipelines::new::processors::MarkJoinCompactor;
 use crate::pipelines::new::processors::SinkBuildHashTable;
 use crate::pipelines::new::processors::Sinker;
 use crate::pipelines::new::processors::SortMergeCompactor;
@@ -523,7 +525,7 @@ impl PipelineBuilder {
         )?;
         let hash_join_state = JoinHashTable::create_join_state(
             ctx.clone(),
-            join_type,
+            join_type.clone(),
             build_keys,
             probe_keys,
             predicate.as_ref(),
@@ -544,6 +546,17 @@ impl PipelineBuilder {
                 output_schema.clone(),
             ))
         })?;
+
+        if join_type == JoinType::Mark {
+            pipeline.resize(1)?;
+            pipeline.add_transform(|input, output| {
+                TransformMarkJoin::try_create(
+                    input,
+                    output,
+                    MarkJoinCompactor::create(hash_join_state.clone()),
+                )
+            })?;
+        }
 
         self.pipelines.push(child_pipeline);
 

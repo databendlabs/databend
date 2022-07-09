@@ -23,6 +23,8 @@ mod schema_api_impl;
 mod schema_api_keys;
 mod schema_api_test_suite;
 
+pub use kv_api::get_start_and_end_of_prefix;
+pub use kv_api::prefix_of_string;
 pub use kv_api::ApiBuilder;
 pub use kv_api::AsKVApi;
 pub use kv_api::KVApi;

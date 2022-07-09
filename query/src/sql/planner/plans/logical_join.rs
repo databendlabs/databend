@@ -109,6 +109,9 @@ impl LogicalPlan for LogicalInnerJoin {
 
         // Derive output columns
         let mut output_columns = left_prop.output_columns;
+        if let Some(mark_index) = self.marker_index {
+            output_columns.insert(mark_index);
+        }
         output_columns = output_columns
             .union(&right_prop.output_columns)
             .cloned()

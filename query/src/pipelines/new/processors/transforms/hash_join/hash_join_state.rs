@@ -37,4 +37,7 @@ pub trait HashJoinState: Send + Sync {
     /// Finish building hash table, will be called only once as soon as all handles
     /// have been detached from current state.
     fn finish(&self) -> Result<()>;
+
+    /// Get mark join results
+    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>>;
 }

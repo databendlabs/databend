@@ -269,6 +269,7 @@ fn query_id_not_found(query_id: String) -> PoemError {
 #[derive(Deserialize)]
 struct DownloadHandlerParams {
     pub format: Option<String>,
+    pub limit: Option<usize>,
 }
 
 #[poem::handler]
@@ -298,7 +299,7 @@ async fn result_download_handler(
         })?;
 
     let stream = result_table
-        .download(ctx, format)
+        .download(ctx, format, params.limit)
         .await
         .map_err(InternalServerError)?;
 
