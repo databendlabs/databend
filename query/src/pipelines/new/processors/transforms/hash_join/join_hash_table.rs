@@ -353,57 +353,55 @@ impl JoinHashTable {
         let probe_keys = probe_keys.iter().collect::<Vec<&ColumnRef>>();
         match &*self.hash_table.read() {
             HashTable::SerializerHashTable(table) => {
-                let keys = table
+                let keys_iter = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                let keys = keys
-                    .iter()
-                    .map(|key| KeysRef::create(key.as_ptr() as usize, key.len()))
-                    .collect();
+                    .build_keys_iter(&probe_keys, input.num_rows())?;
+                let keys_iter =
+                    keys_iter.map(|key| KeysRef::create(key.as_ptr() as usize, key.len()));
 
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU8HashTable(table) => {
-                let keys = table
+                let keys_iter = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_iter(&probe_keys, input.num_rows())?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU16HashTable(table) => {
-                let keys = table
+                let keys_iter = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_iter(&probe_keys, input.num_rows())?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU32HashTable(table) => {
-                let keys = table
+                let keys_iter = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_iter(&probe_keys, input.num_rows())?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU64HashTable(table) => {
-                let keys = table
+                let keys_iter = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_iter(&probe_keys, input.num_rows())?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU128HashTable(table) => {
-                let keys = table
+                let keys_iter = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_iter(&probe_keys, input.num_rows())?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU256HashTable(table) => {
-                let keys = table
+                let keys_iter = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_iter(&probe_keys, input.num_rows())?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU512HashTable(table) => {
-                let keys = table
+                let keys_iter = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_iter(&probe_keys, input.num_rows())?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
         }
     }
@@ -428,6 +426,7 @@ impl HashJoinState for JoinHashTable {
                 let build_keys = table
                     .hash_method
                     .build_keys(&build_cols_ref, input.num_rows())?;
+
                 // Save build_keys in row_space to avoid memory leak
                 self.row_space.push_keys(input, build_keys)
             }
@@ -661,14 +660,14 @@ fn insert_key<Key>(
 where
     Key: HashTableKeyable + Hash + Clone + Default + Debug + 'static,
 {
-    let build_keys = method.build_keys(&columns, chunk.num_rows())?;
-    for (row_index, key) in build_keys.iter().enumerate().take(chunk.num_rows()) {
+    let build_keys_iter = method.build_keys_iter(&columns, chunk.num_rows())?;
+    for (row_index, key) in build_keys_iter.enumerate().take(chunk.num_rows()) {
         let mut inserted = true;
         let ptr = RowPtr {
             chunk_index: chunk_index as u32,
             row_index: row_index as u32,
         };
-        let entity = table.insert_key(key, &mut inserted);
+        let entity = table.insert_key(&key, &mut inserted);
         if inserted {
             entity.set_value(vec![ptr]);
         } else {

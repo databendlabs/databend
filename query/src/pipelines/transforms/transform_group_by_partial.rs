@@ -133,6 +133,7 @@ impl Processor for GroupByPartialTransform {
     #[tracing::instrument(level = "debug", name = "group_by_partial_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
+
         let group_cols = self.extract_group_columns();
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let hash_method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
