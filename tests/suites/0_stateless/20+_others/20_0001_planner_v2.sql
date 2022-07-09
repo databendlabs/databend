@@ -344,7 +344,7 @@ drop table t2;
 select '====NULL====';
 create table n( a int null, b int null) ;
 insert into n select  if (number % 3, null, number), if (number % 2, null, number) from numbers(10);
-select a + b, a and b, a - b, a or b from n;
+select a + b, a and b, a - b, a or b as c from n order by c nulls first;
 drop table n;
 
 -- Subquery SemiJoin and AntiJoin

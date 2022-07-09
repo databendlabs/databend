@@ -1,4 +1,3 @@
-set enable_planner_v2 = 1;
 set max_threads = 16;
 SELECT number, number + 3 FROM numbers_mt (1000) where number > 5 order by number desc limit 3;
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc;
@@ -22,11 +21,10 @@ INSERT INTO t2 VALUES(1, parse_json('{"k":"v"}')),
                      (3, parse_json('[1,2,3]')),
                      (4, parse_json('10')),
                      (5, parse_json('null')),
-                     (6, parse_json('true')),
-                     (7, NULL );
+                     (6, parse_json('true'));
 
 SELECT id, var FROM t2 ORDER BY var ASC;
-SELECT id, var FROM t2 ORDER BY var DESC NULLS FIRST;
+SELECT id, var FROM t2 ORDER BY var DESC;
 
 DROP TABLE t2;
 
@@ -45,4 +43,3 @@ SELECT id, arr FROM t3 ORDER BY arr ASC;
 SELECT id, arr FROM t3 ORDER BY arr DESC;
 
 DROP TABLE t3;
-set enable_planner_v2 = 0;
