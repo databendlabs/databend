@@ -509,7 +509,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
 
-  # Any call to cargo will make rustup install the correct toolchain
+	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
 fi
 
