@@ -7,6 +7,12 @@ on:
     paths:
       - "scripts/setup/**"
       - "docker/build-tool/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "scripts/setup/**"
+      - "docker/build-tool/**"
 
 permissions:
   id-token: write
@@ -91,6 +97,7 @@ jobs:
 
   dev:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}
     needs: base
     steps:
       - uses: actions/checkout@v3
