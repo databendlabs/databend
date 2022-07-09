@@ -38,8 +38,24 @@ pub struct Config {
     /// Supported commands:
     /// - `ver`: print version and quit.
     /// - `show-config`: print effective config and quit.
+    /// - `kvapi::<cmd>`: run kvapi command. The command can be `upsert`, `get`, `mget` and `list`
     #[clap(long, default_value = "")]
     pub cmd: String,
+
+    #[clap(long, default_value = "", multiple = true)]
+    pub key: Vec<String>,
+
+    #[clap(long, default_value = "")]
+    pub value: String,
+
+    #[clap(long, default_value = "")]
+    pub prefix: String,
+
+    #[clap(long, default_value = "root")]
+    pub username: String,
+
+    #[clap(long, default_value = "")]
+    pub password: String,
 
     #[clap(long, short = 'c', default_value = "")]
     pub config_file: String,
@@ -83,6 +99,11 @@ impl From<Config> for InnerConfig {
     fn from(x: Config) -> Self {
         InnerConfig {
             cmd: x.cmd,
+            key: x.key,
+            value: x.value,
+            prefix: x.prefix,
+            username: x.username,
+            password: x.password,
             config_file: x.config_file,
             log_level: x.log_level,
             log_dir: x.log_dir,
@@ -101,6 +122,11 @@ impl From<InnerConfig> for Config {
     fn from(inner: InnerConfig) -> Self {
         Self {
             cmd: inner.cmd,
+            key: inner.key,
+            value: inner.value,
+            prefix: inner.prefix,
+            username: inner.username,
+            password: inner.password,
             config_file: inner.config_file,
             log_level: inner.log_level,
             log_dir: inner.log_dir,
@@ -252,8 +278,13 @@ impl Into<Config> for ConfigViaEnv {
         };
 
         Config {
-            // cmd should only be passed in from CLI
+            // cmd, key, value and prefix should only be passed in from CLI
             cmd: "".to_string(),
+            key: vec![],
+            value: "".to_string(),
+            prefix: "".to_string(),
+            username: "".to_string(),
+            password: "".to_string(),
             config_file: self.metasrv_config_file,
             log_level: self.metasrv_log_level,
             log_dir: self.metasrv_log_dir,

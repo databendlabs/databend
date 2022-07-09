@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(backtrace)]
+mod kvapi;
 
-pub mod api;
-pub mod cmd;
-pub mod configs;
-pub mod executor;
-pub mod export;
-pub mod meta_service;
-pub mod metrics;
-pub mod network;
-pub mod store;
-pub mod version;
-pub mod watcher;
-
-pub trait Opened {
-    /// Return true if it is opened from a previous persistent state.
-    /// Otherwise it is just created.
-    fn is_opened(&self) -> bool;
-}
+pub use kvapi::KvApiCommand;
