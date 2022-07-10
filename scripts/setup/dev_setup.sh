@@ -296,17 +296,6 @@ function install_cargo_binary {
 	fi
 }
 
-function install_toolchain {
-	version=$1
-	echo "==> Installing ${version} of rust toolchain..."
-	rustup install "$version"
-	rustup set profile minimal
-	rustup component add rustfmt --toolchain "$version"
-	rustup component add rust-src --toolchain "$version"
-	rustup component add clippy --toolchain "$version"
-	rustup default "$version"
-}
-
 function usage {
 	cat <<EOF
     usage: $0 [options]
@@ -520,7 +509,8 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
 
-	install_toolchain "$RUST_TOOLCHAIN"
+	# Any call to cargo will make rustup install the correct toolchain
+	cargo version
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
