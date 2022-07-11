@@ -21,7 +21,6 @@ use common_planners::ShowEnginesPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
@@ -32,8 +31,8 @@ pub struct ShowEnginesInterpreter {
 }
 
 impl ShowEnginesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, _plan: ShowEnginesPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowEnginesInterpreter { ctx }))
+    pub fn try_create(ctx: Arc<QueryContext>, _plan: ShowEnginesPlan) -> Result<Self> {
+        Ok(ShowEnginesInterpreter { ctx })
     }
 
     fn build_query(&self) -> Result<String> {

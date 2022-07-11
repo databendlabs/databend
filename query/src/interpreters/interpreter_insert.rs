@@ -36,7 +36,6 @@ use futures::TryStreamExt;
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
 use crate::interpreters::plan_schedulers::InsertWithPlan;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::processors::port::OutputPort;
@@ -60,13 +59,13 @@ impl InsertInterpreter {
         ctx: Arc<QueryContext>,
         plan: InsertPlan,
         async_insert: bool,
-    ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(InsertInterpreter {
+    ) -> Result<Self> {
+        Ok(InsertInterpreter {
             ctx,
             plan,
             source_pipe_builder: Mutex::new(None),
             async_insert,
-        }))
+        })
     }
 
     async fn execute_new(

@@ -22,7 +22,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::PhysicalPlanBuilder;
@@ -85,19 +84,15 @@ impl Interpreter for ExplainInterpreterV2 {
 }
 
 impl ExplainInterpreterV2 {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
-        plan: Plan,
-        kind: ExplainKind,
-    ) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
         let data_field = DataField::new("explain", DataTypeImpl::String(StringType::default()));
         let schema = DataSchemaRefExt::create(vec![data_field]);
-        Ok(Arc::new(ExplainInterpreterV2 {
+        Ok(ExplainInterpreterV2 {
             ctx,
             schema,
             plan,
             kind,
-        }))
+        })
     }
 
     pub async fn explain_syntax(&self, plan: &Plan) -> Result<Vec<DataBlock>> {

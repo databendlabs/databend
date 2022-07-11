@@ -23,7 +23,6 @@ use common_tracing::tracing;
 use common_tracing::tracing::info;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::storages::stage::StageSource;
 
@@ -34,8 +33,8 @@ pub struct DropUserStageInterpreter {
 }
 
 impl DropUserStageInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserStagePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropUserStageInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserStagePlan) -> Result<Self> {
+        Ok(DropUserStageInterpreter { ctx, plan })
     }
 }
 

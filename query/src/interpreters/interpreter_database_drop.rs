@@ -22,7 +22,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct DropDatabaseInterpreter {
@@ -31,8 +30,8 @@ pub struct DropDatabaseInterpreter {
 }
 
 impl DropDatabaseInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropDatabasePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropDatabaseInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropDatabasePlan) -> Result<Self> {
+        Ok(DropDatabaseInterpreter { ctx, plan })
     }
 }
 

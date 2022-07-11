@@ -34,6 +34,7 @@ use common_planners::SelectPlan;
 
 use super::InsertInterpreter;
 use super::SelectInterpreter;
+use crate::interpreters::Interpreter;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
@@ -412,9 +413,7 @@ impl AsyncInsertQueue {
         let mut builder = SourcePipeBuilder::create();
         builder.add_source(output_port.clone(), source);
 
-        interpreter
-            .as_ref()
-            .set_source_pipe_builder(Some(builder))?;
+        interpreter.set_source_pipe_builder(Some(builder))?;
         interpreter.execute(None).await?;
         Ok(())
     }
