@@ -26,7 +26,7 @@ use common_exception::Result;
 use common_meta_types::RoleInfo;
 use common_tracing::tracing;
 
-use crate::users::UserApiProvider;
+use crate::UserApiProvider;
 
 struct CachedRoles {
     roles: HashMap<String, RoleInfo>,

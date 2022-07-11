@@ -1588,6 +1588,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-users"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-exception",
+ "common-grpc",
+ "common-management",
+ "common-meta-api",
+ "common-meta-store",
+ "common-meta-types",
+ "common-tracing",
+ "jwtk",
+ "pretty_assertions",
+ "serde",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2136,6 +2153,7 @@ dependencies = [
  "common-planners",
  "common-streams",
  "common-tracing",
+ "common-users",
  "criterion",
  "dyn-clone",
  "enum_dispatch",
@@ -2148,7 +2166,6 @@ dependencies = [
  "http",
  "itertools",
  "jwt-simple",
- "jwtk",
  "lz4",
  "maplit",
  "metrics",

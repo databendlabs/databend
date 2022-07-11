@@ -32,6 +32,8 @@ use common_metrics::label_counter;
 use common_tracing::init_query_logger;
 use common_tracing::tracing;
 use common_tracing::tracing_appender::non_blocking::WorkerGuard;
+use common_users::RoleCacheMgr;
+use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
 use opendal::Operator;
@@ -47,8 +49,6 @@ use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
 use crate::storages::cache::CacheManager;
-use crate::users::RoleCacheMgr;
-use crate::users::UserApiProvider;
 use crate::Config;
 
 pub struct SessionManager {
@@ -111,7 +111,8 @@ impl SessionManager {
             (Vec::new(), None)
         };
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
-        let user_api_provider = UserApiProvider::create_global(conf.clone()).await?;
+        let user_api_provider =
+            UserApiProvider::create_global(conf.meta.to_meta_grpc_client_conf()).await?;
         let role_cache_manager = Arc::new(RoleCacheMgr::new(user_api_provider.clone()));
 
         let exchange_manager = DataExchangeManager::create(conf.clone());
@@ -436,7 +437,7 @@ impl SessionManager {
         }
 
         {
-            let x = UserApiProvider::create_global(config).await?;
+            let x = UserApiProvider::create_global(config.meta.to_meta_grpc_client_conf()).await?;
             *self.user_api_provider.write() = x.clone();
 
             let role_cache_manager = RoleCacheMgr::new(x);

@@ -24,6 +24,7 @@ use common_exception::ToErrorCode;
 use common_io::prelude::*;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
+use common_users::CertifiedInfo;
 use metrics::histogram;
 use opensrv_mysql::AsyncMysqlShim;
 use opensrv_mysql::ErrorKind;
@@ -47,7 +48,6 @@ use crate::sessions::SessionRef;
 use crate::sql::DfParser;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
-use crate::users::CertifiedInfo;
 
 struct InteractiveWorkerBase<W: std::io::Write> {
     session: SessionRef,

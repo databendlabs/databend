@@ -18,7 +18,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
 
-use crate::users::UserApiProvider;
+use crate::UserApiProvider;
 
 impl UserApiProvider {
     // Get one role from by tenant.

@@ -30,9 +30,12 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;
+use common_users::RoleCacheMgr;
+use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
+use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
@@ -41,9 +44,6 @@ use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::sql::SQLCommon;
 use crate::storages::Table;
-use crate::users::auth::auth_mgr::AuthMgr;
-use crate::users::RoleCacheMgr;
-use crate::users::UserApiProvider;
 use crate::Config;
 
 type DatabaseAndTable = (String, String, String);

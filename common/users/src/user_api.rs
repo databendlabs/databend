@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_grpc::RpcClientConf;
 use common_management::QuotaApi;
 use common_management::QuotaMgr;
 use common_management::RoleApi;
@@ -28,17 +29,13 @@ use common_management::UserMgr;
 use common_meta_api::KVApi;
 use common_meta_store::MetaStoreProvider;
 
-use crate::Config;
-
 pub struct UserApiProvider {
     client: Arc<dyn KVApi>,
 }
 
 impl UserApiProvider {
-    pub async fn create_global(conf: Config) -> Result<Arc<UserApiProvider>> {
-        let client = MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf())
-            .try_get_meta_store()
-            .await?;
+    pub async fn create_global(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
+        let client = MetaStoreProvider::new(conf).try_get_meta_store().await?;
         Ok(Arc::new(UserApiProvider {
             client: client.arc(),
         }))

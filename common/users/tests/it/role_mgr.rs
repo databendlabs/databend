@@ -15,16 +15,17 @@
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_grpc::RpcClientConf;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
-use databend_query::users::UserApiProvider;
+use common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_manager() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create().config();
+    let conf = RpcClientConf::default();
 
     let tenant = "tenant1";
     let role_name = "test-role1".to_string();

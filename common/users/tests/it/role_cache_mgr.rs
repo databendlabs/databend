@@ -17,17 +17,19 @@ use std::collections::HashSet;
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_grpc::RpcClientConf;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
-use databend_query::catalogs::CATALOG_DEFAULT;
-use databend_query::users::role_cache_mgr::find_all_related_roles;
-use databend_query::users::RoleCacheMgr;
-use databend_query::users::UserApiProvider;
+use common_users::role_cache_mgr::find_all_related_roles;
+use common_users::RoleCacheMgr;
+use common_users::UserApiProvider;
+
+pub const CATALOG_DEFAULT: &str = "default";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_cache_mgr() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create().config();
+    let conf = RpcClientConf::default();
     let user_api = UserApiProvider::create_global(conf).await?;
 
     let mut role1 = RoleInfo::new("role1");

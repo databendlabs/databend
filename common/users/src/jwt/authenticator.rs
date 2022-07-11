@@ -21,8 +21,6 @@ use jwtk::HeaderAndClaims;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::Config;
-
 pub struct JwtAuthenticator {
     //Todo(youngsofun): verify settings, like issuer
     verifier: RemoteJwksVerifier,
@@ -59,12 +57,12 @@ impl CustomClaims {
 }
 
 impl JwtAuthenticator {
-    pub async fn try_create(cfg: Config) -> Result<Option<Self>> {
-        if cfg.query.jwt_key_file.is_empty() {
+    pub async fn try_create(jwt_key_file: String) -> Result<Option<Self>> {
+        if jwt_key_file.is_empty() {
             return Ok(None);
         }
         let mut verifier =
-            RemoteJwksVerifier::new(cfg.query.jwt_key_file, None, Duration::from_secs(15 * 60));
+            RemoteJwksVerifier::new(jwt_key_file, None, Duration::from_secs(15 * 60));
         verifier.set_require_kid(false);
         Ok(Some(JwtAuthenticator { verifier }))
     }

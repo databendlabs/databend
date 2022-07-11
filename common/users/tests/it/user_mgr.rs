@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_grpc::RpcClientConf;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::PasswordHashMethod;
@@ -23,13 +24,13 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
-use databend_query::users::User;
-use databend_query::users::UserApiProvider;
+use common_users::User;
+use common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create().config();
+    let conf = RpcClientConf::default();
 
     let tenant = "test";
     let username = "test-user1";
@@ -241,7 +242,7 @@ async fn test_user_manager() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager_with_root_user() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create().config();
+    let conf = RpcClientConf::default();
 
     let tenant = "test";
     let username1 = "default";

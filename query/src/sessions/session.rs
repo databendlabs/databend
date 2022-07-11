@@ -24,6 +24,7 @@ use common_macros::MallocSizeOf;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
+use common_users::RoleCacheMgr;
 use futures::channel::*;
 use opendal::Operator;
 
@@ -35,7 +36,6 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
-use crate::users::RoleCacheMgr;
 use crate::Config;
 
 #[derive(MallocSizeOf)]
