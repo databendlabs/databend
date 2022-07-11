@@ -1600,6 +1600,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "jwtk",
+ "pretty_assertions",
  "serde",
 ]
 
