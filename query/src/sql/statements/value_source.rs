@@ -184,7 +184,7 @@ pub fn skip_to_next_row<R: BufferRead>(
             let c = buffer[it];
             reader.consume(it + 1);
 
-            if it == 0 && escaped {
+            if it == 0 && escaped && c == b'\'' {
                 escaped = false;
                 continue;
             }
