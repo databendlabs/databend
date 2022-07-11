@@ -132,7 +132,7 @@ impl StatisticsAccumulator {
             let col_stats = ColumnStatistics {
                 min,
                 max,
-                unset_bits: unset_bits as u64,
+                null_count: unset_bits as u64,
                 in_memory_size,
             };
 
@@ -281,7 +281,7 @@ pub fn columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns>
         let col_stats = ColumnStatistics {
             min,
             max,
-            unset_bits: unset_bits as u64,
+            null_count: unset_bits as u64,
             in_memory_size,
         };
 

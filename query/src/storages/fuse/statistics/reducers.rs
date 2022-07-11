@@ -52,14 +52,14 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
         .try_fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
             let mut min_stats = Vec::with_capacity(stats.len());
             let mut max_stats = Vec::with_capacity(stats.len());
-            let mut unset_bits = 0;
+            let mut null_count = 0;
             let mut in_memory_size = 0;
 
             for col_stats in stats {
                 min_stats.push(col_stats.min.clone());
                 max_stats.push(col_stats.max.clone());
 
-                unset_bits += col_stats.unset_bits;
+                null_count += col_stats.null_count;
                 in_memory_size += col_stats.in_memory_size;
             }
 
@@ -89,7 +89,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             acc.insert(*id, ColumnStatistics {
                 min,
                 max,
-                unset_bits,
+                null_count,
                 in_memory_size,
             });
             Ok(acc)

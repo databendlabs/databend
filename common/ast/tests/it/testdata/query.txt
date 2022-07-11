@@ -811,10 +811,10 @@ select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
                         c_custkey
                 ) as c_orders
             group by c_count
-            order by custdist desc, c_count asc, totacctbal
+            order by custdist desc nulls first, c_count asc, totacctbal nulls last
             limit 10, totacctbal
 ---------- Output ---------
-SELECT c_count AS cc, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer, orders AS ODS, (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%:1%:2%' GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC, c_count ASC, totacctbal LIMIT 10, totacctbal
+SELECT c_count AS cc, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer, orders AS ODS, (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%:1%:2%' GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC NULLS FIRST, c_count ASC, totacctbal NULLS LAST LIMIT 10, totacctbal
 ---------- AST ------------
 Query {
     span: [
@@ -877,15 +877,19 @@ Query {
         BY(566..568),
         Ident(569..577),
         DESC(578..582),
-        Comma(582..583),
-        Ident(584..591),
-        ASC(592..595),
-        Comma(595..596),
-        Ident(597..607),
-        LIMIT(620..625),
-        LiteralInteger(626..628),
-        Comma(628..629),
-        Ident(630..640),
+        NULLS(583..588),
+        FIRST(589..594),
+        Comma(594..595),
+        Ident(596..603),
+        ASC(604..607),
+        Comma(607..608),
+        Ident(609..619),
+        NULLS(620..625),
+        LAST(626..630),
+        LIMIT(643..648),
+        LiteralInteger(649..651),
+        Comma(651..652),
+        Ident(653..663),
     ],
     body: Select(
         SelectStmt {
@@ -1389,19 +1393,21 @@ Query {
             asc: Some(
                 false,
             ),
-            nulls_first: None,
+            nulls_first: Some(
+                true,
+            ),
         },
         OrderByExpr {
             expr: ColumnRef {
                 span: [
-                    Ident(584..591),
+                    Ident(596..603),
                 ],
                 database: None,
                 table: None,
                 column: Identifier {
                     name: "c_count",
                     quote: None,
-                    span: Ident(584..591),
+                    span: Ident(596..603),
                 },
             },
             asc: Some(
@@ -1412,24 +1418,26 @@ Query {
         OrderByExpr {
             expr: ColumnRef {
                 span: [
-                    Ident(597..607),
+                    Ident(609..619),
                 ],
                 database: None,
                 table: None,
                 column: Identifier {
                     name: "totacctbal",
                     quote: None,
-                    span: Ident(597..607),
+                    span: Ident(609..619),
                 },
             },
             asc: None,
-            nulls_first: None,
+            nulls_first: Some(
+                false,
+            ),
         },
     ],
     limit: [
         Literal {
             span: [
-                LiteralInteger(626..628),
+                LiteralInteger(649..651),
             ],
             lit: Integer(
                 10,
@@ -1437,14 +1445,14 @@ Query {
         },
         ColumnRef {
             span: [
-                Ident(630..640),
+                Ident(653..663),
             ],
             database: None,
             table: None,
             column: Identifier {
                 name: "totacctbal",
                 quote: None,
-                span: Ident(630..640),
+                span: Ident(653..663),
             },
         },
     ],
