@@ -120,10 +120,17 @@ where
         reader: &mut NestedCheckpointReader<R>,
         _format: &FormatSettings,
     ) -> Result<()> {
-        let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
+        let maybe_single_quote = reader.ignore_byte(b'\'')?;
+        let maybe_double_quote = if !maybe_single_quote {
+            reader.ignore_byte(b'"')?
+        } else {
+            false
+        };
         let date = reader.read_date_text();
-        if maybe_quote {
-            reader.must_ignore(|f| f == b'\'' || f == b'"')?;
+        if maybe_single_quote {
+            reader.must_ignore_byte(b'\'')?;
+        } else if maybe_double_quote {
+            reader.must_ignore_byte(b'"')?;
         }
         if date.is_err() {
             return Err(date.err().unwrap());
