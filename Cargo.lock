@@ -1488,7 +1488,6 @@ dependencies = [
 name = "common-metrics"
 version = "0.1.0"
 dependencies = [
- "common-base",
  "common-exception",
  "common-tracing",
  "metrics",
