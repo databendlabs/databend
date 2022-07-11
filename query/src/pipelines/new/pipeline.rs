@@ -122,7 +122,7 @@ impl NewPipeline {
     }
 
     pub fn add_transform<F>(&mut self, f: F) -> Result<()>
-    where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
+        where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
         let mut transform_builder = TransformPipeBuilder::create();
         for _index in 0..self.output_len() {
             let input_port = InputPort::create();
@@ -174,10 +174,19 @@ impl NewPipeline {
         self.on_finished = Some(Arc::new(Box::new(f)));
     }
 
-    pub fn get_on_finished(&self) -> FinishedCallback {
-        match &self.on_finished {
+    pub fn take_on_finished(&mut self) -> FinishedCallback {
+        match self.on_finished.take() {
             None => Arc::new(Box::new(|_may_error| {})),
-            Some(on_finished) => on_finished.clone(),
+            Some(on_finished) => on_finished,
+        }
+    }
+}
+
+impl Drop for NewPipeline {
+    fn drop(&mut self) {
+        // An error may have occurred before the executor was created.
+        if let Some(on_finished) = self.on_finished.take() {
+            (on_finished)(&None);
         }
     }
 }
