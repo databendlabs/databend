@@ -21,11 +21,11 @@ use opensrv_clickhouse::connection::Connection;
 use opensrv_clickhouse::CHContext;
 use opensrv_clickhouse::ClickHouseSession;
 
+use crate::auth::Credential;
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::to_clickhouse_err;
 use crate::servers::clickhouse::writers::QueryWriter;
 use crate::sessions::SessionRef;
-use crate::users::auth::auth_mgr::Credential;
 
 pub struct InteractiveWorker {
     session: SessionRef,

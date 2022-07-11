@@ -49,10 +49,13 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use common_users::RoleCacheMgr;
+use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use opendal::Operator;
 
 use crate::api::DataExchangeManager;
+use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
@@ -65,9 +68,6 @@ use crate::sessions::Settings;
 use crate::storages::cache::CacheManager;
 use crate::storages::stage::StageTable;
 use crate::storages::Table;
-use crate::users::auth::auth_mgr::AuthMgr;
-use crate::users::RoleCacheMgr;
-use crate::users::UserApiProvider;
 use crate::Config;
 
 #[derive(Clone)]
