@@ -19,9 +19,9 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
-use common_base::infallible::Mutex;
 use common_exception::Result;
 use common_tracing::tracing;
+use parking_lot::Mutex;
 
 use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;

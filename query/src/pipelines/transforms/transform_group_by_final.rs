@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bumpalo::Bump;
-use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
@@ -34,6 +33,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::stream::StreamExt;
+use parking_lot::RwLock;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;

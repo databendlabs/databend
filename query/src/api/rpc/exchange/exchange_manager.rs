@@ -23,7 +23,6 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
 use common_base::base::Thread;
 use common_base::base::TrySpawn;
-use common_base::infallible::Mutex;
 use common_base::infallible::ReentrantMutex;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -31,6 +30,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use futures::StreamExt;
 use futures_util::future::Either;
+use parking_lot::Mutex;
 use tonic::Streaming;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentReceiver;

@@ -17,11 +17,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::infallible::RwLock;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
 use common_meta_types::UserInfo;
 use futures::channel::oneshot::Sender;
+use parking_lot::RwLock;
 
 use crate::sessions::QueryContextShared;
 use crate::Config;
