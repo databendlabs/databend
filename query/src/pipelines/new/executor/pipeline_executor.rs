@@ -46,10 +46,10 @@ impl PipelineExecutor {
     pub fn create(
         async_rt: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
-        pipeline: NewPipeline,
+        mut pipeline: NewPipeline,
     ) -> Result<Arc<PipelineExecutor>> {
         let threads_num = pipeline.get_max_threads();
-        let on_finished_callback = pipeline.get_on_finished();
+        let on_finished_callback = pipeline.take_on_finished();
 
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(
@@ -64,7 +64,7 @@ impl PipelineExecutor {
     pub fn from_pipelines(
         async_rt: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
-        pipelines: Vec<NewPipeline>,
+        mut pipelines: Vec<NewPipeline>,
     ) -> Result<Arc<PipelineExecutor>> {
         if pipelines.is_empty() {
             return Err(ErrorCode::LogicalError("Executor Pipelines is empty."));
@@ -77,8 +77,8 @@ impl PipelineExecutor {
             .unwrap_or(0);
 
         let on_finished_callbacks = pipelines
-            .iter()
-            .map(|x| x.get_on_finished())
+            .iter_mut()
+            .map(|x| x.take_on_finished())
             .collect::<Vec<_>>();
 
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
