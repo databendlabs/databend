@@ -1590,6 +1590,18 @@ dependencies = [
 [[package]]
 name = "common-users"
 version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-exception",
+ "common-grpc",
+ "common-management",
+ "common-meta-api",
+ "common-meta-store",
+ "common-meta-types",
+ "common-tracing",
+ "jwtk",
+ "serde",
+]
 
 [[package]]
 name = "concurrent-queue"

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod jwt;
-mod role_mgr;
-mod user;
-mod user_api;
-mod user_mgr;
-mod user_stage;
-mod user_udf;
+mod authenticator;
 
-pub mod role_cache_mgr;
-
-pub use jwt::*;
-pub use role_cache_mgr::RoleCacheMgr;
-pub use user::CertifiedInfo;
-pub use user::User;
-pub use user_api::UserApiProvider;
+pub use authenticator::CustomClaims;
+pub use authenticator::EnsureUser;
+pub use authenticator::JwtAuthenticator;

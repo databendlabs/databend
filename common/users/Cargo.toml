@@ -10,4 +10,19 @@ edition = "2021"
 doctest = false
 test = false
 
-[dependencies]
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-base = { path = "../base" }
+common-exception = { path = "../exception" }
+common-grpc = { path = "../grpc" }
+common-management = { path = "../management" }
+common-meta-api = { path = "../meta/api" }
+common-meta-store = { path = "../meta/store" }
+common-meta-types = { path = "../meta/types" }
+common-tracing = { path = "../tracing" }
+
+# Github dependencies
+
+# Crates.io dependencies
+jwtk = "0.2.3"
+serde = { version = "1.0.137", features = ["derive"] }
