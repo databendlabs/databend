@@ -34,7 +34,6 @@ use regex::Regex;
 use super::SelectInterpreter;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::NewPipeline;

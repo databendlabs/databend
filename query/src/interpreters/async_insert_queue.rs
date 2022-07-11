@@ -31,10 +31,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertPlan;
 use common_planners::SelectPlan;
-use crate::interpreters::Interpreter;
 
 use super::InsertInterpreter;
 use super::SelectInterpreter;
+use crate::interpreters::Interpreter;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;

@@ -23,7 +23,6 @@ use common_tracing::tracing;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
@@ -35,10 +34,7 @@ pub struct DescribeUserStageInterpreter {
 }
 
 impl DescribeUserStageInterpreter {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
-        plan: DescribeUserStagePlan,
-    ) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DescribeUserStagePlan) -> Result<Self> {
         Ok(DescribeUserStageInterpreter { ctx, plan })
     }
 

@@ -24,7 +24,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::QueryContext;

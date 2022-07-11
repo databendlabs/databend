@@ -21,7 +21,6 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use super::Interpreter;
-use super::InterpreterPtr;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
 

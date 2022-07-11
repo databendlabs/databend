@@ -21,7 +21,6 @@ use common_streams::SendableDataBlockStream;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;

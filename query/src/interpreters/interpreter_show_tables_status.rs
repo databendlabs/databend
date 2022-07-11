@@ -23,7 +23,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
@@ -35,10 +34,7 @@ pub struct ShowTablesStatusInterpreter {
 }
 
 impl ShowTablesStatusInterpreter {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
-        plan: ShowTablesStatusPlan,
-    ) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowTablesStatusPlan) -> Result<Self> {
         Ok(ShowTablesStatusInterpreter { ctx, plan })
     }
 

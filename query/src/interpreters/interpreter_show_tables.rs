@@ -23,7 +23,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;

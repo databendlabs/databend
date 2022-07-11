@@ -23,7 +23,6 @@ use common_tracing::tracing;
 use common_tracing::tracing::info;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::storages::stage::StageSource;
 

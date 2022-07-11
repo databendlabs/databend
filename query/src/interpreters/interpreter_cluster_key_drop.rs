@@ -22,7 +22,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use super::Interpreter;
-use super::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct DropTableClusterKeyInterpreter {
@@ -31,10 +30,7 @@ pub struct DropTableClusterKeyInterpreter {
 }
 
 impl DropTableClusterKeyInterpreter {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
-        plan: DropTableClusterKeyPlan,
-    ) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropTableClusterKeyPlan) -> Result<Self> {
         Ok(DropTableClusterKeyInterpreter { ctx, plan })
     }
 }

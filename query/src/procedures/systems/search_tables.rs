@@ -21,7 +21,8 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use futures::TryStreamExt;
 
-use crate::interpreters::{Interpreter, SelectInterpreter};
+use crate::interpreters::Interpreter;
+use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
