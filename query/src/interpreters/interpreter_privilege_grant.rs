@@ -35,8 +35,8 @@ pub struct GrantPrivilegeInterpreter {
 }
 
 impl GrantPrivilegeInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: GrantPrivilegePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(GrantPrivilegeInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: GrantPrivilegePlan) -> Result<Self> {
+        Ok(GrantPrivilegeInterpreter { ctx, plan })
     }
 }
 

@@ -39,8 +39,8 @@ pub struct SelectInterpreter {
 
 impl SelectInterpreter {
     /// Create the SelectInterpreter from SelectPlan
-    pub fn try_create(ctx: Arc<QueryContext>, select: SelectPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(SelectInterpreter { ctx, select }))
+    pub fn try_create(ctx: Arc<QueryContext>, select: SelectPlan) -> Result<Self> {
+        Ok(SelectInterpreter { ctx, select })
     }
 
     /// Call this method to optimize the logical plan before executing

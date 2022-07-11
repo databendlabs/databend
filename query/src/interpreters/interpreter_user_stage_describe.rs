@@ -38,8 +38,8 @@ impl DescribeUserStageInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         plan: DescribeUserStagePlan,
-    ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DescribeUserStageInterpreter { ctx, plan }))
+    ) -> Result<Self> {
+        Ok(DescribeUserStageInterpreter { ctx, plan })
     }
 
     fn build_query(&self, name: &str) -> Result<String> {

@@ -31,8 +31,8 @@ pub struct RenameTableInterpreter {
 }
 
 impl RenameTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: RenameTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(RenameTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RenameTablePlan) -> Result<Self> {
+        Ok(RenameTableInterpreter { ctx, plan })
     }
 }
 

@@ -34,8 +34,8 @@ pub struct ShowDatabasesInterpreter {
 }
 
 impl ShowDatabasesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowDatabasesPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowDatabasesInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowDatabasesPlan) -> Result<Self> {
+        Ok(ShowDatabasesInterpreter { ctx, plan })
     }
 
     fn build_query(&self) -> Result<String> {

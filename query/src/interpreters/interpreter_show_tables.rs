@@ -35,8 +35,8 @@ pub struct ShowTablesInterpreter {
 }
 
 impl ShowTablesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowTablesPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowTablesInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowTablesPlan) -> Result<Self> {
+        Ok(ShowTablesInterpreter { ctx, plan })
     }
 
     fn build_query(&self) -> Result<String> {

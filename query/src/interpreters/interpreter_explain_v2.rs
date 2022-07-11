@@ -89,15 +89,15 @@ impl ExplainInterpreterV2 {
         ctx: Arc<QueryContext>,
         plan: Plan,
         kind: ExplainKind,
-    ) -> Result<InterpreterPtr> {
+    ) -> Result<Self> {
         let data_field = DataField::new("explain", DataTypeImpl::String(StringType::default()));
         let schema = DataSchemaRefExt::create(vec![data_field]);
-        Ok(Arc::new(ExplainInterpreterV2 {
+        Ok(ExplainInterpreterV2 {
             ctx,
             schema,
             plan,
             kind,
-        }))
+        })
     }
 
     pub async fn explain_syntax(&self, plan: &Plan) -> Result<Vec<DataBlock>> {

@@ -34,8 +34,8 @@ pub struct DeleteInterpreter {
 
 impl DeleteInterpreter {
     /// Create the DelectInterpreter from DelectPlan
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DeleteInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<Self> {
+        Ok(DeleteInterpreter { ctx, plan })
     }
 }
 

@@ -34,8 +34,8 @@ impl AlterTableClusterKeyInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         plan: AlterTableClusterKeyPlan,
-    ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(AlterTableClusterKeyInterpreter { ctx, plan }))
+    ) -> Result<Self> {
+        Ok(AlterTableClusterKeyInterpreter { ctx, plan })
     }
 }
 

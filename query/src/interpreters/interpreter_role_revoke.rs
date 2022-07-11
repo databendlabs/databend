@@ -32,8 +32,8 @@ pub struct RevokeRoleInterpreter {
 }
 
 impl RevokeRoleInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokeRolePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(RevokeRoleInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokeRolePlan) -> Result<Self> {
+        Ok(RevokeRoleInterpreter { ctx, plan })
     }
 }
 

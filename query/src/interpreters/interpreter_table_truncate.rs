@@ -31,8 +31,8 @@ pub struct TruncateTableInterpreter {
 }
 
 impl TruncateTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: TruncateTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(TruncateTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: TruncateTablePlan) -> Result<Self> {
+        Ok(TruncateTableInterpreter { ctx, plan })
     }
 }
 

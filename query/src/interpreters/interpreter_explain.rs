@@ -61,8 +61,8 @@ impl Interpreter for ExplainInterpreter {
 }
 
 impl ExplainInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, explain: ExplainPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ExplainInterpreter { ctx, explain }))
+    pub fn try_create(ctx: Arc<QueryContext>, explain: ExplainPlan) -> Result<Self> {
+        Ok(ExplainInterpreter { ctx, explain })
     }
 
     fn explain_graph(&self) -> Result<DataBlock> {

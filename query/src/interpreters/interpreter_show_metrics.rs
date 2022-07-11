@@ -31,8 +31,8 @@ pub struct ShowMetricsInterpreter {
 }
 
 impl ShowMetricsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowMetricsInterpreter { ctx }))
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowMetricsInterpreter { ctx })
     }
 
     fn build_query(&self) -> Result<String> {

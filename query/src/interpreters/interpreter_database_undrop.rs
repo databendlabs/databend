@@ -31,8 +31,8 @@ pub struct UndropDatabaseInterpreter {
 }
 
 impl UndropDatabaseInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: UndropDatabasePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(UndropDatabaseInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: UndropDatabasePlan) -> Result<Self> {
+        Ok(UndropDatabaseInterpreter { ctx, plan })
     }
 }
 

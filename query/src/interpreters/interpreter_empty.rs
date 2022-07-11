@@ -29,8 +29,8 @@ use crate::sessions::QueryContext;
 pub struct EmptyInterpreter {}
 
 impl EmptyInterpreter {
-    pub fn try_create(_ctx: Arc<QueryContext>, _plan: EmptyPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(EmptyInterpreter {}))
+    pub fn try_create(_ctx: Arc<QueryContext>, _plan: EmptyPlan) -> Result<Self> {
+        Ok(EmptyInterpreter {})
     }
 }
 

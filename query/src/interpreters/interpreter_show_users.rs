@@ -31,8 +31,8 @@ pub struct ShowUsersInterpreter {
 }
 
 impl ShowUsersInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowUsersInterpreter { ctx }))
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowUsersInterpreter { ctx })
     }
 
     fn build_query(&self) -> Result<String> {

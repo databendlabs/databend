@@ -32,8 +32,8 @@ pub struct ShowGrantsInterpreter {
 }
 
 impl ShowGrantsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowGrantsPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowGrantsInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowGrantsPlan) -> Result<Self> {
+        Ok(ShowGrantsInterpreter { ctx, plan })
     }
 }
 

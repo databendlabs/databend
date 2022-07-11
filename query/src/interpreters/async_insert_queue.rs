@@ -31,6 +31,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertPlan;
 use common_planners::SelectPlan;
+use crate::interpreters::Interpreter;
 
 use super::InsertInterpreter;
 use super::SelectInterpreter;
@@ -412,9 +413,7 @@ impl AsyncInsertQueue {
         let mut builder = SourcePipeBuilder::create();
         builder.add_source(output_port.clone(), source);
 
-        interpreter
-            .as_ref()
-            .set_source_pipe_builder(Some(builder))?;
+        interpreter.set_source_pipe_builder(Some(builder))?;
         interpreter.execute(None).await?;
         Ok(())
     }

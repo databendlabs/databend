@@ -32,8 +32,8 @@ pub struct SettingInterpreter {
 }
 
 impl SettingInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, set: SettingPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(SettingInterpreter { ctx, set }))
+    pub fn try_create(ctx: Arc<QueryContext>, set: SettingPlan) -> Result<Self> {
+        Ok(SettingInterpreter { ctx, set })
     }
 }
 

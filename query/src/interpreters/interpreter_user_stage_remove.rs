@@ -34,8 +34,8 @@ pub struct RemoveUserStageInterpreter {
 }
 
 impl RemoveUserStageInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: RemoveUserStagePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(RemoveUserStageInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RemoveUserStagePlan) -> Result<Self> {
+        Ok(RemoveUserStageInterpreter { ctx, plan })
     }
 }
 

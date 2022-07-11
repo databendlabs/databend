@@ -35,8 +35,8 @@ pub struct DropViewInterpreter {
 }
 
 impl DropViewInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropViewPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropViewInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropViewPlan) -> Result<Self> {
+        Ok(DropViewInterpreter { ctx, plan })
     }
 }
 

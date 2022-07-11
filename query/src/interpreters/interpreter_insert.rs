@@ -60,13 +60,13 @@ impl InsertInterpreter {
         ctx: Arc<QueryContext>,
         plan: InsertPlan,
         async_insert: bool,
-    ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(InsertInterpreter {
+    ) -> Result<Self> {
+        Ok(InsertInterpreter {
             ctx,
             plan,
             source_pipe_builder: Mutex::new(None),
             async_insert,
-        }))
+        })
     }
 
     async fn execute_new(

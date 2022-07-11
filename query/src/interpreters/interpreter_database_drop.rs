@@ -31,8 +31,8 @@ pub struct DropDatabaseInterpreter {
 }
 
 impl DropDatabaseInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropDatabasePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropDatabaseInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropDatabasePlan) -> Result<Self> {
+        Ok(DropDatabaseInterpreter { ctx, plan })
     }
 }
 

@@ -35,8 +35,8 @@ pub struct DescribeTableInterpreter {
 }
 
 impl DescribeTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DescribeTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DescribeTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DescribeTablePlan) -> Result<Self> {
+        Ok(DescribeTableInterpreter { ctx, plan })
     }
 }
 

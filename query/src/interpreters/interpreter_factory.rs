@@ -27,7 +27,7 @@ use super::ListInterpreter;
 use super::ShowStagesInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
-use crate::interpreters::AlterTableClusterKeyInterpreter;
+use crate::interpreters::{AlterTableClusterKeyInterpreter, InterpreterPtr};
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CallInterpreter;
@@ -88,121 +88,124 @@ pub struct InterpreterFactory;
 /// Such as: SelectPlan -> SelectInterpreter, ExplainPlan -> ExplainInterpreter, ...
 impl InterpreterFactory {
     pub fn get(ctx: Arc<QueryContext>, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
-        let ctx_clone = ctx.clone();
-        let inner = match plan.clone() {
-            PlanNode::Select(v) => SelectInterpreter::try_create(ctx_clone, v),
-            PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx_clone, v),
-            PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v, false),
-            PlanNode::Delete(v) => DeleteInterpreter::try_create(ctx_clone, v),
-            PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
-            PlanNode::Call(v) => CallInterpreter::try_create(ctx_clone, v),
-            PlanNode::Show(ShowPlan::ShowDatabases(v)) => {
-                ShowDatabasesInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::Show(ShowPlan::ShowTables(v)) => {
-                ShowTablesInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::Show(ShowPlan::ShowTablesStatus(v)) => {
-                ShowTablesStatusInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::Show(ShowPlan::ShowEngines(v)) => {
-                ShowEnginesInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::Show(ShowPlan::ShowFunctions(v)) => {
-                ShowFunctionsInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::Show(ShowPlan::ShowGrants(v)) => {
-                ShowGrantsInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::Show(ShowPlan::ShowMetrics(_)) => {
-                ShowMetricsInterpreter::try_create(ctx_clone)
-            }
-            PlanNode::Show(ShowPlan::ShowProcessList(_)) => {
-                ShowProcessListInterpreter::try_create(ctx_clone)
-            }
-            PlanNode::Show(ShowPlan::ShowSettings(_)) => {
-                ShowSettingsInterpreter::try_create(ctx_clone)
-            }
-            PlanNode::Show(ShowPlan::ShowUsers(_)) => ShowUsersInterpreter::try_create(ctx_clone),
-            PlanNode::Show(ShowPlan::ShowRoles(_)) => ShowRolesInterpreter::try_create(ctx_clone),
-            PlanNode::Show(ShowPlan::ShowStages) => ShowStagesInterpreter::try_create(ctx_clone),
-
-            // Database related transforms.
-            PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropDatabase(v) => DropDatabaseInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowCreateDatabase(v) => {
-                ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::RenameDatabase(v) => RenameDatabaseInterpreter::try_create(ctx_clone, v),
-            PlanNode::UndropDatabase(v) => UndropDatabaseInterpreter::try_create(ctx_clone, v),
-
-            // Table related transforms
-            PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::UndropTable(v) => UndropTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::RenameTable(v) => RenameTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::ExistsTable(v) => ExistsTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
-
-            // View related transforms
-            PlanNode::CreateView(v) => CreateViewInterpreter::try_create(ctx_clone, v),
-            PlanNode::AlterView(v) => AlterViewInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropView(v) => DropViewInterpreter::try_create(ctx_clone, v),
-
-            // User related transforms
-            PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),
-            PlanNode::AlterUser(v) => AlterUserInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropUser(v) => DropUserInterpreter::try_create(ctx_clone, v),
-
-            // Privilege related transforms
-            PlanNode::GrantPrivilege(v) => GrantPrivilegeInterpreter::try_create(ctx_clone, v),
-            PlanNode::GrantRole(v) => GrantRoleInterpreter::try_create(ctx_clone, v),
-
-            PlanNode::RevokePrivilege(v) => RevokePrivilegeInterpreter::try_create(ctx_clone, v),
-            PlanNode::RevokeRole(v) => RevokeRoleInterpreter::try_create(ctx_clone, v),
-
-            PlanNode::CreateRole(v) => CreateRoleInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropRole(v) => DropRoleInterpreter::try_create(ctx_clone, v),
-
-            // UDF related transforms
-            PlanNode::CreateUserUDF(v) => CreateUserUDFInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropUserUDF(v) => DropUserUDFInterpreter::try_create(ctx_clone, v),
-            PlanNode::AlterUserUDF(v) => AlterUserUDFInterpreter::try_create(ctx_clone, v),
-
-            // Stage related transforms
-            PlanNode::CreateUserStage(v) => CreateUserStageInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropUserStage(v) => DropUserStageInterpreter::try_create(ctx_clone, v),
-            PlanNode::DescribeUserStage(v) => {
-                DescribeUserStageInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::RemoveUserStage(v) => RemoveUserStageInterpreter::try_create(ctx_clone, v),
-
-            // cluster key.
-            PlanNode::AlterTableClusterKey(v) => {
-                AlterTableClusterKeyInterpreter::try_create(ctx_clone, v)
-            }
-            PlanNode::DropTableClusterKey(v) => {
-                DropTableClusterKeyInterpreter::try_create(ctx_clone, v)
-            }
-
-            // others
-            PlanNode::List(v) => ListInterpreter::try_create(ctx_clone, v),
-            PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
-            PlanNode::Kill(v) => KillInterpreter::try_create(ctx_clone, v),
-            PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
-            PlanNode::Empty(v) => EmptyInterpreter::try_create(ctx_clone, v),
-
-            _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
-                "Can't get the interpreter by plan:{}",
-                plan.name()
-            ))),
-        }?;
+        let inner = Self::create_interpreter(ctx.clone(), &plan)?;
         let query_kind = plan.name().to_string();
         Ok(Arc::new(InterceptorInterpreter::create(
             ctx, inner, plan, query_kind,
         )))
+    }
+
+    fn create_interpreter(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<InterpreterPtr> {
+        match plan.clone() {
+            PlanNode::Select(v) => Ok(Arc::new(SelectInterpreter::try_create(ctx, v)?)),
+            PlanNode::Explain(v) => Ok(Arc::new(ExplainInterpreter::try_create(ctx, v)?)),
+            PlanNode::Insert(v) => Ok(Arc::new(InsertInterpreter::try_create(ctx, v, false)?)),
+            PlanNode::Delete(v) => Ok(Arc::new(DeleteInterpreter::try_create(ctx, v)?)),
+            PlanNode::Copy(v) => Ok(Arc::new(CopyInterpreter::try_create(ctx, v)?)),
+            PlanNode::Call(v) => Ok(Arc::new(CallInterpreter::try_create(ctx, v)?)),
+            PlanNode::Show(ShowPlan::ShowDatabases(v)) => {
+                Ok(Arc::new(ShowDatabasesInterpreter::try_create(ctx, v)?))
+            }
+            PlanNode::Show(ShowPlan::ShowTables(v)) => {
+                Ok(Arc::new(ShowTablesInterpreter::try_create(ctx, v)?))
+            }
+            PlanNode::Show(ShowPlan::ShowTablesStatus(v)) => {
+                Ok(Arc::new(ShowTablesStatusInterpreter::try_create(ctx, v)?))
+            }
+            PlanNode::Show(ShowPlan::ShowEngines(v)) => {
+                Ok(Arc::new(ShowEnginesInterpreter::try_create(ctx, v)?))
+            }
+            PlanNode::Show(ShowPlan::ShowFunctions(v)) => {
+                Ok(Arc::new(ShowFunctionsInterpreter::try_create(ctx, v)?))
+            }
+            PlanNode::Show(ShowPlan::ShowGrants(v)) => {
+                Ok(Arc::new(ShowGrantsInterpreter::try_create(ctx, v)?))
+            }
+            PlanNode::Show(ShowPlan::ShowMetrics(_)) => {
+                Ok(Arc::new(ShowMetricsInterpreter::try_create(ctx)?))
+            }
+            PlanNode::Show(ShowPlan::ShowProcessList(_)) => {
+                Ok(Arc::new(ShowProcessListInterpreter::try_create(ctx)?))
+            }
+            PlanNode::Show(ShowPlan::ShowSettings(_)) => {
+                Ok(Arc::new(ShowSettingsInterpreter::try_create(ctx)?))
+            }
+            PlanNode::Show(ShowPlan::ShowUsers(_)) => Ok(Arc::new(ShowUsersInterpreter::try_create(ctx)?)),
+            PlanNode::Show(ShowPlan::ShowRoles(_)) => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
+            PlanNode::Show(ShowPlan::ShowStages) => Ok(Arc::new(ShowStagesInterpreter::try_create(ctx)?)),
+
+            // Database related transforms.
+            PlanNode::CreateDatabase(v) => Ok(Arc::new(CreateDatabaseInterpreter::try_create(ctx, v)?)),
+            PlanNode::DropDatabase(v) => Ok(Arc::new(DropDatabaseInterpreter::try_create(ctx, v)?)),
+            PlanNode::ShowCreateDatabase(v) => {
+                Ok(Arc::new(ShowCreateDatabaseInterpreter::try_create(ctx, v)?))
+            }
+            PlanNode::RenameDatabase(v) => Ok(Arc::new(RenameDatabaseInterpreter::try_create(ctx, v)?)),
+            PlanNode::UndropDatabase(v) => Ok(Arc::new(UndropDatabaseInterpreter::try_create(ctx, v)?)),
+
+            // Table related transforms
+            PlanNode::CreateTable(v) => Ok(Arc::new(CreateTableInterpreter::try_create(ctx, v)?)),
+            PlanNode::DropTable(v) => Ok(Arc::new(DropTableInterpreter::try_create(ctx, v)?)),
+            PlanNode::UndropTable(v) => Ok(Arc::new(UndropTableInterpreter::try_create(ctx, v)?)),
+            PlanNode::RenameTable(v) => Ok(Arc::new(RenameTableInterpreter::try_create(ctx, v)?)),
+            PlanNode::TruncateTable(v) => Ok(Arc::new(TruncateTableInterpreter::try_create(ctx, v)?)),
+            PlanNode::OptimizeTable(v) => Ok(Arc::new(OptimizeTableInterpreter::try_create(ctx, v)?)),
+            PlanNode::ExistsTable(v) => Ok(Arc::new(ExistsTableInterpreter::try_create(ctx, v)?)),
+            PlanNode::DescribeTable(v) => Ok(Arc::new(DescribeTableInterpreter::try_create(ctx, v)?)),
+            PlanNode::ShowCreateTable(v) => Ok(Arc::new(ShowCreateTableInterpreter::try_create(ctx, v)?)),
+
+            // View related transforms
+            PlanNode::CreateView(v) => Ok(Arc::new(CreateViewInterpreter::try_create(ctx, v)?)),
+            PlanNode::AlterView(v) => Ok(Arc::new(AlterViewInterpreter::try_create(ctx, v)?)),
+            PlanNode::DropView(v) => Ok(Arc::new(DropViewInterpreter::try_create(ctx, v)?)),
+
+            // User related transforms
+            PlanNode::CreateUser(v) => Ok(Arc::new(CreateUserInterpreter::try_create(ctx, v)?)),
+            PlanNode::AlterUser(v) => Ok(Arc::new(AlterUserInterpreter::try_create(ctx, v)?)),
+            PlanNode::DropUser(v) => Ok(Arc::new(DropUserInterpreter::try_create(ctx, v)?)),
+
+            // Privilege related transforms
+            PlanNode::GrantPrivilege(v) => Ok(Arc::new(GrantPrivilegeInterpreter::try_create(ctx, v)?)),
+            PlanNode::GrantRole(v) => Ok(Arc::new(GrantRoleInterpreter::try_create(ctx, v)?)),
+
+            PlanNode::RevokePrivilege(v) => Ok(Arc::new(RevokePrivilegeInterpreter::try_create(ctx, v)?)),
+            PlanNode::RevokeRole(v) => Ok(Arc::new(RevokeRoleInterpreter::try_create(ctx, v)?)),
+
+            PlanNode::CreateRole(v) => Ok(Arc::new(CreateRoleInterpreter::try_create(ctx, v)?)),
+            PlanNode::DropRole(v) => Ok(Arc::new(DropRoleInterpreter::try_create(ctx, v)?)),
+
+            // UDF related transforms
+            PlanNode::CreateUserUDF(v) => Ok(Arc::new(CreateUserUDFInterpreter::try_create(ctx, v)?)),
+            PlanNode::DropUserUDF(v) => Ok(Arc::new(DropUserUDFInterpreter::try_create(ctx, v)?)),
+            PlanNode::AlterUserUDF(v) => Ok(Arc::new(AlterUserUDFInterpreter::try_create(ctx, v)?)),
+
+            // Stage related transforms
+            PlanNode::CreateUserStage(v) => Ok(Arc::new(CreateUserStageInterpreter::try_create(ctx, v)?)),
+            PlanNode::DropUserStage(v) => Ok(Arc::new(DropUserStageInterpreter::try_create(ctx, v)?)),
+            PlanNode::DescribeUserStage(v) => {
+                Ok(Arc::new(DescribeUserStageInterpreter::try_create(ctx, v)?))
+            }
+            PlanNode::RemoveUserStage(v) => Ok(Arc::new(RemoveUserStageInterpreter::try_create(ctx, v)?)),
+
+            // cluster key.
+            PlanNode::AlterTableClusterKey(v) => {
+                Ok(Arc::new(AlterTableClusterKeyInterpreter::try_create(ctx, v)?))
+            }
+            PlanNode::DropTableClusterKey(v) => {
+                Ok(Arc::new(DropTableClusterKeyInterpreter::try_create(ctx, v)?))
+            }
+
+            // others
+            PlanNode::List(v) => Ok(Arc::new(ListInterpreter::try_create(ctx, v)?)),
+            PlanNode::UseDatabase(v) => Ok(Arc::new(UseDatabaseInterpreter::try_create(ctx, v)?)),
+            PlanNode::Kill(v) => Ok(Arc::new(KillInterpreter::try_create(ctx, v)?)),
+            PlanNode::SetVariable(v) => Ok(Arc::new(SettingInterpreter::try_create(ctx, v)?)),
+            PlanNode::Empty(v) => Ok(Arc::new(EmptyInterpreter::try_create(ctx, v)?)),
+
+            _ => Err(ErrorCode::UnknownTypeOfQuery(format!(
+                "Can't get the interpreter by plan:{}",
+                plan.name()
+            ))),
+        }
     }
 }

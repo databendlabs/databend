@@ -31,8 +31,8 @@ pub struct DropUserInterpreter {
 }
 
 impl DropUserInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropUserInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserPlan) -> Result<Self> {
+        Ok(DropUserInterpreter { ctx, plan })
     }
 }
 

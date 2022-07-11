@@ -32,8 +32,8 @@ pub struct ExistsTableInterpreter {
 }
 
 impl ExistsTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ExistsTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ExistsTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ExistsTablePlan) -> Result<Self> {
+        Ok(ExistsTableInterpreter { ctx, plan })
     }
 }
 

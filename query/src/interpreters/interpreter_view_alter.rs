@@ -38,8 +38,8 @@ pub struct AlterViewInterpreter {
 }
 
 impl AlterViewInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterViewPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(AlterViewInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterViewPlan) -> Result<Self> {
+        Ok(AlterViewInterpreter { ctx, plan })
     }
 }
 

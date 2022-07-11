@@ -48,8 +48,8 @@ pub struct CopyInterpreter {
 }
 
 impl CopyInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CopyInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<Self> {
+        Ok(CopyInterpreter { ctx, plan })
     }
 
     // List the files.

@@ -31,8 +31,8 @@ pub struct CreateUserUDFInterpreter {
 }
 
 impl CreateUserUDFInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUserUDFPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreateUserUDFInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUserUDFPlan) -> Result<Self> {
+        Ok(CreateUserUDFInterpreter { ctx, plan })
     }
 }
 

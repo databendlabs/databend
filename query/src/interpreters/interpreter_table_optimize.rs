@@ -30,8 +30,8 @@ pub struct OptimizeTableInterpreter {
 }
 
 impl OptimizeTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: OptimizeTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(OptimizeTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: OptimizeTablePlan) -> Result<Self> {
+        Ok(OptimizeTableInterpreter { ctx, plan })
     }
 }
 

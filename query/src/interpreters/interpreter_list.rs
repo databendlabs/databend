@@ -34,8 +34,8 @@ pub struct ListInterpreter {
 }
 
 impl ListInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ListPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ListInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ListPlan) -> Result<Self> {
+        Ok(ListInterpreter { ctx, plan })
     }
 }
 

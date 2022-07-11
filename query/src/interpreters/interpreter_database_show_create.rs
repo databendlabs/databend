@@ -35,8 +35,8 @@ impl ShowCreateDatabaseInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         plan: ShowCreateDatabasePlan,
-    ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowCreateDatabaseInterpreter { ctx, plan }))
+    ) -> Result<Self> {
+        Ok(ShowCreateDatabaseInterpreter { ctx, plan })
     }
 }
 

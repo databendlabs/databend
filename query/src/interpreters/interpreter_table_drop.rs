@@ -34,8 +34,8 @@ pub struct DropTableInterpreter {
 }
 
 impl DropTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropTablePlan) -> Result<Self> {
+        Ok(DropTableInterpreter { ctx, plan })
     }
 }
 

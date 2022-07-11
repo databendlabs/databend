@@ -33,8 +33,8 @@ pub struct RevokePrivilegeInterpreter {
 }
 
 impl RevokePrivilegeInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokePrivilegePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(RevokePrivilegeInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokePrivilegePlan) -> Result<Self> {
+        Ok(RevokePrivilegeInterpreter { ctx, plan })
     }
 }
 

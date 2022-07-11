@@ -34,8 +34,8 @@ pub struct DropUserStageInterpreter {
 }
 
 impl DropUserStageInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserStagePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropUserStageInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserStagePlan) -> Result<Self> {
+        Ok(DropUserStageInterpreter { ctx, plan })
     }
 }
 

@@ -31,8 +31,8 @@ pub struct AlterUserInterpreter {
 }
 
 impl AlterUserInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterUserPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(AlterUserInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterUserPlan) -> Result<Self> {
+        Ok(AlterUserInterpreter { ctx, plan })
     }
 }
 

@@ -29,7 +29,7 @@ use common_planners::Expression;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 
-use crate::interpreters::SelectInterpreter;
+use crate::interpreters::{Interpreter, SelectInterpreter};
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;

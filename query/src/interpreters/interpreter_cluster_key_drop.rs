@@ -34,8 +34,8 @@ impl DropTableClusterKeyInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         plan: DropTableClusterKeyPlan,
-    ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropTableClusterKeyInterpreter { ctx, plan }))
+    ) -> Result<Self> {
+        Ok(DropTableClusterKeyInterpreter { ctx, plan })
     }
 }
 

@@ -37,8 +37,8 @@ pub struct CreateViewInterpreter {
 }
 
 impl CreateViewInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateViewPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreateViewInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateViewPlan) -> Result<Self> {
+        Ok(CreateViewInterpreter { ctx, plan })
     }
 }
 

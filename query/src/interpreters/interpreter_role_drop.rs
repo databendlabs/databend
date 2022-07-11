@@ -31,8 +31,8 @@ pub struct DropRoleInterpreter {
 }
 
 impl DropRoleInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropRolePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropRoleInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropRolePlan) -> Result<Self> {
+        Ok(DropRoleInterpreter { ctx, plan })
     }
 }
 

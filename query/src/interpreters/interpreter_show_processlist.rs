@@ -31,8 +31,8 @@ pub struct ShowProcessListInterpreter {
 }
 
 impl ShowProcessListInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowProcessListInterpreter { ctx }))
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowProcessListInterpreter { ctx })
     }
 
     fn build_query(&self) -> Result<String> {

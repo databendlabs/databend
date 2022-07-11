@@ -31,8 +31,8 @@ pub struct UseDatabaseInterpreter {
 }
 
 impl UseDatabaseInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: UseDatabasePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(UseDatabaseInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: UseDatabasePlan) -> Result<Self> {
+        Ok(UseDatabaseInterpreter { ctx, plan })
     }
 }
 

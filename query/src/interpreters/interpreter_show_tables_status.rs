@@ -38,8 +38,8 @@ impl ShowTablesStatusInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         plan: ShowTablesStatusPlan,
-    ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowTablesStatusInterpreter { ctx, plan }))
+    ) -> Result<Self> {
+        Ok(ShowTablesStatusInterpreter { ctx, plan })
     }
 
     fn build_query(&self) -> Result<String> {

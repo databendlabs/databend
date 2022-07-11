@@ -31,8 +31,8 @@ pub struct ShowStagesInterpreter {
 }
 
 impl ShowStagesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowStagesInterpreter { ctx }))
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowStagesInterpreter { ctx })
     }
 
     fn build_query(&self) -> Result<String> {

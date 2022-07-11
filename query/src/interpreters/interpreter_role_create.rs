@@ -32,8 +32,8 @@ pub struct CreateRoleInterpreter {
 }
 
 impl CreateRoleInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateRolePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreateRoleInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateRolePlan) -> Result<Self> {
+        Ok(CreateRoleInterpreter { ctx, plan })
     }
 }
 

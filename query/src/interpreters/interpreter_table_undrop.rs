@@ -31,8 +31,8 @@ pub struct UndropTableInterpreter {
 }
 
 impl UndropTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: UndropTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(UndropTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: UndropTablePlan) -> Result<Self> {
+        Ok(UndropTableInterpreter { ctx, plan })
     }
 }
 

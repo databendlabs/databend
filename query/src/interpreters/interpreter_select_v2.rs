@@ -46,13 +46,13 @@ impl SelectInterpreterV2 {
         bind_context: BindContext,
         s_expr: SExpr,
         metadata: MetadataRef,
-    ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(SelectInterpreterV2 {
+    ) -> Result<Self> {
+        Ok(SelectInterpreterV2 {
             ctx,
             s_expr,
             bind_context,
             metadata,
-        }))
+        })
     }
 }
 

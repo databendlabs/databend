@@ -31,8 +31,8 @@ pub struct ShowRolesInterpreter {
 }
 
 impl ShowRolesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowRolesInterpreter { ctx }))
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowRolesInterpreter { ctx })
     }
 
     fn build_query(&self) -> Result<String> {
