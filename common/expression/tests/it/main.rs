@@ -66,7 +66,7 @@ fn run_ast(file: &mut impl Write, raw: &RawExpr, columns: Vec<Column>) {
 #[test]
 pub fn test() {
     let mut mint = Mint::new("tests/it/testdata");
-    let mut file = mint.new_goldenfile("run-ast").unwrap();
+    let mut file = mint.new_goldenfile("run-ast.txt").unwrap();
 
     run_ast(
         &mut file,
