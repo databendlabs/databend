@@ -1258,7 +1258,6 @@ dependencies = [
  "futures",
  "lexical-core",
  "micromarshal",
- "opendal",
  "rand 0.8.5",
  "serde",
  "time 0.3.11",
@@ -1542,6 +1541,14 @@ dependencies = [
  "prost-build",
  "tonic",
  "tonic-build",
+]
+
+[[package]]
+name = "common-storage"
+version = "0.1.0"
+dependencies = [
+ "opendal",
+ "serde",
 ]
 
 [[package]]
@@ -2151,6 +2158,7 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-planners",
+ "common-storage",
  "common-streams",
  "common-tracing",
  "common-users",

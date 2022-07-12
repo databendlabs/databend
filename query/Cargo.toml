@@ -22,7 +22,7 @@ default = ["simd"]
 simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling", "tempfile"]
-storage-hdfs = ["opendal/services-hdfs", "common-io/storage-hdfs"]
+storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
 hive = ["common-hive-meta-store", "thrift", "storage-hdfs"]
 
 [dependencies]
@@ -42,6 +42,7 @@ common-hashtable = { path = "../common/hashtable" }
 common-hive-meta-store = { path = "../common/hive-meta-store", optional = true }
 common-http = { path = "../common/http" }
 common-io = { path = "../common/io" }
+common-storage = { path = "../common/storage" }
 common-macros = { path = "../common/macros" }
 common-management = { path = "../common/management" }
 common-meta-api = { path = "../common/meta/api" }
