@@ -31,6 +31,8 @@ use common_proto_conv::FromToProto;
 use crate::KVApi;
 use crate::KVApiKey;
 
+pub const TXN_MAX_RETRY_TIMES: u32 = 10;
+
 /// Get value that its type is `u64`.
 ///
 /// It expects the kv-value's type is `u64`, such as:
@@ -49,6 +51,27 @@ pub async fn get_u64_value<T: KVApiKey>(
         Ok((seq_v.seq, deserialize_u64(&seq_v.data)?))
     } else {
         Ok((0, 0))
+    }
+}
+
+/// Get a struct value.
+///
+/// It returns seq number and the data.
+pub async fn get_struct_value<K, PB, T>(
+    kv_api: &impl KVApi,
+    k: &K,
+) -> Result<(u64, Option<T>), MetaError>
+where
+    K: KVApiKey,
+    PB: common_protos::prost::Message + Default,
+    T: FromToProto<PB>,
+{
+    let res = kv_api.get_kv(&k.to_key()).await?;
+
+    if let Some(seq_v) = res {
+        Ok((seq_v.seq, Some(deserialize_struct(&seq_v.data)?)))
+    } else {
+        Ok((0, None))
     }
 }
 

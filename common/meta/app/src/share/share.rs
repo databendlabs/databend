@@ -52,6 +52,7 @@ pub struct CreateShareReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropShareReq {
     pub share_name: ShareNameIdent,
+    pub if_exists: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

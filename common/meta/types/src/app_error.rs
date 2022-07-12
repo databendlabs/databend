@@ -381,9 +381,6 @@ pub enum AppError {
     UnknownTableId(#[from] UnknownTableId),
 
     #[error(transparent)]
-    UnknownShare(#[from] UnknownShare),
-
-    #[error(transparent)]
     UnknownShareId(#[from] UnknownShareId),
 
     #[error(transparent)]
@@ -392,6 +389,9 @@ pub enum AppError {
     // share api errors
     #[error(transparent)]
     ShareAlreadyExists(#[from] ShareAlreadyExists),
+
+    #[error(transparent)]
+    UnknownShare(#[from] UnknownShare),
 }
 
 impl AppErrorMessage for UnknownDatabase {

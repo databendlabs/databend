@@ -83,7 +83,6 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::TxnRequest;
-use common_proto_conv::FromToProto;
 use common_tracing::func_name;
 use common_tracing::tracing;
 use ConditionResult::Eq;
@@ -91,6 +90,7 @@ use ConditionResult::Eq;
 use crate::deserialize_struct;
 use crate::deserialize_u64;
 use crate::fetch_id;
+use crate::get_struct_value;
 use crate::get_u64_value;
 use crate::meta_encode_err;
 use crate::send_txn;
@@ -104,9 +104,9 @@ use crate::KVApi;
 use crate::KVApiKey;
 use crate::SchemaApi;
 use crate::TableIdGen;
+use crate::TXN_MAX_RETRY_TIMES;
 
 const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
-const TXN_MAX_RETRY_TIMES: u32 = 10;
 
 /// SchemaApi is implemented upon KVApi.
 /// Thus every type that impl KVApi impls SchemaApi.
@@ -2109,27 +2109,6 @@ async fn list_keys<K: KVApiKey>(kv_api: &impl KVApi, key: &K) -> Result<Vec<K>, 
     }
 
     Ok(structured_keys)
-}
-
-/// Get a struct value.
-///
-/// It returns seq number and the data.
-async fn get_struct_value<K, PB, T>(
-    kv_api: &impl KVApi,
-    k: &K,
-) -> Result<(u64, Option<T>), MetaError>
-where
-    K: KVApiKey,
-    PB: common_protos::prost::Message + Default,
-    T: FromToProto<PB>,
-{
-    let res = kv_api.get_kv(&k.to_key()).await?;
-
-    if let Some(seq_v) = res {
-        Ok((seq_v.seq, Some(deserialize_struct(&seq_v.data)?)))
-    } else {
-        Ok((0, None))
-    }
 }
 
 /// Get the count of tables for one tenant by listing databases and table ids.

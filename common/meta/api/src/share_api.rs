@@ -22,5 +22,5 @@ use common_meta_types::MetaResult;
 pub trait ShareApi: Sync + Send {
     async fn create_share(&self, req: CreateShareReq) -> MetaResult<CreateShareReply>;
 
-    //async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply>;
+    async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply>;
 }
