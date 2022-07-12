@@ -149,6 +149,24 @@ impl<'a, T: ValueType> Value<T> {
     }
 }
 
+impl<T: ArgType> Value<T> {
+    pub fn upcast(self) -> Value<AnyType> {
+        match self {
+            Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar(scalar)),
+            Value::Column(col) => Value::Column(T::upcast_column(col)),
+        }
+    }
+}
+
+impl<'a> ValueRef<'a, AnyType> {
+    pub fn try_downcast<'b, T: ArgType>(&'b self) -> Option<ValueRef<'a, T>> {
+        Some(match self {
+            ValueRef::Scalar(scalar) => ValueRef::Scalar(T::try_downcast_scalar(scalar)?),
+            ValueRef::Column(col) => ValueRef::Column(T::try_downcast_column(col)?),
+        })
+    }
+}
+
 impl<'a, T: ValueType> Clone for ValueRef<'a, T> {
     fn clone(&self) -> Self {
         match self {

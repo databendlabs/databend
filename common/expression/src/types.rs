@@ -39,8 +39,6 @@ pub use self::number::NumberType;
 pub use self::string::StringType;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::values::Value;
-use crate::values::ValueRef;
 
 pub type GenericMap<'a> = [DataType];
 
@@ -87,18 +85,6 @@ pub trait ArgType: ValueType {
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column>;
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
-    fn try_downcast_value<'a>(value: &'a ValueRef<'_, AnyType>) -> Option<ValueRef<'a, Self>> {
-        Some(match value {
-            ValueRef::Scalar(scalar) => ValueRef::Scalar(Self::try_downcast_scalar(scalar)?),
-            ValueRef::Column(col) => ValueRef::Column(Self::try_downcast_column(col)?),
-        })
-    }
-    fn upcast_value(value: Value<Self>) -> Value<AnyType> {
-        match value {
-            Value::Scalar(scalar) => Value::Scalar(Self::upcast_scalar(scalar)),
-            Value::Column(col) => Value::Column(Self::upcast_column(col)),
-        }
-    }
 
     fn column_len<'a>(col: &'a Self::Column) -> usize;
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Self::ScalarRef<'a>;

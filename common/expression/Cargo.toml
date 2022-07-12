@@ -21,4 +21,3 @@ enum-as-inner = "0.4"
 
 [dev-dependencies]
 goldenfile = "1.4"
-

@@ -30,7 +30,6 @@ use common_expression::function::FunctionSignature;
 use common_expression::property::FunctionProperty;
 use common_expression::property::ValueProperty;
 use common_expression::type_check;
-use common_expression::types::ArgType;
 use common_expression::types::ArrayType;
 use common_expression::types::DataType;
 use common_expression::types::*;
@@ -427,21 +426,22 @@ fn builtin_functions() -> FunctionRegistry {
                 } else if args.len() == 1 {
                     args[0].clone().to_owned()
                 } else {
-                    let mut min: Value<NumberType<i16>> = vectorize_2_arg(
-                        NumberType::<i16>::try_downcast_value(&args[0]).unwrap(),
-                        NumberType::<i16>::try_downcast_value(&args[1]).unwrap(),
-                        generics,
-                        |lhs, rhs| lhs.min(rhs),
-                    );
-                    for arg in &args[2..] {
-                        min = vectorize_2_arg(
-                            min.as_ref(),
-                            NumberType::<i16>::try_downcast_value(arg).unwrap(),
-                            generics,
+                    let mut min =
+                        vectorize_2_arg::<NumberType<i16>, NumberType<i16>, NumberType<i16>>(
                             |lhs, rhs| lhs.min(rhs),
+                        )(
+                            args[0].try_downcast().unwrap(),
+                            args[1].try_downcast().unwrap(),
+                            generics,
+                        );
+                    for arg in &args[2..] {
+                        min = vectorize_2_arg::<NumberType<i16>, NumberType<i16>, NumberType<i16>>(
+                            |lhs, rhs| lhs.min(rhs),
+                        )(
+                            min.as_ref(), arg.try_downcast().unwrap(), generics
                         );
                     }
-                    NumberType::<i16>::upcast_value(min)
+                    min.upcast()
                 }
             }),
         }))
