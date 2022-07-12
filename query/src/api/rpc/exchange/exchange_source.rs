@@ -21,8 +21,8 @@ use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_source_merge::ExchangeMergeSource;
 use crate::api::rpc::exchange::exchange_source_shuffle::ExchangeShuffleSource;
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 
 pub struct ExchangeSource {}
 
@@ -46,14 +46,18 @@ impl ExchangeSource {
         rx: Receiver<Result<FlightData>>,
         schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
+        parallel_size: usize,
     ) -> Result<()> {
-        let output = OutputPort::create();
-        pipeline.add_pipe(NewPipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![ExchangeMergeSource::try_create(output, rx, schema)?],
-        });
+        let mut source_builder = SourcePipeBuilder::create();
+        for _index in 0..parallel_size {
+            let output = OutputPort::create();
+            source_builder.add_source(
+                output.clone(),
+                ExchangeMergeSource::try_create(output, rx.clone(), schema.clone())?,
+            );
+        }
 
+        pipeline.add_pipe(source_builder.finalize());
         Ok(())
     }
 }

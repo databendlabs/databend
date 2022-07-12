@@ -667,8 +667,11 @@ impl QueryCoordinator {
             return ExchangeSource::via_exchange(rx, &exchange_params, pipeline);
         }
 
+        let settings = self.ctx.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+        let max_threads = std::cmp::max(max_threads, 1);
         // Add exchange data subscriber.
-        ExchangeSource::create_source(rx, schema, pipeline)
+        ExchangeSource::create_source(rx, schema, pipeline, max_threads)
     }
 }
 
