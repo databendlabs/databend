@@ -23,6 +23,7 @@ pub use config::StorageFsConfig;
 pub use config::StorageHdfsConfig;
 pub use config::StorageParams;
 pub use config::StorageS3Config;
+pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
 
 mod operator;
 pub use operator::init_azblob_operator;
@@ -32,5 +33,9 @@ pub use operator::init_hdfs_operator;
 pub use operator::init_memory_operator;
 pub use operator::init_operator;
 pub use operator::init_s3_operator;
+
+mod location;
+pub use location::parse_uri_location;
+pub use location::UriLocation;
 
 mod utils;

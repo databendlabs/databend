@@ -10,5 +10,6 @@ edition = "2021"
 storage-hdfs = ["opendal/services-hdfs"]
 
 [dependencies]
-opendal = { version = "0.10.0", features = ["retry"] }
+opendal = { version = "0.11.0", features = ["retry"] }
 serde = { version = "1.0.137", features = ["derive"] }
+anyhow = "1.0.58"
