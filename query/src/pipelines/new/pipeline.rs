@@ -190,3 +190,4 @@ impl Drop for NewPipeline {
         }
     }
 }
+

@@ -16,8 +16,8 @@ use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::flight::serialize_schema;
-use common_arrow::arrow::io::ipc::write::default_ipc_fields;
+
+
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::ActionType;
 use common_arrow::arrow_format::flight::data::Criteria;
@@ -159,7 +159,7 @@ impl FlightService for DatabendQueryFlightService {
     type DoExchangeStream = FlightStream<FlightData>;
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
+    async fn do_get(&self, _request: Request<Ticket>) -> Response<Self::DoGetStream> {
         Err(Status::unimplemented("unimplement do_get"))
     }
 
@@ -210,7 +210,6 @@ impl FlightService for DatabendQueryFlightService {
                 exchange_manager.execute_partial_query(query_id)?;
                 FlightResult { body: vec![] }
             }
-            _ => unimplemented!()
         };
 
         // let action_result = do_flight_action.await?;

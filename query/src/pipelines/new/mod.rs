@@ -25,6 +25,7 @@ mod pipeline;
 mod pipeline_builder;
 pub mod processors;
 mod unsafe_cell_wrap;
+mod pipeline_display;
 
 pub use pipe::NewPipe;
 pub use pipe::SinkPipeBuilder;

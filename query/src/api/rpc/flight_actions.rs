@@ -194,7 +194,6 @@ impl TryInto<Action> for FlightAction {
                 r#type: String::from("ExecutePartialQuery"),
                 body: query_id.into_bytes(),
             }),
-            _ => unimplemented!()
         }
     }
 }

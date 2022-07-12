@@ -14,5 +14,4 @@
 
 mod http;
 mod http_service;
-mod rpc;
 mod rpc_service;

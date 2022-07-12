@@ -22,64 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
-use common_streams::SortStream;
 use common_tracing::tracing;
-
-use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::Processor;
-
-pub struct SortPartialTransform {
-    schema: DataSchemaRef,
-    exprs: Vec<Expression>,
-    limit: Option<usize>,
-    input: Arc<dyn Processor>,
-}
-
-impl SortPartialTransform {
-    pub fn try_create(
-        schema: DataSchemaRef,
-        exprs: Vec<Expression>,
-        limit: Option<usize>,
-    ) -> Result<Self> {
-        Ok(SortPartialTransform {
-            schema,
-            exprs,
-            limit,
-            input: Arc::new(EmptyProcessor::create()),
-        })
-    }
-}
-
-#[async_trait]
-impl Processor for SortPartialTransform {
-    fn name(&self) -> &str {
-        "SortPartialTransform"
-    }
-
-    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
-        self.input = input;
-        Ok(())
-    }
-
-    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
-        vec![self.input.clone()]
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    #[tracing::instrument(level = "debug", name = "sort_partial_execute", skip(self))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::debug!("execute...");
-
-        Ok(Box::pin(SortStream::try_create(
-            self.input.execute().await?,
-            get_sort_descriptions(&self.schema, &self.exprs)?,
-            self.limit,
-        )?))
-    }
-}
 
 pub fn get_sort_descriptions(
     schema: &DataSchemaRef,

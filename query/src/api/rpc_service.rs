@@ -100,7 +100,7 @@ impl RpcService {
 
 #[async_trait::async_trait]
 impl DatabendQueryServer for RpcService {
-    async fn shutdown(&mut self, graceful: bool) {}
+    async fn shutdown(&mut self, _graceful: bool) {}
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         let (listener_stream, listener_addr) = Self::listener_tcp(listening).await?;
