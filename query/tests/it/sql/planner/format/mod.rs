@@ -184,4 +184,11 @@ fn test_format() {
     Scan: catalog.database.table
 "#;
     assert_eq!(result.as_str(), expect);
+    let pretty_result = tree.format_pretty().unwrap();
+    let pretty_expect = r#"HashJoin: INNER, build keys: [plus(col1, 123)], probe keys: [col2], join filters: []
+├── Filter: [true]
+│   └── Scan: catalog.database.table
+└── Scan: catalog.database.table
+"#;
+    assert_eq!(pretty_result.as_str(), pretty_expect);
 }
