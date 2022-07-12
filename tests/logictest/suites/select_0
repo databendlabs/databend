@@ -37,7 +37,7 @@ statement ok
 drop table t4;
 
 statement ok
-create table if not exists t5(a text);
+create table if not exists t5(a varchar);
 
 statement ok
 insert into t5(a) values ('abcd\nabcd')
