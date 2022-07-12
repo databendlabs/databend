@@ -103,3 +103,14 @@ pub fn mask_string(s: &str, unmask_len: usize) -> String {
         ret
     }
 }
+
+/// Replace idx-th char as new char
+/// If idx is out of len(s) range, then no replacement is performed.
+/// replace_nth_char("a13", 1, '2') -> 'a23'
+/// replace_nth_char("a13", 10, '2') -> 'a13'
+pub fn replace_nth_char(s: &str, idx: usize, newchar: char) -> String {
+    s.chars()
+        .enumerate()
+        .map(|(i, c)| if i == idx { newchar } else { c })
+        .collect()
+}

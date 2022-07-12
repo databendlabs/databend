@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod format;
-mod http_shutdown_handlers;
 mod net;
 mod profiling;
 mod progress;
@@ -26,8 +24,6 @@ mod string_func;
 mod thread;
 mod uniq_id;
 
-pub use format::Format;
-pub use http_shutdown_handlers::HttpShutdownHandler;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
 pub use profiling::Profiling;
@@ -46,6 +42,7 @@ pub use stop_handle::StopHandle;
 pub use stoppable::Stoppable;
 pub use string_func::escape_for_key;
 pub use string_func::mask_string;
+pub use string_func::replace_nth_char;
 pub use string_func::unescape_for_key;
 pub use thread::Thread;
 pub use tokio;

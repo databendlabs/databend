@@ -14,6 +14,7 @@
 0	1
 ====SCALAR_EXPRESSION====
 13
+2022-07-01
 ====COMPARISON====
 5
 ====CAST====
@@ -406,14 +407,14 @@ NULL	NULL	6	8
 7	8	2	3
 7	8	6	8
 ====NULL====
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
 0	0	0	0
-NULL	NULL	NULL	NULL
 NULL	NULL	NULL	1
 NULL	NULL	NULL	1
 NULL	NULL	NULL	1
-NULL	NULL	NULL	NULL
 12	1	0	1
-NULL	NULL	NULL	NULL
 NULL	NULL	NULL	1
 NULL	NULL	NULL	1
 0
@@ -426,3 +427,19 @@ NULL	NULL	NULL	1
 1
 1	2
 2	3
+2	3
+2	3
+1	2
+2	3
+10000
+====Database====
+default	default	default
+====User====
+'default'@'127.0.0.1'	'default'@'127.0.0.1'	'default'@'127.0.0.1'
+====WITH_KEYWORD====
+system	settings	default	VARCHAR			
+system	settings	description	VARCHAR			
+system	settings	level	VARCHAR			
+system	settings	name	VARCHAR			
+system	settings	type	VARCHAR			
+system	settings	value	VARCHAR			

@@ -26,6 +26,7 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
+use common_streams::TakeStream;
 use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
 use serde::Deserialize;
@@ -140,15 +141,18 @@ impl Table for ResultTable {
     async fn read_partitions(
         &self,
         ctx: Arc<QueryContext>,
-        _push_downs: Option<Extras>,
+        push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let data_accessor = ctx.get_storage_operator()?;
         let meta_location = self.locations.get_meta_location();
         let meta_data = data_accessor.object(&meta_location).read().await?;
         let meta: ResultTableMeta = serde_json::from_slice(&meta_data)?;
+        let limit = push_downs
+            .map(|e| e.limit.unwrap_or(usize::MAX))
+            .unwrap_or(usize::MAX);
         match meta.storage {
             ResultStorageInfo::FuseSegment(seg) => {
-                Ok(FuseTable::all_columns_partitions(&seg.blocks, usize::MAX))
+                Ok(FuseTable::all_columns_partitions(&seg.blocks, limit))
             }
         }
     }
@@ -156,7 +160,7 @@ impl Table for ResultTable {
     async fn read(
         &self,
         ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let block_reader = self.create_block_reader(&ctx, &None)?;
         let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(1) {
@@ -174,7 +178,11 @@ impl Table for ResultTable {
                 async move { block_reader.read(part).await }
             })
             .instrument(common_tracing::tracing::Span::current());
-
+        if let Some(extra) = &plan.push_downs {
+            if let Some(limit) = extra.limit {
+                return Ok(Box::pin(TakeStream::new(Box::pin(stream), limit)));
+            }
+        }
         Ok(Box::pin(stream))
     }
 

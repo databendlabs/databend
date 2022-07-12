@@ -24,11 +24,11 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::sleep;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
-use common_base::infallible::Mutex;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use futures_util::future::Either;
+use parking_lot::Mutex;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
 use crate::api::rpc::packets::DataPacket;
@@ -41,11 +41,13 @@ use crate::sessions::QueryContext;
 use crate::Config;
 
 pub struct ExchangeSender {
+    config: Config,
     query_id: String,
+    target_address: String,
     target_fragments: Vec<usize>,
     target_fragments_finished: HashMap<usize, Arc<AtomicBool>>,
     join_handlers: Mutex<Vec<JoinHandle<()>>>,
-    flight_client: Mutex<Option<FlightClient>>,
+    flight_client: Arc<Mutex<Option<FlightClient>>>,
     target_is_request_server: bool,
 }
 
@@ -56,8 +58,7 @@ impl ExchangeSender {
         target: &str,
     ) -> Result<ExchangeSender> {
         let target_node_info = &packet.target_nodes_info[target];
-        let address = target_node_info.flight_address.to_string();
-        let flight_client = Self::create_client(config, &address).await?;
+        let target_address = target_node_info.flight_address.to_string();
         let target_fragments_id = &packet.target_2_fragments[target];
 
         let mut target_fragments_finished = HashMap::with_capacity(target_fragments_id.len());
@@ -67,12 +68,45 @@ impl ExchangeSender {
         }
 
         Ok(ExchangeSender {
+            config,
+            target_address,
             target_fragments_finished,
             query_id: packet.query_id.clone(),
             target_fragments: target_fragments_id.to_owned(),
             join_handlers: Mutex::new(vec![]),
-            flight_client: Mutex::new(Some(flight_client)),
+            flight_client: Arc::new(Mutex::new(None)),
             target_is_request_server: target == packet.request_server,
+        })
+    }
+
+    pub fn connect_flight(&mut self, runtime: &Arc<Runtime>) -> Result<()> {
+        let config = self.config.clone();
+        let target_address = self.target_address.clone();
+        let flight_client = self.flight_client.clone();
+        let connect_res_future = runtime.spawn(async move {
+            let connection = Self::create_client(config, &target_address).await?;
+            let mut flight_client = flight_client.lock();
+            *flight_client = Some(connection);
+            Ok(())
+        });
+
+        futures::executor::block_on(async move {
+            match connect_res_future.await {
+                Ok(res) => res,
+                Err(join_error) => match join_error.is_panic() {
+                    false => Err(ErrorCode::TokioError("Cancel tokio task.")),
+                    true => {
+                        let cause = join_error.into_panic();
+                        match cause.downcast_ref::<&'static str>() {
+                            None => match cause.downcast_ref::<String>() {
+                                None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+                                Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                            },
+                            Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                        }
+                    }
+                },
+            }
         })
     }
 
@@ -116,42 +150,45 @@ impl ExchangeSender {
         let (f_tx, f_rx) = async_channel::bounded(1);
 
         join_handlers.push(runtime.spawn(async move {
-            let mut sleep_future = Box::pin(sleep(Duration::from_millis(500)));
-
             // flight connect is closed if c_tx is closed.
             'fragment_loop: while !is_finished.load(Ordering::Relaxed) && !c_tx.is_closed() {
+                let sleep_future = Box::pin(sleep(Duration::from_millis(500)));
+
                 match futures::future::select(sleep_future, f_rx.recv()).await {
                     Either::Left((_, _)) => {
                         if to_request_server {
                             ExchangeSender::send_progress_if_need(&ctx, &c_tx).await;
                             ExchangeSender::send_precommit_if_need(&ctx, &c_tx).await;
                         }
-
-                        sleep_future = Box::pin(sleep(Duration::from_millis(500)));
                     }
-                    Either::Right((recv_message, n)) => {
-                        sleep_future = n;
-
+                    Either::Right((recv_message, _)) => {
                         if let Ok(recv_packet) = recv_message {
                             if c_tx.send(recv_packet).await.is_err() {
-                                break 'fragment_loop;
+                                return;
                             }
 
                             continue 'fragment_loop;
                         }
 
-                        // Disconnect channel, exit loop
-                        if to_request_server {
-                            ExchangeSender::send_progress_if_need(&ctx, &c_tx).await;
-                            ExchangeSender::send_precommit_if_need(&ctx, &c_tx).await;
-                        }
-
-                        let fragment_end = FragmentData::End(fragment_id);
-                        c_tx.send(DataPacket::FragmentData(fragment_end)).await.ok();
                         break 'fragment_loop;
                     }
                 };
             }
+
+            while let Ok(recv_message) = f_rx.try_recv() {
+                if c_tx.send(recv_message).await.is_err() {
+                    return;
+                }
+            }
+
+            // Disconnect channel, exit loop
+            if to_request_server {
+                ExchangeSender::send_progress_if_need(&ctx, &c_tx).await;
+                ExchangeSender::send_precommit_if_need(&ctx, &c_tx).await;
+            }
+
+            let fragment_end = FragmentData::End(fragment_id);
+            c_tx.send(DataPacket::FragmentData(fragment_end)).await.ok();
         }));
 
         Ok(f_tx)

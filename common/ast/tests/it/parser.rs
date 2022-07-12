@@ -216,6 +216,9 @@ fn test_statement() {
         r#"CALL system$test(a)"#,
         r#"CALL system$test('a')"#,
         r#"show settings like 'enable%'"#,
+        r#"PRESIGN @my_stage/path/to/file"#,
+        r#"PRESIGN DOWNLOAD @my_stage/path/to/file"#,
+        r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
     ];
 
     for case in cases {
@@ -270,6 +273,7 @@ fn test_statement_error() {
         r#"CALL system$test"#,
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,
+        r#"PRESIGN INVALID @my_stage/path/to/file"#,
     ];
 
     for case in cases {
@@ -309,7 +313,7 @@ fn test_query() {
                         c_custkey
                 ) as c_orders
             group by c_count
-            order by custdist desc, c_count asc, totacctbal
+            order by custdist desc nulls first, c_count asc, totacctbal nulls last
             limit 10, totacctbal"#,
         r#"select * from t1 union select * from t2"#,
         r#"select * from t1 union select * from t2 union select * from t3"#,

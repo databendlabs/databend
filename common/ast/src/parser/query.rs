@@ -284,14 +284,21 @@ pub fn join_operator(i: Input) -> IResult<JoinOperator> {
 }
 
 pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
+    let nulls_first = map(
+        rule! {
+            NULLS ~ ( FIRST | LAST )
+        },
+        |(_, first_last)| first_last.kind == FIRST,
+    );
+
     map(
         rule! {
-            #expr ~ ( ASC | DESC )?
+            #expr ~ ( ASC | DESC )? ~ #nulls_first?
         },
-        |(expr, opt_asc)| OrderByExpr {
+        |(expr, opt_asc, opt_nulls_first)| OrderByExpr {
             expr,
             asc: opt_asc.map(|asc| asc.kind == ASC),
-            nulls_first: None,
+            nulls_first: opt_nulls_first,
         },
     )(i)
 }

@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::infallible::RwLock;
+use parking_lot::RwLock;
 
 use crate::DataBlock;
 

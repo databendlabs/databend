@@ -22,6 +22,8 @@ use common_base::base::get_free_tcp_port;
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_users::CustomClaims;
+use common_users::EnsureUser;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::make_final_uri;
@@ -34,8 +36,6 @@ use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::SessionManager;
-use databend_query::users::auth::jwt::CustomClaims;
-use databend_query::users::auth::jwt::EnsureUser;
 use headers::Header;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
@@ -1107,6 +1107,20 @@ async fn test_download(v2: u64) -> Result<()> {
             fmt
         );
     }
+
+    // test download with limits
+    let uri = format!("/v1/query/{query_id}/download?limit=1");
+    let resp = get_uri(&ep, &uri).await;
+    assert_eq!(resp.status(), StatusCode::OK, "{:?}", resp);
+    let exp = "0,1\n";
+    assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
+
+    let uri = format!("/v1/query/{query_id}/download?limit=0");
+    let resp = get_uri(&ep, &uri).await;
+    assert_eq!(resp.status(), StatusCode::OK, "{:?}", resp);
+    let exp = "0,1\n1,2\n";
+    assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
+
     Ok(())
 }
 

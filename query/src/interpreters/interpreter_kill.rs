@@ -24,7 +24,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct KillInterpreter {
@@ -33,8 +32,8 @@ pub struct KillInterpreter {
 }
 
 impl KillInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: KillPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(KillInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: KillPlan) -> Result<Self> {
+        Ok(KillInterpreter { ctx, plan })
     }
 
     async fn execute_kill(&self, session_id: &String) -> Result<SendableDataBlockStream> {

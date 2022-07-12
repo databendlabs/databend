@@ -30,10 +30,10 @@ use poem::Middleware;
 use poem::Request;
 
 use super::v1::HttpQueryContext;
+use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
-use crate::users::auth::auth_mgr::Credential;
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,

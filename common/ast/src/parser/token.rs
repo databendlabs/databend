@@ -317,6 +317,8 @@ pub enum TokenKind {
     DATE_ADD,
     #[token("DATE_SUB", ignore(ascii_case))]
     DATE_SUB,
+    #[token("DATE_TRUNC", ignore(ascii_case))]
+    DATE_TRUNC,
     #[token("DATETIME", ignore(ascii_case))]
     DATETIME,
     #[token("DAY", ignore(ascii_case))]
@@ -343,6 +345,8 @@ pub enum TokenKind {
     DOW,
     #[token("DOY", ignore(ascii_case))]
     DOY,
+    #[token("DOWNLOAD", ignore(ascii_case))]
+    DOWNLOAD,
     #[token("DROP", ignore(ascii_case))]
     DROP,
     #[token("EXCEPT", ignore(ascii_case))]
@@ -363,6 +367,8 @@ pub enum TokenKind {
     EXISTS,
     #[token("EXPLAIN", ignore(ascii_case))]
     EXPLAIN,
+    #[token("EXPIRE", ignore(ascii_case))]
+    EXPIRE,
     #[token("EXTRACT", ignore(ascii_case))]
     EXTRACT,
     #[token("FALSE", ignore(ascii_case))]
@@ -539,6 +545,8 @@ pub enum TokenKind {
     GRANT,
     #[token("ROLE", ignore(ascii_case))]
     ROLE,
+    #[token("PRESIGN", ignore(ascii_case))]
+    PRESIGN,
     #[token("PRIVILEGES", ignore(ascii_case))]
     PRIVILEGES,
     #[token("REMOVE", ignore(ascii_case))]
@@ -585,6 +593,8 @@ pub enum TokenKind {
     USAGE,
     #[token("UPDATE", ignore(ascii_case))]
     UPDATE,
+    #[token("UPLOAD", ignore(ascii_case))]
+    UPLOAD,
     #[token("SUPER", ignore(ascii_case))]
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
@@ -683,6 +693,12 @@ pub enum TokenKind {
     RANDOM,
     #[token("IFNULL", ignore(ascii_case))]
     IFNULL,
+    #[token("NULLS", ignore(ascii_case))]
+    NULLS,
+    #[token("FIRST", ignore(ascii_case))]
+    FIRST,
+    #[token("LAST", ignore(ascii_case))]
+    LAST,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -877,6 +893,7 @@ impl TokenKind {
             | TokenKind::WITH
             | TokenKind::DATE_ADD
             | TokenKind::DATE_SUB
+            | TokenKind::DATE_TRUNC
             if !after_as => true,
             _ => false
         }
@@ -947,7 +964,7 @@ impl TokenKind {
             // | TokenKind::SIMILAR
             | TokenKind::SOME
             // | TokenKind::SYMMETRIC
-            | TokenKind::TABLE
+            // | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING

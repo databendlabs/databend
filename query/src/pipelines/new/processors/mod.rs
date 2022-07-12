@@ -59,6 +59,7 @@ pub use transforms::KeyU32HashTable;
 pub use transforms::KeyU512HashTable;
 pub use transforms::KeyU64HashTable;
 pub use transforms::KeyU8HashTable;
+pub use transforms::MarkJoinCompactor;
 pub use transforms::ProjectionTransform;
 pub use transforms::SerializerHashTable;
 pub use transforms::SinkBuildHashTable;

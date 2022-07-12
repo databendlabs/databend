@@ -17,7 +17,6 @@ use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,6 +29,7 @@ use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
+use parking_lot::Mutex;
 
 use super::StageSource;
 use crate::pipelines::new::processors::port::OutputPort;

@@ -21,7 +21,6 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
@@ -31,8 +30,8 @@ pub struct AlterUserInterpreter {
 }
 
 impl AlterUserInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterUserPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(AlterUserInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterUserPlan) -> Result<Self> {
+        Ok(AlterUserInterpreter { ctx, plan })
     }
 }
 

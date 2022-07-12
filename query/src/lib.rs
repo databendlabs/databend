@@ -21,6 +21,7 @@
 #![feature(box_patterns)]
 
 pub mod api;
+pub mod auth;
 pub mod catalogs;
 pub mod clusters;
 pub mod common;
@@ -35,7 +36,6 @@ pub mod sessions;
 pub mod sql;
 pub mod storages;
 pub mod table_functions;
-pub mod users;
 
 mod config;
 mod version;

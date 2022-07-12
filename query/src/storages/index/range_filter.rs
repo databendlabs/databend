@@ -35,10 +35,14 @@ use crate::sessions::QueryContext;
 
 pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct ColumnStatistics {
     pub min: DataValue,
     pub max: DataValue,
+    // A non-backward compatible change has been introduced by [PR#6067](https://github.com/datafuselabs/databend/pull/6067/files#diff-20030750809780d6492d2fe215a8eb80294aa6a8a5af2cf1bebe17eb740cae35)
+    // , please also see [issue#6556](https://github.com/datafuselabs/databend/issues/6556)
+    // therefore, we alias `null_count` with `unset_bits`, to make subsequent versions backward compatible again
+    #[serde(alias = "unset_bits")]
     pub null_count: u64,
     pub in_memory_size: u64,
 }

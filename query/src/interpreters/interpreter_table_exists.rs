@@ -23,7 +23,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct ExistsTableInterpreter {
@@ -32,8 +31,8 @@ pub struct ExistsTableInterpreter {
 }
 
 impl ExistsTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ExistsTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ExistsTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ExistsTablePlan) -> Result<Self> {
+        Ok(ExistsTableInterpreter { ctx, plan })
     }
 }
 

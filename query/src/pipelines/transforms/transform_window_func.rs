@@ -18,9 +18,9 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::partition::lexicographical_partition_ranges;
 use common_arrow::arrow::compute::sort::SortColumn;
+use common_arrow::ArrayRef;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_datavalues::ColumnWithField;
@@ -51,6 +51,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::get_sort_descriptions;
 
+// deprecated by the new processor, to be removed in the future.
 pub struct WindowFuncTransform {
     window_func: Expression,
     schema: DataSchemaRef,
@@ -73,7 +74,7 @@ impl WindowFuncTransform {
     }
 
     /// evaluate window function for each frame and return the result block
-    async fn evaluate_window_func(&self, block: &DataBlock) -> common_exception::Result<DataBlock> {
+    fn evaluate_window_func(&self, block: &DataBlock) -> common_exception::Result<DataBlock> {
         // extract the window function
         let_extract!(
             Expression::WindowFunction {
@@ -518,7 +519,7 @@ impl Processor for WindowFuncTransform {
         let block = DataBlock::create(schema.clone(), combined_columns);
 
         // evaluate the window function column
-        let block = self.evaluate_window_func(&block).await.unwrap();
+        let block = self.evaluate_window_func(&block).unwrap();
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

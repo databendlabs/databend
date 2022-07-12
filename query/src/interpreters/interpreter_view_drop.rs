@@ -25,7 +25,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::storages::view::view_table::VIEW_ENGINE;
 
@@ -35,8 +34,8 @@ pub struct DropViewInterpreter {
 }
 
 impl DropViewInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropViewPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropViewInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropViewPlan) -> Result<Self> {
+        Ok(DropViewInterpreter { ctx, plan })
     }
 }
 

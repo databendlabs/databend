@@ -137,7 +137,27 @@ impl MultipartWorker for ParallelMultipartWorker {
                                         continue 'read;
                                     }
 
+                                    let mut read_row_num = 0;
+
                                     while !buf_slice.is_empty() {
+                                        if let Err(cause) = self.input_format.set_state(
+                                            &mut state,
+                                            filename.clone(),
+                                            read_row_num,
+                                        ) {
+                                            if let Err(cause) = tx
+                                                .send(Err(ErrorCode::BadBytes(format!(
+                                                    "Set state error, cause {:?}",
+                                                    cause
+                                                ))))
+                                                .await
+                                            {
+                                                common_tracing::tracing::warn!(
+                                                    "Multipart channel disconnect. {}",
+                                                    cause
+                                                );
+                                            }
+                                        }
                                         let read_size =
                                             match self.input_format.read_buf(buf_slice, &mut state)
                                             {
@@ -147,6 +167,11 @@ impl MultipartWorker for ParallelMultipartWorker {
                                                     break 'outer;
                                                 }
                                             };
+
+                                        read_row_num += self
+                                            .input_format
+                                            .read_row_num(&mut state)
+                                            .unwrap_or_default();
 
                                         has_data_in_state = true;
                                         if read_size < buf_slice.len() {

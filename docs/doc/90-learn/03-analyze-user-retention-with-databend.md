@@ -14,7 +14,7 @@ It's **easy** and **performance** to use [Databend Retention Function](../30-ref
 
 Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend](../00-guides/index.md#deployment)
+* [How to Deploy Databend](../01-guides/index.md#deployment)
 
 ### 1.2 Create a Databend User
 

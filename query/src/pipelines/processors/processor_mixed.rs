@@ -20,12 +20,12 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::mpsc;
 use common_base::base::TrySpawn;
-use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use parking_lot::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 

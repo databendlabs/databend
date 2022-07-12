@@ -17,6 +17,7 @@ use std::sync::Arc;
 use async_stream::stream;
 use common_exception::Result;
 use common_formats::output_format::OutputFormatType;
+use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use futures::StreamExt;
@@ -33,8 +34,19 @@ impl ResultTable {
         &self,
         ctx: Arc<QueryContext>,
         fmt: OutputFormatType,
+        limit: Option<usize>,
     ) -> Result<SendableVu8Stream> {
-        let (_, parts) = self.read_partitions(ctx.clone(), None).await?;
+        let push_downs = match limit {
+            Some(limit) if limit > 0 => Some(Extras {
+                limit: Some(limit),
+                ..Extras::default()
+            }),
+            _ => None,
+        };
+
+        let (_, parts) = self
+            .read_partitions(ctx.clone(), push_downs.clone())
+            .await?;
         ctx.try_set_partitions(parts)?;
         let mut block_stream = self
             .read(ctx.clone(), &ReadDataSourcePlan {
@@ -45,7 +57,7 @@ impl ResultTable {
                 statistics: Default::default(),
                 description: "".to_string(),
                 tbl_args: None,
-                push_downs: None,
+                push_downs,
             })
             .await?;
         let fmt_setting = ctx.get_format_settings()?;

@@ -18,11 +18,11 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_base::infallible::RwLock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::Itertools;
+use parking_lot::RwLock;
 
 use crate::Config;
 

@@ -123,7 +123,17 @@ impl TypeID {
 
     #[inline]
     pub fn is_date_or_date_time(&self) -> bool {
-        matches!(self, TypeID::Date | TypeID::Timestamp,)
+        matches!(self, TypeID::Date | TypeID::Timestamp)
+    }
+
+    #[inline]
+    pub fn is_date(&self) -> bool {
+        matches!(self, TypeID::Date)
+    }
+
+    #[inline]
+    pub fn is_date_time(&self) -> bool {
+        matches!(self, TypeID::Timestamp)
     }
 
     /// Determine if a TypeID is signed numeric or not

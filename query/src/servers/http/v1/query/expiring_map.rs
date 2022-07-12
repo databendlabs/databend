@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use common_base::base::tokio::task;
 use common_base::base::tokio::time::sleep;
-use common_base::infallible::RwLock;
+use parking_lot::RwLock;
 
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;

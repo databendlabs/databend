@@ -23,7 +23,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct ShowGrantsInterpreter {
@@ -32,8 +31,8 @@ pub struct ShowGrantsInterpreter {
 }
 
 impl ShowGrantsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowGrantsPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowGrantsInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowGrantsPlan) -> Result<Self> {
+        Ok(ShowGrantsInterpreter { ctx, plan })
     }
 }
 

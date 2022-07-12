@@ -16,6 +16,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_datavalues::IntervalKind;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
@@ -189,6 +191,11 @@ pub enum Expr<'a> {
         interval: Box<Expr<'a>>,
         unit: IntervalKind,
     },
+    DateTrunc {
+        span: &'a [Token<'a>],
+        unit: IntervalKind,
+        date: Box<Expr<'a>>,
+    },
     /// NULLIF(<expr>, <expr>)
     NullIf {
         span: &'a [Token<'a>],
@@ -300,6 +307,22 @@ pub enum BinaryOperator {
     BitwiseXor,
 }
 
+impl BinaryOperator {
+    pub fn to_contrary(&self) -> Result<Self> {
+        match &self {
+            BinaryOperator::Gt => Ok(BinaryOperator::Lte),
+            BinaryOperator::Lt => Ok(BinaryOperator::Gte),
+            BinaryOperator::Gte => Ok(BinaryOperator::Lt),
+            BinaryOperator::Lte => Ok(BinaryOperator::Gt),
+            BinaryOperator::Eq => Ok(BinaryOperator::NotEq),
+            BinaryOperator::NotEq => Ok(BinaryOperator::Eq),
+            _ => Err(ErrorCode::UnImplement(format!(
+                "Converting {self} to its relative is not currently supported"
+            ))),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryOperator {
     Plus,
@@ -336,6 +359,7 @@ impl<'a> Expr<'a> {
             | Expr::Interval { span, .. }
             | Expr::DateAdd { span, .. }
             | Expr::DateSub { span, .. }
+            | Expr::DateTrunc { span, .. }
             | Expr::NullIf { span, .. }
             | Expr::Coalesce { span, .. }
             | Expr::IfNull { span, .. } => span,
@@ -791,6 +815,9 @@ impl<'a> Display for Expr<'a> {
                 ..
             } => {
                 write!(f, "DATE_SUB({date}, INTERVAL {interval} {unit})")?;
+            }
+            Expr::DateTrunc { unit, date, .. } => {
+                write!(f, "DATE_TRUNC({unit}, {date})")?;
             }
             Expr::NullIf { expr1, expr2, .. } => {
                 write!(f, "NULLIF({expr1}, {expr2})")?;

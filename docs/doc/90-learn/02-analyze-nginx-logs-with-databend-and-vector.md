@@ -21,7 +21,7 @@ Lets ingesting Nginx access logs into Databend from Vector step by step.
 
 Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend](../00-guides/index.md#deployment)
+* [How to Deploy Databend](../01-guides/index.md#deployment)
 
 ### 1.2 Create a Database and Table
 

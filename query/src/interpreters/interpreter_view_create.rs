@@ -27,7 +27,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::storages::view::view_table::VIEW_ENGINE;
 
@@ -37,8 +36,8 @@ pub struct CreateViewInterpreter {
 }
 
 impl CreateViewInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateViewPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreateViewInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateViewPlan) -> Result<Self> {
+        Ok(CreateViewInterpreter { ctx, plan })
     }
 }
 

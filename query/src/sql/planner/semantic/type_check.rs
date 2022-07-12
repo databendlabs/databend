@@ -22,6 +22,7 @@ use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
+use common_ast::ast::SubqueryModifier;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
@@ -312,8 +313,59 @@ impl<'a> TypeChecker<'a> {
                 right,
                 ..
             } => {
-                self.resolve_binary_op(span, op, left.as_ref(), right.as_ref(), required_type)
-                    .await?
+                if let Expr::Subquery {
+                    subquery, modifier, ..
+                } = &**right
+                {
+                    if let Some(subquery_modifier) = modifier {
+                        match subquery_modifier {
+                            SubqueryModifier::Any | SubqueryModifier::Some => {
+                                let comparison_op = ComparisonOp::try_from(op)?;
+                                self.resolve_subquery(
+                                    SubqueryType::Any,
+                                    subquery,
+                                    true,
+                                    Some(*left.clone()),
+                                    Some(comparison_op),
+                                    None,
+                                )
+                                .await?
+                            }
+                            SubqueryModifier::All => {
+                                let contrary_op = op.to_contrary()?;
+                                let rewritten_subquery = Expr::Subquery {
+                                    span: right.span(),
+                                    modifier: Some(SubqueryModifier::Any),
+                                    subquery: (*subquery).clone(),
+                                };
+                                self.resolve_function(
+                                    span,
+                                    "not",
+                                    &[&Expr::BinaryOp {
+                                        span,
+                                        op: contrary_op,
+                                        left: (*left).clone(),
+                                        right: Box::new(rewritten_subquery),
+                                    }],
+                                    None,
+                                )
+                                .await?
+                            }
+                        }
+                    } else {
+                        self.resolve_binary_op(
+                            span,
+                            op,
+                            left.as_ref(),
+                            right.as_ref(),
+                            required_type,
+                        )
+                        .await?
+                    }
+                } else {
+                    self.resolve_binary_op(span, op, left.as_ref(), right.as_ref(), required_type)
+                        .await?
+                }
             }
 
             Expr::UnaryOp { span, op, expr, .. } => {
@@ -648,6 +700,12 @@ impl<'a> TypeChecker<'a> {
                     required_type,
                 )
                 .await?
+            }
+            Expr::DateTrunc {
+                span, unit, date, ..
+            } => {
+                self.resolve_date_trunc(span, date, unit, required_type)
+                    .await?
             }
             Expr::Trim {
                 span,
@@ -1123,6 +1181,73 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
+    #[async_recursion::async_recursion]
+    pub async fn resolve_date_trunc(
+        &mut self,
+        span: &[Token<'_>],
+        date: &Expr<'_>,
+        kind: &IntervalKind,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<Box<(Scalar, DataTypeImpl)>> {
+        match kind {
+            IntervalKind::Year => {
+                self.resolve_function(
+                    span,
+                    "toStartOfYear",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            IntervalKind::Month => {
+                self.resolve_function(
+                    span,
+                    "toStartOfMonth",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            IntervalKind::Day => {
+                self.resolve_function(
+                    span,
+                    "toStartOfDay",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            IntervalKind::Hour => {
+                self.resolve_function(
+                    span,
+                    "toStartOfHour",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            IntervalKind::Minute => {
+                self.resolve_function(
+                    span,
+                    "toStartOfMinute",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            IntervalKind::Second => {
+                self.resolve_function(
+                    span,
+                    "toStartOfSecond",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                .await
+            }
+            _ => Err(ErrorCode::UnsupportedIntervalKind("Only these interval types are currently supported: year, month, day, hour, minute, second")),
+        }
+    }
+
     pub async fn resolve_subquery(
         &mut self,
         typ: SubqueryType,
@@ -1189,12 +1314,12 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
     ) -> Option<Result<Box<(Scalar, DataTypeImpl)>>> {
         match func_name.to_lowercase().as_str() {
-            "database" => {
+            name @ ("database" | "currentdatabase" | "current_database") => {
                 let arg = Expr::Literal {
                     span: &[],
                     lit: Literal::String(self.ctx.get_current_database()),
                 };
-                Some(self.resolve_function(span, "database", &[&arg], None).await)
+                Some(self.resolve_function(span, name, &[&arg], None).await)
             }
             "version" => {
                 let arg = Expr::Literal {
@@ -1203,26 +1328,13 @@ impl<'a> TypeChecker<'a> {
                 };
                 Some(self.resolve_function(span, "version", &[&arg], None).await)
             }
-            "current_user" => match self.ctx.get_current_user() {
+            name @ ("user" | "currentuser" | "current_user") => match self.ctx.get_current_user() {
                 Ok(user) => {
                     let arg = Expr::Literal {
                         span: &[],
                         lit: Literal::String(user.identity().to_string()),
                     };
-                    Some(
-                        self.resolve_function(span, "current_user", &[&arg], None)
-                            .await,
-                    )
-                }
-                Err(e) => Some(Err(e)),
-            },
-            "user" => match self.ctx.get_current_user() {
-                Ok(user) => {
-                    let arg = Expr::Literal {
-                        span: &[],
-                        lit: Literal::String(user.identity().to_string()),
-                    };
-                    Some(self.resolve_function(span, "user", &[&arg], None).await)
+                    Some(self.resolve_function(span, name, &[&arg], None).await)
                 }
                 Err(e) => Some(Err(e)),
             },

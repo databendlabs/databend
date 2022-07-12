@@ -27,6 +27,8 @@ mod share_api;
 mod share_api_impl;
 mod share_api_keys;
 
+pub use kv_api::get_start_and_end_of_prefix;
+pub use kv_api::prefix_of_string;
 pub use kv_api::ApiBuilder;
 pub use kv_api::AsKVApi;
 pub use kv_api::KVApi;

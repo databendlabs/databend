@@ -37,6 +37,7 @@ use super::StringFunction;
 use super::ToCastFunction;
 use super::TupleClassFunction;
 use crate::scalars::DateFunction;
+use crate::scalars::GeoFunction;
 use crate::scalars::UUIDFunction;
 
 pub type FactoryCreator =
@@ -84,6 +85,7 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     OtherFunction::register(&mut function_factory);
     UUIDFunction::register(&mut function_factory);
     MathsFunction::register(&mut function_factory);
+    GeoFunction::register(&mut function_factory);
 
     Arc::new(function_factory)
 });

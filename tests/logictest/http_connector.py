@@ -1,6 +1,5 @@
 import json
 import os
-import time
 import base64
 
 import environs

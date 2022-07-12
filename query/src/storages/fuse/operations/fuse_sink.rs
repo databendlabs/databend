@@ -17,7 +17,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_arrow::parquet::FileMetaData;
+use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -43,7 +43,7 @@ enum State {
     Serialized {
         data: Vec<u8>,
         size: u64,
-        meta_data: Box<FileMetaData>,
+        meta_data: Box<ThriftFileMetaData>,
         block_statistics: BlockStatistics,
     },
     GenerateSegment,

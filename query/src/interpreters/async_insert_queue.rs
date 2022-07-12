@@ -24,16 +24,17 @@ use common_base::base::tokio::time::Duration;
 use common_base::base::tokio::time::Instant;
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
-use common_base::infallible::Mutex;
-use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertPlan;
 use common_planners::SelectPlan;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
 
 use super::InsertInterpreter;
 use super::SelectInterpreter;
+use crate::interpreters::Interpreter;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
@@ -412,9 +413,7 @@ impl AsyncInsertQueue {
         let mut builder = SourcePipeBuilder::create();
         builder.add_source(output_port.clone(), source);
 
-        interpreter
-            .as_ref()
-            .set_source_pipe_builder(Some(builder))?;
+        interpreter.set_source_pipe_builder(Some(builder))?;
         interpreter.execute(None).await?;
         Ok(())
     }

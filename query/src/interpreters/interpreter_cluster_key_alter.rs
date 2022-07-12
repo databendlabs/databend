@@ -22,7 +22,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use super::Interpreter;
-use super::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct AlterTableClusterKeyInterpreter {
@@ -31,11 +30,8 @@ pub struct AlterTableClusterKeyInterpreter {
 }
 
 impl AlterTableClusterKeyInterpreter {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
-        plan: AlterTableClusterKeyPlan,
-    ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(AlterTableClusterKeyInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterTableClusterKeyPlan) -> Result<Self> {
+        Ok(AlterTableClusterKeyInterpreter { ctx, plan })
     }
 }
 

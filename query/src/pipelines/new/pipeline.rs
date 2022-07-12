@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::pipelines::new::executor::FinishedCallback;
 use crate::pipelines::new::pipe::NewPipe;
 use crate::pipelines::new::pipe::TransformPipeBuilder;
 use crate::pipelines::new::processors::port::InputPort;
@@ -46,6 +47,7 @@ use crate::pipelines::new::processors::ResizeProcessor;
 pub struct NewPipeline {
     max_threads: usize,
     pub pipes: Vec<NewPipe>,
+    on_finished: Option<FinishedCallback>,
 }
 
 impl NewPipeline {
@@ -53,6 +55,7 @@ impl NewPipeline {
         NewPipeline {
             max_threads: 0,
             pipes: Vec::new(),
+            on_finished: None,
         }
     }
 
@@ -152,6 +155,38 @@ impl NewPipeline {
                 });
                 Ok(())
             }
+        }
+    }
+
+    pub fn set_on_finished<F: Fn(&Option<ErrorCode>) + Send + Sync + 'static>(&mut self, f: F) {
+        if let Some(on_finished) = &self.on_finished {
+            let old_finished = on_finished.clone();
+
+            self.on_finished = Some(Arc::new(Box::new(move |may_error| {
+                old_finished(may_error);
+
+                f(may_error);
+            })));
+
+            return;
+        }
+
+        self.on_finished = Some(Arc::new(Box::new(f)));
+    }
+
+    pub fn take_on_finished(&mut self) -> FinishedCallback {
+        match self.on_finished.take() {
+            None => Arc::new(Box::new(|_may_error| {})),
+            Some(on_finished) => on_finished,
+        }
+    }
+}
+
+impl Drop for NewPipeline {
+    fn drop(&mut self) {
+        // An error may have occurred before the executor was created.
+        if let Some(on_finished) = self.on_finished.take() {
+            (on_finished)(&None);
         }
     }
 }
