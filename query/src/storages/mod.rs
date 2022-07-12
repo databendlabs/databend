@@ -39,6 +39,6 @@ pub use storage_factory::StorageDescription;
 pub use storage_factory::StorageFactory;
 pub use storage_table::NavigationPoint;
 pub use storage_table::Table;
-pub use storage_table_read_wrap::TableStreamReadWrap;
 pub use storage_table::TableStatistics;
 pub use storage_table_read_plan::ToReadDataSourcePlan;
+pub use storage_table_read_wrap::TableStreamReadWrap;

@@ -30,8 +30,6 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use walkdir::WalkDir;
 
 use crate::pipelines::new::processors::port::OutputPort;
@@ -42,7 +40,6 @@ use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::storages::system::tracing_table_stream::LogEntry;
-use crate::storages::system::TracingTableStream;
 use crate::storages::Table;
 
 pub struct TracingTable {

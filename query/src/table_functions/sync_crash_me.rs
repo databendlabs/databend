@@ -33,7 +33,6 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_streams::SendableDataBlockStream;
 use futures::Stream;
 
 use crate::pipelines::new::processors::port::OutputPort;

@@ -19,7 +19,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_planners::Extras;
@@ -43,7 +42,6 @@ use crate::pipelines::new::SinkPipeBuilder;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
-use crate::storages::memory::MemoryTableStream;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;

@@ -25,10 +25,6 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_streams::SendableDataBlockStream;
-use common_streams::TakeStream;
-use common_tracing::tracing_futures::Instrument;
-use futures::StreamExt;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -113,6 +109,7 @@ impl ResultTable {
         }))
     }
 
+    #[allow(unused)]
     fn create_block_reader(
         &self,
         ctx: &Arc<QueryContext>,

@@ -24,10 +24,11 @@ use futures::StreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::result::ResultTable;
-use crate::storages::{TableStreamReadWrap, Table};
+use crate::storages::Table;
+use crate::storages::TableStreamReadWrap;
 
 pub type SendableVu8Stream =
-std::pin::Pin<Box<dyn futures::stream::Stream<Item=Result<Vec<u8>>> + Send>>;
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Vec<u8>>> + Send>>;
 
 impl ResultTable {
     pub async fn download(
@@ -48,9 +49,8 @@ impl ResultTable {
             .read_partitions(ctx.clone(), push_downs.clone())
             .await?;
         ctx.try_set_partitions(parts)?;
-        let mut block_stream = self.read(
-            ctx.clone(),
-            &ReadDataSourcePlan {
+        let mut block_stream = self
+            .read(ctx.clone(), &ReadDataSourcePlan {
                 catalog: "".to_string(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
@@ -59,8 +59,7 @@ impl ResultTable {
                 description: "".to_string(),
                 tbl_args: None,
                 push_downs,
-            },
-        )
+            })
             .await?;
         let fmt_setting = ctx.get_format_settings()?;
         let mut output_format = fmt.create_format(self.schema(), fmt_setting);

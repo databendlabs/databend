@@ -41,6 +41,7 @@ use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::Table;
+use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
@@ -242,7 +243,7 @@ pub async fn test_drive_with_args_and_ctx(
         .read_plan(ctx.clone(), Some(Extras::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.read(ctx, &source_plan).await
+    func.as_table().read(ctx, &source_plan).await
 }
 
 pub async fn test_drive_clustering_information(
@@ -256,7 +257,7 @@ pub async fn test_drive_clustering_information(
         .read_plan(ctx.clone(), Some(Extras::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.read(ctx, &source_plan).await
+    func.as_table().read(ctx, &source_plan).await
 }
 
 pub fn expects_err<T>(case_name: &str, err_code: u16, res: Result<T>) {
