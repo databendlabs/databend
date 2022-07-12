@@ -428,7 +428,6 @@ macro_rules! insert_key {
                 entity.get_mut_value().push(ptr);
             }
         }
-        return Ok(());
     }};
 }
 
