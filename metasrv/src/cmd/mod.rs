@@ -14,4 +14,4 @@
 
 mod kvapi;
 
-pub use kvapi::KvApiCommand;
+pub use kvapi::KvApi;
