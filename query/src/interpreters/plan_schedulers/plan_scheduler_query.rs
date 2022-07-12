@@ -25,7 +25,6 @@ use crate::interpreters::fragments::QueryFragmentsActions;
 use crate::interpreters::fragments::QueryFragmentsBuilder;
 use crate::interpreters::fragments::RootQueryFragment;
 use crate::interpreters::plan_schedulers;
-use crate::interpreters::plan_schedulers::Scheduled;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::pipelines::processors::PipelineBuilder;
