@@ -1249,6 +1249,7 @@ dependencies = [
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
+ "common-tracing",
  "mockall",
  "serde_json",
 ]
