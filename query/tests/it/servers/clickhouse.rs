@@ -46,6 +46,26 @@ async fn test_clickhouse_handler_query() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_clickhouse_handler_big_query() -> Result<()> {
+    struct Sum {
+        sum: u64,
+    }
+    impl clickhouse_driver::prelude::Deserialize for Sum {
+        fn deserialize(row: Row) -> errors::Result<Self> {
+            let sum = row.value(0).unwrap().unwrap();
+            Ok(Sum { sum })
+        }
+    }
+    let (_, listening) = start_server(1).await?;
+    let mut conn = create_conn(listening.port()).await?;
+    let query_str = "SELECT COUNT(DISTINCT number) FROM numbers(10000000)";
+    let block = query::<Sum>(&mut conn, query_str).await?;
+    assert_eq!(block.len(), 1);
+    assert_eq!(block[0].sum, 10000000);
+    Ok(())
+}
+
 #[derive(Debug)]
 struct Temp {
     a: u64,
