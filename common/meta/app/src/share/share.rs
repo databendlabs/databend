@@ -73,14 +73,14 @@ impl Display for ShareGrantObject {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ShareGrantObject::Database(db) => {
-                return write!(f, "db/{}/{}", db.tenant, db.db_name);
+                write!(f, "db/{}/{}", db.tenant, db.db_name)
             }
             ShareGrantObject::Table(table) => {
-                return write!(
+                write!(
                     f,
                     "table/{}/{}/{}",
                     table.tenant, table.db_name, table.table_name
-                );
+                )
             }
         }
     }
