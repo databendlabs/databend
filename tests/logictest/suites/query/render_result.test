@@ -32,3 +32,6 @@ order by col1,col5,col3,col2,col4;
 
 statement ok
 drop table if exists t1 all;
+
+statement ok
+set enable_planner_v2 = 0;
