@@ -188,7 +188,7 @@ impl Settings {
         // Initial settings.
         {
             let mut settings_mut = settings.write();
-            for value in values.clone() {
+            for value in values {
                 let name = value.user_setting.name.clone();
                 settings_mut.insert(name, value);
             }
@@ -203,16 +203,13 @@ impl Settings {
         // Overwrite settings from metasrv
         {
             let tenant = &ret.session_ctx.get_current_tenant();
-            for value in values {
-                let name = value.user_setting.name.clone();
-                if let Ok(user_setting) = futures::executor::block_on(
-                    ret.user_api
-                        .get_setting_api_client(tenant)?
-                        .get_setting(&name, None),
-                ) {
-                    let val = String::from_utf8(user_setting.data.value.as_string()?).unwrap();
-                    ret.set_settings(name, val, true)?;
-                }
+            let global_settings = futures::executor::block_on(
+                ret.user_api.get_setting_api_client(tenant)?.get_settings(),
+            )?;
+            for global_setting in global_settings {
+                let name = global_setting.name;
+                let val = String::from_utf8(global_setting.value.as_string()?).unwrap();
+                ret.set_settings(name, val, true)?;
             }
         }
 
