@@ -16,7 +16,6 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
-use common_base::infallible::RwLock;
 use common_base::mem_allocator::malloc_size;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -27,6 +26,7 @@ use common_meta_types::UserPrivilegeType;
 use common_users::RoleCacheMgr;
 use futures::channel::*;
 use opendal::Operator;
+use parking_lot::RwLock;
 
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;

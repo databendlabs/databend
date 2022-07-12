@@ -21,10 +21,10 @@ use std::time::Instant;
 
 use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
-use common_base::infallible::RwLock;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
 use common_tracing::tracing;
+use parking_lot::RwLock;
 
 use crate::UserApiProvider;
 

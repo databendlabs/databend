@@ -23,7 +23,6 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::Runtime;
 use common_base::base::SignalStream;
-use common_base::infallible::RwLock;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,6 +36,7 @@ use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
 use opendal::Operator;
+use parking_lot::RwLock;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;
@@ -371,7 +371,7 @@ impl SessionManager {
 
     async fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
         // Read lock does not support reentrant
-        // https://github.com/Amanieu/parking_lot/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
+        // https://github.com/Amanieu/parking_lot::/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
         let active_sessions_read_guard = sessions.read();
 
         // First try to kill the idle session

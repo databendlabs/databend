@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::TrySpawn;
-use common_base::infallible::Mutex;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
@@ -33,6 +32,7 @@ use futures::future::Shared;
 use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
+use parking_lot::Mutex;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Pipeline;

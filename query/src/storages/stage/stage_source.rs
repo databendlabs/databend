@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -36,6 +35,7 @@ use opendal::io_util::CompressAlgorithm;
 use opendal::io_util::SeekableReader;
 use opendal::BytesReader;
 use opendal::Operator;
+use parking_lot::Mutex;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
