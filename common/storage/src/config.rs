@@ -25,6 +25,7 @@ use super::utils::mask_string;
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageConfig {
     pub num_cpus: u64,
+    pub allow_insecure: bool,
 
     pub params: StorageParams,
 }
@@ -68,6 +69,22 @@ impl Display for StorageParams {
                     v.bucket, v.root, v.endpoint_url
                 )
             }
+        }
+    }
+}
+
+impl StorageParams {
+    /// Whether this storage params is secure.
+    ///
+    /// Query will forbid this storage config unless `allow_insecure` has been enabled.
+    pub fn is_secure(&self) -> bool {
+        match self {
+            StorageParams::Azblob(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::Fs(_) => false,
+            #[cfg(feature = "storage-hdfs")]
+            StorageParams::Hdfs(_) => false,
+            StorageParams::Memory => false,
+            StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
         }
     }
 }

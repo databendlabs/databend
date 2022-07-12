@@ -287,6 +287,12 @@ impl<'a> Binder {
             .await?;
 
         let (storage_params, path) = parse_uri_location(src_uri_location)?;
+        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+            return Err(ErrorCode::StorageInsecure(
+                "copy from insecure storage is not allowed",
+            ));
+        }
+
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
 
@@ -399,6 +405,12 @@ impl<'a> Binder {
             .map_err(ErrorCode::SyntaxException)?;
 
         let (storage_params, path) = parse_uri_location(dst_uri_location)?;
+        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+            return Err(ErrorCode::StorageInsecure(
+                "copy into insecure storage is not allowed",
+            ));
+        }
+
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
 
@@ -457,6 +469,12 @@ impl<'a> Binder {
             .map_err(ErrorCode::SyntaxException)?;
 
         let (storage_params, path) = parse_uri_location(dst_uri_location)?;
+        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+            return Err(ErrorCode::StorageInsecure(
+                "copy into insecure storage is not allowed",
+            ));
+        }
+
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
 

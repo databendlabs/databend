@@ -168,6 +168,9 @@ pub struct StorageConfig {
     #[serde(rename = "num_cpus", alias = "storage_num_cpus")]
     pub storage_num_cpus: u64,
 
+    #[clap(long, default_value_t)]
+    pub allow_insecure: bool,
+
     // Fs storage backend config.
     #[clap(flatten)]
     pub fs: FsStorageConfig,
@@ -196,6 +199,7 @@ impl From<InnerStorageConfig> for StorageConfig {
         let mut cfg = Self {
             storage_num_cpus: inner.num_cpus,
             storage_type: "".to_string(),
+            allow_insecure: inner.allow_insecure,
             fs: Default::default(),
             s3: Default::default(),
             azblob: Default::default(),
@@ -235,6 +239,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
     fn try_into(self) -> Result<InnerStorageConfig> {
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
+            allow_insecure: self.allow_insecure,
             params: {
                 match self.storage_type.as_str() {
                     "azblob" => StorageParams::Azblob(self.azblob.try_into()?),
