@@ -267,7 +267,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
-  |                                      ^^^^^^^^^^ expected `ENDPOINT_URL`, `CREDENTIALS`, `ENCRYPTION`, `FILES`, `PATTERN`, `FILE_FORMAT`, or 4 more ...
+  |                                      ^^^^^^^^^^ expected `CONNECTION`, `CREDENTIALS`, `ENCRYPTION`, `FILES`, `PATTERN`, `FILE_FORMAT`, or 4 more ...
 
 
 ---------- Input ----------
