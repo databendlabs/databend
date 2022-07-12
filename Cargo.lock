@@ -1146,6 +1146,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-expression"
+version = "0.1.0"
+dependencies = [
+ "chrono-tz",
+ "common-arrow",
+ "enum-as-inner",
+ "goldenfile",
+]
+
+[[package]]
 name = "common-formats"
 version = "0.1.0"
 dependencies = [
