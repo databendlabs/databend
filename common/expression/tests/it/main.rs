@@ -43,14 +43,14 @@ use goldenfile::Mint;
 
 // TODO: Pretty print the result and input columns
 fn run_ast(file: &mut impl Write, raw: &RawExpr, columns: Vec<Column>) {
-    writeln!(file, "raw expr\t\t: {raw}").unwrap();
+    writeln!(file, "raw expr       : {raw}").unwrap();
 
     let fn_registry = builtin_functions();
     let (expr, ty, prop) = type_check::check(raw, &fn_registry).unwrap();
 
-    writeln!(file, "type\t\t\t: {ty}").unwrap();
-    writeln!(file, "property\t\t: {prop}").unwrap();
-    writeln!(file, "checked expr\t: {expr}").unwrap();
+    writeln!(file, "type           : {ty}").unwrap();
+    writeln!(file, "property       : {prop}").unwrap();
+    writeln!(file, "checked expr   : {expr}").unwrap();
 
     let runtime = Evaluator {
         input_columns: Chunk { columns },
@@ -58,9 +58,9 @@ fn run_ast(file: &mut impl Write, raw: &RawExpr, columns: Vec<Column>) {
     };
     let result = runtime.run(&expr);
     for (i, col) in runtime.input_columns.columns.iter().enumerate() {
-        writeln!(file, "column[{i}]\t\t: {col:?}").unwrap();
+        writeln!(file, "column[{i}]      : {col:?}").unwrap();
     }
-    writeln!(file, "eval result\t\t: {result}\n").unwrap();
+    writeln!(file, "eval result    : {result}\n").unwrap();
 }
 
 #[test]

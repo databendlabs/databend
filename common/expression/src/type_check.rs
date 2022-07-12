@@ -239,6 +239,7 @@ pub fn unify(src_ty: &DataType, dest_ty: &DataType) -> Option<Subsitution> {
     }
 }
 
+// TODO: should support fallable casts
 pub fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
     match (src_ty, dest_ty) {
         (src_ty, dest_ty) if src_ty == dest_ty => true,
