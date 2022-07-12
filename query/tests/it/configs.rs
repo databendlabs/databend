@@ -91,6 +91,7 @@ rpc_tls_meta_service_domain_name = "localhost"
 [storage]
 type = "fs"
 num_cpus = 0
+allow_insecure = false
 
 [storage.fs]
 data_path = "_data"
