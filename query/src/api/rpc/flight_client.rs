@@ -16,20 +16,15 @@ use std::convert::TryInto;
 
 use async_channel::Receiver;
 use common_arrow::arrow_format::flight::data::Action;
-
-
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio::time::Duration;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
-
 use common_tracing::tracing;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
 use tonic::Request;
-
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::packets::DataPacket;

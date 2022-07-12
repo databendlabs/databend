@@ -22,8 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
-
-
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
 use common_planners::PlanNode;
@@ -41,7 +39,6 @@ use crate::pipelines::new::processors::TransformAddOn;
 use crate::pipelines::new::processors::TransformCastSchema;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
-
 use crate::sessions::QueryContext;
 
 pub struct InsertInterpreter {

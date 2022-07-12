@@ -1,5 +1,8 @@
-use std::fmt::{Debug, Display, Formatter};
-use crate::pipelines::new::{NewPipe, NewPipeline};
+use std::fmt::Display;
+use std::fmt::Formatter;
+
+use crate::pipelines::new::NewPipe;
+use crate::pipelines::new::NewPipeline;
 
 impl NewPipeline {
     pub fn display_indent(&self) -> impl std::fmt::Display + '_ {
@@ -16,7 +19,7 @@ impl<'a> NewPipelineIndentDisplayWrapper<'a> {
         unsafe {
             match pipe {
                 NewPipe::SimplePipe { processors, .. } => processors[0].name(),
-                NewPipe::ResizePipe { processor, .. } => processor.name()
+                NewPipe::ResizePipe { processor, .. } => processor.name(),
             }
         }
     }
@@ -41,10 +44,18 @@ impl<'a> Display for NewPipelineIndentDisplayWrapper<'a> {
                         "{} × {} {}",
                         Self::pipe_name(pipe),
                         processors.len(),
-                        if processors.len() == 1 { "processor" } else { "processors" },
+                        if processors.len() == 1 {
+                            "processor"
+                        } else {
+                            "processors"
+                        },
                     )?;
                 }
-                NewPipe::ResizePipe { inputs_port, outputs_port, .. } => {
+                NewPipe::ResizePipe {
+                    inputs_port,
+                    outputs_port,
+                    ..
+                } => {
                     let prev_name = Self::pipe_name(&pipes[index - 1]);
                     let post_name = Self::pipe_name(&pipes[index + 1]);
 
@@ -68,4 +79,3 @@ impl<'a> Display for NewPipelineIndentDisplayWrapper<'a> {
         Ok(())
     }
 }
-

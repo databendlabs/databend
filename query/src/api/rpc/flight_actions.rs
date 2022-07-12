@@ -17,8 +17,6 @@ use std::convert::TryInto;
 use common_arrow::arrow_format::flight::data::Action;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
-use common_planners::Expression;
-use common_planners::PlanNode;
 use tonic::Status;
 
 use crate::api::InitNodesChannelPacket;
@@ -117,38 +115,6 @@ pub enum FlightAction {
     InitQueryFragmentsPlan(InitQueryFragmentsPlan),
     InitNodesChannel(InitNodesChannel),
     ExecutePartialQuery(String),
-}
-
-impl FlightAction {
-    pub fn get_query_id(&self) -> String {
-        match self {
-            _ => unimplemented!(),
-        }
-    }
-
-    pub fn get_stage_id(&self) -> String {
-        match self {
-            _ => unimplemented!(),
-        }
-    }
-
-    pub fn get_sinks(&self) -> Vec<String> {
-        match self {
-            _ => unimplemented!(),
-        }
-    }
-
-    pub fn get_plan(&self) -> PlanNode {
-        match self {
-            _ => unimplemented!(),
-        }
-    }
-
-    pub fn get_scatter_expression(&self) -> Option<Expression> {
-        match self {
-            _ => unimplemented!(),
-        }
-    }
 }
 
 impl TryInto<FlightAction> for Action {

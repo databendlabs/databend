@@ -251,9 +251,9 @@ pub async fn clickhouse_handler_get(
         && !context.get_config().query.management_mode
         && context.get_cluster().is_empty()
         && settings
-        .get_enable_planner_v2()
-        .map_err(InternalServerError)?
-        != 0
+            .get_enable_planner_v2()
+            .map_err(InternalServerError)?
+            != 0
         && !stmts.is_empty()
         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
     {
@@ -333,9 +333,9 @@ pub async fn clickhouse_handler_post(
         && !ctx.get_config().query.management_mode
         && ctx.get_cluster().is_empty()
         && settings
-        .get_enable_planner_v2()
-        .map_err(InternalServerError)?
-        != 0
+            .get_enable_planner_v2()
+            .map_err(InternalServerError)?
+            != 0
         && !stmts.is_empty()
         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
     {

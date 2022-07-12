@@ -15,8 +15,6 @@
 use std::future::Future;
 use std::sync::Arc;
 
-
-
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
 use common_datavalues::DataSchemaRef;
@@ -28,11 +26,7 @@ use common_io::prelude::parse_escape_string;
 use common_io::prelude::FormatSettings;
 use common_planners::InsertInputSource;
 use common_planners::PlanNode;
-
 use common_streams::NDJsonSourceBuilder;
-
-
-
 use common_tracing::tracing;
 use futures::io::Cursor;
 use futures::StreamExt;
@@ -79,7 +73,7 @@ fn execute_query(
     context: Arc<QueryContext>,
     node: PlanNode,
     source_builder: SourcePipeBuilder,
-) -> impl Future<Output=Result<()>> {
+) -> impl Future<Output = Result<()>> {
     async move {
         let interpreter = InterpreterFactory::get(context, node)?;
 
@@ -168,9 +162,7 @@ pub async fn streaming_load(
     context.attach_query_str(insert_sql);
 
     // Block size.
-    let _max_block_size = settings
-        .get_max_block_size()
-        .map_err(InternalServerError)? as usize;
+    let _max_block_size = settings.get_max_block_size().map_err(InternalServerError)? as usize;
 
     let format_settings = context.get_format_settings().map_err(InternalServerError)?;
     let source_pipe_builder = match &mut plan {

@@ -381,6 +381,6 @@ impl Optimizer for ScattersOptimizer {
         }
 
         let mut optimizer_impl = ScattersOptimizerImpl::create(self.ctx.clone());
-        Ok(optimizer_impl.rewrite_plan_node(plan)?)
+        optimizer_impl.rewrite_plan_node(plan)
     }
 }

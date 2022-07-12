@@ -74,11 +74,8 @@ impl Interpreter for SelectInterpreter {
         let query_pipeline = self.create_new_pipeline().await?;
         let async_runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
-        let executor = PipelinePullingExecutor::try_create(
-            async_runtime,
-            query_need_abort,
-            query_pipeline,
-        )?;
+        let executor =
+            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
 
         Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
     }

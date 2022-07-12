@@ -12,17 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::sync::Arc;
-
-use async_trait::async_trait;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
-use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 pub fn get_sort_descriptions(
     schema: &DataSchemaRef,

@@ -268,7 +268,7 @@ impl ExecuteState {
                             Err(ErrorCode::PanicError("interpreter panic!")),
                             false,
                         )
-                            .await;
+                        .await;
                         block_buffer_clone.stop_push().await.unwrap();
                     }
                     _ => {}
@@ -355,7 +355,7 @@ async fn execute(
                         user: ctx.get_current_user()?.identity(),
                     },
                 )
-                    .await?
+                .await?
             } else {
                 Box::new(BlockBufferWriterMemOnly(block_buffer))
             };

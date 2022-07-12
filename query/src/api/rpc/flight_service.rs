@@ -16,8 +16,6 @@ use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
 
-
-
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::ActionType;
 use common_arrow::arrow_format::flight::data::Criteria;
@@ -44,7 +42,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub type FlightStream<T> =
-Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
+    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
     sessions: Arc<SessionManager>,
@@ -52,9 +50,7 @@ pub struct DatabendQueryFlightService {
 
 impl DatabendQueryFlightService {
     pub fn create(sessions: Arc<SessionManager>) -> Self {
-        DatabendQueryFlightService {
-            sessions,
-        }
+        DatabendQueryFlightService { sessions }
     }
 }
 
