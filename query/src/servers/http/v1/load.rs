@@ -79,7 +79,7 @@ fn execute_query(
     context: Arc<QueryContext>,
     node: PlanNode,
     source_builder: SourcePipeBuilder,
-) -> impl Future<Output = Result<()>> {
+) -> impl Future<Output=Result<()>> {
     async move {
         let interpreter = InterpreterFactory::get(context, node)?;
 
@@ -168,20 +168,13 @@ pub async fn streaming_load(
     context.attach_query_str(insert_sql);
 
     // Block size.
-    let max_block_size = context
-        .get_settings()
+    let max_block_size = settings
         .get_max_block_size()
         .map_err(InternalServerError)? as usize;
 
     let format_settings = context.get_format_settings().map_err(InternalServerError)?;
 
-    if context
-        .get_settings()
-        .get_enable_new_processor_framework()
-        .map_err(InternalServerError)?
-        != 0
-        && context.get_cluster().is_empty()
-    {
+    if settings.get_enable_new_processor_framework().map_err(InternalServerError)? != 0 {
         let source_pipe_builder = match &mut plan {
             PlanNode::Insert(insert) => match &mut insert.source {
                 InsertInputSource::StreamingWithFormat(format) => {

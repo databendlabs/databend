@@ -383,12 +383,8 @@ impl Optimizer for ScattersOptimizer {
         let mut optimizer_impl = ScattersOptimizerImpl::create(self.ctx.clone());
         let rewrite_plan = optimizer_impl.rewrite_plan_node(plan)?;
 
-        if self
-            .ctx
-            .get_settings()
-            .get_enable_new_processor_framework()?
-            != 0
-        {
+        let settings = self.ctx.get_settings();
+        if settings.get_enable_new_processor_framework()? != 0 {
             return Ok(rewrite_plan);
         }
 

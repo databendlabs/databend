@@ -79,7 +79,8 @@ pub struct StatementHandlerParams {
     #[allow(unused)]
     session_check: Option<u8>,
     #[allow(unused)]
-    session_timeout: Option<u64>, // in secs
+    session_timeout: Option<u64>,
+    // in secs
     #[allow(unused)]
     with_stacktrace: Option<u8>,
     #[serde(flatten)]
@@ -166,9 +167,7 @@ async fn execute(
         .await
         .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
     let data_stream: SendableDataBlockStream =
-        if ctx.get_settings().get_enable_new_processor_framework()? != 0
-            && ctx.get_cluster().is_empty()
-        {
+        if ctx.get_settings().get_enable_new_processor_framework()? != 0 {
             let output_port = OutputPort::create();
             let stream_source =
                 StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
@@ -255,9 +254,9 @@ pub async fn clickhouse_handler_get(
         && !context.get_config().query.management_mode
         && context.get_cluster().is_empty()
         && settings
-            .get_enable_planner_v2()
-            .map_err(InternalServerError)?
-            != 0
+        .get_enable_planner_v2()
+        .map_err(InternalServerError)?
+        != 0
         && !stmts.is_empty()
         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
     {
@@ -337,9 +336,9 @@ pub async fn clickhouse_handler_post(
         && !ctx.get_config().query.management_mode
         && ctx.get_cluster().is_empty()
         && settings
-            .get_enable_planner_v2()
-            .map_err(InternalServerError)?
-            != 0
+        .get_enable_planner_v2()
+        .map_err(InternalServerError)?
+        != 0
         && !stmts.is_empty()
         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
     {

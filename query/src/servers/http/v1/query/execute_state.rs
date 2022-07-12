@@ -268,7 +268,7 @@ impl ExecuteState {
                             Err(ErrorCode::PanicError("interpreter panic!")),
                             false,
                         )
-                        .await;
+                            .await;
                         block_buffer_clone.stop_push().await.unwrap();
                     }
                     _ => {}
@@ -290,7 +290,6 @@ async fn execute(
     let data_stream: Result<SendableDataBlockStream> =
         if ctx.get_settings().get_enable_async_insert()? != 0
             && ctx.get_settings().get_enable_new_processor_framework()? != 0
-            && ctx.get_cluster().is_empty()
             && matches!(&*plan, PlanNode::Insert(_))
         {
             match &*plan {
@@ -356,7 +355,7 @@ async fn execute(
                         user: ctx.get_current_user()?.identity(),
                     },
                 )
-                .await?
+                    .await?
             } else {
                 Box::new(BlockBufferWriterMemOnly(block_buffer))
             };

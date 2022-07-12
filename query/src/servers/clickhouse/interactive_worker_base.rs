@@ -114,9 +114,7 @@ impl InteractiveWorkerBase {
         let interpreter = InterpreterFactory::get(ctx.clone(), PlanNode::Insert(insert))?;
         let name = interpreter.name().to_string();
 
-        if ctx.get_settings().get_enable_new_processor_framework()? != 0
-            && ctx.get_cluster().is_empty()
-        {
+        if ctx.get_settings().get_enable_new_processor_framework()? != 0 {
             let output_port = OutputPort::create();
             let sync_receiver_ck_source = SyncReceiverCkSource::create(
                 ctx.clone(),
@@ -239,7 +237,7 @@ impl InteractiveWorkerBase {
                             }
                             Some(Err(error_code)) => {
                                 if let Err(cause) =
-                                    data_tx.send(BlockItem::Block(Err(error_code))).await
+                                data_tx.send(BlockItem::Block(Err(error_code))).await
                                 {
                                     tracing::warn!(
                                         "Cannot send data to channel, cause: {:?}",
