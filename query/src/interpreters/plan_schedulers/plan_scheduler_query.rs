@@ -26,46 +26,10 @@ use crate::interpreters::fragments::QueryFragmentsBuilder;
 use crate::interpreters::fragments::RootQueryFragment;
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::plan_schedulers::Scheduled;
-use crate::interpreters::plan_schedulers::ScheduledStream;
-use crate::interpreters::PlanScheduler;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::QueryContext;
-
-#[tracing::instrument(level = "debug", skip(ctx), fields(ctx.id = ctx.get_id().as_str()))]
-pub async fn schedule_query(
-    ctx: &Arc<QueryContext>,
-    plan: &PlanNode,
-) -> Result<SendableDataBlockStream> {
-    let scheduler = PlanScheduler::try_create(ctx.clone())?;
-    let scheduled_tasks = scheduler.reschedule(plan)?;
-    let remote_stage_actions = scheduled_tasks.get_tasks()?;
-
-    let config = ctx.get_config();
-    let cluster = ctx.get_cluster();
-    let timeout = ctx.get_settings().get_flight_client_timeout()?;
-    let mut scheduled = Scheduled::new();
-    for (node, action) in remote_stage_actions {
-        let mut flight_client = cluster.create_node_conn(&node.id, &config).await?;
-        let executing_action = flight_client.execute_action(action.clone(), timeout);
-
-        executing_action.await?;
-        scheduled.insert(node.id.clone(), node.clone());
-    }
-
-    let pipeline_builder = PipelineBuilder::create(ctx.clone());
-    let mut in_local_pipeline = pipeline_builder.build(&scheduled_tasks.get_local_task())?;
-    tracing::log::debug!("local_pipeline:\n{:?}", in_local_pipeline);
-
-    match in_local_pipeline.execute().await {
-        Ok(stream) => Ok(ScheduledStream::create(ctx.clone(), scheduled, stream)),
-        Err(error) => {
-            plan_schedulers::handle_error(ctx, scheduled, timeout).await;
-            Err(error)
-        }
-    }
-}
 
 async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;

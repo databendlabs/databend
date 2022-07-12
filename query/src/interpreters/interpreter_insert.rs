@@ -33,8 +33,6 @@ use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 
-use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
-use crate::interpreters::plan_schedulers::InsertWithPlan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
@@ -221,7 +219,7 @@ impl Interpreter for InsertInterpreter {
             self.plan.schema(),
             None,
             vec![],
-        ))).await
+        )))
     }
 
     async fn create_new_pipeline(&self) -> Result<NewPipeline> {

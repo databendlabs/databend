@@ -37,7 +37,6 @@ mod interpreter_factory_interceptor;
 mod interpreter_factory_v2;
 mod interpreter_insert;
 mod interpreter_insert_v2;
-mod interpreter_insert_with_stream;
 mod interpreter_kill;
 mod interpreter_list;
 mod interpreter_presign;
