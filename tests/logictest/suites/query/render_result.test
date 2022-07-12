@@ -29,3 +29,6 @@ order by col1,col5,col3,col2,col4;
 ----
 102     2   111  1014   103
 106     1   111  1067   109
+
+statement ok
+drop table if exists t1 all;
