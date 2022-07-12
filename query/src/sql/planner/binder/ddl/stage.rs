@@ -86,8 +86,12 @@ impl<'a> Binder {
                 ..Default::default()
             },
             false => {
-                let (stage_storage, _) =
-                    parse_uri_location(location, credential_options, encryption_options)?;
+                let (stage_storage, _) = parse_uri_location(
+                    &self.ctx,
+                    location,
+                    credential_options,
+                    encryption_options,
+                )?;
 
                 stage_storage
             }

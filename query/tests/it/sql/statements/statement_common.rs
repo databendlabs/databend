@@ -99,6 +99,8 @@ async fn test_parse_stage_location_external() -> Result<()> {
 
 #[test]
 fn test_parse_uri_location() -> Result<()> {
+    let ctx = create_query_context().await?;
+
     // Cases are in the format:
     // - `name`
     // - `input location`
@@ -217,7 +219,7 @@ fn test_parse_uri_location() -> Result<()> {
         cases
     {
         let (stage, path) =
-            parse_uri_location(input_location, &input_credential, &input_encryption)?;
+            parse_uri_location(&ctx, input_location, &input_credential, &input_encryption)?;
 
         assert_eq!(stage, expected_stage, "{}", name);
         assert_eq!(path, expected_path, "{}", name);
