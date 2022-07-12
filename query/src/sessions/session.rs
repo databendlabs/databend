@@ -63,7 +63,8 @@ impl Session {
         mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
-        let session_settings = Settings::try_create(&conf)?;
+        let user_api = session_mgr.get_user_api_provider();
+        let session_settings = Settings::try_create(&conf, user_api, session_ctx.clone())?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {
