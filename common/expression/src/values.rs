@@ -521,7 +521,7 @@ impl ColumnBuilder {
             }
             ColumnBuilder::Nullable { column, validity } => {
                 column.push_default();
-                validity.push(true);
+                validity.push(false);
             }
             ColumnBuilder::Tuple { fields, len } => {
                 for field in fields {

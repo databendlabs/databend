@@ -7,7 +7,7 @@ eval result    : Boolean(false)
 raw expr       : and(NULL, false::Boolean)
 type           : Nullable<Nothing>
 property       : {}
-checked expr   : and<Nullable<Nothing>, Boolean>(NULL{}, false::Boolean{not_null})
+checked expr   : and<Nullable<Nothing>, Nullable<Boolean>>(NULL{}, cast<dest_type=Nullable<Boolean>>(false::Boolean){not_null})
 eval result    : Null
 
 raw expr       : plus(ColumnRef(0)::Nullable<UInt8>{}, -10::Int8)
@@ -23,7 +23,15 @@ property       : {}
 checked expr   : plus<Nullable<Int16>, Nullable<Int16>>(cast<dest_type=Nullable<Int16>>(ColumnRef(0)){}, cast<dest_type=Nullable<Int16>>(ColumnRef(1)){})
 column[0]      : Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] }
 column[1]      : Nullable { column: UInt8([1, 2, 3]), validity: [0b_____110] }
-eval result    : Nullable { column: Int16([11, 13, 15]), validity: [0b_____110] }
+eval result    : Nullable { column: Int16([11, 13, 15]), validity: [0b_____010] }
+
+raw expr       : plus(ColumnRef(0)::Nullable<UInt8>{}, ColumnRef(1)::Nullable<Nothing>{})
+type           : Nullable<Nothing>
+property       : {}
+checked expr   : plus<Nullable<Int16>, Nullable<Nothing>>(cast<dest_type=Nullable<Int16>>(ColumnRef(0)){}, ColumnRef(1){})
+column[0]      : Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] }
+column[1]      : Null { len: 3 }
+eval result    : Null { len: 3 }
 
 raw expr       : not(ColumnRef(0)::Nullable<Boolean>{})
 type           : Nullable<Boolean>
@@ -31,6 +39,13 @@ property       : {}
 checked expr   : not<Nullable<Boolean>>(ColumnRef(0){})
 column[0]      : Nullable { column: Boolean([0b_____101]), validity: [0b_____010] }
 eval result    : Nullable { column: Boolean([0b_____010]), validity: [0b_____010] }
+
+raw expr       : not(ColumnRef(0)::Nullable<Nothing>{})
+type           : Nullable<Nothing>
+property       : {}
+checked expr   : not<Nullable<Nothing>>(ColumnRef(0){})
+column[0]      : Null { len: 10 }
+eval result    : Null { len: 10 }
 
 raw expr       : least(10::UInt8, 20::UInt8, 30::UInt8, 40::UInt8)
 type           : Int16

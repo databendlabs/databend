@@ -157,7 +157,7 @@ impl FunctionRegistry {
         property: FunctionProperty,
         func: F,
     ) where
-        F: for<'a> Fn(I1::ScalarRef<'a>) -> O::Scalar + 'static + Clone + Copy,
+        F: Fn(I1::ScalarRef<'_>) -> O::Scalar + 'static + Clone + Copy,
     {
         let has_nullable = &[I1::data_type(), O::data_type()]
             .iter()
@@ -171,9 +171,11 @@ impl FunctionRegistry {
 
         let property = property.preserve_not_null(true);
 
-        self.register_1_arg_core::<NullType, NullType, _>(name, property.clone(), move |_, _| {
-            Value::Scalar(())
-        });
+        self.register_1_arg_core::<NullType, NullType, _>(
+            name,
+            property.clone(),
+            vectorize_1_arg::<NullType, NullType>(|_| ()),
+        );
 
         self.register_1_arg_core::<I1, O, _>(name, property.clone(), vectorize_1_arg(func));
 
@@ -190,7 +192,7 @@ impl FunctionRegistry {
         property: FunctionProperty,
         func: F,
     ) where
-        F: for<'a> Fn(I1::ScalarRef<'a>, &mut O::ColumnBuilder) + 'static + Clone + Copy,
+        F: Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder) + 'static + Clone + Copy,
     {
         let has_nullable = &[I1::data_type(), O::data_type()]
             .iter()
@@ -204,9 +206,11 @@ impl FunctionRegistry {
 
         let property = property.preserve_not_null(true);
 
-        self.register_1_arg_core::<NullType, NullType, _>(name, property.clone(), move |_, _| {
-            Value::Scalar(())
-        });
+        self.register_1_arg_core::<NullType, NullType, _>(
+            name,
+            property.clone(),
+            vectorize_1_arg::<NullType, NullType>(|_| ()),
+        );
 
         self.register_1_arg_core::<I1, O, _>(
             name,
@@ -249,11 +253,7 @@ impl FunctionRegistry {
         property: FunctionProperty,
         func: F,
     ) where
-        F: for<'a, 'b> Fn(I1::ScalarRef<'a>, I2::ScalarRef<'b>) -> O::Scalar
-            + Sized
-            + 'static
-            + Clone
-            + Copy,
+        F: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>) -> O::Scalar + Sized + 'static + Clone + Copy,
     {
         let has_nullable = &[I1::data_type(), I2::data_type(), O::data_type()]
             .iter()
@@ -267,20 +267,20 @@ impl FunctionRegistry {
 
         let property = property.preserve_not_null(true);
 
-        self.register_2_arg_core::<NullType, I2, NullType, _>(
+        self.register_2_arg_core::<NullableType<I1>, NullType, NullType, _>(
             name,
             property.clone(),
-            move |_, _, _| Value::Scalar(()),
+            vectorize_2_arg::<NullableType<I1>, NullType, NullType>(|_, _| ()),
         );
-        self.register_2_arg_core::<I1, NullType, NullType, _>(
+        self.register_2_arg_core::<NullType, NullableType<I2>, NullType, _>(
             name,
             property.clone(),
-            move |_, _, _| Value::Scalar(()),
+            vectorize_2_arg::<NullType, NullableType<I2>, NullType>(|_, _| ()),
         );
         self.register_2_arg_core::<NullType, NullType, NullType, _>(
             name,
             property.clone(),
-            move |_, _, _| Value::Scalar(()),
+            vectorize_2_arg::<NullType, NullType, NullType>(|_, _| ()),
         );
 
         self.register_2_arg_core::<I1, I2, O, _>(name, property.clone(), vectorize_2_arg(func));
@@ -298,7 +298,7 @@ impl FunctionRegistry {
         property: FunctionProperty,
         func: F,
     ) where
-        F: for<'a, 'b> Fn(I1::ScalarRef<'a>, I2::ScalarRef<'b>, &mut O::ColumnBuilder)
+        F: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder)
             + Sized
             + 'static
             + Clone
@@ -316,20 +316,20 @@ impl FunctionRegistry {
 
         let property = property.preserve_not_null(true);
 
-        self.register_2_arg_core::<NullType, I2, NullType, _>(
+        self.register_2_arg_core::<NullableType<I1>, NullType, NullType, _>(
             name,
             property.clone(),
-            move |_, _, _| Value::Scalar(()),
+            vectorize_2_arg::<NullableType<I1>, NullType, NullType>(|_, _| ()),
         );
-        self.register_2_arg_core::<I1, NullType, NullType, _>(
+        self.register_2_arg_core::<NullType, NullableType<I2>, NullType, _>(
             name,
             property.clone(),
-            move |_, _, _| Value::Scalar(()),
+            vectorize_2_arg::<NullType, NullableType<I2>, NullType>(|_, _| ()),
         );
         self.register_2_arg_core::<NullType, NullType, NullType, _>(
             name,
             property.clone(),
-            move |_, _, _| Value::Scalar(()),
+            vectorize_2_arg::<NullType, NullType, NullType>(|_, _| ()),
         );
 
         self.register_2_arg_core::<I1, I2, O, _>(
@@ -351,11 +351,7 @@ impl FunctionRegistry {
         property: FunctionProperty,
         func: F,
     ) where
-        F: for<'a> Fn(ValueRef<'a, I1>, ValueRef<'a, I2>, &GenericMap) -> Value<O>
-            + Sized
-            + 'static
-            + Clone
-            + Copy,
+        F: Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Value<O> + Sized + 'static + Clone + Copy,
     {
         self.funcs
             .entry(name)
@@ -384,13 +380,13 @@ impl FunctionRegistry {
 }
 
 fn erase_function_generic_0_arg<O: ArgType>(
-    func: impl for<'a> Fn(&GenericMap) -> Value<O>,
+    func: impl Fn(&GenericMap) -> Value<O>,
 ) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Value<AnyType> {
     move |_args, generics| func(generics).upcast()
 }
 
 fn erase_function_generic_1_arg<I1: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, &GenericMap) -> Value<O>,
+    func: impl Fn(ValueRef<I1>, &GenericMap) -> Value<O>,
 ) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Value<AnyType> {
     move |args, generics| {
         let arg1 = args[0].try_downcast().unwrap();
@@ -400,7 +396,7 @@ fn erase_function_generic_1_arg<I1: ArgType, O: ArgType>(
 }
 
 fn erase_function_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, ValueRef<'a, I2>, &GenericMap) -> Value<O>,
+    func: impl Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Value<O>,
 ) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Value<AnyType> {
     move |args, generics| {
         let arg1 = args[0].try_downcast().unwrap();
@@ -567,7 +563,7 @@ pub fn vectorize_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType
                 .zip(I2::iter_column(&arg2))
                 .map(|(arg1, arg2)| func(arg1, arg2));
             let col = O::column_from_iter(iter, generics);
-            let validity = common_arrow::arrow::bitmap::or(&arg1_validity, &arg2_validity);
+            let validity = common_arrow::arrow::bitmap::and(&arg1_validity, &arg2_validity);
             Value::Column((col, validity))
         }
     }
@@ -589,43 +585,29 @@ pub fn vectorize_with_writer_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType
             Value::Scalar(Some(O::build_scalar(builder)))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column((arg2, arg2_validity))) => {
-            let iter = I2::iter_column(&arg2).zip(&arg2_validity);
+            let iter = I2::iter_column(&arg2);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
-            for (arg2, arg2_validity) in iter {
-                if arg2_validity {
-                    func(arg1.clone(), arg2, &mut builder);
-                } else {
-                    O::push_default(&mut builder);
-                }
+            for arg2 in iter {
+                func(arg1.clone(), arg2, &mut builder);
             }
             Value::Column((O::build_column(builder), arg2_validity))
         }
         (ValueRef::Column((arg1, arg1_validity)), ValueRef::Scalar(Some(arg2))) => {
-            let iter = I1::iter_column(&arg1).zip(&arg1_validity);
+            let iter = I1::iter_column(&arg1);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
-            for (arg1, arg1_validity) in iter {
-                if arg1_validity {
-                    func(arg1, arg2.clone(), &mut builder);
-                } else {
-                    O::push_default(&mut builder);
-                }
+            for arg1 in iter {
+                func(arg1, arg2.clone(), &mut builder);
             }
             Value::Column((O::build_column(builder), arg1_validity))
         }
         (ValueRef::Column((arg1, arg1_validity)), ValueRef::Column((arg2, arg2_validity))) => {
-            let iter = I1::iter_column(&arg1)
-                .zip(&arg1_validity)
-                .zip(I2::iter_column(&arg2))
-                .zip(&arg2_validity);
+            let iter = I1::iter_column(&arg1).zip(I2::iter_column(&arg2));
             let mut builder = O::create_builder(iter.size_hint().0, generics);
-            for (((arg1, arg1_validity), arg2), arg2_validity) in iter {
-                if arg1_validity && arg2_validity {
-                    func(arg1, arg2, &mut builder);
-                } else {
-                    O::push_default(&mut builder);
-                }
+            for (arg1, arg2) in iter {
+                func(arg1, arg2, &mut builder);
             }
-            Value::Column((O::build_column(builder), arg1_validity))
+            let validity = common_arrow::arrow::bitmap::and(&arg1_validity, &arg2_validity);
+            Value::Column((O::build_column(builder), validity))
         }
     }
 }

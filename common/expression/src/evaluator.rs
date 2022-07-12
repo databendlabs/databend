@@ -97,11 +97,12 @@ impl Evaluator {
                 _ => None,
             },
             Value::Column(col) => match (col, dest_type) {
-                (Column::Null { len }, DataType::Nullable(dest_ty)) => {
-                    Some(Value::Column(Column::Nullable {
-                        column: Box::new(ColumnBuilder::with_capacity(dest_ty, len).build()),
-                        validity: constant_bitmap(false, len).into(),
-                    }))
+                (Column::Null { len }, DataType::Nullable(_)) => {
+                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                    for _ in 0..len {
+                        builder.push_default();
+                    }
+                    Some(Value::Column(builder.build()))
                 }
                 (Column::EmptyArray { len }, DataType::Array(dest_ty)) => {
                     Some(Value::Column(Column::Array {

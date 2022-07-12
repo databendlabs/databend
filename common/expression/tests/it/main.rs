@@ -101,7 +101,7 @@ pub fn test() {
                 RawExpr::ColumnRef {
                     id: 0,
                     data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                    property: ValueProperty::default().not_null(false),
+                    property: ValueProperty::default(),
                 },
                 RawExpr::Literal(Literal::Int8(-10)),
             ],
@@ -121,12 +121,12 @@ pub fn test() {
                 RawExpr::ColumnRef {
                     id: 0,
                     data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                    property: ValueProperty::default().not_null(false),
+                    property: ValueProperty::default(),
                 },
                 RawExpr::ColumnRef {
                     id: 1,
                     data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                    property: ValueProperty::default().not_null(false),
+                    property: ValueProperty::default(),
                 },
             ],
             params: vec![],
@@ -146,11 +146,38 @@ pub fn test() {
     run_ast(
         &mut file,
         &RawExpr::FunctionCall {
+            name: "plus".to_string(),
+            args: vec![
+                RawExpr::ColumnRef {
+                    id: 0,
+                    data_type: DataType::Nullable(Box::new(DataType::UInt8)),
+                    property: ValueProperty::default(),
+                },
+                RawExpr::ColumnRef {
+                    id: 1,
+                    data_type: DataType::Null,
+                    property: ValueProperty::default(),
+                },
+            ],
+            params: vec![],
+        },
+        vec![
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+            Column::Null { len: 3 },
+        ],
+    );
+
+    run_ast(
+        &mut file,
+        &RawExpr::FunctionCall {
             name: "not".to_string(),
             args: vec![RawExpr::ColumnRef {
                 id: 0,
                 data_type: DataType::Nullable(Box::new(DataType::Boolean)),
-                property: ValueProperty::default().not_null(false),
+                property: ValueProperty::default(),
             }],
             params: vec![],
         },
@@ -158,6 +185,20 @@ pub fn test() {
             column: Box::new(Column::Boolean(vec![true, false, true].into())),
             validity: vec![false, true, false].into(),
         }],
+    );
+
+    run_ast(
+        &mut file,
+        &RawExpr::FunctionCall {
+            name: "not".to_string(),
+            args: vec![RawExpr::ColumnRef {
+                id: 0,
+                data_type: DataType::Null,
+                property: ValueProperty::default(),
+            }],
+            params: vec![],
+        },
+        vec![Column::Null { len: 10 }],
     );
 
     run_ast(
@@ -203,7 +244,7 @@ pub fn test() {
                     RawExpr::ColumnRef {
                         id: 1,
                         data_type: DataType::Nullable(Box::new(DataType::String)),
-                        property: ValueProperty::default().not_null(false),
+                        property: ValueProperty::default(),
                     },
                 ],
                 params: vec![],
