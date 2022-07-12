@@ -166,20 +166,17 @@ async fn execute(
         .start()
         .await
         .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
-    let data_stream: SendableDataBlockStream =
-        if ctx.get_settings().get_enable_new_processor_framework()? != 0 {
-            let output_port = OutputPort::create();
-            let stream_source =
-                StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
-            let mut source_pipe_builder = SourcePipeBuilder::create();
-            source_pipe_builder.add_source(output_port, stream_source);
-            let _ = interpreter
-                .set_source_pipe_builder(Option::from(source_pipe_builder))
-                .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
-            interpreter.execute(None).await?
-        } else {
-            interpreter.execute(input_stream).await?
-        };
+    let data_stream: SendableDataBlockStream = {
+        let output_port = OutputPort::create();
+        let stream_source = StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
+        let mut source_pipe_builder = SourcePipeBuilder::create();
+        source_pipe_builder.add_source(output_port, stream_source);
+        let _ = interpreter
+            .set_source_pipe_builder(Option::from(source_pipe_builder))
+            .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+        interpreter.execute(None).await?
+    };
+
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
     let mut output_format = format.create_format(plan.schema(), format_setting);

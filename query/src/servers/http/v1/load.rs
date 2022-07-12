@@ -173,93 +173,27 @@ pub async fn streaming_load(
         .map_err(InternalServerError)? as usize;
 
     let format_settings = context.get_format_settings().map_err(InternalServerError)?;
-
-    if settings.get_enable_new_processor_framework().map_err(InternalServerError)? != 0 {
-        let source_pipe_builder = match &mut plan {
-            PlanNode::Insert(insert) => match &mut insert.source {
-                InsertInputSource::StreamingWithFormat(format) => {
-                    if FormatFactory::instance().has_input(format.as_str()) {
-                        let new_format = format!("{}WithNames", format);
-                        if format_settings.skip_header
-                            && FormatFactory::instance().has_input(new_format.as_str())
-                        {
-                            *format = new_format;
-                        }
-
-                        return match new_processor_format(&context, &plan, multipart).await {
-                            Ok(res) => Ok(res),
-                            Err(cause) => Err(InternalServerError(cause)),
-                        };
-                    }
-
-                    if format.to_lowercase().as_str() == "ndjson"
-                        || format.to_lowercase().as_str() == "jsoneachrow"
-                    {
-                        ndjson_source_pipe_builder(context.clone(), &plan, multipart).await
-                    } else {
-                        Err(poem::Error::from_string(
-                            format!(
-                                "Streaming load only supports csv format, but got {}",
-                                format
-                            ),
-                            StatusCode::BAD_REQUEST,
-                        ))
-                    }
-                }
-                _non_supported_source => Err(poem::Error::from_string(
-                    "Only supports streaming upload. e.g. INSERT INTO $table FORMAT CSV",
-                    StatusCode::BAD_REQUEST,
-                )),
-            },
-            non_insert_plan => Err(poem::Error::from_string(
-                format!(
-                    "Only supports INSERT statement in streaming load, but got {}",
-                    non_insert_plan.name()
-                ),
-                StatusCode::BAD_REQUEST,
-            )),
-        }?;
-        let interpreter =
-            InterpreterFactory::get(context.clone(), plan.clone()).map_err(InternalServerError)?;
-        let _ = interpreter
-            .set_source_pipe_builder(Option::from(source_pipe_builder))
-            .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
-        interpreter.start().await.map_err(InternalServerError)?;
-        let mut data_stream = interpreter
-            .execute(None)
-            .await
-            .map_err(InternalServerError)?;
-        while let Some(_block) = data_stream.next().await {}
-        // Write Finish to query log table.
-        let _ = interpreter
-            .finish()
-            .await
-            .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
-
-        // TODO generate id
-        // TODO duplicate by insert_label
-        let mut id = uuid::Uuid::new_v4().to_string();
-        return Ok(Json(LoadResponse {
-            id,
-            state: "SUCCESS".to_string(),
-            stats: context.get_scan_progress_value(),
-            error: None,
-        }));
-    };
-
-    // After new processor is ready, the following code can directly delete
-    // validate plan
-    let source_stream = match &plan {
-        PlanNode::Insert(insert) => match &insert.source {
+    let source_pipe_builder = match &mut plan {
+        PlanNode::Insert(insert) => match &mut insert.source {
             InsertInputSource::StreamingWithFormat(format) => {
-                if format.to_lowercase().as_str() == "csv" {
-                    build_csv_stream(&plan, &format_settings, multipart, max_block_size)
-                } else if format.to_lowercase().as_str() == "parquet" {
-                    build_parquet_stream(&plan, multipart)
-                } else if format.to_lowercase().as_str() == "ndjson"
+                if FormatFactory::instance().has_input(format.as_str()) {
+                    let new_format = format!("{}WithNames", format);
+                    if format_settings.skip_header
+                        && FormatFactory::instance().has_input(new_format.as_str())
+                    {
+                        *format = new_format;
+                    }
+
+                    return match new_processor_format(&context, &plan, multipart).await {
+                        Ok(res) => Ok(res),
+                        Err(cause) => Err(InternalServerError(cause)),
+                    };
+                }
+
+                if format.to_lowercase().as_str() == "ndjson"
                     || format.to_lowercase().as_str() == "jsoneachrow"
                 {
-                    build_ndjson_stream(&plan, multipart)
+                    ndjson_source_pipe_builder(context.clone(), &plan, multipart).await
                 } else {
                     Err(poem::Error::from_string(
                         format!(
@@ -283,24 +217,17 @@ pub async fn streaming_load(
             StatusCode::BAD_REQUEST,
         )),
     }?;
-
     let interpreter =
         InterpreterFactory::get(context.clone(), plan.clone()).map_err(InternalServerError)?;
-
-    // Write Start to query log table.
     let _ = interpreter
-        .start()
-        .await
-        .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
-
-    // this runs inside the runtime of poem, load is not cpu defensive so it's ok
+        .set_source_pipe_builder(Option::from(source_pipe_builder))
+        .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+    interpreter.start().await.map_err(InternalServerError)?;
     let mut data_stream = interpreter
-        .execute(Some(source_stream))
+        .execute(None)
         .await
         .map_err(InternalServerError)?;
-
     while let Some(_block) = data_stream.next().await {}
-
     // Write Finish to query log table.
     let _ = interpreter
         .finish()
