@@ -83,19 +83,6 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         self.inner_table.get_partitions(ctx, push_downs)
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let block = self.inner_table.get_full_data(ctx)?;
-        Ok(Box::pin(DataBlockStream::create(
-            block.schema().clone(),
-            None,
-            vec![block],
-        )))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
@@ -199,19 +186,6 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         self.inner_table.get_partitions(ctx, push_downs).await
-    }
-
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let block = self.inner_table.get_full_data(ctx).await?;
-        Ok(Box::pin(DataBlockStream::create(
-            block.schema().clone(),
-            None,
-            vec![block],
-        )))
     }
 
     fn read2(

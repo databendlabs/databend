@@ -157,34 +157,34 @@ impl Table for ResultTable {
         }
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let block_reader = self.create_block_reader(&ctx, &None)?;
-        let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(1) {
-            Err(_) => None,
-            Ok(parts) if parts.is_empty() => None,
-            Ok(parts) => Some(parts),
-        })
-        .flatten();
-
-        let part_stream = futures::stream::iter(iter);
-
-        let stream = part_stream
-            .then(move |part| {
-                let block_reader = block_reader.clone();
-                async move { block_reader.read(part).await }
-            })
-            .instrument(common_tracing::tracing::Span::current());
-        if let Some(extra) = &plan.push_downs {
-            if let Some(limit) = extra.limit {
-                return Ok(Box::pin(TakeStream::new(Box::pin(stream), limit)));
-            }
-        }
-        Ok(Box::pin(stream))
-    }
+    // async fn read(
+    //     &self,
+    //     ctx: Arc<QueryContext>,
+    //     plan: &ReadDataSourcePlan,
+    // ) -> Result<SendableDataBlockStream> {
+    //     let block_reader = self.create_block_reader(&ctx, &None)?;
+    //     let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(1) {
+    //         Err(_) => None,
+    //         Ok(parts) if parts.is_empty() => None,
+    //         Ok(parts) => Some(parts),
+    //     })
+    //     .flatten();
+    //
+    //     let part_stream = futures::stream::iter(iter);
+    //
+    //     let stream = part_stream
+    //         .then(move |part| {
+    //             let block_reader = block_reader.clone();
+    //             async move { block_reader.read(part).await }
+    //         })
+    //         .instrument(common_tracing::tracing::Span::current());
+    //     if let Some(extra) = &plan.push_downs {
+    //         if let Some(limit) = extra.limit {
+    //             return Ok(Box::pin(TakeStream::new(Box::pin(stream), limit)));
+    //         }
+    //     }
+    //     Ok(Box::pin(stream))
+    // }
 
     // todo: support
     fn read2(

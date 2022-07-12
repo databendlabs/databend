@@ -108,30 +108,6 @@ impl Table for TracingTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let log_files = Self::log_files(ctx)?;
-
-        // Default limit.
-        let mut limit = 100000000_usize;
-        tracing::debug!("read push_down:{:?}", &plan.push_downs);
-
-        if let Some(extras) = &plan.push_downs {
-            if let Some(limit_push_down) = extras.limit {
-                limit = limit_push_down;
-            }
-        }
-
-        Ok(Box::pin(TracingTableStream::try_create(
-            self.table_info.schema(),
-            log_files,
-            limit,
-        )?))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,

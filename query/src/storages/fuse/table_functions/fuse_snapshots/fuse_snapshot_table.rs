@@ -112,39 +112,6 @@ impl Table for FuseSnapshotTable {
         ])
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let tenant_id = ctx.get_tenant();
-        let tbl = ctx
-            // TODO (dantengsky) the name of catalog should be passed in:
-            //  - select * from fuse_snapshot([cat,] [db,] table_name)
-            //  - if "cat" and "db" are not specified, use the corresponding default values of `ctx`
-            .get_catalog(CATALOG_DEFAULT)?
-            .get_table(
-                tenant_id.as_str(),
-                self.arg_database_name.as_str(),
-                self.arg_table_name.as_str(),
-            )
-            .await?;
-
-        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-
-        let limit = Self::get_limit(plan);
-        let blocks = vec![
-            FuseSnapshot::new(ctx.clone(), tbl)
-                .get_history(limit)
-                .await?,
-        ];
-        Ok(Box::pin(DataBlockStream::create(
-            FuseSnapshot::schema(),
-            None,
-            blocks,
-        )))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,

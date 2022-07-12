@@ -163,3 +163,4 @@ pub use interpreter_user_udf_drop::DropUserUDFInterpreter;
 pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;
+pub use stream::ProcessorExecutorStream;

@@ -118,16 +118,6 @@ impl Table for SyncCrashMeTable {
         Some(vec![Expression::create_literal(DataValue::UInt64(0))])
     }
 
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(SyncCrashMeStream {
-            message: self.panic_message.clone(),
-        }))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,

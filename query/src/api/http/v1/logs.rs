@@ -26,7 +26,7 @@ use tokio_stream::StreamExt;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
-use crate::storages::ToReadDataSourcePlan;
+use crate::storages::{TableStreamReadWrap, ToReadDataSourcePlan};
 
 // read log files from cfg.log.log_dir
 #[poem::handler]

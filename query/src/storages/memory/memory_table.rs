@@ -180,38 +180,6 @@ impl Table for MemoryTable {
         Ok((statistics, parts))
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let push_downs = &plan.push_downs;
-        let raw_blocks = self.blocks.read().clone();
-
-        let blocks = match push_downs {
-            Some(push_downs) => match &push_downs.projection {
-                Some(prj) => {
-                    let pruned_schema = Arc::new(self.table_info.schema().project(prj));
-                    let mut pruned_blocks = Vec::with_capacity(raw_blocks.len());
-
-                    for raw_block in raw_blocks {
-                        let raw_columns = raw_block.columns();
-                        let columns: Vec<ColumnRef> =
-                            prj.iter().map(|idx| raw_columns[*idx].clone()).collect();
-
-                        pruned_blocks.push(DataBlock::create(pruned_schema.clone(), columns))
-                    }
-
-                    pruned_blocks
-                }
-                None => raw_blocks,
-            },
-            None => raw_blocks,
-        };
-
-        Ok(Box::pin(MemoryTableStream::try_create(ctx, blocks)?))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,

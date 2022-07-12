@@ -179,19 +179,6 @@ impl Table for NumbersTable {
         ))])
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(NumbersStream::try_create(
-            ctx,
-            self.schema(),
-            vec![],
-            None,
-        )?))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,

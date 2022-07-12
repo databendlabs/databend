@@ -103,21 +103,6 @@ impl Table for GithubTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let arrays = get_data_from_github(self.options.clone()).await?;
-        let block = DataBlock::create(self.table_info.schema(), arrays);
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![block],
-        )))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,

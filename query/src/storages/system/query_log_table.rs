@@ -138,23 +138,6 @@ impl Table for QueryLogTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let data = self.data.read().clone();
-        let mut blocks = Vec::with_capacity(data.len());
-        for block in data {
-            blocks.push(block);
-        }
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            blocks,
-        )))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
