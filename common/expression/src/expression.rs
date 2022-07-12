@@ -27,6 +27,7 @@ pub enum RawExpr {
         data_type: DataType,
         property: ValueProperty,
     },
+    // TODO: support user cast
     // Cast {
     //     is_try: bool,
     //     expr: Box<Expr>,

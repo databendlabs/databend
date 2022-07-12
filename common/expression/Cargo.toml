@@ -18,6 +18,7 @@ common-arrow = { path = "../arrow" }
 # Crates.io dependencies
 chrono-tz = "0.6.1"
 enum-as-inner = "0.4"
-# https://github.com/calder/rust-goldenfile/pull/7
-goldenfile = { git = "https://github.com/datafuse-extras/rust-goldenfile", rev = "16c5783" }
+
+[dev-dependencies]
+goldenfile = "1.4"
 
