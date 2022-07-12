@@ -19,6 +19,7 @@ use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::types::Index;
 use common_arrow::ArrayRef;
+use common_io::prelude::BinaryWrite;
 
 use crate::prelude::*;
 
@@ -177,6 +178,7 @@ impl Column for ArrayColumn {
         let offset = self.offsets[row] as usize;
         let length = self.size_at_index(row);
 
+        BinaryWrite::write_uvarint(vec, length as u64).unwrap();
         for row in offset..offset + length {
             self.values.serialize(vec, row);
         }

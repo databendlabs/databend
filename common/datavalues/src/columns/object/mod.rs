@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
+use common_io::prelude::BinaryWrite;
 pub use iterator::*;
 pub use mutable::*;
 
@@ -216,9 +217,14 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
         self.values[index].clone().into()
     }
 
+    // TODO add buffer
+    // Bincode does not support the serde::Deserializer::deserialize_any method (while in processor thread 0).
+    // So we can't use bincode here
     fn serialize(&self, vec: &mut Vec<u8>, row: usize) {
-        let value = self.values[row].to_string();
-        vec.extend_from_slice(value.as_bytes());
+        let mut buffer = Vec::with_capacity(8);
+        serde_json::to_writer(&mut buffer, &self.values[row]).unwrap();
+        BinaryWrite::write_uvarint(vec, buffer.len() as u64).unwrap();
+        vec.extend_from_slice(buffer.as_slice());
     }
 }
 
