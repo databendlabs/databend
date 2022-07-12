@@ -16,11 +16,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
 use common_planners::Expression;
+use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;

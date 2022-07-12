@@ -524,12 +524,6 @@ impl<T: MallocSizeOf> MallocSizeOf for parking_lot::Mutex<T> {
     }
 }
 
-impl<T: MallocSizeOf> MallocSizeOf for crate::infallible::Mutex<T> {
-    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.lock().size_of(ops)
-    }
-}
-
 impl<T: MallocSizeOf> MallocSizeOf for std::sync::RwLock<T> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.read().unwrap().size_of(ops)
@@ -537,12 +531,6 @@ impl<T: MallocSizeOf> MallocSizeOf for std::sync::RwLock<T> {
 }
 
 impl<T: MallocSizeOf> MallocSizeOf for parking_lot::RwLock<T> {
-    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.read().size_of(ops)
-    }
-}
-
-impl<T: MallocSizeOf> MallocSizeOf for crate::infallible::RwLock<T> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.read().size_of(ops)
     }

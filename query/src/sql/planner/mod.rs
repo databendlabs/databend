@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
-use common_base::infallible::RwLock;
 use common_exception::Result;
+use parking_lot::RwLock;
 pub use plans::ScalarExpr;
 
 use crate::sessions::QueryContext;

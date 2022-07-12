@@ -22,8 +22,6 @@ use std::sync::Arc;
 use chrono_tz::Tz;
 use common_base::base::Progress;
 use common_base::base::Runtime;
-use common_base::infallible::Mutex;
-use common_base::infallible::RwLock;
 use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,6 +31,8 @@ use common_planners::PlanNode;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::auth::AuthMgr;

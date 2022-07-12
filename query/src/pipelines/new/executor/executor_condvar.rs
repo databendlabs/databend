@@ -17,8 +17,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::infallible::Condvar;
-use common_base::infallible::Mutex;
+use parking_lot::Condvar;
+use parking_lot::Mutex;
 
 struct WorkerCondvar {
     mutex: Mutex<bool>,
@@ -29,7 +29,7 @@ impl WorkerCondvar {
     pub fn create() -> WorkerCondvar {
         WorkerCondvar {
             mutex: Mutex::new(false),
-            condvar: Condvar::create(),
+            condvar: Condvar::new(),
         }
     }
 }
