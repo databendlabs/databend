@@ -40,7 +40,7 @@ const PREFIX_DB_ID_LIST: &str = "__fd_db_id_list";
 const PREFIX_TABLE: &str = "__fd_table";
 const PREFIX_TABLE_BY_ID: &str = "__fd_table_by_id";
 const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
-const PREFIX_ID_GEN: &str = "__fd_id_gen";
+pub(crate) const PREFIX_ID_GEN: &str = "__fd_id_gen";
 const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
 
 /// Key for database id generator

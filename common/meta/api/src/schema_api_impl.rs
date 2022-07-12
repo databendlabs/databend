@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use anyerror::AnyError;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_app::schema::CountTablesKey;
@@ -77,29 +76,29 @@ use common_meta_types::app_error::UndropTableWithNoDropTime;
 use common_meta_types::app_error::UnknownDatabase;
 use common_meta_types::app_error::UnknownTable;
 use common_meta_types::app_error::UnknownTableId;
-use common_meta_types::txn_condition;
-use common_meta_types::txn_op::Request;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
-use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
-use common_meta_types::Operation;
-use common_meta_types::TxnCondition;
-use common_meta_types::TxnDeleteRequest;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnOpResponse;
-use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReq;
 use common_proto_conv::FromToProto;
 use common_tracing::func_name;
 use common_tracing::tracing;
-use txn_condition::Target;
 use ConditionResult::Eq;
 
+use crate::deserialize_struct;
+use crate::deserialize_u64;
+use crate::fetch_id;
+use crate::get_u64_value;
+use crate::meta_encode_err;
+use crate::send_txn;
+use crate::serialize_struct;
+use crate::serialize_u64;
+use crate::txn_cond_seq;
+use crate::txn_op_del;
+use crate::txn_op_put;
 use crate::DatabaseIdGen;
 use crate::KVApi;
 use crate::KVApiKey;
@@ -2064,24 +2063,6 @@ fn table_has_to_not_exist(
     }
 }
 
-/// Get value that its type is `u64`.
-///
-/// It expects the kv-value's type is `u64`, such as:
-/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
-/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
-///
-/// It returns (seq, `u64` value).
-/// If not found, (0,0) is returned.
-async fn get_u64_value<T: KVApiKey>(kv_api: &impl KVApi, key: &T) -> Result<(u64, u64), MetaError> {
-    let res = kv_api.get_kv(&key.to_key()).await?;
-
-    if let Some(seq_v) = res {
-        Ok((seq_v.seq, deserialize_u64(&seq_v.data)?))
-    } else {
-        Ok((0, 0))
-    }
-}
-
 /// List kvs whose value's type is `u64`.
 ///
 /// It expects the kv-value' type is `u64`, such as:
@@ -2149,99 +2130,6 @@ where
     } else {
         Ok((0, None))
     }
-}
-
-/// Generate an id on metasrv.
-///
-/// Ids are categorized by generators.
-/// Ids may not be consecutive.
-async fn fetch_id<T: KVApiKey>(kv_api: &impl KVApi, generator: T) -> Result<u64, MetaError> {
-    let res = kv_api
-        .upsert_kv(UpsertKVReq {
-            key: generator.to_key(),
-            seq: MatchSeq::Any,
-            value: Operation::Update(b"".to_vec()),
-            value_meta: None,
-        })
-        .await?;
-
-    // seq: MatchSeq::Any always succeeds
-    let seq_v = res.result.unwrap();
-    Ok(seq_v.seq)
-}
-
-/// Build a TxnCondition that compares the seq of a record.
-pub fn txn_cond_seq(key: &impl KVApiKey, op: ConditionResult, seq: u64) -> TxnCondition {
-    TxnCondition {
-        key: key.to_key(),
-        expected: op as i32,
-        target: Some(Target::Seq(seq)),
-    }
-}
-
-/// Build a txn operation that puts a record.
-pub fn txn_op_put(key: &impl KVApiKey, value: Vec<u8>) -> TxnOp {
-    TxnOp {
-        request: Some(Request::Put(TxnPutRequest {
-            key: key.to_key(),
-            value,
-            prev_value: true,
-        })),
-    }
-}
-
-/// Build a txn operation that deletes a record.
-pub fn txn_op_del(key: &impl KVApiKey) -> TxnOp {
-    TxnOp {
-        request: Some(Request::Delete(TxnDeleteRequest {
-            key: key.to_key(),
-            prev_value: true,
-        })),
-    }
-}
-
-async fn send_txn(
-    kv_api: &impl KVApi,
-    txn_req: TxnRequest,
-) -> Result<(bool, Vec<TxnOpResponse>), MetaError> {
-    let tx_reply = kv_api.transaction(txn_req).await?;
-    let res: Result<_, MetaError> = tx_reply.into();
-    let (succ, responses) = res?;
-    Ok((succ, responses))
-}
-
-fn serialize_u64(value: u64) -> Result<Vec<u8>, MetaError> {
-    let v = serde_json::to_vec(&value).map_err(meta_encode_err)?;
-    Ok(v)
-}
-
-fn deserialize_u64(v: &[u8]) -> Result<u64, MetaError> {
-    let id = serde_json::from_slice(v).map_err(meta_encode_err)?;
-    Ok(id)
-}
-
-pub(crate) fn serialize_struct<PB: common_protos::prost::Message>(
-    value: &impl FromToProto<PB>,
-) -> Result<Vec<u8>, MetaError> {
-    let p = value.to_pb().map_err(meta_encode_err)?;
-    let mut buf = vec![];
-    common_protos::prost::Message::encode(&p, &mut buf).map_err(meta_encode_err)?;
-    Ok(buf)
-}
-
-pub(crate) fn deserialize_struct<PB, T>(buf: &[u8]) -> Result<T, MetaError>
-where
-    PB: common_protos::prost::Message + Default,
-    T: FromToProto<PB>,
-{
-    let p: PB = common_protos::prost::Message::decode(buf).map_err(meta_encode_err)?;
-    let v: T = FromToProto::from_pb(p).map_err(meta_encode_err)?;
-
-    Ok(v)
-}
-
-fn meta_encode_err<E: std::error::Error + 'static>(e: E) -> MetaError {
-    MetaError::EncodeError(AnyError::new(&e))
 }
 
 /// Get the count of tables for one tenant by listing databases and table ids.

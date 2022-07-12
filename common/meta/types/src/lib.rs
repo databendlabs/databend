@@ -53,7 +53,6 @@ pub mod app_error;
 pub mod error_context;
 mod principal_identity;
 mod proto_display;
-mod share;
 
 // reexport
 
@@ -158,12 +157,6 @@ pub use seq_value::IntoSeqV;
 pub use seq_value::KVMeta;
 pub use seq_value::PbSeqV;
 pub use seq_value::SeqV;
-pub use share::CreateShareReply;
-pub use share::CreateShareReq;
-pub use share::DropShareReply;
-pub use share::DropShareReq;
-pub use share::GetShareReq;
-pub use share::ShareInfo;
 pub use tenant_quota::TenantQuota;
 pub use user_auth::AuthInfo;
 pub use user_auth::AuthType;
