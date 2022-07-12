@@ -97,8 +97,8 @@ async fn test_parse_stage_location_external() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_parse_uri_location() -> Result<()> {
+#[tokio::test]
+async fn test_parse_uri_location() -> Result<()> {
     let ctx = create_query_context().await?;
 
     // Cases are in the format:
