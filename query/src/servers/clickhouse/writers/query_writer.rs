@@ -24,7 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_tracing::tracing;
-use futures::channel::mpsc::Receiver;
+use futures::channel::mpsc::UnboundedReceiver;
 use futures::StreamExt;
 use opensrv_clickhouse::connection::Connection;
 use opensrv_clickhouse::errors::Error as CHError;
@@ -51,7 +51,7 @@ impl<'a> QueryWriter<'a> {
 
     pub async fn write(
         &mut self,
-        receiver: Result<Receiver<BlockItem>>,
+        receiver: Result<UnboundedReceiver<BlockItem>>,
         format: &FormatSettings,
     ) -> Result<()> {
         match receiver {
@@ -103,7 +103,7 @@ impl<'a> QueryWriter<'a> {
 
     async fn write_data(
         &mut self,
-        mut receiver: Receiver<BlockItem>,
+        mut receiver: UnboundedReceiver<BlockItem>,
         format: &FormatSettings,
     ) -> Result<()> {
         loop {
@@ -140,7 +140,7 @@ pub fn to_clickhouse_err(res: ErrorCode) -> opensrv_clickhouse::errors::Error {
 }
 
 pub fn from_clickhouse_err(res: opensrv_clickhouse::errors::Error) -> ErrorCode {
-    ErrorCode::LogicalError(format!("clickhouse-srv expception: {:?}", res))
+    ErrorCode::LogicalError(format!("clickhouse-srv exception: {:?}", res))
 }
 
 pub fn to_clickhouse_block(block: DataBlock, format: &FormatSettings) -> Result<Block> {
