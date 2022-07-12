@@ -18,8 +18,8 @@ use std::sync::Arc;
 use common_base::base::tokio::runtime::Runtime;
 use common_base::base::Thread;
 use common_exception::Result;
-use common_io::prelude::StorageFsConfig;
-use common_io::prelude::StorageParams;
+use common_storage::StorageFsConfig;
+use common_storage::StorageParams;
 use databend_query::sessions::SessionManager;
 use databend_query::Config;
 

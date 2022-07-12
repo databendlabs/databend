@@ -17,7 +17,7 @@ use std::str::FromStr;
 
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
-use common_io::prelude::StorageParams;
+use common_storage::StorageParams;
 
 use crate::UserIdentity;
 

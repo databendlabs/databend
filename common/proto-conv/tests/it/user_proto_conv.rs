@@ -15,14 +15,14 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use common_io::prelude::StorageParams;
-use common_io::prelude::StorageS3Config;
 use common_meta_types as mt;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_protos::pb;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config;
 use enumflags2::make_bitflags;
 
 fn s(ss: impl ToString) -> String {

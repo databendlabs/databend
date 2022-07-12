@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! storage will provide storage related types and functions.
+//! `common_storage` will provide storage related types and functions.
+//!
+//! This crate will return `std::io::Result`.
 
 mod config;
 pub use config::StorageAzblobConfig;

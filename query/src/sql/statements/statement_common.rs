@@ -19,13 +19,13 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::parse_escape_string;
-use common_io::prelude::StorageParams;
-use common_io::prelude::StorageS3Config;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageParams;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config;
 use common_tracing::tracing::debug;
 use sqlparser::ast::ObjectName;
 

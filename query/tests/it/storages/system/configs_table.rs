@@ -14,8 +14,8 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_io::prelude::StorageParams;
-use common_io::prelude::StorageS3Config;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config;
 use databend_query::storages::system::ConfigsTable;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;

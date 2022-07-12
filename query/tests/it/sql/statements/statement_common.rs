@@ -16,11 +16,11 @@ use std::collections::BTreeMap;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_io::prelude::StorageParams;
-use common_io::prelude::StorageS3Config;
 use common_meta_types::StageParams;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config;
 use databend_query::sql::statements::parse_stage_location;
 use databend_query::sql::statements::parse_uri_location;
 use pretty_assertions::assert_eq;
