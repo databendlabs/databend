@@ -230,7 +230,7 @@ impl HashMethod for HashMethodSerializer {
     type HashKey = SmallVu8;
     type HashKeyRef<'a> = &'a [u8];
 
-    type HashKeyIter<'a> = StringViewer<'a>;
+    type HashKeyIter<'a> = StringValueIter<'a>;
 
     fn name(&self) -> String {
         "Serializer".to_string()
@@ -238,7 +238,7 @@ impl HashMethod for HashMethodSerializer {
 
     fn build_keys_state(&self, group_columns: &[&ColumnRef], rows: usize) -> Result<KeysState> {
         if group_columns.len() == 1 && group_columns[0].data_type_id() == TypeID::String {
-            return Ok(KeysState::Column(group_columns[0].clone()));
+            return Ok(KeysState::Column(group_columns[0].convert_full_column()));
         }
 
         let approx_size = group_columns.len() * rows * 8;
@@ -260,8 +260,8 @@ impl HashMethod for HashMethodSerializer {
         match key_state {
             KeysState::Column(col) => {
                 // maybe constant column
-                let viewer = Vu8::try_create_viewer(col)?;
-                Ok(viewer.iter())
+                let str_column: &StringColumn = Series::check_get(col)?;
+                Ok(str_column.iter())
             }
             _ => unreachable!(),
         }
