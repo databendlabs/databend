@@ -2218,6 +2218,7 @@ dependencies = [
  "serde",
  "serde-bridge",
  "serde_json",
+ "serde_repr",
  "serfig",
  "sha1",
  "sha2 0.10.2",
@@ -6297,6 +6298,17 @@ dependencies = [
  "percent-encoding",
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "serde_repr"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2ad84e47328a31223de7fed7a4f5087f2d6ddfe586cf3ca25b7a165bc0a5aed"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

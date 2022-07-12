@@ -1,0 +1,36 @@
+name: "Test Fuzz Standalone"
+description: "Running fuzz tests in standalone mode"
+inputs:
+  profile:
+    description: "The profile for this test"
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+
+    - name: Test setup
+      shell: bash
+      run: |
+        bash ./scripts/setup/dev_setup.sh -yd
+
+    - name: Run fuzz Tests with Standalone mode with embedded meta-store
+      shell: bash
+      run: |
+        bash ./scripts/ci/ci-run-fuzz-tests.sh
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: test-fuzz-standalone-linux
