@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use chrono::NaiveDateTime;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
@@ -24,17 +25,35 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
 use serde::Serialize;
+use serde::Serializer;
 use serde_json;
+use serde_repr::Serialize_repr;
 
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Serialize_repr)]
+#[repr(u8)]
 pub enum LogType {
     Start = 1,
     Finish = 2,
     Error = 3,
     Aborted = 4,
+}
+
+fn date_str<S>(dt: &i32, s: S) -> std::result::Result<S::Ok, S::Error>
+where S: Serializer {
+    let t = NaiveDateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0);
+    s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
+}
+
+fn datetime_str<S>(dt: &i64, s: S) -> std::result::Result<S::Ok, S::Error>
+where S: Serializer {
+    let t = NaiveDateTime::from_timestamp(
+        dt / 1_000_000,
+        u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
+    );
+    s.serialize_str(t.format("%Y-%m-%d %H:%M:%S%.6f").to_string().as_str())
 }
 
 #[derive(Clone, Serialize)]
@@ -47,6 +66,8 @@ pub struct LogEvent {
     pub tenant_id: String,
     pub cluster_id: String,
     pub sql_user: String,
+
+    #[serde(skip_serializing)]
     pub sql_user_quota: String,
     #[serde(skip_serializing)]
     pub sql_user_privileges: String,
@@ -55,7 +76,10 @@ pub struct LogEvent {
     pub query_id: String,
     pub query_kind: String,
     pub query_text: String,
+
+    #[serde(serialize_with = "date_str")]
     pub event_date: i32,
+    #[serde(serialize_with = "datetime_str")]
     pub event_time: i64,
 
     // Schema.
@@ -242,7 +266,7 @@ impl InterpreterQueryLog {
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
             .as_micros() as i64;
-        let event_date = (event_time / (24 * 3600000000)) as i32;
+        let event_date = (event_time / (24 * 3_600_000_000)) as i32;
 
         let written_rows = 0u64;
         let written_bytes = 0u64;
@@ -346,7 +370,7 @@ impl InterpreterQueryLog {
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
             .as_micros() as i64;
-        let event_date = (event_time / (24 * 3600000000)) as i32;
+        let event_date = (event_time / (24 * 3_600_000_000)) as i32;
         let dal_metrics = self.ctx.get_dal_metrics();
 
         let written_rows = self.ctx.get_write_progress_value().rows as u64;
