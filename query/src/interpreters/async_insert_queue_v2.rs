@@ -294,8 +294,7 @@ impl AsyncInsertQueue {
                     self.runtime.clone(),
                     query_need_abort,
                     pipeline,
-                )
-                .unwrap();
+                )?;
                 executor.execute()?;
                 drop(executor);
                 let blocks = ctx.consume_precommit_blocks();
