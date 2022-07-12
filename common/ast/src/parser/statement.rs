@@ -1118,10 +1118,11 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
         map_res(
             rule! {
                 #literal_string
+                ~ (ENDPOINT_URL ~ "=" ~ #literal_string)?
                 ~ (CREDENTIALS ~ "=" ~ #options)?
                 ~ (ENCRYPTION ~ "=" ~ #options)?
             },
-            |(location, credentials_opt, encryption_opt)| {
+            |(location, endpoint_url, credentials_opt, encryption_opt)| {
                 let parsed =
                     Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
 
@@ -1136,6 +1137,7 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
                     } else {
                         parsed.path().to_string()
                     },
+                    endpoint_url: endpoint_url.map(|v| v.2),
                     credentials: credentials_opt.map(|v| v.2).unwrap_or_default(),
                     encryption: encryption_opt.map(|v| v.2).unwrap_or_default(),
                 })

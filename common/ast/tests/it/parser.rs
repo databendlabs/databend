@@ -171,6 +171,16 @@ fn test_statement() {
                 )
                 size_limit=10;"#,
         r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                ENDPOINT_URL = 'http://127.0.0.1:9900'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
                 FROM @my_stage
                 FILE_FORMAT = (
                     type = 'CSV'
