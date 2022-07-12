@@ -21,7 +21,6 @@ use common_streams::SendableDataBlockStream;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
@@ -31,8 +30,8 @@ pub struct ShowStagesInterpreter {
 }
 
 impl ShowStagesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowStagesInterpreter { ctx }))
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowStagesInterpreter { ctx })
     }
 
     fn build_query(&self) -> Result<String> {

@@ -12,25 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parking_lot::Mutex as ParkingMutex;
-use parking_lot::MutexGuard;
+mod jwt;
+mod role_mgr;
+mod user;
+mod user_api;
+mod user_mgr;
+mod user_stage;
+mod user_udf;
 
-/// A simple wrapper around the lock() function of a std::sync::Mutex
-#[derive(Debug)]
-pub struct Mutex<T>(ParkingMutex<T>);
+pub mod role_cache_mgr;
 
-unsafe impl<T> Send for Mutex<T> where ParkingMutex<T>: Send {}
-
-unsafe impl<T> Sync for Mutex<T> where ParkingMutex<T>: Sync {}
-
-impl<T> Mutex<T> {
-    /// creates mutex
-    pub fn new(t: T) -> Self {
-        Self(ParkingMutex::new(t))
-    }
-
-    /// lock the mutex
-    pub fn lock(&self) -> MutexGuard<'_, T> {
-        self.0.lock()
-    }
-}
+pub use jwt::*;
+pub use role_cache_mgr::RoleCacheMgr;
+pub use user::CertifiedInfo;
+pub use user::User;
+pub use user_api::UserApiProvider;

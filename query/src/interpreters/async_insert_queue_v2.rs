@@ -24,11 +24,11 @@ use common_base::base::tokio::time::Duration;
 use common_base::base::tokio::time::Instant;
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
-use common_base::infallible::Mutex;
-use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
 
 use super::InsertInterpreterV2;
 use super::SelectInterpreterV2;
@@ -43,8 +43,8 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::sql::plans::Insert;
-use crate::sql::plans::Plan;
 use crate::sql::plans::InsertInputSource;
+use crate::sql::plans::Plan;
 use crate::storages::memory::MemoryTableSink;
 
 #[derive(Clone)]
@@ -256,11 +256,7 @@ impl AsyncInsertQueue {
         }
     }
 
-    pub async fn push(
-        self: Arc<Self>,
-        plan: Arc<Insert>,
-        ctx: Arc<QueryContext>,
-    ) -> Result<()> {
+    pub async fn push(self: Arc<Self>, plan: Arc<Insert>, ctx: Arc<QueryContext>) -> Result<()> {
         let self_arc = self.clone();
         let plan = plan.clone();
         let settings = ctx.get_changed_settings();
@@ -272,14 +268,12 @@ impl AsyncInsertQueue {
                         s_expr,
                         metadata,
                         bind_context,
-                    } => {
-                        SelectInterpreterV2::try_create(
-                            ctx.clone(),
-                            *bind_context.clone(),
-                            s_expr.clone(),
-                            metadata.clone(),
-                        )
-                    }
+                    } => SelectInterpreterV2::try_create(
+                        ctx.clone(),
+                        *bind_context.clone(),
+                        s_expr.clone(),
+                        metadata.clone(),
+                    ),
                     _ => unreachable!(),
                 };
 
@@ -294,10 +288,13 @@ impl AsyncInsertQueue {
                     );
                 }
                 pipeline.add_pipe(sink_pipeline_builder.finalize());
-                
+
                 let query_need_abort = ctx.query_need_abort();
-                let executor =
-                    PipelineCompleteExecutor::try_create(self.runtime.clone(), query_need_abort, pipeline).unwrap();
+                let executor = PipelineCompleteExecutor::try_create(
+                    self.runtime.clone(),
+                    query_need_abort,
+                    pipeline,
+                )?;
                 executor.execute()?;
                 drop(executor);
                 let blocks = ctx.consume_precommit_blocks();

@@ -23,7 +23,6 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::Runtime;
 use common_base::base::SignalStream;
-use common_base::infallible::RwLock;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -32,9 +31,12 @@ use common_metrics::label_counter;
 use common_tracing::init_query_logger;
 use common_tracing::tracing;
 use common_tracing::tracing_appender::non_blocking::WorkerGuard;
+use common_users::RoleCacheMgr;
+use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
 use opendal::Operator;
+use parking_lot::RwLock;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;
@@ -47,8 +49,6 @@ use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
 use crate::storages::cache::CacheManager;
-use crate::users::RoleCacheMgr;
-use crate::users::UserApiProvider;
 use crate::Config;
 
 pub struct SessionManager {
@@ -111,7 +111,8 @@ impl SessionManager {
             (Vec::new(), None)
         };
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
-        let user_api_provider = UserApiProvider::create_global(conf.clone()).await?;
+        let user_api_provider =
+            UserApiProvider::create_global(conf.meta.to_meta_grpc_client_conf()).await?;
         let role_cache_manager = Arc::new(RoleCacheMgr::new(user_api_provider.clone()));
 
         let exchange_manager = DataExchangeManager::create(conf.clone());
@@ -370,7 +371,7 @@ impl SessionManager {
 
     async fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
         // Read lock does not support reentrant
-        // https://github.com/Amanieu/parking_lot/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
+        // https://github.com/Amanieu/parking_lot::/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
         let active_sessions_read_guard = sessions.read();
 
         // First try to kill the idle session
@@ -436,7 +437,7 @@ impl SessionManager {
         }
 
         {
-            let x = UserApiProvider::create_global(config).await?;
+            let x = UserApiProvider::create_global(config.meta.to_meta_grpc_client_conf()).await?;
             *self.user_api_provider.write() = x.clone();
 
             let role_cache_manager = RoleCacheMgr::new(x);

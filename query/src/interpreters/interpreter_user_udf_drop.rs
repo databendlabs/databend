@@ -21,7 +21,6 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
@@ -31,8 +30,8 @@ pub struct DropUserUDFInterpreter {
 }
 
 impl DropUserUDFInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserUDFPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropUserUDFInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserUDFPlan) -> Result<Self> {
+        Ok(DropUserUDFInterpreter { ctx, plan })
     }
 }
 

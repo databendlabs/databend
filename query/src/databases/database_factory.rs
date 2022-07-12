@@ -16,10 +16,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseInfo;
+use parking_lot::RwLock;
 
 use crate::databases::default::DefaultDatabase;
 use crate::databases::github::GithubDatabase;

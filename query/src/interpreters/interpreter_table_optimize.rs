@@ -21,7 +21,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct OptimizeTableInterpreter {
@@ -30,8 +29,8 @@ pub struct OptimizeTableInterpreter {
 }
 
 impl OptimizeTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: OptimizeTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(OptimizeTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: OptimizeTablePlan) -> Result<Self> {
+        Ok(OptimizeTableInterpreter { ctx, plan })
     }
 }
 

@@ -12,26 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod condvar;
-mod exit_guard;
-mod mutex;
-mod remutex;
-mod remutex_guard;
-mod rwlock;
-mod rwlock_upgrade_read;
-
-pub use condvar::Condvar;
-pub use exit_guard::ExitGuard;
-pub use mutex::Mutex;
-pub use remutex::ReentrantMutex;
-pub use remutex_guard::ReentrantMutexGuard;
-pub use rwlock::RwLock;
-pub use rwlock_upgrade_read::RwLockUpgradableReadGuard;
-
-#[macro_export]
-macro_rules! exit_scope {
-    ($x:block) => {
-        use common_base::infallible::ExitGuard;
-        let _exit_guard = ExitGuard::create(move || $x);
-    };
-}
+mod role_cache_mgr;
+mod role_mgr;
+mod user_mgr;
+mod user_udf;

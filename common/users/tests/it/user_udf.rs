@@ -14,13 +14,14 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_grpc::RpcClientConf;
 use common_meta_types::UserDefinedFunction;
-use databend_query::users::UserApiProvider;
+use common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_udf() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create().config();
+    let conf = RpcClientConf::default();
 
     let tenant = "test";
     let description = "this is a description";

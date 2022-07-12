@@ -24,7 +24,6 @@ use common_tracing::tracing;
 use serde_json::Value;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::sql::plans::PresignAction;
 use crate::sql::plans::PresignPlan;
@@ -37,8 +36,8 @@ pub struct PresignInterpreter {
 
 impl PresignInterpreter {
     /// Create a PresignInterpreter with context and [`PresignPlan`].
-    pub fn try_create(ctx: Arc<QueryContext>, plan: PresignPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(PresignInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: PresignPlan) -> Result<Self> {
+        Ok(PresignInterpreter { ctx, plan })
     }
 }
 

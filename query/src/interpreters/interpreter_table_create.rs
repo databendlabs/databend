@@ -29,7 +29,6 @@ use common_streams::SendableDataBlockStream;
 
 use super::InsertInterpreter;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::storages::StorageDescription;
 
@@ -39,8 +38,8 @@ pub struct CreateTableInterpreter {
 }
 
 impl CreateTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreateTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateTablePlan) -> Result<Self> {
+        Ok(CreateTableInterpreter { ctx, plan })
     }
 }
 

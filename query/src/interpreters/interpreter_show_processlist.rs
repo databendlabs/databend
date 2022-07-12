@@ -20,7 +20,6 @@ use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
@@ -31,8 +30,8 @@ pub struct ShowProcessListInterpreter {
 }
 
 impl ShowProcessListInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowProcessListInterpreter { ctx }))
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowProcessListInterpreter { ctx })
     }
 
     fn build_query(&self) -> Result<String> {

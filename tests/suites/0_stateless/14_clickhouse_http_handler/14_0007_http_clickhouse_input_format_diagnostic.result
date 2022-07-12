@@ -1,4 +1,4 @@
-Code: 4000, displayText = invalid data (Expected to ignore a byte)
+Code: 4000, displayText = invalid data (Expected to have char '.)
 Error occurs at row: 1:
 	Column: 0, Name: a, Type: Timestamp, Parsed text: "<SINGLE QUOTE>19892-02-03 15:23:2"
 	ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss format.

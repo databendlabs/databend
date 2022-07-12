@@ -32,6 +32,7 @@ members = [
     "common/meta/app",
     "common/streams",
     "common/tracing",
+    "common/users",
 
     # Query
     "query",

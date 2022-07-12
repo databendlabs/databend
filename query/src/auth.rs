@@ -18,10 +18,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::UserInfo;
+use common_users::JwtAuthenticator;
+use common_users::UserApiProvider;
 
 use crate::sessions::QueryContext;
-use crate::users::auth::jwt::JwtAuthenticator;
-use crate::users::UserApiProvider;
 pub use crate::Config;
 
 pub struct AuthMgr {
@@ -45,7 +45,7 @@ impl AuthMgr {
     pub async fn create(cfg: Config, user_mgr: Arc<UserApiProvider>) -> Result<Self> {
         Ok(AuthMgr {
             user_mgr,
-            jwt: JwtAuthenticator::try_create(cfg).await?,
+            jwt: JwtAuthenticator::try_create(cfg.query.jwt_key_file).await?,
         })
     }
 

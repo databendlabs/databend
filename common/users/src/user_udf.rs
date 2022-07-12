@@ -16,7 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
 
-use crate::users::UserApiProvider;
+use crate::UserApiProvider;
 
 /// UDF operations.
 impl UserApiProvider {

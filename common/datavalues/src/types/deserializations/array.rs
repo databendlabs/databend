@@ -114,6 +114,12 @@ impl TypeDeserializer for ArrayDeserializer {
         reader: &mut NestedCheckpointReader<R>,
         format: &FormatSettings,
     ) -> Result<()> {
+        let maybe_single_quote = reader.ignore_byte(b'\'')?;
+        let maybe_double_quote = if !maybe_single_quote {
+            reader.ignore_byte(b'"')?
+        } else {
+            false
+        };
         reader.must_ignore_byte(b'[')?;
         let mut idx = 0;
         loop {
@@ -127,8 +133,13 @@ impl TypeDeserializer for ArrayDeserializer {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces()?;
-            self.inner.de_text_csv(reader, format)?;
+            self.inner.de_text_quoted(reader, format)?;
             idx += 1;
+        }
+        if maybe_single_quote {
+            reader.must_ignore_byte(b'\'')?;
+        } else if maybe_double_quote {
+            reader.must_ignore_byte(b'"')?;
         }
         let mut values = Vec::with_capacity(idx);
         for _ in 0..idx {
