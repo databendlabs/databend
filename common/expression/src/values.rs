@@ -645,12 +645,10 @@ impl ColumnBuilder {
                 Scalar::Boolean(builder.get(0))
             }
             ColumnBuilder::String { data, offsets } => {
-                assert_eq!(data.len(), 1);
                 assert_eq!(offsets.len(), 2);
                 Scalar::String(data[(offsets[0] as usize)..(offsets[1] as usize)].to_vec())
             }
             ColumnBuilder::Array { array, offsets } => {
-                assert_eq!(array.len(), 1);
                 assert_eq!(offsets.len(), 2);
                 Scalar::Array(
                     array

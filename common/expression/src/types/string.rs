@@ -125,7 +125,6 @@ impl ArgType for StringType {
     }
 
     fn build_scalar((data, offsets): Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(data.len(), 1);
         assert_eq!(offsets.len(), 2);
         data[(offsets[0] as usize)..(offsets[1] as usize)].to_vec()
     }
