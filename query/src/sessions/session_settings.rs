@@ -510,21 +510,3 @@ impl Settings {
         Ok(())
     }
 }
-
-// #[derive(Clone, Debug)]
-// pub struct UserSetting {
-//     // The name of the setting.
-//     pub name: String,
-
-//     // The value of the setting.
-//     pub value: DataValue,
-// }
-
-// impl UserSetting {
-//     pub fn create(name: &str, value: DataValue) -> UserSetting {
-//         UserSetting {
-//             name: name.to_string(),
-//             value,
-//         }
-//     }
-// }
