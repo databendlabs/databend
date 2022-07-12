@@ -29,15 +29,13 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "s3".to_string(),
                 name: "test".to_string(),
                 path: "/tmp/".to_string(),
-                endpoint_url: None,
-                credentials: vec![
+                connection: vec![
                     ("access_key_id", "access_key_id"),
                     ("secret_access_key", "secret_access_key"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect(),
-                encryption: Default::default(),
             },
             (
                 StorageParams::S3(StorageS3Config {
@@ -60,15 +58,13 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "s3".to_string(),
                 name: "test".to_string(),
                 path: "/tmp/".to_string(),
-                endpoint_url: None,
-                credentials: vec![
+                connection: vec![
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect(),
-                encryption: Default::default(),
             },
             (
                 StorageParams::S3(StorageS3Config {

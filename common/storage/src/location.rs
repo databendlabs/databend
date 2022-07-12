@@ -30,9 +30,8 @@ pub struct UriLocation {
     pub protocol: String,
     pub name: String,
     pub path: String,
-    pub endpoint_url: Option<String>,
-    pub credentials: BTreeMap<String, String>,
-    pub encryption: BTreeMap<String, String>,
+    /// connection should carry all connection related options for storage.
+    pub connection: BTreeMap<String, String>,
 }
 
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
@@ -50,15 +49,19 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
 
     let sp = match protocol {
         Scheme::Azblob => StorageParams::Azblob(StorageAzblobConfig {
-            endpoint_url: l.endpoint_url.clone().ok_or_else(|| {
-                Error::new(
-                    ErrorKind::InvalidInput,
-                    anyhow!("endpoint_url is required for storage azblob"),
-                )
-            })?,
+            endpoint_url: l
+                .connection
+                .get("endpoint_url")
+                .ok_or_else(|| {
+                    Error::new(
+                        ErrorKind::InvalidInput,
+                        anyhow!("endpoint_url is required for storage azblob"),
+                    )
+                })?
+                .to_string(),
             container: l.name.to_string(),
             account_name: l
-                .credentials
+                .connection
                 .get("account_name")
                 .ok_or_else(|| {
                     Error::new(
@@ -68,7 +71,7 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 })?
                 .to_string(),
             account_key: l
-                .credentials
+                .connection
                 .get("account_key")
                 .ok_or_else(|| {
                     Error::new(
@@ -82,12 +85,12 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
         #[cfg(feature = "storage-hdfs")]
         Scheme::Hdfs => StorageParams::Hdfs(crate::StorageHdfsConfig {
             name_node: l
-                .endpoint_url
-                .clone()
+                .connection
+                .get("name_node")
                 .ok_or_else(|| {
                     Error::new(
                         ErrorKind::InvalidInput,
-                        anyhow!("endpoint_url is required for storage hdfs"),
+                        anyhow!("name_node is required for storage hdfs"),
                     )
                 })?
                 .to_string(),
@@ -95,16 +98,16 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
         }),
         Scheme::S3 => StorageParams::S3(StorageS3Config {
             endpoint_url: l
-                .endpoint_url
-                .clone()
+                .connection
+                .get("endpoint_url")
+                .cloned()
                 .unwrap_or(STORAGE_S3_DEFAULT_ENDPOINT.to_string()),
-            // TODO: support this options.
-            region: "".to_string(),
+            region: l.connection.get("region").cloned().unwrap_or_default(),
             bucket: l.name.to_string(),
             access_key_id: l
-                .credentials
+                .connection
                 .get("access_key_id")
-                .or_else(|| l.credentials.get("aws_key_id"))
+                .or_else(|| l.connection.get("aws_key_id"))
                 .ok_or_else(|| {
                     Error::new(
                         ErrorKind::InvalidInput,
@@ -113,9 +116,9 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 })?
                 .to_string(),
             secret_access_key: l
-                .credentials
+                .connection
                 .get("secret_access_key")
-                .or_else(|| l.credentials.get("aws_secret_key"))
+                .or_else(|| l.connection.get("aws_secret_key"))
                 .ok_or_else(|| {
                     Error::new(
                         ErrorKind::InvalidInput,
@@ -123,11 +126,21 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                     )
                 })?
                 .to_string(),
-            master_key: l.encryption.get("master_key").cloned().unwrap_or_default(),
+            master_key: l.connection.get("master_key").cloned().unwrap_or_default(),
             root: root.to_string(),
             disable_credential_loader: true,
-            // TODO: support this options.
-            enable_virtual_host_style: false,
+            enable_virtual_host_style: l
+                .connection
+                .get("enable_virtual_host_style")
+                .cloned()
+                .unwrap_or_else(|| "false".to_string())
+                .parse()
+                .map_err(|err| {
+                    Error::new(
+                        ErrorKind::InvalidInput,
+                        anyhow!("value for enable_virtual_host_style is invalid: {err:?}"),
+                    )
+                })?,
         }),
         v => {
             return Err(Error::new(
