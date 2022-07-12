@@ -22,15 +22,14 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+
+
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use futures::TryStreamExt;
 use parking_lot::Mutex;
 
 use crate::interpreters::Interpreter;
@@ -42,7 +41,7 @@ use crate::pipelines::new::processors::TransformAddOn;
 use crate::pipelines::new::processors::TransformCastSchema;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
-use crate::pipelines::transforms::AddOnStream;
+
 use crate::sessions::QueryContext;
 
 pub struct InsertInterpreter {
@@ -91,7 +90,7 @@ impl Interpreter for InsertInterpreter {
 
     async fn execute(
         &self,
-        mut input_stream: Option<SendableDataBlockStream>,
+        input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let _input_stream = input_stream;
         let plan = &self.plan;

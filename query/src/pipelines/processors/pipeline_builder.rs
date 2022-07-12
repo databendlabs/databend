@@ -35,7 +35,6 @@ use common_planners::SubQueriesSetPlan;
 use common_planners::WindowFuncPlan;
 use common_tracing::tracing;
 
-use crate::api::FlightTicket;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
@@ -130,21 +129,9 @@ impl PipelineBuilder {
             RemotePlan::V2(_) => Err(ErrorCode::LogicalError(
                 "Use version 2 remote plan in version 1",
             )),
-            RemotePlan::V1(plan) => {
-                for fetch_node in &plan.fetch_nodes {
-                    let flight_ticket =
-                        FlightTicket::stream(&plan.query_id, &plan.stage_id, &plan.stream_id);
-
-                    pipeline.add_source(Arc::new(RemoteTransform::try_create(
-                        flight_ticket,
-                        self.ctx.clone(),
-                        /* fetch_node_name */ fetch_node.clone(),
-                        /* fetch_stream_schema */ plan.schema.clone(),
-                    )?))?;
-                }
-
-                Ok(pipeline)
-            }
+            RemotePlan::V1(plan) => Err(ErrorCode::LogicalError(
+                "Version 1 remote plan is removed.",
+            ))
         }
     }
 

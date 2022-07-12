@@ -17,17 +17,17 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
+
+
 use common_tracing::tracing::debug;
 
 use crate::interpreters::fragments::QueryFragmentsActions;
 use crate::interpreters::fragments::QueryFragmentsBuilder;
 use crate::interpreters::fragments::RootQueryFragment;
-use crate::interpreters::plan_schedulers;
+
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::QueryPipelineBuilder;
-use crate::pipelines::processors::PipelineBuilder;
+
 use crate::sessions::QueryContext;
 
 async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {

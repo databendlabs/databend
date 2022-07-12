@@ -22,13 +22,12 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::api::FlightClient;
-use crate::api::FlightTicket;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
 
 pub struct RemoteTransform {
-    ticket: FlightTicket,
+    // ticket: FlightTicket,
     fetch_node_name: String,
     schema: DataSchemaRef,
     pub ctx: Arc<QueryContext>,
@@ -36,13 +35,13 @@ pub struct RemoteTransform {
 
 impl RemoteTransform {
     pub fn try_create(
-        ticket: FlightTicket,
+        // ticket: FlightTicket,
         context: Arc<QueryContext>,
         fetch_node_name: String,
         schema: DataSchemaRef,
     ) -> Result<RemoteTransform> {
         Ok(RemoteTransform {
-            ticket,
+            // ticket,
             fetch_node_name,
             schema,
             ctx: context,
@@ -82,20 +81,6 @@ impl Processor for RemoteTransform {
 
     #[tracing::instrument(level = "debug", name = "remote_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::debug!(
-            "execute, flight_ticket {:?}, node name:{:#}...",
-            self.ticket,
-            self.fetch_node_name
-        );
-
-        let data_schema = self.schema.clone();
-        let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
-
-        let fetch_ticket = self.ticket.clone();
-        let mut flight_client = self.flight_client().await?;
-        let fetch_stream = flight_client
-            .fetch_stream(fetch_ticket, data_schema, timeout)
-            .await?;
-        Ok(Box::pin(self.ctx.try_create_abortable(fetch_stream)?))
+        Err(ErrorCode::LogicalError("V1 remove is removed."))
     }
 }

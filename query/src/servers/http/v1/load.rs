@@ -15,8 +15,8 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use async_compat::CompatExt;
-use async_stream::stream;
+
+
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
 use common_datavalues::DataSchemaRef;
@@ -28,11 +28,11 @@ use common_io::prelude::parse_escape_string;
 use common_io::prelude::FormatSettings;
 use common_planners::InsertInputSource;
 use common_planners::PlanNode;
-use common_streams::CsvSourceBuilder;
+
 use common_streams::NDJsonSourceBuilder;
-use common_streams::ParquetSourceBuilder;
-use common_streams::SendableDataBlockStream;
-use common_streams::Source;
+
+
+
 use common_tracing::tracing;
 use futures::io::Cursor;
 use futures::StreamExt;
@@ -168,7 +168,7 @@ pub async fn streaming_load(
     context.attach_query_str(insert_sql);
 
     // Block size.
-    let max_block_size = settings
+    let _max_block_size = settings
         .get_max_block_size()
         .map_err(InternalServerError)? as usize;
 
