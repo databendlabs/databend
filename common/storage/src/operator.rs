@@ -22,14 +22,13 @@ use opendal::services::s3;
 use opendal::Operator;
 
 use super::StorageAzblobConfig;
-use super::StorageConfig;
 use super::StorageFsConfig;
 use super::StorageParams;
 use super::StorageS3Config;
 
 /// init_operator will init an opendal operator based on storage config.
-pub async fn init_operator(cfg: &StorageConfig) -> Result<Operator> {
-    Ok(match &cfg.params {
+pub async fn init_operator(cfg: &StorageParams) -> Result<Operator> {
+    Ok(match &cfg {
         StorageParams::Azblob(cfg) => init_azblob_operator(cfg).await?,
         StorageParams::Fs(cfg) => init_fs_operator(cfg).await?,
         #[cfg(feature = "storage-hdfs")]

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 
 use serde::Deserialize;
@@ -42,6 +43,32 @@ pub enum StorageParams {
 impl Default for StorageParams {
     fn default() -> Self {
         StorageParams::Fs(StorageFsConfig::default())
+    }
+}
+
+/// StorageParams will be displayed by `{protocol}://{key1=value1},{key2=value2}`
+impl Display for StorageParams {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StorageParams::Azblob(v) => write!(
+                f,
+                "azblob://container={},root={},endpoint={}",
+                v.container, v.root, v.endpoint_url
+            ),
+            StorageParams::Fs(v) => write!(f, "fs://root={}", v.root,),
+            #[cfg(feature = "storage-hdfs")]
+            StorageParams::Hdfs(v) => {
+                write!(f, "hdfs://root={},name_node={}", v.root, v.name_node,)
+            }
+            StorageParams::Memory => write!(f, "memory://"),
+            StorageParams::S3(v) => {
+                write!(
+                    f,
+                    "s3://bucket={},root={},endpoint={}",
+                    v.bucket, v.root, v.endpoint_url
+                )
+            }
+        }
     }
 }
 

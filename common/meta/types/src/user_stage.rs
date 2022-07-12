@@ -236,6 +236,15 @@ pub struct UserStageInfo {
 }
 
 impl UserStageInfo {
+    pub fn new_external_stage(storage: StorageParams, path: &str) -> UserStageInfo {
+        UserStageInfo {
+            stage_name: format!("{storage},path={path}"),
+            stage_type: StageType::External,
+            stage_params: StageParams { storage },
+            ..Default::default()
+        }
+    }
+
     pub fn get_prefix(&self) -> String {
         match self.stage_type {
             StageType::External => "/".to_string(),
