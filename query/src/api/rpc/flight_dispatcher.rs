@@ -20,7 +20,6 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::*;
 use common_base::base::TrySpawn;
-use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -30,6 +29,7 @@ use common_planners::Expression;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use common_tracing::tracing::Span;
+use parking_lot::RwLock;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatter;

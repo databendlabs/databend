@@ -320,6 +320,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic_refcell"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73b5e5f48b927f04e952dedc932f31995a65a0bf65ec971c74436e51bf6e970d"
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1076,6 +1082,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
+ "parking_lot 0.12.1",
  "pretty_assertions",
  "primitive-types",
  "regex",
@@ -1384,6 +1391,7 @@ dependencies = [
  "derive_more",
  "futures",
  "once_cell",
+ "parking_lot 0.12.1",
  "prost",
  "rand 0.8.5",
  "semver",
@@ -1486,12 +1494,12 @@ dependencies = [
 name = "common-metrics"
 version = "0.1.0"
 dependencies = [
- "common-base",
  "common-exception",
  "common-tracing",
  "metrics",
  "metrics-exporter-prometheus",
  "once_cell",
+ "parking_lot 0.12.1",
  "prometheus-parse",
  "serde",
  "tokio",
@@ -1562,6 +1570,7 @@ dependencies = [
  "csv-async",
  "futures",
  "opendal",
+ "parking_lot 0.12.1",
  "pin-project-lite",
  "serde_json",
  "tempfile",
@@ -1600,6 +1609,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "jwtk",
+ "parking_lot 0.12.1",
  "pretty_assertions",
  "serde",
 ]
@@ -2111,6 +2121,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "atomic_refcell",
  "backoff",
  "backon",
  "base64 0.13.0",
@@ -2180,6 +2191,7 @@ dependencies = [
  "opensrv-clickhouse",
  "opensrv-mysql",
  "openssl",
+ "parking_lot 0.12.1",
  "paste",
  "petgraph",
  "poem",

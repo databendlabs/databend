@@ -15,12 +15,12 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_base::infallible::Mutex;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::ErrorStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
+use parking_lot::Mutex;
 
 use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;

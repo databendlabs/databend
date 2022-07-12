@@ -17,7 +17,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -39,6 +38,7 @@ use opendal::Accessor;
 use opendal::BytesReader;
 use opendal::BytesWriter;
 use opendal::Operator;
+use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::tests::create_query_context;

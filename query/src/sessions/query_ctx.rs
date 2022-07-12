@@ -27,8 +27,6 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
-use common_base::infallible::Mutex;
-use common_base::infallible::RwLock;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
@@ -53,6 +51,8 @@ use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use opendal::Operator;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
