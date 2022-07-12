@@ -101,7 +101,7 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .connection
                 .get("endpoint_url")
                 .cloned()
-                .unwrap_or(STORAGE_S3_DEFAULT_ENDPOINT.to_string()),
+                .unwrap_or_else(|| STORAGE_S3_DEFAULT_ENDPOINT.to_string()),
             region: l.connection.get("region").cloned().unwrap_or_default(),
             bucket: l.name.to_string(),
             access_key_id: l
