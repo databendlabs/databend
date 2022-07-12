@@ -193,7 +193,7 @@ pub fn parse_uri_location_v2(
             // different services. We have to remove those logic
             // while old planner removed.
             let endpoint_url = match ctx.get_config().storage.params {
-                StorageParams::S3(v) => v.endpoint_url.clone(),
+                StorageParams::S3(v) => v.endpoint_url,
                 _ => STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
             };
 
