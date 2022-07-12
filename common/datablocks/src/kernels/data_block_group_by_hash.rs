@@ -30,11 +30,20 @@ use crate::DataBlock;
 type GroupIndices<T> = HashMap<T, (Vec<u32>, Vec<DataValue>), ahash::RandomState>;
 type GroupBlock<T> = Vec<(T, Vec<DataValue>, DataBlock)>;
 
+pub enum KeysState {
+    Column(ColumnRef),
+    U128(Vec<u128>),
+    U256(Vec<U256>),
+    U512(Vec<U512>),
+}
+
 pub trait HashMethod {
-    type HashKey<'a>: std::cmp::Eq + Hash + Clone + Debug
+    type HashKey: std::cmp::Eq + Hash + Clone + Debug;
+
+    type HashKeyRef<'a>: std::cmp::Eq + Hash + Clone + Debug
     where Self: 'a;
 
-    type HashKeyIter<'a>: Iterator<Item = Self::HashKey<'a>> + TrustedLen
+    type HashKeyIter<'a>: Iterator<Item = Self::HashKeyRef<'a>> + TrustedLen
     where Self: 'a;
 
     fn name(&self) -> String;
@@ -67,9 +76,9 @@ pub trait HashMethod {
         &self,
         block: &'a DataBlock,
         column_names: &[String],
-    ) -> Result<GroupIndices<Self::HashKey<'a>>> {
+    ) -> Result<GroupIndices<Self::HashKey>> {
         // Table for <group_key, (indices, keys) >
-        let mut group_indices = GroupIndices::<Self::HashKey<'_>>::default();
+        let mut group_indices = GroupIndices::<Self::HashKey>::default();
         // 1. Get group by columns.
         let mut group_columns = Vec::with_capacity(column_names.len());
         {
@@ -79,17 +88,20 @@ pub trait HashMethod {
         }
 
         // 2. Build serialized keys
-        let group_keys = self.build_keys_iter(&group_columns, block.num_rows())?;
+        let keys_state = self.build_keys_state(&group_columns, block.num_rows())?;
+        let group_keys = self.build_keys_iter(&keys_state)?;
         // 2. Make group with indices.
         {
             for (row, group_key) in group_keys.enumerate().take(block.num_rows()) {
+                let group_key = Self::upcast_key(group_key);
+
                 match group_indices.get_mut(&group_key) {
                     None => {
                         let mut group_values = Vec::with_capacity(group_columns.len());
                         for col in &group_columns {
                             group_values.push(col.get(row));
                         }
-                        group_indices.insert(group_key.clone(), (vec![row as u32], group_values));
+                        group_indices.insert(group_key, (vec![row as u32], group_values));
                     }
                     Some((v, _)) => {
                         v.push(row as u32);
@@ -97,7 +109,6 @@ pub trait HashMethod {
                 }
             }
         }
-
         Ok(group_indices)
     }
 
@@ -108,10 +119,10 @@ pub trait HashMethod {
         &self,
         block: &'a DataBlock,
         column_names: &[String],
-    ) -> Result<GroupBlock<Self::HashKey<'a>>> {
+    ) -> Result<GroupBlock<Self::HashKey>> {
         let group_indices = self.group_by_get_indices(block, column_names)?;
         // Table for <(group_key, keys, block)>
-        let mut group_blocks = GroupBlock::<Self::HashKey<'_>>::with_capacity(group_indices.len());
+        let mut group_blocks = GroupBlock::<Self::HashKey>::with_capacity(group_indices.len());
 
         for (group_key, (group_indices, group_keys)) in group_indices {
             let take_block = DataBlock::block_take_by_indices(block, &group_indices)?;
@@ -121,11 +132,11 @@ pub trait HashMethod {
         Ok(group_blocks)
     }
 
-    fn build_keys_iter<'a>(
-        &self,
-        group_columns: &[&'a ColumnRef],
-        rows: usize,
-    ) -> Result<Self::HashKeyIter<'a>>;
+    fn build_keys_state(&self, group_columns: &[&ColumnRef], rows: usize) -> Result<KeysState>;
+
+    fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>>;
+
+    fn upcast_key(keys_ref: Self::HashKeyRef<'_>) -> Self::HashKey;
 }
 
 pub type HashMethodKeysU8 = HashMethodFixedKeys<u8>;
@@ -140,7 +151,6 @@ pub type HashMethodKeysU512 = HashMethodFixedKeys<U512>;
 /// that is the 'numeric' or 'binary` representation of each column value as hash key.
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
-    SingleString(HashMethodSingleString),
     KeysU8(HashMethodKeysU8),
     KeysU16(HashMethodKeysU16),
     KeysU32(HashMethodKeysU32),
@@ -154,7 +164,6 @@ impl HashMethodKind {
     pub fn name(&self) -> String {
         match self {
             HashMethodKind::Serializer(v) => v.name(),
-            HashMethodKind::SingleString(v) => v.name(),
             HashMethodKind::KeysU8(v) => v.name(),
             HashMethodKind::KeysU16(v) => v.name(),
             HashMethodKind::KeysU32(v) => v.name(),
@@ -167,7 +176,6 @@ impl HashMethodKind {
     pub fn data_type(&self) -> DataTypeImpl {
         match self {
             HashMethodKind::Serializer(_) => Vu8::to_data_type(),
-            HashMethodKind::SingleString(_) => Vu8::to_data_type(),
             HashMethodKind::KeysU8(_) => u8::to_data_type(),
             HashMethodKind::KeysU16(_) => u16::to_data_type(),
             HashMethodKind::KeysU32(_) => u32::to_data_type(),
@@ -176,48 +184,6 @@ impl HashMethodKind {
             HashMethodKind::KeysU256(_) => Vu8::to_data_type(),
             HashMethodKind::KeysU512(_) => Vu8::to_data_type(),
         }
-    }
-}
-
-// A special case for Group by String
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HashMethodSingleString {}
-
-impl HashMethodSingleString {
-    #[inline]
-    pub fn get_key(&self, column: &StringColumn, row: usize) -> Vec<u8> {
-        let v = column.get_data(row);
-        v.to_owned()
-    }
-
-    pub fn deserialize_group_columns(
-        &self,
-        keys: Vec<Vec<u8>>,
-        group_fields: &[DataField],
-    ) -> Result<Vec<ColumnRef>> {
-        debug_assert!(!keys.is_empty());
-        debug_assert!(group_fields.len() == 1);
-        let column = StringColumn::new_from_slice(&keys);
-        Ok(vec![column.arc()])
-    }
-}
-
-impl HashMethod for HashMethodSingleString {
-    type HashKey<'a> = &'a [u8];
-    type HashKeyIter<'a> = StringViewer<'a>;
-
-    fn name(&self) -> String {
-        "SingleString".to_string()
-    }
-
-    fn build_keys_iter<'a>(
-        &self,
-        group_columns: &[&'a ColumnRef],
-        _rows: usize,
-    ) -> Result<Self::HashKeyIter<'a>> {
-        debug_assert!(group_columns.len() == 1);
-        let column = group_columns[0];
-        Vu8::try_create_viewer(column)
     }
 }
 
@@ -231,20 +197,6 @@ impl HashMethodSerializer {
         v.to_owned()
     }
 
-    pub fn build_keys(&self, group_columns: &[&ColumnRef], rows: usize) -> Result<Vec<SmallVu8>> {
-        let mut group_keys = Vec::with_capacity(rows);
-        {
-            for _i in 0..rows {
-                group_keys.push(SmallVu8::new());
-            }
-
-            for col in group_columns {
-                Series::serialize(col, &mut group_keys, None)?
-            }
-        }
-        Ok(group_keys)
-    }
-
     pub fn deserialize_group_columns(
         &self,
         keys: Vec<Vec<u8>>,
@@ -252,6 +204,12 @@ impl HashMethodSerializer {
     ) -> Result<Vec<ColumnRef>> {
         debug_assert!(!keys.is_empty());
         let mut keys: Vec<&[u8]> = keys.iter().map(|x| x.as_slice()).collect();
+
+        // Single StringColumn
+        if group_fields.len() == 1 && group_fields[0].data_type().data_type_id() == TypeID::String {
+            let col = StringColumn::from_slice(&keys);
+            return Ok(vec![col.arc()]);
+        }
 
         let rows = keys.len();
         let format = FormatSettings::default();
@@ -269,29 +227,48 @@ impl HashMethodSerializer {
     }
 }
 impl HashMethod for HashMethodSerializer {
-    type HashKey<'a> = SmallVu8;
-    type HashKeyIter<'a> = std::vec::IntoIter<SmallVu8>;
+    type HashKey = SmallVu8;
+    type HashKeyRef<'a> = &'a [u8];
+
+    type HashKeyIter<'a> = StringViewer<'a>;
 
     fn name(&self) -> String {
         "Serializer".to_string()
     }
 
-    fn build_keys_iter<'a>(
-        &self,
-        group_columns: &[&'a ColumnRef],
-        rows: usize,
-    ) -> Result<Self::HashKeyIter<'a>> {
-        let mut group_keys = Vec::with_capacity(rows);
-        {
-            for _i in 0..rows {
-                group_keys.push(SmallVu8::new());
-            }
-
-            for col in group_columns {
-                Series::serialize(col, &mut group_keys, None)?
-            }
+    fn build_keys_state(&self, group_columns: &[&ColumnRef], rows: usize) -> Result<KeysState> {
+        if group_columns.len() == 1 && group_columns[0].data_type_id() == TypeID::String {
+            return Ok(KeysState::Column(group_columns[0].clone()));
         }
-        Ok(group_keys.into_iter())
+
+        let approx_size = group_columns.len() * rows * 8;
+        let mut values = Vec::with_capacity(approx_size);
+        let mut offsets = Vec::with_capacity(rows + 1);
+        offsets.push(0i64);
+
+        for row in 0..rows {
+            for col in group_columns {
+                col.serialize(&mut values, row);
+            }
+            offsets.push(values.len() as i64);
+        }
+        let col = unsafe { StringColumn::from_data_unchecked(offsets.into(), values.into()) };
+        Ok(KeysState::Column(col.arc()))
+    }
+
+    fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
+        match key_state {
+            KeysState::Column(col) => {
+                // maybe constant column
+                let viewer = Vu8::try_create_viewer(col)?;
+                Ok(viewer.iter())
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn upcast_key(keys_ref: Self::HashKeyRef<'_>) -> Self::HashKey {
+        SmallVu8::from_slice(keys_ref)
     }
 }
 
@@ -308,7 +285,42 @@ where T: PrimitiveType
     }
 }
 
-impl<T> HashMethodFixedKeys<T> {
+impl<T> HashMethodFixedKeys<T>
+where T: Clone + Default
+{
+    fn build_keys_vec<'a>(&self, group_columns: &[&'a ColumnRef], rows: usize) -> Result<Vec<T>> {
+        let step = std::mem::size_of::<T>();
+        let mut group_keys: Vec<T> = vec![T::default(); rows];
+        let ptr = group_keys.as_mut_ptr() as *mut u8;
+        let mut offsize = 0;
+        let mut null_offsize = group_columns
+            .iter()
+            .map(|c| {
+                let ty = c.data_type();
+                remove_nullable(&ty).data_type_id().numeric_byte_size()
+            })
+            .sum::<Result<usize>>()?;
+
+        let mut group_columns = group_columns.to_vec();
+        group_columns.sort_by(|a, b| {
+            let a = remove_nullable(&a.data_type()).data_type_id();
+            let b = remove_nullable(&b.data_type()).data_type_id();
+            b.numeric_byte_size()
+                .unwrap()
+                .cmp(&a.numeric_byte_size().unwrap())
+        });
+
+        for col in group_columns.iter() {
+            build(&mut offsize, &mut null_offsize, col, ptr, step)?;
+        }
+
+        Ok(group_keys)
+    }
+}
+
+impl<T> HashMethodFixedKeys<T>
+where T: Clone
+{
     pub fn default() -> Self {
         HashMethodFixedKeys { t: PhantomData }
     }
@@ -404,50 +416,102 @@ impl<T> HashMethodFixedKeys<T> {
     }
 }
 
-impl<T> HashMethod for HashMethodFixedKeys<T>
-where T: std::cmp::Eq + Hash + Clone + Debug + Default + 'static
-{
-    type HashKey<'a> = T;
-    type HashKeyIter<'a> = std::vec::IntoIter<T>;
+macro_rules! impl_hash_method_fixed_keys {
+    ($ty:ty) => {
+        impl HashMethod for HashMethodFixedKeys<$ty> {
+            type HashKey = $ty;
+            type HashKeyRef<'a> = $ty;
+            type HashKeyIter<'a> = std::iter::Copied<std::slice::Iter<'a, $ty>>;
 
-    fn name(&self) -> String {
-        format!("FixedKeys{}", std::mem::size_of::<Self::HashKey<'_>>())
-    }
+            fn name(&self) -> String {
+                format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
+            }
 
-    // More details about how it works, see: Series::fixed_hash
-    fn build_keys_iter<'a>(
-        &self,
-        group_columns: &[&'a ColumnRef],
-        rows: usize,
-    ) -> Result<Self::HashKeyIter<'a>> {
-        let step = std::mem::size_of::<T>();
-        let mut group_keys: Vec<T> = vec![T::default(); rows];
-        let ptr = group_keys.as_mut_ptr() as *mut u8;
-        let mut offsize = 0;
-        let mut null_offsize = group_columns
-            .iter()
-            .map(|c| {
-                let ty = c.data_type();
-                remove_nullable(&ty).data_type_id().numeric_byte_size()
-            })
-            .sum::<Result<usize>>()?;
+            fn build_keys_state(
+                &self,
+                group_columns: &[&ColumnRef],
+                rows: usize,
+            ) -> Result<KeysState> {
+                // faster path for single fixed keys
+                if group_columns.len() == 1
+                    && matches!(
+                        group_columns[0].data_type_id(),
+                        TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64
+                    )
+                {
+                    return Ok(KeysState::Column(group_columns[0].convert_full_column()));
+                }
+                let keys = self.build_keys_vec(group_columns, rows)?;
+                let col = PrimitiveColumn::<$ty>::from_vecs(keys);
+                Ok(KeysState::Column(col.arc()))
+            }
 
-        let mut group_columns = group_columns.to_vec();
-        group_columns.sort_by(|a, b| {
-            let a = remove_nullable(&a.data_type()).data_type_id();
-            let b = remove_nullable(&b.data_type()).data_type_id();
-            b.numeric_byte_size()
-                .unwrap()
-                .cmp(&a.numeric_byte_size().unwrap())
-        });
+            fn build_keys_iter<'a>(
+                &self,
+                key_state: &'a KeysState,
+            ) -> Result<Self::HashKeyIter<'a>> {
+                match key_state {
+                    KeysState::Column(col) => {
+                        let col: &PrimitiveColumn<$ty> = Series::check_get(col)?;
+                        Ok(col.iter().copied())
+                    }
+                    _ => unreachable!(),
+                }
+            }
 
-        for col in group_columns.iter() {
-            build(&mut offsize, &mut null_offsize, col, ptr, step)?;
+            fn upcast_key(keys: Self::HashKeyRef<'_>) -> Self::HashKey {
+                keys
+            }
         }
-
-        Ok(group_keys.into_iter())
-    }
+    };
 }
+
+impl_hash_method_fixed_keys! {u8}
+impl_hash_method_fixed_keys! {u16}
+impl_hash_method_fixed_keys! {u32}
+impl_hash_method_fixed_keys! {u64}
+
+macro_rules! impl_hash_method_fixed_large_keys {
+    ($ty:ty, $name: ident) => {
+        impl HashMethod for HashMethodFixedKeys<$ty> {
+            type HashKey = $ty;
+            type HashKeyRef<'a> = $ty;
+
+            type HashKeyIter<'a> = std::iter::Copied<std::slice::Iter<'a, $ty>>;
+
+            fn name(&self) -> String {
+                format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
+            }
+
+            fn build_keys_state(
+                &self,
+                group_columns: &[&ColumnRef],
+                rows: usize,
+            ) -> Result<KeysState> {
+                let keys = self.build_keys_vec(group_columns, rows)?;
+                Ok(KeysState::$name(keys))
+            }
+
+            fn build_keys_iter<'a>(
+                &self,
+                key_state: &'a KeysState,
+            ) -> Result<Self::HashKeyIter<'a>> {
+                match key_state {
+                    KeysState::$name(v) => Ok(v.iter().copied()),
+                    _ => unreachable!(),
+                }
+            }
+
+            fn upcast_key(keys: Self::HashKeyRef<'_>) -> Self::HashKey {
+                keys
+            }
+        }
+    };
+}
+
+impl_hash_method_fixed_large_keys! {u128, U128}
+impl_hash_method_fixed_large_keys! {U256, U256}
+impl_hash_method_fixed_large_keys! {U512, U512}
 
 #[inline]
 fn build(

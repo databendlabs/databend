@@ -215,6 +215,11 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
     fn get(&self, index: usize) -> DataValue {
         self.values[index].clone().into()
     }
+
+    fn serialize(&self, vec: &mut Vec<u8>, row: usize) {
+        let value = self.values[row].to_string();
+        vec.extend_from_slice(value.as_bytes());
+    }
 }
 
 impl<T> ScalarColumn for ObjectColumn<T>

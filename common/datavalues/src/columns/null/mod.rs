@@ -130,6 +130,8 @@ impl Column for NullColumn {
     fn get(&self, _index: usize) -> DataValue {
         DataValue::Null
     }
+
+    fn serialize(&self, _vec: &mut Vec<u8>, _row: usize) {}
 }
 
 impl std::fmt::Debug for NullColumn {

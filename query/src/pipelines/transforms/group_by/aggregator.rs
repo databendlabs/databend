@@ -62,8 +62,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
                     // 1.1 and 1.2.
                     let group_columns = Self::group_columns(&group_cols, &block)?;
-                    let group_keys_iter =
-                        hash_method.build_keys_iter(&group_columns, block.num_rows())?;
+                    let keys_state =
+                        hash_method.build_keys_state(&group_columns, block.num_rows())?;
+                    let group_keys_iter = self.method.build_keys_iter(&keys_state)?;
+
                     self.lookup_key(group_keys_iter, &mut state);
                 }
             }
@@ -73,8 +75,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
                     // 1.1 and 1.2.
                     let group_columns = Self::group_columns(&group_cols, &block)?;
-                    let group_keys_iter =
-                        hash_method.build_keys_iter(&group_columns, block.num_rows())?;
+                    let keys_state =
+                        hash_method.build_keys_state(&group_columns, block.num_rows())?;
+                    let group_keys_iter = self.method.build_keys_iter(&keys_state)?;
 
                     let places = self.lookup_state(group_keys_iter, &mut state);
                     Self::execute(aggregator_params, &block, &places)?;
@@ -106,7 +109,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     fn lookup_key(&self, keys_iter: Method::HashKeyIter<'_>, state: &mut Method::State) {
         let mut inserted = true;
         for key in keys_iter {
-            state.entity(&key, &mut inserted);
+            state.entity(key, &mut inserted);
         }
     }
 
@@ -123,7 +126,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         let params = self.params.as_ref();
 
         for key in keys_iter {
-            let entity = state.entity(&key, &mut inserted);
+            let entity = state.entity(key, &mut inserted);
 
             match inserted {
                 true => {

@@ -25,7 +25,6 @@ use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
-use common_datablocks::HashMethodSingleString;
 use common_datavalues::ColumnRef;
 use common_datavalues::MutableColumn;
 use common_datavalues::MutableStringColumn;
@@ -61,8 +60,6 @@ pub type KeysU512PartialAggregator<const HAS_AGG: bool> =
 
 pub type SerializerPartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodSerializer>;
-pub type SingleStringPartialAggregator<const HAS_AGG: bool> =
-    PartialAggregator<HAS_AGG, HashMethodSingleString>;
 
 pub struct PartialAggregator<
     const HAS_AGG: bool,
@@ -96,7 +93,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     fn lookup_key(keys_iter: Method::HashKeyIter<'_>, state: &mut Method::State) {
         let mut inserted = true;
         for key in keys_iter {
-            state.entity(&key, &mut inserted);
+            state.entity(key, &mut inserted);
         }
     }
 
@@ -111,7 +108,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
         let mut inserted = true;
         for key in keys_iter {
-            let entity = state.entity(&key, &mut inserted);
+            let entity = state.entity(key, &mut inserted);
 
             match inserted {
                 true => {
@@ -238,9 +235,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
-        let group_keys_iter = self
+        let group_keys_state = self
             .method
-            .build_keys_iter(&group_columns, block.num_rows())?;
+            .build_keys_state(&group_columns, block.num_rows())?;
+
+        let group_keys_iter = self.method.build_keys_iter(&group_keys_state)?;
 
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
@@ -265,9 +264,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
-        let group_keys_iter = self
+
+        let keys_state = self
             .method
-            .build_keys_iter(&group_columns, block.num_rows())?;
+            .build_keys_state(&group_columns, block.num_rows())?;
+        let group_keys_iter = self.method.build_keys_iter(&keys_state)?;
 
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;

@@ -61,57 +61,18 @@ impl Series {
         let column = Series::remove_nullable(&column);
         let type_id = column.data_type_id().to_physical_type();
 
-        with_match_scalar_type!(type_id, |$T| {
+        with_match_physical_primitive_type!(type_id, |$T| {
             let col: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
             GroupHash::fixed_hash(col, ptr, step, nulls)
         }, {
-            Err(ErrorCode::BadDataValueType(
-                format!("Unsupported apply fn fixed_hash operation for column: {:?}", column.data_type()),
-            ))
-        })
-    }
-
-    /// Apply binary mode function to each element of the column.
-    /// WARN: Can't use `&mut [Vec<u8>]` because it has performance drawback.
-    /// Refer: https://github.com/rust-lang/rust-clippy/issues/8334
-    /*
-     * not nullable col1                 nullable col2 (first byte to indicate null or not)
-     * │                                 │
-     * │                                 │
-     * ▼                                 ▼
-     * ┌──────────┬──────────┬───────────┬───────────┬───────────┬───────────┬─────────┬─────────┐
-     * │   1byte  │   1byte  │    1byte  │    1byte  │   1byte   │    1byte  │   1byte │   1byte │ ....
-     * └──────────┴──────────┴───────────┴───────────┴───────────┴───────────┴─────────┴─────────┘
-     *  ▲                                ▲           ▲                                           ▲
-     *  │                                │           │                                           │
-     *  │        Binary Datas            │ null sign │              Binary Datas                 │
-     *  │                                │           │                                           │
-     *  └────────────────────────────────┘           └──────────────────────────────────────────►┘
-     */
-    pub fn serialize(
-        column: &ColumnRef,
-        vec: &mut Vec<SmallVu8>,
-        nulls: Option<Bitmap>,
-    ) -> Result<()> {
-        let column = column.convert_full_column();
-
-        if column.data_type().is_nullable() {
-            let (_, validity) = column.validity();
-            let bitmap = combine_validities_2(nulls, validity.cloned());
-            let column = Series::remove_nullable(&column);
-            return Series::serialize(&column, vec, bitmap);
-        }
-
-        let column = Series::remove_nullable(&column);
-        let type_id = column.data_type_id().to_physical_type();
-
-        with_match_scalar_type!(type_id, |$T| {
-            let col: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
-            GroupHash::serialize(col, vec, nulls)
-        }, {
-             Err(ErrorCode::BadDataValueType(
-                format!("Unsupported apply fn serialize operation for column: {:?}", column.data_type()),
-            ))
+            if type_id == PhysicalTypeID::Boolean {
+                let col: &BooleanColumn = Series::check_get(&column)?;
+                GroupHash::fixed_hash(col, ptr, step, nulls)
+            } else {
+                Err(ErrorCode::BadDataValueType(
+                    format!("Unsupported apply fn fixed_hash operation for column: {:?}", column.data_type()),
+                ))
+            }
         })
     }
 }
@@ -130,13 +91,6 @@ pub trait GroupHash: Debug {
     ) -> Result<()> {
         Err(ErrorCode::BadDataValueType(format!(
             "Unsupported apply fn fixed_hash operation for {:?}",
-            self,
-        )))
-    }
-
-    fn serialize(&self, _vec: &mut Vec<SmallVu8>, _nulls: Option<Bitmap>) -> Result<()> {
-        Err(ErrorCode::BadDataValueType(format!(
-            "Unsupported apply fn serialize operation for {:?}",
             self,
         )))
     }
@@ -184,28 +138,6 @@ where
 
         Ok(())
     }
-
-    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
-        debug_assert_eq!(vec.len(), self.len());
-
-        match nulls {
-            Some(bitmap) => {
-                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec) {
-                    BinaryWrite::write_scalar(vec, &valid)?;
-                    if valid {
-                        BinaryWrite::write_scalar(vec, value)?;
-                    }
-                }
-            }
-            _ => {
-                for (value, vec) in self.iter().zip(vec) {
-                    BinaryWrite::write_scalar(vec, value)?;
-                }
-            }
-        }
-
-        Ok(())
-    }
 }
 
 impl GroupHash for BooleanColumn {
@@ -235,169 +167,6 @@ impl GroupHash for BooleanColumn {
                     unsafe {
                         std::ptr::copy_nonoverlapping(&(value as u8) as *const u8, ptr, 1);
                         ptr = ptr.add(step);
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
-        assert_eq!(vec.len(), self.len());
-
-        match nulls {
-            Some(bitmap) => {
-                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec) {
-                    BinaryWrite::write_scalar(vec, &valid)?;
-                    if valid {
-                        BinaryWrite::write_scalar(vec, &value)?;
-                    }
-                }
-            }
-            None => {
-                for (value, vec) in self.iter().zip(vec) {
-                    BinaryWrite::write_scalar(vec, &value)?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl GroupHash for StringColumn {
-    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
-        assert_eq!(vec.len(), self.len());
-
-        match nulls {
-            Some(bitmap) => {
-                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec) {
-                    BinaryWrite::write_scalar(vec, &valid)?;
-                    if valid {
-                        BinaryWrite::write_binary(vec, value)?;
-                    }
-                }
-            }
-            None => {
-                for (value, vec) in self.iter().zip(vec) {
-                    BinaryWrite::write_binary(vec, value)?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl GroupHash for VariantColumn {
-    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
-        assert_eq!(vec.len(), self.len());
-
-        match nulls {
-            Some(bitmap) => {
-                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec) {
-                    BinaryWrite::write_scalar(vec, &valid)?;
-                    if valid {
-                        BinaryWrite::write_binary(vec, value.to_string().as_bytes())?;
-                    }
-                }
-            }
-            None => {
-                for (value, vec) in self.iter().zip(vec) {
-                    BinaryWrite::write_binary(vec, value.to_string().as_bytes())?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl GroupHash for ArrayColumn {
-    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
-        assert_eq!(vec.len(), self.len());
-
-        let offsets = self.offsets();
-        if offsets.len() <= 1 {
-            return Ok(());
-        }
-        let inner_column = self.values();
-        let inner_length = *offsets.last().unwrap() as usize;
-        let mut inner_keys = Vec::with_capacity(inner_length);
-        for _i in 0..inner_length {
-            inner_keys.push(SmallVu8::new());
-        }
-        Series::serialize(inner_column, &mut inner_keys, None)?;
-
-        match nulls {
-            Some(bitmap) => {
-                let mut offset = 0;
-                for i in 0..self.len() {
-                    let valid = bitmap.get(i).unwrap();
-                    let v = vec.get_mut(i).unwrap();
-                    BinaryWrite::write_scalar(v, &valid)?;
-                    if valid {
-                        let length = self.size_at_index(i);
-                        BinaryWrite::write_uvarint(v, length as u64)?;
-                        for j in offset..offset + length {
-                            BinaryWrite::write_raw(v, inner_keys.get(j).unwrap())?;
-                        }
-                        offset += length;
-                    }
-                }
-            }
-            None => {
-                let mut offset = 0;
-                for i in 0..self.len() {
-                    let v = vec.get_mut(i).unwrap();
-                    let length = self.size_at_index(i);
-                    BinaryWrite::write_uvarint(v, length as u64)?;
-                    for j in offset..offset + length {
-                        BinaryWrite::write_raw(v, inner_keys.get(j).unwrap())?;
-                    }
-                    offset += length;
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl GroupHash for StructColumn {
-    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
-        assert_eq!(vec.len(), self.len());
-
-        let inner_columns = self.values();
-        let mut keys = Vec::with_capacity(inner_columns.len());
-        for inner_column in inner_columns {
-            let mut inner_keys = Vec::with_capacity(inner_column.len());
-            for _i in 0..inner_column.len() {
-                inner_keys.push(SmallVu8::new());
-            }
-            Series::serialize(inner_column, &mut inner_keys, None)?;
-            keys.push(inner_keys);
-        }
-
-        match nulls {
-            Some(bitmap) => {
-                for i in 0..self.len() {
-                    let valid = bitmap.get(i).unwrap();
-                    let v = vec.get_mut(i).unwrap();
-                    BinaryWrite::write_scalar(v, &valid)?;
-                    if valid {
-                        for key in &keys {
-                            BinaryWrite::write_raw(v, key.get(i).unwrap())?;
-                        }
-                    }
-                }
-            }
-            None => {
-                for i in 0..self.len() {
-                    let v = vec.get_mut(i).unwrap();
-                    for key in &keys {
-                        BinaryWrite::write_raw(v, key.get(i).unwrap())?;
                     }
                 }
             }

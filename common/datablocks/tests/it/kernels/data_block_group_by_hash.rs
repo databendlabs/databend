@@ -53,7 +53,8 @@ fn test_data_block_group_by_hash() -> Result<()> {
         }
     }
 
-    let keys_iter = hash.build_keys_iter(&group_columns, block.num_rows())?;
+    let state = hash.build_keys_state(&group_columns, block.num_rows())?;
+    let keys_iter = hash.build_keys_iter(&state)?;
     let keys: Vec<u32> = keys_iter.collect();
     assert_eq!(keys, vec![
         0x10101, 0x10101, 0x20202, 0x10101, 0x20202, 0x30303

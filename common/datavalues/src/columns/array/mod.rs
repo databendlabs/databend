@@ -172,6 +172,15 @@ impl Column for ArrayColumn {
             .collect();
         DataValue::Array(values)
     }
+
+    fn serialize(&self, vec: &mut Vec<u8>, row: usize) {
+        let offset = self.offsets[row] as usize;
+        let length = self.size_at_index(row);
+
+        for row in offset..offset + length {
+            self.values.serialize(vec, row);
+        }
+    }
 }
 
 impl ScalarColumn for ArrayColumn {

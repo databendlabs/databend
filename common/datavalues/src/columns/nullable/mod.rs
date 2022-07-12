@@ -213,6 +213,14 @@ impl Column for NullableColumn {
             DataValue::Null
         }
     }
+
+    fn serialize(&self, vec: &mut Vec<u8>, row: usize) {
+        let valid = self.validity.get_bit(row);
+        vec.push(valid as u8);
+        if valid {
+            self.column.serialize(vec, row);
+        }
+    }
 }
 
 impl std::fmt::Debug for NullableColumn {
