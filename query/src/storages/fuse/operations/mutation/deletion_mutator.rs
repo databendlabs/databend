@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
@@ -44,7 +45,7 @@ pub struct Replacement {
 
 pub type SegmentIndex = usize;
 
-pub struct DeletionCollector<'a> {
+pub struct DeletionMutator<'a> {
     mutations: HashMap<SegmentIndex, Vec<Replacement>>,
     ctx: &'a QueryContext,
     location_generator: &'a TableMetaLocationGenerator,
@@ -52,7 +53,7 @@ pub struct DeletionCollector<'a> {
     data_accessor: Operator,
 }
 
-impl<'a> DeletionCollector<'a> {
+impl<'a> DeletionMutator<'a> {
     pub fn try_create(
         ctx: &'a QueryContext,
         location_generator: &'a TableMetaLocationGenerator,
@@ -71,6 +72,14 @@ impl<'a> DeletionCollector<'a> {
     pub async fn into_new_snapshot(self) -> Result<(TableSnapshot, String)> {
         let snapshot = self.base_snapshot;
         let mut new_snapshot = TableSnapshot::from_previous(snapshot);
+
+        // takes away the segments, they are being mutated
+        let mut segments_editor = HashMap::<_, _, RandomState>::from_iter(
+            std::mem::take(&mut new_snapshot.segments)
+                .into_iter()
+                .enumerate(),
+        );
+
         let segment_reader = MetaReaders::segment_info_reader(self.ctx);
 
         let segment_info_cache = self
@@ -84,9 +93,12 @@ impl<'a> DeletionCollector<'a> {
         );
 
         for (seg_idx, replacements) in self.mutations {
-            let seg_loc = &snapshot.segments[seg_idx];
-            let segment = segment_reader.read(&seg_loc.0, None, seg_loc.1).await?;
+            let segment = {
+                let (path, version) = &snapshot.segments[seg_idx];
+                segment_reader.read(&path, None, *version).await?
+            };
 
+            // collects the block locations of the segment being modified
             let block_positions = segment
                 .blocks
                 .iter()
@@ -94,8 +106,17 @@ impl<'a> DeletionCollector<'a> {
                 .map(|(idx, meta)| (&meta.location, idx))
                 .collect::<HashMap<_, _>>();
 
+            // prepare the new segment, which will replace the modified segment
             let mut new_segment = SegmentInfo::new(segment.blocks.clone(), segment.summary.clone());
 
+            // apply modification
+
+            //  take away the blocks, they are being mutated
+            let mut block_editor = HashMap::<_, _, RandomState>::from_iter(
+                std::mem::take(&mut new_segment.blocks)
+                    .into_iter()
+                    .enumerate(),
+            );
             for replacement in replacements {
                 let position = block_positions
                     .get(&replacement.original_block_loc)
@@ -106,27 +127,31 @@ impl<'a> DeletionCollector<'a> {
                         ))
                     })?;
                 if let Some(block_meta) = replacement.new_block_meta {
-                    new_segment.blocks[*position] = block_meta;
+                    //new_segment.blocks[*position] = block_meta;
+                    block_editor.insert(*position, block_meta);
                 } else {
-                    new_segment.blocks.remove(*position);
+                    //new_segment.blocks.remove(*position);
+                    block_editor.remove(position);
                 }
             }
+            new_segment.blocks = block_editor.into_values().collect();
 
             if new_segment.blocks.is_empty() {
                 // remove the segment if no blocks there
-                new_snapshot.segments.remove(seg_idx);
+                segments_editor.remove(&seg_idx);
             } else {
                 let new_summary = reduce_block_metas(&new_segment.blocks)?;
                 new_segment.summary = new_summary;
                 let new_segment_location = seg_writer.write_segment(new_segment).await?;
-                new_snapshot.segments[seg_idx] = new_segment_location;
+                segments_editor.insert(seg_idx, new_segment_location);
             }
         }
 
-        let mut new_segment_summaries = vec![];
+        new_snapshot.segments = segments_editor.into_values().collect();
+
+        let mut new_segment_summaries = Vec::with_capacity(new_snapshot.segments.len());
         for (loc, ver) in &new_snapshot.segments {
             let seg = segment_reader.read(loc, None, *ver).await?;
-            // only need the summary, drop the reference to segment ASAP
             new_segment_summaries.push(seg.summary.clone())
         }
 
@@ -143,9 +168,8 @@ impl<'a> DeletionCollector<'a> {
         Ok((new_snapshot, snapshot_loc))
     }
 
-    /// Replaces
-    ///  the block located at `block_location` of segment indexed by `seg_idx`
-    /// With a new block `r`
+    /// Records the replacements:  
+    ///  the block located at `block_location` of segment indexed by `seg_idx` with a new block
     pub async fn replace_with(
         &mut self,
         seg_idx: usize,
