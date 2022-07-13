@@ -159,7 +159,6 @@ impl TryInto<InnerConfig> for Config {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
-    /// Current storage type: fs|s3
     #[clap(long, default_value = "fs")]
     #[serde(rename = "type", alias = "storage_type")]
     pub storage_type: String,
@@ -168,7 +167,7 @@ pub struct StorageConfig {
     #[serde(rename = "num_cpus", alias = "storage_num_cpus")]
     pub storage_num_cpus: u64,
 
-    #[clap(long, default_value_t)]
+    #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
 
     // Fs storage backend config.
