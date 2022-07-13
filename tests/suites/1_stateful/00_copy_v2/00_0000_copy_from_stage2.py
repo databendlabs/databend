@@ -31,7 +31,7 @@ with NativeClient(name='client1>') as client1:
     client1.expect(prompt)
 
     client1.send(
-        "CREATE STAGE named_external_stage url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');"
+        "CREATE STAGE named_external_stage url = 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');"
     )
     client1.expect(prompt)
 
