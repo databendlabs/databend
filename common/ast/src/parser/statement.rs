@@ -561,11 +561,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
 
     // stages
-    let create_stage = map(
+    let create_stage = map_res(
         rule! {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident
             ~ ( URL ~ "=" ~ #literal_string
+                ~ (CONNECTION ~ "=" ~ #options)?
                 ~ (CREDENTIALS ~ "=" ~ #options)?
                 ~ (ENCRYPTION ~ "=" ~ #options)?
               )?
@@ -587,22 +588,32 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             validation_mode_opt,
             comment_opt,
         )| {
-            let (location, credential_options, encryption_options) = url_opt
-                .map(|(_, _, url, c, e)| {
-                    (
-                        url,
-                        c.map(|v| v.2).unwrap_or_default(),
-                        e.map(|v| v.2).unwrap_or_default(),
-                    )
+            let (location, connection_options) = url_opt
+                .map(|(_, _, url, conn, creds, encrypt)| {
+                    let mut conn = conn.map(|v| v.2).unwrap_or_default();
+                    conn.extend(creds.map(|v| v.2).unwrap_or_default());
+                    conn.extend(encrypt.map(|v| v.2).unwrap_or_default());
+
+                    (url, conn)
                 })
                 .unwrap_or_default();
 
-            Statement::CreateStage(CreateStageStmt {
+            let parsed = Url::parse(&location).map_err(|_| ErrorKind::Other("invalid url"))?;
+
+            Ok(Statement::CreateStage(CreateStageStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 stage_name: stage.to_string(),
-                location,
-                credential_options,
-                encryption_options,
+                protocol: parsed.scheme().to_string(),
+                name: parsed
+                    .host_str()
+                    .ok_or(ErrorKind::Other("invalid uri location"))?
+                    .to_string(),
+                path: if parsed.path().is_empty() {
+                    "/".to_string()
+                } else {
+                    parsed.path().to_string()
+                },
+                connection: connection_options,
                 file_format_options: file_format_opt
                     .map(|(_, _, file_format_opt)| file_format_opt)
                     .unwrap_or_default(),
@@ -612,7 +623,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                     .map(|v| v.2.to_string())
                     .unwrap_or_default(),
                 comments: comment_opt.map(|v| v.2).unwrap_or_default(),
-            })
+            }))
         },
     );
 
@@ -1114,45 +1125,55 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
     };
 
     // Parse input like `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
-    let uri_location = |i| {
+    let inner_uri_location = |i| {
         map_res(
             rule! {
-                #literal_string
-                ~ (CONNECTION ~ "=" ~ #options)?
-                ~ (CREDENTIALS ~ "=" ~ #options)?
-                ~ (ENCRYPTION ~ "=" ~ #options)?
+                #uri_location
             },
-            |(location, connection_opt, credentials_opt, encryption_opt)| {
-                let parsed =
-                    Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
-
-                // TODO: We will use `CONNECTION` to replace `CREDENTIALS` and `ENCRYPTION`.
-                let mut conn = connection_opt.map(|v| v.2).unwrap_or_default();
-                conn.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
-                conn.extend(encryption_opt.map(|v| v.2).unwrap_or_default());
-
-                Ok(CopyUnit::UriLocation {
-                    protocol: parsed.scheme().to_string(),
-                    name: parsed
-                        .host_str()
-                        .ok_or(ErrorKind::Other("invalid uri location"))?
-                        .to_string(),
-                    path: if parsed.path().is_empty() {
-                        "/".to_string()
-                    } else {
-                        parsed.path().to_string()
-                    },
-                    connection: conn,
-                })
-            },
+            |v| Ok(CopyUnit::UriLocation(v)),
         )(i)
     };
 
     rule!(
        #stage_location: "@<stage_name> { <path> }"
-        | #uri_location: "'<protocol>://<name> {<path>} { CONNECTION = ({ AWS_ACCESS_KEY = 'aws_access_key' }) } '"
+        | #inner_uri_location: "'<protocol>://<name> {<path>} { CONNECTION = ({ AWS_ACCESS_KEY = 'aws_access_key' }) } '"
         | #table: "{ { <catalog>. } <database>. }<table>"
         | #query: "( <query> )"
+    )(i)
+}
+
+/// Parse input into `UriLocation`
+pub fn uri_location(i: Input) -> IResult<UriLocation> {
+    map_res(
+        rule! {
+            #literal_string
+            ~ (CONNECTION ~ "=" ~ #options)?
+            ~ (CREDENTIALS ~ "=" ~ #options)?
+            ~ (ENCRYPTION ~ "=" ~ #options)?
+        },
+        |(location, connection_opt, credentials_opt, encryption_opt)| {
+            let parsed =
+                Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
+
+            // TODO: We will use `CONNECTION` to replace `CREDENTIALS` and `ENCRYPTION`.
+            let mut conn = connection_opt.map(|v| v.2).unwrap_or_default();
+            conn.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
+            conn.extend(encryption_opt.map(|v| v.2).unwrap_or_default());
+
+            Ok(UriLocation {
+                protocol: parsed.scheme().to_string(),
+                name: parsed
+                    .host_str()
+                    .ok_or(ErrorKind::Other("invalid uri location"))?
+                    .to_string(),
+                path: if parsed.path().is_empty() {
+                    "/".to_string()
+                } else {
+                    parsed.path().to_string()
+                },
+                connection: conn,
+            })
+        },
     )(i)
 }
 
