@@ -6,14 +6,12 @@ LimitTransform × 1 processor
           AggregatorPartialTransform × 8 processors
             ExpressionTransform × 8 processors
               FilterTransform × 8 processors
-                SourceTransform × 8 processors
+                NumbersSourceTransform × 8 processors
 LimitTransform × 1 processor
-  Merge (ProjectionTransform × 8 processors) to (LimitTransform × 1)
-    ProjectionTransform × 8 processors
-      HavingTransform × 8 processors
-        Mixed (GroupByFinalTransform × 1 processor) to (HavingTransform × 8 processors)
-          GroupByFinalTransform × 1 processor
-            Merge (GroupByPartialTransform × 8 processors) to (GroupByFinalTransform × 1)
-              GroupByPartialTransform × 8 processors
-                ExpressionTransform × 8 processors
-                  SourceTransform × 8 processors
+  ProjectionTransform × 1 processor
+    HavingTransform × 1 processor
+      GroupByFinalTransform × 1 processor
+        Merge (GroupByPartialTransform × 8 processors) to (GroupByFinalTransform × 1)
+          GroupByPartialTransform × 8 processors
+            ExpressionTransform × 8 processors
+              NumbersSourceTransform × 8 processors

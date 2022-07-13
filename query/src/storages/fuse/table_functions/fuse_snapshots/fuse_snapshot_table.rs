@@ -202,7 +202,7 @@ impl TableFunction for FuseSnapshotTable {
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-        where Self: 'a {
+    where Self: 'a {
         self
     }
 }

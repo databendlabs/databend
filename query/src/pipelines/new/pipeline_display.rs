@@ -70,8 +70,8 @@ impl<'a> Display for NewPipelineIndentDisplayWrapper<'a> {
                     outputs_port,
                     ..
                 } => {
-                    let prev_name = Self::pipe_name(&pipes[index - 1]);
-                    let post_name = Self::pipe_name(&pipes[index + 1]);
+                    let prev_name = Self::pipe_name(&pipes[pipes.len() - index - 2]);
+                    let post_name = Self::pipe_name(&pipes[pipes.len() - index]);
 
                     write!(
                         f,

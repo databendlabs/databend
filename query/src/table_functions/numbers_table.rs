@@ -243,7 +243,7 @@ impl NumbersSource {
 }
 
 impl SyncSource for NumbersSource {
-    const NAME: &'static str = "numbers";
+    const NAME: &'static str = "NumbersSourceTransform";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         let source_remain_size = self.end - self.begin;

@@ -1,12 +1,31 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::any::Any;
 use std::sync::Arc;
-use common_base::base::{Progress, ProgressValues};
+
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_planners::PartInfoPtr;
+
 use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::result::result_table_source::State::Generated;

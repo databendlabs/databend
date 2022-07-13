@@ -136,7 +136,7 @@ impl TestFixture {
                     // database id is required for FUSE
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
-                    .into(),
+                .into(),
                 default_cluster_key: Some("(id)".to_string()),
                 cluster_keys: vec!["(id)".to_string()],
                 default_cluster_key_id: Some(0),
@@ -207,10 +207,7 @@ fn gen_db_name(prefix: &str) -> String {
     format!("db_{}", prefix)
 }
 
-pub async fn test_drive(
-    test_db: Option<&str>,
-    test_tbl: Option<&str>,
-) -> Result<()> {
+pub async fn test_drive(test_db: Option<&str>, test_tbl: Option<&str>) -> Result<()> {
     let arg_db = match test_db {
         Some(v) => DataValue::String(v.as_bytes().to_vec()),
         None => DataValue::Null,
@@ -413,5 +410,5 @@ pub async fn history_should_have_only_one_item(
         execute_query(fixture.ctx(), qry.as_str()).await,
         expected,
     )
-        .await
+    .await
 }

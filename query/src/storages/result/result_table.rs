@@ -28,9 +28,10 @@ use common_planners::Statistics;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::pipelines::new::{NewPipeline, SourcePipeBuilder};
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::TransformLimit;
+use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -184,15 +185,12 @@ impl Table for ResultTable {
         match &plan.push_downs {
             None => Ok(()),
             Some(Extras { limit: None, .. }) => Ok(()),
-            Some(Extras { limit: Some(limit), .. }) => {
+            Some(Extras {
+                limit: Some(limit), ..
+            }) => {
                 let limit = *limit;
                 pipeline.add_transform(|transform_input, transform_output| {
-                    TransformLimit::try_create(
-                        Some(limit),
-                        0,
-                        transform_input,
-                        transform_output,
-                    )
+                    TransformLimit::try_create(Some(limit), 0, transform_input, transform_output)
                 })
             }
         }
