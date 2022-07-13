@@ -21,7 +21,7 @@ impl Plan {
         match self {
             Plan::Query {
                 s_expr, metadata, ..
-            } => s_expr.to_format_tree(metadata).format_indent(),
+            } => s_expr.to_format_tree(metadata).format_pretty(),
             Plan::Explain { kind, plan } => {
                 let result = plan.format_indent()?;
                 Ok(format!("{:?}:\n{}", kind, result))
