@@ -14,6 +14,7 @@
 
 use core::fmt::Write;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 
 use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::*;
@@ -36,6 +37,8 @@ use common_planners::*;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::is_reserved_opt_key;
+use crate::sql::optimizer::optimize;
+use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::Plan;
 use crate::sql::BindContext;
 use crate::sql::ColumnBinding;
@@ -369,8 +372,32 @@ impl<'a> Binder {
                     .collect();
                 (DataSchemaRefExt::create(fields), vec![])
             }
-            // TODO(leiysky): Support `CREATE TABLE AS SELECT` with specified column definitions
-            _ => Err(ErrorCode::UnImplement("Unsupported CREATE TABLE statement"))?,
+            (Some(source), Some(query)) => {
+                // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns speicified
+                let (source_schema, source_coments) =
+                    self.analyze_create_table_schema(source).await?;
+                let init_bind_context = BindContext::new();
+                let (_s_expr, bind_context) = self.bind_query(&init_bind_context, query).await?;
+                let query_fields: Vec<DataField> = bind_context
+                    .columns
+                    .iter()
+                    .map(|column_binding| {
+                        DataField::new(
+                            &column_binding.column_name,
+                            column_binding.data_type.clone(),
+                        )
+                    })
+                    .collect();
+                let  source_fields = source_schema.fields().clone();
+                let source_fields = self.concat_fields(source_fields, query_fields);
+                (
+                    DataSchemaRefExt::create(source_fields.to_vec()),
+                    source_coments,
+                )
+            }
+            _ => Err(ErrorCode::BadArguments(
+                        "Incorrect CREATE query: required list of column descriptions or AS section or SELECT.."
+                ))?,
         };
 
         let mut table_meta = TableMeta {
@@ -408,7 +435,7 @@ impl<'a> Binder {
             table_meta = table_meta.push_cluster_key(cluster_keys_sql);
         }
 
-        let plan = CreateTablePlan {
+        let plan = CreateTablePlanV2 {
             if_not_exists: *if_not_exists,
             tenant: self.ctx.get_tenant(),
             catalog,
@@ -416,10 +443,12 @@ impl<'a> Binder {
             table,
             table_meta,
             cluster_keys,
-            as_select: if as_query.is_some() {
-                Err(ErrorCode::UnImplement(
-                    "Unsupported CREATE TABLE ... AS ...",
-                ))?
+            as_select: if let Some(query) = as_query {
+                let bind_context = BindContext::new();
+                let stmt = Statement::Query(Box::new(*query.clone()));
+                let select_plan = self.bind_statement(&bind_context, &stmt).await?;
+                let select_plan = optimize(self.ctx.clone(), select_plan)?;
+                Some(Box::new(select_plan))
             } else {
                 None
             },
@@ -810,5 +839,22 @@ impl<'a> Binder {
         }
 
         Ok(cluster_keys)
+    }
+
+    fn concat_fields(
+        &self,
+        mut source_fields: Vec<DataField>,
+        query_fields: Vec<DataField>,
+    ) -> Vec<DataField> {
+        let mut name_set = HashSet::new();
+        for field in source_fields.iter() {
+            name_set.insert(field.name().clone());
+        }
+        for query_field in query_fields.iter() {
+            if !name_set.contains(query_field.name()) {
+                source_fields.push(query_field.clone());
+            }
+        }
+        source_fields
     }
 }

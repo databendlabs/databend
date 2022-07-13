@@ -23,6 +23,7 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
+use crate::interpreters::interpreter_table_create_v2::CreateTableInterpreterV2;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
@@ -163,7 +164,7 @@ impl InterpreterFactoryV2 {
             Plan::ShowTablesStatus(show_tables_status) => Ok(Arc::new(
                 ShowTablesStatusInterpreter::try_create(ctx, *show_tables_status.clone())?,
             )),
-            Plan::CreateTable(create_table) => Ok(Arc::new(CreateTableInterpreter::try_create(
+            Plan::CreateTable(create_table) => Ok(Arc::new(CreateTableInterpreterV2::try_create(
                 ctx,
                 *create_table.clone(),
             )?)),
