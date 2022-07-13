@@ -29,6 +29,7 @@ common-tracing = { path = "../../tracing" }
 derive_more = "0.99.17"
 futures = "0.3.21"
 once_cell = "1.12.0"
+parking_lot = "0.12.1"
 prost = "0.10.4"
 rand = "0.8.5"
 semver = "1.0.10"

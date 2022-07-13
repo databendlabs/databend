@@ -350,6 +350,7 @@ Development tools (since -d was provided):
   * python3 (boto3, yapf, yamllint, ...)
   * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
   * sqllogic test dependencies (PyHamcrest, environs, fire, ...)
+  * fuzz test dependencies (fuzzingbook)
 EOF
 	fi
 
@@ -550,6 +551,8 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	python3 -m pip install --quiet mysql-connector-python pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
 	python3 -m pip install --quiet mysql-connector six PyHamcrest requests environs fire
+	# fuzz dependencies
+	python3 -m pip install --quiet fuzzingbook
 
 	# sqllogic clickhouse dependencies
 	# a temp hack only to make logic test work on click house as quickly as possible

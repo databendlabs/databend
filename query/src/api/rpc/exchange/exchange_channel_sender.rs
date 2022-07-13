@@ -24,11 +24,11 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::sleep;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
-use common_base::infallible::Mutex;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use futures_util::future::Either;
+use parking_lot::Mutex;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentSender;
 use crate::api::rpc::packets::DataPacket;

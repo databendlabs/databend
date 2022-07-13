@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use parking_lot::RwLock;
 
 use super::random::RandomTable;
 use crate::storages::fuse::FuseTable;

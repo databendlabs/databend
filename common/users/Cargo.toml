@@ -25,6 +25,7 @@ common-tracing = { path = "../tracing" }
 
 # Crates.io dependencies
 jwtk = "0.2.3"
+parking_lot = "0.12.1"
 serde = { version = "1.0.137", features = ["derive"] }
 
 [dev-dependencies]
