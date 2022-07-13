@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 
 use serde::Deserialize;
@@ -20,12 +21,11 @@ use serde::Serialize;
 
 use super::utils::mask_string;
 
-pub static AWS_S3_ENDPOINT: &str = "https://s3.amazonaws.com";
-
 /// Config for storage backend.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageConfig {
     pub num_cpus: u64,
+    pub allow_insecure: bool,
 
     pub params: StorageParams,
 }
@@ -44,6 +44,48 @@ pub enum StorageParams {
 impl Default for StorageParams {
     fn default() -> Self {
         StorageParams::Fs(StorageFsConfig::default())
+    }
+}
+
+/// StorageParams will be displayed by `{protocol}://{key1=value1},{key2=value2}`
+impl Display for StorageParams {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StorageParams::Azblob(v) => write!(
+                f,
+                "azblob://container={},root={},endpoint={}",
+                v.container, v.root, v.endpoint_url
+            ),
+            StorageParams::Fs(v) => write!(f, "fs://root={}", v.root,),
+            #[cfg(feature = "storage-hdfs")]
+            StorageParams::Hdfs(v) => {
+                write!(f, "hdfs://root={},name_node={}", v.root, v.name_node,)
+            }
+            StorageParams::Memory => write!(f, "memory://"),
+            StorageParams::S3(v) => {
+                write!(
+                    f,
+                    "s3://bucket={},root={},endpoint={}",
+                    v.bucket, v.root, v.endpoint_url
+                )
+            }
+        }
+    }
+}
+
+impl StorageParams {
+    /// Whether this storage params is secure.
+    ///
+    /// Query will forbid this storage config unless `allow_insecure` has been enabled.
+    pub fn is_secure(&self) -> bool {
+        match self {
+            StorageParams::Azblob(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::Fs(_) => false,
+            #[cfg(feature = "storage-hdfs")]
+            StorageParams::Hdfs(_) => false,
+            StorageParams::Memory => false,
+            StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
+        }
     }
 }
 
@@ -96,6 +138,8 @@ pub struct StorageHdfsConfig {
     pub root: String,
 }
 
+pub static STORAGE_S3_DEFAULT_ENDPOINT: &str = "https://s3.amazonaws.com";
+
 /// Config for storage backend s3.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageS3Config {
@@ -106,7 +150,7 @@ pub struct StorageS3Config {
     pub secret_access_key: String,
     pub master_key: String,
     pub root: String,
-    /// This flag is used internally to control whether or not databend load
+    /// This flag is used internally to control whether databend load
     /// credentials from environment like env, profile and web token.
     pub disable_credential_loader: bool,
     /// Enable this flag to send API in virtual host style.
@@ -119,7 +163,7 @@ pub struct StorageS3Config {
 impl Default for StorageS3Config {
     fn default() -> Self {
         StorageS3Config {
-            endpoint_url: AWS_S3_ENDPOINT.to_string(),
+            endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
             region: "".to_string(),
             bucket: "".to_string(),
             access_key_id: "".to_string(),

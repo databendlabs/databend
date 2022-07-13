@@ -1118,12 +1118,18 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
         map_res(
             rule! {
                 #literal_string
+                ~ (CONNECTION ~ "=" ~ #options)?
                 ~ (CREDENTIALS ~ "=" ~ #options)?
                 ~ (ENCRYPTION ~ "=" ~ #options)?
             },
-            |(location, credentials_opt, encryption_opt)| {
+            |(location, connection_opt, credentials_opt, encryption_opt)| {
                 let parsed =
                     Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
+
+                // TODO: We will use `CONNECTION` to replace `CREDENTIALS` and `ENCRYPTION`.
+                let mut conn = connection_opt.map(|v| v.2).unwrap_or_default();
+                conn.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
+                conn.extend(encryption_opt.map(|v| v.2).unwrap_or_default());
 
                 Ok(CopyUnit::UriLocation {
                     protocol: parsed.scheme().to_string(),
@@ -1136,8 +1142,7 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
                     } else {
                         parsed.path().to_string()
                     },
-                    credentials: credentials_opt.map(|v| v.2).unwrap_or_default(),
-                    encryption: encryption_opt.map(|v| v.2).unwrap_or_default(),
+                    connection: conn,
                 })
             },
         )(i)
@@ -1145,7 +1150,7 @@ pub fn copy_target(i: Input) -> IResult<CopyUnit> {
 
     rule!(
        #stage_location: "@<stage_name> { <path> }"
-        | #uri_location: "'<protocol>://<name> {<path>} { CREDENTIALS = ({ AWS_ACCESS_KEY = 'aws_access_key' }) } '"
+        | #uri_location: "'<protocol>://<name> {<path>} { CONNECTION = ({ AWS_ACCESS_KEY = 'aws_access_key' }) } '"
         | #table: "{ { <catalog>. } <database>. }<table>"
         | #query: "( <query> )"
     )(i)

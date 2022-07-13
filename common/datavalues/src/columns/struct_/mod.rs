@@ -150,7 +150,6 @@ impl Column for StructColumn {
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
         let values = self.values.iter().map(|v| v.replicate(offsets)).collect();
-
         Arc::new(Self {
             values,
             data_type: self.data_type.clone(),
@@ -159,6 +158,12 @@ impl Column for StructColumn {
 
     fn convert_full_column(&self) -> ColumnRef {
         Arc::new(self.clone())
+    }
+
+    fn serialize(&self, vec: &mut Vec<u8>, row: usize) {
+        for col in self.values() {
+            col.serialize(vec, row);
+        }
     }
 }
 
