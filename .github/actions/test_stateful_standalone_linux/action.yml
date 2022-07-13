@@ -9,6 +9,13 @@ inputs:
     description: ""
     required: true
     default: "x86_64-unknown-linux-gnu"
+  aws_access_key_id:
+    description: "aws access key id"
+    required: true
+  aws_secret_access_key:
+    description: "aws secret access key"
+    required: true
+    
 runs:
   using: "composite"
   steps:
@@ -39,12 +46,11 @@ runs:
         aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data/ontime_200.parquet s3://testbucket/admin/data/ontime_200_v1.parquet
 
     - name: Run Stateful Tests with Standalone mode (ubuntu-latest only)
-      env:
-        REPO_AWS_ACCESS_KEY_ID: ${{ secrets.REPO_ACCESS_KEY_ID }}
-        REPO_AWS_SECRET_ACCESS_KEY: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
       shell: bash
-      run: |
-        bash ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
+      run: bash ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
+      env:
+        REPO_AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        REPO_AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
 
     - name: Upload failure
       if: failure()

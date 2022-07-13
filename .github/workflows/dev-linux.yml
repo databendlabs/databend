@@ -124,6 +124,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
+        with:
+          aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
 
   test_fuzz_standalone_linux:
     runs-on: [self-hosted, X64, Linux, development]
