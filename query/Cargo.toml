@@ -142,6 +142,7 @@ twox-hash = "1.6.3"
 typetag = "0.1.8"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
+tokio-cron-scheduler = "0.7.4"
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }
@@ -158,7 +159,6 @@ tempfile = "3.3.0"
 toml = { version = "0.5.9", default-features = false }
 url = "2.2.2"
 wiremock = "0.5.13"
-cron = "0.11.0"
 
 [build-dependencies]
 common-building = { path = "../common/building" }

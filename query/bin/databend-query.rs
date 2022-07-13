@@ -14,7 +14,10 @@
 
 use std::env;
 use std::ops::Deref;
+use std::str::FromStr;
 use std::sync::Arc;
+use tokio_cron_scheduler::{JobScheduler, Job};
+use common_base::base::tokio;
 
 use common_base::base::RuntimeTracker;
 use common_base::base::TrySpawn;
@@ -25,7 +28,6 @@ use common_meta_grpc::MetaGrpcClient;
 use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchRequest;
-use cron::Schedule;
 use common_metrics::init_default_metrics_recorder;
 use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
@@ -263,6 +265,20 @@ async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
             do_compaction(ctx.clone(), table, name.to_string()).await?;
         }
     }
+
+    ctx.get_storage_runtime().spawn(async move {
+        let sched = JobScheduler::new().unwrap();
+  
+        sched.add(Job::new("1/10 * * * * *", |uuid, l| {
+            println!("I run every 10 seconds");
+        }).unwrap()).unwrap();
+
+        sched.start().unwrap();
+    });
+
+    //let expression = "@daily";
+    //let schedule = Schedule::from_str(expression).expect("Failed to parse @daily.");
+
     Ok(())
 
     /*let rpc_conf = conf.meta.to_meta_grpc_client_conf();

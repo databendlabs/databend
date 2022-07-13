@@ -1909,9 +1909,9 @@ dependencies = [
 
 [[package]]
 name = "cron"
-version = "0.11.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d76219e9243e100d5a37676005f08379297f8addfebc247613299600625c734d"
+checksum = "4ee7e5cc3c6b73959cef3412d3a185225eefd926286b4ea55be8bea0bd27d10f"
 dependencies = [
  "chrono",
  "nom",
@@ -2316,7 +2316,6 @@ dependencies = [
  "common-tracing",
  "common-users",
  "criterion",
- "cron",
  "dyn-clone",
  "enum_dispatch",
  "enum_extract",
@@ -2374,6 +2373,7 @@ dependencies = [
  "threadpool",
  "thrift",
  "time 0.3.11",
+ "tokio-cron-scheduler",
  "tokio-rustls",
  "tokio-stream",
  "toml",
@@ -7172,6 +7172,22 @@ dependencies = [
  "tokio-macros",
  "tracing",
  "winapi",
+]
+
+[[package]]
+name = "tokio-cron-scheduler"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d1233f0599a489759e9aad64e83eab727eb20be6457afa9702e16c9c866fe49"
+dependencies = [
+ "chrono",
+ "cron",
+ "num-derive",
+ "num-traits",
+ "time 0.1.44",
+ "tokio",
+ "tracing",
+ "uuid 1.1.2",
 ]
 
 [[package]]
