@@ -75,12 +75,7 @@ impl<'a> Binder {
                 .await
             }
             (
-                CopyUnit::UriLocation {
-                    protocol,
-                    name,
-                    path,
-                    connection,
-                },
+                CopyUnit::UriLocation(uri_location),
                 CopyUnit::Table {
                     catalog,
                     database,
@@ -98,10 +93,10 @@ impl<'a> Binder {
                 let table = table.to_string();
 
                 let ul = UriLocation {
-                    protocol: protocol.clone(),
-                    name: name.clone(),
-                    path: path.clone(),
-                    connection: connection.clone(),
+                    protocol: uri_location.protocol.clone(),
+                    name: uri_location.name.clone(),
+                    path: uri_location.path.clone(),
+                    connection: uri_location.connection.clone(),
                 };
 
                 self.bind_copy_from_uri_into_table(
@@ -149,12 +144,7 @@ impl<'a> Binder {
                     database,
                     table,
                 },
-                CopyUnit::UriLocation {
-                    protocol,
-                    name,
-                    path,
-                    connection,
-                },
+                CopyUnit::UriLocation(uri_location),
             ) => {
                 let catalog_name = catalog
                     .as_ref()
@@ -167,10 +157,10 @@ impl<'a> Binder {
                 let table = table.to_string();
 
                 let ul = UriLocation {
-                    protocol: protocol.clone(),
-                    name: name.clone(),
-                    path: path.clone(),
-                    connection: connection.clone(),
+                    protocol: uri_location.protocol.clone(),
+                    name: uri_location.name.clone(),
+                    path: uri_location.path.clone(),
+                    connection: uri_location.connection.clone(),
                 };
 
                 self.bind_copy_from_table_into_uri(
@@ -187,20 +177,12 @@ impl<'a> Binder {
                 self.bind_copy_from_query_into_stage(bind_context, stmt, query, name, path)
                     .await
             }
-            (
-                CopyUnit::Query(query),
-                CopyUnit::UriLocation {
-                    protocol,
-                    name,
-                    path,
-                    connection,
-                },
-            ) => {
+            (CopyUnit::Query(query), CopyUnit::UriLocation(uri_location)) => {
                 let ul = UriLocation {
-                    protocol: protocol.clone(),
-                    name: name.clone(),
-                    path: path.clone(),
-                    connection: connection.clone(),
+                    protocol: uri_location.protocol.clone(),
+                    name: uri_location.name.clone(),
+                    path: uri_location.path.clone(),
+                    connection: uri_location.connection.clone(),
                 };
 
                 self.bind_copy_from_query_into_uri(bind_context, stmt, query, &ul)
