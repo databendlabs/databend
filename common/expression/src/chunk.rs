@@ -22,7 +22,7 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn new(columns: Vec<Column>) -> Self {
-        assert!(columns.iter().map(|col| col.len()).all_equal());
+        debug_assert!(columns.iter().map(|col| col.len()).all_equal());
         Self { columns }
     }
 
