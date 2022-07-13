@@ -23,7 +23,6 @@ use common_tracing::tracing;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::storages::stage::StageSource;
 
@@ -34,8 +33,8 @@ pub struct RemoveUserStageInterpreter {
 }
 
 impl RemoveUserStageInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: RemoveUserStagePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(RemoveUserStageInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RemoveUserStagePlan) -> Result<Self> {
+        Ok(RemoveUserStageInterpreter { ctx, plan })
     }
 }
 

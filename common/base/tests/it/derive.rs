@@ -15,11 +15,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::infallible::Mutex;
 use common_base::mem_allocator::malloc_size;
 use common_base::mem_allocator::MallocSizeOf;
 use common_base::mem_allocator::MallocSizeOfExt;
 use common_macros::MallocSizeOf;
+use parking_lot::Mutex;
 
 #[test]
 fn derive_vec() {

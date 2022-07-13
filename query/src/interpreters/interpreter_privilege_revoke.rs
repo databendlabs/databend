@@ -23,7 +23,6 @@ use common_tracing::tracing;
 
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
@@ -33,8 +32,8 @@ pub struct RevokePrivilegeInterpreter {
 }
 
 impl RevokePrivilegeInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokePrivilegePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(RevokePrivilegeInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokePrivilegePlan) -> Result<Self> {
+        Ok(RevokePrivilegeInterpreter { ctx, plan })
     }
 }
 

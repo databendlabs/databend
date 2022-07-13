@@ -23,7 +23,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct SettingInterpreter {
@@ -32,8 +31,8 @@ pub struct SettingInterpreter {
 }
 
 impl SettingInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, set: SettingPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(SettingInterpreter { ctx, set }))
+    pub fn try_create(ctx: Arc<QueryContext>, set: SettingPlan) -> Result<Self> {
+        Ok(SettingInterpreter { ctx, set })
     }
 }
 
@@ -58,14 +57,16 @@ impl Interpreter for SettingInterpreter {
                     let _ = tz.parse::<Tz>().map_err(|_| {
                         ErrorCode::InvalidTimezone(format!("Invalid Timezone: {}", var.value))
                     })?;
-                    self.ctx
-                        .get_settings()
-                        .set_settings(var.variable, tz.to_string(), false)?;
+                    self.ctx.get_settings().set_settings(
+                        var.variable,
+                        tz.to_string(),
+                        var.is_global,
+                    )?;
                 }
                 _ => {
                     self.ctx
                         .get_settings()
-                        .set_settings(var.variable, var.value, false)?;
+                        .set_settings(var.variable, var.value, var.is_global)?;
                 }
             }
         }

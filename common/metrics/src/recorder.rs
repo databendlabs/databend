@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::sync::Once;
 
-use common_base::infallible::RwLock;
 use common_tracing::tracing;
 use metrics::counter;
 use metrics::decrement_gauge;
@@ -24,6 +23,7 @@ use metrics::increment_gauge;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
 use once_cell::sync::Lazy;
+use parking_lot::RwLock;
 
 static PROMETHEUS_HANDLE: Lazy<Arc<RwLock<Option<PrometheusHandle>>>> =
     Lazy::new(|| Arc::new(RwLock::new(None)));

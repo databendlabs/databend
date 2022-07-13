@@ -24,7 +24,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::QueryContext;
@@ -61,8 +60,8 @@ impl Interpreter for ExplainInterpreter {
 }
 
 impl ExplainInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, explain: ExplainPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ExplainInterpreter { ctx, explain }))
+    pub fn try_create(ctx: Arc<QueryContext>, explain: ExplainPlan) -> Result<Self> {
+        Ok(ExplainInterpreter { ctx, explain })
     }
 
     fn explain_graph(&self) -> Result<DataBlock> {

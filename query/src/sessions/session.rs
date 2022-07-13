@@ -16,7 +16,6 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
-use common_base::infallible::RwLock;
 use common_base::mem_allocator::malloc_size;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,8 +23,10 @@ use common_macros::MallocSizeOf;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
+use common_users::RoleCacheMgr;
 use futures::channel::*;
 use opendal::Operator;
+use parking_lot::RwLock;
 
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
@@ -35,7 +36,6 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
-use crate::users::RoleCacheMgr;
 use crate::Config;
 
 #[derive(MallocSizeOf)]
@@ -63,7 +63,8 @@ impl Session {
         mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
-        let session_settings = Settings::try_create(&conf)?;
+        let user_api = session_mgr.get_user_api_provider();
+        let session_settings = Settings::try_create(&conf, user_api, session_ctx.clone())?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {

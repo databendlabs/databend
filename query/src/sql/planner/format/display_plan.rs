@@ -99,6 +99,8 @@ impl Plan {
             Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
 
             Plan::Presign(presign) => Ok(format!("{:?}", presign)),
+
+            Plan::SetVariable(_set_variable) => Ok("SET".to_string()),
         }
     }
 }

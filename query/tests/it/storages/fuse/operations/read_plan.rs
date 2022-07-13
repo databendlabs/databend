@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_planners::Extras;
 use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
+use databend_query::interpreters::Interpreter;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::ColumnMeta;
 use databend_query::storages::fuse::FuseTable;

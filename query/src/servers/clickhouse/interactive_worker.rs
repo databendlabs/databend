@@ -21,11 +21,11 @@ use opensrv_clickhouse::connection::Connection;
 use opensrv_clickhouse::CHContext;
 use opensrv_clickhouse::ClickHouseSession;
 
+use crate::auth::Credential;
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::to_clickhouse_err;
 use crate::servers::clickhouse::writers::QueryWriter;
 use crate::sessions::SessionRef;
-use crate::users::auth::auth_mgr::Credential;
 
 pub struct InteractiveWorker {
     session: SessionRef,
@@ -74,11 +74,6 @@ impl ClickHouseSession for InteractiveWorker {
     }
 
     // TODO: remove it
-    fn server_display_name(&self) -> &str {
-        "databend"
-    }
-
-    // TODO: remove it
     fn dbms_version_major(&self) -> u64 {
         2021
     }
@@ -89,8 +84,9 @@ impl ClickHouseSession for InteractiveWorker {
     }
 
     // TODO: remove it
-    fn dbms_version_patch(&self) -> u64 {
-        0
+    // the MIN_SERVER_REVISION for suggestions is 54406
+    fn dbms_tcp_protocol_version(&self) -> u64 {
+        54405
     }
 
     // TODO: remove it
@@ -99,9 +95,18 @@ impl ClickHouseSession for InteractiveWorker {
     }
 
     // TODO: remove it
-    // the MIN_SERVER_REVISION for suggestions is 54406
-    fn dbms_tcp_protocol_version(&self) -> u64 {
-        54405
+    fn server_display_name(&self) -> &str {
+        "databend"
+    }
+
+    // TODO: remove it
+    fn dbms_version_patch(&self) -> u64 {
+        0
+    }
+
+    // TODO: remove it
+    fn get_progress(&self) -> opensrv_clickhouse::types::Progress {
+        unimplemented!()
     }
 
     async fn authenticate(&self, user: &str, password: &[u8], client_addr: &str) -> bool {
@@ -145,10 +150,5 @@ impl ClickHouseSession for InteractiveWorker {
                 false
             }
         }
-    }
-
-    // TODO: remove it
-    fn get_progress(&self) -> opensrv_clickhouse::types::Progress {
-        unimplemented!()
     }
 }

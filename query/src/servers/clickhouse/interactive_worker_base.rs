@@ -32,7 +32,7 @@ use common_planners::InsertPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use futures::channel::mpsc;
-use futures::channel::mpsc::Receiver;
+use futures::channel::mpsc::UnboundedReceiver;
 use futures::SinkExt;
 use futures::StreamExt;
 use metrics::histogram;
@@ -64,7 +64,7 @@ impl InteractiveWorkerBase {
     pub async fn do_query(
         ch_ctx: &mut CHContext,
         session: SessionRef,
-    ) -> Result<Receiver<BlockItem>> {
+    ) -> Result<UnboundedReceiver<BlockItem>> {
         let query = &ch_ctx.state.query;
         tracing::debug!("{}", query);
 
@@ -99,7 +99,7 @@ impl InteractiveWorkerBase {
         insert: InsertPlan,
         ch_ctx: &mut CHContext,
         ctx: Arc<QueryContext>,
-    ) -> Result<Receiver<BlockItem>> {
+    ) -> Result<UnboundedReceiver<BlockItem>> {
         let sample_block = DataBlock::empty_with_schema(insert.schema());
         let (sender, rec) = channel(4);
         ch_ctx.state.out = Some(sender);
@@ -131,7 +131,7 @@ impl InteractiveWorkerBase {
                 .set_source_pipe_builder(Option::from(source_pipe_builder))
                 .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
 
-            let (mut tx, rx) = mpsc::channel(20);
+            let (mut tx, rx) = mpsc::unbounded();
             tx.send(BlockItem::InsertSample(sample_block)).await.ok();
 
             // the data is coming in async mode
@@ -149,7 +149,7 @@ impl InteractiveWorkerBase {
             return Ok(rx);
         }
 
-        let (mut tx, rx) = mpsc::channel(20);
+        let (mut tx, rx) = mpsc::unbounded();
         tx.send(BlockItem::InsertSample(sample_block)).await.ok();
 
         // the data is coming in async mode
@@ -173,7 +173,7 @@ impl InteractiveWorkerBase {
     pub async fn process_select_query(
         plan: PlanNode,
         ctx: Arc<QueryContext>,
-    ) -> Result<Receiver<BlockItem>> {
+    ) -> Result<UnboundedReceiver<BlockItem>> {
         let start = Instant::now();
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
         let name = interpreter.name().to_string();
@@ -186,7 +186,7 @@ impl InteractiveWorkerBase {
         let cancel = Arc::new(AtomicBool::new(false));
         let cancel_clone = cancel.clone();
 
-        let (tx, rx) = mpsc::channel(20);
+        let (tx, rx) = mpsc::unbounded();
         let mut data_tx = tx.clone();
         let mut progress_tx = tx;
 

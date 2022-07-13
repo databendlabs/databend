@@ -26,9 +26,7 @@ mod binary_read;
 mod binary_write;
 
 mod buffer;
-mod configs;
 mod format_settings;
-mod operator;
 mod options_deserializer;
 mod position;
 mod stat_buffer;

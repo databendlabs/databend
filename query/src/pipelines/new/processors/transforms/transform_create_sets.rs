@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
-use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -28,7 +27,9 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
+use parking_lot::Mutex;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::processors::port::InputPort;

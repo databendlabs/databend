@@ -24,7 +24,6 @@ use common_tracing::tracing;
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::NewPipeline;
@@ -39,8 +38,8 @@ pub struct SelectInterpreter {
 
 impl SelectInterpreter {
     /// Create the SelectInterpreter from SelectPlan
-    pub fn try_create(ctx: Arc<QueryContext>, select: SelectPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(SelectInterpreter { ctx, select }))
+    pub fn try_create(ctx: Arc<QueryContext>, select: SelectPlan) -> Result<Self> {
+        Ok(SelectInterpreter { ctx, select })
     }
 
     /// Call this method to optimize the logical plan before executing
