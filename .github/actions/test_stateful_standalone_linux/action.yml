@@ -40,8 +40,8 @@ runs:
 
     - name: Run Stateful Tests with Standalone mode (ubuntu-latest only)
       env:
-        REPO_AWS_ACCESS_KEY_ID: "${{ secrets.REPO_ACCESS_KEY_ID }}"
-        REPO_AWS_SECRET_ACCESS_KEY: "${{ secrets.REPO_SECRET_ACCESS_KEY }}"
+        REPO_AWS_ACCESS_KEY_ID: ${{ secrets.REPO_ACCESS_KEY_ID }}
+        REPO_AWS_SECRET_ACCESS_KEY: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
       shell: bash
       run: |
         bash ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
