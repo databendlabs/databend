@@ -25,8 +25,7 @@ class ClickhouseConnector():
             headers = e.dict("CLICKHOUSE_ADDITIONAL_HEADERS")
             for key in headers:
                 self._additonal_headers["header__" + key] = headers[key]
-        self._engine = create_engine(self._uri,
-                                     connect_args=self._additonal_headers)
+
         self._session = None
 
     def query_with_session(self, statement):
@@ -45,7 +44,8 @@ class ClickhouseConnector():
                 return sql  #  do nothing
 
         if self._session is None:
-            self._session = make_session(self._engine)
+            engine = create_engine(self._uri, connect_args=self._additonal_headers)
+            self._session = make_session(engine)
         log.debug(parseSQL(statement))
         return self._session.execute(parseSQL(statement))
 
