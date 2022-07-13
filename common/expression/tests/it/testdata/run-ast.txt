@@ -9,15 +9,15 @@ false
 raw expr       : and(NULL, false::Boolean)
 type           : Nullable<Nothing>
 property       : {}
-checked expr   : and<Nullable<Nothing>, Nullable<Boolean>>(NULL{}, cast<dest_type=Nullable<Boolean>>(false::Boolean){not_null})
+checked expr   : and<Nullable<Nothing>, Nullable(Boolean)>(NULL{}, cast<dest_type=Nullable(Boolean)>(false::Boolean){not_null})
 evaluation result:
 NULL
 
 
-raw expr       : plus(ColumnRef(0)::Nullable<UInt8>{}, -10::Int8)
-type           : Nullable<Int16>
+raw expr       : plus(ColumnRef(0)::Nullable(UInt8){}, -10::Int8)
+type           : Nullable(Int16)
 property       : {}
-checked expr   : plus<Nullable<Int16>, Nullable<Int16>>(cast<dest_type=Nullable<Int16>>(ColumnRef(0)){}, cast<dest_type=Nullable<Int16>>(-10::Int8){not_null})
+checked expr   : plus<Nullable(Int16), Nullable(Int16)>(cast<dest_type=Nullable(Int16)>(ColumnRef(0)){}, cast<dest_type=Nullable(Int16)>(-10::Int8){not_null})
 input chunk:
 +----------+
 | Column 0 |
@@ -48,10 +48,10 @@ evaluation result (internal):
 +-----------+---------------------------------------------------------------+
 
 
-raw expr       : plus(ColumnRef(0)::Nullable<UInt8>{}, ColumnRef(1)::Nullable<UInt8>{})
-type           : Nullable<Int16>
+raw expr       : plus(ColumnRef(0)::Nullable(UInt8){}, ColumnRef(1)::Nullable(UInt8){})
+type           : Nullable(Int16)
 property       : {}
-checked expr   : plus<Nullable<Int16>, Nullable<Int16>>(cast<dest_type=Nullable<Int16>>(ColumnRef(0)){}, cast<dest_type=Nullable<Int16>>(ColumnRef(1)){})
+checked expr   : plus<Nullable(Int16), Nullable(Int16)>(cast<dest_type=Nullable(Int16)>(ColumnRef(0)){}, cast<dest_type=Nullable(Int16)>(ColumnRef(1)){})
 input chunk:
 +----------+----------+
 | Column 0 | Column 1 |
@@ -83,10 +83,10 @@ evaluation result (internal):
 +-----------+------------------------------------------------------------------+
 
 
-raw expr       : plus(ColumnRef(0)::Nullable<UInt8>{}, ColumnRef(1)::Nullable<Nothing>{})
+raw expr       : plus(ColumnRef(0)::Nullable(UInt8){}, ColumnRef(1)::Nullable<Nothing>{})
 type           : Nullable<Nothing>
 property       : {}
-checked expr   : plus<Nullable<Int16>, Nullable<Nothing>>(cast<dest_type=Nullable<Int16>>(ColumnRef(0)){}, ColumnRef(1){})
+checked expr   : plus<Nullable(Int16), Nullable<Nothing>>(cast<dest_type=Nullable(Int16)>(ColumnRef(0)){}, ColumnRef(1){})
 input chunk:
 +----------+----------+
 | Column 0 | Column 1 |
@@ -118,10 +118,10 @@ evaluation result (internal):
 +-----------+-----------------+
 
 
-raw expr       : not(ColumnRef(0)::Nullable<Boolean>{})
-type           : Nullable<Boolean>
+raw expr       : not(ColumnRef(0)::Nullable(Boolean){})
+type           : Nullable(Boolean)
 property       : {}
-checked expr   : not<Nullable<Boolean>>(ColumnRef(0){})
+checked expr   : not<Nullable(Boolean)>(ColumnRef(0){})
 input chunk:
 +----------+
 | Column 0 |
@@ -216,10 +216,10 @@ evaluation result:
 (NULL, true)
 
 
-raw expr       : get_tuple(1)(create_tuple(ColumnRef(0)::Int16{not_null}, ColumnRef(1)::Nullable<String>{}))
-type           : Nullable<String>
+raw expr       : get_tuple(1)(create_tuple(ColumnRef(0)::Int16{not_null}, ColumnRef(1)::Nullable(String){}))
+type           : Nullable(String)
 property       : {not_null}
-checked expr   : get_tuple<(Int16, Nullable<String>)>(create_tuple<Int16, Nullable<String>>(ColumnRef(0){not_null}, ColumnRef(1){}){not_null})
+checked expr   : get_tuple<(Int16, Nullable(String))>(create_tuple<Int16, Nullable(String)>(ColumnRef(0){not_null}, ColumnRef(1){}){not_null})
 input chunk:
 +----------+----------+
 | Column 0 | Column 1 |
@@ -255,10 +255,10 @@ evaluation result (internal):
 +-----------+-------------------------------------------------------------------------------------------------------------------+
 
 
-raw expr       : get_tuple(1)(ColumnRef(0)::Nullable<(Boolean, String)>{not_null})
-type           : Nullable<String>
+raw expr       : get_tuple(1)(ColumnRef(0)::Nullable((Boolean, String)){not_null})
+type           : Nullable(String)
 property       : {not_null}
-checked expr   : get_tuple<Nullable<(Boolean, String)>>(ColumnRef(0){not_null})
+checked expr   : get_tuple<Nullable((Boolean, String))>(ColumnRef(0){not_null})
 input chunk:
 +------------+
 | Column 0   |
@@ -302,15 +302,15 @@ evaluation result:
 
 
 raw expr       : create_array(NULL, true::Boolean)
-type           : Array<Nullable<Boolean>>
+type           : Array(Nullable(Boolean))
 property       : {not_null}
-checked expr   : create_array<T0=Nullable<Boolean>><T0, T0>(cast<dest_type=Nullable<Boolean>>(NULL){}, cast<dest_type=Nullable<Boolean>>(true::Boolean){not_null})
+checked expr   : create_array<T0=Nullable(Boolean)><T0, T0>(cast<dest_type=Nullable(Boolean)>(NULL){}, cast<dest_type=Nullable(Boolean)>(true::Boolean){not_null})
 evaluation result:
 [NULL, true]
 
 
 raw expr       : create_array(ColumnRef(0)::Int16{not_null}, ColumnRef(1)::Int16{not_null})
-type           : Array<Int16>
+type           : Array(Int16)
 property       : {not_null}
 checked expr   : create_array<T0=Int16><T0, T0>(ColumnRef(0){not_null}, ColumnRef(1){not_null})
 input chunk:
@@ -349,9 +349,9 @@ evaluation result (internal):
 
 
 raw expr       : create_array(create_array(ColumnRef(0)::Int16{not_null}, ColumnRef(1)::Int16{not_null}), NULL, NULL)
-type           : Array<Nullable<Array<Int16>>>
+type           : Array(Nullable(Array(Int16)))
 property       : {not_null}
-checked expr   : create_array<T0=Nullable<Array<Int16>>><T0, T0, T0>(cast<dest_type=Nullable<Array<Int16>>>(create_array<T0=Int16><T0, T0>(ColumnRef(0){not_null}, ColumnRef(1){not_null})){not_null}, cast<dest_type=Nullable<Array<Int16>>>(NULL){}, cast<dest_type=Nullable<Array<Int16>>>(NULL){})
+checked expr   : create_array<T0=Nullable(Array(Int16))><T0, T0, T0>(cast<dest_type=Nullable(Array(Int16))>(create_array<T0=Int16><T0, T0>(ColumnRef(0){not_null}, ColumnRef(1){not_null})){not_null}, cast<dest_type=Nullable(Array(Int16))>(NULL){}, cast<dest_type=Nullable(Array(Int16))>(NULL){})
 input chunk:
 +----------+----------+
 | Column 0 | Column 1 |
@@ -387,10 +387,10 @@ evaluation result (internal):
 +-----------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-raw expr       : get(ColumnRef(0)::Array<Int16>{not_null}, ColumnRef(1)::UInt8{not_null})
+raw expr       : get(ColumnRef(0)::Array(Int16){not_null}, ColumnRef(1)::UInt8{not_null})
 type           : Int16
 property       : {not_null}
-checked expr   : get<T0=Int16><Array<T0>, Int16>(ColumnRef(0){not_null}, cast<dest_type=Int16>(ColumnRef(1)){not_null})
+checked expr   : get<T0=Int16><Array(T0), Int16>(ColumnRef(0){not_null}, cast<dest_type=Int16>(ColumnRef(1)){not_null})
 input chunk:
 +----------------------------------------------------------------------------------+----------+
 | Column 0                                                                         | Column 1 |
@@ -426,10 +426,10 @@ evaluation result (internal):
 +-----------+----------------------------+
 
 
-raw expr       : get(ColumnRef(0)::Array<Array<Int16>>{not_null}, ColumnRef(1)::UInt8{not_null})
-type           : Array<Int16>
+raw expr       : get(ColumnRef(0)::Array(Array(Int16)){not_null}, ColumnRef(1)::UInt8{not_null})
+type           : Array(Int16)
 property       : {not_null}
-checked expr   : get<T0=Array<Int16>><Array<T0>, Int16>(ColumnRef(0){not_null}, cast<dest_type=Int16>(ColumnRef(1)){not_null})
+checked expr   : get<T0=Array(Int16)><Array(T0), Int16>(ColumnRef(0){not_null}, cast<dest_type=Int16>(ColumnRef(1)){not_null})
 input chunk:
 +----------------------------------------------------------------------------------------------------------------+----------+
 | Column 0                                                                                                       | Column 1 |

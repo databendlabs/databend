@@ -37,10 +37,13 @@ impl Debug for Chunk {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
+
         table.set_header(vec!["Column ID", "Column Data"]);
+
         for (i, col) in self.columns().iter().enumerate() {
             table.add_row(vec![i.to_string(), format!("{:?}", col)]);
         }
+
         write!(f, "{}", table)
     }
 }
@@ -147,9 +150,9 @@ impl Display for DataType {
             DataType::Int8 => write!(f, "Int8"),
             DataType::Int16 => write!(f, "Int16"),
             DataType::Null => write!(f, "Nullable<Nothing>"),
-            DataType::Nullable(inner) => write!(f, "Nullable<{inner}>"),
+            DataType::Nullable(inner) => write!(f, "Nullable({inner})"),
             DataType::EmptyArray => write!(f, "Array<Nothing>"),
-            DataType::Array(inner) => write!(f, "Array<{inner}>"),
+            DataType::Array(inner) => write!(f, "Array({inner})"),
             DataType::Tuple(tys) => {
                 if tys.len() == 1 {
                     write!(f, "({},)", tys[0])
