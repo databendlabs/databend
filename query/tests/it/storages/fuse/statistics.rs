@@ -65,7 +65,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
             Some((idx, ColumnStatistics {
                 min: DataValue::Null,
                 max: DataValue::Null,
-                unset_bits: 1,
+                null_count: 1,
                 in_memory_size: 1,
             }))
         })
@@ -85,7 +85,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
         // for each column, the reduced value of in_memory_size should be 1 + 1
         assert_eq!(col_stats.in_memory_size, 2);
         // for each column, the reduced value of null_count should be 1 + 1
-        assert_eq!(col_stats.unset_bits, 2);
+        assert_eq!(col_stats.null_count, 2);
     }
     Ok(())
 }
