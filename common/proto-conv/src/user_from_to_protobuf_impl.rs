@@ -21,9 +21,9 @@ use std::convert::TryFrom;
 
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
-use common_io::prelude::*;
 use common_meta_types as mt;
 use common_protos::pb;
+use common_storage::StorageParams;
 use enumflags2::BitFlags;
 use num::FromPrimitive;
 
