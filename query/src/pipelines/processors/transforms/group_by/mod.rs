@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[allow(dead_code)]
 mod aggregator;
 mod aggregator_groups_builder;
 mod aggregator_keys_builder;
 mod aggregator_keys_iter;
+#[allow(dead_code)]
 mod aggregator_params;
 mod aggregator_polymorphic_keys;
 mod aggregator_state;

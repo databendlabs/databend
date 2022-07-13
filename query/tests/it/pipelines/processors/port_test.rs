@@ -19,10 +19,8 @@ use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::pipelines::processors::connect;
-// use databend_query::pipelines::processors::port::InputPort;
+use databend_query::pipelines::processors::port::InputPort;
 use databend_query::pipelines::processors::port::OutputPort;
-
-use super::processors::port::InputPort;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_input_and_output_port() -> Result<()> {
