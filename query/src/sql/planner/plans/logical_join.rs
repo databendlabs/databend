@@ -37,6 +37,7 @@ pub enum JoinType {
     Anti,
     Cross,
     Mark,
+    Single,
 }
 
 impl Display for JoinType {
@@ -65,6 +66,9 @@ impl Display for JoinType {
             }
             JoinType::Mark => {
                 write!(f, "MARK")
+            }
+            JoinType::Single => {
+                write!(f, "SINGLE")
             }
         }
     }

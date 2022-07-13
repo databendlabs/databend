@@ -172,7 +172,7 @@ impl PhysicalPlan {
             } => {
                 let mut fields = probe.output_schema()?.fields().clone();
                 match join_type {
-                    JoinType::Left => {
+                    JoinType::Left | JoinType::Single => {
                         for field in build.output_schema()?.fields() {
                             fields.push(DataField::new(
                                 field.name().as_str(),

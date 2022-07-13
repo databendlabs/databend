@@ -254,7 +254,9 @@ impl JoinHashTable {
         mut build_data_schema: DataSchemaRef,
         hash_join_desc: HashJoinDesc,
     ) -> Result<Self> {
-        if hash_join_desc.join_type == JoinType::Left {
+        if hash_join_desc.join_type == JoinType::Left
+            || hash_join_desc.join_type == JoinType::Single
+        {
             let mut nullable_field = Vec::with_capacity(build_data_schema.fields().len());
             for field in build_data_schema.fields().iter() {
                 nullable_field.push(DataField::new_nullable(

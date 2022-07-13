@@ -23,6 +23,7 @@ use common_datavalues::ColumnRef;
 use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
 use common_datavalues::Series;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashTableKeyable;
@@ -128,14 +129,14 @@ impl JoinHashTable {
             }
 
             // probe_blocks left join build blocks
-            JoinType::Left => {
+            JoinType::Left | JoinType::Single => {
                 if self.hash_join_desc.other_predicate.is_none() {
                     let result =
-                        self.left_join::<false, _, _>(hash_table, probe_state, keys_iter, input)?;
+                        self.left_or_single_join::<false, _>(hash_table, probe_state, keys, input)?;
                     return Ok(vec![result]);
                 } else {
                     let result =
-                        self.left_join::<true, _, _>(hash_table, probe_state, keys_iter, input)?;
+                        self.left_or_single_join::<true, _>(hash_table, probe_state, keys, input)?;
                     return Ok(vec![result]);
                 }
             }
@@ -343,7 +344,7 @@ impl JoinHashTable {
         DataBlock::filter_block(probe_block, &predicate)
     }
 
-    fn left_join<const WITH_OTHER_CONJUNCT: bool, Key, IT>(
+    fn left_or_single_join<const WITH_OTHER_CONJUNCT: bool, Key>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
@@ -371,6 +372,13 @@ impl JoinHashTable {
             match probe_result_ptr {
                 Some(v) => {
                     let probe_result_ptrs = v.get_value();
+                    if self.hash_join_desc.join_type == JoinType::Single
+                        && probe_result_ptrs.len() > 1
+                    {
+                        return Err(ErrorCode::LogicalError(
+                            "Scalar subquery can't return more than one row",
+                        ));
+                    }
                     build_indexs.extend_from_slice(probe_result_ptrs);
                     probe_indexs.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
 
