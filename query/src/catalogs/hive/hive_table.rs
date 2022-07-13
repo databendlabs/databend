@@ -30,16 +30,17 @@ use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
-use crate::catalogs::hive::hive_table_source::HiveTableSource;
 
 use super::hive_table_options::HiveTableOptions;
+use crate::catalogs::hive::hive_table_source::HiveTableSource;
 use crate::catalogs::hive::HivePartInfo;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::SyncSource;
 use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::{NewPipe, SourcePipeBuilder};
+use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::hive::HiveParquetBlockReader;
 use crate::storages::Table;
@@ -97,9 +98,9 @@ impl HiveTable {
         push_downs: &Option<Extras>,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projection = if let Some(Extras {
-                                         projection: Some(prj),
-                                         ..
-                                     }) = push_downs
+            projection: Some(prj),
+            ..
+        }) = push_downs
         {
             prj.clone()
         } else {

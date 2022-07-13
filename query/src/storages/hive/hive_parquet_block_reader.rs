@@ -21,24 +21,26 @@ use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_arrow::parquet::metadata::ColumnChunkMetaData;
+use common_arrow::parquet::metadata::{ColumnChunkMetaData, FileMetaData};
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
+use futures::AsyncReadExt;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
 use common_tracing::tracing;
-use common_tracing::tracing::{debug_span, warn};
+use common_tracing::tracing::debug_span;
+use common_tracing::tracing::warn;
 use common_tracing::tracing::Instrument;
 use futures::StreamExt;
 use futures::TryStreamExt;
-use opendal::{Object, Operator};
-use common_base::base::tokio::io::AsyncReadExt;
+use opendal::Object;
+use opendal::Operator;
 
 use crate::catalogs::hive::HivePartInfo;
 use crate::storages::fuse::io::retry;
@@ -156,7 +158,7 @@ impl HiveParquetBlockReader {
         }
     }
 
-    pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<(usize, Vec<Vec<u8>>)> {
+    pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<(FileMetaData, Vec<Vec<u8>>)> {
         let part = HivePartInfo::from_part(&part)?;
 
         let object = self.operator.object(&part.location);
@@ -188,16 +190,17 @@ impl HiveParquetBlockReader {
             ));
         }
 
-        Ok((row_group.num_rows(), futures::future::try_join_all(join_handlers).await?))
+        Ok((meta, futures::future::try_join_all(join_handlers).await?))
     }
 
-    pub fn deserialize(&self, chunks: Vec<Vec<u8>>, num_rows: usize) -> Result<DataBlock> {
+    pub fn deserialize(&self, chunks: Vec<Vec<u8>>, meta: FileMetaData) -> Result<DataBlock> {
         if self.projection.len() != chunks.len() {
             return Err(ErrorCode::LogicalError(
                 "Columns chunk len must be equals projections len.",
             ));
         }
 
+        let row_group = &meta.row_groups[0];
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         for (index, column_chunk) in chunks.into_iter().enumerate() {
@@ -209,7 +212,7 @@ impl HiveParquetBlockReader {
             columns_array_iter.push(Self::to_deserialize(
                 column_meta,
                 column_chunk,
-                num_rows,
+                row_group.num_rows(),
                 column_descriptor,
                 field,
             )?);

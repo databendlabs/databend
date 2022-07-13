@@ -40,34 +40,6 @@ use crate::storages::fuse::operations::read::State::Generated;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
-    #[inline]
-    pub fn do_read(
-        &self,
-        ctx: Arc<QueryContext>,
-        push_downs: &Option<Extras>,
-    ) -> Result<SendableDataBlockStream> {
-        let block_reader =
-            self.create_block_reader(&ctx, self.projection_of_push_downs(push_downs))?;
-
-        let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(1) {
-            Err(_) => None,
-            Ok(parts) if parts.is_empty() => None,
-            Ok(parts) => Some(parts),
-        })
-        .flatten();
-
-        let part_stream = futures::stream::iter(iter);
-
-        let stream = part_stream
-            .then(move |part| {
-                let block_reader = block_reader.clone();
-                async move { block_reader.read(part).await }
-            })
-            .instrument(common_tracing::tracing::Span::current());
-
-        Ok(Box::pin(stream))
-    }
-
     pub fn create_block_reader(
         &self,
         ctx: &Arc<QueryContext>,
