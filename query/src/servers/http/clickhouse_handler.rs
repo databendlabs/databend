@@ -295,8 +295,8 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(InternalServerError)?;
 
-    session
-        .get_settings()
+    let settings = ctx.get_settings();
+    settings
         .set_batch_settings(&params.settings, false)
         .map_err(BadRequest)?;
 
@@ -321,11 +321,8 @@ pub async fn clickhouse_handler_post(
             .map_err(InternalServerError);
     }
 
-    let stmt_sql = params.query();
-    let (stmts, _) = DfParser::parse_sql(stmt_sql.as_str(), ctx.get_current_session().get_type())
+    let (stmts, _) = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type())
         .unwrap_or_else(|_| (vec![], vec![]));
-
-    let settings = ctx.get_settings();
     if settings
         .get_enable_new_processor_framework()
         .map_err(InternalServerError)?

@@ -115,7 +115,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
 
   test_stateful_standalone_linux:
@@ -124,6 +124,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
+
+  test_fuzz_standalone_linux:
+    runs-on: [self-hosted, X64, Linux, development]
+    needs: build_gnu
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_fuzz_standalone_linux
+        continue-on-error: true
 
   build_hive:
     runs-on: [self-hosted, X64, Linux, development]

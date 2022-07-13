@@ -45,7 +45,7 @@ table_disk_cache_mb_size = 10240
 [log]
 level = "ERROR"
 dir = "./.databend/logs"
-query_enabled = false
+query_enabled = true
 
 [meta]
 # To enable embedded meta-store, set address to "".

@@ -394,9 +394,12 @@ impl HttpQueryHandle {
     ) -> Result<SendableDataBlockStream> {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
+        let last_schema = physical_plan.output_schema()?;
         let mut pb = PipelineBuilder::new();
         let mut root_pipeline = NewPipeline::create();
         pb.build_pipeline(ctx.clone(), physical_plan, &mut root_pipeline)?;
+        pb.render_result_set(last_schema, result_columns, &mut root_pipeline)?;
+
         let mut pipelines = pb.pipelines;
         let async_runtime = ctx.get_storage_runtime();
 
