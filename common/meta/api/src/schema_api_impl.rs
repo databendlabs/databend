@@ -27,6 +27,7 @@ use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
+use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
@@ -48,6 +49,7 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdList;
 use common_meta_app::schema::TableIdListKey;
+use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -168,9 +170,11 @@ impl<KV: KVApi> SchemaApi for KV {
             // (tenant, db_name) -> db_id
             // (db_id) -> db_meta
             // append db_id into _fd_db_id_list/<tenant>/<db_name>
+            // (db_id) -> (tenant,db_name)
 
             let db_id = fetch_id(self, DatabaseIdGen {}).await?;
             let id_key = DatabaseId { db_id };
+            let id_to_name_key = DatabaseIdToName { db_id };
 
             tracing::debug!(db_id, name_key = debug(&name_key), "new database id");
 
@@ -181,12 +185,14 @@ impl<KV: KVApi> SchemaApi for KV {
                 let txn_req = TxnRequest {
                     condition: vec![
                         txn_cond_seq(name_key, Eq, 0),
+                        txn_cond_seq(&id_to_name_key, Eq, 0),
                         txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
                     ],
                     if_then: vec![
                         txn_op_put(name_key, serialize_u64(db_id)?), // (tenant, db_name) -> db_id
                         txn_op_put(&id_key, serialize_struct(&req.meta)?), // (db_id) -> db_meta
                         txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?), // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
+                        txn_op_put(&id_to_name_key, serialize_struct(name_key)?), // __fd_database_id_to_name/<db_id> -> (tenant,db_name)
                     ],
                     else_then: vec![],
                 };
@@ -433,6 +439,11 @@ impl<KV: KVApi> SchemaApi for KV {
             let (db_id_seq, _db_id) = get_u64_value(self, &tenant_newdbname).await?;
             db_has_to_not_exist(db_id_seq, &tenant_newdbname, "rename_database")?;
 
+            // get db id -> name
+            let db_id_key = DatabaseIdToName { db_id: old_db_id };
+            let (db_name_seq, _): (_, Option<DatabaseNameIdent>) =
+                get_struct_value(self, &db_id_key).await?;
+
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist = DbIdListKey {
                 tenant: tenant_dbname.tenant.clone(),
@@ -502,6 +513,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     condition: vec![
                         // Prevent renaming or deleting in other threads.
                         txn_cond_seq(tenant_dbname, Eq, old_db_id_seq),
+                        txn_cond_seq(&db_id_key, Eq, db_name_seq),
                         txn_cond_seq(&tenant_newdbname, Eq, 0),
                         txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
                         txn_cond_seq(&new_dbid_idlist, Eq, new_db_id_list_seq),
@@ -512,6 +524,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_op_put(&tenant_newdbname, serialize_u64(old_db_id)?), // (tenant, new_db_name) -> old_db_id
                         txn_op_put(&new_dbid_idlist, serialize_struct(&new_db_id_list)?), // _fd_db_id_list/tenant/new_db_name -> new_db_id_list
                         txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?), // _fd_db_id_list/tenant/db_name -> db_id_list
+                        txn_op_put(&db_id_key, serialize_struct(&tenant_newdbname)?), // __fd_database_id_to_name/<db_id> -> (tenant,db_name)
                     ],
                     else_then: vec![],
                 };
@@ -768,10 +781,18 @@ impl<KV: KVApi> SchemaApi for KV {
             // (db_id, table_name) -> table_id
             // (table_id) -> table_meta
             // append table_id into _fd_table_id_list/db_id/table_name
+            // (table_id) -> table_name
 
             let table_id = fetch_id(self, TableIdGen {}).await?;
 
             let tbid = TableId { table_id };
+
+            // get table id name
+            let table_id_to_name_key = TableIdToName { table_id };
+            let db_id_table_name = DBIdTableName {
+                db_id,
+                table_name: req.name_ident.table_name.clone(),
+            };
 
             tracing::debug!(
                 table_id,
@@ -794,6 +815,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
                         // update table count atomicly
                         txn_cond_seq(&tb_count_key, Eq, tb_count_seq),
+                        txn_cond_seq(&table_id_to_name_key, Eq, 0),
                     ],
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
@@ -804,6 +826,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_op_put(&tbid, serialize_struct(&req.table_meta)?), // (tenant, db_id, tb_id) -> tb_meta
                         txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?), // _fd_table_id_list/db_id/table_name -> tb_id_list
                         txn_op_put(&tb_count_key, serialize_u64(tb_count + 1)?), // _fd_table_count/tenant -> tb_count
+                        txn_op_put(&table_id_to_name_key, serialize_struct(&db_id_table_name)?), // __fd_table_id_to_name/db_id/table_name -> DBIdTableName
                     ],
                     else_then: vec![],
                 };
@@ -1226,6 +1249,15 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             };
 
+            // get table id name
+            let table_id_to_name_key = TableIdToName { table_id };
+            let (table_id_to_name_seq, _): (_, Option<DBIdTableName>) =
+                get_struct_value(self, &table_id_to_name_key).await?;
+            let db_id_table_name = DBIdTableName {
+                db_id,
+                table_name: req.new_table_name.clone(),
+            };
+
             {
                 // move table id from old table id list to new table id list
                 tb_id_list.pop();
@@ -1243,6 +1275,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     // no other table id with the same name is append.
                     txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
                     txn_cond_seq(&new_dbid_tbname_idlist, Eq, new_tb_id_list_seq),
+                    txn_cond_seq(&table_id_to_name_key, Eq, table_id_to_name_seq),
                 ];
 
                 let mut then_ops = vec![
@@ -1254,6 +1287,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), // (db_id) -> db_meta
                     txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?), // _fd_table_id_list/db_id/old_table_name -> tb_id_list
                     txn_op_put(&new_dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?), // _fd_table_id_list/db_id/new_table_name -> tb_id_list
+                    txn_op_put(&table_id_to_name_key, serialize_struct(&db_id_table_name)?), // __fd_table_id_to_name/db_id/table_name -> DBIdTableName
                 ];
 
                 if db_id != new_db_id {
