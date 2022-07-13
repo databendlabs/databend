@@ -669,8 +669,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let copy_into = map(
         rule! {
             COPY
-            ~ INTO ~ #copy_target
-            ~ FROM ~ #copy_target
+            ~ INTO ~ #copy_unit
+            ~ FROM ~ #copy_unit
             ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")?
             ~ ( PATTERN ~ "=" ~ #literal_string)?
             ~ ( FILE_FORMAT ~ "=" ~ #options)?
@@ -1081,12 +1081,12 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     ))(i)
 }
 
-/// Parse input into `CopyTarget`
+/// Parse input into `CopyUnit`
 ///
 /// # Notes
 ///
 /// It's required to parse stage location first. Or stage could be parsed as table.
-pub fn copy_target(i: Input) -> IResult<CopyUnit> {
+pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
     // Parse input like `@my_stage/path/to/dir`
     let stage_location = |i| {
         map(at_string, |location| {
