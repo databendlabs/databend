@@ -19,7 +19,6 @@ use bumpalo::Bump;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
-use common_datablocks::HashMethodSingleString;
 use common_datavalues::prelude::*;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::HashMapIteratorKind;
@@ -78,7 +77,7 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
         Some(place)
     }
 
-    fn entity(&mut self, key: &Method::HashKey<'_>, inserted: &mut bool) -> *mut Self::Entity;
+    fn entity(&mut self, key: Method::HashKeyRef<'_>, inserted: &mut bool) -> *mut Self::Entity;
 
     fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity;
 
@@ -142,8 +141,8 @@ impl<T: ShortFixedKeyable> Drop for ShortFixedKeysAggregatorState<T> {
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorState<T>
 where
     T: PrimitiveType + ShortFixedKeyable,
-    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
-    for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey<'a>: HashTableKeyable,
+    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T, HashKeyRef<'a> = T>,
+    for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
     type Key = T;
     type Entity = ShortFixedKeysStateEntity<T>;
@@ -165,7 +164,7 @@ where
     }
 
     #[inline(always)]
-    fn entity(&mut self, key: &T, inserted: &mut bool) -> *mut Self::Entity {
+    fn entity(&mut self, key: T, inserted: &mut bool) -> *mut Self::Entity {
         unsafe {
             let index = key.lookup();
             let value = self.data.offset(index);
@@ -177,7 +176,7 @@ where
 
             *inserted = true;
             self.size += 1;
-            (*value).key = *key;
+            (*value).key = key;
             (*value).fill = true;
             value
         }
@@ -185,7 +184,7 @@ where
 
     #[inline(always)]
     fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
-        self.entity(key, inserted)
+        self.entity(*key, inserted)
     }
 
     #[inline(always)]
@@ -226,11 +225,11 @@ unsafe impl<T: HashTableKeyable + Send> Send for LongerFixedKeysAggregatorState<
 // will not be used multiple async, so KeyValueEntity is Sync
 unsafe impl<T: HashTableKeyable + Sync> Sync for LongerFixedKeysAggregatorState<T> {}
 
-impl<T: Send + Sync + Sized + 'static> AggregatorState<HashMethodFixedKeys<T>>
+impl<T: Copy + Send + Sync + Sized + 'static> AggregatorState<HashMethodFixedKeys<T>>
     for LongerFixedKeysAggregatorState<T>
 where
-    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
-    for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey<'a>: HashTableKeyable,
+    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T, HashKeyRef<'a> = T>,
+    for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
     type Key = T;
     type Entity = KeyValueEntity<T, usize>;
@@ -252,13 +251,13 @@ where
     }
 
     #[inline(always)]
-    fn entity(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
-        self.data.insert_key(key, inserted)
+    fn entity(&mut self, key: Self::Key, inserted: &mut bool) -> *mut Self::Entity {
+        self.data.insert_key(&key, inserted)
     }
 
     #[inline(always)]
     fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
-        self.entity(key, inserted)
+        self.entity(*key, inserted)
     }
 
     #[inline(always)]
@@ -311,79 +310,7 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     }
 
     #[inline(always)]
-    fn entity(&mut self, keys: &SmallVu8, inserted: &mut bool) -> *mut Self::Entity {
-        let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
-        let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
-
-        if *inserted {
-            unsafe {
-                // Keys will be destroyed after call we need copy the keys to the memory pool.
-                let global_keys = self.keys_area.alloc_slice_copy(keys);
-                let inserted_hash = state_entity.get_hash();
-                keys_ref.address = global_keys.as_ptr() as usize;
-                // TODO: maybe need set key method.
-                state_entity.set_key_and_hash(&keys_ref, inserted_hash)
-            }
-        }
-
-        state_entity
-    }
-
-    #[inline(always)]
-    fn entity_by_key(&mut self, keys_ref: &KeysRef, inserted: &mut bool) -> *mut Self::Entity {
-        let state_entity = self.data_state_map.insert_key(keys_ref, inserted);
-
-        if *inserted {
-            unsafe {
-                // Keys will be destroyed after call we need copy the keys to the memory pool.
-                let data_ptr = keys_ref.address as *mut u8;
-                let keys = std::slice::from_raw_parts_mut(data_ptr, keys_ref.length);
-                let global_keys = self.keys_area.alloc_slice_copy(keys);
-                let inserted_hash = state_entity.get_hash();
-                let address = global_keys.as_ptr() as usize;
-                let new_keys_ref = KeysRef::create(address, keys_ref.length);
-                state_entity.set_key_and_hash(&new_keys_ref, inserted_hash)
-            }
-        }
-
-        state_entity
-    }
-
-    #[inline(always)]
-    fn is_two_level(&self) -> bool {
-        self.two_level_flag
-    }
-
-    #[inline(always)]
-    fn convert_to_two_level(&mut self) {
-        unsafe {
-            self.data_state_map.convert_to_two_level();
-        }
-        self.two_level_flag = true;
-    }
-}
-
-impl AggregatorState<HashMethodSingleString> for SerializedKeysAggregatorState {
-    type Key = KeysRef;
-    type Entity = KeyValueEntity<KeysRef, usize>;
-    type Iterator = HashMapIteratorKind<KeysRef, usize>;
-
-    fn len(&self) -> usize {
-        self.data_state_map.len()
-    }
-
-    fn iter(&self) -> Self::Iterator {
-        self.data_state_map.iter()
-    }
-
-    #[inline(always)]
-    fn alloc_place(&self, layout: Layout) -> StateAddr {
-        self.state_area.alloc_layout(layout).into()
-    }
-
-    #[inline(always)]
-    fn entity(&mut self, keys: &&[u8], inserted: &mut bool) -> *mut Self::Entity {
-        let keys = *keys;
+    fn entity(&mut self, keys: &[u8], inserted: &mut bool) -> *mut Self::Entity {
         let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
         let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
 

@@ -30,5 +30,5 @@ serde_json = "1.0.81"
 [dev-dependencies]
 common-base = { path = "../base" }
 common-meta-embedded = { path = "../meta/embedded" }
-
+common-storage = { path = "../storage" }
 mockall = "0.11.1"

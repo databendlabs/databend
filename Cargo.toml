@@ -33,6 +33,7 @@ members = [
     "common/streams",
     "common/tracing",
     "common/users",
+    "common/storage",
 
     # Query
     "query",

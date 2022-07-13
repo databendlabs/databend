@@ -12,9 +12,6 @@ edition = "2021"
 doctest = false
 test = false
 
-[features]
-storage-hdfs = ["opendal/services-hdfs"]
-
 [dependencies]
 # Workspace dependencies
 common-exception = { path = "../exception" }
@@ -29,7 +26,6 @@ chrono-tz = "0.6.1"
 futures = "0.3.21"
 lexical-core = "0.8.5"
 micromarshal = "0.1.0"
-opendal = { version = "0.10.0", features = ["retry"] }
 serde = { version = "1.0.137", features = ["derive"] }
 time = "0.3.10"
 

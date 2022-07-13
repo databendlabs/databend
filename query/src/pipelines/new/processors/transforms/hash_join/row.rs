@@ -15,18 +15,17 @@
 use std::sync::RwLock;
 
 use common_datablocks::DataBlock;
+use common_datablocks::KeysState;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::SmallVu8;
 use common_exception::Result;
 
 pub type ColumnVector = Vec<ColumnRef>;
-pub type KeysVector = Vec<SmallVu8>;
 
 pub struct Chunk {
     pub data_block: DataBlock,
     pub cols: Option<ColumnVector>,
-    pub keys: Option<KeysVector>,
+    pub keys_state: Option<KeysState>,
 }
 
 impl Chunk {
@@ -54,11 +53,11 @@ impl RowSpace {
         }
     }
 
-    pub fn push_keys(&self, data_block: DataBlock, keys: KeysVector) -> Result<()> {
+    pub fn push_cols(&self, data_block: DataBlock, cols: ColumnVector) -> Result<()> {
         let chunk = Chunk {
             data_block,
-            cols: None,
-            keys: Some(keys),
+            cols: Some(cols),
+            keys_state: None,
         };
 
         {
@@ -70,11 +69,11 @@ impl RowSpace {
         Ok(())
     }
 
-    pub fn push_cols(&self, data_block: DataBlock, cols: ColumnVector) -> Result<()> {
+    pub fn push_keys_state(&self, data_block: DataBlock, keys_state: KeysState) -> Result<()> {
         let chunk = Chunk {
             data_block,
-            cols: Some(cols),
-            keys: None,
+            cols: None,
+            keys_state: Some(keys_state),
         };
 
         {
@@ -82,7 +81,6 @@ impl RowSpace {
             let mut chunks = self.chunks.write().unwrap();
             chunks.push(chunk);
         }
-
         Ok(())
     }
 
