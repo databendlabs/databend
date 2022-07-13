@@ -12,6 +12,9 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+
     - name: Download artifact
       uses: ./.github/actions/artifact_download
       with:
@@ -19,15 +22,10 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 
-    - name: Test setup
-      shell: bash
-      run: |
-        bash ./scripts/setup/dev_setup.sh -yd
-
     - name: Run fuzz Tests with Standalone mode with embedded meta-store
       shell: bash
       run: |
-        bash ./scripts/ci/ci-run-fuzz-tests.sh
+        build-tool bash ./scripts/ci/ci-run-fuzz-tests.sh
 
     - name: Upload failure
       if: failure()
