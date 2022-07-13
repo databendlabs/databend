@@ -135,7 +135,7 @@ impl<T: ArgType> ArgType for ArrayType<T> {
     }
 
     fn build_column((builder, offsets): Self::ColumnBuilder) -> Self::Column {
-        assert_eq!(T::builder_len(&builder), offsets.len());
+        assert_eq!(T::builder_len(&builder), offsets.len() - 1);
         (T::build_column(builder), offsets.into())
     }
 
