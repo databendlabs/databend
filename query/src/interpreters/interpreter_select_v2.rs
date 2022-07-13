@@ -21,7 +21,6 @@ use common_tracing::tracing;
 
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::NewPipeline;
@@ -46,13 +45,13 @@ impl SelectInterpreterV2 {
         bind_context: BindContext,
         s_expr: SExpr,
         metadata: MetadataRef,
-    ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(SelectInterpreterV2 {
+    ) -> Result<Self> {
+        Ok(SelectInterpreterV2 {
             ctx,
             s_expr,
             bind_context,
             metadata,
-        }))
+        })
     }
 }
 

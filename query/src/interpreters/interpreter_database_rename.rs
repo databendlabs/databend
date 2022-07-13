@@ -22,7 +22,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct RenameDatabaseInterpreter {
@@ -31,8 +30,8 @@ pub struct RenameDatabaseInterpreter {
 }
 
 impl RenameDatabaseInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: RenameDatabasePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(RenameDatabaseInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RenameDatabasePlan) -> Result<Self> {
+        Ok(RenameDatabaseInterpreter { ctx, plan })
     }
 }
 

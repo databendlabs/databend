@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_base::infallible::RwLock;
 use common_datavalues::BooleanType;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataValue;
@@ -35,6 +34,7 @@ use databend_query::sql::plans::PhysicalScan;
 use databend_query::sql::ColumnBinding;
 use databend_query::sql::Metadata;
 use databend_query::storages::Table;
+use parking_lot::RwLock;
 
 struct DummyTable {
     table_info: TableInfo,
@@ -184,4 +184,11 @@ fn test_format() {
     Scan: catalog.database.table
 "#;
     assert_eq!(result.as_str(), expect);
+    let pretty_result = tree.format_pretty().unwrap();
+    let pretty_expect = r#"HashJoin: INNER, build keys: [plus(col1, 123)], probe keys: [col2], join filters: []
+├── Filter: [true]
+│   └── Scan: catalog.database.table
+└── Scan: catalog.database.table
+"#;
+    assert_eq!(pretty_result.as_str(), pretty_expect);
 }

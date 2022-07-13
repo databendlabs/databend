@@ -12,20 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::TrustedLen;
+
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
-use common_datavalues::BooleanType;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
-use common_datavalues::NullableType;
 use common_datavalues::Series;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashTableKeyable;
@@ -40,15 +37,16 @@ use crate::sql::planner::plans::JoinType;
 use crate::sql::plans::JoinType::Mark;
 
 impl JoinHashTable {
-    pub(crate) fn result_blocks<Key>(
+    pub(crate) fn result_blocks<Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
-        keys: Vec<Key>,
+        keys_iter: IT,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
         Key: HashTableKeyable + Clone + 'static,
+        IT: Iterator<Item = Key> + TrustedLen,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
         let build_indexs = &mut probe_state.build_indexs;
@@ -56,8 +54,8 @@ impl JoinHashTable {
         let mut results: Vec<DataBlock> = vec![];
         match self.hash_join_desc.join_type {
             JoinType::Inner => {
-                for (i, key) in keys.iter().enumerate() {
-                    let probe_result_ptr = hash_table.find_key(key);
+                for (i, key) in keys_iter.enumerate() {
+                    let probe_result_ptr = hash_table.find_key(&key);
                     match probe_result_ptr {
                         Some(v) => {
                             let probe_result_ptrs = v.get_value();
@@ -89,14 +87,18 @@ impl JoinHashTable {
             }
             JoinType::Semi => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result =
-                        self.semi_anti_join::<true, _>(hash_table, probe_state, keys, input)?;
-                    return Ok(vec![result]);
-                } else {
-                    let result = self.semi_anti_join_with_other_conjunct::<true, _>(
+                    let result = self.semi_anti_join::<true, _, _>(
                         hash_table,
                         probe_state,
-                        keys,
+                        keys_iter,
+                        input,
+                    )?;
+                    return Ok(vec![result]);
+                } else {
+                    let result = self.semi_anti_join_with_other_conjunct::<true, _, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
                         input,
                     )?;
                     return Ok(vec![result]);
@@ -104,14 +106,18 @@ impl JoinHashTable {
             }
             JoinType::Anti => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result =
-                        self.semi_anti_join::<false, _>(hash_table, probe_state, keys, input)?;
-                    return Ok(vec![result]);
-                } else {
-                    let result = self.semi_anti_join_with_other_conjunct::<false, _>(
+                    let result = self.semi_anti_join::<false, _, _>(
                         hash_table,
                         probe_state,
-                        keys,
+                        keys_iter,
+                        input,
+                    )?;
+                    return Ok(vec![result]);
+                } else {
+                    let result = self.semi_anti_join_with_other_conjunct::<false, _, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
                         input,
                     )?;
                     return Ok(vec![result]);
@@ -122,93 +128,122 @@ impl JoinHashTable {
             JoinType::Left => {
                 if self.hash_join_desc.other_predicate.is_none() {
                     let result =
-                        self.left_join::<false, _>(hash_table, probe_state, keys, input)?;
+                        self.left_join::<false, _, _>(hash_table, probe_state, keys_iter, input)?;
                     return Ok(vec![result]);
                 } else {
-                    let result = self.left_join::<true, _>(hash_table, probe_state, keys, input)?;
+                    let result =
+                        self.left_join::<true, _, _>(hash_table, probe_state, keys_iter, input)?;
                     return Ok(vec![result]);
                 }
             }
             Mark => {
-                let mut has_null = false;
-                // `probe_column` is the subquery result column.
-                // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
-                let probe_column = input.column(0);
-                // Check if there is any null in the probe column.
-                if let Some(validity) = probe_column.validity().1 {
-                    if validity.unset_bits() > 0 {
-                        has_null = true;
-                    }
+                results.push(DataBlock::empty());
+                // Either there is only non-equi condition, or there is only equi-condition
+                // It's impossible for both to coexist.
+                if self.hash_join_desc.other_predicate.is_some() {
+                    self.mark_join_with_other_condition(input, probe_state)?;
+                } else {
+                    self.mark_join_without_other_condition(hash_table, keys_iter, input)?;
                 }
-                for key in keys.iter() {
-                    let probe_result_ptr = hash_table.find_key(key);
-                    if let Some(v) = probe_result_ptr {
-                        let probe_result_ptrs = v.get_value();
-                        let mut marker = self.hash_join_desc.marker.write();
-                        for ptr in probe_result_ptrs {
-                            // If find join partner, set the marker to true.
-                            marker[ptr.row_index as usize] = MarkerKind::True;
-                        }
-                    }
-                }
-                let mut marker = self.hash_join_desc.marker.write();
-                let mut validity = MutableBitmap::new();
-                let mut boolean_bit_map = MutableBitmap::new();
-                for m in marker.iter_mut() {
-                    if m == &mut MarkerKind::False && has_null {
-                        *m = MarkerKind::Null;
-                    }
-                    if m == &mut MarkerKind::Null {
-                        validity.push(false);
-                    } else {
-                        validity.push(true);
-                    }
-                    if m == &mut MarkerKind::True {
-                        boolean_bit_map.push(true);
-                    } else {
-                        boolean_bit_map.push(false);
-                    }
-                }
-                // transfer marker to a Nullable(BooleanColumn)
-                let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
-                let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
-                let marker_schema = DataSchema::new(vec![DataField::new(
-                    &self
-                        .hash_join_desc
-                        .marker_index
-                        .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
-                        .to_string(),
-                    NullableType::new_impl(BooleanType::new_impl()),
-                )]);
-                let marker_block =
-                    DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
-                let build_indexs = &mut probe_state.build_indexs;
-                for entity in hash_table.iter() {
-                    build_indexs.extend_from_slice(entity.get_value());
-                }
-                let build_block = self.row_space.gather(build_indexs)?;
-                let result = self.merge_eq_block(&marker_block, &build_block)?;
-                results.push(result);
             }
             _ => unreachable!(),
         }
         Ok(results)
     }
 
-    fn semi_anti_join<const SEMI: bool, Key>(
+    fn mark_join_without_other_condition<Key, IT>(
+        &self,
+        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        keys_iter: IT,
+        input: &DataBlock,
+    ) -> Result<()>
+    where
+        Key: HashTableKeyable + Clone + 'static,
+        IT: Iterator<Item = Key> + TrustedLen,
+    {
+        // `probe_column` is the subquery result column.
+        // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
+        let probe_column = input.column(0);
+        // Check if there is any null in the probe column.
+        if let Some(validity) = probe_column.validity().1 {
+            if validity.unset_bits() > 0 {
+                let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+                *has_null = true;
+            }
+        }
+        for key in keys_iter {
+            let probe_result_ptr = hash_table.find_key(&key);
+            if let Some(v) = probe_result_ptr {
+                let probe_result_ptrs = v.get_value();
+                for ptr in probe_result_ptrs {
+                    // If find join partner, set the marker to true.
+                    let offset = {
+                        let chunks = self.row_space.chunks.read().unwrap();
+                        chunks
+                            .iter()
+                            .by_ref()
+                            .take(ptr.chunk_index as usize)
+                            .fold(0, |acc, c| acc + c.num_rows())
+                    };
+                    let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
+                    marker[offset + ptr.row_index as usize] = MarkerKind::True;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn mark_join_with_other_condition(
+        &self,
+        input: &DataBlock,
+        probe_state: &mut ProbeState,
+    ) -> Result<()> {
+        let cross_join_blocks = self.probe_cross_join(input, probe_state)?;
+        let func_ctx = self.ctx.try_get_function_context()?;
+        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
+        for block in cross_join_blocks.iter() {
+            let type_vector = self
+                .hash_join_desc
+                .other_predicate
+                .as_ref()
+                .unwrap()
+                .eval(&func_ctx, block)?;
+            let filter_column = type_vector.vector();
+            assert_eq!(filter_column.len(), block.num_rows());
+            for idx in 0..filter_column.len() {
+                match filter_column.get(idx) {
+                    DataValue::Null => {
+                        if (*marker)[idx] == MarkerKind::False {
+                            (*marker)[idx] = MarkerKind::Null;
+                        }
+                    }
+                    DataValue::Boolean(value) => {
+                        if value {
+                            (*marker)[idx] = MarkerKind::True;
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn semi_anti_join<const SEMI: bool, Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
-        keys: Vec<Key>,
+        keys_iter: IT,
         input: &DataBlock,
     ) -> Result<DataBlock>
     where
         Key: HashTableKeyable + Clone + 'static,
+        IT: Iterator<Item = Key> + TrustedLen,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
 
-        for (i, key) in keys.iter().enumerate() {
-            let probe_result_ptr = hash_table.find_key(key);
+        for (i, key) in keys_iter.enumerate() {
+            let probe_result_ptr = hash_table.find_key(&key);
 
             match (probe_result_ptr, SEMI) {
                 (Some(_), true) | (None, false) => {
@@ -220,27 +255,28 @@ impl JoinHashTable {
         DataBlock::block_take_by_indices(input, probe_indexs)
     }
 
-    fn semi_anti_join_with_other_conjunct<const SEMI: bool, Key>(
+    fn semi_anti_join_with_other_conjunct<const SEMI: bool, Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
-        keys: Vec<Key>,
+        keys_iter: IT,
         input: &DataBlock,
     ) -> Result<DataBlock>
     where
         Key: HashTableKeyable + Clone + 'static,
+        IT: Iterator<Item = Key> + TrustedLen,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
         let build_indexs = &mut probe_state.build_indexs;
         let row_state = &mut probe_state.row_state;
 
         // For semi join, it defaults to all
-        row_state.resize(keys.len(), 0);
+        row_state.resize(keys_iter.size_hint().0, 0);
 
         let mut dummys = 0;
 
-        for (i, key) in keys.iter().enumerate() {
-            let probe_result_ptr = hash_table.find_key(key);
+        for (i, key) in keys_iter.enumerate() {
+            let probe_result_ptr = hash_table.find_key(&key);
 
             match (probe_result_ptr, SEMI) {
                 (Some(v), _) => {
@@ -300,15 +336,16 @@ impl JoinHashTable {
         DataBlock::filter_block(probe_block, &predicate)
     }
 
-    fn left_join<const WITH_OTHER_CONJUNCT: bool, Key>(
+    fn left_join<const WITH_OTHER_CONJUNCT: bool, Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
-        keys: Vec<Key>,
+        keys_iter: IT,
         input: &DataBlock,
     ) -> Result<DataBlock>
     where
         Key: HashTableKeyable + Clone + 'static,
+        IT: Iterator<Item = Key> + TrustedLen,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
         let build_indexs = &mut probe_state.build_indexs;
@@ -316,12 +353,12 @@ impl JoinHashTable {
         let row_state = &mut probe_state.row_state;
 
         if WITH_OTHER_CONJUNCT {
-            row_state.resize(keys.len(), 0);
+            row_state.resize(keys_iter.size_hint().0, 0);
         }
 
         let mut validity = MutableBitmap::new();
-        for (i, key) in keys.iter().enumerate() {
-            let probe_result_ptr = hash_table.find_key(key);
+        for (i, key) in keys_iter.enumerate() {
+            let probe_result_ptr = hash_table.find_key(&key);
 
             match probe_result_ptr {
                 Some(v) => {
@@ -504,7 +541,7 @@ impl JoinHashTable {
         ))
     }
 
-    fn set_validity(column: &ColumnRef, validity: &Bitmap) -> Result<ColumnRef> {
+    pub(crate) fn set_validity(column: &ColumnRef, validity: &Bitmap) -> Result<ColumnRef> {
         if column.is_null() {
             Ok(column.clone())
         } else if column.is_nullable() {

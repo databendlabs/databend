@@ -101,6 +101,7 @@ impl NumbersTable {
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.
                 created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp(0, 0)),
+                updated_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp(0, 0)),
                 ..Default::default()
             },
         };

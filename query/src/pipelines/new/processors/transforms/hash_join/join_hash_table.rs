@@ -14,34 +14,37 @@
 
 use std::borrow::BorrowMut;
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_base::infallible::RwLock;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
+use common_datavalues::BooleanColumn;
+use common_datavalues::BooleanType;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::NullableType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
-use common_hashtable::HashTableKeyable;
+use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
 
 use super::ProbeState;
 use crate::common::EvalNode;
 use crate::common::Evaluator;
-use crate::pipelines::new::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::new::processors::HashJoinState;
@@ -50,6 +53,7 @@ use crate::sessions::QueryContext;
 use crate::sql::exec::ColumnID;
 use crate::sql::exec::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
+use crate::sql::plans::JoinType::Mark;
 use crate::sql::IndexType;
 
 pub struct SerializerHashTable {
@@ -110,13 +114,18 @@ pub enum MarkerKind {
     Null,
 }
 
+pub struct MarkJoinDesc {
+    pub(crate) marker: RwLock<Vec<MarkerKind>>,
+    pub(crate) marker_index: Option<IndexType>,
+    pub(crate) has_null: RwLock<bool>,
+}
+
 pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<EvalNode<ColumnID>>,
     pub(crate) probe_keys: Vec<EvalNode<ColumnID>>,
     pub(crate) join_type: JoinType,
     pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
-    pub(crate) marker: RwLock<Vec<MarkerKind>>,
-    pub(crate) marker_index: Option<IndexType>,
+    pub(crate) marker_join_desc: MarkJoinDesc,
 }
 
 pub struct JoinHashTable {
@@ -156,21 +165,22 @@ impl JoinHashTable {
             other_predicate: other_predicate
                 .map(Evaluator::eval_physical_scalar)
                 .transpose()?,
-            marker: RwLock::new(vec![]),
-            marker_index,
+            marker_join_desc: MarkJoinDesc {
+                marker: RwLock::new(vec![]),
+                marker_index,
+                has_null: RwLock::new(false),
+            },
         };
         Ok(match method {
-            HashMethodKind::SingleString(_) | HashMethodKind::Serializer(_) => {
-                Arc::new(JoinHashTable::try_create(
-                    ctx,
-                    HashTable::SerializerHashTable(SerializerHashTable {
-                        hash_table: HashMap::<KeysRef, Vec<RowPtr>>::create(),
-                        hash_method: HashMethodSerializer::default(),
-                    }),
-                    build_schema,
-                    hash_join_desc,
-                )?)
-            }
+            HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
+                ctx,
+                HashTable::SerializerHashTable(SerializerHashTable {
+                    hash_table: HashMap::<KeysRef, Vec<RowPtr>>::create(),
+                    hash_method: HashMethodSerializer::default(),
+                }),
+                build_schema,
+                hash_join_desc,
+            )?),
             HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::KeyU8HashTable(KeyU8HashTable {
@@ -304,7 +314,7 @@ impl JoinHashTable {
         Ok(replicated_probe_block)
     }
 
-    fn probe_cross_join(
+    pub(crate) fn probe_cross_join(
         &self,
         input: &DataBlock,
         _probe_state: &mut ProbeState,
@@ -338,60 +348,87 @@ impl JoinHashTable {
         let probe_keys = probe_keys.iter().collect::<Vec<&ColumnRef>>();
         match &*self.hash_table.read() {
             HashTable::SerializerHashTable(table) => {
-                let keys = table
+                let keys_state = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                let keys = keys
-                    .iter()
-                    .map(|key| KeysRef::create(key.as_ptr() as usize, key.len()))
-                    .collect();
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                let keys_iter =
+                    keys_iter.map(|key| KeysRef::create(key.as_ptr() as usize, key.len()));
 
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU8HashTable(table) => {
-                let keys = table
+                let keys_state = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU16HashTable(table) => {
-                let keys = table
+                let keys_state = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU32HashTable(table) => {
-                let keys = table
+                let keys_state = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU64HashTable(table) => {
-                let keys = table
+                let keys_state = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU128HashTable(table) => {
-                let keys = table
+                let keys_state = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU256HashTable(table) => {
-                let keys = table
+                let keys_state = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU512HashTable(table) => {
-                let keys = table
+                let keys_state = table
                     .hash_method
-                    .build_keys(&probe_keys, input.num_rows())?;
-                self.result_blocks(&table.hash_table, probe_state, keys, input)
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
         }
     }
+}
+
+macro_rules! insert_key {
+    ($table: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, ) => {{
+        let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
+        let build_keys_iter = $method.build_keys_iter(&keys_state)?;
+
+        for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
+            let mut inserted = true;
+            let ptr = RowPtr {
+                chunk_index: $chunk_index as u32,
+                row_index: row_index as u32,
+            };
+            let entity = $table.insert_key(&key, &mut inserted);
+            if inserted {
+                entity.set_value(vec![ptr]);
+            } else {
+                entity.get_mut_value().push(ptr);
+            }
+        }
+    }};
 }
 
 impl HashJoinState for JoinHashTable {
@@ -410,11 +447,10 @@ impl HashJoinState for JoinHashTable {
                 for build_col in build_cols.iter() {
                     build_cols_ref.push(build_col);
                 }
-                let build_keys = table
+                let keys_state = table
                     .hash_method
-                    .build_keys(&build_cols_ref, input.num_rows())?;
-                // Save build_keys in row_space to avoid memory leak
-                self.row_space.push_keys(input, build_keys)
+                    .build_keys_state(&build_cols_ref, input.num_rows())?;
+                self.row_space.push_keys_state(input, keys_state)
             }
             _ => self.row_space.push_cols(input, build_cols),
         }
@@ -455,7 +491,11 @@ impl HashJoinState for JoinHashTable {
 
     fn finish(&self) -> Result<()> {
         let chunks = self.row_space.chunks.read().unwrap();
-        let mut marker = self.hash_join_desc.marker.write();
+        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
+        if self.hash_join_desc.join_type == Mark && self.hash_join_desc.other_predicate.is_some() {
+            let row_nums = chunks.iter().fold(0, |acc, chunk| acc + chunk.num_rows());
+            marker.append(&mut vec![MarkerKind::False; row_nums])
+        }
         for chunk_index in 0..chunks.len() {
             let chunk = &chunks[chunk_index];
             let mut columns = vec![];
@@ -477,8 +517,10 @@ impl HashJoinState for JoinHashTable {
             }
             match (*self.hash_table.write()).borrow_mut() {
                 HashTable::SerializerHashTable(table) => {
-                    if let Some(keys) = chunk.keys.as_ref() {
-                        for (row_index, key) in keys.iter().enumerate().take(chunk.num_rows()) {
+                    if let Some(keys_state) = chunk.keys_state.as_ref() {
+                        let build_keys_iter = table.hash_method.build_keys_iter(keys_state)?;
+
+                        for (row_index, key) in build_keys_iter.enumerate().take(chunk.num_rows()) {
                             let mut inserted = true;
                             let ptr = RowPtr {
                                 chunk_index: chunk_index as u32,
@@ -494,85 +536,140 @@ impl HashJoinState for JoinHashTable {
                         }
                     }
                 }
-                HashTable::KeyU8HashTable(table) => insert_key(
+                HashTable::KeyU8HashTable(table) => insert_key! {
                     &mut table.hash_table,
                     &table.hash_method,
                     chunk,
                     columns,
                     chunk_index,
-                )?,
-                HashTable::KeyU16HashTable(table) => insert_key(
+                },
+                HashTable::KeyU16HashTable(table) => insert_key! {
                     &mut table.hash_table,
                     &table.hash_method,
                     chunk,
                     columns,
                     chunk_index,
-                )?,
-                HashTable::KeyU32HashTable(table) => insert_key(
+                },
+                HashTable::KeyU32HashTable(table) => insert_key! {
                     &mut table.hash_table,
                     &table.hash_method,
                     chunk,
                     columns,
                     chunk_index,
-                )?,
-                HashTable::KeyU64HashTable(table) => insert_key(
+                },
+                HashTable::KeyU64HashTable(table) => insert_key! {
                     &mut table.hash_table,
                     &table.hash_method,
                     chunk,
                     columns,
                     chunk_index,
-                )?,
-                HashTable::KeyU128HashTable(table) => insert_key(
+                },
+                HashTable::KeyU128HashTable(table) => insert_key! {
                     &mut table.hash_table,
                     &table.hash_method,
                     chunk,
                     columns,
                     chunk_index,
-                )?,
-                HashTable::KeyU256HashTable(table) => insert_key(
+                },
+                HashTable::KeyU256HashTable(table) => insert_key! {
                     &mut table.hash_table,
                     &table.hash_method,
                     chunk,
                     columns,
                     chunk_index,
-                )?,
-                HashTable::KeyU512HashTable(table) => insert_key(
+                },
+                HashTable::KeyU512HashTable(table) => insert_key! {
                     &mut table.hash_table,
                     &table.hash_method,
                     chunk,
                     columns,
                     chunk_index,
-                )?,
+                },
             }
         }
 
         Ok(())
     }
-}
 
-fn insert_key<Key>(
-    table: &mut HashMap<Key, Vec<RowPtr>>,
-    method: &HashMethodFixedKeys<Key>,
-    chunk: &Chunk,
-    columns: Vec<&ColumnRef>,
-    chunk_index: usize,
-) -> Result<()>
-where
-    Key: HashTableKeyable + Hash + Clone + Default + Debug + 'static,
-{
-    let build_keys = method.build_keys(&columns, chunk.num_rows())?;
-    for (row_index, key) in build_keys.iter().enumerate().take(chunk.num_rows()) {
-        let mut inserted = true;
-        let ptr = RowPtr {
-            chunk_index: chunk_index as u32,
-            row_index: row_index as u32,
-        };
-        let entity = table.insert_key(key, &mut inserted);
-        if inserted {
-            entity.set_value(vec![ptr]);
-        } else {
-            entity.get_mut_value().push(ptr);
+    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>> {
+        let hash_table = self.hash_table.read();
+        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
+        let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
+        let mut validity = MutableBitmap::with_capacity(marker.len());
+        let mut boolean_bit_map = MutableBitmap::with_capacity(marker.len());
+        for m in marker.iter_mut() {
+            if m == &mut MarkerKind::False && *has_null {
+                *m = MarkerKind::Null;
+            }
+            if m == &mut MarkerKind::Null {
+                validity.push(false);
+            } else {
+                validity.push(true);
+            }
+            if m == &mut MarkerKind::True {
+                boolean_bit_map.push(true);
+            } else {
+                boolean_bit_map.push(false);
+            }
         }
+        // transfer marker to a Nullable(BooleanColumn)
+        let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
+        let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
+        let marker_schema = DataSchema::new(vec![DataField::new(
+            &self
+                .hash_join_desc
+                .marker_join_desc
+                .marker_index
+                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
+                .to_string(),
+            NullableType::new_impl(BooleanType::new_impl()),
+        )]);
+        let marker_block =
+            DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
+        let mut build_indexes = Vec::new();
+        match *hash_table {
+            HashTable::SerializerHashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU8HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU16HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU32HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU64HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU128HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU256HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+            HashTable::KeyU512HashTable(ref hash_table) => {
+                for entity in hash_table.hash_table.iter() {
+                    build_indexes.extend_from_slice(entity.get_value());
+                }
+            }
+        };
+        let build_block = self.row_space.gather(&build_indexes)?;
+        Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
     }
-    Ok(())
 }

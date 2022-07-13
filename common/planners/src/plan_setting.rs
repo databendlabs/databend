@@ -19,6 +19,7 @@ use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct VarValue {
+    pub is_global: bool,
     pub variable: String,
     pub value: String,
 }

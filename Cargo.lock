@@ -320,6 +320,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic_refcell"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73b5e5f48b927f04e952dedc932f31995a65a0bf65ec971c74436e51bf6e970d"
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1076,6 +1082,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
+ "parking_lot 0.12.1",
  "pretty_assertions",
  "primitive-types",
  "regex",
@@ -1136,6 +1143,18 @@ dependencies = [
  "thiserror",
  "time 0.3.11",
  "tonic",
+]
+
+[[package]]
+name = "common-expression"
+version = "0.1.0"
+dependencies = [
+ "chrono-tz",
+ "comfy-table",
+ "common-arrow",
+ "enum-as-inner",
+ "goldenfile",
+ "itertools",
 ]
 
 [[package]]
@@ -1258,7 +1277,6 @@ dependencies = [
  "futures",
  "lexical-core",
  "micromarshal",
- "opendal",
  "rand 0.8.5",
  "serde",
  "time 0.3.11",
@@ -1290,6 +1308,7 @@ dependencies = [
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
+ "common-storage",
  "mockall",
  "serde_json",
 ]
@@ -1384,6 +1403,7 @@ dependencies = [
  "derive_more",
  "futures",
  "once_cell",
+ "parking_lot 0.12.1",
  "prost",
  "rand 0.8.5",
  "semver",
@@ -1460,7 +1480,7 @@ dependencies = [
  "common-building",
  "common-datavalues",
  "common-exception",
- "common-io",
+ "common-storage",
  "derive_more",
  "enumflags2",
  "hex",
@@ -1486,12 +1506,12 @@ dependencies = [
 name = "common-metrics"
 version = "0.1.0"
 dependencies = [
- "common-base",
  "common-exception",
  "common-tracing",
  "metrics",
  "metrics-exporter-prometheus",
  "once_cell",
+ "parking_lot 0.12.1",
  "prometheus-parse",
  "serde",
  "tokio",
@@ -1521,10 +1541,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-datavalues",
- "common-io",
  "common-meta-app",
  "common-meta-types",
  "common-protos",
+ "common-storage",
  "enumflags2",
  "maplit",
  "num",
@@ -1545,6 +1565,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "opendal",
+ "serde",
+]
+
+[[package]]
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
@@ -1562,6 +1591,7 @@ dependencies = [
  "csv-async",
  "futures",
  "opendal",
+ "parking_lot 0.12.1",
  "pin-project-lite",
  "serde_json",
  "tempfile",
@@ -1585,6 +1615,24 @@ dependencies = [
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "common-users"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-exception",
+ "common-grpc",
+ "common-management",
+ "common-meta-api",
+ "common-meta-store",
+ "common-meta-types",
+ "common-tracing",
+ "jwtk",
+ "parking_lot 0.12.1",
+ "pretty_assertions",
+ "serde",
 ]
 
 [[package]]
@@ -2094,6 +2142,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "atomic_refcell",
  "backoff",
  "backon",
  "base64 0.13.0",
@@ -2134,8 +2183,10 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-planners",
+ "common-storage",
  "common-streams",
  "common-tracing",
+ "common-users",
  "criterion",
  "dyn-clone",
  "enum_dispatch",
@@ -2148,7 +2199,6 @@ dependencies = [
  "http",
  "itertools",
  "jwt-simple",
- "jwtk",
  "lz4",
  "maplit",
  "metrics",
@@ -2163,6 +2213,7 @@ dependencies = [
  "opensrv-clickhouse",
  "opensrv-mysql",
  "openssl",
+ "parking_lot 0.12.1",
  "paste",
  "petgraph",
  "poem",
@@ -2179,6 +2230,7 @@ dependencies = [
  "serde",
  "serde-bridge",
  "serde_json",
+ "serde_repr",
  "serfig",
  "sha1",
  "sha2 0.10.2",
@@ -3010,8 +3062,9 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "goldenfile"
-version = "1.3.0"
-source = "git+https://github.com/datafuse-extras/rust-goldenfile?rev=16c5783#16c5783dd13253fed80d40851fd6774256a9c6a8"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03bd0e9c2ea26ce269d37016d6b95556bbfa544cbbbdeff40102ac54121c990b"
 dependencies = [
  "similar-asserts",
  "tempfile",
@@ -4555,9 +4608,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6ce886835b8a98dd969901d278509c96e0800a2c550d5df445738f58426ea87"
+checksum = "770a7e8a4d84cf9fd2fbaea08b86fb59823b849b6b056c272be7ff806f3174f2"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6257,6 +6310,17 @@ dependencies = [
  "percent-encoding",
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "serde_repr"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2ad84e47328a31223de7fed7a4f5087f2d6ddfe586cf3ca25b7a165bc0a5aed"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

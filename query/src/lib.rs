@@ -18,9 +18,11 @@
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 #![feature(assert_matches)]
+#![feature(trusted_len)]
 #![feature(box_patterns)]
 
 pub mod api;
+pub mod auth;
 pub mod catalogs;
 pub mod clusters;
 pub mod common;
@@ -35,7 +37,6 @@ pub mod sessions;
 pub mod sql;
 pub mod storages;
 pub mod table_functions;
-pub mod users;
 
 mod config;
 mod version;

@@ -41,16 +41,7 @@ impl TablesTable {
             num_rows,
             data_size,
             data_compressed_size,
-            index_size,
-            database AS TABLE_CATALOG,
-            database AS TABLE_SCHEMA,
-            name AS TABLE_NAME,
-            'BASE TABLE' AS TABLE_TYPE,
-            engine AS ENGINE,
-            created_on AS CREATE_TIME,
-            0 AS DATA_LENGTH,
-            0 AS INDEX_LENGTH,
-            '' AS TABLE_COMMENT
+            index_size
         FROM system.tables;";
 
         let mut options = BTreeMap::new();

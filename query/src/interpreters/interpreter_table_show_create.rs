@@ -23,7 +23,6 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::sql::is_internal_opt_key;
 use crate::sql::PlanParser;
@@ -34,8 +33,8 @@ pub struct ShowCreateTableInterpreter {
 }
 
 impl ShowCreateTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowCreateTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowCreateTableInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowCreateTablePlan) -> Result<Self> {
+        Ok(ShowCreateTableInterpreter { ctx, plan })
     }
 }
 

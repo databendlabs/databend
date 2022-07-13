@@ -296,17 +296,6 @@ function install_cargo_binary {
 	fi
 }
 
-function install_toolchain {
-	version=$1
-	echo "==> Installing ${version} of rust toolchain..."
-	rustup install "$version"
-	rustup set profile minimal
-	rustup component add rustfmt --toolchain "$version"
-	rustup component add rust-src --toolchain "$version"
-	rustup component add clippy --toolchain "$version"
-	rustup default "$version"
-}
-
 function usage {
 	cat <<EOF
     usage: $0 [options]
@@ -361,6 +350,7 @@ Development tools (since -d was provided):
   * python3 (boto3, yapf, yamllint, ...)
   * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
   * sqllogic test dependencies (PyHamcrest, environs, fire, ...)
+  * fuzz test dependencies (fuzzingbook)
 EOF
 	fi
 
@@ -520,7 +510,8 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
 
-	install_toolchain "$RUST_TOOLCHAIN"
+	# Any call to cargo will make rustup install the correct toolchain
+	cargo version
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
@@ -560,6 +551,8 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	python3 -m pip install --quiet mysql-connector-python pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
 	python3 -m pip install --quiet mysql-connector six PyHamcrest requests environs fire
+	# fuzz dependencies
+	python3 -m pip install --quiet fuzzingbook
 
 	# sqllogic clickhouse dependencies
 	# a temp hack only to make logic test work on click house as quickly as possible

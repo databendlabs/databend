@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_planners::Extras;
 use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
+use databend_query::interpreters::Interpreter;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::ColumnMeta;
 use databend_query::storages::fuse::FuseTable;
@@ -39,7 +40,7 @@ fn test_to_partitions() -> Result<()> {
     let col_stats_gen = |col_size| ColumnStatistics {
         min: DataValue::Int64(1),
         max: DataValue::Int64(2),
-        unset_bits: 0,
+        null_count: 0,
         in_memory_size: col_size as u64,
     };
 

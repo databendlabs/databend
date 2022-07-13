@@ -15,7 +15,11 @@
 use std::any::Any;
 
 use common_datablocks::DataBlock;
+use common_datavalues::TypeDeserializerImpl;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::MemoryReader;
+use common_io::prelude::NestedCheckpointReader;
 
 pub trait InputState: Send {
     fn as_any(&mut self) -> &mut dyn Any;
@@ -28,9 +32,31 @@ pub trait InputFormat: Send + Sync {
 
     fn create_state(&self) -> Box<dyn InputState>;
 
+    fn set_state(
+        &self,
+        _state: &mut Box<dyn InputState>,
+        _file_name: String,
+        _start_row_index: usize,
+    ) -> Result<()> {
+        Err(ErrorCode::UnImplement("Unimplement error"))
+    }
+
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>>;
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
 
     fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
+
+    fn read_row(
+        &self,
+        _checkpoint_reader: &mut NestedCheckpointReader<MemoryReader>,
+        _deserializers: &mut Vec<TypeDeserializerImpl>,
+        _row_index: usize,
+    ) -> Result<()> {
+        Err(ErrorCode::UnImplement("Unimplement error"))
+    }
+
+    fn read_row_num(&self, _state: &mut Box<dyn InputState>) -> Result<usize> {
+        Err(ErrorCode::UnImplement("Unimplement error"))
+    }
 }

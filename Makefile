@@ -14,7 +14,7 @@ setup:
 	bash ./scripts/setup/dev_setup.sh
 
 fmt:
-	cargo fmt
+	cargo fmt --all
 
 lint:
 	cargo fmt --all
@@ -56,15 +56,6 @@ endif
 build-native:
 	bash ./scripts/build/build-native.sh
 
-build-debug:
-	echo "Please use 'make build' instead"
-
-cross-compile-debug:
-	cross build --target aarch64-unknown-linux-gnu
-
-cross-compile-release:
-	RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi" cross build --target aarch64-unknown-linux-gnu --release
-
 unit-test:
 	ulimit -n 10000;ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
 
@@ -89,7 +80,7 @@ stateless-cluster-test-tls: build
 	rm -rf ./_meta*/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
-metactl-test: build-debug
+metactl-test:
 	bash ./tests/metactl/test-metactl.sh
 	bash ./tests/metactl/test-metactl-restore-new-cluster.sh
 
@@ -101,19 +92,12 @@ test: unit-test stateless-test sqllogic-test metactl-test
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/databend-query:${TAG} .
 
-k8s-docker:
-	bash ./scripts/build/build-k8s-runner.sh
-
 # experiment feature: take a look at docker/README.md for detailed multi architecture image build support
 dockerx:
 	docker buildx build . -f ./docker/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-query:${TAG} --build-arg VERSION=${VERSION} --push
 
 build-tool:
 	bash ./scripts/build/build-tool-runner.sh
-
-# generate common/functions/src/scalars/arithmetics/result_type.rs
-run-codegen:
-	cargo run --manifest-path=common/codegen/Cargo.toml
 
 # used for the build of dev container
 dev-container:

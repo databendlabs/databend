@@ -9,6 +9,7 @@ select number as a, number + 1 as b from numbers(1) group by a, number order by 
 
 select '====SCALAR_EXPRESSION====';
 select extract(day from to_date('2022-05-13'));
+select date_trunc(month, to_date('2022-07-07'));
 
 -- Comparison expressions
 select '====COMPARISON====';
@@ -348,7 +349,7 @@ drop table t2;
 select '====NULL====';
 create table n( a int null, b int null) ;
 insert into n select  if (number % 3, null, number), if (number % 2, null, number) from numbers(10);
-select a + b, a and b, a - b, a or b from n;
+select a + b, a and b, a - b, a or b as c from n order by c nulls first;
 drop table n;
 
 -- Subquery SemiJoin and AntiJoin
@@ -358,15 +359,26 @@ select * from numbers(5) as t where not exists (select * from numbers(3) where n
 select * from numbers(5) as t where exists (select number as a from numbers(3) where number = t.number and number > 0 and t.number < 2);
 select * from numbers(5) as t where exists (select * from numbers(3) where number > t.number);
 
--- (Not)IN Subquery
+-- (Not)IN/ANY/SOME/ALL Subquery
 create table t1(a int, b int);
 create table t2(a int, b int);
 insert into t1 values(1, 2), (2, 3);
 insert into t2 values(3, 4), (2, 3);
 select * from t1 where t1.a not in (select t2.a from t2);
 select * from t1 where t1.a in (select t2.a from t2);
+select * from t1 where t1.a = any (select t2.a from t2);
+select * from t1 where t1.a = some (select t2.a from t2);
+select * from t1 where t1.a != all (select t2.a from t2);
+select * from t1 where t1.a >= any (select t2.a from t2);
+select * from t1 where t1.a = all (select t2.a from t2);
+set enable_planner_v2 = 0;
+create table t3 as select *  from numbers(10000);
+insert into t3 values(1);
+set enable_planner_v2 = 1;
+select count(*) from numbers(10000) as t4 where t4.number in (select t3.number from t3);
 drop table t1;
 drop table t2;
+drop table t3;
 
 select '====Database====';
 select database(), currentDatabase(), current_database();

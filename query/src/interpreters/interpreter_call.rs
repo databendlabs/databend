@@ -21,7 +21,6 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use super::Interpreter;
-use super::InterpreterPtr;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
 
@@ -31,8 +30,8 @@ pub struct CallInterpreter {
 }
 
 impl CallInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CallPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CallInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CallPlan) -> Result<Self> {
+        Ok(CallInterpreter { ctx, plan })
     }
 }
 

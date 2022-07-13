@@ -16,11 +16,11 @@ use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
-use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
+use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 
 use crate::SendableDataBlockStream;

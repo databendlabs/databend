@@ -317,6 +317,8 @@ pub enum TokenKind {
     DATE_ADD,
     #[token("DATE_SUB", ignore(ascii_case))]
     DATE_SUB,
+    #[token("DATE_TRUNC", ignore(ascii_case))]
+    DATE_TRUNC,
     #[token("DATETIME", ignore(ascii_case))]
     DATETIME,
     #[token("DAY", ignore(ascii_case))]
@@ -399,6 +401,8 @@ pub enum TokenKind {
     FUSE,
     #[token("GITHUB", ignore(ascii_case))]
     GITHUB,
+    #[token("GLOBAL", ignore(ascii_case))]
+    GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
     GRAPH,
     #[token("GROUP", ignore(ascii_case))]
@@ -691,6 +695,12 @@ pub enum TokenKind {
     RANDOM,
     #[token("IFNULL", ignore(ascii_case))]
     IFNULL,
+    #[token("NULLS", ignore(ascii_case))]
+    NULLS,
+    #[token("FIRST", ignore(ascii_case))]
+    FIRST,
+    #[token("LAST", ignore(ascii_case))]
+    LAST,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -885,6 +895,7 @@ impl TokenKind {
             | TokenKind::WITH
             | TokenKind::DATE_ADD
             | TokenKind::DATE_SUB
+            | TokenKind::DATE_TRUNC
             if !after_as => true,
             _ => false
         }

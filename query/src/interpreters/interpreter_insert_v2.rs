@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_base::base::TrySpawn;
-use common_base::infallible::Mutex;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -25,6 +24,7 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use parking_lot::Mutex;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;

@@ -25,7 +25,6 @@ use common_tracing::tracing;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct ListInterpreter {
@@ -34,8 +33,8 @@ pub struct ListInterpreter {
 }
 
 impl ListInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ListPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ListInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ListPlan) -> Result<Self> {
+        Ok(ListInterpreter { ctx, plan })
     }
 }
 

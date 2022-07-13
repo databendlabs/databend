@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use common_ast::ast::CopyStmt;
@@ -28,6 +27,8 @@ use common_meta_types::UserStageInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::StageTableInfo;
+use common_storage::parse_uri_location;
+use common_storage::UriLocation;
 
 use crate::sql::binder::Binder;
 use crate::sql::plans::CopyPlanV2;
@@ -35,7 +36,6 @@ use crate::sql::plans::Plan;
 use crate::sql::plans::ValidationMode;
 use crate::sql::statements::parse_copy_file_format_options;
 use crate::sql::statements::parse_stage_location_v2;
-use crate::sql::statements::parse_uri_location_v2;
 use crate::sql::BindContext;
 
 impl<'a> Binder {
@@ -79,8 +79,7 @@ impl<'a> Binder {
                     protocol,
                     name,
                     path,
-                    credentials,
-                    encryption,
+                    connection,
                 },
                 CopyUnit::Table {
                     catalog,
@@ -98,14 +97,17 @@ impl<'a> Binder {
                     .unwrap_or_else(|| self.ctx.get_current_database());
                 let table = table.to_string();
 
+                let ul = UriLocation {
+                    protocol: protocol.clone(),
+                    name: name.clone(),
+                    path: path.clone(),
+                    connection: connection.clone(),
+                };
+
                 self.bind_copy_from_uri_into_table(
                     bind_context,
                     stmt,
-                    protocol,
-                    name,
-                    path,
-                    credentials,
-                    encryption,
+                    &ul,
                     &catalog_name,
                     &database_name,
                     &table,
@@ -151,8 +153,7 @@ impl<'a> Binder {
                     protocol,
                     name,
                     path,
-                    credentials,
-                    encryption,
+                    connection,
                 },
             ) => {
                 let catalog_name = catalog
@@ -165,17 +166,20 @@ impl<'a> Binder {
                     .unwrap_or_else(|| self.ctx.get_current_database());
                 let table = table.to_string();
 
+                let ul = UriLocation {
+                    protocol: protocol.clone(),
+                    name: name.clone(),
+                    path: path.clone(),
+                    connection: connection.clone(),
+                };
+
                 self.bind_copy_from_table_into_uri(
                     bind_context,
                     stmt,
                     &catalog_name,
                     &database_name,
                     &table,
-                    protocol,
-                    name,
-                    path,
-                    credentials,
-                    encryption,
+                    &ul,
                 )
                 .await
             }
@@ -189,21 +193,18 @@ impl<'a> Binder {
                     protocol,
                     name,
                     path,
-                    credentials,
-                    encryption,
+                    connection,
                 },
             ) => {
-                self.bind_copy_from_query_into_uri(
-                    bind_context,
-                    stmt,
-                    query,
-                    protocol,
-                    name,
-                    path,
-                    credentials,
-                    encryption,
-                )
-                .await
+                let ul = UriLocation {
+                    protocol: protocol.clone(),
+                    name: name.clone(),
+                    path: path.clone(),
+                    connection: connection.clone(),
+                };
+
+                self.bind_copy_from_query_into_uri(bind_context, stmt, query, &ul)
+                    .await
             }
             (src, dst) => Err(ErrorCode::SyntaxException(format!(
                 "COPY INTO <{}> FROM <{}> is invalid",
@@ -272,11 +273,7 @@ impl<'a> Binder {
         &mut self,
         _: &BindContext,
         stmt: &CopyStmt<'a>,
-        src_protocol: &str,
-        src_name: &str,
-        src_path: &str,
-        src_credentials: &BTreeMap<String, String>,
-        src_encryption: &BTreeMap<String, String>,
+        src_uri_location: &UriLocation,
         dst_catalog_name: &str,
         dst_database_name: &str,
         dst_table_name: &str,
@@ -289,13 +286,14 @@ impl<'a> Binder {
             .get_table(dst_catalog_name, dst_database_name, dst_table_name)
             .await?;
 
-        let (mut stage_info, path) = parse_uri_location_v2(
-            src_protocol,
-            src_name,
-            src_path,
-            src_credentials,
-            src_encryption,
-        )?;
+        let (storage_params, path) = parse_uri_location(src_uri_location)?;
+        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+            return Err(ErrorCode::StorageInsecure(
+                "copy from insecure storage is not allowed",
+            ));
+        }
+
+        let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
 
         let from = ReadDataSourcePlan {
@@ -382,11 +380,7 @@ impl<'a> Binder {
         src_catalog_name: &str,
         src_database_name: &str,
         src_table_name: &str,
-        dst_protocol: &str,
-        dst_name: &str,
-        dst_path: &str,
-        dst_credentials: &BTreeMap<String, String>,
-        dst_encryption: &BTreeMap<String, String>,
+        dst_uri_location: &UriLocation,
     ) -> Result<Plan> {
         let subquery =
             format!("SELECT * FROM {src_catalog_name}.{src_database_name}.{src_table_name}");
@@ -410,13 +404,14 @@ impl<'a> Binder {
         let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
 
-        let (mut stage_info, path) = parse_uri_location_v2(
-            dst_protocol,
-            dst_name,
-            dst_path,
-            dst_credentials,
-            dst_encryption,
-        )?;
+        let (storage_params, path) = parse_uri_location(dst_uri_location)?;
+        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+            return Err(ErrorCode::StorageInsecure(
+                "copy into insecure storage is not allowed",
+            ));
+        }
+
+        let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
@@ -463,11 +458,7 @@ impl<'a> Binder {
         bind_context: &BindContext,
         stmt: &CopyStmt<'a>,
         src_query: &Query<'_>,
-        dst_protocol: &str,
-        dst_name: &str,
-        dst_path: &str,
-        dst_credentials: &BTreeMap<String, String>,
-        dst_encryption: &BTreeMap<String, String>,
+        dst_uri_location: &UriLocation,
     ) -> Result<Plan> {
         let query = self
             .bind_statement(bind_context, &Statement::Query(Box::new(src_query.clone())))
@@ -477,13 +468,14 @@ impl<'a> Binder {
         let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
 
-        let (mut stage_info, path) = parse_uri_location_v2(
-            dst_protocol,
-            dst_name,
-            dst_path,
-            dst_credentials,
-            dst_encryption,
-        )?;
+        let (storage_params, path) = parse_uri_location(dst_uri_location)?;
+        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+            return Err(ErrorCode::StorageInsecure(
+                "copy into insecure storage is not allowed",
+            ));
+        }
+
+        let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {

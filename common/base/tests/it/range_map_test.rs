@@ -67,4 +67,45 @@ fn test_range_set() {
         assert_eq!(a.get_by_point(&a1), vec![r11]);
         assert_eq!(a.get_by_point(&a2), vec![r24, r26]);
     }
+    // test get_by_point for string prefix
+    {
+        let mut a = RangeMap::new();
+
+        let a1 = "11".to_string();
+        let a2 = "12".to_string();
+
+        a.insert(a1..a2, 11, 11);
+        assert!(!a.get_by_point(&"11".to_string()).is_empty());
+        assert!(!a.get_by_point(&"111".to_string()).is_empty());
+        assert!(!a.get_by_point(&"11z".to_string()).is_empty());
+        assert!(!a.get_by_point(&"11/".to_string()).is_empty());
+        assert!(!a.get_by_point(&"11*".to_string()).is_empty());
+        assert!(a.get_by_point(&"12".to_string()).is_empty());
+    }
+    // test get_by_point for char upbound limit string prefix
+    {
+        let mut a = RangeMap::new();
+
+        let a1 = format!("{}", 255 as char);
+        let a2 = format!("{}{}", 255 as char, 255 as char);
+
+        a.insert(a1..a2, 11, 11);
+        assert!(!a.get_by_point(&format!("{}", 255 as char)).is_empty());
+        assert!(!a.get_by_point(&format!("{}z", 255 as char)).is_empty());
+        assert!(!a.get_by_point(&format!("{}/", 255 as char)).is_empty());
+        assert!(!a.get_by_point(&format!("{}*", 255 as char)).is_empty());
+    }
+    // test get_by_point for char upbound limit string prefix
+    {
+        let mut a = RangeMap::new();
+
+        let a1 = "1".to_string();
+        let a2 = format!("{}{}", a1, 255 as char);
+
+        a.insert(a1.clone()..a2, 11, 11);
+        assert!(!a.get_by_point(&a1).is_empty());
+        assert!(!a.get_by_point(&format!("{}z", a1)).is_empty());
+        assert!(!a.get_by_point(&format!("{}*", a1)).is_empty());
+        assert!(!a.get_by_point(&format!("{}/", a1)).is_empty());
+    }
 }

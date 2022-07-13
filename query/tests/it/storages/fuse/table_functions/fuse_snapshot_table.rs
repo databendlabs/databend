@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::interpreters::CreateTableInterpreter;
+use databend_query::interpreters::Interpreter;
 use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;

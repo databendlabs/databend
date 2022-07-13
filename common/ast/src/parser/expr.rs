@@ -276,6 +276,10 @@ pub enum ExprElement<'a> {
         interval: Expr<'a>,
         unit: IntervalKind,
     },
+    DateTrunc {
+        unit: IntervalKind,
+        date: Expr<'a>,
+    },
     NullIf {
         expr1: Expr<'a>,
         expr2: Expr<'a>,
@@ -474,6 +478,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 date: Box::new(date),
                 interval: Box::new(interval),
                 unit,
+            },
+            ExprElement::DateTrunc { unit, date } => Expr::DateTrunc {
+                span: elem.span.0,
+                unit,
+                date: Box::new(date),
             },
             ExprElement::NullIf { expr1, expr2 } => Expr::NullIf {
                 span: elem.span.0,
@@ -863,6 +872,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             unit,
         },
     );
+    let date_trunc = map(
+        rule! {
+            DATE_TRUNC ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ ")"
+        },
+        |(_, _, unit, _, date, _)| ExprElement::DateTrunc { unit, date },
+    );
     let nullif = map(
         rule! {
             NULLIF
@@ -898,6 +913,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
     );
     let (rest, (span, elem)) = consumed(alt((
+        // Note: each `alt` call supports maximum of 21 parsers
         rule!(
             #is_null : "`... IS [NOT] NULL`"
             | #in_list : "`[NOT] IN (<expr>, ...)`"
@@ -909,6 +925,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #cast : "`CAST(... AS ...)`"
             | #date_add: "`DATE_ADD(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
             | #date_sub: "`DATE_SUB(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+            | #date_trunc: "`DATE_TRUNC((YEAR | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW), ...)`"
             | #interval: "`INTERVAL ... (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
             | #pg_cast : "`::<type_name>`"
             | #extract : "`EXTRACT((YEAR | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
@@ -919,10 +936,10 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #nullif: "`NULLIF(..., ...)`"
             | #coalesce: "`COALESCE (<expr>, ...)`"
             | #ifnull: "`IFNULL(..., ...)`"
-            | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
         ),
         rule!(
-            #count_all : "COUNT(*)"
+            #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
+            | #count_all : "COUNT(*)"
             | #tuple : "`(<expr>, ...)`"
             | #function_call_with_param : "<function>"
             | #function_call : "<function>"

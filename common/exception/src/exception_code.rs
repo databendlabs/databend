@@ -212,6 +212,7 @@ build_exceptions! {
     IllegalUDFFormat(2601),
     UnknownUDF(2602),
     UdfAlreadyExists(2603),
+    UnsupportedIntervalKind(2604),
 
     // Database error codes.
     UnknownDatabaseEngine(2701),
@@ -225,11 +226,13 @@ build_exceptions! {
 
     // Variable error codes.
     UnknownVariable(2801),
+    OnlySupportAsciiChars(2802),
 
     // Tenant quota error codes.
     IllegalTenantQuotaFormat(2901),
     TenantQuotaUnknown(2902),
     TenantQuotaExceeded(2903),
+
 }
 
 // Storage errors [3001, 4000].
@@ -238,6 +241,7 @@ build_exceptions! {
     StoragePermissionDenied(3002),
     StorageUnavailable(3901),
     StorageUnsupported(3902),
+    StorageInsecure(3903),
     StorageOther(4000),
 }
 

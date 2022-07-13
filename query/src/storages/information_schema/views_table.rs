@@ -37,17 +37,7 @@ impl ViewsTable {
             engine = 'MaterializedView' AS is_insertable_into,
             0 AS is_trigger_updatable,
             0 AS is_trigger_deletable,
-            0 AS is_trigger_insertable_into,
-            database AS TABLE_CATALOG,
-            database AS TABLE_SCHEMA,
-            name AS TABLE_NAME,
-            NULL AS VIEW_DEFINITION,
-            'NONE' AS CHECK_OPTION,
-            0 AS IS_UPDATABLE,
-            engine = 'MaterializedView' AS IS_INSERTABLE_INTO,
-            0 AS IS_TRIGGER_UPDATABLE,
-            0 AS IS_TRIGGER_DELETABLE,
-            0 AS IS_TRIGGER_INSERTABLE_INTO
+            0 AS is_trigger_insertable_into
         FROM system.tables
         WHERE engine LIKE '%View';";
 

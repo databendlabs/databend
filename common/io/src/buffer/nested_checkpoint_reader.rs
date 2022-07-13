@@ -60,6 +60,19 @@ impl<R: BufferRead> NestedCheckpointReader<R> {
         &self.buffer[cp..self.pos]
     }
 
+    pub fn get_checkpoint_buffer_end(&mut self) -> &[u8] {
+        let cp = self.checkpoints[self.checkpoints.len() - 1];
+        self.fill_buf().unwrap();
+        &self.buffer[cp..self.buffer.len()]
+    }
+
+    pub fn get_top_checkpoint_pos(&self) -> usize {
+        if self.checkpointing {
+            return self.checkpoints[self.checkpoints.len() - 1];
+        }
+        0
+    }
+
     pub fn clear(&mut self) {
         self.checkpointing = false;
         self.buffer.clear();
