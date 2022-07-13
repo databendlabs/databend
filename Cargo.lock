@@ -1908,6 +1908,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cron"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d76219e9243e100d5a37676005f08379297f8addfebc247613299600625c734d"
+dependencies = [
+ "chrono",
+ "nom",
+ "once_cell",
+]
+
+[[package]]
 name = "crossbeam"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2305,6 +2316,7 @@ dependencies = [
  "common-tracing",
  "common-users",
  "criterion",
+ "cron",
  "dyn-clone",
  "enum_dispatch",
  "enum_extract",

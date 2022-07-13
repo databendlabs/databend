@@ -17,6 +17,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_base::base::RuntimeTracker;
+use common_base::base::TrySpawn;
 use common_macros::databend_main;
 use common_meta_api::PREFIX_TABLE_BY_ID;
 use common_meta_embedded::MetaEmbedded;
@@ -24,6 +25,7 @@ use common_meta_grpc::MetaGrpcClient;
 use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchRequest;
+use cron::Schedule;
 use common_metrics::init_default_metrics_recorder;
 use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
