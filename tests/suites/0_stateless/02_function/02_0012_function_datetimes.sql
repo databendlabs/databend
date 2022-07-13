@@ -10,11 +10,11 @@ select to_datetime(1640019661000000), to_int64(to_datetime(1640019661000000))  =
 select to_date('1000-01-01');
 select to_date('9999-12-31');
 select to_date('10000-12-31'); -- {ErrorCode 1010}
-select to_date('0999-12-31'); -- {ErrorCode 1068}
+select to_date('0999-12-31');
 select to_datetime('1000-01-01 00:00:00');
 select to_datetime('9999-12-31 23:59:59');
 select to_datetime('10000-01-01 00:00:00'); -- {ErrorCode 1010}
-select to_datetime('0999-12-31 23:59:59'); -- {ErrorCode 1069}
+select to_datetime('0999-12-31 23:59:59');
 
 select typeof(today() + 3) = 'DATE';
 select typeof(today() - 3) = 'DATE';
@@ -227,9 +227,9 @@ create table t(a datetime, b DateTime(3), c Date);
 
 insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28', '1000-01-01');
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '9999-12-31');
-insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '2020-10-10'); -- {ErrorCode 1069}
+insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.222', '2020-10-10');
 insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10-10'); -- {ErrorCode 1010}
-insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '0999-10-10'); -- {ErrorCode 1068}
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.223', '0999-10-10');
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10'); -- {ErrorCode 1010}
 
 select * from t order by b;

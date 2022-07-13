@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use chrono::DateTime;
+use chrono::Datelike;
 use chrono::Duration;
 use chrono::NaiveDate;
 use chrono::TimeZone;
@@ -47,10 +48,16 @@ where R: BufferRead
         if v == "0000-00-00" {
             return Ok(NaiveDate::from_ymd(1970, 1, 1));
         }
-        v.parse::<NaiveDate>()
+        let d = v
+            .parse::<NaiveDate>()
             .map_err_to_code(ErrorCode::BadBytes, || {
                 format!("Cannot parse value:{} to Date type", v)
-            })
+            })?;
+        // convert date less than `1000-01-01` to `1000-01-01`
+        if d.year() < 1000 {
+            return Ok(NaiveDate::from_ymd(1000, 1, 1));
+        }
+        Ok(d)
     }
 
     fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {
@@ -71,23 +78,33 @@ where R: BufferRead
         };
 
         self.ignore(|b| b == b'z' || b == b'Z')?;
-        if self.ignore_byte(b'.')? {
+        let dt = if self.ignore_byte(b'.')? {
             buf.clear();
             let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
             let scales: i64 = lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
 
-            let res = if size >= 9 {
+            if size >= 9 {
                 res.checked_add_signed(Duration::nanoseconds(scales))
+                    .unwrap()
             } else if size >= 6 {
                 res.checked_add_signed(Duration::microseconds(scales))
+                    .unwrap()
             } else if size >= 3 {
                 res.checked_add_signed(Duration::milliseconds(scales))
+                    .unwrap()
             } else {
-                Some(res)
-            };
-            Ok(res.unwrap())
+                res
+            }
         } else {
-            Ok(res)
+            res
+        };
+        // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
+        if dt.year() < 1000 {
+            Ok(tz
+                .datetime_from_str("1000-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+                .unwrap())
+        } else {
+            Ok(dt)
         }
     }
 }

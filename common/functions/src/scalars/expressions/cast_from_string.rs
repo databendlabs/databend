@@ -95,7 +95,18 @@ pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTi
             let t = format!("1970-01-01 00:00:00{}", &s[19..]);
             tz.datetime_from_str(&t, "%Y-%m-%d %H:%M:%S%.f").ok()
         } else {
-            tz.datetime_from_str(s, "%Y-%m-%d %H:%M:%S%.f").ok()
+            match tz.datetime_from_str(s, "%Y-%m-%d %H:%M:%S%.f") {
+                Ok(dt) => {
+                    // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
+                    if dt.year() < 1000 {
+                        tz.datetime_from_str("1000-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+                            .ok()
+                    } else {
+                        Some(dt)
+                    }
+                }
+                Err(_) => None,
+            }
         }
     } else {
         None
@@ -110,7 +121,17 @@ pub fn string_to_date(date_str: impl AsRef<[u8]>) -> Option<NaiveDate> {
         if s == "0000-00-00" {
             Some(NaiveDate::from_ymd(1970, 1, 1))
         } else {
-            s.parse::<NaiveDate>().ok()
+            match s.parse::<NaiveDate>() {
+                Ok(d) => {
+                    // convert date less than `1000-01-01` to `1000-01-01`
+                    if d.year() < 1000 {
+                        Some(NaiveDate::from_ymd(1000, 1, 1))
+                    } else {
+                        Some(d)
+                    }
+                }
+                Err(_) => None,
+            }
         }
     } else {
         None
