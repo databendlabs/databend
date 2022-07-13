@@ -92,6 +92,7 @@ impl<'a> DeletionMutator<'a> {
             &segment_info_cache,
         );
 
+        // apply mutations
         for (seg_idx, replacements) in self.mutations {
             let segment = {
                 let (path, version) = &snapshot.segments[seg_idx];
@@ -106,17 +107,16 @@ impl<'a> DeletionMutator<'a> {
                 .map(|(idx, meta)| (&meta.location, idx))
                 .collect::<HashMap<_, _>>();
 
-            // prepare the new segment, which will replace the modified segment
+            // prepare the new segment
             let mut new_segment = SegmentInfo::new(segment.blocks.clone(), segment.summary.clone());
 
-            // apply modification
-
-            //  take away the blocks, they are being mutated
+            // take away the blocks, they are being mutated
             let mut block_editor = HashMap::<_, _, RandomState>::from_iter(
                 std::mem::take(&mut new_segment.blocks)
                     .into_iter()
                     .enumerate(),
             );
+
             for replacement in replacements {
                 let position = block_positions
                     .get(&replacement.original_block_loc)
@@ -127,26 +127,28 @@ impl<'a> DeletionMutator<'a> {
                         ))
                     })?;
                 if let Some(block_meta) = replacement.new_block_meta {
-                    //new_segment.blocks[*position] = block_meta;
                     block_editor.insert(*position, block_meta);
                 } else {
-                    //new_segment.blocks.remove(*position);
                     block_editor.remove(position);
                 }
             }
+            // assign back the mutated blocks to segment
             new_segment.blocks = block_editor.into_values().collect();
 
             if new_segment.blocks.is_empty() {
                 // remove the segment if no blocks there
                 segments_editor.remove(&seg_idx);
             } else {
+                // re-calculate the segment statistics
                 let new_summary = reduce_block_metas(&new_segment.blocks)?;
                 new_segment.summary = new_summary;
+                // write down new segment
                 let new_segment_location = seg_writer.write_segment(new_segment).await?;
                 segments_editor.insert(seg_idx, new_segment_location);
             }
         }
 
+        // assign back the mutated segments to snapshot
         new_snapshot.segments = segments_editor.into_values().collect();
 
         let mut new_segment_summaries = Vec::with_capacity(new_snapshot.segments.len());
@@ -159,7 +161,7 @@ impl<'a> DeletionMutator<'a> {
         let new_summary = reduce_statistics(&new_segment_summaries)?;
         new_snapshot.summary = new_summary;
 
-        // write the new snapshot out (and keep it in undo log)
+        // write down the new snapshot
         let snapshot_loc = self.location_generator.snapshot_location_from_uuid(
             &new_snapshot.snapshot_id,
             new_snapshot.format_version(),

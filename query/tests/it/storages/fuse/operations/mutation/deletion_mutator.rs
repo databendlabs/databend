@@ -50,7 +50,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, &segment_info_cache);
 
     let gen_test_seg = || async {
-        // generates test segment, which contains only one block
+        // generates test segment, each of them contains only one block
         // structures are filled with arbitrary values, no effects for this test case
         let block_id = Uuid::new_v4().simple().to_string();
         let location = (block_id, DataBlock::VERSION);
@@ -91,7 +91,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     // clear half of the segments
     for (i, _) in test_segment_locations.iter().enumerate().take(100) {
         if i % 2 == 0 {
-            // remove block from segment (segment only contains one block)
+            // empty the segment (segment only contains one block)
             mutator
                 .replace_with(i, test_block_locations[i].clone(), DataBlock::empty())
                 .await?;
