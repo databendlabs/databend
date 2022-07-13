@@ -552,7 +552,7 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	# sqllogic dependencies
 	python3 -m pip install --quiet mysql-connector six PyHamcrest requests environs fire
 	# fuzz dependencies
-	python3 -m pip install --quiet fuzzingbook
+	python3 -m pip install fuzzingbook
 
 	# sqllogic clickhouse dependencies
 	# a temp hack only to make logic test work on click house as quickly as possible
