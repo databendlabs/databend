@@ -28,6 +28,7 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
+use common_base::base::tokio::sync::Semaphore;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -123,7 +124,12 @@ impl HiveParquetBlockReader {
         Ok(column_meta[0])
     }
 
-    async fn read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
+    async fn read_column(
+        o: Object,
+        offset: u64,
+        length: u64,
+        semaphore: Arc<Semaphore>,
+    ) -> Result<Vec<u8>> {
         let handler = common_base::base::tokio::spawn(async move {
             let op = || async {
                 let mut chunk = vec![0; length as usize];
@@ -145,6 +151,7 @@ impl HiveParquetBlockReader {
                 )
             };
 
+            let _semaphore_permit = semaphore.acquire().await.unwrap();
             let chunk = op.retry_with_notify(notify).await?;
             Ok(chunk)
         });
@@ -182,6 +189,7 @@ impl HiveParquetBlockReader {
 
         let mut join_handlers = Vec::with_capacity(self.projection.len());
 
+        let semaphore = Arc::new(Semaphore::new(10));
         for index in &self.projection {
             let field = &self.arrow_schema.fields[*index];
             let column_meta = Self::get_parquet_column_metadata(row_group, &field.name)?;
@@ -191,6 +199,7 @@ impl HiveParquetBlockReader {
                 self.operator.object(&part.location),
                 start,
                 len,
+                semaphore.clone(),
             ));
         }
 
