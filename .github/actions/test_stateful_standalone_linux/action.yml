@@ -15,7 +15,7 @@ inputs:
   aws_secret_access_key:
     description: "aws secret access key"
     required: true
-    
+
 runs:
   using: "composite"
   steps:
