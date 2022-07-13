@@ -43,6 +43,10 @@ where R: BufferRead
         let v = std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
             format!("Cannot convert value:{:?} to utf8", buf)
         })?;
+        // convert zero date to `1970-01-01`
+        if v == "0000-00-00" {
+            return Ok(NaiveDate::from_ymd(1970, 1, 1));
+        }
         v.parse::<NaiveDate>()
             .map_err_to_code(ErrorCode::BadBytes, || {
                 format!("Cannot parse value:{} to Date type", v)
@@ -55,12 +59,16 @@ where R: BufferRead
 
         let v = std::str::from_utf8(buf.as_slice())
             .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
-        let res = tz
-            .datetime_from_str(v, "%Y-%m-%d %H:%M:%S%.f")
-            .or_else(|_| tz.datetime_from_str(v, "%Y-%m-%dT%H:%M:%S"))
-            .map_err_to_code(ErrorCode::BadBytes, || {
-                format!("Cannot parse value:{:?} to DateTime type", v)
-            })?;
+        // convert zero timestamp to `1970-01-01 00:00:00`
+        let res = if v == "0000-00-00 00:00:00" {
+            tz.datetime_from_str("1970-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+                .unwrap()
+        } else {
+            tz.datetime_from_str(v, "%Y-%m-%d %H:%M:%S")
+                .map_err_to_code(ErrorCode::BadBytes, || {
+                    format!("Cannot parse value:{:?} to DateTime type", v)
+                })?
+        };
 
         self.ignore(|b| b == b'z' || b == b'Z')?;
         if self.ignore_byte(b'.')? {

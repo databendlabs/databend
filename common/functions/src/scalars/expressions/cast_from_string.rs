@@ -89,11 +89,30 @@ pub fn cast_from_string(
 #[inline]
 pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTime<Tz>> {
     let s = std::str::from_utf8(date_str.as_ref()).ok();
-    s.and_then(|c| tz.datetime_from_str(c, "%Y-%m-%d %H:%M:%S%.f").ok())
+    if let Some(s) = s {
+        // convert zero timestamp to `1970-01-01 00:00:00`
+        if s.len() >= 19 && &s[..19] == "0000-00-00 00:00:00" {
+            let t = format!("1970-01-01 00:00:00{}", &s[19..]);
+            tz.datetime_from_str(&t, "%Y-%m-%d %H:%M:%S%.f").ok()
+        } else {
+            tz.datetime_from_str(s, "%Y-%m-%d %H:%M:%S%.f").ok()
+        }
+    } else {
+        None
+    }
 }
 
 #[inline]
 pub fn string_to_date(date_str: impl AsRef<[u8]>) -> Option<NaiveDate> {
     let s = std::str::from_utf8(date_str.as_ref()).ok();
-    s.and_then(|c| c.parse::<NaiveDate>().ok())
+    if let Some(s) = s {
+        // convert zero date to `1970-01-01`
+        if s == "0000-00-00" {
+            Some(NaiveDate::from_ymd(1970, 1, 1))
+        } else {
+            s.parse::<NaiveDate>().ok()
+        }
+    } else {
+        None
+    }
 }
