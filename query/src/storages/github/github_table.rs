@@ -25,8 +25,6 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -101,21 +99,6 @@ impl Table for GithubTable {
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
-    }
-
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let arrays = get_data_from_github(self.options.clone()).await?;
-        let block = DataBlock::create(self.table_info.schema(), arrays);
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![block],
-        )))
     }
 
     fn read2(

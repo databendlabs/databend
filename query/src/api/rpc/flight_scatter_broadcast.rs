@@ -27,6 +27,7 @@ pub struct BroadcastFlightScatter {
 }
 
 impl BroadcastFlightScatter {
+    #[allow(unused)]
     pub fn try_create(
         _: Arc<QueryContext>,
         _: DataSchemaRef,

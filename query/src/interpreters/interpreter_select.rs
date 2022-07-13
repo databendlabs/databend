@@ -71,24 +71,13 @@ impl Interpreter for SelectInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let settings = self.ctx.get_settings();
+        let query_pipeline = self.create_new_pipeline().await?;
+        let async_runtime = self.ctx.get_storage_runtime();
+        let query_need_abort = self.ctx.query_need_abort();
+        let executor =
+            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
 
-        if settings.get_enable_new_processor_framework()? != 0 {
-            let query_pipeline = self.create_new_pipeline().await?;
-            let async_runtime = self.ctx.get_storage_runtime();
-            let query_need_abort = self.ctx.query_need_abort();
-            let executor = PipelinePullingExecutor::try_create(
-                async_runtime,
-                query_need_abort,
-                query_pipeline,
-            )?;
-            let stream = ProcessorExecutorStream::create(executor)?;
-
-            return Ok(Box::pin(stream));
-        } else {
-            let optimized_plan = self.rewrite_plan()?;
-            plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
-        }
+        Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
     }
 
     /// This method will create a new pipeline

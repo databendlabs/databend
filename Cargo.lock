@@ -1585,7 +1585,6 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-functions",
  "common-io",
  "common-tracing",
  "csv-async",

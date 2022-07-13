@@ -32,6 +32,7 @@ use futures::TryStreamExt;
 use opendal::ObjectMode;
 
 use super::hive_table_options::HiveTableOptions;
+use crate::catalogs::hive::hive_table_source::HiveTableSource;
 use crate::catalogs::hive::HivePartInfo;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -39,6 +40,7 @@ use crate::pipelines::new::processors::SyncSource;
 use crate::pipelines::new::processors::SyncSourcer;
 use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::hive::HiveParquetBlockReader;
 use crate::storages::Table;
@@ -63,30 +65,31 @@ impl HiveTable {
     }
 
     #[inline]
-    pub fn do_read(
+    pub fn do_read2(
         &self,
         ctx: Arc<QueryContext>,
-        push_downs: &Option<Extras>,
-    ) -> Result<SendableDataBlockStream> {
+        plan: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
+        let push_downs = &plan.push_downs;
         let block_reader = self.create_block_reader(&ctx, push_downs)?;
 
-        let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(1) {
-            Err(_) => None,
-            Ok(parts) if parts.is_empty() => None,
-            Ok(parts) => Some(parts),
-        })
-        .flatten();
+        let parts_len = plan.parts.len();
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = std::cmp::min(parts_len, max_threads);
 
-        let part_stream = futures::stream::iter(iter);
+        let mut source_builder = SourcePipeBuilder::create();
 
-        let stream = part_stream
-            .then(move |part| {
-                let block_reader = block_reader.clone();
-                async move { block_reader.read(part).await }
-            })
-            .instrument(common_tracing::tracing::Span::current());
+        for _index in 0..std::cmp::max(1, max_threads) {
+            let output = OutputPort::create();
+            source_builder.add_source(
+                output.clone(),
+                HiveTableSource::create(ctx.clone(), output, block_reader.clone())?,
+            );
+        }
 
-        Ok(Box::pin(stream))
+        pipeline.add_pipe(source_builder.finalize());
+        Ok(())
     }
 
     fn create_block_reader(
@@ -131,7 +134,7 @@ impl HiveTable {
                 return Err(ErrorCode::TableInfoError(format!(
                     "{}, table location is empty",
                     self.table_info.name
-                )))
+                )));
             }
         };
         let location = convert_hdfs_path(path, true);
@@ -205,29 +208,13 @@ impl Table for HiveTable {
         None
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        return self.do_read(ctx, &plan.push_downs);
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
-        _: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
-        let output = OutputPort::create();
-        let schema = self.table_info.schema();
-        pipeline.add_pipe(NewPipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![HiveSource::create(ctx, output, schema)?],
-        });
-
-        Ok(())
+        self.do_read2(ctx, plan, pipeline)
     }
 
     async fn append_data(
@@ -356,6 +343,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::convert_hdfs_path;
+
     #[test]
     fn test_convert_hdfs_path() {
         let mut m = HashMap::new();

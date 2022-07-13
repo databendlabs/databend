@@ -23,10 +23,12 @@ use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
+use common_base::base::tokio::sync::Semaphore;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -34,12 +36,17 @@ use common_exception::Result;
 use common_planners::PartInfoPtr;
 use common_tracing::tracing;
 use common_tracing::tracing::debug_span;
+use common_tracing::tracing::warn;
 use common_tracing::tracing::Instrument;
+use futures::AsyncReadExt;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use opendal::Object;
 use opendal::Operator;
 
 use crate::catalogs::hive::HivePartInfo;
+use crate::storages::fuse::io::retry;
+use crate::storages::fuse::io::retry::Retryable;
 
 #[derive(Clone)]
 pub struct HiveParquetBlockReader {
@@ -117,7 +124,52 @@ impl HiveParquetBlockReader {
         Ok(column_meta[0])
     }
 
-    async fn read_columns(&self, part: PartInfoPtr) -> Result<(usize, Vec<ArrayIter<'static>>)> {
+    async fn read_column(
+        o: Object,
+        offset: u64,
+        length: u64,
+        semaphore: Arc<Semaphore>,
+    ) -> Result<Vec<u8>> {
+        let handler = common_base::base::tokio::spawn(async move {
+            let op = || async {
+                let mut chunk = vec![0; length as usize];
+                // Sine error conversion DO matters: retry depends on the conversion
+                // to distinguish transient errors from permanent ones.
+                // Explict error conversion is used here, to make the code easy to be followed
+                let mut r = o
+                    .range_reader(offset..offset + length)
+                    .await
+                    .map_err(retry::from_io_error)?;
+                r.read_exact(&mut chunk).await?;
+                Ok(chunk)
+            };
+
+            let notify = |e: std::io::Error, duration| {
+                warn!(
+                    "transient error encountered while reading column, at duration {:?} : {}",
+                    duration, e,
+                )
+            };
+
+            let _semaphore_permit = semaphore.acquire().await.unwrap();
+            let chunk = op.retry_with_notify(notify).await?;
+            Ok(chunk)
+        });
+
+        match handler.await {
+            Ok(Ok(data)) => Ok(data),
+            Ok(Err(cause)) => Err(cause),
+            Err(cause) => Err(ErrorCode::TokioError(format!(
+                "Cannot join future {:?}",
+                cause
+            ))),
+        }
+    }
+
+    pub async fn read_columns_data(
+        &self,
+        part: PartInfoPtr,
+    ) -> Result<(FileMetaData, Vec<Vec<u8>>)> {
         let part = HivePartInfo::from_part(&part)?;
 
         let object = self.operator.object(&part.location);
@@ -135,52 +187,60 @@ impl HiveParquetBlockReader {
         // todo: support predict push down
         let row_group = &meta.row_groups[0];
 
-        //todo : if size of rowgroup is small, there is no need to parallel read
-        let num_cols = self.projection.len();
-        let mut column_chunk_futs = Vec::with_capacity(num_cols);
-        for idx in &self.projection {
-            let field = &self.arrow_schema.fields[*idx];
+        let mut join_handlers = Vec::with_capacity(self.projection.len());
+
+        let semaphore = Arc::new(Semaphore::new(10));
+        for index in &self.projection {
+            let field = &self.arrow_schema.fields[*index];
             let column_meta = Self::get_parquet_column_metadata(row_group, &field.name)?;
             let (start, len) = column_meta.byte_range();
-            let column_reader = self.operator.object(&part.location);
-            let fut = async move {
-                // NOTE: move chunk inside future so that alloc only
-                // happen when future is ready to go.
-                let column_chunk = column_reader.range_read(start..start + len).await?;
-                Ok::<_, ErrorCode>(column_chunk)
-            }
-            .instrument(debug_span!("read_col_chunk"));
-            column_chunk_futs.push(fut);
-        }
-        let chunks = futures::stream::iter(column_chunk_futs)
-            .buffered(std::cmp::min(10, num_cols))
-            .try_collect::<Vec<_>>()
-            .await?;
 
-        let rows = row_group.num_rows();
-        let mut columns_array_iter = Vec::with_capacity(num_cols);
-        for (i, columns_chunk) in chunks.into_iter().enumerate() {
-            let idx = self.projection[i];
+            join_handlers.push(Self::read_column(
+                self.operator.object(&part.location),
+                start,
+                len,
+                semaphore.clone(),
+            ));
+        }
+
+        Ok((meta, futures::future::try_join_all(join_handlers).await?))
+    }
+
+    pub fn deserialize(&self, chunks: Vec<Vec<u8>>, meta: FileMetaData) -> Result<DataBlock> {
+        if self.projection.len() != chunks.len() {
+            return Err(ErrorCode::LogicalError(
+                "Columns chunk len must be equals projections len.",
+            ));
+        }
+
+        let row_group = &meta.row_groups[0];
+        let mut columns_array_iter = Vec::with_capacity(self.projection.len());
+
+        for (index, column_chunk) in chunks.into_iter().enumerate() {
+            let idx = self.projection[index];
             let field = self.arrow_schema.fields[idx].clone();
             let column_descriptor = &self.parquet_schema_descriptor.columns()[idx];
             let column_meta = Self::get_parquet_column_metadata(row_group, &field.name)?;
+
             columns_array_iter.push(Self::to_deserialize(
                 column_meta,
-                columns_chunk,
-                rows,
+                column_chunk,
+                row_group.num_rows(),
                 column_descriptor,
                 field,
             )?);
         }
 
-        Ok((rows, columns_array_iter))
+        let mut deserializer =
+            RowGroupDeserializer::new(columns_array_iter, row_group.num_rows(), None);
+
+        self.try_next_block(&mut deserializer)
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read(&self, part: PartInfoPtr) -> Result<DataBlock> {
-        let (num_rows, columns_array_iter) = self.read_columns(part).await?;
-        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
-        self.try_next_block(&mut deserializer)
+        let (num_rows, columns_array_iter) = self.read_columns_data(part).await?;
+        self.deserialize(columns_array_iter, num_rows)
     }
 
     fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {

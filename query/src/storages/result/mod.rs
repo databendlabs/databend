@@ -17,6 +17,7 @@ mod download;
 mod result_locations;
 mod result_table;
 mod result_table_sink;
+mod result_table_source;
 mod writer;
 
 pub use result_table::ResultQueryInfo;
