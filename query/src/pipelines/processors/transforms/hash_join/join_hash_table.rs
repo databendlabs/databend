@@ -445,7 +445,7 @@ impl HashJoinState for JoinHashTable {
 
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match self.hash_join_desc.join_type {
-            JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left | JoinType::Mark => {
+            JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left | Mark => {
                 self.probe_join(input, probe_state)
             }
             JoinType::Cross => self.probe_cross_join(input, probe_state),

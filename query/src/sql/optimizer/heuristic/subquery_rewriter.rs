@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::sql::binder::ColumnBinding;
-use crate::sql::optimizer::heuristic::decorrelate::try_decorrelate_subquery;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
@@ -32,7 +31,6 @@ use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::ConstantExpr;
-use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::JoinType;
@@ -49,7 +47,7 @@ use crate::sql::plans::SubqueryType;
 use crate::sql::IndexType;
 use crate::sql::MetadataRef;
 
-enum UnnestResult {
+pub enum UnnestResult {
     Uncorrelated,
     Apply,
     SimpleJoin, // SemiJoin or AntiJoin
@@ -125,247 +123,6 @@ impl SubqueryRewriter {
             | RelOperator::PhysicalHashJoin(_)
             | RelOperator::Pattern(_)
             | RelOperator::PhysicalScan(_) => Err(ErrorCode::LogicalError("Invalid plan type")),
-        }
-    }
-
-    fn unnest_subquery(
-        &mut self,
-        left: &SExpr,
-        subquery: &SubqueryExpr,
-        is_conjunctive_predicate: bool,
-    ) -> Result<(SExpr, UnnestResult)> {
-        match subquery.typ {
-            SubqueryType::Scalar => {
-                let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                let prop = rel_expr.derive_relational_prop()?;
-                let (rel_op, result): (RelOperator, _) = if prop.outer_columns.is_empty() {
-                    (
-                        LogicalInnerJoin {
-                            left_conditions: vec![],
-                            right_conditions: vec![],
-                            other_conditions: vec![],
-                            join_type: JoinType::Cross,
-                            marker_index: None,
-                        }
-                        .into(),
-                        UnnestResult::Uncorrelated,
-                    )
-                } else {
-                    (
-                        CrossApply {
-                            correlated_columns: subquery.outer_columns.clone(),
-                        }
-                        .into(),
-                        UnnestResult::Apply,
-                    )
-                };
-                Ok((
-                    SExpr::create_binary(
-                        rel_op,
-                        left.clone(),
-                        SExpr::create_unary(Max1Row.into(), *subquery.subquery.clone()),
-                    ),
-                    result,
-                ))
-            }
-            SubqueryType::Exists | SubqueryType::NotExists => {
-                if is_conjunctive_predicate {
-                    if let Some(result) = try_decorrelate_subquery(left, subquery)? {
-                        return Ok((result, UnnestResult::SimpleJoin));
-                    }
-                }
-                let mut subquery_expr = *subquery.subquery.clone();
-                // Wrap Limit to current subquery
-                let limit = Limit {
-                    limit: Some(1),
-                    offset: 0,
-                };
-                subquery_expr = SExpr::create_unary(limit.into(), subquery_expr.clone());
-
-                // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
-                // In contrast, NOT EXISTS subquery will be rewritten into `COUNT(*) = 0`.
-                // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
-                // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
-                let agg_func = AggregateFunctionFactory::instance().get("count", vec![], vec![])?;
-                let agg_func_index = self.metadata.write().add_column(
-                    "count(*)".to_string(),
-                    agg_func.return_type()?,
-                    None,
-                );
-
-                let agg = Aggregate {
-                    group_items: vec![],
-                    aggregate_functions: vec![ScalarItem {
-                        scalar: AggregateFunction {
-                            display_name: "count(*)".to_string(),
-                            func_name: "count".to_string(),
-                            distinct: false,
-                            params: vec![],
-                            args: vec![],
-                            return_type: Box::new(agg_func.return_type()?),
-                        }
-                        .into(),
-                        index: agg_func_index,
-                    }],
-                    from_distinct: false,
-                };
-
-                // COUNT(*) = 1 or COUNT(*) = 0
-                let compare_index = self.metadata.write().add_column(
-                    "subquery".to_string(),
-                    BooleanType::new_impl(),
-                    None,
-                );
-                let compare = ComparisonExpr {
-                    op: ComparisonOp::Equal,
-                    left: Box::new(
-                        BoundColumnRef {
-                            column: ColumnBinding {
-                                database_name: None,
-                                table_name: None,
-                                column_name: "count(*)".to_string(),
-                                index: agg_func_index,
-                                data_type: Box::new(agg_func.return_type()?),
-                                visible_in_unqualified_wildcard: false,
-                            },
-                        }
-                        .into(),
-                    ),
-                    right: Box::new(
-                        ConstantExpr {
-                            value: if SubqueryType::Exists == subquery.typ {
-                                DataValue::Int64(1)
-                            } else {
-                                DataValue::Int64(0)
-                            },
-                            data_type: Box::new(agg_func.return_type()?),
-                        }
-                        .into(),
-                    ),
-                    return_type: Box::new(agg_func.return_type()?),
-                };
-                let eval_scalar = EvalScalar {
-                    items: vec![ScalarItem {
-                        scalar: compare.into(),
-                        index: compare_index,
-                    }],
-                };
-
-                let project = Project {
-                    columns: ColumnSet::from([compare_index]),
-                };
-
-                // Project
-                //     EvalScalar: COUNT(*) = 1 or COUNT(*) = 0
-                //         Aggregate: COUNT(*)
-                let rewritten_subquery = SExpr::create_unary(
-                    project.into(),
-                    SExpr::create_unary(
-                        eval_scalar.into(),
-                        SExpr::create_unary(agg.into(), subquery_expr),
-                    ),
-                );
-
-                let rel_expr = RelExpr::with_s_expr(&rewritten_subquery);
-                let prop = rel_expr.derive_relational_prop()?;
-
-                let (rel_op, result): (RelOperator, _) = if prop.outer_columns.is_empty() {
-                    (
-                        LogicalInnerJoin {
-                            left_conditions: vec![],
-                            right_conditions: vec![],
-                            other_conditions: vec![],
-                            join_type: JoinType::Cross,
-                            marker_index: None,
-                        }
-                        .into(),
-                        UnnestResult::Uncorrelated,
-                    )
-                } else {
-                    (
-                        CrossApply {
-                            correlated_columns: subquery.outer_columns.clone(),
-                        }
-                        .into(),
-                        UnnestResult::Apply,
-                    )
-                };
-
-                Ok((
-                    SExpr::create_binary(rel_op, left.clone(), rewritten_subquery),
-                    result,
-                ))
-            }
-            SubqueryType::Any => {
-                let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                let prop = rel_expr.derive_relational_prop()?;
-                let output_columns = prop.output_columns.clone();
-                let index = output_columns
-                    .iter()
-                    .take(1)
-                    .next()
-                    .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
-                let column_name = format!("subquery_{}", index);
-                let left_condition = Scalar::BoundColumnRef(BoundColumnRef {
-                    column: ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_name,
-                        index: *index,
-                        data_type: subquery.data_type.clone(),
-                        visible_in_unqualified_wildcard: false,
-                    },
-                });
-                let right_condition = *subquery.child_expr.as_ref().unwrap().clone();
-                let op = subquery.compare_op.as_ref().unwrap().clone();
-                let (left_conditions, right_conditions, other_conditions) =
-                    if op == ComparisonOp::Equal {
-                        (vec![left_condition], vec![right_condition], vec![])
-                    } else {
-                        let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
-                            op,
-                            left: Box::new(right_condition),
-                            right: Box::new(left_condition),
-                            return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
-                        });
-                        (vec![], vec![], vec![other_condition])
-                    };
-                if prop.outer_columns.is_empty() {
-                    // Add a marker column to save comparison result.
-                    // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
-                    // If subquery contains NULL, the comparison result is TRUE or NULL.
-                    // Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
-                    // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
-                    let marker_index = self.metadata.write().add_column(
-                        "marker".to_string(),
-                        NullableType::new_impl(BooleanType::new_impl()),
-                        None,
-                    );
-                    // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
-                    // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
-                    // Note that subquery is the left table, and it'll be the probe side.
-                    let mark_join = LogicalInnerJoin {
-                        left_conditions,
-                        right_conditions,
-                        other_conditions,
-                        join_type: JoinType::Mark,
-                        marker_index: Some(marker_index),
-                    }
-                    .into();
-                    Ok((
-                        SExpr::create_binary(mark_join, *subquery.subquery.clone(), left.clone()),
-                        UnnestResult::MarkJoin { marker_index },
-                    ))
-                } else {
-                    Err(ErrorCode::LogicalError(
-                        "Unsupported subquery type: Correlated AnySubquery",
-                    ))
-                }
-            }
-            _ => Err(ErrorCode::LogicalError(format!(
-                "Unsupported subquery type: {:?}",
-                &subquery.typ
-            ))),
         }
     }
 
@@ -467,8 +224,16 @@ impl SubqueryRewriter {
                 let mut subquery = subquery.clone();
                 subquery.subquery = Box::new(self.rewrite(&subquery.subquery)?);
 
-                let (s_expr, result) =
-                    self.unnest_subquery(s_expr, &subquery, is_conjunctive_predicate)?;
+                // Check if the subquery is a correlated subquery.
+                // If it is, we'll try to decorrelate it.
+                // If it is not, we'll just rewrite it to join
+                let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
+                let prop = rel_expr.derive_relational_prop()?;
+                let (s_expr, result) = if prop.outer_columns.is_empty() {
+                    self.try_rewrite_uncorrelated_subquery(s_expr, &subquery)?
+                } else {
+                    self.try_decorrelate_subquery(s_expr, &subquery, is_conjunctive_predicate)?
+                };
 
                 // If we unnest the subquery into a simple join, then we can replace the
                 // original predicate with a `TRUE` literal to eliminate the conjunction.
@@ -511,6 +276,199 @@ impl SubqueryRewriter {
 
                 Ok((BoundColumnRef { column: column_ref }.into(), s_expr))
             }
+        }
+    }
+
+    fn try_rewrite_uncorrelated_subquery(
+        &mut self,
+        left: &SExpr,
+        subquery: &SubqueryExpr,
+    ) -> Result<(SExpr, UnnestResult)> {
+        match subquery.typ {
+            SubqueryType::Scalar => {
+                let cross_join = LogicalInnerJoin {
+                    left_conditions: vec![],
+                    right_conditions: vec![],
+                    other_conditions: vec![],
+                    join_type: JoinType::Cross,
+                    marker_index: None,
+                }
+                .into();
+                Ok((
+                    SExpr::create_binary(
+                        cross_join,
+                        left.clone(),
+                        SExpr::create_unary(Max1Row.into(), *subquery.subquery.clone()),
+                    ),
+                    UnnestResult::Uncorrelated,
+                ))
+            }
+            SubqueryType::Exists | SubqueryType::NotExists => {
+                let mut subquery_expr = *subquery.subquery.clone();
+                // Wrap Limit to current subquery
+                let limit = Limit {
+                    limit: Some(1),
+                    offset: 0,
+                };
+                subquery_expr = SExpr::create_unary(limit.into(), subquery_expr.clone());
+
+                // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
+                // In contrast, NOT EXISTS subquery will be rewritten into `COUNT(*) = 0`.
+                // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
+                // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
+                let agg_func = AggregateFunctionFactory::instance().get("count", vec![], vec![])?;
+                let agg_func_index = self.metadata.write().add_column(
+                    "count(*)".to_string(),
+                    agg_func.return_type()?,
+                    None,
+                );
+
+                let agg = Aggregate {
+                    group_items: vec![],
+                    aggregate_functions: vec![ScalarItem {
+                        scalar: AggregateFunction {
+                            display_name: "count(*)".to_string(),
+                            func_name: "count".to_string(),
+                            distinct: false,
+                            params: vec![],
+                            args: vec![],
+                            return_type: Box::new(agg_func.return_type()?),
+                        }
+                        .into(),
+                        index: agg_func_index,
+                    }],
+                    from_distinct: false,
+                };
+
+                // COUNT(*) = 1 or COUNT(*) = 0
+                let compare_index = self.metadata.write().add_column(
+                    "subquery".to_string(),
+                    BooleanType::new_impl(),
+                    None,
+                );
+                let compare = ComparisonExpr {
+                    op: ComparisonOp::Equal,
+                    left: Box::new(
+                        BoundColumnRef {
+                            column: ColumnBinding {
+                                database_name: None,
+                                table_name: None,
+                                column_name: "count(*)".to_string(),
+                                index: agg_func_index,
+                                data_type: Box::new(agg_func.return_type()?),
+                                visible_in_unqualified_wildcard: false,
+                            },
+                        }
+                        .into(),
+                    ),
+                    right: Box::new(
+                        ConstantExpr {
+                            value: if SubqueryType::Exists == subquery.typ {
+                                DataValue::Int64(1)
+                            } else {
+                                DataValue::Int64(0)
+                            },
+                            data_type: Box::new(agg_func.return_type()?),
+                        }
+                        .into(),
+                    ),
+                    return_type: Box::new(agg_func.return_type()?),
+                };
+                let eval_scalar = EvalScalar {
+                    items: vec![ScalarItem {
+                        scalar: compare.into(),
+                        index: compare_index,
+                    }],
+                };
+
+                let project = Project {
+                    columns: ColumnSet::from([compare_index]),
+                };
+
+                // Project
+                //     EvalScalar: COUNT(*) = 1 or COUNT(*) = 0
+                //         Aggregate: COUNT(*)
+                let rewritten_subquery = SExpr::create_unary(
+                    project.into(),
+                    SExpr::create_unary(
+                        eval_scalar.into(),
+                        SExpr::create_unary(agg.into(), subquery_expr),
+                    ),
+                );
+                let cross_join = LogicalInnerJoin {
+                    left_conditions: vec![],
+                    right_conditions: vec![],
+                    other_conditions: vec![],
+                    join_type: JoinType::Cross,
+                    marker_index: None,
+                }
+                .into();
+                Ok((
+                    SExpr::create_binary(cross_join, left.clone(), rewritten_subquery),
+                    UnnestResult::Uncorrelated,
+                ))
+            }
+            SubqueryType::Any => {
+                let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
+                let prop = rel_expr.derive_relational_prop()?;
+                let output_columns = prop.output_columns.clone();
+                let index = output_columns
+                    .iter()
+                    .take(1)
+                    .next()
+                    .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
+                let column_name = format!("subquery_{}", index);
+                let left_condition = Scalar::BoundColumnRef(BoundColumnRef {
+                    column: ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        column_name,
+                        index: *index,
+                        data_type: subquery.data_type.clone(),
+                        visible_in_unqualified_wildcard: false,
+                    },
+                });
+                let right_condition = *subquery.child_expr.as_ref().unwrap().clone();
+                let op = subquery.compare_op.as_ref().unwrap().clone();
+                let (left_conditions, right_conditions, other_conditions) =
+                    if op == ComparisonOp::Equal {
+                        (vec![left_condition], vec![right_condition], vec![])
+                    } else {
+                        let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
+                            op,
+                            left: Box::new(right_condition),
+                            right: Box::new(left_condition),
+                            return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                        });
+                        (vec![], vec![], vec![other_condition])
+                    };
+                // Add a marker column to save comparison result.
+                // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
+                // If subquery contains NULL, the comparison result is TRUE or NULL.
+                // Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
+                // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
+                let marker_index = self.metadata.write().add_column(
+                    "marker".to_string(),
+                    NullableType::new_impl(BooleanType::new_impl()),
+                    None,
+                );
+                // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
+                // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
+                // Note that subquery is the left table, and it'll be the probe side.
+                let mark_join = LogicalInnerJoin {
+                    left_conditions,
+                    right_conditions,
+                    other_conditions,
+                    join_type: JoinType::Mark,
+                    marker_index: Some(marker_index),
+                }
+                .into();
+                Ok((
+                    SExpr::create_binary(mark_join, *subquery.subquery.clone(), left.clone()),
+                    UnnestResult::MarkJoin { marker_index },
+                ))
+            }
+            _ => unreachable!(),
         }
     }
 }
