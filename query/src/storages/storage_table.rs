@@ -34,7 +34,7 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::NewPipeline;
 use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]

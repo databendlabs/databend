@@ -24,8 +24,8 @@ use opendal::io_util::CompressAlgorithm;
 use opendal::io_util::DecompressDecoder;
 use poem::web::Multipart;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::SourcePipeBuilder;
 use crate::servers::http::v1::parallel_format_source::ParallelInputFormatSource;
 use crate::servers::http::v1::parallel_format_source::ParallelMultipartWorker;
 use crate::servers::http::v1::sequential_format_source::SequentialInputFormatSource;

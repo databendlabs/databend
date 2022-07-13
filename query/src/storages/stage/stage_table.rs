@@ -32,10 +32,10 @@ use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 
 use super::StageSource;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::TransformLimit;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::TransformLimit;
+use crate::pipelines::NewPipeline;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 

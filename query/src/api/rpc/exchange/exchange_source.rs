@@ -20,9 +20,9 @@ use common_exception::Result;
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_source_merge::ExchangeMergeSource;
 use crate::api::rpc::exchange::exchange_source_shuffle::ExchangeShuffleSource;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::NewPipeline;
+use crate::pipelines::SourcePipeBuilder;
 
 pub struct ExchangeSource {}
 

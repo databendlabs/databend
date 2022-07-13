@@ -25,7 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
-use databend_query::pipelines::new::NewPipeline;
+use databend_query::pipelines::NewPipeline;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::FuseTable;

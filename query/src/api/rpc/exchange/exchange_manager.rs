@@ -52,10 +52,10 @@ use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::QueryPipelineBuilder;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::NewPipe;
+use crate::pipelines::NewPipeline;
+use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::Config;
 

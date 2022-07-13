@@ -35,12 +35,12 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use futures::Stream;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::AsyncSource;
-use crate::pipelines::new::processors::AsyncSourcer;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::AsyncSource;
+use crate::pipelines::processors::AsyncSourcer;
+use crate::pipelines::NewPipe;
+use crate::pipelines::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 use crate::table_functions::table_function_factory::TableArgs;

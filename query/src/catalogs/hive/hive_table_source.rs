@@ -24,10 +24,10 @@ use common_exception::Result;
 use common_planners::PartInfoPtr;
 
 use crate::catalogs::hive::hive_table_source::State::Generated;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
 use crate::storages::hive::HiveParquetBlockReader;
 

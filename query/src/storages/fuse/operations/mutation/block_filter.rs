@@ -22,7 +22,7 @@ use common_datavalues::Series;
 use common_exception::Result;
 use common_planners::Expression;
 
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::operations::mutation::mutations_collector::Deletion;

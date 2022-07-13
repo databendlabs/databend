@@ -28,10 +28,10 @@ use common_planners::Statistics;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::TransformLimit;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::TransformLimit;
+use crate::pipelines::NewPipeline;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::meta::SegmentInfo;

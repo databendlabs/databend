@@ -25,9 +25,9 @@ use crate::interpreters::plan_schedulers;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
-use crate::pipelines::new::executor::PipelinePullingExecutor;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::QueryPipelineBuilder;
+use crate::pipelines::executor::PipelinePullingExecutor;
+use crate::pipelines::NewPipeline;
+use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
 /// SelectInterpreter struct which interprets SelectPlan

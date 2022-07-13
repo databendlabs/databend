@@ -19,8 +19,8 @@ use common_planners::ReadDataSourcePlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::ProcessorExecutorStream;
-use crate::pipelines::new::executor::PipelinePullingExecutor;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::executor::PipelinePullingExecutor;
+use crate::pipelines::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 

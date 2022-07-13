@@ -38,7 +38,7 @@ use common_tracing::tracing;
 use futures::StreamExt;
 use uuid::Uuid;
 
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
