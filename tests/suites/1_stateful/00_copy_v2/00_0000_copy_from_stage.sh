@@ -19,8 +19,8 @@ aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontim
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet s3://testbucket/admin/stage/s1/ontime_200.parquet >/dev/null 2>&1
 
 ## Copy from internal stage
-echo "CREATE STAGE s1;" | $MYSQL_CLIENT_CONNECT
-echo "list @s1 PATTERN = 'ontime.*'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' | sort
+echo "set enable_planner_v2 = 1; CREATE STAGE s1;" | $MYSQL_CLIENT_CONNECT
+echo "set enable_planner_v2 = 1; list @s1 PATTERN = 'ontime.*'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' | sort
 
 copy_from_stage_cases=(
   # copy parquet
@@ -31,7 +31,7 @@ copy_from_stage_cases=(
   "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1);"
   # copy bz2 csv
   "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
-   # copy bz2 csv
+   # copy xz csv
     "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'xz'  record_delimiter = '\n' skip_header = 1);"
   # copy auto csv
   "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.gz', 'ontime_200.csv.zst', 'ontime_200.csv.bz2', 'ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = AUTO  record_delimiter = '\n' skip_header = 1);"
@@ -44,8 +44,8 @@ for i in "${copy_from_stage_cases[@]}"; do
 done
 
 ## Copy from named external stage
-echo "CREATE STAGE named_external_stage url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');" | $MYSQL_CLIENT_CONNECT
-echo "list @named_external_stage PATTERN = 'ontime.*parquet$'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' | sort
+echo "set enable_planner_v2 = 1; CREATE STAGE named_external_stage url = 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
+echo "set enable_planner_v2 = 1; list @named_external_stage PATTERN = 'ontime.*parquet$'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' | sort
 
 copy_from_named_external_stage_cases=(
   # copy parquet

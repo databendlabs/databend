@@ -55,6 +55,7 @@ mod scalar;
 mod scalar_common;
 mod scalar_visitor;
 mod select;
+mod setting;
 mod show;
 mod sort;
 mod table;
@@ -256,6 +257,15 @@ impl<'a> Binder {
             })),
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
+
+            Statement::SetVariable {
+                is_global,
+                variable,
+                value,
+            } => {
+                self.bind_set_variable(bind_context, *is_global, variable, value)
+                    .await?
+            }
 
             _ => {
                 return Err(ErrorCode::UnImplement(format!(

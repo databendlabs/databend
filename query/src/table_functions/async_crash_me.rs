@@ -33,7 +33,6 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_streams::SendableDataBlockStream;
 use futures::Stream;
 
 use crate::pipelines::new::processors::port::OutputPort;
@@ -116,16 +115,6 @@ impl Table for AsyncCrashMeTable {
 
     fn table_args(&self) -> Option<Vec<Expression>> {
         Some(vec![Expression::create_literal(DataValue::UInt64(0))])
-    }
-
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(AsyncCrashMeStream {
-            message: self.panic_message.clone(),
-        }))
     }
 
     fn read2(

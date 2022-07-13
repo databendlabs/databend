@@ -17,6 +17,7 @@ mod role_mgr;
 mod user;
 mod user_api;
 mod user_mgr;
+mod user_setting;
 mod user_stage;
 mod user_udf;
 

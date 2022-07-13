@@ -120,7 +120,7 @@ impl ExplainInterpreterV2 {
         // Format root pipeline
         blocks.push(DataBlock::create(self.schema.clone(), vec![
             Series::from_data(
-                format!("{:?}", root_pipeline)
+                format!("{}", root_pipeline.display_indent())
                     .lines()
                     .map(|s| s.as_bytes())
                     .collect::<Vec<_>>(),
@@ -130,7 +130,7 @@ impl ExplainInterpreterV2 {
         for pipeline in pipelines.iter() {
             blocks.push(DataBlock::create(self.schema.clone(), vec![
                 Series::from_data(
-                    format!("\n{:?}", pipeline)
+                    format!("\n{}", pipeline.display_indent())
                         .lines()
                         .map(|s| s.as_bytes())
                         .collect::<Vec<_>>(),

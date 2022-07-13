@@ -14,9 +14,10 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_io::prelude::StorageParams;
-use common_io::prelude::StorageS3Config;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config;
 use databend_query::storages::system::ConfigsTable;
+use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -98,6 +99,7 @@ async fn test_configs_table() -> Result<()> {
         "| query   | table_memory_cache_mb_size           | 256                       |             |",
         "| query   | tenant_id                            | test                      |             |",
         "| query   | wait_timeout_mills                   | 5000                      |             |",
+        "| storage | allow_insecure                       | false                     |             |",
         "| storage | azblob.account_key                   |                           |             |",
         "| storage | azblob.account_name                  |                           |             |",
         "| storage | azblob.container                     |                           |             |",
@@ -214,6 +216,7 @@ async fn test_configs_table_redact() -> Result<()> {
         "| query   | table_memory_cache_mb_size           | 256                       |             |",
         "| query   | tenant_id                            | test                      |             |",
         "| query   | wait_timeout_mills                   | 5000                      |             |",
+        "| storage | allow_insecure                       | false                     |             |",
         "| storage | azblob.account_key                   |                           |             |",
         "| storage | azblob.account_name                  |                           |             |",
         "| storage | azblob.container                     |                           |             |",

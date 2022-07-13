@@ -13,7 +13,7 @@ test = false
 [dependencies]
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../exception" }
-common-io = { path = "../../io" }
+common-storage = { path = "../../storage" }
 
 openraft = { git = "https://github.com/datafuselabs/openraft", rev = "v0.7.0-alpha.2" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }

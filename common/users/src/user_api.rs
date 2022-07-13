@@ -20,6 +20,8 @@ use common_management::QuotaApi;
 use common_management::QuotaMgr;
 use common_management::RoleApi;
 use common_management::RoleMgr;
+use common_management::SettingApi;
+use common_management::SettingMgr;
 use common_management::StageApi;
 use common_management::StageMgr;
 use common_management::UdfApi;
@@ -59,5 +61,9 @@ impl UserApiProvider {
 
     pub fn get_tenant_quota_api_client(&self, tenant: &str) -> Result<Arc<dyn QuotaApi>> {
         Ok(Arc::new(QuotaMgr::create(self.client.clone(), tenant)?))
+    }
+
+    pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
+        Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
     }
 }

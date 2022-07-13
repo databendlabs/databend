@@ -22,7 +22,7 @@ default = ["simd"]
 simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling", "tempfile"]
-storage-hdfs = ["opendal/services-hdfs", "common-io/storage-hdfs"]
+storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
 hive = ["common-hive-meta-store", "thrift", "storage-hdfs"]
 
 [dependencies]
@@ -54,6 +54,7 @@ common-meta-store = { path = "../common/meta/store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
+common-storage = { path = "../common/storage" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 common-users = { path = "../common/users" }
@@ -96,7 +97,7 @@ num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.16.0"
 once_cell = "1.12.0"
-opendal = { version = "0.10.0", features = ["retry", "compress"] }
+opendal = { version = "0.11.0", features = ["retry", "compress"] }
 opensrv-clickhouse = "0.1.0"
 opensrv-mysql = "0.1.0"
 openssl = { version = "0.10.40", features = ["vendored"] }
@@ -140,7 +141,7 @@ walkdir = "2.3.2"
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }
 criterion = "0.3.5"
-goldenfile = "1.3.0"
+goldenfile = "1.4"
 hex = "0.4.3"
 jwt-simple = "0.11.0"
 maplit = "1.0.2"

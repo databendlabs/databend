@@ -19,13 +19,14 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::parse_escape_string;
-use common_io::prelude::StorageParams;
-use common_io::prelude::StorageS3Config;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageParams;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config;
+use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use common_tracing::tracing::debug;
 use sqlparser::ast::ObjectName;
 
@@ -55,8 +56,6 @@ use crate::sessions::QueryContext;
 /// For internal stage, we will also add prefix `/stage/<stage>/`
 ///
 /// - @internal/abc => (internal, "/stage/internal/abc")
-///
-/// TODO(xuanwo): Move those logic into parser.
 pub async fn parse_stage_location(
     ctx: &Arc<QueryContext>,
     location: &str,
@@ -79,8 +78,6 @@ pub async fn parse_stage_location(
 /// parse_stage_location_v2 work similar to parse_stage_location.
 ///
 /// Difference is input location has already been parsed by parser.
-///
-/// TODO(xuanwo): Move this logic into parser
 pub async fn parse_stage_location_v2(
     ctx: &Arc<QueryContext>,
     name: &str,
@@ -110,8 +107,9 @@ pub async fn parse_stage_location_v2(
 ///     file_format = (type = csv field_delimiter = '|' skip_header = 1)"
 /// ```
 ///
-/// TODO(xuanwo): Move this logic into parser
+/// TODO: should be removed after old planner has been removed.
 pub fn parse_uri_location(
+    ctx: &Arc<QueryContext>,
     location: &str,
     credential_options: &BTreeMap<String, String>,
     encryption_options: &BTreeMap<String, String>,
@@ -143,6 +141,7 @@ pub fn parse_uri_location(
     }
 
     parse_uri_location_v2(
+        ctx,
         uri.scheme_str()
             .ok_or_else(|| ErrorCode::SyntaxException("File location scheme must be specified"))?,
         &bucket,
@@ -164,8 +163,9 @@ pub fn parse_uri_location(
 /// This function works similar with parse_uri_location.
 /// Different is input location has been parsed.
 ///
-/// TODO(xuanwo): Move this logic into parser
+/// TODO: should be removed after old planner has been removed.
 pub fn parse_uri_location_v2(
+    ctx: &Arc<QueryContext>,
     protocol: &str,
     name: &str,
     path: &str,
@@ -185,9 +185,20 @@ pub fn parse_uri_location_v2(
     let stage_storage = match protocol {
         // AWS s3 plan.
         "s3" => {
+            // TODO
+            //
+            // In the new planner, we have supported storage from
+            // different services. We have to remove those logic
+            // while old planner removed.
+            let endpoint_url = match ctx.get_config().storage.params {
+                StorageParams::S3(v) => v.endpoint_url,
+                _ => STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
+            };
+
             let cfg = StorageS3Config {
                 bucket: name.to_string(),
                 root: root.to_string(),
+                endpoint_url,
                 access_key_id: credentials.get("aws_key_id").cloned().unwrap_or_default(),
                 secret_access_key: credentials
                     .get("aws_secret_key")

@@ -25,7 +25,6 @@ use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
-use common_datablocks::HashMethodSingleString;
 use common_datavalues::DataType;
 use common_datavalues::MutableColumn;
 use common_datavalues::ScalarColumn;
@@ -54,9 +53,6 @@ pub type KeysU256FinalAggregator<const HAS_AGG: bool> =
     FinalAggregator<HAS_AGG, HashMethodKeysU256>;
 pub type KeysU512FinalAggregator<const HAS_AGG: bool> =
     FinalAggregator<HAS_AGG, HashMethodKeysU512>;
-
-pub type SingleStringFinalAggregator<const HAS_AGG: bool> =
-    FinalAggregator<HAS_AGG, HashMethodSingleString>;
 
 pub type SerializerFinalAggregator<const HAS_AGG: bool> =
     FinalAggregator<HAS_AGG, HashMethodSerializer>;
@@ -137,7 +133,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for FinalAggregator<true, Method>
 {
-    const NAME: &'static str = "FinalAggregatorWithAggregateFunction";
+    const NAME: &'static str = "GroupByFinalTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
@@ -237,7 +233,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for FinalAggregator<false, Method>
 {
-    const NAME: &'static str = "";
+    const NAME: &'static str = "GroupByFinalTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         let key_array = block.column(0);

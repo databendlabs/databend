@@ -611,3 +611,8 @@ pub struct CountTablesReq {
 pub struct CountTablesReply {
     pub count: u64,
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct TableIdToName {
+    pub table_id: u64,
+}

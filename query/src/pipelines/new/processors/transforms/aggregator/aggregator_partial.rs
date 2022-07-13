@@ -25,7 +25,6 @@ use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
-use common_datablocks::HashMethodSingleString;
 use common_datavalues::ColumnRef;
 use common_datavalues::MutableColumn;
 use common_datavalues::MutableStringColumn;
@@ -61,8 +60,6 @@ pub type KeysU512PartialAggregator<const HAS_AGG: bool> =
 
 pub type SerializerPartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodSerializer>;
-pub type SingleStringPartialAggregator<const HAS_AGG: bool> =
-    PartialAggregator<HAS_AGG, HashMethodSingleString>;
 
 pub struct PartialAggregator<
     const HAS_AGG: bool,
@@ -93,9 +90,9 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    fn lookup_key(keys: Vec<Method::HashKey<'_>>, state: &mut Method::State) {
+    fn lookup_key(keys_iter: Method::HashKeyIter<'_>, state: &mut Method::State) {
         let mut inserted = true;
-        for key in keys.iter() {
+        for key in keys_iter {
             state.entity(key, &mut inserted);
         }
     }
@@ -104,13 +101,13 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     #[inline(always)]
     fn lookup_state(
         params: &Arc<AggregatorParams>,
-        keys: Vec<Method::HashKey<'_>>,
+        keys_iter: Method::HashKeyIter<'_>,
         state: &mut Method::State,
     ) -> StateAddrs {
-        let mut places = Vec::with_capacity(keys.len());
+        let mut places = Vec::with_capacity(keys_iter.size_hint().0);
 
         let mut inserted = true;
-        for key in keys.iter() {
+        for key in keys_iter {
             let entity = state.entity(key, &mut inserted);
 
             match inserted {
@@ -233,12 +230,16 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for PartialAggregator<true, Method>
 {
-    const NAME: &'static str = "";
+    const NAME: &'static str = "GroupByPartialTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
-        let group_keys = self.method.build_keys(&group_columns, block.num_rows())?;
+        let group_keys_state = self
+            .method
+            .build_keys_state(&group_columns, block.num_rows())?;
+
+        let group_keys_iter = self.method.build_keys_iter(&group_keys_state)?;
 
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
@@ -246,7 +247,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
             self.state.convert_to_two_level();
         }
 
-        let places = Self::lookup_state(&self.params, group_keys, &mut self.state);
+        let places = Self::lookup_state(&self.params, group_keys_iter, &mut self.state);
         Self::execute(&self.params, &block, &places)
     }
 
@@ -258,12 +259,16 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for PartialAggregator<false, Method>
 {
-    const NAME: &'static str = "";
+    const NAME: &'static str = "GroupByPartialTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
-        let group_keys = self.method.build_keys(&group_columns, block.num_rows())?;
+
+        let keys_state = self
+            .method
+            .build_keys_state(&group_columns, block.num_rows())?;
+        let group_keys_iter = self.method.build_keys_iter(&keys_state)?;
 
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
@@ -271,7 +276,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
             self.state.convert_to_two_level();
         }
 
-        Self::lookup_key(group_keys, &mut self.state);
+        Self::lookup_key(group_keys_iter, &mut self.state);
         Ok(())
     }
 

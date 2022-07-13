@@ -26,8 +26,8 @@ use common_base::base::SignalStream;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::init_operator;
 use common_metrics::label_counter;
+use common_storage::init_operator;
 use common_tracing::init_query_logger;
 use common_tracing::tracing;
 use common_tracing::tracing_appender::non_blocking::WorkerGuard;
@@ -389,7 +389,7 @@ impl SessionManager {
 
     // Init the storage operator by config.
     async fn init_storage_operator(conf: &Config) -> Result<Operator> {
-        let op = init_operator(&conf.storage).await?;
+        let op = init_operator(&conf.storage.params).await?;
         // Enable exponential backoff by default
         let op = op.with_backoff(backon::ExponentialBackoff::default());
         // OpenDAL will send a real request to underlying storage to check whether it works or not.

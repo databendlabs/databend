@@ -59,4 +59,3 @@ mod interpreter_user_stage;
 mod interpreter_user_udf_alter;
 mod interpreter_user_udf_create;
 mod interpreter_user_udf_drop;
-mod plan_schedulers;

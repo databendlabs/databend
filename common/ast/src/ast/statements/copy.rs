@@ -101,18 +101,8 @@ pub enum CopyUnit<'a> {
     },
     /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
     ///
-    /// For examples: `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
-    ///
-    /// TODO(xuanwo): Add endpoint_url support.
-    /// TODO(xuanwo): We can check if we support this protocol during parsing.
-    /// TODO(xuanwo): Maybe we can introduce more strict (friendly) report for credentials and encryption, like parsed into StorageConfig?
-    UriLocation {
-        protocol: String,
-        name: String,
-        path: String,
-        credentials: BTreeMap<String, String>,
-        encryption: BTreeMap<String, String>,
-    },
+    /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
+    UriLocation(UriLocation),
     /// Query can only be used as `FROM`.
     ///
     /// For example:`(SELECT field_a,field_b FROM table)`
@@ -153,29 +143,33 @@ impl Display for CopyUnit<'_> {
             CopyUnit::StageLocation { name, path } => {
                 write!(f, "@{name}{path}")
             }
-            CopyUnit::UriLocation {
-                protocol,
-                name,
-                path,
-                credentials,
-                encryption,
-            } => {
-                write!(f, "'{protocol}://{name}{path}'")?;
-                if !credentials.is_empty() {
-                    write!(f, " CREDENTIALS = ( ")?;
-                    write_space_seperated_map(f, credentials)?;
-                    write!(f, " )")?;
-                }
-                if !encryption.is_empty() {
-                    write!(f, " ENCRYPTION = ( ")?;
-                    write_space_seperated_map(f, encryption)?;
-                    write!(f, " )")?;
-                }
-                Ok(())
-            }
+            CopyUnit::UriLocation(v) => v.fmt(f),
             CopyUnit::Query(query) => {
                 write!(f, "({query})")
             }
         }
+    }
+}
+
+/// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
+///
+/// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UriLocation {
+    pub protocol: String,
+    pub name: String,
+    pub path: String,
+    pub connection: BTreeMap<String, String>,
+}
+
+impl Display for UriLocation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}://{}{}'", self.protocol, self.name, self.path)?;
+        if !self.connection.is_empty() {
+            write!(f, " CONNECTION = ( ")?;
+            write_space_seperated_map(f, &self.connection)?;
+            write!(f, " )")?;
+        }
+        Ok(())
     }
 }

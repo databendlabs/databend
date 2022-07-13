@@ -14,9 +14,9 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_io::prelude::StorageFsConfig;
-use common_io::prelude::StorageParams;
-use common_io::prelude::StorageS3Config;
+use common_storage::StorageFsConfig;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 use wiremock::Mock;
