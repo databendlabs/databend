@@ -21,7 +21,7 @@ impl Plan {
         match self {
             Plan::Query {
                 s_expr, metadata, ..
-            } => s_expr.to_format_tree(metadata).format_indent(),
+            } => s_expr.to_format_tree(metadata).format_pretty(),
             Plan::Explain { kind, plan } => {
                 let result = plan.format_indent()?;
                 Ok(format!("{:?}:\n{}", kind, result))
@@ -99,6 +99,8 @@ impl Plan {
             Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
 
             Plan::Presign(presign) => Ok(format!("{:?}", presign)),
+
+            Plan::SetVariable(_set_variable) => Ok("SET".to_string()),
         }
     }
 }

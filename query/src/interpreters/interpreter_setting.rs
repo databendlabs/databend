@@ -57,14 +57,16 @@ impl Interpreter for SettingInterpreter {
                     let _ = tz.parse::<Tz>().map_err(|_| {
                         ErrorCode::InvalidTimezone(format!("Invalid Timezone: {}", var.value))
                     })?;
-                    self.ctx
-                        .get_settings()
-                        .set_settings(var.variable, tz.to_string(), false)?;
+                    self.ctx.get_settings().set_settings(
+                        var.variable,
+                        tz.to_string(),
+                        var.is_global,
+                    )?;
                 }
                 _ => {
                     self.ctx
                         .get_settings()
-                        .set_settings(var.variable, var.value, false)?;
+                        .set_settings(var.variable, var.value, var.is_global)?;
                 }
             }
         }

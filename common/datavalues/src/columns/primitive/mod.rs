@@ -319,6 +319,11 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         let v = unsafe { self.value_unchecked(index) };
         v.into()
     }
+
+    fn serialize(&self, vec: &mut Vec<u8>, row: usize) {
+        let value = unsafe { self.value_unchecked(row) };
+        vec.extend_from_slice(value.to_le_bytes().as_ref());
+    }
 }
 
 impl<T> ScalarColumn for PrimitiveColumn<T>
