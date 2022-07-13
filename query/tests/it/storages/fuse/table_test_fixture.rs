@@ -46,6 +46,7 @@ use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
 use tempfile::TempDir;
+use tokio_stream::StreamExt;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
@@ -135,7 +136,7 @@ impl TestFixture {
                     // database id is required for FUSE
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
-                .into(),
+                    .into(),
                 default_cluster_key: Some("(id)".to_string()),
                 cluster_keys: vec!["(id)".to_string()],
                 default_cluster_key_id: Some(0),
@@ -209,7 +210,7 @@ fn gen_db_name(prefix: &str) -> String {
 pub async fn test_drive(
     test_db: Option<&str>,
     test_tbl: Option<&str>,
-) -> Result<SendableDataBlockStream> {
+) -> Result<()> {
     let arg_db = match test_db {
         Some(v) => DataValue::String(v.as_bytes().to_vec()),
         None => DataValue::Null,
@@ -224,12 +225,21 @@ pub async fn test_drive(
         Expression::create_literal(arg_db),
         Expression::create_literal(arg_tbl),
     ]);
+
     test_drive_with_args(tbl_args).await
 }
 
-pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<SendableDataBlockStream> {
+pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
-    test_drive_with_args_and_ctx(tbl_args, ctx).await
+    let mut stream = test_drive_with_args_and_ctx(tbl_args, ctx).await?;
+
+    while let Some(res) = stream.next().await {
+        if let Err(cause) = res {
+            return Err(cause);
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn test_drive_with_args_and_ctx(
@@ -284,7 +294,7 @@ pub async fn expects_ok(
 ) -> Result<()> {
     match res {
         Ok(stream) => {
-            let blocks: Vec<DataBlock> = stream.try_collect().await.unwrap();
+            let blocks: Vec<DataBlock> = stream.try_collect().await?;
             assert_blocks_sorted_eq_with_name(case_name.as_ref(), expected, &blocks)
         }
         Err(err) => {
@@ -403,5 +413,5 @@ pub async fn history_should_have_only_one_item(
         execute_query(fixture.ctx(), qry.as_str()).await,
         expected,
     )
-    .await
+        .await
 }

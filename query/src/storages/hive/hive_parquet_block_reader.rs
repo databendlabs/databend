@@ -222,7 +222,7 @@ impl HiveParquetBlockReader {
             )?);
         }
 
-        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
+        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, row_group.num_rows(), None);
 
         self.try_next_block(&mut deserializer)
     }

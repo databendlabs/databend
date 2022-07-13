@@ -93,7 +93,6 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
             "| snapshot_id | snapshot_location | format_version | previous_snapshot_id | segment_count | block_count | row_count | bytes_uncompressed | bytes_compressed | timestamp |",
             "+-------------+-------------------+----------------+----------------------+---------------+-------------+-----------+--------------------+------------------+-----------+",
             "+-------------+-------------------+----------------+----------------------+---------------+-------------+-----------+--------------------+------------------+-----------+",
-
         ];
 
         expects_ok(
@@ -102,7 +101,7 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
                 .await,
             expected,
         )
-        .await?;
+            .await?;
     }
 
     {
@@ -125,7 +124,7 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
             execute_query(ctx.clone(), qry.as_str()).await,
             expected,
         )
-        .await?;
+            .await?;
     }
 
     {
@@ -145,7 +144,7 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
             execute_query(ctx.clone(), qry.as_str()).await,
             expected,
         )
-        .await?;
+            .await?;
     }
 
     {
@@ -168,7 +167,7 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
             execute_query(ctx.clone(), qry.as_str()).await,
             expected,
         )
-        .await?;
+            .await?;
     }
 
     {

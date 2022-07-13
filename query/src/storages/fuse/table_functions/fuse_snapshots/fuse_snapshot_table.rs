@@ -167,6 +167,7 @@ impl FuseHistorySource {
 #[async_trait::async_trait]
 impl AsyncSource for FuseHistorySource {
     const NAME: &'static str = "fuse_snapshot";
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
@@ -201,7 +202,7 @@ impl TableFunction for FuseSnapshotTable {
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-    where Self: 'a {
+        where Self: 'a {
         self
     }
 }

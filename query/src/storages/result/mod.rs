@@ -18,6 +18,7 @@ mod result_locations;
 mod result_table;
 mod result_table_sink;
 mod writer;
+mod result_table_source;
 
 pub use result_table::ResultQueryInfo;
 pub use result_table::ResultTable;
