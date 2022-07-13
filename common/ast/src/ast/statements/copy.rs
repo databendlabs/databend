@@ -101,17 +101,12 @@ pub enum CopyUnit<'a> {
     },
     /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
     ///
-    /// For examples: `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
-    ///
-    /// TODO(xuanwo): Add endpoint_url support.
-    /// TODO(xuanwo): We can check if we support this protocol during parsing.
-    /// TODO(xuanwo): Maybe we can introduce more strict (friendly) report for credentials and encryption, like parsed into StorageConfig?
+    /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
     UriLocation {
         protocol: String,
         name: String,
         path: String,
-        credentials: BTreeMap<String, String>,
-        encryption: BTreeMap<String, String>,
+        connection: BTreeMap<String, String>,
     },
     /// Query can only be used as `FROM`.
     ///
@@ -157,18 +152,12 @@ impl Display for CopyUnit<'_> {
                 protocol,
                 name,
                 path,
-                credentials,
-                encryption,
+                connection,
             } => {
                 write!(f, "'{protocol}://{name}{path}'")?;
-                if !credentials.is_empty() {
-                    write!(f, " CREDENTIALS = ( ")?;
-                    write_space_seperated_map(f, credentials)?;
-                    write!(f, " )")?;
-                }
-                if !encryption.is_empty() {
-                    write!(f, " ENCRYPTION = ( ")?;
-                    write_space_seperated_map(f, encryption)?;
+                if !connection.is_empty() {
+                    write!(f, " CONNECTION = ( ")?;
+                    write_space_seperated_map(f, connection)?;
                     write!(f, " )")?;
                 }
                 Ok(())

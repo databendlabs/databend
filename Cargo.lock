@@ -1275,7 +1275,6 @@ dependencies = [
  "futures",
  "lexical-core",
  "micromarshal",
- "opendal",
  "rand 0.8.5",
  "serde",
  "time 0.3.11",
@@ -1307,6 +1306,7 @@ dependencies = [
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
+ "common-storage",
  "mockall",
  "serde_json",
 ]
@@ -1478,7 +1478,7 @@ dependencies = [
  "common-building",
  "common-datavalues",
  "common-exception",
- "common-io",
+ "common-storage",
  "derive_more",
  "enumflags2",
  "hex",
@@ -1539,10 +1539,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-datavalues",
- "common-io",
  "common-meta-app",
  "common-meta-types",
  "common-protos",
+ "common-storage",
  "enumflags2",
  "maplit",
  "num",
@@ -1560,6 +1560,15 @@ dependencies = [
  "prost-build",
  "tonic",
  "tonic-build",
+]
+
+[[package]]
+name = "common-storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "opendal",
+ "serde",
 ]
 
 [[package]]
@@ -2172,6 +2181,7 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-planners",
+ "common-storage",
  "common-streams",
  "common-tracing",
  "common-users",
@@ -4596,9 +4606,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6ce886835b8a98dd969901d278509c96e0800a2c550d5df445738f58426ea87"
+checksum = "770a7e8a4d84cf9fd2fbaea08b86fb59823b849b6b056c272be7ff806f3174f2"
 dependencies = [
  "anyhow",
  "async-compat",

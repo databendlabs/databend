@@ -58,6 +58,7 @@ impl AnalyzableStatement for DfCreateUserStage {
             },
             false => {
                 let (stage_storage, _) = parse_uri_location(
+                    &ctx,
                     &self.location,
                     &self.credential_options,
                     &self.encryption_options,

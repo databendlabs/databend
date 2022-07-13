@@ -175,6 +175,7 @@ impl DfCopy {
             parse_stage_location(ctx, &self.location).await
         } else {
             parse_uri_location(
+                ctx,
                 &self.location,
                 &self.credential_options,
                 &self.encryption_options,

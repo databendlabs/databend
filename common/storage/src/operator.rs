@@ -13,23 +13,22 @@
 // limitations under the License.
 
 use std::env;
+use std::io::Result;
 
-use common_exception::Result;
 use opendal::services::azblob;
 use opendal::services::fs;
 use opendal::services::memory;
 use opendal::services::s3;
 use opendal::Operator;
 
-use super::configs::StorageAzblobConfig;
-use super::configs::StorageConfig;
-use super::configs::StorageFsConfig;
-use super::configs::StorageParams;
-use super::configs::StorageS3Config;
+use super::StorageAzblobConfig;
+use super::StorageFsConfig;
+use super::StorageParams;
+use super::StorageS3Config;
 
 /// init_operator will init an opendal operator based on storage config.
-pub async fn init_operator(cfg: &StorageConfig) -> Result<Operator> {
-    Ok(match &cfg.params {
+pub async fn init_operator(cfg: &StorageParams) -> Result<Operator> {
+    Ok(match &cfg {
         StorageParams::Azblob(cfg) => init_azblob_operator(cfg).await?,
         StorageParams::Fs(cfg) => init_fs_operator(cfg).await?,
         #[cfg(feature = "storage-hdfs")]
@@ -72,9 +71,9 @@ pub async fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
     Ok(Operator::new(builder.finish().await?))
 }
 
-/// init_hdfs_operator will init a opendal hdfs operator.
+/// init_hdfs_operator will init an opendal hdfs operator.
 #[cfg(feature = "storage-hdfs")]
-pub async fn init_hdfs_operator(cfg: &super::configs::StorageHdfsConfig) -> Result<Operator> {
+pub async fn init_hdfs_operator(cfg: &super::StorageHdfsConfig) -> Result<Operator> {
     use opendal::services::hdfs;
 
     let mut builder = hdfs::Backend::build();
