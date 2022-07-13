@@ -565,11 +565,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident
-            ~ ( URL ~ "=" ~ #literal_string
-                ~ (CONNECTION ~ "=" ~ #options)?
-                ~ (CREDENTIALS ~ "=" ~ #options)?
-                ~ (ENCRYPTION ~ "=" ~ #options)?
-              )?
+            ~ ( URL ~ "=" ~ #uri_location)?
             ~ ( FILE_FORMAT ~ "=" ~ #options)?
             ~ ( ON_ERROR ~ "=" ~ #ident)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
@@ -588,32 +584,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             validation_mode_opt,
             comment_opt,
         )| {
-            let (location, connection_options) = url_opt
-                .map(|(_, _, url, conn, creds, encrypt)| {
-                    let mut conn = conn.map(|v| v.2).unwrap_or_default();
-                    conn.extend(creds.map(|v| v.2).unwrap_or_default());
-                    conn.extend(encrypt.map(|v| v.2).unwrap_or_default());
-
-                    (url, conn)
-                })
-                .unwrap_or_default();
-
-            let parsed = Url::parse(&location).map_err(|_| ErrorKind::Other("invalid url"))?;
-
             Ok(Statement::CreateStage(CreateStageStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 stage_name: stage.to_string(),
-                protocol: parsed.scheme().to_string(),
-                name: parsed
-                    .host_str()
-                    .ok_or(ErrorKind::Other("invalid uri location"))?
-                    .to_string(),
-                path: if parsed.path().is_empty() {
-                    "/".to_string()
-                } else {
-                    parsed.path().to_string()
-                },
-                connection: connection_options,
+                location: url_opt.map(|v| v.2),
                 file_format_options: file_format_opt
                     .map(|(_, _, file_format_opt)| file_format_opt)
                     .unwrap_or_default(),
