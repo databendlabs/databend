@@ -110,9 +110,13 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let set_variable = map(
         rule! {
-            SET ~ #ident ~ "=" ~ #literal
+            SET ~ (GLOBAL)? ~ #ident ~ "=" ~ #literal
         },
-        |(_, variable, _, value)| Statement::SetVariable { variable, value },
+        |(_, opt_is_global, variable, _, value)| Statement::SetVariable {
+            is_global: opt_is_global.is_some(),
+            variable,
+            value,
+        },
     );
     let show_databases = map(
         rule! {
