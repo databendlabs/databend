@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
+
 use crate::chunk::Chunk;
 use crate::expression::Expr;
 use crate::expression::Literal;
@@ -33,7 +35,7 @@ impl Evaluator {
     pub fn run(&self, expr: &Expr) -> Value<AnyType> {
         match expr {
             Expr::Literal(lit) => Value::Scalar(self.run_lit(lit)),
-            Expr::ColumnRef { id } => Value::Column(self.input_columns.columns[*id].clone()),
+            Expr::ColumnRef { id } => Value::Column(self.input_columns.columns()[*id].clone()),
             Expr::FunctionCall {
                 function,
                 args,
@@ -44,6 +46,13 @@ impl Evaluator {
                     .iter()
                     .map(|(expr, _)| self.run(expr))
                     .collect::<Vec<_>>();
+                assert!(cols
+                    .iter()
+                    .filter_map(|val| match val {
+                        Value::Column(col) => Some(col.len()),
+                        Value::Scalar(_) => None,
+                    })
+                    .all_equal());
                 let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
                 (function.eval)(cols_ref.as_slice(), generics)
             }

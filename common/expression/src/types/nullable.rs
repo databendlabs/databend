@@ -120,41 +120,41 @@ impl<T: ArgType> ArgType for NullableType<T> {
         validity.len()
     }
 
-    fn push_item((col, validity): &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn push_item((builder, validity): &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
         match item {
             Some(scalar) => {
-                T::push_item(col, scalar);
+                T::push_item(builder, scalar);
                 validity.push(true);
             }
             None => {
-                T::push_default(col);
+                T::push_default(builder);
                 validity.push(false);
             }
         }
     }
 
-    fn push_default((col, validity): &mut Self::ColumnBuilder) {
-        T::push_default(col);
+    fn push_default((builder, validity): &mut Self::ColumnBuilder) {
+        T::push_default(builder);
         validity.push(false);
     }
 
     fn append_builder(
-        (col, validity): &mut Self::ColumnBuilder,
-        (other_col, other_nulls): &Self::ColumnBuilder,
+        (builder, validity): &mut Self::ColumnBuilder,
+        (other_builder, other_nulls): &Self::ColumnBuilder,
     ) {
-        T::append_builder(col, other_col);
+        T::append_builder(builder, other_builder);
         validity.extend_from_slice(other_nulls.as_slice(), 0, other_nulls.len());
     }
 
-    fn build_column((col, validity): Self::ColumnBuilder) -> Self::Column {
-        // TODO: check that they have same length
-        (T::build_column(col), validity.into())
+    fn build_column((builder, validity): Self::ColumnBuilder) -> Self::Column {
+        assert_eq!(T::builder_len(&builder), validity.len());
+        (T::build_column(builder), validity.into())
     }
 
-    fn build_scalar((col, validity): Self::ColumnBuilder) -> Self::Scalar {
+    fn build_scalar((builder, validity): Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(validity.len(), 1);
         if validity.get(0) {
-            Some(T::build_scalar(col))
+            Some(T::build_scalar(builder))
         } else {
             None
         }

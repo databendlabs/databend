@@ -40,7 +40,6 @@ use common_expression::values::Value;
 use common_expression::values::ValueRef;
 use goldenfile::Mint;
 
-// TODO: Pretty print the result and input columns
 fn run_ast(file: &mut impl Write, raw: &RawExpr, columns: Vec<Column>) {
     writeln!(file, "raw expr       : {raw}").unwrap();
 
@@ -51,15 +50,27 @@ fn run_ast(file: &mut impl Write, raw: &RawExpr, columns: Vec<Column>) {
     writeln!(file, "property       : {prop}").unwrap();
     writeln!(file, "checked expr   : {expr}").unwrap();
 
+    let chunk = Chunk::new(columns);
+    if chunk.num_columns() > 0 {
+        writeln!(file, "input chunk:\n{}", chunk).unwrap();
+        writeln!(file, "input chunk (internal):\n{:?}", chunk).unwrap();
+    }
+
     let runtime = Evaluator {
-        input_columns: Chunk { columns },
+        input_columns: chunk,
         context: FunctionContext::default(),
     };
     let result = runtime.run(&expr);
-    for (i, col) in runtime.input_columns.columns.iter().enumerate() {
-        writeln!(file, "column[{i}]      : {col:?}").unwrap();
+    match result {
+        Value::Scalar(scalar) => writeln!(file, "evaluation result:\n{}", scalar.as_ref()).unwrap(),
+        Value::Column(col) => {
+            let chunk = Chunk::new(vec![col]);
+            writeln!(file, "evaluation result:\n{}", chunk).unwrap();
+            writeln!(file, "evaluation result (internal):\n{:?}", chunk).unwrap();
+        }
     }
-    writeln!(file, "eval result    : {result}\n").unwrap();
+
+    write!(file, "\n\n").unwrap();
 }
 
 #[test]
@@ -273,7 +284,7 @@ pub fn test() {
                     DataType::Boolean,
                     DataType::String,
                 ]))),
-                property: ValueProperty::default().not_null(true),
+                property: ValueProperty::default(),
             }],
             params: vec![1],
         },
@@ -421,13 +432,13 @@ pub fn test() {
                     array: Box::new(Column::Int16((0..100).collect())),
                     offsets: vec![
                         0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90,
-                        100,
+                        95, 100,
                     ]
                     .into(),
                 }),
-                offsets: vec![0, 4, 8, 12, 16, 20].into(),
+                offsets: vec![0, 4, 8, 11, 15, 20].into(),
             },
-            Column::UInt8(vec![0, 1, 2].into()),
+            Column::UInt8(vec![0, 1, 2, 3, 4].into()),
         ],
     );
 }
