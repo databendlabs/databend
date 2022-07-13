@@ -21,14 +21,12 @@ use common_datablocks::HashMethodKeysU128;
 use common_datablocks::HashMethodKeysU256;
 use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodSerializer;
-use common_datablocks::HashMethodSingleString;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_hashtable::HashMapKind;
 use primitive_types::U256;
 use primitive_types::U512;
 
-use super::aggregator_groups_builder::SingleStringGroupColumnsBuilder;
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
 use crate::pipelines::new::processors::AggregatorParams;
@@ -284,39 +282,6 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
         params: &AggregatorParams,
     ) -> Self::GroupColumnsBuilder {
         FixedKeysGroupColumnsBuilder::create(capacity, params)
-    }
-}
-
-impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
-    type State = SerializedKeysAggregatorState;
-    fn aggregate_state(&self) -> Self::State {
-        SerializedKeysAggregatorState {
-            keys_area: Bump::new(),
-            state_area: Bump::new(),
-            data_state_map: HashMapKind::create_hash_table(),
-            two_level_flag: false,
-        }
-    }
-
-    type ColumnBuilder = SerializedKeysColumnBuilder;
-    fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder {
-        SerializedKeysColumnBuilder {
-            inner_builder: MutableStringColumn::with_capacity(capacity),
-        }
-    }
-
-    type KeysColumnIter = SerializedKeysColumnIter;
-    fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter> {
-        SerializedKeysColumnIter::create(Series::check_get::<StringColumn>(column)?)
-    }
-
-    type GroupColumnsBuilder = SingleStringGroupColumnsBuilder;
-    fn group_columns_builder(
-        &self,
-        capacity: usize,
-        params: &AggregatorParams,
-    ) -> Self::GroupColumnsBuilder {
-        SingleStringGroupColumnsBuilder::create(capacity, params)
     }
 }
 

@@ -126,6 +126,10 @@ impl Column for BooleanColumn {
     fn get(&self, index: usize) -> DataValue {
         DataValue::Boolean(self.values.get_bit(index))
     }
+
+    fn serialize(&self, vec: &mut Vec<u8>, row: usize) {
+        vec.push(self.values.get_bit(row) as u8);
+    }
 }
 
 impl ScalarColumn for BooleanColumn {
