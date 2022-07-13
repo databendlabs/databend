@@ -1,0 +1,23 @@
+[package]
+name = "common-expression"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+test = false
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-arrow = { path = "../arrow" }
+
+# Github dependencies
+
+# Crates.io dependencies
+chrono-tz = "0.6.1"
+enum-as-inner = "0.4"
+
+[dev-dependencies]
+goldenfile = "1.4"
