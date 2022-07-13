@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use crate::values::Column;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct VarValue {
-    pub is_global: bool,
-    pub variable: String,
-    pub value: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct SettingPlan {
-    pub vars: Vec<VarValue>,
-}
-
-impl SettingPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
+pub struct Chunk {
+    pub columns: Vec<Column>,
 }

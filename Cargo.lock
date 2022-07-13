@@ -1146,6 +1146,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-expression"
+version = "0.1.0"
+dependencies = [
+ "chrono-tz",
+ "common-arrow",
+ "enum-as-inner",
+ "goldenfile",
+]
+
+[[package]]
 name = "common-formats"
 version = "0.1.0"
 dependencies = [
@@ -3050,8 +3060,9 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "goldenfile"
-version = "1.3.0"
-source = "git+https://github.com/datafuse-extras/rust-goldenfile?rev=16c5783#16c5783dd13253fed80d40851fd6774256a9c6a8"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03bd0e9c2ea26ce269d37016d6b95556bbfa544cbbbdeff40102ac54121c990b"
 dependencies = [
  "similar-asserts",
  "tempfile",

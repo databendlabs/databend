@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use crate::types::ValueType;
+use crate::values::Column;
+use crate::values::Scalar;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+pub struct AnyType;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct VarValue {
-    pub is_global: bool,
-    pub variable: String,
-    pub value: String,
-}
+impl ValueType for AnyType {
+    type Scalar = Scalar;
+    type ScalarRef<'a> = &'a Scalar;
+    type Column = Column;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct SettingPlan {
-    pub vars: Vec<VarValue>,
-}
+    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
+        scalar.clone()
+    }
 
-impl SettingPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
+        scalar
     }
 }

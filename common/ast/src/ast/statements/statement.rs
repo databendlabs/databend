@@ -52,6 +52,7 @@ pub enum Statement<'a> {
     },
 
     SetVariable {
+        is_global: bool,
         variable: Identifier<'a>,
         value: Literal,
     },
@@ -215,7 +216,17 @@ impl<'a> Display for Statement<'a> {
                 }
                 write!(f, " {object_id}")?;
             }
-            Statement::SetVariable { variable, value } => write!(f, "SET {variable} = {value}")?,
+            Statement::SetVariable {
+                is_global,
+                variable,
+                value,
+            } => {
+                write!(f, "SET ")?;
+                if *is_global {
+                    write!(f, "GLOBAL ")?;
+                }
+                write!(f, "{variable} = {value}")?;
+            }
             Statement::ShowDatabases(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatabase(stmt) => write!(f, "{stmt}")?,
