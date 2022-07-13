@@ -22,9 +22,6 @@ use common_datavalues::chrono::Utc;
 use enumflags2::bitflags;
 use enumflags2::BitFlags;
 
-use crate::schema::DatabaseNameIdent;
-use crate::schema::TableNameIdent;
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareNameIdent {
     pub tenant: String,
@@ -63,10 +60,25 @@ pub struct ShareId {
     pub share_id: u64,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareDatabaseObject {
+    pub tenant: String,
+    pub db_name: String,
+    pub db_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareTableObject {
+    pub tenant: String,
+    pub db_name: String,
+    pub table_name: String,
+    pub table_id: u64,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObject {
-    Database(DatabaseNameIdent),
-    Table(TableNameIdent),
+    Database(ShareDatabaseObject),
+    Table(ShareTableObject),
 }
 
 impl Display for ShareGrantObject {
@@ -136,7 +148,7 @@ impl Display for ShareGrantEntry {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct ShareMeta {
-    pub database: Option<DatabaseNameIdent>,
+    pub database: Option<ShareDatabaseObject>,
     pub entries: BTreeMap<String, ShareGrantEntry>,
     pub accounts: Vec<String>,
     pub comment: Option<String>,
@@ -152,4 +164,17 @@ impl ShareMeta {
             ..Default::default()
         }
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareIdent {
+    pub share_id: u64,
+    pub seq: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareInfo {
+    pub ident: ShareIdent,
+    pub name_ident: ShareNameIdent,
+    pub meta: ShareMeta,
 }

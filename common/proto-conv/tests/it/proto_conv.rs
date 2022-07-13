@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -21,9 +22,14 @@ use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::share;
+use common_meta_app::share::ShareIdent;
+use common_meta_app::share::ShareMeta;
+use common_meta_app::share::ShareNameIdent;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_protos::pb;
+use enumflags2::BitFlags;
 use maplit::btreemap;
 
 fn s(ss: impl ToString) -> String {
@@ -45,6 +51,56 @@ fn new_db_info() -> mt::DatabaseInfo {
             updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
             comment: "foo bar".to_string(),
             drop_on: None,
+        },
+    }
+}
+
+fn new_share_info() -> share::ShareInfo {
+    let db = share::ShareDatabaseObject {
+        tenant: s("t"),
+        db_name: s("db"),
+        db_id: 9,
+    };
+
+    let mut entries = BTreeMap::new();
+    for entry in vec![
+        share::ShareGrantEntry::new(
+            share::ShareGrantObject::Database(db.clone()),
+            BitFlags::<share::ShareGrantObjectPrivilege, u64>::from_flag(
+                share::ShareGrantObjectPrivilege::Usage,
+            ),
+        ),
+        share::ShareGrantEntry::new(
+            share::ShareGrantObject::Table(share::ShareTableObject {
+                tenant: s("t"),
+                db_name: s("db"),
+                table_name: s("table"),
+                table_id: 19,
+            }),
+            BitFlags::<share::ShareGrantObjectPrivilege, u64>::from_flag(
+                share::ShareGrantObjectPrivilege::Select,
+            ),
+        ),
+    ] {
+        entries.insert(entry.to_string().clone(), entry);
+    }
+
+    share::ShareInfo {
+        ident: ShareIdent {
+            share_id: 1,
+            seq: 5,
+        },
+        name_ident: ShareNameIdent {
+            tenant: s("t"),
+            share_name: s("123"),
+        },
+        meta: ShareMeta {
+            database: Some(db),
+            entries,
+            accounts: vec![s("a"), s("b")],
+            comment: Some(s("comment")),
+            share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+            update_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
         },
     }
 }
@@ -190,6 +246,17 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("{:?}", buf);
+    }
+
+    // ShareInfo
+    {
+        let tbl = new_share_info();
+
+        let p = tbl.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("share:{:?}", buf);
     }
 
     Ok(())
@@ -343,6 +410,26 @@ fn test_load_old() -> anyhow::Result<()> {
                 statistics: Default::default(),
             },
         };
+        assert_eq!(want, got);
+    }
+
+    {
+        let share_info_v1: Vec<u8> = vec![
+            10, 10, 8, 1, 16, 5, 160, 6, 1, 168, 6, 1, 18, 14, 10, 1, 116, 18, 3, 49, 50, 51, 160,
+            6, 1, 168, 6, 1, 26, 165, 1, 10, 15, 10, 1, 116, 18, 2, 100, 98, 24, 9, 160, 6, 1, 168,
+            6, 1, 18, 33, 10, 23, 10, 15, 10, 1, 116, 18, 2, 100, 98, 24, 9, 160, 6, 1, 168, 6, 1,
+            160, 6, 1, 168, 6, 1, 16, 1, 160, 6, 1, 168, 6, 1, 18, 40, 10, 30, 18, 22, 10, 1, 116,
+            18, 2, 100, 98, 26, 5, 116, 97, 98, 108, 101, 32, 19, 160, 6, 1, 168, 6, 1, 160, 6, 1,
+            168, 6, 1, 16, 4, 160, 6, 1, 168, 6, 1, 26, 1, 97, 26, 1, 98, 34, 7, 99, 111, 109, 109,
+            101, 110, 116, 42, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48,
+            58, 48, 57, 32, 85, 84, 67, 50, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50,
+            58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 1, 168, 6, 1, 160, 6, 1, 168, 6, 1,
+        ];
+        let p: pb::ShareInfo =
+            common_protos::prost::Message::decode(share_info_v1.as_slice()).map_err(print_err)?;
+
+        let got = share::ShareInfo::from_pb(p).map_err(print_err)?;
+        let want = new_share_info();
         assert_eq!(want, got);
     }
 

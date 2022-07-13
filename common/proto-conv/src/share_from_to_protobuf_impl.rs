@@ -19,12 +19,12 @@ use std::collections::BTreeMap;
 
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
-use common_meta_app::schema;
 use common_meta_app::share as mt;
 use common_protos::pb;
 use enumflags2::BitFlags;
 
 use crate::check_ver;
+use crate::missing;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_COMPATIBLE_VER;
@@ -52,30 +52,106 @@ impl FromToProto<pb::ShareNameIdent> for mt::ShareNameIdent {
     }
 }
 
+impl FromToProto<pb::ShareIdent> for mt::ShareIdent {
+    fn from_pb(p: pb::ShareIdent) -> Result<Self, Incompatible> {
+        check_ver(p.ver, p.min_compatible)?;
+
+        let v = Self {
+            share_id: p.share_id,
+            seq: p.seq,
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::ShareIdent, Incompatible> {
+        let p = pb::ShareIdent {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            share_id: self.share_id,
+            seq: self.seq,
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::ShareDatabaseObject> for mt::ShareDatabaseObject {
+    fn from_pb(p: pb::ShareDatabaseObject) -> Result<Self, Incompatible> {
+        check_ver(p.ver, p.min_compatible)?;
+
+        let v = Self {
+            tenant: p.tenant,
+            db_name: p.db_name,
+            db_id: p.db_id,
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::ShareDatabaseObject, Incompatible> {
+        let p = pb::ShareDatabaseObject {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            tenant: self.tenant.clone(),
+            db_name: self.db_name.clone(),
+            db_id: self.db_id,
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::ShareTableObject> for mt::ShareTableObject {
+    fn from_pb(p: pb::ShareTableObject) -> Result<Self, Incompatible> {
+        check_ver(p.ver, p.min_compatible)?;
+
+        let v = Self {
+            tenant: p.tenant,
+            db_name: p.db_name,
+            table_name: p.table_name,
+            table_id: p.table_id,
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::ShareTableObject, Incompatible> {
+        let p = pb::ShareTableObject {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            tenant: self.tenant.clone(),
+            db_name: self.db_name.clone(),
+            table_name: self.table_name.clone(),
+            table_id: self.table_id,
+        };
+        Ok(p)
+    }
+}
+
 impl FromToProto<pb::ShareGrantObject> for mt::ShareGrantObject {
     fn from_pb(p: pb::ShareGrantObject) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
         match p.object {
-            Some(pb::share_grant_object::Object::Database(pb::DatabaseNameIdent {
+            Some(pb::share_grant_object::Object::Database(pb::ShareDatabaseObject {
                 ver: _,
                 min_compatible: _,
                 tenant,
                 db_name,
-            })) => Ok(mt::ShareGrantObject::Database(schema::DatabaseNameIdent {
+                db_id,
+            })) => Ok(mt::ShareGrantObject::Database(mt::ShareDatabaseObject {
                 tenant,
                 db_name,
+                db_id,
             })),
-            Some(pb::share_grant_object::Object::Table(pb::TableNameIdent {
+            Some(pb::share_grant_object::Object::Table(pb::ShareTableObject {
                 ver: _,
                 min_compatible: _,
                 tenant,
                 db_name,
                 table_name,
-            })) => Ok(mt::ShareGrantObject::Table(schema::TableNameIdent {
+                table_id,
+            })) => Ok(mt::ShareGrantObject::Table(mt::ShareTableObject {
                 tenant,
                 db_name,
                 table_name,
+                table_id,
             })),
             None => Err(Incompatible {
                 reason: "ShareGrantObject cannot be None".to_string(),
@@ -85,25 +161,34 @@ impl FromToProto<pb::ShareGrantObject> for mt::ShareGrantObject {
 
     fn to_pb(&self) -> Result<pb::ShareGrantObject, Incompatible> {
         let object = match self {
-            mt::ShareGrantObject::Database(schema::DatabaseNameIdent { tenant, db_name }) => Some(
-                pb::share_grant_object::Object::Database(pb::DatabaseNameIdent {
+            mt::ShareGrantObject::Database(mt::ShareDatabaseObject {
+                tenant,
+                db_name,
+                db_id,
+            }) => Some(pb::share_grant_object::Object::Database(
+                pb::ShareDatabaseObject {
                     ver: VER,
                     min_compatible: MIN_COMPATIBLE_VER,
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
-                }),
-            ),
-            mt::ShareGrantObject::Table(schema::TableNameIdent {
+                    db_id: *db_id,
+                },
+            )),
+            mt::ShareGrantObject::Table(mt::ShareTableObject {
                 tenant,
                 db_name,
                 table_name,
-            }) => Some(pb::share_grant_object::Object::Table(pb::TableNameIdent {
-                ver: VER,
-                min_compatible: MIN_COMPATIBLE_VER,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: table_name.to_string(),
-            })),
+                table_id,
+            }) => Some(pb::share_grant_object::Object::Table(
+                pb::ShareTableObject {
+                    ver: VER,
+                    min_compatible: MIN_COMPATIBLE_VER,
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: table_name.to_string(),
+                    table_id: *table_id,
+                },
+            )),
         };
 
         let p = pb::ShareGrantObject {
@@ -155,7 +240,7 @@ impl FromToProto<pb::ShareMeta> for mt::ShareMeta {
         }
         Ok(mt::ShareMeta {
             database: match p.database {
-                Some(db) => Some(schema::DatabaseNameIdent::from_pb(db)?),
+                Some(db) => Some(mt::ShareDatabaseObject::from_pb(db)?),
                 None => None,
             },
             entries,
@@ -179,7 +264,7 @@ impl FromToProto<pb::ShareMeta> for mt::ShareMeta {
             ver: VER,
             min_compatible: MIN_COMPATIBLE_VER,
             database: match &self.database {
-                Some(db) => Some(schema::DatabaseNameIdent::to_pb(db)?),
+                Some(db) => Some(mt::ShareDatabaseObject::to_pb(db)?),
                 None => None,
             },
             entries,
@@ -191,5 +276,41 @@ impl FromToProto<pb::ShareMeta> for mt::ShareMeta {
                 None => None,
             },
         })
+    }
+}
+
+impl FromToProto<pb::ShareInfo> for mt::ShareInfo {
+    fn from_pb(p: pb::ShareInfo) -> Result<Self, Incompatible> {
+        check_ver(p.ver, p.min_compatible)?;
+
+        let meta = match p.meta {
+            None => {
+                return Err(Incompatible {
+                    reason: "ShareInfo.meta can not be None".to_string(),
+                })
+            }
+            Some(x) => x,
+        };
+
+        let v = Self {
+            ident: mt::ShareIdent::from_pb(p.ident.ok_or_else(missing("ShareInfo.ident"))?)?,
+            name_ident: mt::ShareNameIdent::from_pb(
+                p.name_ident.ok_or_else(missing("ShareInfo.name_ident"))?,
+            )?,
+            meta: mt::ShareMeta::from_pb(meta)?,
+        };
+
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::ShareInfo, Incompatible> {
+        let p = pb::ShareInfo {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            ident: Some(self.ident.to_pb()?),
+            name_ident: Some(self.name_ident.to_pb()?),
+            meta: Some(self.meta.to_pb()?),
+        };
+        Ok(p)
     }
 }
