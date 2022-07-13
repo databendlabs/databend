@@ -19,10 +19,12 @@ use std::fmt::Debug;
 use common_meta_app::schema::CountTablesKey;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
+use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdListKey;
+use common_meta_app::schema::TableIdToName;
 use kv_api_key::check_segment;
 use kv_api_key::check_segment_absent;
 use kv_api_key::check_segment_present;
@@ -42,6 +44,8 @@ const PREFIX_TABLE_BY_ID: &str = "__fd_table_by_id";
 const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
 const PREFIX_ID_GEN: &str = "__fd_id_gen";
 const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
+const PREFIX_DATABASE_ID_TO_NAME: &str = "__fd_database_id_to_name";
+const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
 
 /// Key for database id generator
 #[derive(Debug)]
@@ -103,6 +107,52 @@ impl KVApiKey for DatabaseId {
         check_segment_absent(elts.next(), 2, s)?;
 
         Ok(DatabaseId { db_id })
+    }
+}
+
+/// "__fd_database_id_to_name/<db_id> -> DatabaseNameIdent"
+impl KVApiKey for DatabaseIdToName {
+    const PREFIX: &'static str = PREFIX_DATABASE_ID_TO_NAME;
+
+    fn to_key(&self) -> String {
+        format!("{}/{}", Self::PREFIX, self.db_id,)
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let db_id = check_segment_present(elts.next(), 1, s)?;
+        let db_id = decode_id(db_id)?;
+
+        check_segment_absent(elts.next(), 2, s)?;
+
+        Ok(DatabaseIdToName { db_id })
+    }
+}
+
+/// "__fd_table_id_to_name/<table_id> -> DBIdTableName"
+impl KVApiKey for TableIdToName {
+    const PREFIX: &'static str = PREFIX_TABLE_ID_TO_NAME;
+
+    fn to_key(&self) -> String {
+        format!("{}/{}", Self::PREFIX, self.table_id,)
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let table_id = check_segment_present(elts.next(), 1, s)?;
+        let table_id = decode_id(table_id)?;
+
+        check_segment_absent(elts.next(), 2, s)?;
+
+        Ok(TableIdToName { table_id })
     }
 }
 
