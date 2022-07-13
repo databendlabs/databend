@@ -196,13 +196,13 @@ fn test_pb_from_to() -> anyhow::Result<()> {
 fn test_incompatible() -> anyhow::Result<()> {
     let db_info = new_db_info();
     let mut p = db_info.to_pb()?;
-    p.ver = 2;
-    p.min_compatible = 2;
+    p.ver = 3;
+    p.min_compatible = 3;
 
     let res = mt::DatabaseInfo::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("executable ver=1 is smaller than the message min compatible ver: 2")
+            reason: s("executable ver=2 is smaller than the message min compatible ver: 3")
         },
         res.unwrap_err()
     );
