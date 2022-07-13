@@ -27,6 +27,8 @@ use super::cast_with_type::new_mutable_bitmap;
 use super::cast_with_type::CastOptions;
 use crate::scalars::FunctionContext;
 
+const DATE_TIME_LEN: usize = 19;
+
 pub fn cast_from_string(
     column: &ColumnRef,
     from_type: &DataTypeImpl,
@@ -91,16 +93,17 @@ pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTi
     let s = std::str::from_utf8(date_str.as_ref()).ok();
     if let Some(s) = s {
         // convert zero timestamp to `1970-01-01 00:00:00`
-        if s.len() >= 19 && &s[..19] == "0000-00-00 00:00:00" {
-            let t = format!("1970-01-01 00:00:00{}", &s[19..]);
+        if s.len() >= DATE_TIME_LEN && &s[..DATE_TIME_LEN] == "0000-00-00 00:00:00" {
+            let t = format!("1970-01-01 00:00:00{}", &s[DATE_TIME_LEN..]);
             tz.datetime_from_str(&t, "%Y-%m-%d %H:%M:%S%.f").ok()
         } else {
             match tz.datetime_from_str(s, "%Y-%m-%d %H:%M:%S%.f") {
                 Ok(dt) => {
                     // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
                     if dt.year() < 1000 {
-                        tz.datetime_from_str("1000-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
-                            .ok()
+                        Some(
+                            tz.from_utc_datetime(&NaiveDate::from_ymd(1000, 1, 1).and_hms(0, 0, 0)),
+                        )
                     } else {
                         Some(dt)
                     }
