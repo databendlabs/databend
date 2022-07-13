@@ -17,7 +17,9 @@ common-arrow = { path = "../arrow" }
 
 # Crates.io dependencies
 chrono-tz = "0.6.1"
+comfy-table = "6"
 enum-as-inner = "0.4"
+itertools = "0.10"
 
 [dev-dependencies]
 goldenfile = "1.4"
