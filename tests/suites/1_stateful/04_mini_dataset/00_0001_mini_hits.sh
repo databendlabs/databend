@@ -57,3 +57,4 @@ echo "SELECT WindowClientWidth, WindowClientHeight, COUNT(*) AS PageViews FROM h
 
 ## Clean up
 echo "drop table hits all;" | $MYSQL_CLIENT_CONNECT
+

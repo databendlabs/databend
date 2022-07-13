@@ -24,3 +24,4 @@ echo 'SELECT OriginCityName, DestCityName, count(*) AS c FROM ontime_mini GROUP 
 
 ## Clean table
 echo "drop table ontime_mini all;" | $MYSQL_CLIENT_CONNECT
+
