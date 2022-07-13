@@ -19,13 +19,12 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::init_s3_operator;
-use common_io::prelude::StorageParams;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::StageTableInfo;
+use common_storage::init_operator;
 use common_streams::CsvSourceBuilder;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::ParquetSourceBuilder;
@@ -165,21 +164,7 @@ impl StageSource {
         if stage.stage_type == StageType::Internal {
             ctx.get_storage_operator()
         } else {
-            // Get the dal file reader.
-            match &stage.stage_params.storage {
-                StorageParams::S3(cfg) => {
-                    let mut cfg = cfg.clone();
-
-                    // If we are running of s3, use ctx cfg's endpoint instead.
-                    // TODO(xuanwo): it's better support user input.
-                    if let StorageParams::S3(ctx_cfg) = ctx.get_config().storage.params {
-                        cfg.endpoint_url = ctx_cfg.endpoint_url;
-                    }
-
-                    init_s3_operator(&cfg).await
-                }
-                _ => todo!("other storage type are not supported"),
-            }
+            Ok(init_operator(&stage.stage_params.storage).await?)
         }
     }
 

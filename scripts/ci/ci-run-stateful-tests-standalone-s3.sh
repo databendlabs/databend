@@ -14,6 +14,7 @@ export STORAGE_S3_ROOT=admin
 export STORAGE_S3_ENDPOINT_URL=http://127.0.0.1:9900
 export STORAGE_S3_ACCESS_KEY_ID=minioadmin
 export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
+export STORAGE_ALLOW_INSECURE=true
 
 echo "Install dependence"
 python3 -m pip install --quiet mysql-connector-python

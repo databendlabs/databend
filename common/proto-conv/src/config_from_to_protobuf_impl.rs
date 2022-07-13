@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_io::prelude::StorageFsConfig;
-use common_io::prelude::StorageParams;
-use common_io::prelude::StorageS3Config;
 use common_protos::pb;
+use common_storage::StorageFsConfig;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config;
 
 use crate::check_ver;
 use crate::FromToProto;

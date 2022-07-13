@@ -14,13 +14,14 @@
 
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
+use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataField;
 use common_datavalues::DataType;
-use common_datavalues::MutableColumn;
-use common_datavalues::MutableStringColumn;
-use common_datavalues::ScalarColumnBuilder;
+use common_datavalues::ScalarColumn;
+use common_datavalues::StringColumn;
 use common_datavalues::TypeDeserializer;
+use common_datavalues::TypeID;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
@@ -38,7 +39,7 @@ pub struct FixedKeysGroupColumnsBuilder<T> {
 }
 
 impl<T> FixedKeysGroupColumnsBuilder<T>
-where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>
+where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
 {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
@@ -49,7 +50,7 @@ where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>
 }
 
 impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
-where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>
+where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
 {
     #[inline]
     fn append_value(&mut self, v: &T) {
@@ -92,6 +93,13 @@ impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
             }
         }
 
+        if self.groups_fields.len() == 1
+            && self.groups_fields[0].data_type().data_type_id() == TypeID::String
+        {
+            let col = StringColumn::from_slice(&keys);
+            return Ok(vec![col.arc()]);
+        }
+
         let rows = self.data.len();
         let mut res = Vec::with_capacity(self.groups_fields.len());
         let format = FormatSettings::default();
@@ -106,34 +114,5 @@ impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
         }
 
         Ok(res)
-    }
-}
-
-pub struct SingleStringGroupColumnsBuilder {
-    inner_builder: MutableStringColumn,
-}
-
-impl SingleStringGroupColumnsBuilder {
-    pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
-        assert_eq!(params.group_data_fields.len(), 1);
-
-        Self {
-            inner_builder: MutableStringColumn::with_capacity(capacity),
-        }
-    }
-}
-
-impl GroupColumnsBuilder<KeysRef> for SingleStringGroupColumnsBuilder {
-    fn append_value(&mut self, v: &KeysRef) {
-        unsafe {
-            let value = std::slice::from_raw_parts(v.address as *const u8, v.length);
-            self.inner_builder.push(value);
-        }
-    }
-
-    fn finish(self) -> Result<Vec<ColumnRef>> {
-        let mut builder = self.inner_builder;
-        let col = builder.to_column();
-        Ok(vec![col])
     }
 }

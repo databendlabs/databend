@@ -16,11 +16,11 @@ use std::collections::BTreeMap;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_io::prelude::StorageParams;
-use common_io::prelude::StorageS3Config;
 use common_meta_types::StageParams;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config;
 use databend_query::sql::statements::parse_stage_location;
 use databend_query::sql::statements::parse_uri_location;
 use pretty_assertions::assert_eq;
@@ -97,8 +97,10 @@ async fn test_parse_stage_location_external() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_parse_uri_location() -> Result<()> {
+#[tokio::test]
+async fn test_parse_uri_location() -> Result<()> {
+    let ctx = create_query_context().await?;
+
     // Cases are in the format:
     // - `name`
     // - `input location`
@@ -217,7 +219,7 @@ fn test_parse_uri_location() -> Result<()> {
         cases
     {
         let (stage, path) =
-            parse_uri_location(input_location, &input_credential, &input_encryption)?;
+            parse_uri_location(&ctx, input_location, &input_credential, &input_encryption)?;
 
         assert_eq!(stage, expected_stage, "{}", name);
         assert_eq!(path, expected_path, "{}", name);
