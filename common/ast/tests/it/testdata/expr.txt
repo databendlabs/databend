@@ -1404,9 +1404,9 @@ TryCast {
 
 
 ---------- Input ----------
-TRY_CAST(col1 AS (BIGINT UNSIGNED NULL, BOOLEAN))
+TRY_CAST(col1 AS TUPLE(BIGINT UNSIGNED NULL, BOOLEAN))
 ---------- Output ---------
-TRY_CAST(col1 AS (UInt64 NULL, BOOLEAN))
+TRY_CAST(col1 AS TUPLE(UInt64 NULL, BOOLEAN))
 ---------- AST ------------
 TryCast {
     span: [
@@ -1414,14 +1414,15 @@ TryCast {
         LParen(8..9),
         Ident(9..13),
         AS(14..16),
-        LParen(17..18),
-        BIGINT(18..24),
-        UNSIGNED(25..33),
-        NULL(34..38),
-        Comma(38..39),
-        BOOLEAN(40..47),
-        RParen(47..48),
-        RParen(48..49),
+        TUPLE(17..22),
+        LParen(22..23),
+        BIGINT(23..29),
+        UNSIGNED(30..38),
+        NULL(39..43),
+        Comma(43..44),
+        BOOLEAN(45..52),
+        RParen(52..53),
+        RParen(53..54),
     ],
     expr: ColumnRef {
         span: [
@@ -1436,6 +1437,7 @@ TryCast {
         },
     },
     target_type: Tuple {
+        fields_name: None,
         fields_type: [
             Nullable(
                 UInt64,

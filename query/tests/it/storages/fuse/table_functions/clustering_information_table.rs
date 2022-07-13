@@ -64,7 +64,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
     }
 
     {
-        let qry = format!("insert into {}.{} values(1),(2)", db, tbl);
+        let qry = format!("insert into {}.{} values(1, (2, 3)),(2, (4, 6))", db, tbl);
         execute_query(ctx.clone(), qry.as_str()).await?;
         let expected = vec![
             "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",

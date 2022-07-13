@@ -72,12 +72,12 @@ async fn test_fuse_occ_retry() -> Result<()> {
         .await?;
 
     let expected = vec![
-        "+----+", //
-        "| id |", //
-        "+----+", //
-        "| 1  |", //
-        "| 5  |", //
-        "+----+", //
+        "+----+----------+", //
+        "| id | t        |", //
+        "+----+----------+", //
+        "| 1  | (2, 3)   |", //
+        "| 5  | (10, 15) |", //
+        "+----+----------+", //
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
 
