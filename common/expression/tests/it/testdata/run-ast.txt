@@ -7,9 +7,9 @@ false
 
 
 raw expr       : and(NULL, false::Boolean)
-type           : Nullable<Nothing>
+type           : Nullable(Nothing)
 property       : {}
-checked expr   : and<Nullable<Nothing>, Nullable(Boolean)>(NULL{}, cast<dest_type=Nullable(Boolean)>(false::Boolean){not_null})
+checked expr   : and<Nullable(Nothing), Nullable(Boolean)>(NULL{}, cast<dest_type=Nullable(Boolean)>(false::Boolean){not_null})
 evaluation result:
 NULL
 
@@ -83,10 +83,10 @@ evaluation result (internal):
 +-----------+------------------------------------------------------------------+
 
 
-raw expr       : plus(ColumnRef(0)::Nullable(UInt8){}, ColumnRef(1)::Nullable<Nothing>{})
-type           : Nullable<Nothing>
+raw expr       : plus(ColumnRef(0)::Nullable(UInt8){}, ColumnRef(1)::Nullable(Nothing){})
+type           : Nullable(Nothing)
 property       : {}
-checked expr   : plus<Nullable(Int16), Nullable<Nothing>>(cast<dest_type=Nullable(Int16)>(ColumnRef(0)){}, ColumnRef(1){})
+checked expr   : plus<Nullable(Int16), Nullable(Nothing)>(cast<dest_type=Nullable(Int16)>(ColumnRef(0)){}, ColumnRef(1){})
 input chunk:
 +----------+----------+
 | Column 0 | Column 1 |
@@ -152,10 +152,10 @@ evaluation result (internal):
 +-----------+--------------------------------------------------------------------+
 
 
-raw expr       : not(ColumnRef(0)::Nullable<Nothing>{})
-type           : Nullable<Nothing>
+raw expr       : not(ColumnRef(0)::Nullable(Nothing){})
+type           : Nullable(Nothing)
 property       : {}
-checked expr   : not<Nullable<Nothing>>(ColumnRef(0){})
+checked expr   : not<Nullable(Nothing)>(ColumnRef(0){})
 input chunk:
 +----------+
 | Column 0 |
@@ -209,9 +209,9 @@ evaluation result:
 
 
 raw expr       : create_tuple(NULL, true::Boolean)
-type           : (Nullable<Nothing>, Boolean)
+type           : (Nullable(Nothing), Boolean)
 property       : {not_null}
-checked expr   : create_tuple<Nullable<Nothing>, Boolean>(NULL{}, true::Boolean{not_null})
+checked expr   : create_tuple<Nullable(Nothing), Boolean>(NULL{}, true::Boolean{not_null})
 evaluation result:
 (NULL, true)
 
@@ -255,10 +255,10 @@ evaluation result (internal):
 +-----------+-------------------------------------------------------------------------------------------------------------------+
 
 
-raw expr       : get_tuple(1)(ColumnRef(0)::Nullable((Boolean, String)){not_null})
+raw expr       : get_tuple(1)(ColumnRef(0)::Nullable((Boolean, String)){})
 type           : Nullable(String)
-property       : {not_null}
-checked expr   : get_tuple<Nullable((Boolean, String))>(ColumnRef(0){not_null})
+property       : {}
+checked expr   : get_tuple<Nullable((Boolean, String))>(ColumnRef(0){})
 input chunk:
 +------------+
 | Column 0   |
@@ -294,7 +294,7 @@ evaluation result (internal):
 
 
 raw expr       : create_array()
-type           : Array<Nothing>
+type           : Array(Nothing)
 property       : {not_null}
 checked expr   : create_array<>()
 evaluation result:

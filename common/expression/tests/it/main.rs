@@ -284,7 +284,7 @@ pub fn test() {
                     DataType::Boolean,
                     DataType::String,
                 ]))),
-                property: ValueProperty::default().not_null(true),
+                property: ValueProperty::default(),
             }],
             params: vec![1],
         },
