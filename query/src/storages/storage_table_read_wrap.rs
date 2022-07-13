@@ -29,8 +29,10 @@ impl<T: Table> TableStreamReadWrap for T {
         let mut pipeline = NewPipeline::create();
         self.read2(ctx.clone(), plan, &mut pipeline)?;
 
+        let settings = ctx.get_settings();
         let async_runtime = ctx.get_storage_runtime();
         let query_need_abort = ctx.query_need_abort();
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor =
             PipelinePullingExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
 
@@ -48,8 +50,10 @@ impl TableStreamReadWrap for dyn Table {
         let mut pipeline = NewPipeline::create();
         self.read2(ctx.clone(), plan, &mut pipeline)?;
 
+        let settings = ctx.get_settings();
         let async_runtime = ctx.get_storage_runtime();
         let query_need_abort = ctx.query_need_abort();
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor =
             PipelinePullingExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
 

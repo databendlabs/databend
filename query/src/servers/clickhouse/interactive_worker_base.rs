@@ -216,7 +216,7 @@ impl InteractiveWorkerBase {
                             }
                             Some(Err(error_code)) => {
                                 if let Err(cause) =
-                                data_tx.send(BlockItem::Block(Err(error_code))).await
+                                    data_tx.send(BlockItem::Block(Err(error_code))).await
                                 {
                                     tracing::warn!(
                                         "Cannot send data to channel, cause: {:?}",
