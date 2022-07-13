@@ -21,13 +21,13 @@ use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_arrow::parquet::metadata::{ColumnChunkMetaData, FileMetaData};
+use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
-use futures::AsyncReadExt;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -37,6 +37,7 @@ use common_tracing::tracing;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::warn;
 use common_tracing::tracing::Instrument;
+use futures::AsyncReadExt;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::Object;
@@ -158,7 +159,10 @@ impl HiveParquetBlockReader {
         }
     }
 
-    pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<(FileMetaData, Vec<Vec<u8>>)> {
+    pub async fn read_columns_data(
+        &self,
+        part: PartInfoPtr,
+    ) -> Result<(FileMetaData, Vec<Vec<u8>>)> {
         let part = HivePartInfo::from_part(&part)?;
 
         let object = self.operator.object(&part.location);

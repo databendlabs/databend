@@ -24,9 +24,6 @@ use common_exception::Result;
 use common_planners::Extras;
 use common_planners::PartInfoPtr;
 use common_planners::ReadDataSourcePlan;
-use common_streams::SendableDataBlockStream;
-use common_tracing::tracing_futures::Instrument;
-use futures::StreamExt;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
