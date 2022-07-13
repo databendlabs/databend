@@ -24,7 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
-use common_io::prelude::StorageConfig;
+use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 
 use super::outer_v0::Config as OuterV0Config;

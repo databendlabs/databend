@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parking_lot::Mutex as ParkingMutex;
-use parking_lot::MutexGuard;
+use crate::types::ValueType;
+use crate::values::Column;
+use crate::values::Scalar;
 
-/// A simple wrapper around the lock() function of a std::sync::Mutex
-#[derive(Debug)]
-pub struct Mutex<T>(ParkingMutex<T>);
+pub struct AnyType;
 
-unsafe impl<T> Send for Mutex<T> where ParkingMutex<T>: Send {}
+impl ValueType for AnyType {
+    type Scalar = Scalar;
+    type ScalarRef<'a> = &'a Scalar;
+    type Column = Column;
 
-unsafe impl<T> Sync for Mutex<T> where ParkingMutex<T>: Sync {}
-
-impl<T> Mutex<T> {
-    /// creates mutex
-    pub fn new(t: T) -> Self {
-        Self(ParkingMutex::new(t))
+    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
+        scalar.clone()
     }
 
-    /// lock the mutex
-    pub fn lock(&self) -> MutexGuard<'_, T> {
-        self.0.lock()
+    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
+        scalar
     }
 }

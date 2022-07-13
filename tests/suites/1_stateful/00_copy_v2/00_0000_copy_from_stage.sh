@@ -31,7 +31,7 @@ copy_from_stage_cases=(
   "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1);"
   # copy bz2 csv
   "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
-   # copy bz2 csv
+   # copy xz csv
     "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'xz'  record_delimiter = '\n' skip_header = 1);"
   # copy auto csv
   "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.gz', 'ontime_200.csv.zst', 'ontime_200.csv.bz2', 'ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = AUTO  record_delimiter = '\n' skip_header = 1);"

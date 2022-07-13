@@ -16,14 +16,18 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::str;
 use std::sync::Arc;
 
-use common_base::infallible::RwLock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserSetting;
+use common_users::UserApiProvider;
 use itertools::Itertools;
+use parking_lot::RwLock;
 
+use super::SessionContext;
 use crate::Config;
 
 #[derive(Clone)]
@@ -58,10 +62,18 @@ pub struct SettingValue {
 #[derive(Clone)]
 pub struct Settings {
     settings: Arc<RwLock<HashMap<String, SettingValue>>>,
+    #[allow(dead_code)]
+    user_api: Arc<UserApiProvider>,
+    #[allow(dead_code)]
+    session_ctx: Arc<SessionContext>,
 }
 
 impl Settings {
-    pub fn try_create(conf: &Config) -> Result<Settings> {
+    pub fn try_create(
+        conf: &Config,
+        user_api: Arc<UserApiProvider>,
+        session_ctx: Arc<SessionContext>,
+    ) -> Result<Settings> {
         let values = vec![
             // max_block_size
             SettingValue {
@@ -182,7 +194,24 @@ impl Settings {
             }
         }
 
-        let ret = Settings { settings };
+        let ret = Settings {
+            settings,
+            user_api,
+            session_ctx,
+        };
+
+        // Overwrite settings from metasrv
+        {
+            let tenant = &ret.session_ctx.get_current_tenant();
+            let global_settings = futures::executor::block_on(
+                ret.user_api.get_setting_api_client(tenant)?.get_settings(),
+            )?;
+            for global_setting in global_settings {
+                let name = global_setting.name;
+                let val = String::from_utf8(global_setting.value.as_string()?).unwrap();
+                ret.set_settings(name, val, true)?;
+            }
+        }
 
         // Overwrite settings from conf.
         {
@@ -334,22 +363,42 @@ impl Settings {
     }
 
     // Set u64 value to settings map, if is_global will write to metasrv.
-    fn try_set_u64(&self, key: &str, val: u64, _is_global: bool) -> Result<()> {
+    fn try_set_u64(&self, key: &str, val: u64, is_global: bool) -> Result<()> {
         let mut settings = self.settings.write();
         let mut setting = settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         setting.user_setting.value = DataValue::UInt64(val);
 
+        if is_global {
+            let tenant = self.session_ctx.get_current_tenant();
+            let _ = futures::executor::block_on(
+                self.user_api
+                    .get_setting_api_client(&tenant)?
+                    .set_setting(setting.user_setting.clone()),
+            )?;
+            setting.level = ScopeLevel::Global;
+        }
+
         Ok(())
     }
 
-    fn try_set_string(&self, key: &str, val: Vec<u8>, _is_global: bool) -> Result<()> {
+    fn try_set_string(&self, key: &str, val: Vec<u8>, is_global: bool) -> Result<()> {
         let mut settings = self.settings.write();
         let mut setting = settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         setting.user_setting.value = DataValue::String(val);
+
+        if is_global {
+            let tenant = self.session_ctx.get_current_tenant();
+            let _ = futures::executor::block_on(
+                self.user_api
+                    .get_setting_api_client(&tenant)?
+                    .set_setting(setting.user_setting.clone()),
+            )?;
+            setting.level = ScopeLevel::Global;
+        }
 
         Ok(())
     }
@@ -394,6 +443,8 @@ impl Settings {
         }
         Settings {
             settings: new_settings,
+            user_api: self.user_api.clone(),
+            session_ctx: self.session_ctx.clone(),
         }
     }
 
@@ -457,23 +508,5 @@ impl Settings {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct UserSetting {
-    // The name of the setting.
-    pub name: String,
-
-    // The value of the setting.
-    pub value: DataValue,
-}
-
-impl UserSetting {
-    pub fn create(name: &str, value: DataValue) -> UserSetting {
-        UserSetting {
-            name: name.to_string(),
-            value,
-        }
     }
 }

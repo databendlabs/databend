@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,26 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod condvar;
-mod exit_guard;
-mod mutex;
-mod remutex;
-mod remutex_guard;
-mod rwlock;
-mod rwlock_upgrade_read;
+mod setting_api;
+mod setting_mgr;
 
-pub use condvar::Condvar;
-pub use exit_guard::ExitGuard;
-pub use mutex::Mutex;
-pub use remutex::ReentrantMutex;
-pub use remutex_guard::ReentrantMutexGuard;
-pub use rwlock::RwLock;
-pub use rwlock_upgrade_read::RwLockUpgradableReadGuard;
-
-#[macro_export]
-macro_rules! exit_scope {
-    ($x:block) => {
-        use common_base::infallible::ExitGuard;
-        let _exit_guard = ExitGuard::create(move || $x);
-    };
-}
+pub use setting_api::SettingApi;
+pub use setting_mgr::SettingMgr;

@@ -21,12 +21,12 @@ use clap::Parser;
 use common_base::base::mask_string;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::StorageAzblobConfig as InnerStorageAzblobConfig;
-use common_io::prelude::StorageConfig as InnerStorageConfig;
-use common_io::prelude::StorageFsConfig as InnerStorageFsConfig;
-use common_io::prelude::StorageHdfsConfig as InnerStorageHdfsConfig;
-use common_io::prelude::StorageParams;
-use common_io::prelude::StorageS3Config as InnerStorageS3Config;
+use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
+use common_storage::StorageConfig as InnerStorageConfig;
+use common_storage::StorageFsConfig as InnerStorageFsConfig;
+use common_storage::StorageHdfsConfig as InnerStorageHdfsConfig;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
 use serde::Deserialize;
 use serde::Serialize;
@@ -159,7 +159,6 @@ impl TryInto<InnerConfig> for Config {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
-    /// Current storage type: fs|s3
     #[clap(long, default_value = "fs")]
     #[serde(rename = "type", alias = "storage_type")]
     pub storage_type: String,
@@ -167,6 +166,9 @@ pub struct StorageConfig {
     #[clap(long, default_value_t)]
     #[serde(rename = "num_cpus", alias = "storage_num_cpus")]
     pub storage_num_cpus: u64,
+
+    #[clap(long = "storage-allow-insecure")]
+    pub allow_insecure: bool,
 
     // Fs storage backend config.
     #[clap(flatten)]
@@ -196,6 +198,7 @@ impl From<InnerStorageConfig> for StorageConfig {
         let mut cfg = Self {
             storage_num_cpus: inner.num_cpus,
             storage_type: "".to_string(),
+            allow_insecure: inner.allow_insecure,
             fs: Default::default(),
             s3: Default::default(),
             azblob: Default::default(),
@@ -235,6 +238,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
     fn try_into(self) -> Result<InnerStorageConfig> {
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
+            allow_insecure: self.allow_insecure,
             params: {
                 match self.storage_type.as_str() {
                     "azblob" => StorageParams::Azblob(self.azblob.try_into()?),

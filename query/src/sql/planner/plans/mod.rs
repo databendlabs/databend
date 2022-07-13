@@ -76,6 +76,7 @@ use common_planners::RenameDatabasePlan;
 use common_planners::RenameTablePlan;
 use common_planners::RevokePrivilegePlan;
 use common_planners::RevokeRolePlan;
+use common_planners::SettingPlan;
 use common_planners::ShowCreateDatabasePlan;
 use common_planners::ShowCreateTablePlan;
 use common_planners::ShowDatabasesPlan;
@@ -198,6 +199,9 @@ pub enum Plan {
 
     // Presign
     Presign(Box<PresignPlan>),
+
+    // Set
+    SetVariable(Box<SettingPlan>),
 }
 
 impl Display for Plan {
@@ -255,6 +259,7 @@ impl Display for Plan {
             Plan::Delete(_) => write!(f, "Delete"),
             Plan::Call(_) => write!(f, "Call"),
             Plan::Presign(_) => write!(f, "Presign"),
+            Plan::SetVariable(_) => write!(f, "SetVariable"),
         }
     }
 }
@@ -320,6 +325,7 @@ impl Plan {
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
             Plan::Call(_) => Arc::new(DataSchema::empty()),
             Plan::Presign(plan) => plan.schema(),
+            Plan::SetVariable(plan) => plan.schema(),
         }
     }
 }

@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_base::base::TrySpawn;
-use common_base::infallible::Mutex;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -32,6 +31,7 @@ use common_planners::SelectPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
+use parking_lot::Mutex;
 
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
 use crate::interpreters::plan_schedulers::InsertWithPlan;

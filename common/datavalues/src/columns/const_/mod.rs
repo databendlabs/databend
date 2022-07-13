@@ -138,4 +138,8 @@ impl Column for ConstColumn {
     fn get(&self, _index: usize) -> DataValue {
         self.column.get(0)
     }
+
+    fn serialize(&self, vec: &mut Vec<u8>, _row: usize) {
+        self.column.serialize(vec, 0);
+    }
 }

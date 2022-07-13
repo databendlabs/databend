@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub struct ExitGuard<F: Fn()> {
-    function: F,
-}
-
-impl<F: Fn()> ExitGuard<F> {
-    pub fn create(f: F) -> ExitGuard<F> {
-        ExitGuard { function: f }
-    }
-}
-
-impl<F: Fn()> Drop for ExitGuard<F> {
-    fn drop(&mut self) {
-        (self.function)();
+/// Mask a string by "******", but keep `unmask_len` of suffix.
+///
+/// Copied from `common-base` so that we don't need to depend on it.
+#[inline]
+pub fn mask_string(s: &str, unmask_len: usize) -> String {
+    if s.len() <= unmask_len {
+        s.to_string()
+    } else {
+        let mut ret = "******".to_string();
+        ret.push_str(&s[(s.len() - unmask_len)..]);
+        ret
     }
 }

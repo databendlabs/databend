@@ -12,23 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parking_lot::Condvar as ParkingCondvar;
-use parking_lot::MutexGuard;
+#![feature(generic_associated_types)]
+#![feature(iterator_try_reduce)]
+#![feature(box_patterns)]
+#![feature(associated_type_defaults)]
+#![allow(clippy::len_without_is_empty)]
+#![allow(clippy::needless_lifetimes)]
 
-pub struct Condvar(ParkingCondvar);
-
-impl Condvar {
-    pub fn create() -> Condvar {
-        Condvar(ParkingCondvar::new())
-    }
-
-    #[inline]
-    pub fn notify_one(&self) -> bool {
-        self.0.notify_one()
-    }
-
-    #[inline]
-    pub fn wait<T: ?Sized>(&self, mutex_guard: &mut MutexGuard<'_, T>) {
-        self.0.wait(mutex_guard)
-    }
-}
+pub mod chunk;
+mod display;
+pub mod evaluator;
+pub mod expression;
+pub mod function;
+pub mod property;
+pub mod type_check;
+pub mod types;
+pub mod util;
+pub mod values;
