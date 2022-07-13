@@ -162,8 +162,8 @@ fn keep_required_columns(expr: &SExpr, mut required: ColumnSet) -> Result<SExpr>
             }
             Ok(SExpr::create_binary(
                 RelOperator::CrossApply(p.clone()),
-                keep_required_columns(expr.child(0)?, required)?,
-                prune_columns(expr.child(1)?)?,
+                keep_required_columns(expr.child(0)?, required.clone())?,
+                keep_required_columns(expr.child(1)?, required)?,
             ))
         }
         RelOperator::Max1Row(p) => Ok(SExpr::create_unary(
