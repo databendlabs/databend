@@ -18,8 +18,10 @@ use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::InputFormat;
+use common_meta_types::StageFileCompression;
 use opendal::io_util::CompressAlgorithm;
 use opendal::Operator;
 use parking_lot::Mutex;
@@ -38,9 +40,9 @@ pub struct MultiFileSplitter {
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
     output_splits: VecDeque<Vec<u8>>,
-    compress_algorithm: Option<CompressAlgorithm>,
     input_format: Arc<dyn InputFormat>,
     files: Arc<Mutex<VecDeque<String>>>,
+    compress_option: StageFileCompression,
 }
 
 impl MultiFileSplitter {
@@ -49,7 +51,7 @@ impl MultiFileSplitter {
         scan_progress: Arc<Progress>,
         output: Arc<OutputPort>,
         input_format: Arc<dyn InputFormat>,
-        compress_algorithm: Option<CompressAlgorithm>,
+        compress_option: StageFileCompression,
         files: Arc<Mutex<VecDeque<String>>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MultiFileSplitter {
@@ -58,7 +60,7 @@ impl MultiFileSplitter {
             output,
             scan_progress,
             output_splits: Default::default(),
-            compress_algorithm,
+            compress_option,
             input_format,
             finished: false,
             files,
@@ -76,9 +78,32 @@ impl MultiFileSplitter {
         self.current_file = Some(FileSplitter::create(
             reader,
             self.input_format.clone(),
-            self.compress_algorithm,
+            self.get_compression_algo(path)?,
         ));
         Ok(())
+    }
+
+    fn get_compression_algo(&self, path: &str) -> Result<Option<CompressAlgorithm>> {
+        let compression_algo = match self.compress_option {
+            StageFileCompression::Auto => CompressAlgorithm::from_path(path),
+            StageFileCompression::Gzip => Some(CompressAlgorithm::Gzip),
+            StageFileCompression::Bz2 => Some(CompressAlgorithm::Bz2),
+            StageFileCompression::Brotli => Some(CompressAlgorithm::Brotli),
+            StageFileCompression::Zstd => Some(CompressAlgorithm::Zstd),
+            StageFileCompression::Deflate => Some(CompressAlgorithm::Zlib),
+            StageFileCompression::RawDeflate => Some(CompressAlgorithm::Deflate),
+            StageFileCompression::Xz => Some(CompressAlgorithm::Xz),
+            StageFileCompression::Lzo => {
+                return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"))
+            }
+            StageFileCompression::Snappy => {
+                return Err(ErrorCode::UnImplement(
+                    "compress type snappy is unimplemented",
+                ))
+            }
+            StageFileCompression::None => None,
+        };
+        Ok(compression_algo)
     }
 }
 
