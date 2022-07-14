@@ -19,7 +19,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_planners::Extras;
@@ -31,19 +30,18 @@ use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Sink;
-use crate::pipelines::new::processors::Sinker;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SinkPipeBuilder;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Sink;
+use crate::pipelines::processors::Sinker;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SinkPipeBuilder;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
-use crate::storages::memory::MemoryTableStream;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -180,43 +178,11 @@ impl Table for MemoryTable {
         Ok((statistics, parts))
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let push_downs = &plan.push_downs;
-        let raw_blocks = self.blocks.read().clone();
-
-        let blocks = match push_downs {
-            Some(push_downs) => match &push_downs.projection {
-                Some(prj) => {
-                    let pruned_schema = Arc::new(self.table_info.schema().project(prj));
-                    let mut pruned_blocks = Vec::with_capacity(raw_blocks.len());
-
-                    for raw_block in raw_blocks {
-                        let raw_columns = raw_block.columns();
-                        let columns: Vec<ColumnRef> =
-                            prj.iter().map(|idx| raw_columns[*idx].clone()).collect();
-
-                        pruned_blocks.push(DataBlock::create(pruned_schema.clone(), columns))
-                    }
-
-                    pruned_blocks
-                }
-                None => raw_blocks,
-            },
-            None => raw_blocks,
-        };
-
-        Ok(Box::pin(MemoryTableStream::try_create(ctx, blocks)?))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let settings = ctx.get_settings();
         let mut builder = SourcePipeBuilder::create();
@@ -239,7 +205,7 @@ impl Table for MemoryTable {
         Ok(())
     }
 
-    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut Pipeline) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();

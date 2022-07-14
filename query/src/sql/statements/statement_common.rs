@@ -56,8 +56,6 @@ use crate::sessions::QueryContext;
 /// For internal stage, we will also add prefix `/stage/<stage>/`
 ///
 /// - @internal/abc => (internal, "/stage/internal/abc")
-///
-/// TODO(xuanwo): Move those logic into parser.
 pub async fn parse_stage_location(
     ctx: &Arc<QueryContext>,
     location: &str,
@@ -109,7 +107,7 @@ pub async fn parse_stage_location_v2(
 ///     file_format = (type = csv field_delimiter = '|' skip_header = 1)"
 /// ```
 ///
-/// TODO: migrate to `common-storage::parse_uri_location`
+/// TODO: should be removed after old planner has been removed.
 pub fn parse_uri_location(
     ctx: &Arc<QueryContext>,
     location: &str,
@@ -165,7 +163,7 @@ pub fn parse_uri_location(
 /// This function works similar with parse_uri_location.
 /// Different is input location has been parsed.
 ///
-/// TODO(xuanwo): Move this logic into parser
+/// TODO: should be removed after old planner has been removed.
 pub fn parse_uri_location_v2(
     ctx: &Arc<QueryContext>,
     protocol: &str,

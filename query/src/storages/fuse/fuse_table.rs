@@ -38,7 +38,7 @@ use common_tracing::tracing;
 use futures::StreamExt;
 use uuid::Uuid;
 
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
@@ -345,26 +345,17 @@ impl Table for FuseTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_read", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        self.do_read(ctx, &plan.push_downs)
-    }
-
     #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_read2(ctx, plan, pipeline)
     }
 
-    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut Pipeline) -> Result<()> {
         self.check_mutable()?;
         self.do_append2(ctx, pipeline)
     }

@@ -17,7 +17,6 @@ common-base = { path = "../base" }
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
-common-functions = { path = "../functions" }
 common-io = { path = "../io" }
 common-tracing = { path = "../tracing" }
 

@@ -21,6 +21,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_planners::*;
 use databend_query::storages::null::NullTable;
+use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 

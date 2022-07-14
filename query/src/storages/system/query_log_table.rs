@@ -32,12 +32,12 @@ use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use parking_lot::RwLock;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
@@ -138,28 +138,11 @@ impl Table for QueryLogTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let data = self.data.read().clone();
-        let mut blocks = Vec::with_capacity(data.len());
-        for block in data {
-            blocks.push(block);
-        }
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            blocks,
-        )))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         // TODO: split data for multiple threads
         let output = OutputPort::create();

@@ -33,18 +33,16 @@ use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_streams::SendableDataBlockStream;
 
-use super::numbers_stream::NumbersStream;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::EmptySource;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
-use crate::pipelines::transforms::get_sort_descriptions;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::transforms::get_sort_descriptions;
+use crate::pipelines::processors::EmptySource;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 use crate::table_functions::generate_numbers_parts;
@@ -179,28 +177,15 @@ impl Table for NumbersTable {
         ))])
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(NumbersStream::try_create(
-            ctx,
-            self.schema(),
-            vec![],
-            None,
-        )?))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         if plan.parts.is_empty() {
             let output = OutputPort::create();
-            pipeline.add_pipe(NewPipe::SimplePipe {
+            pipeline.add_pipe(Pipe::SimplePipe {
                 inputs_port: vec![],
                 outputs_port: vec![output.clone()],
                 processors: vec![EmptySource::create(output)?],
@@ -258,7 +243,7 @@ impl NumbersSource {
 }
 
 impl SyncSource for NumbersSource {
-    const NAME: &'static str = "numbers";
+    const NAME: &'static str = "NumbersSourceTransform";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         let source_remain_size = self.end - self.begin;

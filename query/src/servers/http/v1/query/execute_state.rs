@@ -43,11 +43,11 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::executor::PipelineExecutor;
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::exec::PhysicalPlan;
@@ -287,10 +287,8 @@ async fn execute(
     executor: Arc<RwLock<Executor>>,
     plan: Arc<PlanNode>,
 ) -> Result<()> {
-    let data_stream: Result<SendableDataBlockStream> =
+    let data_stream: Result<SendableDataBlockStream> = {
         if ctx.get_settings().get_enable_async_insert()? != 0
-            && ctx.get_settings().get_enable_new_processor_framework()? != 0
-            && ctx.get_cluster().is_empty()
             && matches!(&*plan, PlanNode::Insert(_))
         {
             match &*plan {
@@ -331,7 +329,8 @@ async fn execute(
             }
         } else {
             interpreter.execute(None).await
-        };
+        }
+    };
 
     let mut data_stream = ctx.try_create_abortable(data_stream?)?;
     let use_result_cache = !ctx.get_config().query.management_mode;
@@ -397,7 +396,7 @@ impl HttpQueryHandle {
         let block_buffer = self.block_buffer.clone();
         let last_schema = physical_plan.output_schema()?;
         let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = NewPipeline::create();
+        let mut root_pipeline = Pipeline::create();
         pb.build_pipeline(ctx.clone(), physical_plan, &mut root_pipeline)?;
         pb.render_result_set(last_schema, result_columns, &mut root_pipeline)?;
 
@@ -433,7 +432,7 @@ impl HttpQueryHandle {
             query_info,
             self.block_buffer,
         )?;
-        root_pipeline.add_pipe(NewPipe::SimplePipe {
+        root_pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],
             inputs_port: vec![input],
             processors: vec![sink],

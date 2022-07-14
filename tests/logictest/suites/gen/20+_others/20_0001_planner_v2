@@ -1280,8 +1280,8 @@ explain select t1.a from t1 where a > 0;
 
 ----  
 Project: [a]
-    Filter: [t1.a > 0]
-        Scan: default.default.t1
+└── Filter: [t1.a > 0]
+    └── Scan: default.default.t1
 
 
 ----  http

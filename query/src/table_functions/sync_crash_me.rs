@@ -33,15 +33,14 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_streams::SendableDataBlockStream;
 use futures::Stream;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 use crate::table_functions::table_function_factory::TableArgs;
@@ -118,24 +117,14 @@ impl Table for SyncCrashMeTable {
         Some(vec![Expression::create_literal(DataValue::UInt64(0))])
     }
 
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(SyncCrashMeStream {
-            message: self.panic_message.clone(),
-        }))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
-        pipeline.add_pipe(NewPipe::SimplePipe {
+        pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
             processors: vec![SyncCrashMeSource::create(

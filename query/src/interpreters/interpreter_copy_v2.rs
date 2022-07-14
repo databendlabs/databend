@@ -28,12 +28,10 @@ use common_tracing::tracing;
 use futures::TryStreamExt;
 use regex::Regex;
 
-use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::executor::PipelinePullingExecutor;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
@@ -134,7 +132,7 @@ impl CopyInterpreterV2 {
         let ctx = self.ctx.clone();
         let settings = self.ctx.get_settings();
 
-        let mut pipeline = NewPipeline::create();
+        let mut pipeline = Pipeline::create();
         let read_source_plan = from.clone();
         let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
         tracing::info!("copy_files_to_table: source plan:{:?}", read_source_plan);
@@ -146,35 +144,16 @@ impl CopyInterpreterV2 {
 
         let table = ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        if ctx.get_settings().get_enable_new_processor_framework()? != 0 {
-            table.append2(ctx.clone(), &mut pipeline)?;
-            pipeline.set_max_threads(settings.get_max_threads()? as usize);
-
-            let async_runtime = ctx.get_storage_runtime();
-            let query_need_abort = ctx.query_need_abort();
-            let executor =
-                PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
-            executor.execute()?;
-
-            return Ok(ctx.consume_precommit_blocks());
-        }
-
+        table.append2(ctx.clone(), &mut pipeline)?;
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
         let async_runtime = ctx.get_storage_runtime();
-        let query_need_abort = self.ctx.query_need_abort();
+        let query_need_abort = ctx.query_need_abort();
         let executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+            PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+        executor.execute()?;
 
-        let stream = ProcessorExecutorStream::create(executor)?;
-
-        let operations = table
-            .append_data(ctx.clone(), Box::pin(stream))
-            .await?
-            .try_collect()
-            .await?;
-
-        Ok(operations)
+        Ok(ctx.consume_precommit_blocks())
     }
 
     async fn execute_copy_into_stage(

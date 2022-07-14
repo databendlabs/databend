@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_planners::*;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
+use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
@@ -36,7 +37,7 @@ async fn test_number_table() -> Result<()> {
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(ctx, &source_plan).await?;
+    let stream = table.as_table().read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);

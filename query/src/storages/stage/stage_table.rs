@@ -32,10 +32,10 @@ use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 
 use super::StageSource;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::TransformLimit;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::TransformLimit;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
@@ -76,23 +76,11 @@ impl Table for StageTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    // External stage only supported new pipeline.
-    // TODO(bohu): Remove after new pipeline ready.
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        Err(ErrorCode::UnImplement(
-            "S3 external table not support read()!",
-        ))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let settings = ctx.get_settings();
         let mut builder = SourcePipeBuilder::create();

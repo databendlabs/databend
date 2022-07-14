@@ -22,29 +22,23 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use futures::TryStreamExt;
 use parking_lot::Mutex;
 
-use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
-use crate::interpreters::plan_schedulers::InsertWithPlan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::BlocksSource;
-use crate::pipelines::new::processors::TransformAddOn;
-use crate::pipelines::new::processors::TransformCastSchema;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
-use crate::pipelines::transforms::AddOnStream;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::BlocksSource;
+use crate::pipelines::processors::TransformAddOn;
+use crate::pipelines::processors::TransformCastSchema;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 
 pub struct InsertInterpreter {
@@ -68,20 +62,42 @@ impl InsertInterpreter {
         })
     }
 
-    async fn execute_new(
+    fn check_schema_cast(&self, plan_node: &PlanNode) -> common_exception::Result<bool> {
+        let output_schema = &self.plan.schema;
+        let select_schema = plan_node.schema();
+
+        // validate schema
+        if select_schema.fields().len() < output_schema.fields().len() {
+            return Err(ErrorCode::BadArguments(
+                "Fields in select statement is less than expected",
+            ));
+        }
+
+        // check if cast needed
+        let cast_needed = select_schema != *output_schema;
+        Ok(cast_needed)
+    }
+}
+
+#[async_trait::async_trait]
+impl Interpreter for InsertInterpreter {
+    fn name(&self) -> &str {
+        "InsertIntoInterpreter"
+    }
+
+    async fn execute(
         &self,
-        _input_stream: Option<SendableDataBlockStream>,
+        input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        let _input_stream = input_stream;
         let plan = &self.plan;
         let settings = self.ctx.get_settings();
         let table = self
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
-
         let mut pipeline = self.create_new_pipeline().await?;
         let mut builder = SourcePipeBuilder::create();
-
         if self.async_insert {
             pipeline.add_pipe(
                 ((*self.source_pipe_builder.lock()).clone())
@@ -157,7 +173,6 @@ impl InsertInterpreter {
                 }
             };
         }
-
         let need_fill_missing_columns = table.schema() != plan.schema();
         if need_fill_missing_columns {
             pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -170,31 +185,23 @@ impl InsertInterpreter {
                 )
             })?;
         }
-
         table.append2(self.ctx.clone(), &mut pipeline)?;
-
         let async_runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
-
         pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
         let executor =
             PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
-
         executor.execute()?;
         drop(executor);
-
         let overwrite = self.plan.overwrite;
         let catalog_name = self.plan.catalog.clone();
         let context = self.ctx.clone();
         let append_entries = self.ctx.consume_precommit_blocks();
-
-        // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
         let handler = self.ctx.get_storage_runtime().spawn(async move {
             table
                 .commit_insertion(context, &catalog_name, append_entries, overwrite)
                 .await
         });
-
         match handler.await {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(cause)) => Err(cause),
@@ -211,128 +218,8 @@ impl InsertInterpreter {
         )))
     }
 
-    fn check_schema_cast(&self, plan_node: &PlanNode) -> common_exception::Result<bool> {
-        let output_schema = &self.plan.schema;
-        let select_schema = plan_node.schema();
-
-        // validate schema
-        if select_schema.fields().len() < output_schema.fields().len() {
-            return Err(ErrorCode::BadArguments(
-                "Fields in select statement is less than expected",
-            ));
-        }
-
-        // check if cast needed
-        let cast_needed = select_schema != *output_schema;
-        Ok(cast_needed)
-    }
-}
-
-#[async_trait::async_trait]
-impl Interpreter for InsertInterpreter {
-    fn name(&self) -> &str {
-        "InsertIntoInterpreter"
-    }
-
-    async fn execute(
-        &self,
-        mut input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
-        let settings = self.ctx.get_settings();
-
-        // Use insert in new processor
-        if settings.get_enable_new_processor_framework()? != 0 {
-            return self.execute_new(input_stream).await;
-        }
-
-        let plan = &self.plan;
-        self.ctx
-            .get_current_session()
-            .validate_privilege(
-                &GrantObject::Table(
-                    plan.catalog.clone(),
-                    plan.database.clone(),
-                    plan.table.clone(),
-                ),
-                UserPrivilegeType::Insert,
-            )
-            .await?;
-
-        let table = self
-            .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
-            .await?;
-
-        let cluster_keys = table.cluster_keys();
-        let need_fill_missing_columns =
-            table.schema() != self.plan.schema() || !cluster_keys.is_empty();
-
-        let append_logs = match &self.plan.source {
-            InsertInputSource::SelectPlan(plan_node) => {
-                let with_plan =
-                    InsertWithPlan::new(&self.ctx, &self.plan.schema, plan_node, &plan.catalog);
-                with_plan.execute(table.as_ref()).await
-            }
-
-            InsertInputSource::Values(values) => {
-                let stream: SendableDataBlockStream =
-                    Box::pin(futures::stream::iter(vec![Ok(values.block.clone())]));
-                let stream = if need_fill_missing_columns {
-                    Box::pin(AddOnStream::try_create(
-                        stream,
-                        cluster_keys,
-                        self.plan.schema(),
-                        table.schema(),
-                        self.ctx.clone(),
-                    )?)
-                } else {
-                    stream
-                };
-
-                let with_stream = InsertWithStream::new(&self.ctx, &table);
-                with_stream.append_stream(stream).await
-            }
-
-            InsertInputSource::StreamingWithFormat(_) => {
-                let stream = input_stream
-                    .take()
-                    .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))?;
-
-                let stream = if need_fill_missing_columns {
-                    Box::pin(AddOnStream::try_create(
-                        stream,
-                        cluster_keys,
-                        self.plan.schema(),
-                        table.schema(),
-                        self.ctx.clone(),
-                    )?)
-                } else {
-                    stream
-                };
-
-                let with_stream = InsertWithStream::new(&self.ctx, &table);
-                with_stream.append_stream(stream).await
-            }
-        }?;
-        // feed back the append operation logs to table
-        table
-            .commit_insertion(
-                self.ctx.clone(),
-                &self.plan.catalog,
-                append_logs.try_collect().await?,
-                self.plan.overwrite,
-            )
-            .await?;
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
-    }
-
-    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        let insert_pipeline = NewPipeline::create();
+    async fn create_new_pipeline(&self) -> Result<Pipeline> {
+        let insert_pipeline = Pipeline::create();
         Ok(insert_pipeline)
     }
 

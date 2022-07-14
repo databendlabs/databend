@@ -28,10 +28,10 @@ use common_formats::InputFormat;
 use common_formats::InputState;
 use poem::web::Multipart;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 use crate::servers::http::v1::multipart_format::MultipartWorker;
 
 pub struct ParallelMultipartWorker {

@@ -633,65 +633,36 @@ impl ColumnBuilder {
     }
 
     pub fn build_scalar(self) -> Scalar {
+        assert_eq!(self.len(), 1);
         match self {
-            ColumnBuilder::Null { len } => {
-                assert_eq!(len, 1);
-                Scalar::Null
-            }
-            ColumnBuilder::EmptyArray { len } => {
-                assert_eq!(len, 1);
-                Scalar::EmptyArray
-            }
-            ColumnBuilder::Int8(builder) => {
-                assert_eq!(builder.len(), 1);
-                Scalar::Int8(builder[0])
-            }
-            ColumnBuilder::Int16(builder) => {
-                assert_eq!(builder.len(), 1);
-                Scalar::Int16(builder[0])
-            }
-            ColumnBuilder::UInt8(builder) => {
-                assert_eq!(builder.len(), 1);
-                Scalar::UInt8(builder[0])
-            }
-            ColumnBuilder::UInt16(builder) => {
-                assert_eq!(builder.len(), 1);
-                Scalar::UInt16(builder[0])
-            }
-            ColumnBuilder::Boolean(builder) => {
-                assert_eq!(builder.len(), 1);
-                Scalar::Boolean(builder.get(0))
-            }
+            ColumnBuilder::Null { .. } => Scalar::Null,
+            ColumnBuilder::EmptyArray { .. } => Scalar::EmptyArray,
+            ColumnBuilder::Int8(builder) => Scalar::Int8(builder[0]),
+            ColumnBuilder::Int16(builder) => Scalar::Int16(builder[0]),
+            ColumnBuilder::UInt8(builder) => Scalar::UInt8(builder[0]),
+            ColumnBuilder::UInt16(builder) => Scalar::UInt16(builder[0]),
+            ColumnBuilder::Boolean(builder) => Scalar::Boolean(builder.get(0)),
             ColumnBuilder::String { data, offsets } => {
-                assert_eq!(offsets.len(), 2);
                 Scalar::String(data[(offsets[0] as usize)..(offsets[1] as usize)].to_vec())
             }
-            ColumnBuilder::Array { array, offsets } => {
-                assert_eq!(offsets.len(), 2);
-                Scalar::Array(
-                    array
-                        .build()
-                        .slice((offsets[0] as usize)..(offsets[1] as usize)),
-                )
-            }
+            ColumnBuilder::Array { array, offsets } => Scalar::Array(
+                array
+                    .build()
+                    .slice((offsets[0] as usize)..(offsets[1] as usize)),
+            ),
             ColumnBuilder::Nullable { column, validity } => {
-                assert_eq!(column.len(), 1);
-                assert_eq!(validity.len(), 1);
                 if validity.get(0) {
                     column.build_scalar()
                 } else {
                     Scalar::Null
                 }
             }
-            ColumnBuilder::Tuple { fields, len } => {
-                assert_eq!(len, 1);
-                Scalar::Tuple(
-                    fields
-                        .into_iter()
-                        .map(|field| field.build_scalar())
-                        .collect(),
-                )
-            }
+            ColumnBuilder::Tuple { fields, .. } => Scalar::Tuple(
+                fields
+                    .into_iter()
+                    .map(|field| field.build_scalar())
+                    .collect(),
+            ),
         }
     }
 }

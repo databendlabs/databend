@@ -41,10 +41,12 @@ use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::Table;
+use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
 use tempfile::TempDir;
+use tokio_stream::StreamExt;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
@@ -205,10 +207,7 @@ fn gen_db_name(prefix: &str) -> String {
     format!("db_{}", prefix)
 }
 
-pub async fn test_drive(
-    test_db: Option<&str>,
-    test_tbl: Option<&str>,
-) -> Result<SendableDataBlockStream> {
+pub async fn test_drive(test_db: Option<&str>, test_tbl: Option<&str>) -> Result<()> {
     let arg_db = match test_db {
         Some(v) => DataValue::String(v.as_bytes().to_vec()),
         None => DataValue::Null,
@@ -223,12 +222,21 @@ pub async fn test_drive(
         Expression::create_literal(arg_db),
         Expression::create_literal(arg_tbl),
     ]);
+
     test_drive_with_args(tbl_args).await
 }
 
-pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<SendableDataBlockStream> {
+pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
-    test_drive_with_args_and_ctx(tbl_args, ctx).await
+    let mut stream = test_drive_with_args_and_ctx(tbl_args, ctx).await?;
+
+    while let Some(res) = stream.next().await {
+        if let Err(cause) = res {
+            return Err(cause);
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn test_drive_with_args_and_ctx(
@@ -242,7 +250,7 @@ pub async fn test_drive_with_args_and_ctx(
         .read_plan(ctx.clone(), Some(Extras::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.read(ctx, &source_plan).await
+    func.as_table().read(ctx, &source_plan).await
 }
 
 pub async fn test_drive_clustering_information(
@@ -256,7 +264,7 @@ pub async fn test_drive_clustering_information(
         .read_plan(ctx.clone(), Some(Extras::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.read(ctx, &source_plan).await
+    func.as_table().read(ctx, &source_plan).await
 }
 
 pub fn expects_err<T>(case_name: &str, err_code: u16, res: Result<T>) {
@@ -283,7 +291,7 @@ pub async fn expects_ok(
 ) -> Result<()> {
     match res {
         Ok(stream) => {
-            let blocks: Vec<DataBlock> = stream.try_collect().await.unwrap();
+            let blocks: Vec<DataBlock> = stream.try_collect().await?;
             assert_blocks_sorted_eq_with_name(case_name.as_ref(), expected, &blocks)
         }
         Err(err) => {

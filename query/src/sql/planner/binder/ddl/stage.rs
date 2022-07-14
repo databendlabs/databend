@@ -23,12 +23,14 @@ use common_meta_types::UserStageInfo;
 use common_planners::CreateUserStagePlan;
 use common_planners::ListPlan;
 use common_planners::RemoveUserStagePlan;
+use common_storage::parse_uri_location;
+use common_storage::StorageParams;
+use common_storage::UriLocation;
 
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
 use crate::sql::statements::parse_copy_file_format_options;
 use crate::sql::statements::parse_stage_location;
-use crate::sql::statements::parse_uri_location;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_list_stage(
@@ -71,8 +73,6 @@ impl<'a> Binder {
             if_not_exists,
             stage_name,
             location,
-            credential_options,
-            encryption_options,
             file_format_options,
             on_error,
             size_limit,
@@ -80,20 +80,33 @@ impl<'a> Binder {
             comments: _,
         } = stmt;
 
-        let mut stage_info = match location.is_empty() {
-            true => UserStageInfo {
+        let mut stage_info = match location {
+            None => UserStageInfo {
                 stage_type: StageType::Internal,
                 ..Default::default()
             },
-            false => {
-                let (stage_storage, _) = parse_uri_location(
-                    &self.ctx,
-                    location,
-                    credential_options,
-                    encryption_options,
-                )?;
+            Some(uri) => {
+                let mut uri = UriLocation {
+                    protocol: uri.protocol.clone(),
+                    name: uri.name.clone(),
+                    path: uri.path.clone(),
+                    connection: uri.connection.clone(),
+                };
 
-                stage_storage
+                // Make sure the behavior under older planner is the same
+                // with before which always use the same endpoint with config.
+                //
+                // TODO: remove me while removing old planner
+                if self.ctx.get_settings().get_enable_planner_v2()? == 0 {
+                    if let StorageParams::S3(v) = self.ctx.get_config().storage.params {
+                        uri.connection
+                            .insert("endpoint_url".to_string(), v.endpoint_url);
+                    }
+                }
+
+                let (stage_storage, path) = parse_uri_location(&uri)?;
+
+                UserStageInfo::new_external_stage(stage_storage, &path)
             }
         };
         stage_info.stage_name = stage_name.clone();

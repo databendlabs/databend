@@ -23,6 +23,7 @@ use common_meta_app::schema::TableMeta;
 use common_planners::*;
 use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::storages::memory::MemoryTable;
+use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 

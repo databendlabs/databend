@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use anyerror::AnyError;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_app::schema::CountTablesKey;
@@ -27,6 +26,7 @@ use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
+use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
@@ -48,6 +48,7 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdList;
 use common_meta_app::schema::TableIdListKey;
+use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -77,37 +78,37 @@ use common_meta_types::app_error::UndropTableWithNoDropTime;
 use common_meta_types::app_error::UnknownDatabase;
 use common_meta_types::app_error::UnknownTable;
 use common_meta_types::app_error::UnknownTableId;
-use common_meta_types::txn_condition;
-use common_meta_types::txn_op::Request;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
-use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
-use common_meta_types::Operation;
-use common_meta_types::TxnCondition;
-use common_meta_types::TxnDeleteRequest;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnOpResponse;
-use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReq;
-use common_proto_conv::FromToProto;
 use common_tracing::func_name;
 use common_tracing::tracing;
-use txn_condition::Target;
 use ConditionResult::Eq;
 
+use crate::deserialize_struct;
+use crate::deserialize_u64;
+use crate::fetch_id;
+use crate::get_struct_value;
+use crate::get_u64_value;
+use crate::meta_encode_err;
+use crate::send_txn;
+use crate::serialize_struct;
+use crate::serialize_u64;
+use crate::txn_cond_seq;
+use crate::txn_op_del;
+use crate::txn_op_put;
 use crate::DatabaseIdGen;
 use crate::KVApi;
 use crate::KVApiKey;
 use crate::SchemaApi;
 use crate::TableIdGen;
+use crate::TXN_MAX_RETRY_TIMES;
 
 const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
-const TXN_MAX_RETRY_TIMES: u32 = 10;
 
 /// SchemaApi is implemented upon KVApi.
 /// Thus every type that impl KVApi impls SchemaApi.
@@ -168,9 +169,11 @@ impl<KV: KVApi> SchemaApi for KV {
             // (tenant, db_name) -> db_id
             // (db_id) -> db_meta
             // append db_id into _fd_db_id_list/<tenant>/<db_name>
+            // (db_id) -> (tenant,db_name)
 
             let db_id = fetch_id(self, DatabaseIdGen {}).await?;
             let id_key = DatabaseId { db_id };
+            let id_to_name_key = DatabaseIdToName { db_id };
 
             tracing::debug!(db_id, name_key = debug(&name_key), "new database id");
 
@@ -181,12 +184,14 @@ impl<KV: KVApi> SchemaApi for KV {
                 let txn_req = TxnRequest {
                     condition: vec![
                         txn_cond_seq(name_key, Eq, 0),
+                        txn_cond_seq(&id_to_name_key, Eq, 0),
                         txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
                     ],
                     if_then: vec![
                         txn_op_put(name_key, serialize_u64(db_id)?), // (tenant, db_name) -> db_id
                         txn_op_put(&id_key, serialize_struct(&req.meta)?), // (db_id) -> db_meta
                         txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?), // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
+                        txn_op_put(&id_to_name_key, serialize_struct(name_key)?), // __fd_database_id_to_name/<db_id> -> (tenant,db_name)
                     ],
                     else_then: vec![],
                 };
@@ -433,6 +438,11 @@ impl<KV: KVApi> SchemaApi for KV {
             let (db_id_seq, _db_id) = get_u64_value(self, &tenant_newdbname).await?;
             db_has_to_not_exist(db_id_seq, &tenant_newdbname, "rename_database")?;
 
+            // get db id -> name
+            let db_id_key = DatabaseIdToName { db_id: old_db_id };
+            let (db_name_seq, _): (_, Option<DatabaseNameIdent>) =
+                get_struct_value(self, &db_id_key).await?;
+
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist = DbIdListKey {
                 tenant: tenant_dbname.tenant.clone(),
@@ -502,6 +512,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     condition: vec![
                         // Prevent renaming or deleting in other threads.
                         txn_cond_seq(tenant_dbname, Eq, old_db_id_seq),
+                        txn_cond_seq(&db_id_key, Eq, db_name_seq),
                         txn_cond_seq(&tenant_newdbname, Eq, 0),
                         txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
                         txn_cond_seq(&new_dbid_idlist, Eq, new_db_id_list_seq),
@@ -512,6 +523,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_op_put(&tenant_newdbname, serialize_u64(old_db_id)?), // (tenant, new_db_name) -> old_db_id
                         txn_op_put(&new_dbid_idlist, serialize_struct(&new_db_id_list)?), // _fd_db_id_list/tenant/new_db_name -> new_db_id_list
                         txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?), // _fd_db_id_list/tenant/db_name -> db_id_list
+                        txn_op_put(&db_id_key, serialize_struct(&tenant_newdbname)?), // __fd_database_id_to_name/<db_id> -> (tenant,db_name)
                     ],
                     else_then: vec![],
                 };
@@ -768,10 +780,18 @@ impl<KV: KVApi> SchemaApi for KV {
             // (db_id, table_name) -> table_id
             // (table_id) -> table_meta
             // append table_id into _fd_table_id_list/db_id/table_name
+            // (table_id) -> table_name
 
             let table_id = fetch_id(self, TableIdGen {}).await?;
 
             let tbid = TableId { table_id };
+
+            // get table id name
+            let table_id_to_name_key = TableIdToName { table_id };
+            let db_id_table_name = DBIdTableName {
+                db_id,
+                table_name: req.name_ident.table_name.clone(),
+            };
 
             tracing::debug!(
                 table_id,
@@ -794,6 +814,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
                         // update table count atomicly
                         txn_cond_seq(&tb_count_key, Eq, tb_count_seq),
+                        txn_cond_seq(&table_id_to_name_key, Eq, 0),
                     ],
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
@@ -804,6 +825,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_op_put(&tbid, serialize_struct(&req.table_meta)?), // (tenant, db_id, tb_id) -> tb_meta
                         txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?), // _fd_table_id_list/db_id/table_name -> tb_id_list
                         txn_op_put(&tb_count_key, serialize_u64(tb_count + 1)?), // _fd_table_count/tenant -> tb_count
+                        txn_op_put(&table_id_to_name_key, serialize_struct(&db_id_table_name)?), // __fd_table_id_to_name/db_id/table_name -> DBIdTableName
                     ],
                     else_then: vec![],
                 };
@@ -1226,6 +1248,15 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             };
 
+            // get table id name
+            let table_id_to_name_key = TableIdToName { table_id };
+            let (table_id_to_name_seq, _): (_, Option<DBIdTableName>) =
+                get_struct_value(self, &table_id_to_name_key).await?;
+            let db_id_table_name = DBIdTableName {
+                db_id,
+                table_name: req.new_table_name.clone(),
+            };
+
             {
                 // move table id from old table id list to new table id list
                 tb_id_list.pop();
@@ -1243,6 +1274,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     // no other table id with the same name is append.
                     txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
                     txn_cond_seq(&new_dbid_tbname_idlist, Eq, new_tb_id_list_seq),
+                    txn_cond_seq(&table_id_to_name_key, Eq, table_id_to_name_seq),
                 ];
 
                 let mut then_ops = vec![
@@ -1254,6 +1286,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), // (db_id) -> db_meta
                     txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?), // _fd_table_id_list/db_id/old_table_name -> tb_id_list
                     txn_op_put(&new_dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?), // _fd_table_id_list/db_id/new_table_name -> tb_id_list
+                    txn_op_put(&table_id_to_name_key, serialize_struct(&db_id_table_name)?), // __fd_table_id_to_name/db_id/table_name -> DBIdTableName
                 ];
 
                 if db_id != new_db_id {
@@ -2064,24 +2097,6 @@ fn table_has_to_not_exist(
     }
 }
 
-/// Get value that its type is `u64`.
-///
-/// It expects the kv-value's type is `u64`, such as:
-/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
-/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
-///
-/// It returns (seq, `u64` value).
-/// If not found, (0,0) is returned.
-async fn get_u64_value<T: KVApiKey>(kv_api: &impl KVApi, key: &T) -> Result<(u64, u64), MetaError> {
-    let res = kv_api.get_kv(&key.to_key()).await?;
-
-    if let Some(seq_v) = res {
-        Ok((seq_v.seq, deserialize_u64(&seq_v.data)?))
-    } else {
-        Ok((0, 0))
-    }
-}
-
 /// List kvs whose value's type is `u64`.
 ///
 /// It expects the kv-value' type is `u64`, such as:
@@ -2128,120 +2143,6 @@ async fn list_keys<K: KVApiKey>(kv_api: &impl KVApi, key: &K) -> Result<Vec<K>, 
     }
 
     Ok(structured_keys)
-}
-
-/// Get a struct value.
-///
-/// It returns seq number and the data.
-async fn get_struct_value<K, PB, T>(
-    kv_api: &impl KVApi,
-    k: &K,
-) -> Result<(u64, Option<T>), MetaError>
-where
-    K: KVApiKey,
-    PB: common_protos::prost::Message + Default,
-    T: FromToProto<PB>,
-{
-    let res = kv_api.get_kv(&k.to_key()).await?;
-
-    if let Some(seq_v) = res {
-        Ok((seq_v.seq, Some(deserialize_struct(&seq_v.data)?)))
-    } else {
-        Ok((0, None))
-    }
-}
-
-/// Generate an id on metasrv.
-///
-/// Ids are categorized by generators.
-/// Ids may not be consecutive.
-async fn fetch_id<T: KVApiKey>(kv_api: &impl KVApi, generator: T) -> Result<u64, MetaError> {
-    let res = kv_api
-        .upsert_kv(UpsertKVReq {
-            key: generator.to_key(),
-            seq: MatchSeq::Any,
-            value: Operation::Update(b"".to_vec()),
-            value_meta: None,
-        })
-        .await?;
-
-    // seq: MatchSeq::Any always succeeds
-    let seq_v = res.result.unwrap();
-    Ok(seq_v.seq)
-}
-
-/// Build a TxnCondition that compares the seq of a record.
-pub fn txn_cond_seq(key: &impl KVApiKey, op: ConditionResult, seq: u64) -> TxnCondition {
-    TxnCondition {
-        key: key.to_key(),
-        expected: op as i32,
-        target: Some(Target::Seq(seq)),
-    }
-}
-
-/// Build a txn operation that puts a record.
-pub fn txn_op_put(key: &impl KVApiKey, value: Vec<u8>) -> TxnOp {
-    TxnOp {
-        request: Some(Request::Put(TxnPutRequest {
-            key: key.to_key(),
-            value,
-            prev_value: true,
-        })),
-    }
-}
-
-/// Build a txn operation that deletes a record.
-pub fn txn_op_del(key: &impl KVApiKey) -> TxnOp {
-    TxnOp {
-        request: Some(Request::Delete(TxnDeleteRequest {
-            key: key.to_key(),
-            prev_value: true,
-        })),
-    }
-}
-
-async fn send_txn(
-    kv_api: &impl KVApi,
-    txn_req: TxnRequest,
-) -> Result<(bool, Vec<TxnOpResponse>), MetaError> {
-    let tx_reply = kv_api.transaction(txn_req).await?;
-    let res: Result<_, MetaError> = tx_reply.into();
-    let (succ, responses) = res?;
-    Ok((succ, responses))
-}
-
-fn serialize_u64(value: u64) -> Result<Vec<u8>, MetaError> {
-    let v = serde_json::to_vec(&value).map_err(meta_encode_err)?;
-    Ok(v)
-}
-
-fn deserialize_u64(v: &[u8]) -> Result<u64, MetaError> {
-    let id = serde_json::from_slice(v).map_err(meta_encode_err)?;
-    Ok(id)
-}
-
-pub(crate) fn serialize_struct<PB: common_protos::prost::Message>(
-    value: &impl FromToProto<PB>,
-) -> Result<Vec<u8>, MetaError> {
-    let p = value.to_pb().map_err(meta_encode_err)?;
-    let mut buf = vec![];
-    common_protos::prost::Message::encode(&p, &mut buf).map_err(meta_encode_err)?;
-    Ok(buf)
-}
-
-pub(crate) fn deserialize_struct<PB, T>(buf: &[u8]) -> Result<T, MetaError>
-where
-    PB: common_protos::prost::Message + Default,
-    T: FromToProto<PB>,
-{
-    let p: PB = common_protos::prost::Message::decode(buf).map_err(meta_encode_err)?;
-    let v: T = FromToProto::from_pb(p).map_err(meta_encode_err)?;
-
-    Ok(v)
-}
-
-fn meta_encode_err<E: std::error::Error + 'static>(e: E) -> MetaError {
-    MetaError::EncodeError(AnyError::new(&e))
 }
 
 /// Get the count of tables for one tenant by listing databases and table ids.

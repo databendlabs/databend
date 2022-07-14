@@ -18,6 +18,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::storages::system::TracingTable;
 use databend_query::storages::Table;
+use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 

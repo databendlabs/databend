@@ -16,6 +16,11 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use comfy_table::Cell;
+use comfy_table::Table;
+use itertools::Itertools;
+
+use crate::chunk::Chunk;
 use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
@@ -24,40 +29,68 @@ use crate::property::FunctionProperty;
 use crate::property::ValueProperty;
 use crate::types::DataType;
 use crate::types::ValueType;
+use crate::values::ScalarRef;
 use crate::values::Value;
 use crate::values::ValueRef;
 
-///! Convert a column of record batches into a table
-// fn create_table(results: &[DataBlock]) -> Result<Table> {
-//     let mut table = Table::new();
-//     table.load_preset("||--+-++|    ++++++");
+impl Debug for Chunk {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut table = Table::new();
+        table.load_preset("||--+-++|    ++++++");
 
-//     if results.is_empty() {
-//         return Ok(table);
-//     }
+        table.set_header(vec!["Column ID", "Column Data"]);
 
-//     let schema = results[0].schema();
+        for (i, col) in self.columns().iter().enumerate() {
+            table.add_row(vec![i.to_string(), format!("{:?}", col)]);
+        }
 
-//     let mut header = Vec::new();
-//     for field in schema.fields() {
-//         header.push(Cell::new(field.name()));
-//     }
-//     table.set_header(header);
+        write!(f, "{}", table)
+    }
+}
 
-//     for batch in results {
-//         for row in 0..batch.num_rows() {
-//             let mut cells = Vec::new();
-//             for col in 0..batch.num_columns() {
-//                 let column = batch.column(col);
-//                 let str = column.get_checked(row)?.to_string();
-//                 cells.push(Cell::new(&str));
-//             }
-//             table.add_row(cells);
-//         }
-//     }
+impl Display for Chunk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut table = Table::new();
+        table.load_preset("||--+-++|    ++++++");
 
-//     Ok(table)
-// }
+        table.set_header((0..self.num_columns()).map(|idx| format!("Column {idx}")));
+
+        for index in 0..self.num_rows() {
+            let row: Vec<_> = self
+                .columns()
+                .iter()
+                .map(|col| col.index(index).to_string())
+                .map(Cell::new)
+                .collect();
+            table.add_row(row);
+        }
+
+        write!(f, "{table}")
+    }
+}
+
+impl<'a> Display for ScalarRef<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScalarRef::Null => write!(f, "NULL"),
+            ScalarRef::EmptyArray => write!(f, "[]"),
+            ScalarRef::Int8(i) => write!(f, "{}", i),
+            ScalarRef::Int16(i) => write!(f, "{}", i),
+            ScalarRef::UInt8(i) => write!(f, "{}", i),
+            ScalarRef::UInt16(i) => write!(f, "{}", i),
+            ScalarRef::Boolean(b) => write!(f, "{}", b),
+            ScalarRef::String(s) => write!(f, "{}", String::from_utf8_lossy(s)),
+            ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
+            ScalarRef::Tuple(fields) => {
+                write!(
+                    f,
+                    "({})",
+                    fields.iter().map(ScalarRef::to_string).join(", ")
+                )
+            }
+        }
+    }
+}
 
 impl Display for RawExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -116,10 +149,10 @@ impl Display for DataType {
             DataType::UInt16 => write!(f, "UInt16"),
             DataType::Int8 => write!(f, "Int8"),
             DataType::Int16 => write!(f, "Int16"),
-            DataType::Null => write!(f, "Nullable<Nothing>"),
-            DataType::Nullable(inner) => write!(f, "Nullable<{inner}>"),
-            DataType::EmptyArray => write!(f, "Array<Nothing>"),
-            DataType::Array(inner) => write!(f, "Array<{inner}>"),
+            DataType::Null => write!(f, "Nullable(Nothing)"),
+            DataType::Nullable(inner) => write!(f, "Nullable({inner})"),
+            DataType::EmptyArray => write!(f, "Array(Nothing)"),
+            DataType::Array(inner) => write!(f, "Array({inner})"),
             DataType::Tuple(tys) => {
                 if tys.len() == 1 {
                     write!(f, "({},)", tys[0])

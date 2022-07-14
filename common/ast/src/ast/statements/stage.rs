@@ -16,14 +16,14 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use crate::ast::UriLocation;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateStageStmt {
     pub if_not_exists: bool,
     pub stage_name: String,
 
-    pub location: String,
-    pub credential_options: BTreeMap<String, String>,
-    pub encryption_options: BTreeMap<String, String>,
+    pub location: Option<UriLocation>,
 
     pub file_format_options: BTreeMap<String, String>,
     pub on_error: String,
@@ -40,24 +40,9 @@ impl Display for CreateStageStmt {
         }
         write!(f, " {}", self.stage_name)?;
 
-        if !self.location.is_empty() {
-            write!(f, " URL = '{}'", self.location)?;
-
-            if !self.credential_options.is_empty() {
-                write!(f, " CREDENTIALS = (")?;
-                for (k, v) in self.credential_options.iter() {
-                    write!(f, " {} = '{}'", k, v)?;
-                }
-                write!(f, " )")?;
-            }
-
-            if !self.encryption_options.is_empty() {
-                write!(f, " ENCRYPTION = (")?;
-                for (k, v) in self.encryption_options.iter() {
-                    write!(f, " {} = '{}'", k, v)?;
-                }
-                write!(f, " )")?;
-            }
+        if let Some(ul) = &self.location {
+            write!(f, " URL = ")?;
+            write!(f, "{ul}")?;
         }
 
         if !self.file_format_options.is_empty() {

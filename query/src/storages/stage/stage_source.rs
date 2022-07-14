@@ -37,10 +37,10 @@ use opendal::BytesReader;
 use opendal::Operator;
 use parking_lot::Mutex;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::AsyncSource;
-use crate::pipelines::new::processors::AsyncSourcer;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::AsyncSource;
+use crate::pipelines::processors::AsyncSourcer;
 use crate::sessions::QueryContext;
 
 pub struct StageSource {

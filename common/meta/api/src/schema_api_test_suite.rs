@@ -27,6 +27,7 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
+use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
@@ -43,6 +44,7 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdList;
 use common_meta_app::schema::TableIdListKey;
+use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -215,6 +217,7 @@ impl SchemaApiTestSuite {
     {
         let suite = SchemaApiTestSuite {};
 
+        suite.database_and_table_rename(&b.build().await).await?;
         suite.database_create_get_drop(&b.build().await).await?;
         suite
             .database_create_get_drop_in_diff_tenant(&b.build().await)
@@ -247,7 +250,6 @@ impl SchemaApiTestSuite {
             .table_drop_out_of_retention_time_history(&b.build().await)
             .await?;
         suite.get_table_by_id(&b.build().await).await?;
-
         Ok(())
     }
 
@@ -305,6 +307,136 @@ impl SchemaApiTestSuite {
         {
             let cluster = b.build_cluster().await;
             suite.table_get_diff_nodes(&cluster[2], &cluster[1]).await?;
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn database_and_table_rename<MT: SchemaApi + AsKVApi>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let db2_name = "db2";
+        let table_name = "table";
+        let table2_name = "table2";
+        let db_id;
+        let table_id;
+
+        let db_name_ident = DatabaseNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+        };
+        let db2_name_ident = DatabaseNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db2_name.to_string(),
+        };
+        let db_table_name_ident = TableNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+            table_name: table_name.to_string(),
+        };
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            updated_on: created_on,
+            created_on,
+            ..TableMeta::default()
+        };
+
+        let created_on = Utc::now();
+
+        let req = CreateTableReq {
+            if_not_exists: false,
+            name_ident: db_table_name_ident.clone(),
+            table_meta: table_meta(created_on),
+        };
+
+        {
+            tracing::info!("--- prepare db1 and table");
+            // prepare db1
+            let res = self.create_database(mt, tenant, "db1", "eng1").await?;
+            assert_eq!(1, res.db_id);
+            db_id = res.db_id;
+
+            let res = mt.create_table(req).await?;
+            table_id = res.table_id;
+
+            let db_id_name_key = DatabaseIdToName { db_id };
+            let ret_db_name_ident: DatabaseNameIdent =
+                get_test_data(mt.as_kv_api(), &db_id_name_key).await?;
+            assert_eq!(ret_db_name_ident, db_name_ident);
+
+            let table_id_name_key = TableIdToName { table_id };
+            let ret_table_name_ident: DBIdTableName =
+                get_test_data(mt.as_kv_api(), &table_id_name_key).await?;
+            assert_eq!(ret_table_name_ident, DBIdTableName {
+                db_id,
+                table_name: table_name.to_string()
+            });
+        }
+
+        {
+            tracing::info!("--- rename exists db db1 to not exists mutable db2");
+            let req = RenameDatabaseReq {
+                if_exists: false,
+                name_ident: db_name_ident.clone(),
+                new_db_name: db2_name.to_string(),
+            };
+            let res = mt.rename_database(req).await;
+            tracing::info!("rename database res: {:?}", res);
+            assert!(res.is_ok());
+
+            let db_id_2_name_key = DatabaseIdToName { db_id };
+            let ret_db_name_ident: DatabaseNameIdent =
+                get_test_data(mt.as_kv_api(), &db_id_2_name_key).await?;
+            assert_eq!(ret_db_name_ident, db2_name_ident);
+
+            let table_id_name_key = TableIdToName { table_id };
+            let ret_table_name_ident: DBIdTableName =
+                get_test_data(mt.as_kv_api(), &table_id_name_key).await?;
+            assert_eq!(ret_table_name_ident, DBIdTableName {
+                db_id,
+                table_name: table_name.to_string()
+            });
+        }
+
+        {
+            tracing::info!("--- rename exists table1 to not exists mutable table2");
+            let got = mt
+                .rename_table(RenameTableReq {
+                    if_exists: true,
+                    name_ident: TableNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db2_name.to_string(),
+                        table_name: table_name.to_string(),
+                    },
+                    new_db_name: db2_name.to_string(),
+                    new_table_name: table2_name.to_string(),
+                })
+                .await;
+            tracing::debug!("--- rename table on unknown database got: {:?}", got);
+
+            let table_id_name_key = TableIdToName { table_id };
+            let ret_table_name_ident: DBIdTableName =
+                get_test_data(mt.as_kv_api(), &table_id_name_key).await?;
+            assert_eq!(ret_table_name_ident, DBIdTableName {
+                db_id,
+                table_name: table2_name.to_string()
+            });
         }
 
         Ok(())
@@ -403,7 +535,7 @@ impl SchemaApiTestSuite {
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(
-                5, res.db_id,
+                6, res.db_id,
                 "second database id is 4: seq increment but no used"
             );
         }

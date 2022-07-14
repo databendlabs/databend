@@ -30,19 +30,16 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use walkdir::WalkDir;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::storages::system::tracing_table_stream::LogEntry;
-use crate::storages::system::TracingTableStream;
 use crate::storages::Table;
 
 pub struct TracingTable {
@@ -108,35 +105,11 @@ impl Table for TracingTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let log_files = Self::log_files(ctx)?;
-
-        // Default limit.
-        let mut limit = 100000000_usize;
-        tracing::debug!("read push_down:{:?}", &plan.push_downs);
-
-        if let Some(extras) = &plan.push_downs {
-            if let Some(limit_push_down) = extras.limit {
-                limit = limit_push_down;
-            }
-        }
-
-        Ok(Box::pin(TracingTableStream::try_create(
-            self.table_info.schema(),
-            log_files,
-            limit,
-        )?))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let settings = ctx.get_settings();
 
@@ -145,7 +118,7 @@ impl Table for TracingTable {
         let schema = self.table_info.schema();
         let max_block_size = settings.get_max_block_size()? as usize;
 
-        pipeline.add_pipe(NewPipe::SimplePipe {
+        pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
             processors: vec![TracingSource::create(

@@ -44,9 +44,9 @@ use tokio_stream::wrappers::ReceiverStream;
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::SyncReceiverCkSource;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::SyncReceiverCkSource;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
@@ -114,40 +114,19 @@ impl InteractiveWorkerBase {
         let interpreter = InterpreterFactory::get(ctx.clone(), PlanNode::Insert(insert))?;
         let name = interpreter.name().to_string();
 
-        if ctx.get_settings().get_enable_new_processor_framework()? != 0
-            && ctx.get_cluster().is_empty()
-        {
-            let output_port = OutputPort::create();
-            let sync_receiver_ck_source = SyncReceiverCkSource::create(
-                ctx.clone(),
-                ck_stream.input.into_inner(),
-                output_port.clone(),
-                sc,
-            )?;
-            let mut source_pipe_builder = SourcePipeBuilder::create();
-            source_pipe_builder.add_source(output_port, sync_receiver_ck_source);
+        let output_port = OutputPort::create();
+        let sync_receiver_ck_source = SyncReceiverCkSource::create(
+            ctx.clone(),
+            ck_stream.input.into_inner(),
+            output_port.clone(),
+            sc,
+        )?;
+        let mut source_pipe_builder = SourcePipeBuilder::create();
+        source_pipe_builder.add_source(output_port, sync_receiver_ck_source);
 
-            let _ = interpreter
-                .set_source_pipe_builder(Option::from(source_pipe_builder))
-                .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
-
-            let (mut tx, rx) = mpsc::unbounded();
-            tx.send(BlockItem::InsertSample(sample_block)).await.ok();
-
-            // the data is coming in async mode
-            let sent_all_data = ch_ctx.state.sent_all_data.clone();
-            let start = Instant::now();
-            ctx.try_spawn(async move {
-                interpreter.execute(None).await.unwrap();
-                sent_all_data.notify_one();
-            })?;
-            histogram!(
-                super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
-                start.elapsed(),
-                "interpreter" => name
-            );
-            return Ok(rx);
-        }
+        let _ = interpreter
+            .set_source_pipe_builder(Option::from(source_pipe_builder))
+            .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
 
         let (mut tx, rx) = mpsc::unbounded();
         tx.send(BlockItem::InsertSample(sample_block)).await.ok();
@@ -156,10 +135,7 @@ impl InteractiveWorkerBase {
         let sent_all_data = ch_ctx.state.sent_all_data.clone();
         let start = Instant::now();
         ctx.try_spawn(async move {
-            interpreter
-                .execute(Some(Box::pin(ck_stream)))
-                .await
-                .unwrap();
+            interpreter.execute(None).await.unwrap();
             sent_all_data.notify_one();
         })?;
         histogram!(
@@ -167,6 +143,7 @@ impl InteractiveWorkerBase {
             start.elapsed(),
             "interpreter" => name
         );
+
         Ok(rx)
     }
 

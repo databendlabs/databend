@@ -26,19 +26,17 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use super::clustering_information::ClusteringInformation;
 use super::table_args::get_cluster_keys;
 use super::table_args::parse_func_table_args;
 use crate::catalogs::CATALOG_DEFAULT;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::AsyncSource;
-use crate::pipelines::new::processors::AsyncSourcer;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::AsyncSource;
+use crate::pipelines::processors::AsyncSourcer;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::table_functions::string_literal;
 use crate::storages::fuse::FuseTable;
@@ -112,44 +110,14 @@ impl Table for ClusteringInformationTable {
         ])
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let tenant_id = ctx.get_tenant();
-        let tbl = ctx
-            .get_catalog(CATALOG_DEFAULT)?
-            .get_table(
-                tenant_id.as_str(),
-                self.arg_database_name.as_str(),
-                self.arg_table_name.as_str(),
-            )
-            .await?;
-        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-
-        let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys)?;
-
-        let blocks = vec![
-            ClusteringInformation::new(ctx.clone(), tbl, cluster_keys)
-                .get_clustering_info()
-                .await?,
-        ];
-        Ok(Box::pin(DataBlockStream::create(
-            ClusteringInformation::schema(),
-            None,
-            blocks,
-        )))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
-        pipeline.add_pipe(NewPipe::SimplePipe {
+        pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
             processors: vec![ClusteringInformationSource::create(

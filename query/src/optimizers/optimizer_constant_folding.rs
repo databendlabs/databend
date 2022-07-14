@@ -29,7 +29,7 @@ use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 
 use crate::optimizers::Optimizer;
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 
 pub struct ConstantFoldingOptimizer {

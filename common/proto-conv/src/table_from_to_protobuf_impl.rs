@@ -89,6 +89,28 @@ impl FromToProto<pb::TableNameIdent> for mt::TableNameIdent {
     }
 }
 
+impl FromToProto<pb::DbIdTableName> for mt::DBIdTableName {
+    fn from_pb(p: pb::DbIdTableName) -> Result<Self, Incompatible> {
+        check_ver(p.ver, p.min_compatible)?;
+
+        let v = Self {
+            db_id: p.db_id,
+            table_name: p.table_name,
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::DbIdTableName, Incompatible> {
+        let p = pb::DbIdTableName {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            db_id: self.db_id,
+            table_name: self.table_name.clone(),
+        };
+        Ok(p)
+    }
+}
+
 impl FromToProto<pb::TableIdent> for mt::TableIdent {
     fn from_pb(p: pb::TableIdent) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;

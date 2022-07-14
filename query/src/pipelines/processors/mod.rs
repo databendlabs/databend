@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,71 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod pipe;
-mod pipeline;
-mod pipeline_builder;
-mod pipeline_display;
-mod pipeline_walker;
-mod processor;
-mod processor_empty;
-mod processor_merge;
-mod processor_mixed;
+pub mod port;
+pub mod processor;
 
-pub use pipe::Pipe;
-pub use pipeline::Pipeline;
-pub use pipeline_builder::PipelineBuilder;
-pub use processor::FormatterSettings;
+mod port_trigger;
+mod resize_processor;
+mod sinks;
+mod sources;
+pub(crate) mod transforms;
+
+pub use port::connect;
+pub use port_trigger::DirectedEdge;
+pub use port_trigger::UpdateList;
+pub use port_trigger::UpdateTrigger;
 pub use processor::Processor;
-pub use processor_empty::EmptyProcessor;
-pub use processor_merge::MergeProcessor;
-pub use processor_mixed::MixedProcessor;
+pub use processor::Processors;
+pub use resize_processor::ResizeProcessor;
+pub use sinks::AsyncSink;
+pub use sinks::AsyncSinker;
+pub use sinks::EmptySink;
+pub use sinks::Sink;
+pub use sinks::Sinker;
+pub use sinks::SyncSenderSink;
+pub use sources::AsyncSource;
+pub use sources::AsyncSourcer;
+pub use sources::BlocksSource;
+pub use sources::EmptySource;
+pub use sources::StreamSource;
+pub use sources::StreamSourceV2;
+pub use sources::SyncReceiverCkSource;
+pub use sources::SyncReceiverSource;
+pub use sources::SyncSource;
+pub use sources::SyncSourcer;
+pub use transforms::AggregatorParams;
+pub use transforms::AggregatorTransformParams;
+pub use transforms::BlockCompactor;
+pub use transforms::ExpressionTransform;
+pub use transforms::HashJoinState;
+pub use transforms::HashTable;
+pub use transforms::JoinHashTable;
+pub use transforms::KeyU128HashTable;
+pub use transforms::KeyU16HashTable;
+pub use transforms::KeyU256HashTable;
+pub use transforms::KeyU32HashTable;
+pub use transforms::KeyU512HashTable;
+pub use transforms::KeyU64HashTable;
+pub use transforms::KeyU8HashTable;
+pub use transforms::MarkJoinCompactor;
+pub use transforms::ProjectionTransform;
+pub use transforms::SerializerHashTable;
+pub use transforms::SinkBuildHashTable;
+pub use transforms::SortMergeCompactor;
+pub use transforms::SubQueriesPuller;
+pub use transforms::TransformAddOn;
+pub use transforms::TransformAggregator;
+pub use transforms::TransformApply;
+pub use transforms::TransformBlockCompact;
+pub use transforms::TransformCastSchema;
+pub use transforms::TransformCompact;
+pub use transforms::TransformCreateSets;
+pub use transforms::TransformDummy;
+pub use transforms::TransformFilter;
+pub use transforms::TransformHashJoinProbe;
+pub use transforms::TransformHaving;
+pub use transforms::TransformLimit;
+pub use transforms::TransformLimitBy;
+pub use transforms::TransformMax1Row;
+pub use transforms::TransformSortMerge;
+pub use transforms::TransformSortPartial;
