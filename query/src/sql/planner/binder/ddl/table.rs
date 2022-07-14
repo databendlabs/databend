@@ -384,7 +384,7 @@ impl<'a> Binder {
                     .map(|column_binding| {
                         DataField::new(
                             &column_binding.column_name,
-                            column_binding.data_type.clone(),
+                            *column_binding.data_type.clone(),
                         )
                     })
                     .collect();

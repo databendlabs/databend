@@ -25,7 +25,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::InsertInterpreterV2;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::insert::Insert;
@@ -39,8 +38,8 @@ pub struct CreateTableInterpreterV2 {
 }
 
 impl CreateTableInterpreterV2 {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateTablePlanV2) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreateTableInterpreterV2 { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateTablePlanV2) -> Result<Self> {
+        Ok(CreateTableInterpreterV2 { ctx, plan })
     }
 }
 
