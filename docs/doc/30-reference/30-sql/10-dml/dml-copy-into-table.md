@@ -5,13 +5,13 @@ description:
   'Load Data using COPY INTO <table>'
 ---
 
-`COPY` moves data between Databend tables and object storage system(Such as Amazon S3-like) files.
+`COPY` moves data between Databend tables and object storage systems (AWS S3 compatible object storage services and Azure Blob storage).
 
-Loads data from staged files into a table, the files must be staged in one of the following locations:
+This command loads data into a table from files staged in one of the following locations:
 
 * Named internal stage, files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md).
-* Named external stage that references an external location (Amazon S3 S3-like object storage system).
-* External location (Amazon S3-like object storage system).
+* Named external stage that references an external location (AWS S3 compatible object storage services and Azure Blob storage).
+* External location. This includes AWS S3 compatible object storage services and Azure Blob storage.
 
 ## Syntax
 
@@ -38,19 +38,50 @@ internalStage ::= @<internal_stage_name>[/<path>]
 externalStage ::= @<external_stage_name>[/<path>]
 ```
 
-### externalLocation (for Amazon S3-like)
+### externalLocation
 
-```
-externalLocation (for Amazon S3) ::=
-  's3://<bucket>[/<path>]'
-  [ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]
+AWS S3 compatible object storage services:
+
+```sql
+externalLocation ::=
+  's3://<bucket>[<path>]'
+  CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>'
+        ACCESS_KEY_ID = '<your-access-key-ID>'
+        SECRET_ACCESS_KEY = '<your-secret-access-key>'
+        REGION = '<region-name>'
+        ENABLE_VIRTUAL_HOST_STYLE = true|false
+  )
 ```
 
-| Parameters                                                                                  | Description                                                                                                             | Required  |
-|---------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|-----------|
-| `s3://<bucket>/[<path>]`                                                                    | Files are in the specified external location (S3-like bucket)                                                           | YES       |
-| `[ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]` | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. | Optional  |
-| `[ ENDPOINT_URL = '<endpoint_url>' ]`                                                       | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com`                                            |  Optional |
+| Parameter                 	| Description                                                                 	| Required 	|
+|---------------------------	|-----------------------------------------------------------------------------	|----------	|
+| `s3://<bucket>[<path>]`    	| External files located at the AWS S3 compatible object storage.             	| Optional 	|
+| ENDPOINT_URL              	| The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.                                  	| Optional 	|
+| ACCESS_KEY_ID             	| Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.    	| Optional 	|
+| SECRET_ACCESS_KEY         	| Your secret access key for connecting the AWS S3 compatible object storage. 	| Optional 	|
+| REGION                    	| AWS region name. For example, us-east-1.                                    	| Optional 	|
+| ENABLE_VIRTUAL_HOST_STYLE 	| If you use virtual hosting to address the bucket, set it to "true".                               	| Optional 	|
+
+Azure Blob storage：
+
+```sql
+externalLocation ::=
+  'azblob://<container>[<path>]'
+  CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>'
+        ACCOUT_NAME = '<your-account-name>'
+        ACCOUNT_KEY = '<your-account-key>'
+  )
+```
+
+| Parameter                  	| Description                                              	| Required 	|
+|----------------------------	|----------------------------------------------------------	|----------	|
+| `azblob://<container>[<path>]` 	| External files located at the Azure Blob storage.        	| Required 	|
+| ENDPOINT_URL               	| The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.    	| Optional 	|
+| ACCOUNT_NAME               	| Your account name for connecting the Azure Blob storage. If not provided, Databend will access the container anonymously.	| Optional 	|
+| ACCOUNT_KEY                	| Your account key for connecting the Azure Blob storage.  	| Optional 	|
+
 
 ### FILES = ( 'file_name' [ , 'file_name' ... ] )
 
@@ -157,22 +188,48 @@ COPY INTO mytable FROM '@my_external_s1' pattern = 'books.*parquet' file_format 
 
 ### Loading Files Directly from External Location
 
-**Amazon S3**
+**AWS S3 compatible object storage services**
 
-Try to read 10 rows from csv and insert into the `mytable`.
+This example reads 10 rows from a CSV file and inserts them into a table:
 
 ```sql
 COPY INTO mytable
   FROM 's3://mybucket/data.csv'
-  credentials=(aws_key_id='<AWS_ACCESS_KEY_ID>' aws_secret_key='<AWS_SECRET_ACCESS_KEY>')
+  CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>'
+        ACCESS_KEY_ID = '<your-access-key-ID>'
+        SECRET_ACCESS_KEY = '<your-secret-access-key>')
   FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
 
-Try to load data from a gzip compressed csv and insert into `mytable`
+This example reads 10 rows from a CSV file compressed as GZIP and inserts them into a table:
 
 ```sql
 COPY INTO mytable
   FROM 's3://mybucket/data.csv.gz'
-  credentials=(aws_key_id='<AWS_ACCESS_KEY_ID>' aws_secret_key='<AWS_SECRET_ACCESS_KEY>')
+  CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>'
+        ACCESS_KEY_ID = '<your-access-key-ID>'
+        SECRET_ACCESS_KEY = '<your-secret-access-key>')
   FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = GZIP) size_limit=10;
+```
+
+This example moves data from a CSV file without specifying the endpoint URL:
+```sql
+COPY INTO mytable
+  FROM 's3://mybucket/data.csv'
+  FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
+```
+
+**Azure Blob storage**
+
+This example reads data from a CSV file and inserts them into a table:
+```sql
+COPY INTO mytable
+    FROM 'azblob://mybucket/data.csv'
+    CONNECTION = (
+        ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net'
+        ACCOUNT_NAME = '<account_name>'
+        ACCOUNT_KEY = '<account_key>'
+    )
 ```
