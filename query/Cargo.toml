@@ -59,6 +59,8 @@ common-metrics = { path = "../common/metrics" }
 common-pipeline = { path = "../common/pipeline" }
 common-planners = { path = "../common/planners" }
 common-settings = { path = "../common/settings" }
+common-proto-conv = { path = "../common/proto-conv" }
+common-protos = { path = "../common/protos"}
 common-storage = { path = "../common/storage" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }

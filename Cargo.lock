@@ -2310,6 +2310,8 @@ dependencies = [
  "common-metrics",
  "common-pipeline",
  "common-planners",
+ "common-proto-conv",
+ "common-protos",
  "common-settings",
  "common-storage",
  "common-streams",

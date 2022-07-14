@@ -14,15 +14,15 @@
 
 use std::env;
 use std::ops::Deref;
-use std::str::FromStr;
 use std::sync::Arc;
-use tokio_cron_scheduler::{JobScheduler, Job};
-use common_base::base::tokio;
 
 use common_base::base::RuntimeTracker;
-use common_base::base::TrySpawn;
+use common_exception::ErrorCode;
 use common_macros::databend_main;
+use common_meta_api::get_start_and_end_of_prefix;
+use common_meta_api::KVApiKey;
 use common_meta_api::PREFIX_TABLE_BY_ID;
+use common_meta_app::schema as mt;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_grpc::MIN_METASRV_SEMVER;
@@ -31,6 +31,8 @@ use common_meta_types::protobuf::WatchRequest;
 use common_metrics::init_default_metrics_recorder;
 use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
+use common_proto_conv::FromToProto;
+use common_protos::pb;
 use common_tracing::init_global_tracing;
 use common_tracing::set_panic_hook;
 use common_tracing::tracing;
@@ -50,6 +52,8 @@ use databend_query::sessions::SessionType;
 use databend_query::storages::Table;
 use databend_query::Config;
 use databend_query::QUERY_SEMVER;
+use tokio_cron_scheduler::Job;
+use tokio_cron_scheduler::JobScheduler;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
@@ -249,68 +253,111 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
 async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
     let sessions = SessionManager::from_conf(conf.clone()).await?;
+    let mut shutdown_handle = ShutdownHandle::create(sessions.clone());
+
     let executor_session = sessions.create_session(SessionType::Dummy).await?;
-    let ctx = executor_session.create_query_context().await?;
-    let tenant = ctx.get_tenant();
-    let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
-    let databases = catalog.list_databases(tenant.as_str()).await?;
+    let qc = executor_session.create_query_context().await?;
+    let tenant = qc.get_tenant();
+    let cl = qc.get_catalog(CATALOG_DEFAULT)?;
 
-    for database in databases {
-        let name = database.name();
-        if is_system_database(name) {
-            continue;
+    let ctx = qc.clone();
+    let catalog = cl.clone();
+    let sched = JobScheduler::new().expect("Failed to new JobScheduler");
+    let cron_job = Job::new_async("@daily", move |_, _| {
+        let catalog = Arc::clone(&catalog);
+        let tenant = tenant.clone();
+        let ctx = Arc::clone(&ctx);
+        Box::pin(async move {
+            let databases = catalog.list_databases(tenant.as_str()).await.unwrap();
+
+            for database in databases {
+                let name = database.name();
+                if is_system_database(name) {
+                    continue;
+                }
+                let tables = catalog.list_tables(tenant.as_str(), name).await.unwrap();
+                for table in tables {
+                    do_compaction(ctx.clone(), table, name.to_string())
+                        .await
+                        .unwrap();
+                }
+            }
+        })
+    })
+    .unwrap();
+    sched.add(cron_job).expect("Failed to add cron job");
+
+    async {
+        let start = sched.start();
+        if let Err(e) = start {
+            return Err(ErrorCode::JobSchedulerError(format!(
+                "Error starting scheduler: {}",
+                e
+            )));
         }
-        let tables = catalog.list_tables(tenant.as_str(), name).await?;
-        for table in tables {
-            do_compaction(ctx.clone(), table, name.to_string()).await?;
-        }
+        Ok(())
     }
+    .await?;
 
-    ctx.get_storage_runtime().spawn(async move {
-        let sched = JobScheduler::new().unwrap();
-  
-        sched.add(Job::new("1/10 * * * * *", |uuid, l| {
-            println!("I run every 10 seconds");
-        }).unwrap()).unwrap();
-
-        sched.start().unwrap();
-    });
-
-    //let expression = "@daily";
-    //let schedule = Schedule::from_str(expression).expect("Failed to parse @daily.");
-
-    Ok(())
-
-    /*let rpc_conf = conf.meta.to_meta_grpc_client_conf();
+    let rpc_conf = conf.meta.to_meta_grpc_client_conf();
     if rpc_conf.local_mode() {
         todo!();
     }
+    let (key, key_end) = get_start_and_end_of_prefix(PREFIX_TABLE_BY_ID)?;
     let watch = WatchRequest {
-        key: PREFIX_TABLE_BY_ID.to_string(),
-        key_end: Some(prefix_of_string(PREFIX_TABLE_BY_ID)),
+        key,
+        key_end: Some(key_end),
         filter_type: FilterType::Update.into(),
     };
     let client = MetaGrpcClient::try_new(&rpc_conf)?;
 
     let mut client_stream = client.request(watch).await?;
 
-    loop {
-        if let Ok(Some(resp)) = client_stream.message().await {
-            if let Some(_) = resp.event {
-                todo!();
+    async {
+        loop {
+            if let Ok(Some(resp)) = client_stream.message().await {
+                if let Some(event) = resp.event {
+                    if event.prev.is_none() || event.current.is_none() {
+                        continue;
+                    }
+
+                    let key = event.key;
+                    let id = mt::TableId::from_key(&key).unwrap();
+
+                    let current_seqv = event.current.unwrap();
+                    let seq = current_seqv.seq;
+                    let current = current_seqv.data;
+                    let p: pb::TableMeta =
+                        common_protos::prost::Message::decode(current.as_slice()).unwrap();
+
+                    let meta = mt::TableMeta::from_pb(p).unwrap();
+                    if meta.drop_on.is_some() || meta.default_cluster_key.is_some() {
+                        continue;
+                    }
+
+                    let ident = mt::TableIdent::new(id.table_id, seq);
+                    let table_info = mt::TableInfo {
+                        ident,
+                        desc: "".to_owned(),
+                        name: "".to_owned(),
+                        meta,
+                    };
+                    let table = cl.get_table_by_info(&table_info).unwrap();
+                    do_compaction(qc.clone(), table, "".to_owned())
+                        .await
+                        .unwrap();
+                }
             }
         }
-    }*/
-}
+    }
+    .await;
 
-fn prefix_of_string(s: &str) -> String {
-    let l = s.len();
-    let a = s.chars().nth(l - 1).unwrap();
-    return format!("{}{}", s[..l - 1].to_string(), (a as u8 + 1) as char);
+    shutdown_handle.wait_for_termination_request().await;
+    Ok(())
 }
 
 fn is_system_database(name: &str) -> bool {
-    return name == "INFORMATION_SCHEMA" || name == "system";
+    name == "INFORMATION_SCHEMA" || name == "system"
 }
 
 async fn do_compaction(
