@@ -23,6 +23,7 @@ pub use read::MetaReaders;
 pub use read::SegmentInfoReader;
 pub use read::TableSnapshotReader;
 pub use write::write_block;
+pub use write::write_data;
 pub use write::write_meta;
 pub use write::BlockCompactor;
 pub use write::BlockStreamWriter;

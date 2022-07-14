@@ -21,7 +21,7 @@ use common_arrow::parquet::encoding::Encoding;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_arrow::parquet::write::Version;
 use common_arrow::write_parquet_file;
-use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -29,10 +29,10 @@ use crate::DataBlock;
 
 pub fn serialize_data_blocks(
     blocks: Vec<DataBlock>,
-    schema: &DataSchemaRef,
+    schema: impl AsRef<DataSchema>,
     buf: &mut Vec<u8>,
 ) -> Result<(u64, ThriftFileMetaData)> {
-    let arrow_schema = schema.to_arrow();
+    let arrow_schema = schema.as_ref().to_arrow();
 
     let row_group_write_options = WriteOptions {
         write_statistics: false,
@@ -40,8 +40,8 @@ pub fn serialize_data_blocks(
         version: Version::V2,
     };
     let batches = blocks
-        .iter()
-        .map(|b| Chunk::try_from(b.clone()))
+        .into_iter()
+        .map(Chunk::try_from)
         .collect::<Result<Vec<_>>>()?;
 
     let encodings: Vec<Vec<_>> = arrow_schema
@@ -54,7 +54,7 @@ pub fn serialize_data_blocks(
         .collect();
 
     let row_groups = RowGroupIterator::try_new(
-        batches.iter().map(|c| Ok(c.clone())),
+        batches.into_iter().map(Ok),
         &arrow_schema,
         row_group_write_options,
         encodings,

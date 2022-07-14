@@ -21,15 +21,20 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
+use common_streams::ParquetSourceBuilder;
+use common_streams::Source;
 use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
+use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::index::BloomFilterExprEvalResult;
+use crate::storages::index::BloomFilterIndexer;
 use crate::storages::index::RangeFilter;
 use crate::storages::index::StatisticsOfColumns;
 
@@ -46,18 +51,21 @@ impl BlockPruner {
     #[tracing::instrument(level = "debug", name="block_pruner_apply", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn apply(
         &self,
-        ctx: &QueryContext,
+        ctx: &Arc<QueryContext>,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
     ) -> Result<Vec<(usize, BlockMeta)>> {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
-                // for the time being, we only handle the first expr
+                // TODO `exprs`.filters should be typed as Option<Expression>
                 let range_filter =
-                    RangeFilter::try_create(Arc::new(ctx.clone()), &exprs.filters[0], schema)?;
+                    RangeFilter::try_create(ctx.clone(), &exprs.filters[0], schema.clone())?;
                 Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
             }
-            _ => Box::new(|_: &StatisticsOfColumns| Ok(true)),
+            _ => {
+                // TODO arrange a shortcut for this?
+                Box::new(|_: &StatisticsOfColumns| Ok(true))
+            }
         };
 
         let segment_locs = self.table_snapshot.segments.clone();
@@ -90,24 +98,79 @@ impl BlockPruner {
             .enumerate()
             .map(|(idx, (loc, ver))| (NonCopy(idx), (loc, NonCopy(ver))));
 
+        let dal = ctx.get_storage_operator()?;
+        let bloom_index_schema = BloomFilterIndexer::to_bloom_schema(schema.as_ref());
+        //let bloom_field_to_idx = bloom_index_schema
+        //    .fields()
+        //    .iter()
+        //    .enumerate()
+        //    .map(|(idx, filed)| (filed.name().clone(), idx))
+        //    .collect::<HashMap<_, _>>();
+
         let stream = futures::stream::iter(segment_locs)
             .map(|(idx, (seg_loc, u))| async {
                 let version = { u }.0; // use block expression to force moving
                 let idx = { idx }.0;
                 if accumulated_rows.load(Ordering::Acquire) < limit {
-                    let reader = MetaReaders::segment_info_reader(ctx);
-                    let segment_info = reader.read(seg_loc, None, version).await?;
-                    Ok::<_, ErrorCode>(
-                        Self::filter_segment(
-                            segment_info.as_ref(),
-                            &block_pred,
-                            &accumulated_rows,
-                            limit,
-                        )?
-                        .into_iter()
-                        .map(|v| (idx, v))
-                        .collect::<Vec<_>>(),
-                    )
+                    let segment_reader = MetaReaders::segment_info_reader(ctx);
+                    let segment_info = segment_reader.read(seg_loc, None, version).await?;
+                    let blocks = Self::filter_segment(
+                        segment_info.as_ref(),
+                        &block_pred,
+                        &accumulated_rows,
+                        limit,
+                    )?
+                    .into_iter()
+                    .map(|v| (idx, v));
+
+                    if let Some(Extras {
+                        projection: Some(_proj),
+                        filters,
+                        ..
+                    }) = push_down
+                    {
+                        let mut res = vec![];
+                        if !filters.is_empty() {
+                            let parquet_source_builder =
+                                ParquetSourceBuilder::create(Arc::new(bloom_index_schema.clone()));
+
+                            // collects the column index that gonna be used
+                            //let mut projection = Vec::with_capacity(schema.fields().len());
+                            //for idx in proj {
+                            //    let field = &schema.fields()[*idx];
+                            //    if let Some(pos) = bloom_field_to_idx.get(field.name()) {
+                            //        projection.push(*pos)
+                            //    }
+                            //}
+                            //parquet_source_builder.projection(projection);
+
+                            // load filters of columns
+                            for (idx, meta) in blocks {
+                                let bloom_idx_location =
+                                    TableMetaLocationGenerator::block_bloom_index_location(
+                                        &meta.location.0,
+                                    );
+                                let object = dal.object(bloom_idx_location.as_str());
+                                let reader = object.seekable_reader(0..);
+                                let mut source = parquet_source_builder.build_ext(reader)?;
+                                let block = source.read().await?.unwrap();
+                                let ctx = ctx.clone();
+                                let index = BloomFilterIndexer::from_bloom_block(
+                                    schema.clone(),
+                                    block,
+                                    ctx,
+                                )?;
+                                if BloomFilterExprEvalResult::Unknown == index.eval(&filters[0])? {
+                                    res.push((idx, meta))
+                                }
+                            }
+                            Ok::<_, ErrorCode>(res)
+                        } else {
+                            Ok::<_, ErrorCode>(blocks.collect::<Vec<_>>())
+                        }
+                    } else {
+                        Ok::<_, ErrorCode>(blocks.collect::<Vec<_>>())
+                    }
                 } else {
                     Ok(vec![])
                 }

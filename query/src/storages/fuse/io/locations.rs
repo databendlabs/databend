@@ -54,6 +54,11 @@ impl TableMetaLocationGenerator {
         )
     }
 
+    // TODO refine this
+    pub fn block_bloom_index_location(block_location: &str) -> String {
+        format!("{}.bloom.parquet", &block_location)
+    }
+
     pub fn gen_segment_info_location(&self) -> String where {
         let segment_uuid = Uuid::new_v4().simple().to_string();
         format!(

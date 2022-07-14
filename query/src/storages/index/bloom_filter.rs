@@ -64,14 +64,18 @@ pub struct BloomFilterIndexer {
     // The schema of the source table/block, which the bloom filter work for.
     pub source_schema: DataSchemaRef,
 
+    // The schema of the bloom filter block
+    pub bloom_schema: DataSchemaRef,
+
     // The bloom block contains bloom filters;
     pub bloom_block: DataBlock,
 
     pub ctx: Arc<QueryContext>,
 }
 
-const BLOOM_FILTER_MAX_NUM_BITS: usize = 20480; // 2.5KB, maybe too big?
-const BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.05;
+// TODO teaks the default max_num_bits value according to default value of block size?
+const BLOOM_FILTER_MAX_NUM_BITS: usize = 2048000;
+const BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.01;
 const BLOOM_FILTER_SEED_GEN_A: u64 = 845897321;
 const BLOOM_FILTER_SEED_GEN_B: u64 = 217728422;
 
@@ -80,6 +84,20 @@ impl BloomFilterIndexer {
     /// The bloom filter will be stored with field name 'Bloom(column_name)'
     pub fn to_bloom_column_name(column_name: &str) -> String {
         format!("Bloom({})", column_name)
+    }
+    pub fn to_bloom_schema(data_schema: &DataSchema) -> DataSchema {
+        let mut bloom_fields = vec![];
+        let fields = data_schema.fields();
+        for field in fields.iter() {
+            if BloomFilter::is_supported_type(field.data_type()) {
+                // create field for applicable ones
+                let bloom_column_name = Self::to_bloom_column_name(field.name());
+                let bloom_field = DataField::new(&bloom_column_name, Vu8::to_data_type());
+                bloom_fields.push(bloom_field);
+            }
+        }
+
+        DataSchema::new(bloom_fields)
     }
 
     #[inline(always)]
@@ -96,6 +114,7 @@ impl BloomFilterIndexer {
     ) -> Result<Self> {
         Ok(Self {
             source_schema: source_table_schema,
+            bloom_schema: bloom_block.schema().clone(),
             bloom_block,
             ctx,
         })
@@ -105,7 +124,7 @@ impl BloomFilterIndexer {
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
 
-    pub fn try_create(ctx: Arc<QueryContext>, source_data_blocks: &[DataBlock]) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, source_data_blocks: &[&DataBlock]) -> Result<Self> {
         let seed = Self::create_seed();
         Self::try_create_with_seed(source_data_blocks, seed, ctx)
     }
@@ -114,7 +133,7 @@ impl BloomFilterIndexer {
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
     pub fn try_create_with_seed(
-        blocks: &[DataBlock],
+        blocks: &[&DataBlock],
         seed: u64,
         ctx: Arc<QueryContext>,
     ) -> Result<Self> {
@@ -123,20 +142,12 @@ impl BloomFilterIndexer {
         }
 
         let source_schema = blocks[0].schema().clone();
-
         let total_num_rows = blocks.iter().map(|block| block.num_rows() as u64).sum();
-
         let mut bloom_columns = vec![];
-        let mut bloom_fields = vec![];
 
-        let fields = blocks[0].schema().fields();
+        let fields = source_schema.fields();
         for (i, field) in fields.iter().enumerate() {
             if BloomFilter::is_supported_type(field.data_type()) {
-                // create field for applicable ones
-                let bloom_column_name = Self::to_bloom_column_name(field.name());
-                let bloom_field = DataField::new(&bloom_column_name, Vu8::to_data_type());
-                bloom_fields.push(bloom_field);
-
                 // create bloom filter per column
                 let mut bloom_filter = BloomFilter::with_rate_and_max_bits(
                     total_num_rows,
@@ -160,10 +171,11 @@ impl BloomFilterIndexer {
             }
         }
 
-        let bloom_schema = Arc::new(DataSchema::new(bloom_fields));
-        let bloom_block = DataBlock::create(bloom_schema, bloom_columns);
+        let bloom_schema = Arc::new(Self::to_bloom_schema(source_schema.as_ref()));
+        let bloom_block = DataBlock::create(bloom_schema.clone(), bloom_columns);
         Ok(Self {
             source_schema,
+            bloom_schema,
             bloom_block,
             ctx,
         })

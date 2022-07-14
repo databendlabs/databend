@@ -49,7 +49,7 @@ async fn apply_block_pruning(
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
     BlockPruner::new(table_snapshot)
-        .apply(ctx.as_ref(), schema, push_down)
+        .apply(&ctx, schema, push_down)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }

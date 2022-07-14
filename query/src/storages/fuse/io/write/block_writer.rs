@@ -73,15 +73,17 @@ pub async fn write_block(
 ) -> Result<(u64, ThriftFileMetaData)> {
     // we need a configuration of block size threshold here
     let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-
     let schema = block.schema().clone();
     let result = serialize_data_blocks(vec![block], &schema, &mut buf)?;
+    write_data(&buf, data_accessor, location).await?;
+    Ok(result)
+}
 
-    let bytes = buf.as_slice();
+pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -> Result<()> {
     let op = || async {
         data_accessor
             .object(location)
-            .write(bytes)
+            .write(data)
             .await
             .map_err(retry::from_io_error)
     };
@@ -95,5 +97,5 @@ pub async fn write_block(
 
     op.retry_with_notify(notify).await?;
 
-    Ok(result)
+    Ok(())
 }

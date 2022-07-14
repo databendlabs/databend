@@ -66,6 +66,11 @@ impl ParquetSourceBuilder {
     where R: AsyncRead + AsyncSeek + Unpin + Send {
         Ok(ParquetSource::create(self.clone(), reader))
     }
+
+    pub fn build_ext<R>(&self, reader: R) -> Result<ParquetSource<R>>
+    where R: AsyncRead + AsyncSeek + Unpin + Send {
+        Ok(ParquetSource::create_ext(self.clone(), reader))
+    }
 }
 
 pub struct ParquetSource<R> {
@@ -82,6 +87,17 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
     fn create(builder: ParquetSourceBuilder, reader: R) -> Self {
         let arrow_table_schema = Arc::new(builder.schema.project(&builder.projection)).to_arrow();
 
+        ParquetSource {
+            reader,
+            builder,
+            arrow_table_schema,
+            current_row_group: 0,
+            rows: 0,
+        }
+    }
+
+    fn create_ext(builder: ParquetSourceBuilder, reader: R) -> Self {
+        let arrow_table_schema = builder.schema.to_arrow();
         ParquetSource {
             reader,
             builder,

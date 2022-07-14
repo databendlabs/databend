@@ -80,7 +80,7 @@ impl FuseTable {
         };
         let push_downs = Some(extras);
         let block_metas = BlockPruner::new(snapshot.clone())
-            .apply(ctx.as_ref(), schema, &push_downs)
+            .apply(&ctx, schema, &push_downs)
             .await?;
 
         // delete block one by one.

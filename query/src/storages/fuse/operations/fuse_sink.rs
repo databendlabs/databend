@@ -30,12 +30,21 @@ use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
+use crate::storages::index::BloomFilterIndexer;
 use crate::storages::index::ClusterKeyInfo;
+
+struct BloomIndexState {
+    data: Vec<u8>,
+    // TODO keep this in table meta
+    _size: u64,
+    location: String,
+}
 
 enum State {
     None,
@@ -45,6 +54,7 @@ enum State {
         size: u64,
         meta_data: Box<ThriftFileMetaData>,
         block_statistics: BlockStatistics,
+        bloom_index_state: BloomIndexState,
     },
     GenerateSegment,
     SerializedSegment {
@@ -150,18 +160,38 @@ impl Processor for FuseTableSink {
                     }
                 }
 
-                let location = self.meta_locations.gen_block_location();
-                let block_statistics = BlockStatistics::from(&block, location, cluster_stats)?;
+                let block_location = self.meta_locations.gen_block_location();
 
+                // write index
+                let bloom_index_state = {
+                    let bloom_index = BloomFilterIndexer::try_create(self.ctx.clone(), &[&block])?;
+                    let index_block = bloom_index.bloom_block;
+                    let location =
+                        TableMetaLocationGenerator::block_bloom_index_location(&block_location);
+                    let mut data = Vec::with_capacity(100 * 1024);
+                    let index_block_schema = &bloom_index.bloom_schema;
+                    let (_size, _) =
+                        serialize_data_blocks(vec![index_block], &index_block_schema, &mut data)?;
+                    BloomIndexState {
+                        data,
+                        _size,
+                        location,
+                    }
+                };
+
+                let block_statistics =
+                    BlockStatistics::from(&block, block_location, cluster_stats)?;
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
                 let (size, meta_data) = serialize_data_blocks(vec![block], &schema, &mut data)?;
+
                 self.state = State::Serialized {
                     data,
                     size,
                     block_statistics,
                     meta_data: Box::new(meta_data),
+                    bloom_index_state,
                 };
             }
             State::GenerateSegment => {
@@ -197,11 +227,23 @@ impl Processor for FuseTableSink {
                 size,
                 meta_data,
                 block_statistics,
+                bloom_index_state,
             } => {
-                self.data_accessor
-                    .object(&block_statistics.block_file_location)
-                    .write(data)
-                    .await?;
+                // write data block
+                io::write_data(
+                    &data,
+                    &self.data_accessor,
+                    &block_statistics.block_file_location,
+                )
+                .await?;
+
+                // write bloom filter index
+                io::write_data(
+                    &bloom_index_state.data,
+                    &self.data_accessor,
+                    &bloom_index_state.location,
+                )
+                .await?;
 
                 self.accumulator
                     .add_block(size, *meta_data, block_statistics)?;

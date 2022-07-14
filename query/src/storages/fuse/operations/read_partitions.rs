@@ -45,7 +45,7 @@ impl FuseTable {
                 }
                 let schema = self.table_info.schema();
                 let block_metas = BlockPruner::new(snapshot.clone())
-                    .apply(ctx.as_ref(), schema, &push_downs)
+                    .apply(&ctx, schema, &push_downs)
                     .await?
                     .into_iter()
                     .map(|(_, v)| v)

@@ -290,8 +290,9 @@ fn create_blocks() -> Vec<DataBlock> {
 
 async fn create_bloom_indexer() -> Result<BloomFilterIndexer> {
     let blocks = create_blocks();
+    let block_refs = blocks.iter().collect::<Vec<_>>();
     let ctx = create_query_context().await?;
-    BloomFilterIndexer::try_create_with_seed(blocks.as_slice(), create_seed(), ctx)
+    BloomFilterIndexer::try_create_with_seed(&block_refs, create_seed(), ctx)
 }
 
 #[tokio::test]
