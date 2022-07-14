@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::Bitmap;
+
 use super::row::RowPtr;
 
 /// ProbeState used for probe phase of hash join.
@@ -19,7 +21,7 @@ use super::row::RowPtr;
 pub struct ProbeState {
     pub(crate) probe_indexs: Vec<u32>,
     pub(crate) build_indexs: Vec<RowPtr>,
-
+    pub(crate) valids: Option<Bitmap>,
     // In the probe phase, the probe block with N rows could join result into M rows
     // e.g.: [0, 1, 2, 3]  results into [0, 1, 2, 2, 3]
     // probe_indexs: the result index to the probe block row -> [0, 1, 2, 2, 3]
@@ -32,6 +34,7 @@ impl ProbeState {
         self.probe_indexs.clear();
         self.build_indexs.clear();
         self.row_state.clear();
+        self.valids = None;
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
@@ -39,6 +42,7 @@ impl ProbeState {
             probe_indexs: Vec::with_capacity(capacity),
             build_indexs: Vec::with_capacity(capacity),
             row_state: Vec::with_capacity(capacity),
+            valids: None,
         }
     }
 }
