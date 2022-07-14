@@ -2,10 +2,10 @@ statement ok
 set enable_planner_v2 = 1;
 
 statement ok
-create database inner;
+create database db;
 
 statement ok
-use inner;
+use db;
 
 statement ok
 create table t(a int);
@@ -52,4 +52,4 @@ select * from t t1, t t2, t t3 order by t1.a, t2.a, t3.a;
 1	1	1
 
 statement ok
-drop database inner;
+drop database db;
