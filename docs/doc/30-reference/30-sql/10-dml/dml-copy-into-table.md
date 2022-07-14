@@ -83,7 +83,6 @@ externalLocation ::=
 | ACCOUNT_KEY                	| Your account key for connecting the Azure Blob storage.  	| Optional 	|
 
 
-
 ### FILES = ( 'file_name' [ , 'file_name' ... ] )
 
 Specifies a list of one or more files names (separated by commas) to be loaded.
