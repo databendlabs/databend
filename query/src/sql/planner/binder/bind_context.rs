@@ -138,8 +138,6 @@ impl BindContext {
 
         let mut bind_context: &BindContext = self;
 
-        println!("column_bodung:{:?}", bind_context.columns[0]);
-
         // Lookup parent context to support correlated subquery
         loop {
             for column_binding in bind_context.columns.iter() {
