@@ -13,8 +13,5 @@
 // limitations under the License.
 
 mod sources;
-mod stream_cast;
 mod stream_datablock;
-mod stream_limit_by;
 mod stream_progress;
-mod stream_skip;

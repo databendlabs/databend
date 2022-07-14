@@ -14,7 +14,7 @@ In Databend, you **don't need to specify any of these**, one of Databend's desig
 
 ### Create Table
 ```sql
-CREATE TABLE [IF NOT EXISTS] [db.]table_name
+CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
 (
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
@@ -47,24 +47,37 @@ Data type reference:
 
 For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../70-clusterkey/dml-set-cluster-key.md).
 
-### Create Table LIKE
+### CREATE TABLE ... LIKE
 
 Creates an empty copy of an existing table, the new table automatically copies all column names, their data types, and their not-null constraints.
 
 Syntax:
-```text
+```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 ```
 
-### Create Table AS [SELECT query]
+### CREATE TABLE ... AS [SELECT query]
 
 Creates a table and fills it with data computed by a SELECT command.
 
-```text
+Syntax:
+```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 AS SELECT query
+```
+
+### CREATE TRANSIENT TABLE ...
+Creates a transient table. 
+
+Transient tables are used to hold transitory data that does not require a data protection or recovery mechanism. Dataebend does not hold historical data for a transient table so you will not be able to query from a previous version of the transient table with the Time Travel feature, for example, the [AT](./../../20-query-syntax/dml-at.md) clause in the SELECT statement will not work for transient tables. Please note that you can still [drop](./20-ddl-drop-table.md) and [undrop](./21-ddl-undrop-table.md) a transient table.
+
+Transient tables help save your storage expenses because they do not need extra space for historical data compared to non-transient tables. See [example](#create-transient-table-1) for detailed explanations.
+
+Syntax:
+```sql
+CREATE TRANSIENT TABLE ...
 ```
 
 ## Column Nullable
@@ -109,7 +122,7 @@ DESC t_null;
 ```
 
 ## Default Values
-```text
+```sql
 DEFAULT <expression>
 ```
 Specifies a default value inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
@@ -234,4 +247,22 @@ SELECT * FROM test3;
 +------+-------+---------+
 |  888 | stars | stars-b |
 +------+-------+---------+
+```
+### Create Transient Table
+
+```sql
+-- Create a transient table
+CREATE TRANSIENT TABLE mytemp (c bigint);
+
+-- Insert values
+insert into mytemp values(1);
+insert into mytemp values(2);
+insert into mytemp values(3);
+
+-- Only one snapshot is stored. This explains why the Time Travel feature does not work for transient tables.
+select count(*) from fuse_snapshot('default', 'mytemp');
++---------+
+| count() |
++---------+
+|       1 | 
 ```

@@ -16,24 +16,17 @@ use std::convert::TryInto;
 
 use async_channel::Receiver;
 use common_arrow::arrow_format::flight::data::Action;
-use common_arrow::arrow_format::flight::data::FlightData;
-use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio::time::Duration;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
 use tonic::Request;
-use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::rpc::flight_client_stream::FlightDataStream;
-use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::packets::DataPacketStream;
 
@@ -45,17 +38,6 @@ pub struct FlightClient {
 impl FlightClient {
     pub fn new(inner: FlightServiceClient<Channel>) -> FlightClient {
         FlightClient { inner }
-    }
-
-    pub async fn fetch_stream(
-        &mut self,
-        ticket: FlightTicket,
-        schema: DataSchemaRef,
-        timeout: u64,
-    ) -> Result<SendableDataBlockStream> {
-        let ticket = ticket.try_into()?;
-        let inner = self.do_get(ticket, timeout).await?;
-        Ok(Box::pin(FlightDataStream::from_remote(schema, inner)))
     }
 
     pub async fn execute_action(&mut self, action: FlightAction, timeout: u64) -> Result<()> {
@@ -89,17 +71,6 @@ impl FlightClient {
         Self::set_metadata(&mut request, "x-query-id", query_id)?;
         self.inner.do_put(request).await?;
         Ok(())
-    }
-
-    // Execute do_get.
-    #[tracing::instrument(level = "debug", skip_all)]
-    async fn do_get(&mut self, ticket: Ticket, timeout: u64) -> Result<Streaming<FlightData>> {
-        let request = Request::new(ticket);
-        let mut request = common_tracing::inject_span_to_tonic_request(request);
-        request.set_timeout(Duration::from_secs(timeout));
-
-        let response = self.inner.do_get(request).await?;
-        Ok(response.into_inner())
     }
 
     // Execute do_action.

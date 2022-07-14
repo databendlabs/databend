@@ -23,6 +23,7 @@ pub mod executor;
 mod pipe;
 mod pipeline;
 mod pipeline_builder;
+mod pipeline_display;
 pub mod processors;
 mod unsafe_cell_wrap;
 

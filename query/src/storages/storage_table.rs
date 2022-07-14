@@ -121,14 +121,14 @@ pub trait Table: Sync + Send {
         None
     }
 
-    // Read block data from the underling.
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        unimplemented!()
-    }
+    // // Read block data from the underling.
+    // async fn read(
+    //     &self,
+    //     _ctx: Arc<QueryContext>,
+    //     _plan: &ReadDataSourcePlan,
+    // ) -> Result<SendableDataBlockStream> {
+    //     unimplemented!()
+    // }
 
     fn read2(
         &self,

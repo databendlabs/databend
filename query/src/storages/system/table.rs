@@ -22,8 +22,6 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -81,19 +79,6 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         self.inner_table.get_partitions(ctx, push_downs)
-    }
-
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let block = self.inner_table.get_full_data(ctx)?;
-        Ok(Box::pin(DataBlockStream::create(
-            block.schema().clone(),
-            None,
-            vec![block],
-        )))
     }
 
     fn read2(
@@ -199,19 +184,6 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         self.inner_table.get_partitions(ctx, push_downs).await
-    }
-
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let block = self.inner_table.get_full_data(ctx).await?;
-        Ok(Box::pin(DataBlockStream::create(
-            block.schema().clone(),
-            None,
-            vec![block],
-        )))
     }
 
     fn read2(

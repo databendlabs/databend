@@ -4429,18 +4429,23 @@ Query(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CREDENTIALS = ( aws_key_id = '1a2b3c' aws_secret_key = '4x5y6z' ) FILE_FORMAT = ( compression = 'GZIP' format = 'CSV' record_delimiter = ',' )
+CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CONNECTION = ( aws_key_id='1a2b3c' aws_secret_key='4x5y6z' ) FILE_FORMAT = ( compression = 'GZIP' format = 'CSV' record_delimiter = ',' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
         if_not_exists: true,
         stage_name: "test_stage",
-        location: "s3://load/files/",
-        credential_options: {
-            "aws_key_id": "1a2b3c",
-            "aws_secret_key": "4x5y6z",
-        },
-        encryption_options: {},
+        location: Some(
+            UriLocation {
+                protocol: "s3",
+                name: "load",
+                path: "/files/",
+                connection: {
+                    "aws_key_id": "1a2b3c",
+                    "aws_secret_key": "4x5y6z",
+                },
+            },
+        ),
         file_format_options: {
             "compression": "GZIP",
             "format": "CSV",
@@ -5300,12 +5305,14 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter 
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: UriLocation {
-            protocol: "s3",
-            name: "mybucket",
-            path: "/data.csv",
-            connection: {},
-        },
+        src: UriLocation(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                connection: {},
+            },
+        ),
         dst: Table {
             catalog: None,
             database: None,
@@ -5348,14 +5355,16 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='htt
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: UriLocation {
-            protocol: "s3",
-            name: "mybucket",
-            path: "/data.csv",
-            connection: {
-                "endpoint_url": "http://127.0.0.1:9900",
+        src: UriLocation(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                connection: {
+                    "endpoint_url": "http://127.0.0.1:9900",
+                },
             },
-        },
+        ),
         dst: Table {
             catalog: None,
             database: None,
@@ -5447,12 +5456,14 @@ Copy(
                 span: Ident(56..63),
             },
         },
-        dst: UriLocation {
-            protocol: "s3",
-            name: "mybucket",
-            path: "/data.csv",
-            connection: {},
-        },
+        dst: UriLocation(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                connection: {},
+            },
+        ),
         files: [],
         pattern: "",
         file_format: {
@@ -5533,16 +5544,18 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='acces
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: UriLocation {
-            protocol: "s3",
-            name: "mybucket",
-            path: "/data.csv",
-            connection: {
-                "aws_key_id": "access_key",
-                "aws_secret_key": "secret_key",
-                "master_key": "master_key",
+        src: UriLocation(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                connection: {
+                    "aws_key_id": "access_key",
+                    "aws_secret_key": "secret_key",
+                    "master_key": "master_key",
+                },
             },
-        },
+        ),
         dst: Table {
             catalog: None,
             database: None,
