@@ -26,6 +26,7 @@ pub struct FormatSettings {
     pub field_delimiter: Vec<u8>,
     pub empty_as_default: bool,
     pub skip_header: bool,
+    pub size_limit: Option<usize>,
     pub compression: Compression,
     pub timezone: Tz,
     pub true_bytes: Vec<u8>,
