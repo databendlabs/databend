@@ -31,7 +31,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::ColumnID;
 use crate::sql::exec::PhysicalPlan;
@@ -226,7 +226,7 @@ impl TransformApply {
         let mut rewriter = OuterRefRewriter::new(outer_columns);
         let physical_plan = rewriter.rewrite_physical_plan(&self.subquery)?;
 
-        let mut pipeline = NewPipeline::create();
+        let mut pipeline = Pipeline::create();
         let mut pb = PipelineBuilder::new();
         pb.build_pipeline(
             QueryContext::create_from(self.ctx.clone()),

@@ -40,8 +40,8 @@ use crate::pipelines::processors::transforms::get_sort_descriptions;
 use crate::pipelines::processors::EmptySource;
 use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::NewPipe;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
@@ -181,11 +181,11 @@ impl Table for NumbersTable {
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         if plan.parts.is_empty() {
             let output = OutputPort::create();
-            pipeline.add_pipe(NewPipe::SimplePipe {
+            pipeline.add_pipe(Pipe::SimplePipe {
                 inputs_port: vec![],
                 outputs_port: vec![output.clone()],
                 processors: vec![EmptySource::create(output)?],

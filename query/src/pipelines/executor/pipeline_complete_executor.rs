@@ -20,7 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 
 pub struct PipelineCompleteExecutor {
     executor: Arc<PipelineExecutor>,
@@ -32,7 +32,7 @@ impl PipelineCompleteExecutor {
     pub fn try_create(
         async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
-        pipeline: NewPipeline,
+        pipeline: Pipeline,
     ) -> Result<PipelineCompleteExecutor> {
         if !pipeline.is_complete_pipeline()? {
             return Err(ErrorCode::LogicalError(
@@ -47,7 +47,7 @@ impl PipelineCompleteExecutor {
     pub fn from_pipelines(
         async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
-        pipelines: Vec<NewPipeline>,
+        pipelines: Vec<Pipeline>,
     ) -> Result<Arc<PipelineCompleteExecutor>> {
         for pipeline in &pipelines {
             if !pipeline.is_complete_pipeline()? {

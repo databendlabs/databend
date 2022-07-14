@@ -30,7 +30,7 @@ use serde::Serialize;
 
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::TransformLimit;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
@@ -162,7 +162,7 @@ impl Table for ResultTable {
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let block_reader = self.create_block_reader(&ctx, &None)?;
 

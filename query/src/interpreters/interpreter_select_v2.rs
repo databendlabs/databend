@@ -23,7 +23,7 @@ use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::PhysicalPlanBuilder;
 use crate::sql::exec::PipelineBuilder;
@@ -78,7 +78,7 @@ impl Interpreter for SelectInterpreterV2 {
         let last_schema = physical_plan.output_schema()?;
 
         let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = NewPipeline::create();
+        let mut root_pipeline = Pipeline::create();
         pb.build_pipeline(self.ctx.clone(), &physical_plan, &mut root_pipeline)?;
         // Render result set with given output schema
         pb.render_result_set(last_schema, &self.bind_context.columns, &mut root_pipeline)?;
@@ -110,13 +110,13 @@ impl Interpreter for SelectInterpreterV2 {
     }
 
     /// This method will create a new pipeline
-    /// The QueryPipelineBuilder will use the optimized plan to generate a NewPipeline
-    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
+    /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
+    async fn create_new_pipeline(&self) -> Result<Pipeline> {
         let builder = PhysicalPlanBuilder::new(self.metadata.clone());
         let physical_plan = builder.build(&self.s_expr)?;
         let last_schema = physical_plan.output_schema()?;
         let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = NewPipeline::create();
+        let mut root_pipeline = Pipeline::create();
         pb.build_pipeline(self.ctx.clone(), &physical_plan, &mut root_pipeline)?;
         pb.render_result_set(last_schema, &self.bind_context.columns, &mut root_pipeline)?;
         root_pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);

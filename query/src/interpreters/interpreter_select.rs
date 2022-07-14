@@ -26,7 +26,7 @@ use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
@@ -81,8 +81,8 @@ impl Interpreter for SelectInterpreter {
     }
 
     /// This method will create a new pipeline
-    /// The QueryPipelineBuilder will use the optimized plan to generate a NewPipeline
-    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
+    /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
+    async fn create_new_pipeline(&self) -> Result<Pipeline> {
         match self.ctx.get_cluster().is_empty() {
             true => {
                 let settings = self.ctx.get_settings();

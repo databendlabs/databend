@@ -29,8 +29,8 @@ use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::NewPipe;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
@@ -85,11 +85,11 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         &self,
         ctx: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
         let inner_table = self.inner_table.clone();
-        pipeline.add_pipe(NewPipe::SimplePipe {
+        pipeline.add_pipe(Pipe::SimplePipe {
             processors: vec![SystemTableSyncSource::create(
                 ctx,
                 output.clone(),
@@ -190,11 +190,11 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         &self,
         ctx: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
         let inner_table = self.inner_table.clone();
-        pipeline.add_pipe(NewPipe::SimplePipe {
+        pipeline.add_pipe(Pipe::SimplePipe {
             processors: vec![SystemTableAsyncSource::create(
                 output.clone(),
                 inner_table,

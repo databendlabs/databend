@@ -28,7 +28,7 @@ use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
-use crate::pipelines::pipeline::NewPipeline;
+use crate::pipelines::pipeline::Pipeline;
 
 pub type FinishedCallback = Arc<Box<dyn Fn(&Option<ErrorCode>) + Send + Sync + 'static>>;
 
@@ -46,7 +46,7 @@ impl PipelineExecutor {
     pub fn create(
         async_rt: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
-        mut pipeline: NewPipeline,
+        mut pipeline: Pipeline,
     ) -> Result<Arc<PipelineExecutor>> {
         let threads_num = pipeline.get_max_threads();
         let on_finished_callback = pipeline.take_on_finished();
@@ -64,7 +64,7 @@ impl PipelineExecutor {
     pub fn from_pipelines(
         async_rt: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
-        mut pipelines: Vec<NewPipeline>,
+        mut pipelines: Vec<Pipeline>,
     ) -> Result<Arc<PipelineExecutor>> {
         if pipelines.is_empty() {
             return Err(ErrorCode::LogicalError("Executor Pipelines is empty."));

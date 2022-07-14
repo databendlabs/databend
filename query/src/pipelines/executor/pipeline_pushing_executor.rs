@@ -28,7 +28,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 
@@ -61,7 +61,7 @@ pub struct PipelinePushingExecutor {
 impl PipelinePushingExecutor {
     fn wrap_pipeline(
         ctx: Arc<QueryContext>,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<SyncSender<Option<DataBlock>>> {
         if pipeline.is_pulling_pipeline()? || !pipeline.is_pushing_pipeline()? {
             return Err(ErrorCode::LogicalError(
@@ -72,7 +72,7 @@ impl PipelinePushingExecutor {
         let (tx, rx) = std::sync::mpsc::sync_channel(pipeline.input_len());
         let mut source_pipe_builder = SourcePipeBuilder::create();
 
-        let mut new_pipeline = NewPipeline::create();
+        let mut new_pipeline = Pipeline::create();
         let output = OutputPort::create();
         let pushing_source = PushingSource::create(ctx, rx, output.clone())?;
         source_pipe_builder.add_source(output, pushing_source);
@@ -90,7 +90,7 @@ impl PipelinePushingExecutor {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         query_need_abort: Arc<AtomicBool>,
-        mut pipeline: NewPipeline,
+        mut pipeline: Pipeline,
     ) -> Result<PipelinePushingExecutor> {
         let state = State::create();
         let async_runtime = ctx.get_storage_runtime();

@@ -30,8 +30,8 @@ use petgraph::Direction;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
-use crate::pipelines::pipe::NewPipe;
-use crate::pipelines::pipeline::NewPipeline;
+use crate::pipelines::pipe::Pipe;
+use crate::pipelines::pipeline::Pipeline;
 use crate::pipelines::processors::connect;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -90,13 +90,13 @@ struct ExecutingGraph {
 type StateLockGuard = ExecutingGraph;
 
 impl ExecutingGraph {
-    pub fn create(pipeline: NewPipeline) -> Result<ExecutingGraph> {
+    pub fn create(pipeline: Pipeline) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
         Self::init_graph(&pipeline, &mut graph);
         Ok(ExecutingGraph { graph })
     }
 
-    pub fn from_pipelines(pipelines: Vec<NewPipeline>) -> Result<ExecutingGraph> {
+    pub fn from_pipelines(pipelines: Vec<Pipeline>) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
 
         for pipeline in &pipelines {
@@ -106,12 +106,12 @@ impl ExecutingGraph {
         Ok(ExecutingGraph { graph })
     }
 
-    fn init_graph(pipeline: &NewPipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
+    fn init_graph(pipeline: &Pipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
         let mut node_stack = Vec::new();
         let mut edge_stack: Vec<Arc<OutputPort>> = Vec::new();
         for query_pipe in &pipeline.pipes {
             match query_pipe {
-                NewPipe::ResizePipe {
+                Pipe::ResizePipe {
                     processor,
                     inputs_port,
                     outputs_port,
@@ -140,7 +140,7 @@ impl ExecutingGraph {
                         edge_stack.push(output_port.clone());
                     }
                 },
-                NewPipe::SimplePipe {
+                Pipe::SimplePipe {
                     processors,
                     inputs_port,
                     outputs_port,
@@ -340,13 +340,13 @@ impl ScheduleQueue {
 pub struct RunningGraph(ExecutingGraph);
 
 impl RunningGraph {
-    pub fn create(pipeline: NewPipeline) -> Result<RunningGraph> {
+    pub fn create(pipeline: Pipeline) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::create(pipeline)?;
         tracing::debug!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(graph_state))
     }
 
-    pub fn from_pipelines(pipelines: Vec<NewPipeline>) -> Result<RunningGraph> {
+    pub fn from_pipelines(pipelines: Vec<Pipeline>) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::from_pipelines(pipelines)?;
         tracing::debug!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(graph_state))

@@ -15,31 +15,31 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::pipelines::NewPipe;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 
-impl NewPipeline {
+impl Pipeline {
     pub fn display_indent(&self) -> impl std::fmt::Display + '_ {
-        NewPipelineIndentDisplayWrapper { pipeline: self }
+        PipelineIndentDisplayWrapper { pipeline: self }
     }
 }
 
-struct NewPipelineIndentDisplayWrapper<'a> {
-    pipeline: &'a NewPipeline,
+struct PipelineIndentDisplayWrapper<'a> {
+    pipeline: &'a Pipeline,
 }
 
-impl<'a> NewPipelineIndentDisplayWrapper<'a> {
-    fn pipe_name(pipe: &NewPipe) -> &'static str {
+impl<'a> PipelineIndentDisplayWrapper<'a> {
+    fn pipe_name(pipe: &Pipe) -> &'static str {
         unsafe {
             match pipe {
-                NewPipe::SimplePipe { processors, .. } => processors[0].name(),
-                NewPipe::ResizePipe { processor, .. } => processor.name(),
+                Pipe::SimplePipe { processors, .. } => processors[0].name(),
+                Pipe::ResizePipe { processor, .. } => processor.name(),
             }
         }
     }
 }
 
-impl<'a> Display for NewPipelineIndentDisplayWrapper<'a> {
+impl<'a> Display for PipelineIndentDisplayWrapper<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let pipes = &self.pipeline.pipes;
         for (index, pipe) in pipes.iter().rev().enumerate() {
@@ -52,7 +52,7 @@ impl<'a> Display for NewPipelineIndentDisplayWrapper<'a> {
             }
 
             match pipe {
-                NewPipe::SimplePipe { processors, .. } => {
+                Pipe::SimplePipe { processors, .. } => {
                     write!(
                         f,
                         "{} × {} {}",
@@ -65,7 +65,7 @@ impl<'a> Display for NewPipelineIndentDisplayWrapper<'a> {
                         },
                     )?;
                 }
-                NewPipe::ResizePipe {
+                Pipe::ResizePipe {
                     inputs_port,
                     outputs_port,
                     ..

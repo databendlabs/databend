@@ -22,7 +22,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::PhysicalPlanBuilder;
 use crate::sql::exec::PipelineBuilder;
@@ -113,7 +113,7 @@ impl ExplainInterpreterV2 {
         let builder = PhysicalPlanBuilder::new(metadata);
         let plan = builder.build(&s_expr)?;
         let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = NewPipeline::create();
+        let mut root_pipeline = Pipeline::create();
         pb.build_pipeline(self.ctx.clone(), &plan, &mut root_pipeline)?;
         let pipelines = pb.pipelines;
         let mut blocks = vec![];

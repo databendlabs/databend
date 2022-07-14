@@ -39,8 +39,8 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
-use crate::pipelines::NewPipe;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 use crate::table_functions::table_function_factory::TableArgs;
@@ -121,10 +121,10 @@ impl Table for AsyncCrashMeTable {
         &self,
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
-        pipeline.add_pipe(NewPipe::SimplePipe {
+        pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
             processors: vec![AsyncCrashMeSource::create(

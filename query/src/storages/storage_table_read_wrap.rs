@@ -20,7 +20,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::ProcessorExecutorStream;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
@@ -40,7 +40,7 @@ impl<T: Table> TableStreamReadWrap for T {
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let mut pipeline = NewPipeline::create();
+        let mut pipeline = Pipeline::create();
         self.read2(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
@@ -61,7 +61,7 @@ impl TableStreamReadWrap for dyn Table {
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let mut pipeline = NewPipeline::create();
+        let mut pipeline = Pipeline::create();
         self.read2(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();

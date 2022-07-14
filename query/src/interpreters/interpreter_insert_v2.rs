@@ -34,7 +34,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
 use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Insert;
@@ -246,8 +246,8 @@ impl Interpreter for InsertInterpreterV2 {
         self.execute_new(input_stream).await
     }
 
-    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        let insert_pipeline = NewPipeline::create();
+    async fn create_new_pipeline(&self) -> Result<Pipeline> {
+        let insert_pipeline = Pipeline::create();
         Ok(insert_pipeline)
     }
 

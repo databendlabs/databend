@@ -35,7 +35,7 @@ use common_planners::WindowFuncPlan;
 use super::processors::transforms::TransformWindowFunc;
 use super::processors::transforms::WindowFuncCompact;
 use super::processors::SortMergeCompactor;
-use crate::pipelines::pipeline::NewPipeline;
+use crate::pipelines::pipeline::Pipeline;
 use crate::pipelines::processors::transforms::get_sort_descriptions;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
@@ -59,7 +59,7 @@ use crate::sessions::QueryContext;
 /// ```
 pub struct QueryPipelineBuilder {
     ctx: Arc<QueryContext>,
-    pipeline: NewPipeline,
+    pipeline: Pipeline,
     limit: Option<usize>,
     offset: usize,
 }
@@ -69,7 +69,7 @@ impl QueryPipelineBuilder {
     pub fn create(ctx: Arc<QueryContext>) -> QueryPipelineBuilder {
         QueryPipelineBuilder {
             ctx,
-            pipeline: NewPipeline::create(),
+            pipeline: Pipeline::create(),
             limit: None,
             offset: 0,
         }
@@ -78,7 +78,7 @@ impl QueryPipelineBuilder {
     /// The core of generating the pipeline
     /// It will recursively visit the entire plan tree, and create a `SimplePipe` for each node,
     /// adding it to the pipeline
-    pub fn finalize(mut self, plan: &PlanNode) -> Result<NewPipeline> {
+    pub fn finalize(mut self, plan: &PlanNode) -> Result<Pipeline> {
         self.visit_plan_node(plan)?;
         Ok(self.pipeline)
     }

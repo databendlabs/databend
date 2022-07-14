@@ -29,8 +29,8 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Sink;
 use crate::pipelines::processors::Sinker;
-use crate::pipelines::NewPipe;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 
 struct State {
     sender: SyncSender<Result<Option<DataBlock>>>,
@@ -51,7 +51,7 @@ pub struct PipelinePullingExecutor {
 
 impl PipelinePullingExecutor {
     fn wrap_pipeline(
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
         tx: SyncSender<Result<Option<DataBlock>>>,
     ) -> Result<()> {
         if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
@@ -63,7 +63,7 @@ impl PipelinePullingExecutor {
         pipeline.resize(1)?;
         let input = InputPort::create();
 
-        pipeline.add_pipe(NewPipe::SimplePipe {
+        pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],
             inputs_port: vec![input.clone()],
             processors: vec![PullingSink::create(tx, input)],
@@ -74,7 +74,7 @@ impl PipelinePullingExecutor {
     pub fn try_create(
         async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
-        mut pipeline: NewPipeline,
+        mut pipeline: Pipeline,
     ) -> Result<PipelinePullingExecutor> {
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
         let state = State::create(sender.clone());

@@ -46,8 +46,8 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::NewPipe;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::exec::PhysicalPlan;
@@ -396,7 +396,7 @@ impl HttpQueryHandle {
         let block_buffer = self.block_buffer.clone();
         let last_schema = physical_plan.output_schema()?;
         let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = NewPipeline::create();
+        let mut root_pipeline = Pipeline::create();
         pb.build_pipeline(ctx.clone(), physical_plan, &mut root_pipeline)?;
         pb.render_result_set(last_schema, result_columns, &mut root_pipeline)?;
 
@@ -432,7 +432,7 @@ impl HttpQueryHandle {
             query_info,
             self.block_buffer,
         )?;
-        root_pipeline.add_pipe(NewPipe::SimplePipe {
+        root_pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],
             inputs_port: vec![input],
             processors: vec![sink],

@@ -31,7 +31,7 @@ use regex::Regex;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
@@ -132,7 +132,7 @@ impl CopyInterpreterV2 {
         let ctx = self.ctx.clone();
         let settings = self.ctx.get_settings();
 
-        let mut pipeline = NewPipeline::create();
+        let mut pipeline = Pipeline::create();
         let read_source_plan = from.clone();
         let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
         tracing::info!("copy_files_to_table: source plan:{:?}", read_source_plan);

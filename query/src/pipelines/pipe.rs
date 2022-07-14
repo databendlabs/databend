@@ -19,7 +19,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 
 #[derive(Clone)]
-pub enum NewPipe {
+pub enum Pipe {
     SimplePipe {
         processors: Vec<ProcessorPtr>,
         inputs_port: Vec<Arc<InputPort>>,
@@ -32,32 +32,32 @@ pub enum NewPipe {
     },
 }
 
-impl NewPipe {
+impl Pipe {
     pub fn size(&self) -> usize {
         match self {
-            NewPipe::ResizePipe { .. } => 1,
-            NewPipe::SimplePipe { processors, .. } => processors.len(),
+            Pipe::ResizePipe { .. } => 1,
+            Pipe::SimplePipe { processors, .. } => processors.len(),
         }
     }
 
     pub fn input_size(&self) -> usize {
         match self {
-            NewPipe::SimplePipe { inputs_port, .. } => inputs_port.len(),
-            NewPipe::ResizePipe { inputs_port, .. } => inputs_port.len(),
+            Pipe::SimplePipe { inputs_port, .. } => inputs_port.len(),
+            Pipe::ResizePipe { inputs_port, .. } => inputs_port.len(),
         }
     }
 
     pub fn output_size(&self) -> usize {
         match self {
-            NewPipe::SimplePipe { outputs_port, .. } => outputs_port.len(),
-            NewPipe::ResizePipe { outputs_port, .. } => outputs_port.len(),
+            Pipe::SimplePipe { outputs_port, .. } => outputs_port.len(),
+            Pipe::ResizePipe { outputs_port, .. } => outputs_port.len(),
         }
     }
 
     pub fn processor_by_index(&self, index: usize) -> ProcessorPtr {
         match self {
-            NewPipe::SimplePipe { processors, .. } => processors[index].clone(),
-            NewPipe::ResizePipe { processor, .. } => processor.clone(),
+            Pipe::SimplePipe { processors, .. } => processors[index].clone(),
+            Pipe::ResizePipe { processor, .. } => processor.clone(),
         }
     }
 }
@@ -76,9 +76,9 @@ impl SourcePipeBuilder {
         }
     }
 
-    pub fn finalize(self) -> NewPipe {
+    pub fn finalize(self) -> Pipe {
         assert_eq!(self.processors.len(), self.outputs_port.len());
-        NewPipe::SimplePipe {
+        Pipe::SimplePipe {
             processors: self.processors,
             inputs_port: vec![],
             outputs_port: self.outputs_port,
@@ -106,9 +106,9 @@ impl SinkPipeBuilder {
         }
     }
 
-    pub fn finalize(self) -> NewPipe {
+    pub fn finalize(self) -> Pipe {
         assert_eq!(self.processors.len(), self.inputs_port.len());
-        NewPipe::SimplePipe {
+        Pipe::SimplePipe {
             processors: self.processors,
             inputs_port: self.inputs_port,
             outputs_port: vec![],
@@ -136,10 +136,10 @@ impl TransformPipeBuilder {
         }
     }
 
-    pub fn finalize(self) -> NewPipe {
+    pub fn finalize(self) -> Pipe {
         assert_eq!(self.processors.len(), self.inputs_port.len());
         assert_eq!(self.processors.len(), self.outputs_port.len());
-        NewPipe::SimplePipe {
+        Pipe::SimplePipe {
             processors: self.processors,
             inputs_port: self.inputs_port,
             outputs_port: self.outputs_port,

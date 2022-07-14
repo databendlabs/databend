@@ -34,7 +34,7 @@ use parking_lot::Mutex;
 use super::StageSource;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::TransformLimit;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
@@ -80,7 +80,7 @@ impl Table for StageTable {
         &self,
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let settings = ctx.get_settings();
         let mut builder = SourcePipeBuilder::create();

@@ -30,7 +30,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::StorageContext;
@@ -141,7 +141,7 @@ impl Table for RandomTable {
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let mut output_schema = self.table_info.schema();
         let push_downs = plan.push_downs.clone();

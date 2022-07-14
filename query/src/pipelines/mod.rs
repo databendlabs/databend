@@ -21,9 +21,9 @@ mod pipeline_builder;
 mod pipeline_display;
 mod unsafe_cell_wrap;
 
-pub use pipe::NewPipe;
+pub use pipe::Pipe;
 pub use pipe::SinkPipeBuilder;
 pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;
-pub use pipeline::NewPipeline;
+pub use pipeline::Pipeline;
 pub use pipeline_builder::QueryPipelineBuilder;

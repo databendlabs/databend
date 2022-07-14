@@ -38,7 +38,7 @@ use common_tracing::tracing;
 use futures::StreamExt;
 use uuid::Uuid;
 
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
@@ -350,12 +350,12 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_read2(ctx, plan, pipeline)
     }
 
-    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut Pipeline) -> Result<()> {
         self.check_mutable()?;
         self.do_append2(ctx, pipeline)
     }

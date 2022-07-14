@@ -37,7 +37,7 @@ use crate::pipelines::processors::Sink;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
@@ -182,7 +182,7 @@ impl Table for MemoryTable {
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let settings = ctx.get_settings();
         let mut builder = SourcePipeBuilder::create();
@@ -205,7 +205,7 @@ impl Table for MemoryTable {
         Ok(())
     }
 
-    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut Pipeline) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();

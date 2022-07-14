@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::pipelines::executor::FinishedCallback;
-use crate::pipelines::pipe::NewPipe;
+use crate::pipelines::pipe::Pipe;
 use crate::pipelines::pipe::TransformPipeBuilder;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -44,15 +44,15 @@ use crate::pipelines::processors::ResizeProcessor;
 ///                                           +-----+                       +--->|Processor|
 ///                                                                              +---------+
 ///
-pub struct NewPipeline {
+pub struct Pipeline {
     max_threads: usize,
-    pub pipes: Vec<NewPipe>,
+    pub pipes: Vec<Pipe>,
     on_finished: Option<FinishedCallback>,
 }
 
-impl NewPipeline {
-    pub fn create() -> NewPipeline {
-        NewPipeline {
+impl Pipeline {
+    pub fn create() -> Pipeline {
+        Pipeline {
             max_threads: 0,
             pipes: Vec::new(),
             on_finished: None,
@@ -88,23 +88,23 @@ impl NewPipeline {
         )
     }
 
-    pub fn add_pipe(&mut self, pipe: NewPipe) {
+    pub fn add_pipe(&mut self, pipe: Pipe) {
         self.pipes.push(pipe);
     }
 
     pub fn input_len(&self) -> usize {
         match self.pipes.first() {
             None => 0,
-            Some(NewPipe::SimplePipe { inputs_port, .. }) => inputs_port.len(),
-            Some(NewPipe::ResizePipe { inputs_port, .. }) => inputs_port.len(),
+            Some(Pipe::SimplePipe { inputs_port, .. }) => inputs_port.len(),
+            Some(Pipe::ResizePipe { inputs_port, .. }) => inputs_port.len(),
         }
     }
 
     pub fn output_len(&self) -> usize {
         match self.pipes.last() {
             None => 0,
-            Some(NewPipe::SimplePipe { outputs_port, .. }) => outputs_port.len(),
-            Some(NewPipe::ResizePipe { outputs_port, .. }) => outputs_port.len(),
+            Some(Pipe::SimplePipe { outputs_port, .. }) => outputs_port.len(),
+            Some(Pipe::ResizePipe { outputs_port, .. }) => outputs_port.len(),
         }
     }
 
@@ -148,7 +148,7 @@ impl NewPipeline {
                 let processor = ResizeProcessor::create(pipe.output_size(), new_size);
                 let inputs_port = processor.get_inputs().to_vec();
                 let outputs_port = processor.get_outputs().to_vec();
-                self.pipes.push(NewPipe::ResizePipe {
+                self.pipes.push(Pipe::ResizePipe {
                     inputs_port,
                     outputs_port,
                     processor: ProcessorPtr::create(Box::new(processor)),
@@ -182,7 +182,7 @@ impl NewPipeline {
     }
 }
 
-impl Drop for NewPipeline {
+impl Drop for Pipeline {
     fn drop(&mut self) {
         // An error may have occurred before the executor was created.
         if let Some(on_finished) = self.on_finished.take() {
