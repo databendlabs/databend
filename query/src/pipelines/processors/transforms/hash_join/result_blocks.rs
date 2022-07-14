@@ -413,7 +413,6 @@ impl JoinHashTable {
         }
 
         let validity: Bitmap = validity.into();
-        dbg!(build_indexs.len());
         let build_block = self.row_space.gather(build_indexs)?;
 
         let nullable_columns = build_block

@@ -22,6 +22,7 @@ use common_planners::ReadDataSourcePlan;
 use parking_lot::RwLock;
 
 use crate::sql::common::IndexType;
+use crate::sql::optimizer::ColumnSet;
 use crate::storages::Table;
 
 pub type MetadataRef = Arc<RwLock<Metadata>>;
@@ -119,8 +120,13 @@ impl Metadata {
         self.tables.as_slice()
     }
 
-    pub fn table_index_by_column_index(&self, column_index: IndexType) -> Option<IndexType> {
-        self.columns[column_index].table_index
+    pub fn table_index_by_column_indexes(&self, column_indexes: &ColumnSet) -> Option<IndexType> {
+        for column in self.columns.iter() {
+            if column_indexes.contains(&column.column_index) {
+                return column.table_index;
+            }
+        }
+        None
     }
 
     pub fn column(&self, index: IndexType) -> &ColumnEntry {
@@ -151,7 +157,6 @@ impl Metadata {
         data_type: DataTypeImpl,
         table_index: Option<IndexType>,
     ) -> IndexType {
-        dbg!(self.columns.clone());
         let column_index = self.columns.len();
         let column_entry = ColumnEntry::new(name, data_type, column_index, table_index);
         self.columns.push(column_entry);

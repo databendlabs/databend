@@ -433,7 +433,6 @@ impl JoinHashTable {
 
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
-        dbg!(self.hash_join_desc.join_type.clone());
         let func_ctx = self.ctx.try_get_function_context()?;
         let build_cols = self
             .hash_join_desc

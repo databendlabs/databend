@@ -90,8 +90,6 @@ impl RowSpace {
         }
 
         if !data_blocks.is_empty() {
-            dbg!(data_blocks.clone());
-            dbg!(indices.clone());
             let data_block =
                 DataBlock::block_take_by_chunk_indices(&data_blocks, indices.as_slice())?;
             Ok(data_block)

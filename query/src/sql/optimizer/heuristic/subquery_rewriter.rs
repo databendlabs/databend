@@ -272,18 +272,23 @@ impl SubqueryRewriter {
                         .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
                     (index, format!("subquery_{}", index))
                 };
-                let column_ref = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_name: name,
-                    index,
-                    data_type: if let DataTypeImpl::Nullable(_) = *subquery.data_type {
+                let data_type = if subquery.typ == SubqueryType::Scalar {
+                    if let DataTypeImpl::Nullable(_) = *subquery.data_type {
                         subquery.data_type.clone()
                     } else {
                         Box::new(DataTypeImpl::Nullable(NullableType::create(
                             *subquery.data_type.clone(),
                         )))
-                    },
+                    }
+                } else {
+                    subquery.data_type.clone()
+                };
+                let column_ref = ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: name,
+                    index,
+                    data_type,
                     visible_in_unqualified_wildcard: false,
                 };
 

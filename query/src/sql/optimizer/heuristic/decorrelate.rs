@@ -330,7 +330,7 @@ impl SubqueryRewriter {
             // Finally generate a cross join, so we finish flattening the subquery.
             let mut metadata = self.metadata.write();
             let table_index = metadata
-                .table_index_by_column_index(correlated_columns.len() - 1)
+                .table_index_by_column_indexes(correlated_columns)
                 .unwrap();
             for correlated_column in correlated_columns.iter() {
                 let column_entry = metadata.column(correlated_column.clone()).clone();
@@ -349,7 +349,6 @@ impl SubqueryRewriter {
                     ),
                 );
             }
-            dbg!(self.derived_columns.clone());
             let logical_get = SExpr::create_leaf(
                 LogicalGet {
                     table_index,
