@@ -26,7 +26,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 
@@ -268,6 +267,7 @@ struct HiveSource {
 }
 
 impl HiveSource {
+    #[allow(dead_code)]
     pub fn create(
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,

@@ -37,8 +37,6 @@ use common_planners::PartInfoPtr;
 use common_tracing::tracing;
 use common_tracing::tracing::warn;
 use futures::AsyncReadExt;
-use futures::StreamExt;
-use futures::TryStreamExt;
 use opendal::Object;
 use opendal::Operator;
 
