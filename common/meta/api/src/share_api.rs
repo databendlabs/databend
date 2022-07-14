@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This crate defines meta data types used by meta-client application, e.g. Schema, User, Share etc.
-//! Such as Database, Table and User etc.
-//!
-//! Types in this crate will not be used directly by databend-meta.
-//! But instead, they are used by the caller of meta-client, e.g, databend-query.
+use common_meta_app::share::CreateShareReply;
+use common_meta_app::share::CreateShareReq;
+use common_meta_app::share::DropShareReply;
+use common_meta_app::share::DropShareReq;
+use common_meta_types::MetaResult;
 
-pub mod schema;
-// pub mod user;
-pub mod share;
+#[async_trait::async_trait]
+pub trait ShareApi: Sync + Send {
+    async fn create_share(&self, req: CreateShareReq) -> MetaResult<CreateShareReply>;
+
+    async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply>;
+}
