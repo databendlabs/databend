@@ -72,7 +72,7 @@ impl Default for StageType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StageFileCompression {
     Auto,
     Gzip,
