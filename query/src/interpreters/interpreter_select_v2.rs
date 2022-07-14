@@ -21,7 +21,7 @@ use common_tracing::tracing;
 
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
-use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
@@ -77,29 +77,34 @@ impl Interpreter for SelectInterpreterV2 {
 
         let last_schema = physical_plan.output_schema()?;
 
-        let mut pb = PipelineBuilder::new();
+        let mut pb = PipelineBuilder::default();
         let mut root_pipeline = Pipeline::create();
         pb.build_pipeline(self.ctx.clone(), &physical_plan, &mut root_pipeline)?;
         // Render result set with given output schema
         pb.render_result_set(last_schema, &self.bind_context.columns, &mut root_pipeline)?;
-        let mut pipelines = pb.pipelines;
+
         let async_runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
 
         root_pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-        for pipeline in pipelines.iter_mut() {
-            pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-        }
+
+        let mut pipelines = root_pipeline.flatten();
+        root_pipeline = pipelines.remove(pipelines.len() - 1);
 
         // Spawn sub-pipelines
-        for pipeline in pipelines {
-            let executor = PipelineExecutor::create(
-                async_runtime.clone(),
-                query_need_abort.clone(),
-                pipeline,
-            )?;
-            executor.execute()?;
-        }
+        pipelines
+            .into_iter()
+            .fold(Ok(()), |acc, pipeline| match acc {
+                Ok(_) => {
+                    let executor = PipelineCompleteExecutor::try_create(
+                        async_runtime.clone(),
+                        query_need_abort.clone(),
+                        pipeline,
+                    )?;
+                    executor.execute()
+                }
+                err => err,
+            })?;
 
         // Spawn root pipeline
         let executor =
@@ -109,18 +114,16 @@ impl Interpreter for SelectInterpreterV2 {
         Ok(Box::pin(Box::pin(stream)))
     }
 
-    /// This method will create a new pipeline
-    /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     async fn create_new_pipeline(&self) -> Result<Pipeline> {
         let builder = PhysicalPlanBuilder::new(self.metadata.clone());
         let physical_plan = builder.build(&self.s_expr)?;
         let last_schema = physical_plan.output_schema()?;
-        let mut pb = PipelineBuilder::new();
+        let mut pb = PipelineBuilder::default();
         let mut root_pipeline = Pipeline::create();
         pb.build_pipeline(self.ctx.clone(), &physical_plan, &mut root_pipeline)?;
         pb.render_result_set(last_schema, &self.bind_context.columns, &mut root_pipeline)?;
         root_pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-        if !pb.pipelines.is_empty() {
+        if !root_pipeline.source_pipelines.is_empty() {
             return Err(ErrorCode::UnImplement(
                 "Unsupported run query with sub-pipeline".to_string(),
             ));

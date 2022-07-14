@@ -44,7 +44,6 @@ use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
@@ -395,18 +394,14 @@ impl HttpQueryHandle {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
         let last_schema = physical_plan.output_schema()?;
-        let mut pb = PipelineBuilder::new();
+        let mut pb = PipelineBuilder::default();
         let mut root_pipeline = Pipeline::create();
         pb.build_pipeline(ctx.clone(), physical_plan, &mut root_pipeline)?;
         pb.render_result_set(last_schema, result_columns, &mut root_pipeline)?;
 
-        let mut pipelines = pb.pipelines;
         let async_runtime = ctx.get_storage_runtime();
 
         root_pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-        for pipeline in pipelines.iter_mut() {
-            pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-        }
 
         root_pipeline.resize(1)?;
         let input = InputPort::create();
@@ -442,20 +437,20 @@ impl HttpQueryHandle {
         let query_need_abort = ctx.query_need_abort();
 
         let run = move || -> Result<()> {
-            for pipeline in pipelines {
-                let executor = PipelineExecutor::create(
-                    async_runtime_clone.clone(),
-                    query_need_abort.clone(),
-                    pipeline,
-                )?;
-                executor.execute()?;
-            }
-            let pipeline_executor = PipelineCompleteExecutor::try_create(
-                async_runtime_clone,
-                query_need_abort.clone(),
-                root_pipeline,
-            )?;
-            pipeline_executor.execute()
+            root_pipeline
+                .flatten()
+                .into_iter()
+                .fold(Ok(()), |acc, pipeline| match acc {
+                    Ok(_) => {
+                        let executor = PipelineCompleteExecutor::try_create(
+                            async_runtime_clone.clone(),
+                            query_need_abort.clone(),
+                            pipeline,
+                        )?;
+                        executor.execute()
+                    }
+                    err => err,
+                })
         };
 
         let (error_sender, mut error_receiver) = mpsc::channel::<Result<()>>(1);

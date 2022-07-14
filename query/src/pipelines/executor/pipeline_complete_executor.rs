@@ -27,7 +27,6 @@ pub struct PipelineCompleteExecutor {
 }
 
 // Use this executor when the pipeline is complete pipeline (has source and sink)
-#[allow(dead_code)]
 impl PipelineCompleteExecutor {
     pub fn try_create(
         async_runtime: Arc<Runtime>,

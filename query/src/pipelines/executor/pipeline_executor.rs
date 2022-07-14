@@ -30,7 +30,7 @@ use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::pipeline::Pipeline;
 
-pub type FinishedCallback = Arc<Box<dyn Fn(&Option<ErrorCode>) + Send + Sync + 'static>>;
+pub type FinishedCallback = Arc<dyn Fn(&Option<ErrorCode>) + Send + Sync + 'static>;
 
 pub struct PipelineExecutor {
     threads_num: usize,
@@ -87,11 +87,11 @@ impl PipelineExecutor {
             query_need_abort,
             RunningGraph::from_pipelines(pipelines)?,
             threads_num,
-            Arc::new(Box::new(move |may_error| {
+            Arc::new(move |may_error| {
                 for on_finished_callback in &on_finished_callbacks {
                     on_finished_callback(may_error);
                 }
-            })),
+            }),
         )
     }
 

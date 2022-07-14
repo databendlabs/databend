@@ -63,15 +63,9 @@ use crate::sql::ColumnBinding;
 use crate::sql::IndexType;
 
 #[derive(Default)]
-pub struct PipelineBuilder {
-    pub pipelines: Vec<Pipeline>,
-}
+pub struct PipelineBuilder {}
 
 impl PipelineBuilder {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn build_pipeline(
         &mut self,
         context: Arc<QueryContext>,
@@ -554,7 +548,7 @@ impl PipelineBuilder {
             })?;
         }
 
-        self.pipelines.push(child_pipeline);
+        pipeline.add_source_pipeline(child_pipeline);
 
         Ok(())
     }

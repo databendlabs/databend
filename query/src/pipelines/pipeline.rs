@@ -44,10 +44,22 @@ use crate::pipelines::processors::ResizeProcessor;
 ///                                           +-----+                       +--->|Processor|
 ///                                                                              +---------+
 ///
+#[derive(Clone)]
 pub struct Pipeline {
     max_threads: usize,
     pub pipes: Vec<Pipe>,
     on_finished: Option<FinishedCallback>,
+
+    /// The pipelines depended by this pipeline, e.g. build side of
+    /// hash join is depended by probe side.
+    ///
+    /// TODO(leiysky): Maybe we should launch the current pipeline when all
+    /// the depended pipelines are finished?
+    /// For now, we just launch the source pipelines before lauching
+    /// current pipeline. It is fine since we only have hash join that
+    /// depends on other pipelines now, which implement a blocking mechanism
+    /// to wait until the depended pipelines are finished.
+    pub source_pipelines: Vec<Pipeline>,
 }
 
 impl Pipeline {
@@ -56,6 +68,7 @@ impl Pipeline {
             max_threads: 0,
             pipes: Vec::new(),
             on_finished: None,
+            source_pipelines: Vec::new(),
         }
     }
 
@@ -115,10 +128,49 @@ impl Pipeline {
         }
 
         self.max_threads = std::cmp::min(max_pipe_size, max_threads);
+
+        // TODO(leiysky): Set max_threads for each source pipelines seperately?
+        for source_pipeline in self.source_pipelines.iter_mut() {
+            source_pipeline.set_max_threads(max_threads);
+        }
     }
 
     pub fn get_max_threads(&self) -> usize {
         self.max_threads
+    }
+
+    pub fn add_source_pipeline(&mut self, pipeline: Pipeline) {
+        self.source_pipelines.push(pipeline);
+    }
+
+    /// Get flattened pipeline with `source_pipelines` removed.
+    /// The pipelines will be added into result vector in post-order,
+    /// i.e. the pipelines in `source_pipelines` will be added first and
+    /// the last element is the root pipeline(current pipeline).
+    ///
+    /// This is helpful when we want to launch the pipelines with depended
+    /// pipelines launched first.
+    pub fn flatten(&self) -> Vec<Pipeline> {
+        let mut pipelines = Vec::new();
+        self.flatten_into(&mut pipelines);
+
+        assert!(!pipelines.is_empty());
+
+        pipelines
+    }
+
+    fn flatten_into(&self, pipelines: &mut Vec<Pipeline>) {
+        for source_pipeline in self.source_pipelines.iter() {
+            source_pipeline.flatten_into(pipelines);
+        }
+        let pipeline = Pipeline {
+            // clear the source_pipelines for flattened pipeline
+            source_pipelines: vec![],
+            max_threads: self.max_threads,
+            pipes: self.pipes.clone(),
+            on_finished: self.on_finished.clone(),
+        };
+        pipelines.push(pipeline);
     }
 
     pub fn add_transform<F>(&mut self, f: F) -> Result<()>
@@ -162,11 +214,11 @@ impl Pipeline {
         if let Some(on_finished) = &self.on_finished {
             let old_finished = on_finished.clone();
 
-            self.on_finished = Some(Arc::new(Box::new(move |may_error| {
+            self.on_finished = Some(Arc::new(move |may_error| {
                 old_finished(may_error);
 
                 f(may_error);
-            })));
+            }));
 
             return;
         }
@@ -176,7 +228,7 @@ impl Pipeline {
 
     pub fn take_on_finished(&mut self) -> FinishedCallback {
         match self.on_finished.take() {
-            None => Arc::new(Box::new(|_may_error| {})),
+            None => Arc::new(|_may_error| {}),
             Some(on_finished) => on_finished,
         }
     }

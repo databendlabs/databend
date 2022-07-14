@@ -1,0 +1,49 @@
+statement ok
+set enable_planner_v2 = 1;
+
+statement ok
+create table t(a int);
+
+statement ok
+insert into t values(1);
+
+onlyif mysql
+statement query T
+explain select * from t t1, (select * from t t2, t t3) as t4 order by t1.a, t2.a, t3.a;
+
+----
+Sort: [a DESC, a DESC, a DESC]            
+ └── CrossJoin                             
+     ├── Scan: default.default.t           
+     └── CrossJoin                         
+         ├── Scan: default.default.t       
+         └── Scan: default.default.t
+
+onlyif mysql
+statement query III
+select * from t t1, (select * from t t2, t t3) as t4 order by t1.a, t2.a, t3.a;
+
+----
+1	1	1
+
+onlyif mysql
+statement query T
+explain select * from t t1, t t2, t t3 order by t1.a, t2.a, t3.a;
+
+----
+Sort: [a DESC, a DESC, a DESC]              
+ └── CrossJoin                               
+     ├── CrossJoin                           
+     │   ├── Scan: default.default.t         
+     │   └── Scan: default.default.t         
+     └── Scan: default.default.t
+
+onlyif mysql
+statement query III
+select * from t t1, t t2, t t3 order by t1.a, t2.a, t3.a;
+
+----
+1	1	1
+
+statement ok
+drop table t;

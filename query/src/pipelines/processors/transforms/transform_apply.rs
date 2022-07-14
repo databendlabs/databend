@@ -24,7 +24,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
-use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -226,34 +226,43 @@ impl TransformApply {
         let mut rewriter = OuterRefRewriter::new(outer_columns);
         let physical_plan = rewriter.rewrite_physical_plan(&self.subquery)?;
 
-        let mut pipeline = Pipeline::create();
-        let mut pb = PipelineBuilder::new();
+        let mut root_pipeline = Pipeline::create();
+        let mut pb = PipelineBuilder::default();
         pb.build_pipeline(
             QueryContext::create_from(self.ctx.clone()),
             &physical_plan,
-            &mut pipeline,
+            &mut root_pipeline,
         )?;
-
-        let mut children = pb.pipelines;
 
         // Set max threads
         let settings = self.ctx.get_settings();
-        pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        for pipeline in children.iter_mut() {
-            pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        }
+        root_pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
         let runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
-        // Spawn sub-pipelines
-        for pipeline in children {
-            let executor =
-                PipelineExecutor::create(runtime.clone(), query_need_abort.clone(), pipeline)?;
-            executor.execute()?;
-        }
 
+        // Spawn sub-pipelines
+        let mut pipelines = root_pipeline.flatten();
+        root_pipeline = pipelines.remove(pipelines.len() - 1);
+
+        // Spawn sub-pipelines
+        pipelines
+            .into_iter()
+            .fold(Ok(()), |acc, pipeline| match acc {
+                Ok(_) => {
+                    let executor = PipelineCompleteExecutor::try_create(
+                        runtime.clone(),
+                        query_need_abort.clone(),
+                        pipeline,
+                    )?;
+                    executor.execute()
+                }
+                err => err,
+            })?;
+
+        // Spawn root pipeline
         let mut executor =
-            PipelinePullingExecutor::try_create(runtime, query_need_abort, pipeline)?;
+            PipelinePullingExecutor::try_create(runtime, query_need_abort, root_pipeline)?;
         executor.start();
         let mut results = vec![];
         while let Some(result) = executor.pull_data()? {

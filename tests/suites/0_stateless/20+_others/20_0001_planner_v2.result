@@ -333,16 +333,17 @@ HashJoin: INNER, build keys: [t2.a], probe keys: [t1.a], join filters: []
 ├── Scan: default.default.t1
 └── Scan: default.default.t2
 ===Explain Pipeline===
-Project × 1 processor
-  TransformHashJoin × 1 processor
-    Rename × 1 processor
-      Project × 1 processor
-        FuseEngineSource × 1 processor
 
 BuildHashTable × 1 processor
   Rename × 1 processor
     Project × 1 processor
       FuseEngineSource × 1 processor
+
+Project × 1 processor
+  TransformHashJoin × 1 processor
+    Rename × 1 processor
+      Project × 1 processor
+        FuseEngineSource × 1 processor
 ===Position Function===
 4
 0
