@@ -64,6 +64,7 @@ externalLocation ::=
 | ENABLE_VIRTUAL_HOST_STYLE 	| If you use virtual hosting to address the bucket, set it to "true".                               	| Optional 	|
 
 Azure Blob storage：
+
 ```sql
 externalLocation ::=
   'azblob://<container>[<path>]'
@@ -192,7 +193,6 @@ COPY INTO mytable FROM '@my_external_s1' pattern = 'books.*parquet' file_format 
 
 This example reads 10 rows from a CSV file and inserts them into a table:
 
-
 ```sql
 COPY INTO mytable
   FROM 's3://mybucket/data.csv'
@@ -213,6 +213,13 @@ COPY INTO mytable
         ACCESS_KEY_ID = '<your-access-key-ID>'
         SECRET_ACCESS_KEY = '<your-secret-access-key>')
   FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = GZIP) size_limit=10;
+```
+
+This example moves data from a CSV file without specifying the endpoint URL:
+```sql
+COPY INTO mytable
+  FROM 's3://mybucket/data.csv'
+  FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
 
 **Azure Blob storage**
