@@ -60,39 +60,20 @@ pub struct ShareId {
     pub share_id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareDatabaseObject {
-    pub tenant: String,
-    pub db_name: String,
-    pub db_id: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareTableObject {
-    pub tenant: String,
-    pub db_name: String,
-    pub table_name: String,
-    pub table_id: u64,
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObject {
-    Database(ShareDatabaseObject),
-    Table(ShareTableObject),
+    Database(u64),
+    Table(u64),
 }
 
 impl Display for ShareGrantObject {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ShareGrantObject::Database(db) => {
-                write!(f, "db/{}/{}", db.tenant, db.db_name)
+            ShareGrantObject::Database(db_id) => {
+                write!(f, "db/{}", *db_id)
             }
-            ShareGrantObject::Table(table) => {
-                write!(
-                    f,
-                    "table/{}/{}/{}",
-                    table.tenant, table.db_name, table.table_name
-                )
+            ShareGrantObject::Table(table_id) => {
+                write!(f, "table/{}", *table_id)
             }
         }
     }
@@ -148,7 +129,7 @@ impl Display for ShareGrantEntry {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct ShareMeta {
-    pub database: Option<ShareDatabaseObject>,
+    pub database: Option<ShareGrantEntry>,
     pub entries: BTreeMap<String, ShareGrantEntry>,
     pub accounts: Vec<String>,
     pub comment: Option<String>,

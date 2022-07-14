@@ -40,29 +40,13 @@ message ShareDatabaseObject {
   uint64 db_id = 3;
 }
 
-message ShareTableObject {
-  uint64 ver = 100;
-  uint64 min_compatible = 101;
-
-  // The user this table belongs to.
-  string tenant = 1;
-
-  // The database this table belongs to.
-  string db_name = 2;
-
-  // The table name.
-  string table_name = 3;
-
-  uint64 table_id = 4;
-}
-
 message ShareGrantObject {
   uint64 ver = 100;
   uint64 min_compatible = 101;
 
   oneof object {
-    ShareDatabaseObject database = 1;
-    ShareTableObject table = 2;
+    uint64 db_id = 1;
+    uint64 table_id = 2;
   }
 }
 
@@ -78,33 +62,10 @@ message ShareMeta {
   uint64 ver = 100;
   uint64 min_compatible = 101;
 
-  optional ShareDatabaseObject database = 1;
+  optional ShareGrantEntry database = 1;
   repeated ShareGrantEntry entries = 2;
   repeated string accounts = 3;
   optional string comment = 4;
   string share_on = 5;
   optional string update_on = 6;
-}
-
-// The identifier of a share.
-// `share_id` will never change. It can only be created or removed.
-// The `seq` indicates changes of the instance.
-// I.e., the tuple `(db_id, seq)` always identifies the same instance.
-message ShareIdent {
-  uint64 ver = 100;
-  uint64 min_compatible = 101;
-
-  uint64 share_id = 1;
-
-  // The seq of TableMeta
-  uint64 seq = 2;
-}
-
-message ShareInfo {
-  uint64 ver = 100;
-  uint64 min_compatible = 101;
-
-  ShareIdent ident = 1;
-  ShareNameIdent name_ident = 2;
-  ShareMeta meta = 3;
 }
