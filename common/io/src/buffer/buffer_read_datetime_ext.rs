@@ -71,6 +71,7 @@ where R: BufferRead
             tz.from_utc_datetime(&NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0))
         } else {
             tz.datetime_from_str(v, "%Y-%m-%d %H:%M:%S")
+                .or_else(|_| tz.datetime_from_str(v, "%Y-%m-%dT%H:%M:%S"))
                 .map_err_to_code(ErrorCode::BadBytes, || {
                     format!("Cannot parse value:{:?} to DateTime type", v)
                 })?

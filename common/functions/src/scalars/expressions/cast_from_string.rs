@@ -97,7 +97,10 @@ pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTi
             let t = format!("1970-01-01 00:00:00{}", &s[DATE_TIME_LEN..]);
             tz.datetime_from_str(&t, "%Y-%m-%d %H:%M:%S%.f").ok()
         } else {
-            match tz.datetime_from_str(s, "%Y-%m-%d %H:%M:%S%.f") {
+            match tz
+                .datetime_from_str(s, "%Y-%m-%d %H:%M:%S%.f")
+                .or_else(|_| tz.datetime_from_str(s, "%Y-%m-%dT%H:%M:%S%.f"))
+            {
                 Ok(dt) => {
                     // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
                     if dt.year() < 1000 {
