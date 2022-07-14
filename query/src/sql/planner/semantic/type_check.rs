@@ -1244,7 +1244,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            _ => Err(ErrorCode::UnsupportedIntervalKind("Only these interval types are currently supported: year, month, day, hour, minute, second")),
+            _ => Err(ErrorCode::SemanticError(span.display_error("Only these interval types are currently supported: [year, month, day, hour, minute, second]".to_string()))),
         }
     }
 

@@ -212,7 +212,6 @@ build_exceptions! {
     IllegalUDFFormat(2601),
     UnknownUDF(2602),
     UdfAlreadyExists(2603),
-    UnsupportedIntervalKind(2604),
 
     // Database error codes.
     UnknownDatabaseEngine(2701),
