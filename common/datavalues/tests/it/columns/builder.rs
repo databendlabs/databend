@@ -141,15 +141,13 @@ fn test_pop_data_value() -> Result<()> {
             name: "test primitive(u64) column",
             data_type: UInt64Type::new_impl(),
             column: Series::from_data(&[1u64, 2, 3]),
-            expected_err:
-                "Code: 1018, displayText = Primitive column array is empty when pop data value.",
+            expected_err: "Code: 1018, displayText = Primitive column array is empty when pop data value.",
         },
         Test {
             name: "test string column",
             data_type: StringType::new_impl(),
             column: Series::from_data(&["1", "22", "333"]),
-            expected_err:
-                "Code: 1018, displayText = String column array is empty when pop data value.",
+            expected_err: "Code: 1018, displayText = String column array is empty when pop data value.",
         },
         Test {
             name: "test object column",
@@ -159,8 +157,7 @@ fn test_pop_data_value() -> Result<()> {
                 VariantValue::from(JsonValue::Bool(true)),
                 VariantValue::from(JsonValue::Null),
             ]),
-            expected_err:
-                "Code: 1018, displayText = Object column array is empty when pop data value.",
+            expected_err: "Code: 1018, displayText = Object column array is empty when pop data value.",
         },
         Test {
             name: "test null column",

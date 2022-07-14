@@ -42,12 +42,11 @@ impl FromStr for ValidationMode {
                 let rows_str = v.replace("RETURN_", "").replace("_ROWS", "");
                 let rows = rows_str.parse::<u64>();
                 match rows {
-                    Ok(v) => { Ok(ValidationMode::ReturnNRows(v)) }
-                    Err(_) => {
-                        Err(
-                            format!("Unknown validation mode:{:?}, must one of {{ RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS}}", v)
-                        )
-                    }
+                    Ok(v) => Ok(ValidationMode::ReturnNRows(v)),
+                    Err(_) => Err(format!(
+                        "Unknown validation mode:{:?}, must one of {{ RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS}}",
+                        v
+                    )),
                 }
             }
         }

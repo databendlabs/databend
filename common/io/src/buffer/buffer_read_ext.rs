@@ -114,7 +114,10 @@ pub trait BufferReadExt: BufferRead {
         }
         Err(std::io::Error::new(
             ErrorKind::InvalidData,
-            format!("Expected to have terminated string literal after quota {:?}, while consumed buf: {:?}", quota as char, buf),
+            format!(
+                "Expected to have terminated string literal after quota {:?}, while consumed buf: {:?}",
+                quota as char, buf
+            ),
         ))
     }
 

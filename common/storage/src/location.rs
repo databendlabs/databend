@@ -122,7 +122,7 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 anyhow!("{v} is not allowed to be used as uri location"),
-            ))
+            ));
         }
     };
 

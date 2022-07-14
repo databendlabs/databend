@@ -81,7 +81,7 @@ impl Function for UnhexFunction {
                             "{} can not unhex because: {}",
                             String::from_utf8_lossy(val),
                             err
-                        )))
+                        )));
                     }
                 }
             } else {

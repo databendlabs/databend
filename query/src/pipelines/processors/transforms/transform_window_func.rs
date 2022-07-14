@@ -379,10 +379,10 @@ impl WindowFuncCompact {
                 }
                 (frame_start, frame_end) => {
                     assert_eq!(
-                            order_by.len(),
-                            1,
-                            "Range mode is only possible if the query has exactly one numeric order by expression."
-                        );
+                        order_by.len(),
+                        1,
+                        "Range mode is only possible if the query has exactly one numeric order by expression."
+                    );
                     assert_numeric(
                             block
                                 .schema()

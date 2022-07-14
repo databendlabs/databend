@@ -37,49 +37,51 @@ async fn test_scalar_evaluator() -> Result<()> {
     let scalar = Scalar::FunctionCall(FunctionCall {
         func_name: "negate".to_string(),
 
-        arguments: vec![FunctionCall {
-            arguments: vec![
-                FunctionCall {
-                    arguments: vec![
-                        BoundColumnRef {
-                            column: ColumnBinding {
-                                database_name: None,
-                                table_name: None,
-                                column_name: "".to_string(),
-                                index: 0,
-                                data_type: Box::new(Int32Type::new_impl()),
-                                visible_in_unqualified_wildcard: false,
-                            },
-                        }
-                        .into(),
-                        BoundColumnRef {
-                            column: ColumnBinding {
-                                database_name: None,
-                                table_name: None,
-                                column_name: "".to_string(),
-                                index: 1,
-                                data_type: Box::new(Int32Type::new_impl()),
-                                visible_in_unqualified_wildcard: false,
-                            },
-                        }
-                        .into(),
-                    ],
-                    func_name: "plus".to_string(),
-                    arg_types: vec![Int32Type::new_impl(), Int32Type::new_impl()],
-                    return_type: Box::new(Int32Type::new_impl()),
-                }
-                .into(),
-                ConstantExpr {
-                    value: DataValue::Int64(2),
-                    data_type: Box::new(Int64Type::new_impl()),
-                }
-                .into(),
-            ],
-            func_name: "pow".to_string(),
-            arg_types: vec![Int64Type::new_impl(), Int64Type::new_impl()],
-            return_type: Box::new(Float64Type::new_impl()),
-        }
-        .into()],
+        arguments: vec![
+            FunctionCall {
+                arguments: vec![
+                    FunctionCall {
+                        arguments: vec![
+                            BoundColumnRef {
+                                column: ColumnBinding {
+                                    database_name: None,
+                                    table_name: None,
+                                    column_name: "".to_string(),
+                                    index: 0,
+                                    data_type: Box::new(Int32Type::new_impl()),
+                                    visible_in_unqualified_wildcard: false,
+                                },
+                            }
+                            .into(),
+                            BoundColumnRef {
+                                column: ColumnBinding {
+                                    database_name: None,
+                                    table_name: None,
+                                    column_name: "".to_string(),
+                                    index: 1,
+                                    data_type: Box::new(Int32Type::new_impl()),
+                                    visible_in_unqualified_wildcard: false,
+                                },
+                            }
+                            .into(),
+                        ],
+                        func_name: "plus".to_string(),
+                        arg_types: vec![Int32Type::new_impl(), Int32Type::new_impl()],
+                        return_type: Box::new(Int32Type::new_impl()),
+                    }
+                    .into(),
+                    ConstantExpr {
+                        value: DataValue::Int64(2),
+                        data_type: Box::new(Int64Type::new_impl()),
+                    }
+                    .into(),
+                ],
+                func_name: "pow".to_string(),
+                arg_types: vec![Int64Type::new_impl(), Int64Type::new_impl()],
+                return_type: Box::new(Float64Type::new_impl()),
+            }
+            .into(),
+        ],
         arg_types: vec![Float64Type::new_impl()],
         return_type: Box::new(Float64Type::new_impl()),
     });

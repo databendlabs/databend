@@ -45,9 +45,10 @@ impl TryInto<Vec<u8>> for CancelAction {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        serde_json::to_vec(&self).map_err_to_code(ErrorCode::LogicalError, || {
-            "Logical error: cannot serialize BroadcastAction."
-        })
+        serde_json::to_vec(&self).map_err_to_code(
+            ErrorCode::LogicalError,
+            || "Logical error: cannot serialize BroadcastAction.",
+        )
     }
 }
 
@@ -74,9 +75,10 @@ impl TryInto<Vec<u8>> for InitQueryFragmentsPlan {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        serde_json::to_vec(&self).map_err_to_code(ErrorCode::LogicalError, || {
-            "Logical error: cannot serialize PrepareExecutor."
-        })
+        serde_json::to_vec(&self).map_err_to_code(
+            ErrorCode::LogicalError,
+            || "Logical error: cannot serialize PrepareExecutor.",
+        )
     }
 }
 
@@ -103,9 +105,10 @@ impl TryInto<Vec<u8>> for InitNodesChannel {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        serde_json::to_vec(&self).map_err_to_code(ErrorCode::LogicalError, || {
-            "Logical error: cannot serialize PreparePublisher."
-        })
+        serde_json::to_vec(&self).map_err_to_code(
+            ErrorCode::LogicalError,
+            || "Logical error: cannot serialize PreparePublisher.",
+        )
     }
 }
 

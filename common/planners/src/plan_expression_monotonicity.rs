@@ -119,7 +119,7 @@ impl ExpressionMonotonicityVisitor {
                     return Err(ErrorCode::LogicalError(format!(
                         "Expected {} arguments, actual {}.",
                         args_size, index
-                    )))
+                    )));
                 }
                 Some((arg_type, monotonic)) => {
                     left_vec.push(monotonic.left.clone());
