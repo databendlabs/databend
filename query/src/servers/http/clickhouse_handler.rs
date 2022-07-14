@@ -45,9 +45,9 @@ use serde::Serialize;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::StreamSource;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::StreamSource;
+use crate::pipelines::SourcePipeBuilder;
 use crate::servers::clickhouse::CLickHouseFederated;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;

@@ -381,16 +381,17 @@ pub enum AppError {
     UnknownTableId(#[from] UnknownTableId),
 
     #[error(transparent)]
-    ShareAlreadyExists(#[from] ShareAlreadyExists),
-
-    #[error(transparent)]
-    UnknownShare(#[from] UnknownShare),
-
-    #[error(transparent)]
     UnknownShareId(#[from] UnknownShareId),
 
     #[error(transparent)]
     TxnRetryMaxTimes(#[from] TxnRetryMaxTimes),
+
+    // share api errors
+    #[error(transparent)]
+    ShareAlreadyExists(#[from] ShareAlreadyExists),
+
+    #[error(transparent)]
+    UnknownShare(#[from] UnknownShare),
 }
 
 impl AppErrorMessage for UnknownDatabase {

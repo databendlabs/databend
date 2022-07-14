@@ -30,12 +30,12 @@ use common_planners::Statistics;
 use super::fuse_snapshot::FuseSnapshot;
 use super::table_args::parse_func_history_args;
 use crate::catalogs::CATALOG_DEFAULT;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::AsyncSource;
-use crate::pipelines::new::processors::AsyncSourcer;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::AsyncSource;
+use crate::pipelines::processors::AsyncSourcer;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::table_functions::string_literal;
 use crate::storages::fuse::FuseTable;
@@ -114,11 +114,11 @@ impl Table for FuseSnapshotTable {
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
         let limit = Self::get_limit(plan);
-        pipeline.add_pipe(NewPipe::SimplePipe {
+        pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
             processors: vec![FuseHistorySource::create(

@@ -30,7 +30,7 @@ use common_planners::ExpressionMonotonicityVisitor;
 use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
 
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 
 pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;

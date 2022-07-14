@@ -41,9 +41,9 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::StreamSourceV2;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::StreamSourceV2;
+use crate::pipelines::SourcePipeBuilder;
 use crate::servers::http::v1::multipart_format::MultipartFormat;
 use crate::servers::http::v1::multipart_format::MultipartWorker;
 use crate::sessions::QueryContext;
