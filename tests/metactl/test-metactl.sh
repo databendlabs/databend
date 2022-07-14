@@ -34,7 +34,7 @@ chmod +x ./target/${BUILD_PROFILE}/databend-meta
 ./target/${BUILD_PROFILE}/databend-meta --single &
 METASRV_PID=$!
 echo $METASRV_PID
-sleep 1
+sleep 3
 
 
 echo " === export data from a running databend-meta to $grpc_exported"
