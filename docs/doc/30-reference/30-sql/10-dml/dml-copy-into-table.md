@@ -58,7 +58,7 @@ externalLocation ::=
 |---------------------------	|-----------------------------------------------------------------------------	|----------	|
 | `s3://<bucket>/[<path>]`    	| External files located at the AWS S3 compatible object storage.             	| Optional 	|
 | ENDPOINT_URL              	| The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.                                  	| Optional 	|
-| ACCESS_KEY_ID             	| Your access key ID for connecting the AWS S3 compatible object storage.     	| Optional 	|
+| ACCESS_KEY_ID             	| Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.    	| Optional 	|
 | SECRET_ACCESS_KEY         	| Your secret access key for connecting the AWS S3 compatible object storage. 	| Optional 	|
 | REGION                    	| AWS region name. For example, us-east-1.                                    	| Optional 	|
 | ENABLE_VIRTUAL_HOST_STYLE 	| If you use virtual hosting to address the bucket, set it to "true".                               	| Optional 	|
@@ -78,7 +78,7 @@ externalLocation ::=
 |----------------------------	|----------------------------------------------------------	|----------	|
 | `azblob://<container>[<path>]` 	| External files located at the Azure Blob storage.        	| Required 	|
 | ENDPOINT_URL               	| The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.    	| Optional 	|
-| ACCOUNT_NAME               	| Your account name for connecting the Azure Blob storage. 	| Optional 	|
+| ACCOUNT_NAME               	| Your account name for connecting the Azure Blob storage. If not provided, Databend will access the container anonymously.	| Optional 	|
 | ACCOUNT_KEY                	| Your account key for connecting the Azure Blob storage.  	| Optional 	|
 
 
