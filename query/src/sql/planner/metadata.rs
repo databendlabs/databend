@@ -151,6 +151,7 @@ impl Metadata {
         data_type: DataTypeImpl,
         table_index: Option<IndexType>,
     ) -> IndexType {
+        dbg!(self.columns.clone());
         let column_index = self.columns.len();
         let column_entry = ColumnEntry::new(name, data_type, column_index, table_index);
         self.columns.push(column_entry);

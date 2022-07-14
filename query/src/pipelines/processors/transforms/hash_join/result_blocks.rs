@@ -131,12 +131,20 @@ impl JoinHashTable {
             // probe_blocks left join build blocks
             JoinType::Left | JoinType::Single => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result =
-                        self.left_or_single_join::<false, _, _>(hash_table, probe_state, keys_iter, input)?;
+                    let result = self.left_or_single_join::<false, _, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                    )?;
                     return Ok(vec![result]);
                 } else {
-                    let result =
-                        self.left_or_single_join::<true, _, _>(hash_table, probe_state, keys_iter, input)?;
+                    let result = self.left_or_single_join::<true, _, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                    )?;
                     return Ok(vec![result]);
                 }
             }

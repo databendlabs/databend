@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use common_datavalues::BooleanType;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::NullableType;
 use common_exception::ErrorCode;
@@ -276,7 +277,13 @@ impl SubqueryRewriter {
                     table_name: None,
                     column_name: name,
                     index,
-                    data_type: subquery.data_type.clone(),
+                    data_type: if let DataTypeImpl::Nullable(_) = *subquery.data_type {
+                        subquery.data_type.clone()
+                    } else {
+                        Box::new(DataTypeImpl::Nullable(NullableType::create(
+                            *subquery.data_type.clone(),
+                        )))
+                    },
                     visible_in_unqualified_wildcard: false,
                 };
 

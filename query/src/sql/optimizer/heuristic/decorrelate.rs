@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_datavalues::type_coercion::merge_types;
+use common_datavalues::DataTypeImpl;
+use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -336,7 +338,13 @@ impl SubqueryRewriter {
                     correlated_column.clone(),
                     metadata.add_column(
                         column_entry.name.clone(),
-                        column_entry.data_type.clone(),
+                        if let DataTypeImpl::Nullable(_) = column_entry.data_type {
+                            column_entry.data_type.clone()
+                        } else {
+                            DataTypeImpl::Nullable(NullableType::create(
+                                column_entry.data_type.clone(),
+                            ))
+                        },
                         None,
                     ),
                 );
@@ -377,7 +385,7 @@ impl SubqueryRewriter {
                 // Add correlated columns to the  scalar item list.
                 let mut items = eval_scalar.items.clone();
                 let metadata = self.metadata.read();
-                for  derived_column in self.derived_columns.values() {
+                for derived_column in self.derived_columns.values() {
                     let column_entry = metadata.column(derived_column.clone());
                     let column_binding = ColumnBinding {
                         database_name: None,
@@ -408,7 +416,8 @@ impl SubqueryRewriter {
                 let filter_plan = Filter {
                     predicates,
                     is_having: filter.is_having,
-                }.into();
+                }
+                .into();
                 return Ok(SExpr::create_unary(filter_plan, flatten_plan));
             }
             RelOperator::LogicalInnerJoin(join) => {
