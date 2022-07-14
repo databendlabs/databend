@@ -57,11 +57,13 @@ fn remove_true_predicate(predicates: Vec<Scalar>) -> Vec<Scalar> {
 
 fn normalize_falsy_predicate(predicates: Vec<Scalar>) -> Vec<Scalar> {
     if predicates.iter().any(is_falsy) {
-        vec![ConstantExpr {
-            value: DataValue::Boolean(false),
-            data_type: Box::new(BooleanType::new_impl()),
-        }
-        .into()]
+        vec![
+            ConstantExpr {
+                value: DataValue::Boolean(false),
+                data_type: Box::new(BooleanType::new_impl()),
+            }
+            .into(),
+        ]
     } else {
         predicates
     }

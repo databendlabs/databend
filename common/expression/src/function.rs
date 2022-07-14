@@ -542,7 +542,7 @@ pub fn vectorize_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType
     ValueRef<NullableType<I2>>,
     &GenericMap,
 ) -> Value<NullableType<O>>
-       + Copy {
++ Copy {
     move |arg1, arg2, generics| match (arg1, arg2) {
         (ValueRef::Scalar(None), _) | (_, ValueRef::Scalar(None)) => Value::Scalar(None),
         (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2))) => {
@@ -576,7 +576,7 @@ pub fn vectorize_with_writer_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType
     ValueRef<NullableType<I2>>,
     &GenericMap,
 ) -> Value<NullableType<O>>
-       + Copy {
++ Copy {
     move |arg1, arg2, generics| match (arg1, arg2) {
         (ValueRef::Scalar(None), _) | (_, ValueRef::Scalar(None)) => Value::Scalar(None),
         (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2))) => {

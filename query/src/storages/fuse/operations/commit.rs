@@ -110,7 +110,10 @@ impl FuseTable {
                             let keep_last_snapshot = true;
                             if let Err(e) = tbl.do_gc(&ctx, keep_last_snapshot).await {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
-                                warn!("GC of transient table not success (this is not a permanent error). the error : {}", e);
+                                warn!(
+                                    "GC of transient table not success (this is not a permanent error). the error : {}",
+                                    e
+                                );
                             } else {
                                 info!("GC of transient table done");
                             }
@@ -124,11 +127,11 @@ impl FuseTable {
                     Some(d) => {
                         let name = tbl.table_info.name.clone();
                         tracing::debug!(
-                                "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
-                                d.as_millis(),
-                                name.as_str(),
-                                tbl.table_info.ident
-                            );
+                            "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
+                            d.as_millis(),
+                            name.as_str(),
+                            tbl.table_info.ident
+                        );
                         common_base::base::tokio::time::sleep(d).await;
                         latest = tbl.latest(&ctx, catalog_name).await?;
                         tbl = FuseTable::try_from_table(latest.as_ref())?;
@@ -139,12 +142,14 @@ impl FuseTable {
                         tracing::info!("aborting operations");
                         let _ = self::utils::abort_operations(ctx.as_ref(), operation_log).await;
                         break Err(ErrorCode::OCCRetryFailure(format!(
-                                "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
-                                retry_times,
-                                Instant::now().duration_since(backoff.start_time).as_millis(),
-                                tbl.table_info.name.as_str(),
-                                tbl.table_info.ident,
-                            )));
+                            "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
+                            retry_times,
+                            Instant::now()
+                                .duration_since(backoff.start_time)
+                                .as_millis(),
+                            tbl.table_info.name.as_str(),
+                            tbl.table_info.ident,
+                        )));
                     }
                 },
                 Err(e) => break Err(e),

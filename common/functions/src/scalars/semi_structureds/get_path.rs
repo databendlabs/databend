@@ -174,7 +174,7 @@ pub fn parse_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
                 return Err(ErrorCode::SyntaxException(format!(
                     "Can not tokenize definition: {}, Error: {:?}",
                     definition, tokenize_error
-                )))
+                )));
             }
         }
     }

@@ -33,7 +33,7 @@ fn test_explain_plan() -> Result<()> {
         typ: ExplainType::Syntax,
         input: Arc::new(plan),
     });
-    let expect ="\
+    let expect = "\
     Projection: number as c1:UInt64, number as c2:UInt64\
     \n  Having: ((number + 1) = 4)\
     \n    Filter: ((number + 1) = 4)\

@@ -172,11 +172,7 @@ impl<'a, T: ArgType> Iterator for NullableIterator<'a, T> {
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().zip(self.validity.next()).map(
             |(scalar, is_null)| {
-                if is_null {
-                    None
-                } else {
-                    Some(scalar)
-                }
+                if is_null { None } else { Some(scalar) }
             },
         )
     }

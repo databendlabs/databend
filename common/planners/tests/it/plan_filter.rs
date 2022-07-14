@@ -27,7 +27,7 @@ fn test_filter_plan() -> Result<()> {
         .project(&[col("number")])?
         .build()?;
 
-    let expect ="\
+    let expect = "\
     Projection: number:UInt64\
     \n  Filter: (number = 1)\
     \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]";

@@ -57,7 +57,7 @@ pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, 
                 return Err(ErrorCode::ParquetError(format!(
                     "invalid parquet file, meta data of column idx {} is empty",
                     idx
-                )))
+                )));
             }
         }
     }

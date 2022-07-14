@@ -106,11 +106,10 @@ impl Function for RunningDifferenceFunction {
             TypeID::Float32 => compute_f32(col, input_rows),
             TypeID::Float64 => compute_f64(col, input_rows),
 
-            _ => Result::Err(ErrorCode::IllegalDataType(
-                format!(
-                    "Argument for function running_difference must have numeric type.: While processing running_difference({})",
-                    columns[0].field().name(),
-                )))
+            _ => Result::Err(ErrorCode::IllegalDataType(format!(
+                "Argument for function running_difference must have numeric type.: While processing running_difference({})",
+                columns[0].field().name(),
+            ))),
         }
     }
 }

@@ -203,7 +203,7 @@ async fn init_new_cluster(
             None => {
                 return Err(anyhow::Error::new(MetaStorageError::SledError(
                     AnyError::error("cannot find last applied log id"),
-                )))
+                )));
             }
         },
     };
