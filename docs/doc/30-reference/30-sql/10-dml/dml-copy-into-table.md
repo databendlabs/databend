@@ -57,7 +57,7 @@ externalLocation ::=
 | Parameter                 	| Description                                                                 	| Required 	|
 |---------------------------	|-----------------------------------------------------------------------------	|----------	|
 | `s3://<bucket>/[<path>]`    	| External files located at the AWS S3 compatible object storage.             	| Optional 	|
-| ENDPOINT_URL              	| The bucket endpoint URL starting with "https://".                                  	| Optional 	|
+| ENDPOINT_URL              	| The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.                                  	| Optional 	|
 | ACCESS_KEY_ID             	| Your access key ID for connecting the AWS S3 compatible object storage.     	| Optional 	|
 | SECRET_ACCESS_KEY         	| Your secret access key for connecting the AWS S3 compatible object storage. 	| Optional 	|
 | REGION                    	| AWS region name. For example, us-east-1.                                    	| Optional 	|
@@ -77,7 +77,7 @@ externalLocation ::=
 | Parameter                  	| Description                                              	| Required 	|
 |----------------------------	|----------------------------------------------------------	|----------	|
 | `azblob://<container>[<path>]` 	| External files located at the Azure Blob storage.        	| Required 	|
-| ENDPOINT_URL               	| The container endpoint URL starting with "https://".     	| Optional 	|
+| ENDPOINT_URL               	| The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.    	| Optional 	|
 | ACCOUNT_NAME               	| Your account name for connecting the Azure Blob storage. 	| Optional 	|
 | ACCOUNT_KEY                	| Your account key for connecting the Azure Blob storage.  	| Optional 	|
 
