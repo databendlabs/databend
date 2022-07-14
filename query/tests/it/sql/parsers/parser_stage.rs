@@ -32,9 +32,9 @@ fn create_stage_test() -> Result<()> {
             location: "s3://load/files/".to_string(),
             credential_options: BTreeMap::from([
                 ("aws_key_id".to_string(), "1a2b3c".to_string()),
-                ("aws_secret_key".to_string(), "4x5y6z".to_string())
+                ("aws_secret_key".to_string(), "4x5y6z".to_string()),
             ]),
-          ..Default::default()
+            ..Default::default()
         }),
     )?;
 
@@ -46,9 +46,10 @@ fn create_stage_test() -> Result<()> {
             location: "s3://load/files/".to_string(),
             credential_options: BTreeMap::from([
                 ("aws_key_id".to_string(), "1a2b3c".to_string()),
-                ("aws_secret_key".to_string(), "4x5y6z".to_string())
+                ("aws_secret_key".to_string(), "4x5y6z".to_string()),
             ]),
-          ..Default::default()}),
+            ..Default::default()
+        }),
     )?;
 
     expect_parse_ok(
@@ -59,14 +60,15 @@ fn create_stage_test() -> Result<()> {
             location: "s3://load/files/".to_string(),
             credential_options: BTreeMap::from([
                 ("aws_key_id".to_string(), "1a2b3c".to_string()),
-                ("aws_secret_key".to_string(), "4x5y6z".to_string())
+                ("aws_secret_key".to_string(), "4x5y6z".to_string()),
             ]),
             file_format_options: BTreeMap::from([
                 ("format".to_string(), "CSV".to_string()),
                 ("compression".to_string(), "GZIP".to_string()),
                 ("record_delimiter".to_string(), ",".to_string()),
             ]),
-          ..Default::default()}),
+            ..Default::default()
+        }),
     )?;
 
     expect_parse_ok(

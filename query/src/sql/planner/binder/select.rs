@@ -286,7 +286,9 @@ impl<'a> Binder {
                 // Transfer Except to Anti join
                 self.bind_except(left_bind_context, right_bind_context, left_expr, right_expr)
             }
-            _ => Err(ErrorCode::UnImplement("Unsupported query type, currently, databend only support intersect distinct and except distinct")),
+            _ => Err(ErrorCode::UnImplement(
+                "Unsupported query type, currently, databend only support intersect distinct and except distinct",
+            )),
         }
     }
 

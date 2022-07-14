@@ -99,20 +99,22 @@ impl GithubDataGetter for RepoInfoTable {
         let repo = instance.repos(owner, repo).get().await?;
 
         let repo_name_array: Vec<Vec<u8>> = vec![repo.name.clone().into()];
-        let language_array: Vec<Vec<u8>> = vec![repo
-            .language
-            .as_ref()
-            .and_then(|l| l.as_str())
-            .unwrap_or("No Language")
-            .as_bytes()
-            .to_vec()];
-        let license_array: Vec<Vec<u8>> = vec![repo
-            .license
-            .as_ref()
-            .map(|l| l.key.as_str())
-            .unwrap_or("No license")
-            .as_bytes()
-            .to_vec()];
+        let language_array: Vec<Vec<u8>> = vec![
+            repo.language
+                .as_ref()
+                .and_then(|l| l.as_str())
+                .unwrap_or("No Language")
+                .as_bytes()
+                .to_vec(),
+        ];
+        let license_array: Vec<Vec<u8>> = vec![
+            repo.license
+                .as_ref()
+                .map(|l| l.key.as_str())
+                .unwrap_or("No license")
+                .as_bytes()
+                .to_vec(),
+        ];
         let star_count_array: Vec<u32> = vec![repo.stargazers_count.unwrap_or(0)];
         let forks_count_array: Vec<u32> = vec![repo.forks_count.unwrap_or(0)];
         let watchers_count_array: Vec<u32> = vec![repo.watchers_count.unwrap_or(0)];

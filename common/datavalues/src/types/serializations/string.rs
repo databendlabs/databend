@@ -122,14 +122,14 @@ impl<'a> TypeSerializer<'a> for StringSerializer<'a> {
                         return Err(ErrorCode::BadDataValueType(format!(
                             "Error parsing JSON: {}",
                             e
-                        )))
+                        )));
                     }
                 },
                 Err(e) => {
                     return Err(ErrorCode::BadDataValueType(format!(
                         "Error parsing JSON: {}",
                         e
-                    )))
+                    )));
                 }
             }
         }

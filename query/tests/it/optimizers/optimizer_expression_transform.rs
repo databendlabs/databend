@@ -26,176 +26,176 @@ async fn test_expression_transform_optimizer() -> Result<()> {
     }
 
     let tests: Vec<Test> = vec![
-            Test {
-                name: "And expression",
-                query: "select number from numbers_mt(10) where not(number>1 and number<=3)",
-                expect: "\
+        Test {
+            name: "And expression",
+            query: "select number from numbers_mt(10) where not(number>1 and number<=3)",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number <= 1) or (number > 3))\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(NOT ((number > 1) AND (number <= 3)))]]",
-            },
-            Test {
-                name: "Complex expression",
-                query: "select number from numbers_mt(10) where not(number>=5 or number<3 and to_boolean(number))",
-                expect: "\
+        },
+        Test {
+            name: "Complex expression",
+            query: "select number from numbers_mt(10) where not(number>=5 or number<3 and to_boolean(number))",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number < 5) and ((number >= 3) or (NOT to_boolean(number))))\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(NOT ((number >= 5) OR ((number < 3) AND to_boolean(number))))]]",
-            },
-            Test {
-                name: "Like and is_not_null expression",
-                query: "select * from system.databases where not (is_not_null(name) and name LIKE '%sys%')",
-                expect: "\
+        },
+        Test {
+            name: "Like and is_not_null expression",
+            query: "select * from system.databases where not (is_not_null(name) and name LIKE '%sys%')",
+            expect: "\
                 Projection: name:String\
                 \n  Filter: (is_null(name) or (name not like %sys%))\
                 \n    ReadDataSource: scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [(NOT (is_not_null(name) AND (name LIKE %sys%)))]]",
-            },
-            Test {
-                name: "Not like and is_null expression",
-                query: "select * from system.databases where not (name is null or name not like 'a%')",
-                expect: "\
+        },
+        Test {
+            name: "Not like and is_null expression",
+            query: "select * from system.databases where not (name is null or name not like 'a%')",
+            expect: "\
                 Projection: name:String\
                 \n  Filter: (is_not_null(name) and (name like a%))\
                 \n    ReadDataSource: scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [(NOT (is_null(name) OR (name NOT LIKE a%)))]]",
-            },
-            Test {
-                name: "Equal expression",
-                query: "select number from numbers_mt(10) where not(number=1) and number<5",
-                expect: "\
+        },
+        Test {
+            name: "Equal expression",
+            query: "select number from numbers_mt(10) where not(number=1) and number<5",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number <> 1) and (number < 5))\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((NOT (number = 1)) AND (number < 5))]]",
-            },
-            Test {
-                name: "Not equal expression",
-                query: "select number from numbers_mt(10) where not(number!=1) or number<5",
-                expect: "\
+        },
+        Test {
+            name: "Not equal expression",
+            query: "select number from numbers_mt(10) where not(number!=1) or number<5",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number = 1) or (number < 5))\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((NOT (number <> 1)) OR (number < 5))]]",
-            },
-            Test {
-                name: "Not expression",
-                query: "select number from numbers_mt(10) where not(NOT to_boolean(number))",
-                expect: "\
+        },
+        Test {
+            name: "Not expression",
+            query: "select number from numbers_mt(10) where not(NOT to_boolean(number))",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: to_boolean(number)\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(NOT (NOT to_boolean(number)))]]",
-            },
-            Test {
-                name: "Boolean transform",
-                query: "select number from numbers_mt(10) where number",
-                expect: "\
+        },
+        Test {
+            name: "Boolean transform",
+            query: "select number from numbers_mt(10) where number",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number != 0)\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [number]]",
-            },
-            Test {
-                name: "Boolean and truth transform",
-                query: "select number from numbers_mt(10) where not number",
-                expect: "\
+        },
+        Test {
+            name: "Boolean and truth transform",
+            query: "select number from numbers_mt(10) where not number",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number = 0)\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(NOT number)]]",
-            },
-            Test {
-                name: "Literal boolean transform",
-                query: "select number from numbers_mt(10) where false",
-                expect: "\
+        },
+        Test {
+            name: "Literal boolean transform",
+            query: "select number from numbers_mt(10) where false",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: false\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [false]]",
-            },
-            Test {
-                name: "Limit zero transform",
-                query: "select number from numbers_mt(10) where true limit 0",
-                expect: "\
+        },
+        Test {
+            name: "Limit zero transform",
+            query: "select number from numbers_mt(10) where true limit 0",
+            expect: "\
                 Limit: 0\
                 \n  Projection: number:UInt64\
                 \n    Filter: true\
                 \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [true], limit: 0]",
-            },
-            Test {
-                name: "Filter true and cond",
-                query: "SELECT number from numbers(10) where true AND number > 1",
-                expect: "\
+        },
+        Test {
+            name: "Filter true and cond",
+            query: "SELECT number from numbers(10) where true AND number > 1",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(true AND (number > 1))]]",
-            },
-            Test {
-                name: "Filter cond and true",
-                query: "SELECT number from numbers(10) where number > 1 AND true",
-                expect: "\
+        },
+        Test {
+            name: "Filter cond and true",
+            query: "SELECT number from numbers(10) where number > 1 AND true",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) AND true)]]",
-            },
-            Test {
-                name: "Filter false and cond",
-                query: "SELECT number from numbers(10) where false AND number > 1",
-                expect: "\
+        },
+        Test {
+            name: "Filter false and cond",
+            query: "SELECT number from numbers(10) where false AND number > 1",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: false\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(false AND (number > 1))]]",
-            },
-            Test {
-                name: "Filter cond and false",
-                query: "SELECT number from numbers(10) where number > 1 AND false",
-                expect: "\
+        },
+        Test {
+            name: "Filter cond and false",
+            query: "SELECT number from numbers(10) where number > 1 AND false",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: false\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) AND false)]]",
-            },
-            Test {
-                name: "Filter false or cond",
-                query: "SELECT number from numbers(10) where false OR number > 1",
-                expect: "\
+        },
+        Test {
+            name: "Filter false or cond",
+            query: "SELECT number from numbers(10) where false OR number > 1",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(false OR (number > 1))]]",
-            },
-            Test {
-                name: "Filter cond or false",
-                query: "SELECT number from numbers(10) where number > 1 OR false",
-                expect: "\
+        },
+        Test {
+            name: "Filter cond or false",
+            query: "SELECT number from numbers(10) where number > 1 OR false",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) OR false)]]",
-            },
-            Test {
-                name: "Filter true or cond",
-                query: "SELECT number from numbers(10) where true OR number > 1",
-                expect: "\
+        },
+        Test {
+            name: "Filter true or cond",
+            query: "SELECT number from numbers(10) where true OR number > 1",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: true\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(true OR (number > 1))]]",
-            },
-            Test {
-                name: "Filter cond or true",
-                query: "SELECT number from numbers(10) where number > 1 OR true",
-                expect: "\
+        },
+        Test {
+            name: "Filter cond or true",
+            query: "SELECT number from numbers(10) where number > 1 OR true",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: true\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) OR true)]]",
-            },
-            Test {
-                name: "Projection logics const",
-                query: "SELECT 1 = 1 and 2 > 1",
-                expect: "\
+        },
+        Test {
+            name: "Projection logics const",
+            query: "SELECT 1 = 1 and 2 > 1",
+            expect: "\
                 Projection: ((1 = 1) and (2 > 1)):Boolean\
                 \n  Expression: ((1 = 1) and (2 > 1)):Boolean (Before Projection)\
                 \n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
-            },
-            Test {
-                name: "Projection cond",
-                query: "select number<3 or number>5 from numbers(10);",
-                expect: "\
+        },
+        Test {
+            name: "Projection cond",
+            query: "select number<3 or number>5 from numbers(10);",
+            expect: "\
                 Projection: ((number < 3) or (number > 5)):Boolean\
                 \n  Expression: ((number < 3) or (number > 5)):Boolean (Before Projection)\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
-            },
-        ];
+        },
+    ];
 
     for test in tests {
         let ctx = crate::tests::create_query_context().await?;

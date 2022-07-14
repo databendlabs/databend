@@ -27,8 +27,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
 
-    let query =
-        "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
+    let query = "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
 
     {
         let plan = PlanParser::parse(ctx.clone(), query).await?;

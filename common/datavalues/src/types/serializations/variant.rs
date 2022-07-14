@@ -93,7 +93,7 @@ impl<'a> TypeSerializer<'a> for VariantSerializer<'a> {
                         return Err(ErrorCode::BadDataValueType(format!(
                             "Error parsing JSON: {}",
                             e
-                        )))
+                        )));
                     }
                 },
                 _ => result.push(v.as_ref().to_owned()),

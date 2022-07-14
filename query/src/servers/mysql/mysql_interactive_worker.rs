@@ -402,11 +402,10 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             .in_current_span(),
         )?;
 
-        let query_result = query_result
-            .await
-            .map_err_to_code(ErrorCode::TokioError, || {
-                "Cannot join handle from context's runtime"
-            })?;
+        let query_result = query_result.await.map_err_to_code(
+            ErrorCode::TokioError,
+            || "Cannot join handle from context's runtime",
+        )?;
         query_result.map(|data| {
             if data.is_empty() {
                 (data, "".to_string())

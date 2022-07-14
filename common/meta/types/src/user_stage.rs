@@ -202,13 +202,12 @@ impl FromStr for OnErrorMode {
             v => {
                 let num_str = v.replace("SKIP_FILE_", "");
                 let nums = num_str.parse::<u64>();
-                match nums{
-                    Ok(v) => { Ok(OnErrorMode::SkipFileNum(v)) }
-                    Err(_) => {
-                        Err(
-                            format!("Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT_STATEMENT }}", v)
-                        )
-                    }
+                match nums {
+                    Ok(v) => Ok(OnErrorMode::SkipFileNum(v)),
+                    Err(_) => Err(format!(
+                        "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT_STATEMENT }}",
+                        v
+                    )),
                 }
             }
         }

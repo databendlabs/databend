@@ -46,13 +46,14 @@ impl Evaluator {
                     .iter()
                     .map(|(expr, _)| self.run(expr))
                     .collect::<Vec<_>>();
-                assert!(cols
-                    .iter()
-                    .filter_map(|val| match val {
-                        Value::Column(col) => Some(col.len()),
-                        Value::Scalar(_) => None,
-                    })
-                    .all_equal());
+                assert!(
+                    cols.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
                 let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
                 (function.eval)(cols_ref.as_slice(), generics)
             }

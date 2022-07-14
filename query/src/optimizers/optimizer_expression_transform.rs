@@ -103,7 +103,7 @@ impl ExprTransformImpl {
                     Ok(origin.clone())
                 } else {
                     Ok(Expression::create_unary_expression("NOT", vec![
-                        origin.clone()
+                        origin.clone(),
                     ]))
                 }
             }

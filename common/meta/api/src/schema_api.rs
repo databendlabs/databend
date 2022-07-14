@@ -117,7 +117,7 @@ pub trait SchemaApi: Send + Sync {
 
     // gc dropped {table|db} which out of retention time.
     async fn gc_dropped_data(&self, req: GCDroppedDataReq)
-        -> Result<GCDroppedDataReply, MetaError>;
+    -> Result<GCDroppedDataReply, MetaError>;
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, MetaError>;
 
