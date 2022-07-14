@@ -22,6 +22,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::InputFormat;
 use common_meta_types::StageFileCompression;
+use common_storage::init_operator;
+use common_storage::StorageParams;
 use opendal::io_util::CompressAlgorithm;
 use opendal::Operator;
 use parking_lot::Mutex;
@@ -35,7 +37,7 @@ use crate::pipelines::processors::Processor;
 
 pub struct MultiFileSplitter {
     finished: bool,
-    storage_operator: Operator,
+    storage_operator: OperatorInfo,
     current_file: Option<FileSplitter>,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
@@ -45,9 +47,15 @@ pub struct MultiFileSplitter {
     compress_option: StageFileCompression,
 }
 
+#[derive(Clone)]
+pub enum OperatorInfo {
+    Op(Operator),
+    Cfg(StorageParams),
+}
+
 impl MultiFileSplitter {
     pub fn create(
-        storage_operator: Operator,
+        storage_operator: OperatorInfo,
         scan_progress: Arc<Progress>,
         output: Arc<OutputPort>,
         input_format: Arc<dyn InputFormat>,
@@ -73,7 +81,15 @@ impl MultiFileSplitter {
     }
 
     pub async fn init_file(&mut self, path: &str) -> Result<()> {
-        let object = self.storage_operator.object(&path);
+        let op = match &self.storage_operator {
+            OperatorInfo::Op(op) => op.clone(),
+            OperatorInfo::Cfg(cfg) => {
+                let op = init_operator(cfg).await?;
+                self.storage_operator = OperatorInfo::Op(op.clone());
+                op
+            }
+        };
+        let object = op.object(&path);
         let reader = object.reader().await?;
         self.current_file = Some(FileSplitter::create(
             reader,
@@ -170,7 +186,7 @@ impl Processor for MultiFileSplitter {
             }
         }
         let current = self.current_file.as_mut().unwrap();
-        current.async_process();
+        current.async_process().await?;
         Ok(())
     }
 }

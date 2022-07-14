@@ -30,6 +30,7 @@ pub use blocks_source::BlocksSource;
 pub use deserializer::Deserializer;
 pub use empty_source::EmptySource;
 pub use multi_file_splitter::MultiFileSplitter;
+pub use multi_file_splitter::OperatorInfo;
 pub use stream_source::StreamSource;
 pub use stream_source_v2::StreamSourceV2;
 pub use sync_ck_source_receiver::SyncReceiverCkSource;
