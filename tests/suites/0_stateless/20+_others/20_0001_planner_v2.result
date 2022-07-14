@@ -449,3 +449,7 @@ system	settings	level	VARCHAR
 system	settings	name	VARCHAR			
 system	settings	type	VARCHAR			
 system	settings	value	VARCHAR			
+====Correlated====
+1	NULL
+2	3
+NULL	NULL

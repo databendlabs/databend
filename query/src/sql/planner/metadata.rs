@@ -115,6 +115,14 @@ impl Metadata {
         self.tables.get(index).unwrap()
     }
 
+    pub fn tables(&self) -> &[TableEntry] {
+        self.tables.as_slice()
+    }
+
+    pub fn table_index_by_column_index(&self, column_index: IndexType) -> Option<IndexType> {
+        self.columns[column_index].table_index
+    }
+
     pub fn column(&self, index: IndexType) -> &ColumnEntry {
         self.columns.get(index).unwrap()
     }
@@ -127,7 +135,7 @@ impl Metadata {
         let mut result = vec![];
         for col in self.columns.iter() {
             match col.table_index {
-                Some(col_index) if col_index == index => {
+                Some(table_index) if table_index == index => {
                     result.push(col.clone());
                 }
                 _ => {}

@@ -400,5 +400,16 @@ select user(), currentuser(), current_user();
 -- Query has keyword
 SELECT '====WITH_KEYWORD====';
 SELECT database, table, name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;
+
+-- Correlated subquery
+SELECT '====Correlated====';
+create table t1(a int null , b int null);
+insert into t1 values(1, 2), (2, 3), (null, 1);
+create table t2(a int null, b int null);
+insert into t2 values(3, 4), (2, 3), (null, 2);
+select t1.a, (select t2.a from t2 where t1.a > 1 and t2.a > 2) from t1;
+drop table t1;
+drop table t2;
+
 set enable_planner_v2 = 0;
 

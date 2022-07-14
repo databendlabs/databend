@@ -49,14 +49,14 @@ use crate::sql::MetadataRef;
 
 pub enum UnnestResult {
     Uncorrelated,
-    Apply,
     SimpleJoin, // SemiJoin or AntiJoin
     MarkJoin { marker_index: IndexType },
+    SingleJoin,
 }
 
 /// Rewrite subquery into `Apply` operator
 pub struct SubqueryRewriter {
-    metadata: MetadataRef,
+    pub(crate) metadata: MetadataRef,
 }
 
 impl SubqueryRewriter {
@@ -225,7 +225,7 @@ impl SubqueryRewriter {
                 subquery.subquery = Box::new(self.rewrite(&subquery.subquery)?);
 
                 // Check if the subquery is a correlated subquery.
-                // If it is, we'll try to decorrelate it.
+                // If it is, we'll try to flatten it and rewrite to join.
                 // If it is not, we'll just rewrite it to join
                 let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                 let prop = rel_expr.derive_relational_prop()?;

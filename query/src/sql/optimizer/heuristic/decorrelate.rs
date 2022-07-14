@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::type_coercion::merge_types;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::binder::wrap_cast_if_needed;
@@ -22,16 +23,21 @@ use crate::sql::optimizer::heuristic::subquery_rewriter::UnnestResult;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::CrossApply;
+use crate::sql::plans::BoundColumnRef;
+use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
+use crate::sql::plans::LogicalGet;
 use crate::sql::plans::LogicalInnerJoin;
-use crate::sql::plans::Max1Row;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::Project;
 use crate::sql::plans::RelOp;
+use crate::sql::plans::RelOperator;
+use crate::sql::plans::Scalar;
+use crate::sql::plans::ScalarItem;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
+use crate::sql::ColumnBinding;
 use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 
@@ -248,17 +254,39 @@ impl SubqueryRewriter {
         is_conjunctive_predicate: bool,
     ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
-            SubqueryType::Scalar => Ok((
-                SExpr::create_binary(
-                    CrossApply {
-                        correlated_columns: subquery.outer_columns.clone(),
-                    }
-                    .into(),
-                    left.clone(),
-                    SExpr::create_unary(Max1Row.into(), *subquery.subquery.clone()),
-                ),
-                UnnestResult::Apply,
-            )),
+            SubqueryType::Scalar => {
+                let correlated_columns = subquery.outer_columns.clone();
+                let flatten_plan =
+                    self.flatten_subquery(&subquery.subquery, &correlated_columns)?;
+                // Construct single join
+                let mut left_conditions = Vec::with_capacity(correlated_columns.len());
+                let mut right_conditions = Vec::with_capacity(correlated_columns.len());
+                let metadata = self.metadata.read();
+                for (idx, correlated_column) in correlated_columns.iter().enumerate() {
+                    let column_entry = metadata.column(correlated_column.clone());
+                    let column = Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: format!("subquery_{}", idx),
+                            index: correlated_column.clone(),
+                            data_type: Box::from(column_entry.data_type.clone()),
+                            visible_in_unqualified_wildcard: false,
+                        },
+                    });
+                    left_conditions.push(column.clone());
+                    right_conditions.push(column);
+                }
+                let join_plan = LogicalInnerJoin {
+                    left_conditions,
+                    right_conditions,
+                    other_conditions: vec![],
+                    join_type: JoinType::Single,
+                    marker_index: None,
+                };
+                let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
+                Ok((s_expr, UnnestResult::SingleJoin))
+            }
             SubqueryType::Exists | SubqueryType::NotExists => {
                 if is_conjunctive_predicate {
                     if let Some(result) = self.try_decorrelate_simple_subquery(left, subquery)? {
@@ -272,5 +300,103 @@ impl SubqueryRewriter {
             }
             _ => unreachable!(),
         }
+    }
+
+    fn flatten_subquery(&self, plan: &SExpr, correlated_columns: &ColumnSet) -> Result<SExpr> {
+        let rel_expr = RelExpr::with_s_expr(plan);
+        let prop = rel_expr.derive_relational_prop()?;
+        if prop.outer_columns.is_empty() {
+            dbg!(correlated_columns);
+            // Construct a LogicalGet plan by correlated columns.
+            // Wrap the plan with distinct to eliminate duplicates rows
+            // Finally generate a cross join, so we finish flattening the subquery.
+            let table_index = self
+                .metadata
+                .read()
+                .table_index_by_column_index(correlated_columns.len() - 1)
+                .unwrap();
+            let logical_get = SExpr::create_leaf(
+                LogicalGet {
+                    table_index,
+                    columns: correlated_columns.clone(),
+                }
+                .into(),
+            );
+            // Todo(xudong963): Wrap logical get with distinct to eliminate duplicates rows.
+            let cross_join = LogicalInnerJoin {
+                left_conditions: vec![],
+                right_conditions: vec![],
+                other_conditions: vec![],
+                join_type: JoinType::Cross,
+                marker_index: None,
+            }
+            .into();
+            return Ok(SExpr::create_binary(cross_join, logical_get, plan.clone()));
+        }
+
+        match plan.plan() {
+            RelOperator::Project(project) => {
+                let flatten_plan = self
+                    .flatten_subquery(plan.child(0)?, correlated_columns)?
+                    .clone();
+                // Add correlated columns to the project list.
+                let mut columns = project.columns.clone();
+                columns.extend(correlated_columns.iter().cloned());
+                return Ok(SExpr::create_unary(
+                    Project { columns }.into(),
+                    flatten_plan,
+                ));
+            }
+            RelOperator::EvalScalar(eval_scalar) => {
+                let flatten_plan = self
+                    .flatten_subquery(plan.child(0)?, correlated_columns)?
+                    .clone();
+                // Add correlated columns to the  scalar item list.
+                let mut items = eval_scalar.items.clone();
+                let metadata = self.metadata.read();
+                for (idx, correlated_column) in correlated_columns.iter().enumerate() {
+                    let column_entry = metadata.column(correlated_column.clone());
+                    let column_binding = ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        column_name: format!("subquery_{}", idx),
+                        index: correlated_column.clone(),
+                        data_type: Box::from(column_entry.data_type.clone()),
+                        visible_in_unqualified_wildcard: false,
+                    };
+                    items.push(ScalarItem {
+                        scalar: Scalar::BoundColumnRef(BoundColumnRef {
+                            column: column_binding,
+                        }),
+                        index: correlated_column.clone(),
+                    });
+                }
+                return Ok(SExpr::create_unary(
+                    EvalScalar { items }.into(),
+                    flatten_plan,
+                ));
+            }
+            RelOperator::Filter(_) => {
+                let flatten_plan = self
+                    .flatten_subquery(plan.child(0)?, correlated_columns)?
+                    .clone();
+                return Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan));
+            }
+            RelOperator::LogicalInnerJoin(_) => {}
+            RelOperator::PhysicalHashJoin(_) => {}
+            RelOperator::Aggregate(_) => {}
+            RelOperator::Sort(_) => {}
+            RelOperator::Limit(_) => {}
+            RelOperator::Max1Row(_)
+            | RelOperator::Pattern(_)
+            | RelOperator::LogicalGet(_)
+            | RelOperator::PhysicalScan(_)
+            | RelOperator::CrossApply(_) => {
+                return Err(ErrorCode::LogicalError(
+                    "Invalid plan type for flattening subquery",
+                ));
+            }
+        }
+        Ok(plan.clone())
     }
 }

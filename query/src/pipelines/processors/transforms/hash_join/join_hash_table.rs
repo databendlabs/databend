@@ -433,6 +433,7 @@ impl JoinHashTable {
 
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
+        dbg!(self.hash_join_desc.join_type.clone());
         let func_ctx = self.ctx.try_get_function_context()?;
         let build_cols = self
             .hash_join_desc
@@ -445,9 +446,12 @@ impl HashJoinState for JoinHashTable {
 
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match self.hash_join_desc.join_type {
-            JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left | Mark => {
-                self.probe_join(input, probe_state)
-            }
+            JoinType::Inner
+            | JoinType::Semi
+            | JoinType::Anti
+            | JoinType::Left
+            | Mark
+            | JoinType::Single => self.probe_join(input, probe_state),
             JoinType::Cross => self.probe_cross_join(input, probe_state),
             _ => unimplemented!("{} is unimplemented", self.hash_join_desc.join_type),
         }
