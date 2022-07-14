@@ -28,7 +28,7 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use crate::sessions::SessionType;
-use crate::storages::stage::StageSource;
+use crate::storages::stage::StageSourceHelper;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {
@@ -67,7 +67,7 @@ pub async fn upload_to_stage(
         .await
         .map_err(InternalServerError)?;
 
-    let op = StageSource::get_op(&context, &stage)
+    let op = StageSourceHelper::get_op(&context, &stage)
         .await
         .map_err(InternalServerError)?;
 

@@ -28,7 +28,7 @@ use futures::TryStreamExt;
 use regex::Regex;
 
 use crate::sessions::QueryContext;
-use crate::storages::stage::StageSource;
+use crate::storages::stage::StageSourceHelper;
 
 pub async fn validate_grant_object_exists(
     ctx: &Arc<QueryContext>,
@@ -90,7 +90,7 @@ pub async fn list_files_from_dal(
     path: &str,
     pattern: &str,
 ) -> Result<Vec<StageFile>> {
-    let op = StageSource::get_op(ctx, stage).await?;
+    let op = StageSourceHelper::get_op(ctx, stage).await?;
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.

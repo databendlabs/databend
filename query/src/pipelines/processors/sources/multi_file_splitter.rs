@@ -89,7 +89,7 @@ impl MultiFileSplitter {
                 op
             }
         };
-        let object = op.object(&path);
+        let object = op.object(path);
         let reader = object.reader().await?;
         self.current_file = Some(FileSplitter::create(
             reader,
