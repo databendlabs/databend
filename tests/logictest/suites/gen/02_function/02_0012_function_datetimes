@@ -75,6 +75,9 @@ skipif clickhouse
 statement query T 
 select  to_date('0999-12-31'); 
 
+----  
+1000-01-01
+
 skipif clickhouse
 statement query T 
 select  to_datetime('1000-01-01 00:00:00');
@@ -96,6 +99,9 @@ select  to_datetime('10000-01-01 00:00:00');
 skipif clickhouse
 statement query T 
 select  to_datetime('0999-12-31 23:59:59'); 
+
+----  
+1000-01-01 00:00:00.000000
 
 skipif clickhouse
 statement query B label(http)
