@@ -50,7 +50,8 @@ externalLocation ::=
         ACCESS_KEY_ID = '<your-access-key-ID>'
         SECRET_ACCESS_KEY = '<your-secret-access-key>'
         REGION = '<region-name>'
-        ENABLE_VIRTUAL_HOST_STYLE = true|false)
+        ENABLE_VIRTUAL_HOST_STYLE = true|false
+  )
 ```
 
 | Parameter                 	| Description                                                                 	| Required 	|
