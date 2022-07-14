@@ -23,6 +23,7 @@ use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
+use common_datavalues::combine_validities_2;
 use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanType;
 use common_datavalues::Column;
@@ -346,6 +347,23 @@ impl JoinHashTable {
             .map(|expr| Ok(expr.eval(&func_ctx, input)?.vector().clone()))
             .collect::<Result<Vec<ColumnRef>>>()?;
         let probe_keys = probe_keys.iter().collect::<Vec<&ColumnRef>>();
+
+        if probe_keys.iter().any(|c| c.is_nullable() || c.is_null()) {
+            let mut valids = None;
+            for col in probe_keys.iter() {
+                let (is_all_null, tmp_valids) = col.validity();
+                if is_all_null {
+                    let mut m = MutableBitmap::with_capacity(input.num_rows());
+                    m.extend_constant(input.num_rows(), false);
+                    valids = Some(m.into());
+                    break;
+                } else {
+                    valids = combine_validities_2(valids, tmp_valids.cloned());
+                }
+            }
+            probe_state.valids = valids;
+        }
+
         match &*self.hash_table.read() {
             HashTable::SerializerHashTable(table) => {
                 let keys_state = table
