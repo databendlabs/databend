@@ -31,6 +31,7 @@ use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 
 use crate::sql::binder::Binder;
+use crate::sql::optimizer::optimize;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 use crate::sql::plans::ValidationMode;
@@ -336,6 +337,8 @@ impl<'a> Binder {
                 ))
             }
         };
+        // Make sure query has been optimized.
+        let query = optimize(self.ctx.clone(), query)?;
 
         // Validation mode.
         let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
@@ -381,6 +384,8 @@ impl<'a> Binder {
                 ))
             }
         };
+        // Make sure query has been optimized.
+        let query = optimize(self.ctx.clone(), query)?;
 
         // Validation mode.
         let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
@@ -416,6 +421,8 @@ impl<'a> Binder {
         let query = self
             .bind_statement(bind_context, &Statement::Query(Box::new(src_query.clone())))
             .await?;
+        // Make sure query has been optimized.
+        let query = optimize(self.ctx.clone(), query)?;
 
         // Validation mode.
         let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
@@ -445,6 +452,8 @@ impl<'a> Binder {
         let query = self
             .bind_statement(bind_context, &Statement::Query(Box::new(src_query.clone())))
             .await?;
+        // Make sure query has been optimized.
+        let query = optimize(self.ctx.clone(), query)?;
 
         // Validation mode.
         let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())

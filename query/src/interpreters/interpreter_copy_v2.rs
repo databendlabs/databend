@@ -191,7 +191,7 @@ impl CopyInterpreterV2 {
             .collect();
         let data_schema = DataSchemaRefExt::create(fields);
         let stage_table_info = StageTableInfo {
-            schema: data_schema,
+            schema: data_schema.clone(),
             stage_info: stage.clone(),
             path: "".to_string(),
             files: vec![],
@@ -211,12 +211,7 @@ impl CopyInterpreterV2 {
             )
             .await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            // TODO(xuanwo): Is this correct?
-            Arc::new(DataSchema::new(vec![])),
-            None,
-            vec![],
-        )))
+        Ok(Box::pin(DataBlockStream::create(data_schema, None, vec![])))
     }
 }
 
