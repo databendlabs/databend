@@ -222,8 +222,8 @@ This example reads data from a CSV file and inserts them into a table:
 COPY INTO mytable
     FROM 'azblob://mybucket/data.csv'
     CONNECTION = (
-        ENDPOINT_URL = 'https://<endpoint-URL>'
-        ACCOUNT_NAME = '<string>'
-        ACCOUNT_KEY = '<string>'
+        ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net'
+        ACCOUNT_NAME = '<account_name>'
+        ACCOUNT_KEY = '<account_key>'
     )
 ```
