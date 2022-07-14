@@ -53,6 +53,7 @@ pub use schema_api::SchemaApi;
 pub use schema_api_keys::DatabaseIdGen;
 pub use schema_api_keys::TableIdGen;
 pub(crate) use schema_api_keys::PREFIX_ID_GEN;
+pub use schema_api_keys::PREFIX_TABLE_BY_ID;
 pub use schema_api_test_suite::SchemaApiTestSuite;
 pub use share_api::ShareApi;
 pub(crate) use share_api_impl::get_share_account_meta_or_err;
