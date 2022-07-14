@@ -40,8 +40,8 @@ pub fn serialize_data_blocks(
         version: Version::V2,
     };
     let batches = blocks
-        .iter()
-        .map(|b| Chunk::try_from(b.clone()))
+        .into_iter()
+        .map(|b| Chunk::try_from(b))
         .collect::<Result<Vec<_>>>()?;
 
     let encodings: Vec<Vec<_>> = arrow_schema
@@ -54,7 +54,7 @@ pub fn serialize_data_blocks(
         .collect();
 
     let row_groups = RowGroupIterator::try_new(
-        batches.iter().map(|c| Ok(c.clone())),
+        batches.into_iter().map(Ok),
         &arrow_schema,
         row_group_write_options,
         encodings,
