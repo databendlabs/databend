@@ -26,6 +26,7 @@ use common_datavalues::Series;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashTableKeyable;
+use common_hashtable::KeyValueEntity;
 
 use super::JoinHashTable;
 use super::ProbeState;
@@ -50,12 +51,13 @@ impl JoinHashTable {
     {
         let probe_indexs = &mut probe_state.probe_indexs;
         let build_indexs = &mut probe_state.build_indexs;
+        let valids = &probe_state.valids;
 
         let mut results: Vec<DataBlock> = vec![];
         match self.hash_join_desc.join_type {
             JoinType::Inner => {
                 for (i, key) in keys_iter.enumerate() {
-                    let probe_result_ptr = hash_table.find_key(&key);
+                    let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
                     match probe_result_ptr {
                         Some(v) => {
                             let probe_result_ptrs = v.get_value();
@@ -143,7 +145,12 @@ impl JoinHashTable {
                 if self.hash_join_desc.other_predicate.is_some() {
                     self.mark_join_with_other_condition(input, probe_state)?;
                 } else {
-                    self.mark_join_without_other_condition(hash_table, keys_iter, input)?;
+                    self.mark_join_without_other_condition(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                    )?;
                 }
             }
             _ => unreachable!(),
@@ -154,6 +161,7 @@ impl JoinHashTable {
     fn mark_join_without_other_condition<Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
+        probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
     ) -> Result<()>
@@ -171,8 +179,9 @@ impl JoinHashTable {
                 *has_null = true;
             }
         }
-        for key in keys_iter {
-            let probe_result_ptr = hash_table.find_key(&key);
+        let valids = &probe_state.valids;
+        for (i, key) in keys_iter.enumerate() {
+            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
             if let Some(v) = probe_result_ptr {
                 let probe_result_ptrs = v.get_value();
                 for ptr in probe_result_ptrs {
@@ -241,9 +250,10 @@ impl JoinHashTable {
         IT: Iterator<Item = Key> + TrustedLen,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
+        let valids = &probe_state.valids;
 
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = hash_table.find_key(&key);
+            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
 
             match (probe_result_ptr, SEMI) {
                 (Some(_), true) | (None, false) => {
@@ -268,6 +278,7 @@ impl JoinHashTable {
     {
         let probe_indexs = &mut probe_state.probe_indexs;
         let build_indexs = &mut probe_state.build_indexs;
+        let valids = &probe_state.valids;
         let row_state = &mut probe_state.row_state;
 
         // For semi join, it defaults to all
@@ -276,7 +287,7 @@ impl JoinHashTable {
         let mut dummys = 0;
 
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = hash_table.find_key(&key);
+            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
 
             match (probe_result_ptr, SEMI) {
                 (Some(v), _) => {
@@ -349,6 +360,7 @@ impl JoinHashTable {
     {
         let probe_indexs = &mut probe_state.probe_indexs;
         let build_indexs = &mut probe_state.build_indexs;
+        let valids = &probe_state.valids;
 
         let row_state = &mut probe_state.row_state;
 
@@ -358,7 +370,7 @@ impl JoinHashTable {
 
         let mut validity = MutableBitmap::new();
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = hash_table.find_key(&key);
+            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
 
             match probe_result_ptr {
                 Some(v) => {
@@ -553,5 +565,18 @@ impl JoinHashTable {
             let col = NullableColumn::wrap_inner(column.clone(), Some(validity.clone()));
             Ok(col)
         }
+    }
+
+    #[inline]
+    fn probe_key<Key: HashTableKeyable>(
+        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        key: Key,
+        valids: &Option<Bitmap>,
+        i: usize,
+    ) -> Option<*mut KeyValueEntity<Key, Vec<RowPtr>>> {
+        if valids.as_ref().map(|v| v.get_bit(i)).unwrap_or(true) {
+            return hash_table.find_key(&key);
+        }
+        None
     }
 }
