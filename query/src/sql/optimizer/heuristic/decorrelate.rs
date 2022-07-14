@@ -23,12 +23,19 @@ use crate::sql::optimizer::heuristic::subquery_rewriter::UnnestResult;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::Aggregate;
+use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
+use crate::sql::plans::CastExpr;
+use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Filter;
+use crate::sql::plans::FunctionCall;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::LogicalInnerJoin;
+use crate::sql::plans::OrExpr;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::Project;
 use crate::sql::plans::RelOp;
@@ -256,26 +263,36 @@ impl SubqueryRewriter {
         match subquery.typ {
             SubqueryType::Scalar => {
                 let correlated_columns = subquery.outer_columns.clone();
-                let flatten_plan =
-                    self.flatten_subquery(&subquery.subquery, &correlated_columns)?;
+                let flatten_plan = self.flatten(&subquery.subquery, &correlated_columns)?;
                 // Construct single join
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
                 let metadata = self.metadata.read();
-                for (idx, correlated_column) in correlated_columns.iter().enumerate() {
+                for correlated_column in correlated_columns.iter() {
                     let column_entry = metadata.column(correlated_column.clone());
-                    let column = Scalar::BoundColumnRef(BoundColumnRef {
+                    let left_column = Scalar::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
-                            column_name: format!("subquery_{}", idx),
+                            column_name: format!("subquery_{}", correlated_column),
                             index: correlated_column.clone(),
                             data_type: Box::from(column_entry.data_type.clone()),
                             visible_in_unqualified_wildcard: false,
                         },
                     });
-                    left_conditions.push(column.clone());
-                    right_conditions.push(column);
+                    let derive_column = self.derived_columns.get(&correlated_column).unwrap();
+                    let right_column = Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: format!("subquery_{}", derive_column),
+                            index: derive_column.clone(),
+                            data_type: Box::from(column_entry.data_type.clone()),
+                            visible_in_unqualified_wildcard: false,
+                        },
+                    });
+                    left_conditions.push(left_column.clone());
+                    right_conditions.push(right_column);
                 }
                 let join_plan = LogicalInnerJoin {
                     left_conditions,
@@ -302,23 +319,33 @@ impl SubqueryRewriter {
         }
     }
 
-    fn flatten_subquery(&self, plan: &SExpr, correlated_columns: &ColumnSet) -> Result<SExpr> {
+    fn flatten(&mut self, plan: &SExpr, correlated_columns: &ColumnSet) -> Result<SExpr> {
         let rel_expr = RelExpr::with_s_expr(plan);
         let prop = rel_expr.derive_relational_prop()?;
         if prop.outer_columns.is_empty() {
-            dbg!(correlated_columns);
             // Construct a LogicalGet plan by correlated columns.
             // Wrap the plan with distinct to eliminate duplicates rows
             // Finally generate a cross join, so we finish flattening the subquery.
-            let table_index = self
-                .metadata
-                .read()
+            let mut metadata = self.metadata.write();
+            let table_index = metadata
                 .table_index_by_column_index(correlated_columns.len() - 1)
                 .unwrap();
+            for correlated_column in correlated_columns.iter() {
+                let column_entry = metadata.column(correlated_column.clone()).clone();
+                self.derived_columns.insert(
+                    correlated_column.clone(),
+                    metadata.add_column(
+                        column_entry.name.clone(),
+                        column_entry.data_type.clone(),
+                        None,
+                    ),
+                );
+            }
+            dbg!(self.derived_columns.clone());
             let logical_get = SExpr::create_leaf(
                 LogicalGet {
                     table_index,
-                    columns: correlated_columns.clone(),
+                    columns: self.derived_columns.values().cloned().collect(),
                 }
                 .into(),
             );
@@ -336,31 +363,27 @@ impl SubqueryRewriter {
 
         match plan.plan() {
             RelOperator::Project(project) => {
-                let flatten_plan = self
-                    .flatten_subquery(plan.child(0)?, correlated_columns)?
-                    .clone();
+                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
                 // Add correlated columns to the project list.
                 let mut columns = project.columns.clone();
-                columns.extend(correlated_columns.iter().cloned());
+                columns.extend(self.derived_columns.values());
                 return Ok(SExpr::create_unary(
                     Project { columns }.into(),
                     flatten_plan,
                 ));
             }
             RelOperator::EvalScalar(eval_scalar) => {
-                let flatten_plan = self
-                    .flatten_subquery(plan.child(0)?, correlated_columns)?
-                    .clone();
+                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
                 // Add correlated columns to the  scalar item list.
                 let mut items = eval_scalar.items.clone();
                 let metadata = self.metadata.read();
-                for (idx, correlated_column) in correlated_columns.iter().enumerate() {
-                    let column_entry = metadata.column(correlated_column.clone());
+                for  derived_column in self.derived_columns.values() {
+                    let column_entry = metadata.column(derived_column.clone());
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
-                        column_name: format!("subquery_{}", idx),
-                        index: correlated_column.clone(),
+                        column_name: format!("subquery_{}", derived_column),
+                        index: derived_column.clone(),
                         data_type: Box::from(column_entry.data_type.clone()),
                         visible_in_unqualified_wildcard: false,
                     };
@@ -368,7 +391,7 @@ impl SubqueryRewriter {
                         scalar: Scalar::BoundColumnRef(BoundColumnRef {
                             column: column_binding,
                         }),
-                        index: correlated_column.clone(),
+                        index: derived_column.clone(),
                     });
                 }
                 return Ok(SExpr::create_unary(
@@ -376,21 +399,75 @@ impl SubqueryRewriter {
                     flatten_plan,
                 ));
             }
-            RelOperator::Filter(_) => {
-                let flatten_plan = self
-                    .flatten_subquery(plan.child(0)?, correlated_columns)?
-                    .clone();
+            RelOperator::Filter(filter) => {
+                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
+                let mut predicates = Vec::with_capacity(filter.predicates.len());
+                for predicate in filter.predicates.iter() {
+                    predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
+                }
+                let filter_plan = Filter {
+                    predicates,
+                    is_having: filter.is_having,
+                }.into();
+                return Ok(SExpr::create_unary(filter_plan, flatten_plan));
+            }
+            RelOperator::LogicalInnerJoin(join) => {
+                let left_flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
+                let right_flatten_plan = self.flatten(plan.child(1)?, correlated_columns)?;
+                return Ok(SExpr::create_binary(
+                    LogicalInnerJoin {
+                        left_conditions: join.left_conditions.clone(),
+                        right_conditions: join.right_conditions.clone(),
+                        other_conditions: join.other_conditions.clone(),
+                        join_type: join.join_type.clone(),
+                        marker_index: join.marker_index,
+                    }
+                    .into(),
+                    left_flatten_plan,
+                    right_flatten_plan,
+                ));
+            }
+            RelOperator::Aggregate(aggregate) => {
+                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
+                let mut group_items = aggregate.group_items.clone();
+                let metadata = self.metadata.read();
+                for (idx, derived_column) in self.derived_columns.values().enumerate() {
+                    let column_entry = metadata.column(derived_column.clone());
+                    let column_binding = ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        column_name: format!("subquery_{}", idx),
+                        index: derived_column.clone(),
+                        data_type: Box::from(column_entry.data_type.clone()),
+                        visible_in_unqualified_wildcard: false,
+                    };
+                    group_items.push(ScalarItem {
+                        scalar: Scalar::BoundColumnRef(BoundColumnRef {
+                            column: column_binding,
+                        }),
+                        index: derived_column.clone(),
+                    });
+                }
+                return Ok(SExpr::create_unary(
+                    Aggregate {
+                        group_items,
+                        aggregate_functions: aggregate.aggregate_functions.clone(),
+                        from_distinct: aggregate.from_distinct,
+                    }
+                    .into(),
+                    flatten_plan,
+                ));
+            }
+            RelOperator::Sort(_) => {}
+            RelOperator::Limit(_) => {
+                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
                 return Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan));
             }
-            RelOperator::LogicalInnerJoin(_) => {}
-            RelOperator::PhysicalHashJoin(_) => {}
-            RelOperator::Aggregate(_) => {}
-            RelOperator::Sort(_) => {}
-            RelOperator::Limit(_) => {}
             RelOperator::Max1Row(_)
             | RelOperator::Pattern(_)
             | RelOperator::LogicalGet(_)
             | RelOperator::PhysicalScan(_)
+            | RelOperator::PhysicalHashJoin(_)
             | RelOperator::CrossApply(_) => {
                 return Err(ErrorCode::LogicalError(
                     "Invalid plan type for flattening subquery",
@@ -398,5 +475,99 @@ impl SubqueryRewriter {
             }
         }
         Ok(plan.clone())
+    }
+
+    fn flatten_scalar(
+        &mut self,
+        scalar: &Scalar,
+        correlated_columns: &ColumnSet,
+    ) -> Result<Scalar> {
+        match scalar {
+            Scalar::BoundColumnRef(bound_column) => {
+                let column_binding = bound_column.column.clone();
+                if correlated_columns.contains(&column_binding.index) {
+                    let index = self.derived_columns.get(&column_binding.index).unwrap();
+                    return Ok(Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: format!("subquery_{}", index),
+                            index: index.clone(),
+                            data_type: column_binding.data_type.clone(),
+                            visible_in_unqualified_wildcard: column_binding
+                                .visible_in_unqualified_wildcard
+                                .clone(),
+                        },
+                    }));
+                }
+                Ok(scalar.clone())
+            }
+            Scalar::ConstantExpr(_) => Ok(scalar.clone()),
+            Scalar::AndExpr(and_expr) => {
+                let left = self.flatten_scalar(&and_expr.left, correlated_columns)?;
+                let right = self.flatten_scalar(&and_expr.right, correlated_columns)?;
+                Ok(Scalar::AndExpr(AndExpr {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    return_type: and_expr.return_type.clone(),
+                }))
+            }
+            Scalar::OrExpr(or_expr) => {
+                let left = self.flatten_scalar(&or_expr.left, correlated_columns)?;
+                let right = self.flatten_scalar(&or_expr.right, correlated_columns)?;
+                Ok(Scalar::OrExpr(OrExpr {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    return_type: or_expr.return_type.clone(),
+                }))
+            }
+            Scalar::ComparisonExpr(comparison_expr) => {
+                let left = self.flatten_scalar(&comparison_expr.left, correlated_columns)?;
+                let right = self.flatten_scalar(&comparison_expr.right, correlated_columns)?;
+                Ok(Scalar::ComparisonExpr(ComparisonExpr {
+                    op: comparison_expr.op.clone(),
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    return_type: comparison_expr.return_type.clone(),
+                }))
+            }
+            Scalar::AggregateFunction(agg) => {
+                let mut args = Vec::with_capacity(agg.args.len());
+                for arg in &agg.args {
+                    args.push(self.flatten_scalar(arg, correlated_columns)?);
+                }
+                Ok(Scalar::AggregateFunction(AggregateFunction {
+                    display_name: agg.display_name.clone(),
+                    func_name: agg.func_name.clone(),
+                    distinct: agg.distinct,
+                    params: agg.params.clone(),
+                    args,
+                    return_type: agg.return_type.clone(),
+                }))
+            }
+            Scalar::FunctionCall(fun_call) => {
+                let mut arguments = Vec::with_capacity(fun_call.arguments.len());
+                for arg in &fun_call.arguments {
+                    arguments.push(self.flatten_scalar(arg, correlated_columns)?);
+                }
+                Ok(Scalar::FunctionCall(FunctionCall {
+                    arguments,
+                    func_name: fun_call.func_name.clone(),
+                    arg_types: fun_call.arg_types.clone(),
+                    return_type: fun_call.return_type.clone(),
+                }))
+            }
+            Scalar::CastExpr(cast_expr) => {
+                let scalar = self.flatten_scalar(&cast_expr.argument, correlated_columns)?;
+                Ok(Scalar::CastExpr(CastExpr {
+                    argument: Box::new(scalar),
+                    from_type: cast_expr.from_type.clone(),
+                    target_type: cast_expr.target_type.clone(),
+                }))
+            }
+            _ => Err(ErrorCode::LogicalError(
+                "Invalid scalar for flattening subquery",
+            )),
+        }
     }
 }

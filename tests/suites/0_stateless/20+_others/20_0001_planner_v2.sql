@@ -408,6 +408,7 @@ insert into t1 values(1, 2), (2, 3), (null, 1);
 create table t2(a int null, b int null);
 insert into t2 values(3, 4), (2, 3), (null, 2);
 select t1.a, (select t2.a from t2 where t1.a > 1 and t2.a > 2) from t1;
+select t1.a from t1 where t1.a > (select t2.a from t2 where t1.a = t2.a );
 drop table t1;
 drop table t2;
 

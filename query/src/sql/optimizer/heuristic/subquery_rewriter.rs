@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_datavalues::BooleanType;
 use common_datavalues::DataValue;
 use common_datavalues::NullableType;
@@ -57,11 +59,15 @@ pub enum UnnestResult {
 /// Rewrite subquery into `Apply` operator
 pub struct SubqueryRewriter {
     pub(crate) metadata: MetadataRef,
+    pub(crate) derived_columns: HashMap<IndexType, IndexType>,
 }
 
 impl SubqueryRewriter {
     pub fn new(metadata: MetadataRef) -> Self {
-        Self { metadata }
+        Self {
+            metadata,
+            derived_columns: Default::default(),
+        }
     }
 
     pub fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
