@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This crate defines meta data types used by meta-client application, e.g. Schema, User, Share etc.
-//! Such as Database, Table and User etc.
-//!
-//! Types in this crate will not be used directly by databend-meta.
-//! But instead, they are used by the caller of meta-client, e.g, databend-query.
+#[allow(clippy::module_inception)]
+mod share;
 
-pub mod schema;
-// pub mod user;
-pub mod share;
+pub use share::CreateShareReply;
+pub use share::CreateShareReq;
+pub use share::DropShareReply;
+pub use share::DropShareReq;
+pub use share::ShareGrantEntry;
+pub use share::ShareGrantObject;
+pub use share::ShareGrantObjectPrivilege;
+pub use share::ShareId;
+pub use share::ShareIdent;
+pub use share::ShareInfo;
+pub use share::ShareMeta;
+pub use share::ShareNameIdent;

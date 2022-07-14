@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -21,9 +22,11 @@ use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::share;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_protos::pb;
+use enumflags2::BitFlags;
 use maplit::btreemap;
 
 fn s(ss: impl ToString) -> String {
@@ -46,6 +49,33 @@ fn new_db_info() -> mt::DatabaseInfo {
             comment: "foo bar".to_string(),
             drop_on: None,
         },
+    }
+}
+
+fn new_share_meta() -> share::ShareMeta {
+    let db_entry = share::ShareGrantEntry::new(
+        share::ShareGrantObject::Database(1),
+        BitFlags::<share::ShareGrantObjectPrivilege, u64>::from_flag(
+            share::ShareGrantObjectPrivilege::Usage,
+        ),
+    );
+    let mut entries = BTreeMap::new();
+    for entry in vec![share::ShareGrantEntry::new(
+        share::ShareGrantObject::Table(19),
+        BitFlags::<share::ShareGrantObjectPrivilege, u64>::from_flag(
+            share::ShareGrantObjectPrivilege::Select,
+        ),
+    )] {
+        entries.insert(entry.to_string().clone(), entry);
+    }
+
+    share::ShareMeta {
+        database: Some(db_entry),
+        entries,
+        accounts: vec![s("a"), s("b")],
+        comment: Some(s("comment")),
+        share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+        update_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
     }
 }
 
@@ -140,13 +170,13 @@ fn test_pb_from_to() -> anyhow::Result<()> {
 fn test_incompatible() -> anyhow::Result<()> {
     let db_info = new_db_info();
     let mut p = db_info.to_pb()?;
-    p.ver = 2;
-    p.min_compatible = 2;
+    p.ver = 3;
+    p.min_compatible = 3;
 
     let res = mt::DatabaseInfo::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("executable ver=1 is smaller than the message min compatible ver: 2")
+            reason: s("executable ver=2 is smaller than the message min compatible ver: 3")
         },
         res.unwrap_err()
     );
@@ -190,6 +220,17 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("{:?}", buf);
+    }
+
+    // ShareMeta
+    {
+        let tbl = new_share_meta();
+
+        let p = tbl.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("share:{:?}", buf);
     }
 
     Ok(())
@@ -343,6 +384,22 @@ fn test_load_old() -> anyhow::Result<()> {
                 statistics: Default::default(),
             },
         };
+        assert_eq!(want, got);
+    }
+
+    {
+        let share_meta_v2: Vec<u8> = vec![
+            10, 18, 10, 8, 8, 1, 160, 6, 2, 168, 6, 1, 16, 1, 160, 6, 2, 168, 6, 1, 18, 18, 10, 8,
+            16, 19, 160, 6, 2, 168, 6, 1, 16, 4, 160, 6, 2, 168, 6, 1, 26, 1, 97, 26, 1, 98, 34, 7,
+            99, 111, 109, 109, 101, 110, 116, 42, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32,
+            49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 50, 23, 50, 48, 49, 52, 45, 49, 49, 45,
+            50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
+        ];
+        let p: pb::ShareMeta =
+            common_protos::prost::Message::decode(share_meta_v2.as_slice()).map_err(print_err)?;
+
+        let got = share::ShareMeta::from_pb(p).map_err(print_err)?;
+        let want = new_share_meta();
         assert_eq!(want, got);
     }
 

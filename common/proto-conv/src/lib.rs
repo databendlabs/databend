@@ -22,6 +22,7 @@ mod config_from_to_protobuf_impl;
 mod data_from_to_protobuf_impl;
 mod database_from_to_protobuf_impl;
 mod from_to_protobuf;
+mod share_from_to_protobuf_impl;
 mod table_from_to_protobuf_impl;
 mod user_from_to_protobuf_impl;
 mod util;
