@@ -343,6 +343,11 @@ impl InputFormat for CsvInputFormat {
         state.memory = buf;
     }
 
+    fn take_buf(&self, state: &mut Box<dyn InputState>) -> Vec<u8> {
+        let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
+        std::mem::take(&mut state.memory)
+    }
+
     fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
         if self.skip_rows > 0 {
             let mut index = 0;

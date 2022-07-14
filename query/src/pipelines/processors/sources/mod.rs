@@ -16,11 +16,14 @@ mod async_source;
 mod blocks_source;
 mod deserializer;
 mod empty_source;
+mod file_splitter;
+mod multi_file_splitter;
 mod stream_source;
 mod stream_source_v2;
 mod sync_ck_source_receiver;
 mod sync_source;
 mod sync_source_receiver;
+
 pub use async_source::AsyncSource;
 pub use async_source::AsyncSourcer;
 pub use blocks_source::BlocksSource;
