@@ -159,6 +159,7 @@ impl CopyInterpreterV2 {
     async fn execute_copy_into_stage(
         &self,
         stage: &UserStageInfo,
+        path: &str,
         query: &Plan,
     ) -> Result<SendableDataBlockStream> {
         let (s_expr, metadata, bind_context) = match query {
@@ -193,7 +194,7 @@ impl CopyInterpreterV2 {
         let stage_table_info = StageTableInfo {
             schema: data_schema.clone(),
             stage_info: stage.clone(),
-            path: "".to_string(),
+            path: path.to_string(),
             files: vec![],
         };
 
@@ -280,9 +281,9 @@ impl Interpreter for CopyInterpreterV2 {
                     vec![],
                 )))
             }
-            CopyPlanV2::IntoStage { stage, from, .. } => {
-                self.execute_copy_into_stage(stage, from).await
-            }
+            CopyPlanV2::IntoStage {
+                stage, from, path, ..
+            } => self.execute_copy_into_stage(stage, path, from).await,
         }
     }
 }
