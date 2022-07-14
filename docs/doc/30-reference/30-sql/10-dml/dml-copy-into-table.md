@@ -70,7 +70,8 @@ externalLocation ::=
   CONNECTION = (
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ACCOUT_NAME = '<your-account-name>'
-        ACCOUNT_KEY = '<your-account-key>')
+        ACCOUNT_KEY = '<your-account-key>'
+  )
 ```
 
 | Parameter                  	| Description                                              	| Required 	|
