@@ -157,9 +157,8 @@ impl FuseTable {
 
             statistics.read_rows += rows;
             for projection_index in indices {
-                let column_stats = &block_meta.col_stats;
-                let column_stats = &column_stats[&(*projection_index as u32)];
-                statistics.read_bytes += column_stats.in_memory_size as usize;
+                let col_metas = &block_meta.col_metas[&(*projection_index as u32)];
+                statistics.read_bytes += col_metas.len as usize;
             }
 
             if remaining > rows {

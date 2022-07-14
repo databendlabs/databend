@@ -26,18 +26,16 @@ use crate::storages::index::ColumnStatistics;
 use crate::storages::index::StatisticsOfColumns;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
-    stats: &[T],
+    stats_of_columns: &[T],
 ) -> Result<StatisticsOfColumns> {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
     // to   : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
-    let col_stat_list = stats.iter().fold(HashMap::new(), |acc, item| {
+    let col_to_stats_lit = stats_of_columns.iter().fold(HashMap::new(), |acc, item| {
         item.borrow().iter().fold(
             acc,
-            |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, stats)| {
-                acc.entry(*col_id)
-                    .or_insert_with(|| vec![stats])
-                    .push(stats);
+            |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
+                acc.entry(*col_id).or_default().push(col_stats);
                 acc
             },
         )
@@ -46,8 +44,8 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     // Reduce the `Vec<&ColumnStatistics` into ColumnStatistics`, i.e.:
     // from : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
     // to   : `type BlockStatistics = HashMap<ColumnId, ColumnStatistics>`
-    let len = stats.len();
-    col_stat_list
+    let len = stats_of_columns.len();
+    col_to_stats_lit
         .iter()
         .try_fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
             let mut min_stats = Vec::with_capacity(stats.len());

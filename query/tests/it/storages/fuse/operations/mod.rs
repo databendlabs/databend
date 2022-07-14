@@ -14,6 +14,7 @@
 //
 
 mod commit;
+mod mutation;
 mod navigate;
 mod optimize;
 mod purge_drop;
