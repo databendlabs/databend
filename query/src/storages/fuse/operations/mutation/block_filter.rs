@@ -25,7 +25,7 @@ use common_planners::Expression;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::operations::mutation::mutations_collector::Deletion;
+use crate::storages::fuse::operations::mutation::deletion_mutator::Deletion;
 use crate::storages::fuse::FuseTable;
 
 pub async fn delete_from_block(

@@ -44,12 +44,14 @@ fn test_to_partitions() -> Result<()> {
         in_memory_size: col_size as u64,
     };
 
-    let col_metas_gen = || ColumnMeta {
+    let col_metas_gen = |col_size| ColumnMeta {
         offset: 0,
-        len: 0,
+        len: col_size as u64,
         num_values: 0,
     };
 
+    // generates fake data.
+    // for simplicity, we set `in_memory_size` and the `len` to the value of `col_id`
     let cols_stats = (0..num_of_col)
         .into_iter()
         .map(|col_id| (col_id as u32, col_stats_gen(col_id)))
@@ -57,7 +59,7 @@ fn test_to_partitions() -> Result<()> {
 
     let cols_metas = (0..num_of_col)
         .into_iter()
-        .map(|col_id| (col_id as u32, col_metas_gen()))
+        .map(|col_id| (col_id as u32, col_metas_gen(col_id)))
         .collect::<HashMap<_, _>>();
 
     let cluster_stats = None;
@@ -70,8 +72,8 @@ fn test_to_partitions() -> Result<()> {
         0,
         block_size,
         0,
-        cols_stats.clone(),
-        cols_metas,
+        cols_stats,
+        cols_metas.clone(),
         cluster_stats,
         location,
     );
@@ -83,10 +85,7 @@ fn test_to_partitions() -> Result<()> {
 
     // CASE I:  no projection
     let (s, _) = FuseTable::to_partitions(&blocks_metas, None);
-    let expected_block_size: u64 = cols_stats
-        .iter()
-        .map(|(_, col_stats)| col_stats.in_memory_size)
-        .sum();
+    let expected_block_size: u64 = cols_metas.iter().map(|(_, col_stats)| col_stats.len).sum();
     assert_eq!(expected_block_size * num_of_block, s.read_bytes as u64);
 
     // CASE II: col pruning
@@ -97,10 +96,10 @@ fn test_to_partitions() -> Result<()> {
         .collect::<Vec<usize>>();
 
     // for each block, the block size we expects (after pruning)
-    let expected_block_size: u64 = cols_stats
+    let expected_block_size: u64 = cols_metas
         .iter()
         .filter(|(cid, _)| proj.contains(&(**cid as usize)))
-        .map(|(_, col_stats)| col_stats.in_memory_size)
+        .map(|(_, col_stats)| col_stats.len)
         .sum();
 
     // kick off
