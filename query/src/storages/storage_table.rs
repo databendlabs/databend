@@ -34,7 +34,7 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]
@@ -130,16 +130,11 @@ pub trait Table: Sync + Send {
     //     unimplemented!()
     // }
 
-    fn read2(
-        &self,
-        _: Arc<QueryContext>,
-        _: &ReadDataSourcePlan,
-        _: &mut NewPipeline,
-    ) -> Result<()> {
+    fn read2(&self, _: Arc<QueryContext>, _: &ReadDataSourcePlan, _: &mut Pipeline) -> Result<()> {
         unimplemented!()
     }
 
-    fn append2(&self, _: Arc<QueryContext>, _: &mut NewPipeline) -> Result<()> {
+    fn append2(&self, _: Arc<QueryContext>, _: &mut Pipeline) -> Result<()> {
         unimplemented!()
     }
 

@@ -12,7 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod transforms;
+pub mod executor;
+pub mod processors;
 
-// TODO: pub mod for tests
-pub mod new;
+mod pipe;
+mod pipeline;
+mod pipeline_builder;
+mod pipeline_display;
+mod unsafe_cell_wrap;
+
+pub use pipe::Pipe;
+pub use pipe::SinkPipeBuilder;
+pub use pipe::SourcePipeBuilder;
+pub use pipe::TransformPipeBuilder;
+pub use pipeline::Pipeline;
+pub use pipeline_builder::QueryPipelineBuilder;

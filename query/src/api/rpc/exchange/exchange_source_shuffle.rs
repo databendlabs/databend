@@ -24,11 +24,11 @@ use common_arrow::arrow_format::flight::data::FlightData;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 
 pub struct ExchangeShuffleSource {
     input: Arc<InputPort>,
