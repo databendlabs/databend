@@ -76,7 +76,7 @@ externalLocation ::=
 
 | Parameter                  	| Description                                              	| Required 	|
 |----------------------------	|----------------------------------------------------------	|----------	|
-| `azblob://<bucket>/[<path>]` 	| External files located at the Azure Blob storage.        	| Required 	|
+| `azblob://<container>[<path>]` 	| External files located at the Azure Blob storage.        	| Required 	|
 | ENDPOINT_URL               	| The container endpoint URL starting with "https://".     	| Optional 	|
 | ACCOUNT_NAME               	| Your account name for connecting the Azure Blob storage. 	| Optional 	|
 | ACCOUNT_KEY                	| Your account key for connecting the Azure Blob storage.  	| Optional 	|
