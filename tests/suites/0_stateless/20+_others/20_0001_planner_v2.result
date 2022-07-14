@@ -451,5 +451,5 @@ system	settings	type	VARCHAR
 system	settings	value	VARCHAR			
 ====Correlated====
 1	NULL
-2	3
+2	2
 NULL	NULL

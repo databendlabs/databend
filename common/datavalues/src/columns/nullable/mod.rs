@@ -43,7 +43,7 @@ impl NullableColumn {
             // So we just need the first bit of the validity
 
             let validity = if let Some(b) = validity {
-                if b.len() == 0 {
+                if b.is_empty() {
                     None
                 } else {
                     Some(b.slice(0, 1))

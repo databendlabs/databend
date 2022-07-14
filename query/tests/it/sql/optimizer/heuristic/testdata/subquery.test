@@ -2,19 +2,18 @@
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
 Project: [number]
-    Filter: [t.number = subquery_4]
-        CrossApply
-            CrossJoin
-                Scan: default.system.numbers
-                Scan: default.system.numbers
-            Max1Row
-                Project: [COUNT(*)]
-                    EvalScalar: [COUNT(*)]
-                        Aggregate: group items: [], aggregate functions: [COUNT(*)]
-                            Filter: [t.number = t2.number]
-                                CrossJoin
-                                    Scan: default.system.numbers
-                                    Scan: default.system.numbers
+    HashJoin: SINGLE, build keys: [subquery_6, subquery_6], probe keys: [subquery_0, CAST(t.number AS BIGINT UNSIGNED NULL)], join filters: []
+        CrossJoin
+            Scan: default.system.numbers
+            Scan: default.system.numbers
+        Project: [COUNT(*),number]
+            EvalScalar: [COUNT(*)]
+                Aggregate: group items: [subquery_0], aggregate functions: [COUNT(*)]
+                    HashJoin: INNER, build keys: [t2.number], probe keys: [subquery_6], join filters: []
+                        Scan: default.system.numbers
+                        CrossJoin
+                            Scan: default.system.numbers
+                            Scan: default.system.numbers
 
 
 # Uncorrelated subquery
@@ -36,7 +35,7 @@ Project: [number]
 select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [subquery_1], probe keys: [t.number], join filters: []
+    HashJoin: INNER, build keys: [subquery_1], probe keys: [CAST(t.number AS BIGINT UNSIGNED NULL)], join filters: []
         Scan: default.system.numbers
         Max1Row
             Filter: [numbers.number = 0]
@@ -102,17 +101,17 @@ Project: [number]
 select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
 ----
 Project: [number]
-    Filter: [subquery_3]
-        CrossApply
-            HashJoin: INNER, build keys: [t1.number], probe keys: [t.number], join filters: []
-                Scan: default.system.numbers
-                Scan: default.system.numbers
-            Max1Row
-                Project: [COUNT(*) = 1]
-                    EvalScalar: [COUNT(*) = 1]
-                        Aggregate: group items: [], aggregate functions: [COUNT(*)]
-                            Filter: [t.number = numbers.number]
-                                Scan: default.system.numbers
+    HashJoin: SINGLE, build keys: [subquery_5], probe keys: [subquery_0], join filters: []
+        HashJoin: INNER, build keys: [t1.number], probe keys: [t.number], join filters: []
+            Scan: default.system.numbers
+            Scan: default.system.numbers
+        Project: [COUNT(*) = 1,number]
+            Filter: [subquery_3]
+                EvalScalar: [COUNT(*) = 1]
+                    Aggregate: group items: [subquery_0], aggregate functions: [COUNT(*)]
+                        HashJoin: INNER, build keys: [numbers.number], probe keys: [subquery_5], join filters: []
+                            Scan: default.system.numbers
+                            Scan: default.system.numbers
 
 
 # Semi join with other conditions
