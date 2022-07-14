@@ -132,11 +132,11 @@ impl JoinHashTable {
             JoinType::Left | JoinType::Single => {
                 if self.hash_join_desc.other_predicate.is_none() {
                     let result =
-                        self.left_or_single_join::<false, _>(hash_table, probe_state, keys, input)?;
+                        self.left_or_single_join::<false, _, _>(hash_table, probe_state, keys_iter, input)?;
                     return Ok(vec![result]);
                 } else {
                     let result =
-                        self.left_or_single_join::<true, _>(hash_table, probe_state, keys, input)?;
+                        self.left_or_single_join::<true, _, _>(hash_table, probe_state, keys_iter, input)?;
                     return Ok(vec![result]);
                 }
             }
@@ -344,7 +344,7 @@ impl JoinHashTable {
         DataBlock::filter_block(probe_block, &predicate)
     }
 
-    fn left_or_single_join<const WITH_OTHER_CONJUNCT: bool, Key>(
+    fn left_or_single_join<const WITH_OTHER_CONJUNCT: bool, Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
