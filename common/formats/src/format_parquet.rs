@@ -134,6 +134,11 @@ impl InputFormat for ParquetInputFormat {
         Ok(buf.len())
     }
 
+    fn set_buf(&self, buf: Vec<u8>, state: &mut Box<dyn InputState>) {
+        let state = state.as_any().downcast_mut::<ParquetInputState>().unwrap();
+        state.memory = buf;
+    }
+
     fn skip_header(&self, _: &[u8], _: &mut Box<dyn InputState>) -> Result<usize> {
         Ok(0)
     }

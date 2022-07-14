@@ -45,6 +45,8 @@ pub trait InputFormat: Send + Sync {
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
 
+    fn set_buf(&self, buf: Vec<u8>, state: &mut Box<dyn InputState>);
+
     fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
 
     fn read_row(

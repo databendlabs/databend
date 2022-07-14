@@ -338,6 +338,11 @@ impl InputFormat for CsvInputFormat {
         Ok(index)
     }
 
+    fn set_buf(&self, buf: Vec<u8>, state: &mut Box<dyn InputState>) {
+        let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
+        state.memory = buf;
+    }
+
     fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
         if self.skip_rows > 0 {
             let mut index = 0;
