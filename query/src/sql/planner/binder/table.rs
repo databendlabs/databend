@@ -117,6 +117,29 @@ impl<'a> Binder {
                     None => None,
                 };
 
+                let mut cur_bind_context = bind_context;
+                loop {
+                    if cur_bind_context
+                        .with_subquery
+                        .read()
+                        .unwrap()
+                        .contains_key(&table)
+                    {
+                        let subquery = cur_bind_context.with_subquery.read().unwrap();
+                        let (s_expr, mut bind_context) = subquery.get(&table).unwrap().clone();
+                        if let Some(alias) = alias {
+                            bind_context.apply_table_alias(alias)?;
+                        }
+                        return Ok((s_expr, bind_context));
+                    }
+
+                    if let Some(ref parent) = cur_bind_context.parent {
+                        cur_bind_context = parent;
+                    } else {
+                        break;
+                    }
+                }
+
                 // Resolve table with catalog
                 let table_meta: Arc<dyn Table> = self
                     .resolve_data_source(

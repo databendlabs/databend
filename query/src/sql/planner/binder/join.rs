@@ -47,8 +47,9 @@ impl<'a> Binder {
         bind_context: &BindContext,
         join: &Join<'a>,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_child, left_context) =
-            self.bind_table_reference(bind_context, &join.left).await?;
+        let (left_child, left_context) = self
+            .bind_table_reference(&bind_context.clone(), &join.left)
+            .await?;
         let (right_child, right_context) =
             self.bind_table_reference(bind_context, &join.right).await?;
 

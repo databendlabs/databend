@@ -26,6 +26,9 @@ use crate::parser::token::Token;
 pub struct Query<'a> {
     pub span: &'a [Token<'a>],
 
+    // With operator
+    pub with: Vec<WithExpr<'a>>,
+
     // Set operator: SELECT or UNION / EXCEPT / INTERSECT
     pub body: SetExpr<'a>,
 
@@ -38,6 +41,12 @@ pub struct Query<'a> {
     pub offset: Option<Expr<'a>>,
     // FORMAT <format>
     pub format: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WithExpr<'a> {
+    pub name: Identifier<'a>,
+    pub subquery: &'a [Token<'a>],
 }
 
 #[derive(Debug, Clone, PartialEq)]

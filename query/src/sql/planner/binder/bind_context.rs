@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::RwLock;
+
 use common_ast::ast::Identifier;
 use common_ast::ast::TableAlias;
 use common_ast::DisplayError;
@@ -21,6 +25,7 @@ use common_exception::Result;
 
 use super::AggregateInfo;
 use crate::sql::common::IndexType;
+use crate::sql::optimizer::SExpr;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ColumnBinding {
@@ -57,6 +62,9 @@ pub struct BindContext {
 
     /// Format type of query output.
     pub format: Option<String>,
+
+    /// With subquery
+    pub with_subquery: Arc<RwLock<HashMap<String, (SExpr, BindContext)>>>,
 }
 
 impl BindContext {
@@ -71,6 +79,7 @@ impl BindContext {
             aggregate_info: Default::default(),
             in_grouping: false,
             format: None,
+            with_subquery: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -78,6 +87,7 @@ impl BindContext {
     pub fn replace(&self) -> Self {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
+        bind_context.with_subquery = self.with_subquery.clone();
         bind_context
     }
 
@@ -127,6 +137,9 @@ impl BindContext {
         let mut result = vec![];
 
         let mut bind_context: &BindContext = self;
+
+        println!("column_bodung:{:?}", bind_context.columns[0]);
+
         // Lookup parent context to support correlated subquery
         loop {
             for column_binding in bind_context.columns.iter() {

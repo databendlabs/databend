@@ -25,7 +25,11 @@ use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
+use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
+use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
 use common_datavalues::type_coercion::merge_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -176,11 +180,48 @@ impl<'a> Binder {
         }
     }
 
+    #[async_recursion]
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &BindContext,
         query: &Query<'_>,
     ) -> Result<(SExpr, BindContext)> {
+        for with_expr in &query.with {
+            let first = with_expr
+                .subquery
+                .first()
+                .ok_or_else(|| ErrorCode::SyntaxException("Missing token"))?;
+            let source = first.source;
+            let last = with_expr
+                .subquery
+                .last()
+                .ok_or_else(|| ErrorCode::SyntaxException("Missing token"))?;
+            let subquery = source[first.span.start..last.span.end].to_string();
+
+            let left = subquery.find('(').unwrap();
+            let right = subquery.rfind(')').unwrap();
+            let subquery = subquery[left + 1..right].to_string();
+
+            let tokens = tokenize_sql(&subquery)?;
+            let backtrace = Backtrace::new();
+            let (stmt, _) = parse_sql(&tokens, &backtrace)?;
+
+            let (subquery, mut sub_bind_context) = match &stmt {
+                Statement::Query(query) => self.bind_query(bind_context, query).await?,
+                _ => unreachable!(),
+            };
+
+            for column in sub_bind_context.columns.iter_mut() {
+                column.table_name = Some(with_expr.name.name.clone());
+            }
+
+            let mut with_subquery = bind_context.with_subquery.write().unwrap();
+            with_subquery.insert(
+                with_expr.name.name.clone(),
+                (subquery, sub_bind_context.clone()),
+            );
+        }
+
         let (mut s_expr, mut bind_context) = match query.body {
             SetExpr::Select(_) | SetExpr::Query(_) => {
                 self.bind_set_expr(bind_context, &query.body, &query.order_by)

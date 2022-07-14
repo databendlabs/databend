@@ -32,15 +32,29 @@ use crate::util::*;
 pub fn query(i: Input) -> IResult<Query> {
     map(
         consumed(rule! {
-            #set_operation
+            ( WITH ~ #comma_separated_list1(with_expr) )?
+            ~ #set_operation
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( LIMIT ~ ^#comma_separated_list1(expr) )?
             ~ ( OFFSET ~ ^#expr )?
             ~ ( FORMAT ~ #ident )?
             : "`SELECT ...`"
         }),
-        |(span, (body, opt_order_by_block, opt_limit_block, opt_offset_block, opt_format))| Query {
+        |(
+            span,
+            (
+                opt_with_expr,
+                body,
+                opt_order_by_block,
+                opt_limit_block,
+                opt_offset_block,
+                opt_format,
+            ),
+        )| Query {
             span: span.0,
+            with: opt_with_expr
+                .map(|(_, with_expr)| with_expr)
+                .unwrap_or_default(),
             body,
             order_by: opt_order_by_block
                 .map(|(_, _, order_by)| order_by)
@@ -92,6 +106,18 @@ pub fn table_reference(i: Input) -> IResult<TableReference> {
         | #subquery
         | #table_function
         | #aliased_table
+    )(i)
+}
+
+pub fn with_expr(i: Input) -> IResult<WithExpr> {
+    map(
+        consumed(rule! {
+            #ident ~ AS ~ #parenthesized_query
+        }),
+        |(input, (with_name, _, _))| WithExpr {
+            name: with_name,
+            subquery: input.0,
+        },
     )(i)
 }
 
