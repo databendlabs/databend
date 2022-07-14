@@ -17,6 +17,7 @@ use common_exception::Result;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use databend_query::storages::system::ConfigsTable;
+use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;

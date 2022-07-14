@@ -287,10 +287,8 @@ async fn execute(
     executor: Arc<RwLock<Executor>>,
     plan: Arc<PlanNode>,
 ) -> Result<()> {
-    let data_stream: Result<SendableDataBlockStream> =
+    let data_stream: Result<SendableDataBlockStream> = {
         if ctx.get_settings().get_enable_async_insert()? != 0
-            && ctx.get_settings().get_enable_new_processor_framework()? != 0
-            && ctx.get_cluster().is_empty()
             && matches!(&*plan, PlanNode::Insert(_))
         {
             match &*plan {
@@ -331,7 +329,8 @@ async fn execute(
             }
         } else {
             interpreter.execute(None).await
-        };
+        }
+    };
 
     let mut data_stream = ctx.try_create_abortable(data_stream?)?;
     let use_result_cache = !ctx.get_config().query.management_mode;

@@ -18,6 +18,7 @@ mod hive_database;
 mod hive_partition;
 mod hive_table;
 mod hive_table_options;
+mod hive_table_source;
 
 pub use hive_catalog::HiveCatalog;
 pub use hive_partition::HivePartInfo;

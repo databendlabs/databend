@@ -86,6 +86,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::RevokeRole(_)
                 | DfStatement::RevokePrivilege(_)
                 | DfStatement::Call(_)
+                | DfStatement::SetVariable(_)
         )
     }
 
@@ -298,6 +299,11 @@ impl InterpreterFactoryV2 {
             Plan::Presign(presign) => Ok(Arc::new(PresignInterpreter::try_create(
                 ctx,
                 *presign.clone(),
+            )?)),
+
+            Plan::SetVariable(set_variable) => Ok(Arc::new(SettingInterpreter::try_create(
+                ctx,
+                *set_variable.clone(),
             )?)),
         }
     }

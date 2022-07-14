@@ -76,18 +76,6 @@ impl Table for StageTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    // External stage only supported new pipeline.
-    // TODO(bohu): Remove after new pipeline ready.
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        Err(ErrorCode::UnImplement(
-            "S3 external table not support read()!",
-        ))
-    }
-
     fn read2(
         &self,
         ctx: Arc<QueryContext>,

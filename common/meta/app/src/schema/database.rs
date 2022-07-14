@@ -58,6 +58,17 @@ impl Display for DatabaseId {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct DatabaseIdToName {
+    pub db_id: u64,
+}
+
+impl Display for DatabaseIdToName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.db_id)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DbIdListKey {
     pub tenant: String,
     pub db_name: String,

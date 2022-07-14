@@ -28,11 +28,9 @@ use common_tracing::tracing;
 use futures::TryStreamExt;
 use regex::Regex;
 
-use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::plans::CopyPlanV2;
@@ -146,35 +144,16 @@ impl CopyInterpreterV2 {
 
         let table = ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        if ctx.get_settings().get_enable_new_processor_framework()? != 0 {
-            table.append2(ctx.clone(), &mut pipeline)?;
-            pipeline.set_max_threads(settings.get_max_threads()? as usize);
-
-            let async_runtime = ctx.get_storage_runtime();
-            let query_need_abort = ctx.query_need_abort();
-            let executor =
-                PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
-            executor.execute()?;
-
-            return Ok(ctx.consume_precommit_blocks());
-        }
-
+        table.append2(ctx.clone(), &mut pipeline)?;
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
         let async_runtime = ctx.get_storage_runtime();
-        let query_need_abort = self.ctx.query_need_abort();
+        let query_need_abort = ctx.query_need_abort();
         let executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+            PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+        executor.execute()?;
 
-        let stream = ProcessorExecutorStream::create(executor)?;
-
-        let operations = table
-            .append_data(ctx.clone(), Box::pin(stream))
-            .await?
-            .try_collect()
-            .await?;
-
-        Ok(operations)
+        Ok(ctx.consume_precommit_blocks())
     }
 
     async fn execute_copy_into_stage(

@@ -230,7 +230,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for PartialAggregator<true, Method>
 {
-    const NAME: &'static str = "";
+    const NAME: &'static str = "GroupByPartialTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
@@ -259,7 +259,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for PartialAggregator<false, Method>
 {
-    const NAME: &'static str = "";
+    const NAME: &'static str = "GroupByPartialTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.

@@ -106,7 +106,7 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
 }
 
 impl Aggregator for SingleStateAggregator<true> {
-    const NAME: &'static str = "FinalSingleStateAggregator";
+    const NAME: &'static str = "AggregatorFinalTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         for (index, func) in self.funcs.iter().enumerate() {
@@ -156,7 +156,7 @@ impl Aggregator for SingleStateAggregator<true> {
 }
 
 impl Aggregator for SingleStateAggregator<false> {
-    const NAME: &'static str = "PartialSingleStateAggregator";
+    const NAME: &'static str = "AggregatorPartialTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         let rows = block.num_rows();

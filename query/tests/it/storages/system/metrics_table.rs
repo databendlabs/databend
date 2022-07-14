@@ -17,6 +17,7 @@ use common_datablocks::pretty_format_blocks;
 use common_exception::Result;
 use common_metrics::init_default_metrics_recorder;
 use databend_query::storages::system::MetricsTable;
+use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 

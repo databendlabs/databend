@@ -133,7 +133,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for FinalAggregator<true, Method>
 {
-    const NAME: &'static str = "FinalAggregatorWithAggregateFunction";
+    const NAME: &'static str = "GroupByFinalTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
@@ -233,7 +233,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for FinalAggregator<false, Method>
 {
-    const NAME: &'static str = "";
+    const NAME: &'static str = "GroupByFinalTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         let key_array = block.column(0);

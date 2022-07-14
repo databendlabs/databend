@@ -16,8 +16,6 @@ use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::flight::serialize_schema;
-use common_arrow::arrow::io::ipc::write::default_ipc_fields;
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::ActionType;
 use common_arrow::arrow_format::flight::data::Criteria;
@@ -40,10 +38,6 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
-use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcherRef;
-use crate::api::rpc::flight_service_stream::FlightDataStream;
-use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
@@ -52,18 +46,11 @@ pub type FlightStream<T> =
 
 pub struct DatabendQueryFlightService {
     sessions: Arc<SessionManager>,
-    dispatcher: Arc<DatabendQueryFlightDispatcher>,
 }
 
 impl DatabendQueryFlightService {
-    pub fn create(
-        dispatcher: DatabendQueryFlightDispatcherRef,
-        sessions: Arc<SessionManager>,
-    ) -> Self {
-        DatabendQueryFlightService {
-            sessions,
-            dispatcher,
-        }
+    pub fn create(sessions: Arc<SessionManager>) -> Self {
+        DatabendQueryFlightService { sessions }
     }
 }
 
@@ -101,27 +88,6 @@ impl FlightService for DatabendQueryFlightService {
     }
 
     type DoGetStream = FlightStream<FlightData>;
-
-    #[tracing::instrument(level = "debug", skip_all)]
-    async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
-        common_tracing::extract_remote_span_as_parent(&request);
-        let ticket: FlightTicket = request.into_inner().try_into()?;
-
-        match ticket {
-            FlightTicket::StreamTicket(steam_ticket) => {
-                let (receiver, data_schema) = self.dispatcher.get_stream(&steam_ticket)?;
-                let arrow_schema = data_schema.to_arrow();
-                let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-
-                serialize_schema(&arrow_schema, Some(&ipc_fields));
-
-                Ok(RawResponse::new(
-                    Box::pin(FlightDataStream::create(receiver, ipc_fields))
-                        as FlightStream<FlightData>,
-                ))
-            }
-        }
-    }
 
     type DoPutStream = FlightStream<PutResult>;
 
@@ -188,6 +154,11 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoExchangeStream = FlightStream<FlightData>;
 
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn do_get(&self, _request: Request<Ticket>) -> Response<Self::DoGetStream> {
+        Err(Status::unimplemented("unimplement do_get"))
+    }
+
     async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
         Result::Err(Status::unimplemented(
             "DatabendQuery does not implement do_exchange.",
@@ -212,32 +183,6 @@ impl FlightService for DatabendQueryFlightService {
                     session.force_kill_session();
                 }
 
-                FlightResult { body: vec![] }
-            }
-            FlightAction::BroadcastAction(action) => {
-                let session_id = action.query_id.clone();
-                let is_aborted = self.dispatcher.is_aborted();
-                let session = self
-                    .sessions
-                    .create_rpc_session(session_id, is_aborted)
-                    .await?;
-
-                self.dispatcher
-                    .broadcast_action(session, flight_action)
-                    .await?;
-                FlightResult { body: vec![] }
-            }
-            FlightAction::PrepareShuffleAction(action) => {
-                let session_id = action.query_id.clone();
-                let is_aborted = self.dispatcher.is_aborted();
-                let session = self
-                    .sessions
-                    .create_rpc_session(session_id, is_aborted)
-                    .await?;
-
-                self.dispatcher
-                    .shuffle_action(session, flight_action)
-                    .await?;
                 FlightResult { body: vec![] }
             }
             FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {

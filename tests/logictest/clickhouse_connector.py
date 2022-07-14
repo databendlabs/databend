@@ -44,7 +44,8 @@ class ClickhouseConnector():
                 return sql  #  do nothing
 
         if self._session is None:
-            engine = create_engine(self._uri, connect_args=self._additonal_headers)
+            engine = create_engine(self._uri,
+                                   connect_args=self._additonal_headers)
             self._session = make_session(engine)
         log.debug(parseSQL(statement))
         return self._session.execute(parseSQL(statement))

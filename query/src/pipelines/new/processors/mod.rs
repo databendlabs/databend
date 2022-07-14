@@ -15,7 +15,6 @@
 pub mod port;
 pub mod processor;
 
-mod format;
 mod port_trigger;
 mod resize_processor;
 mod sinks;

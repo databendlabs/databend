@@ -925,7 +925,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #cast : "`CAST(... AS ...)`"
             | #date_add: "`DATE_ADD(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
             | #date_sub: "`DATE_SUB(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-            | #date_trunc: "`DATE_TRUNC((YEAR | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW), ...)`"
+            | #date_trunc: "`DATE_TRUNC((YEAR | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
             | #interval: "`INTERVAL ... (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
             | #pg_cast : "`::<type_name>`"
             | #extract : "`EXTRACT((YEAR | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
