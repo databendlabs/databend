@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -97,12 +98,12 @@ impl TsvInputFormat {
         skip_rows: usize,
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
-    ) -> Result<Box<dyn InputFormat>> {
+    ) -> Result<Arc<dyn InputFormat>> {
         settings.field_delimiter = vec![b'\t'];
         settings.record_delimiter = vec![b'\n'];
         settings.null_bytes = settings.tsv_null_bytes.clone();
 
-        Ok(Box::new(TsvInputFormat {
+        Ok(Arc::new(TsvInputFormat {
             schema,
             settings,
             skip_rows,

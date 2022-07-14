@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -97,7 +98,7 @@ impl CsvInputFormat {
         skip_rows: usize,
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
-    ) -> Result<Box<dyn InputFormat>> {
+    ) -> Result<Arc<dyn InputFormat>> {
         let field_delimiter = match settings.field_delimiter.len() {
             n if n >= 1 => settings.field_delimiter[0],
             _ => b',',
@@ -114,7 +115,7 @@ impl CsvInputFormat {
 
         settings.null_bytes = settings.csv_null_bytes.clone();
 
-        Ok(Box::new(CsvInputFormat {
+        Ok(Arc::new(CsvInputFormat {
             schema,
             settings,
             skip_rows,

@@ -48,6 +48,7 @@ impl Default for FormatSettings {
             field_delimiter: vec![b','],
             empty_as_default: false,
             skip_header: false,
+            size_limit: None,
             compression: Compression::None,
             timezone: "UTC".parse::<Tz>().unwrap(),
             true_bytes: vec![b'1'],

@@ -156,7 +156,7 @@ pub struct SequentialInputFormatSource {
     data_block: Vec<DataBlock>,
     scan_progress: Arc<Progress>,
     input_state: Box<dyn InputState>,
-    input_format: Box<dyn InputFormat>,
+    input_format: Arc<dyn InputFormat>,
     input_decompress: Option<DecompressDecoder>,
     data_receiver: Receiver<common_exception::Result<Vec<u8>>>,
 }
@@ -164,7 +164,7 @@ pub struct SequentialInputFormatSource {
 impl SequentialInputFormatSource {
     pub fn create(
         output: Arc<OutputPort>,
-        input_format: Box<dyn InputFormat>,
+        input_format: Arc<dyn InputFormat>,
         data_receiver: Receiver<Result<Vec<u8>>>,
         input_decompress: Option<DecompressDecoder>,
         scan_progress: Arc<Progress>,

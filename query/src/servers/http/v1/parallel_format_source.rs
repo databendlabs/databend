@@ -36,7 +36,7 @@ use crate::servers::http::v1::multipart_format::MultipartWorker;
 
 pub struct ParallelMultipartWorker {
     multipart: Multipart,
-    input_format: Box<dyn InputFormat>,
+    input_format: Arc<dyn InputFormat>,
     tx: Option<Sender<Result<Box<dyn InputState>>>>,
 }
 
@@ -44,7 +44,7 @@ impl ParallelMultipartWorker {
     pub fn create(
         multipart: Multipart,
         tx: Sender<Result<Box<dyn InputState>>>,
-        input_format: Box<dyn InputFormat>,
+        input_format: Arc<dyn InputFormat>,
     ) -> ParallelMultipartWorker {
         ParallelMultipartWorker {
             multipart,
@@ -235,7 +235,7 @@ pub struct ParallelInputFormatSource {
     output: Arc<OutputPort>,
     data_block: Vec<DataBlock>,
     scan_progress: Arc<Progress>,
-    input_format: Box<dyn InputFormat>,
+    input_format: Arc<dyn InputFormat>,
     data_receiver: Receiver<Result<Box<dyn InputState>>>,
 }
 
@@ -243,7 +243,7 @@ impl ParallelInputFormatSource {
     pub fn create(
         output: Arc<OutputPort>,
         scan_progress: Arc<Progress>,
-        input_format: Box<dyn InputFormat>,
+        input_format: Arc<dyn InputFormat>,
         data_receiver: Receiver<Result<Box<dyn InputState>>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(ParallelInputFormatSource {

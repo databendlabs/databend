@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::io::Cursor;
+use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
@@ -62,9 +63,9 @@ impl ParquetInputFormat {
         )
     }
 
-    pub fn try_create(_name: &str, schema: DataSchemaRef) -> Result<Box<dyn InputFormat>> {
+    pub fn try_create(_name: &str, schema: DataSchemaRef) -> Result<Arc<dyn InputFormat>> {
         let arrow_table_schema = schema.to_arrow();
-        Ok(Box::new(ParquetInputFormat {
+        Ok(Arc::new(ParquetInputFormat {
             schema,
             arrow_table_schema,
         }))
