@@ -44,7 +44,7 @@ AWS S3 compatible object storage services:
 
 ```sql
 externalLocation ::=
-  's3://<bucket>[/<path>]'
+  's3://<bucket>[<path>]'
   CONNECTION = (
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ACCESS_KEY_ID = '<your-access-key-ID>'
