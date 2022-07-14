@@ -30,15 +30,15 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::EmptySink;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SinkPipeBuilder;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::EmptySink;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
@@ -84,11 +84,11 @@ impl Table for NullTable {
         &self,
         ctx: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
         let schema = self.table_info.schema();
-        pipeline.add_pipe(NewPipe::SimplePipe {
+        pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
             processors: vec![NullSource::create(ctx, output, schema)?],
@@ -113,7 +113,7 @@ impl Table for NullTable {
         )))
     }
 
-    fn append2(&self, _: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+    fn append2(&self, _: Arc<QueryContext>, pipeline: &mut Pipeline) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();

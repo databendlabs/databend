@@ -41,7 +41,7 @@ use common_streams::NDJsonSourceBuilder;
 use common_streams::Source;
 use common_tracing::tracing;
 
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;

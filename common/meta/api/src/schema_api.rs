@@ -121,14 +121,5 @@ pub trait SchemaApi: Send + Sync {
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, MetaError>;
 
-    // TODO: Disabled temporarily: Consider move them to another trait such as `ShareApi` or else.
-    //       Since `share` has nothing really to do with database or table.
-    // // share
-    // async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError>;
-    //
-    // async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, MetaError>;
-    //
-    // async fn get_share(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError>;
-
     fn name(&self) -> String;
 }

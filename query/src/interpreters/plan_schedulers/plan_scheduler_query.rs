@@ -22,11 +22,11 @@ use common_tracing::tracing::debug;
 use crate::interpreters::fragments::QueryFragmentsActions;
 use crate::interpreters::fragments::QueryFragmentsBuilder;
 use crate::interpreters::fragments::RootQueryFragment;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::QueryPipelineBuilder;
+use crate::pipelines::Pipeline;
+use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
-async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
+async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<Pipeline> {
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
     let root_query_fragments = RootQueryFragment::create(query_fragments, ctx.clone(), plan)?;
 
@@ -47,7 +47,7 @@ async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<
         .await
 }
 
-pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
+pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<Pipeline> {
     let settings = ctx.get_settings();
     let mut pipeline = schedule_query_impl(ctx, plan).await?;
     pipeline.set_max_threads(settings.get_max_threads()? as usize);

@@ -25,7 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
-use databend_query::pipelines::new::NewPipeline;
+use databend_query::pipelines::Pipeline;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::FuseTable;
@@ -154,7 +154,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     let tbl = fuse_table.navigate_to_time_point(&ctx, instant).await?;
 
     // check append2
-    let res = tbl.append2(ctx.clone(), &mut NewPipeline::create());
+    let res = tbl.append2(ctx.clone(), &mut Pipeline::create());
     assert_not_writable(res, "append2");
     let empty_stream = Box::pin(DataBlockStream::create(
         Arc::new(DataSchema::empty()),
