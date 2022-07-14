@@ -19,6 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use databend_query::storages::fuse::statistics::accumulator;
 use databend_query::storages::fuse::statistics::reducers;
+use databend_query::storages::index::ColumnStatistics;
 
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -53,6 +54,39 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, DataValue::Int64(val_start_with as i64));
     assert_eq!(col_stats.max, DataValue::Int64(num_of_blocks as i64));
+    Ok(())
+}
+
+#[test]
+fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()> {
+    let iter = |mut idx| {
+        std::iter::from_fn(move || {
+            idx += 1;
+            Some((idx, ColumnStatistics {
+                min: DataValue::Null,
+                max: DataValue::Null,
+                null_count: 1,
+                in_memory_size: 1,
+            }))
+        })
+    };
+
+    let num_of_cols = 100;
+    // combine two statistics
+    let col_stats_left = HashMap::from_iter(iter(0).take(num_of_cols));
+    let col_stats_right = HashMap::from_iter(iter(0).take(num_of_cols));
+    let r = reducers::reduce_block_statistics(&[col_stats_left, col_stats_right])?;
+    assert_eq!(num_of_cols, r.len());
+    // there should be 100 columns in the result
+    for idx in 1..=100 {
+        let col_stats = r.get(&idx);
+        assert!(col_stats.is_some());
+        let col_stats = col_stats.unwrap();
+        // for each column, the reduced value of in_memory_size should be 1 + 1
+        assert_eq!(col_stats.in_memory_size, 2);
+        // for each column, the reduced value of null_count should be 1 + 1
+        assert_eq!(col_stats.null_count, 2);
+    }
     Ok(())
 }
 

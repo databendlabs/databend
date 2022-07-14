@@ -23,8 +23,8 @@ use common_tracing::tracing::debug;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::mutation::delete_from_block;
-use crate::storages::fuse::operations::mutation::mutations_collector::Deletion;
-use crate::storages::fuse::operations::mutation::mutations_collector::DeletionCollector;
+use crate::storages::fuse::operations::mutation::deletion_mutator::Deletion;
+use crate::storages::fuse::operations::mutation::deletion_mutator::DeletionMutator;
 use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
@@ -69,7 +69,7 @@ impl FuseTable {
         plan: &DeletePlan,
     ) -> Result<()> {
         let mut deletion_collector =
-            DeletionCollector::try_create(ctx.as_ref(), &self.meta_location_generator, snapshot)?;
+            DeletionMutator::try_create(ctx.as_ref(), &self.meta_location_generator, snapshot)?;
         let schema = self.table_info.schema();
         // TODO refine pruner
         let extras = Extras {
@@ -108,7 +108,7 @@ impl FuseTable {
     async fn commit_deletion(
         &self,
         ctx: &QueryContext,
-        del_holder: DeletionCollector<'_>,
+        del_holder: DeletionMutator<'_>,
         catalog_name: &str,
     ) -> Result<()> {
         let (new_snapshot, loc) = del_holder.into_new_snapshot().await?;
