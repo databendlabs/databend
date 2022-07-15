@@ -512,12 +512,13 @@ impl HashJoinState for JoinHashTable {
                 vec![None; chunk.num_rows()]
             };
             for col in chunk.cols.iter() {
-                for row_index in 0..col.len() {
-                    if self.hash_join_desc.join_type == Mark {
+                if self.hash_join_desc.join_type == Mark {
+                    assert_eq!(col.len(), markers.len());
+                    for (row_index, marker) in markers.iter_mut().enumerate() {
                         if col.get(row_index) == DataValue::Null {
-                            markers[row_index] = Some(MarkerKind::Null);
+                            *marker = Some(MarkerKind::Null);
                         } else {
-                            markers[row_index] = Some(MarkerKind::False);
+                            *marker = Some(MarkerKind::False);
                         }
                     }
                 }
@@ -545,7 +546,7 @@ impl HashJoinState for JoinHashTable {
                         };
                         {
                             let mut self_row_ptrs = self.row_ptrs.write();
-                            self_row_ptrs.push(ptr.clone());
+                            self_row_ptrs.push(ptr);
                         }
                         let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
                         let entity = table.hash_table.insert_key(&keys_ref, &mut inserted);
@@ -623,7 +624,7 @@ impl HashJoinState for JoinHashTable {
         let mut validity = MutableBitmap::with_capacity(row_ptrs.len());
         let mut boolean_bit_map = MutableBitmap::with_capacity(row_ptrs.len());
         for row_ptr in row_ptrs.iter_mut() {
-            let marker = row_ptr.marker.unwrap().clone();
+            let marker = row_ptr.marker.unwrap();
             if marker == MarkerKind::False && *has_null {
                 row_ptr.marker = Some(MarkerKind::Null);
             }
