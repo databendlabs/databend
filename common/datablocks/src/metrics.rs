@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(hash_raw_entry)]
-#![feature(trusted_len)]
-#![feature(generic_associated_types)]
+use metrics::counter;
 
-mod data_block;
-mod data_block_debug;
-mod kernels;
-mod memory;
-mod metrics;
-mod utils;
+pub static METRIC_DATA_BLOCK_CREATED: &str = "data_block_created_total";
+pub static METRIC_DATA_BLOCK_DROPPED: &str = "data_block_dropped_total";
 
-pub use data_block::DataBlock;
-pub use data_block_debug::*;
-pub use kernels::*;
-pub use memory::InMemoryData;
-pub use utils::*;
+fn incr_created_counter() {
+    counter!(super::metrics::METRIC_DATA_BLOCK_CREATED, 1);
+}
+
+fn incr_dropped_counter() {
+    counter!(super::metrics::METRIC_DATA_BLOCK_DROPPED, 1);
+}
