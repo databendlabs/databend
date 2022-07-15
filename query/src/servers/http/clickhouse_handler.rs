@@ -254,7 +254,7 @@ pub async fn clickhouse_handler_get(
             && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
             || stmts
                 .get(0)
-                .map_or(false, |stmt| InterpreterFactoryV2::enable_default(stmt)))
+                .map_or(false, InterpreterFactoryV2::enable_default))
     {
         let mut planner = Planner::new(context.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
@@ -332,7 +332,7 @@ pub async fn clickhouse_handler_post(
             && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
             || stmts
                 .get(0)
-                .map_or(false, |stmt| InterpreterFactoryV2::enable_default(stmt)))
+                .map_or(false, InterpreterFactoryV2::enable_default))
     {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;

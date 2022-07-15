@@ -303,7 +303,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
                         || stmts
                             .get(0)
-                            .map_or(false, |stmt| InterpreterFactoryV2::enable_default(stmt))
+                            .map_or(false, InterpreterFactoryV2::enable_default)
                     {
                         let mut planner = Planner::new(context.clone());
                         planner

@@ -32,7 +32,9 @@ use common_exception::Result;
 use common_meta_app::schema::TableMeta;
 use common_planners::OptimizeTableAction;
 use common_planners::*;
+use common_tracing::tracing;
 
+use crate::catalogs::DatabaseCatalog;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::is_reserved_opt_key;
@@ -118,11 +120,15 @@ impl<'a> Binder {
             with_history,
         } = stmt;
 
-        let database = database
+        let mut database = database
             .clone()
             .map(|ident| ident.name.to_lowercase())
             .unwrap_or_else(|| self.ctx.get_current_database());
-
+        
+        if DatabaseCatalog::is_case_insensitive_db(database.as_str()) {
+            database = database.to_uppercase();
+        }
+        
         let mut select_builder = SelectBuilder::from("information_schema.tables");
 
         if *full {
@@ -175,6 +181,7 @@ impl<'a> Binder {
                 select_builder.build()
             }
         };
+        tracing::debug!("show tables rewrite to: {:?}", query);
         let tokens = tokenize_sql(query.as_str())?;
         let backtrace = Backtrace::new();
         let (stmt, _) = parse_sql(&tokens, &backtrace)?;

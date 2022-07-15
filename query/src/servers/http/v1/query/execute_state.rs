@@ -194,7 +194,7 @@ impl ExecuteState {
                 && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
                 || stmts
                     .get(0)
-                    .map_or(false, |stmt| InterpreterFactoryV2::enable_default(stmt)))
+                    .map_or(false, InterpreterFactoryV2::enable_default))
         {
             let mut planner = Planner::new(ctx.clone());
             let (plan, _, _) = planner.plan_sql(sql).await?;
