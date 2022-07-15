@@ -15,7 +15,7 @@ RUN curl -sSfLo /tmp/musl-cross-make.tar.gz https://github.com/richfelker/musl-c
     rm -rf /tmp/musl-cross-make-* && \
     rm -f /tmp/musl-cross-make.tar.gz
 
+ENV CC /usr/local/bin/${ARCH}-linux-musl-cc
 ENV C_INCLUDE_PATH /usr/local/${ARCH}-linux-musl/include/
-RUN ln -s ${ARCH}-linux-musl-gcc /usr/local/bin/musl-gcc
 RUN rustup target add ${ARCH}-unknown-linux-musl
 RUN printf "[target.${ARCH}-unknown-linux-musl]\nlinker = \"${ARCH}-linux-musl-gcc\"\n" > ${CARGO_HOME}/config
