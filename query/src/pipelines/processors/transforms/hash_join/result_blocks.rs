@@ -187,9 +187,9 @@ impl JoinHashTable {
                 for ptr in probe_result_ptrs {
                     // If find join partner, set the marker to true.
                     let mut self_row_ptrs = self.row_ptrs.write();
-                    self_row_ptrs.iter_mut().find(|p| (*p).eq(&ptr)).map(|p| {
+                    if let Some(p) = self_row_ptrs.iter_mut().find(|p| (*p).eq(&ptr)) {
                         p.marker = Some(MarkerKind::True);
-                    });
+                    }
                 }
             }
         }

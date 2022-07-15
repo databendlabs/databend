@@ -428,24 +428,6 @@ impl JoinHashTable {
     }
 }
 
-macro_rules! insert_key {
-    ($table: expr, $row_ptrs: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, ) => {{
-        let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
-        let build_keys_iter = $method.build_keys_iter(&keys_state)?;
-
-        for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
-            let mut inserted = true;
-            let ptr = $row_ptrs[row_index].clone();
-            let entity = $table.insert_key(&key, &mut inserted);
-            if inserted {
-                entity.set_value(vec![ptr]);
-            } else {
-                entity.get_mut_value().push(ptr);
-            }
-        }
-    }};
-}
-
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         let func_ctx = self.ctx.try_get_function_context()?;
@@ -455,20 +437,7 @@ impl HashJoinState for JoinHashTable {
             .iter()
             .map(|expr| Ok(expr.eval(&func_ctx, &input)?.vector().clone()))
             .collect::<Result<Vec<ColumnRef>>>()?;
-
-        match &*self.hash_table.read() {
-            HashTable::SerializerHashTable(table) => {
-                let mut build_cols_ref = Vec::with_capacity(build_cols.len());
-                for build_col in build_cols.iter() {
-                    build_cols_ref.push(build_col);
-                }
-                let keys_state = table
-                    .hash_method
-                    .build_keys_state(&build_cols_ref, input.num_rows())?;
-                self.row_space.push_keys_state(input, keys_state)
-            }
-            _ => self.row_space.push_cols(input, build_cols),
-        }
+        self.row_space.push_cols(input, build_cols)
     }
 
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
@@ -505,56 +474,91 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn finish(&self) -> Result<()> {
-        let chunks = self.row_space.chunks.read().unwrap();
-        for chunk_index in 0..chunks.len() {
-            let chunk = &chunks[chunk_index];
-            let mut columns = vec![];
-            let mut row_ptrs = vec![];
-            if let Some(cols) = chunk.cols.as_ref() {
-                columns = Vec::with_capacity(cols.len());
-                row_ptrs = Vec::with_capacity(cols.len());
-                let mut marker = None;
-                for col in cols.iter() {
-                    for row_index in 0..col.len() {
-                        if self.hash_join_desc.join_type == Mark {
-                            if col.get(row_index) == DataValue::Null
-                                && self.hash_join_desc.other_predicate.is_none()
-                            {
-                                marker = Some(MarkerKind::Null);
-                            } else {
-                                marker = Some(MarkerKind::False);
-                            }
-                        }
-                        row_ptrs.push(RowPtr {
-                            chunk_index: chunk_index as u32,
-                            row_index: row_index as u32,
-                            marker: marker.clone(),
-                        })
+        macro_rules! insert_key {
+            ($table: expr, $markers: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, ) => {{
+                let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
+                let build_keys_iter = $method.build_keys_iter(&keys_state)?;
+
+                for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
+                    let mut inserted = true;
+                    let ptr = RowPtr {
+                        chunk_index: $chunk_index as u32,
+                        row_index: row_index as u32,
+                        marker: $markers[row_index],
+                    };
+                    {
+                        let mut self_row_ptrs = self.row_ptrs.write();
+                        self_row_ptrs.push(ptr.clone());
                     }
-                    columns.push(col);
+                    let entity = $table.insert_key(&key, &mut inserted);
+                    if inserted {
+                        entity.set_value(vec![ptr]);
+                    } else {
+                        entity.get_mut_value().push(ptr);
+                    }
                 }
+            }};
+        }
+
+        let mut chunks = self.row_space.chunks.write().unwrap();
+        for chunk_index in 0..chunks.len() {
+            let chunk = &mut chunks[chunk_index];
+            let mut columns = Vec::with_capacity(chunk.cols.len());
+            let mut markers = if self.hash_join_desc.join_type == Mark
+                && self.hash_join_desc.other_predicate.is_some()
+            {
+                vec![Some(MarkerKind::False); chunk.num_rows()]
+            } else {
+                vec![None; chunk.num_rows()]
+            };
+            for col in chunk.cols.iter() {
+                for row_index in 0..col.len() {
+                    if self.hash_join_desc.join_type == Mark {
+                        if col.get(row_index) == DataValue::Null {
+                            markers[row_index] = Some(MarkerKind::Null);
+                        } else {
+                            markers[row_index] = Some(MarkerKind::False);
+                        }
+                    }
+                }
+                columns.push(col);
             }
             match (*self.hash_table.write()).borrow_mut() {
                 HashTable::SerializerHashTable(table) => {
-                    if let Some(keys_state) = chunk.keys_state.as_ref() {
-                        let build_keys_iter = table.hash_method.build_keys_iter(keys_state)?;
-
-                        for (row_index, key) in build_keys_iter.enumerate().take(chunk.num_rows()) {
-                            let mut inserted = true;
-                            let ptr = row_ptrs[row_index].clone();
-                            let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
-                            let entity = table.hash_table.insert_key(&keys_ref, &mut inserted);
-                            if inserted {
-                                entity.set_value(vec![ptr]);
-                            } else {
-                                entity.get_mut_value().push(ptr);
-                            }
+                    let mut build_cols_ref = Vec::with_capacity(chunk.cols.len());
+                    for build_col in chunk.cols.iter() {
+                        build_cols_ref.push(build_col);
+                    }
+                    let keys_state = table
+                        .hash_method
+                        .build_keys_state(&build_cols_ref, chunk.num_rows())?;
+                    chunk.keys_state = Some(keys_state);
+                    let build_keys_iter = table
+                        .hash_method
+                        .build_keys_iter(chunk.keys_state.as_ref().unwrap())?;
+                    for (row_index, key) in build_keys_iter.enumerate().take(chunk.num_rows()) {
+                        let mut inserted = true;
+                        let ptr = RowPtr {
+                            chunk_index: chunk_index as u32,
+                            row_index: row_index as u32,
+                            marker: markers[row_index],
+                        };
+                        {
+                            let mut self_row_ptrs = self.row_ptrs.write();
+                            self_row_ptrs.push(ptr.clone());
+                        }
+                        let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
+                        let entity = table.hash_table.insert_key(&keys_ref, &mut inserted);
+                        if inserted {
+                            entity.set_value(vec![ptr]);
+                        } else {
+                            entity.get_mut_value().push(ptr);
                         }
                     }
                 }
                 HashTable::KeyU8HashTable(table) => insert_key! {
                     &mut table.hash_table,
-                    &row_ptrs,
+                    &markers,
                     &table.hash_method,
                     chunk,
                     columns,
@@ -562,7 +566,7 @@ impl HashJoinState for JoinHashTable {
                 },
                 HashTable::KeyU16HashTable(table) => insert_key! {
                     &mut table.hash_table,
-                    &row_ptrs,
+                    &markers,
                     &table.hash_method,
                     chunk,
                     columns,
@@ -570,7 +574,7 @@ impl HashJoinState for JoinHashTable {
                 },
                 HashTable::KeyU32HashTable(table) => insert_key! {
                     &mut table.hash_table,
-                    &row_ptrs,
+                    &markers,
                     &table.hash_method,
                     chunk,
                     columns,
@@ -578,7 +582,7 @@ impl HashJoinState for JoinHashTable {
                 },
                 HashTable::KeyU64HashTable(table) => insert_key! {
                     &mut table.hash_table,
-                    &row_ptrs,
+                    &markers,
                     &table.hash_method,
                     chunk,
                     columns,
@@ -586,7 +590,7 @@ impl HashJoinState for JoinHashTable {
                 },
                 HashTable::KeyU128HashTable(table) => insert_key! {
                     &mut table.hash_table,
-                    &row_ptrs,
+                    &markers,
                     &table.hash_method,
                     chunk,
                     columns,
@@ -594,7 +598,7 @@ impl HashJoinState for JoinHashTable {
                 },
                 HashTable::KeyU256HashTable(table) => insert_key! {
                     &mut table.hash_table,
-                    &row_ptrs,
+                    &markers,
                     &table.hash_method,
                     chunk,
                     columns,
@@ -602,15 +606,13 @@ impl HashJoinState for JoinHashTable {
                 },
                 HashTable::KeyU512HashTable(table) => insert_key! {
                     &mut table.hash_table,
-                    &row_ptrs,
+                    &markers,
                     &table.hash_method,
                     chunk,
                     columns,
                     chunk_index,
                 },
             }
-            let mut self_row_ptrs = self.row_ptrs.write();
-            self_row_ptrs.append(&mut row_ptrs);
         }
         Ok(())
     }
