@@ -66,11 +66,6 @@ impl ParquetSourceBuilder {
     where R: AsyncRead + AsyncSeek + Unpin + Send {
         Ok(ParquetSource::create(self.clone(), reader))
     }
-
-    pub fn build_ext<R>(&self, reader: R) -> Result<ParquetSource<R>>
-    where R: AsyncRead + AsyncSeek + Unpin + Send {
-        Ok(ParquetSource::create_ext(self.clone(), reader))
-    }
 }
 
 pub struct ParquetSource<R> {
@@ -85,19 +80,8 @@ impl<R> ParquetSource<R>
 where R: AsyncRead + AsyncSeek + Unpin + Send
 {
     fn create(builder: ParquetSourceBuilder, reader: R) -> Self {
-        let arrow_table_schema = Arc::new(builder.schema.project(&builder.projection)).to_arrow();
-
-        ParquetSource {
-            reader,
-            builder,
-            arrow_table_schema,
-            current_row_group: 0,
-            rows: 0,
-        }
-    }
-
-    fn create_ext(builder: ParquetSourceBuilder, reader: R) -> Self {
         let arrow_table_schema = builder.schema.to_arrow();
+
         ParquetSource {
             reader,
             builder,
@@ -137,6 +121,7 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
         let fields = &self.arrow_table_schema.fields;
 
         let row_group = &metadata.row_groups[self.current_row_group];
+        eprintln!("builder proj {:?}", &self.builder.projection);
         let fields_to_read: Vec<&Field> = self
             .builder
             .projection
@@ -144,6 +129,7 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
             .into_iter()
             .map(|idx| &fields[idx])
             .collect();
+        eprintln!("fields to read {:?}", fields_to_read);
 
         let column_chunks =
             read_columns_many_async(&mut self.reader, row_group, fields_to_read, None)

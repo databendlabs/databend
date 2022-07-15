@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -20,6 +21,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::find_column_exprs;
 use common_planners::Extras;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
@@ -100,12 +102,14 @@ impl BlockPruner {
 
         let dal = ctx.get_storage_operator()?;
         let bloom_index_schema = BloomFilterIndexer::to_bloom_schema(schema.as_ref());
-        //let bloom_field_to_idx = bloom_index_schema
-        //    .fields()
-        //    .iter()
-        //    .enumerate()
-        //    .map(|(idx, filed)| (filed.name().clone(), idx))
-        //    .collect::<HashMap<_, _>>();
+
+        // map from filed name to index
+        let bloom_field_to_idx = bloom_index_schema
+            .fields()
+            .iter()
+            .enumerate()
+            .map(|(idx, filed)| (filed.name().clone(), idx))
+            .collect::<HashMap<_, _>>();
 
         let stream = futures::stream::iter(segment_locs)
             .map(|(idx, (seg_loc, u))| async {
@@ -124,25 +128,29 @@ impl BlockPruner {
                     .map(|v| (idx, v));
 
                     if let Some(Extras {
-                        projection: Some(_proj),
+                        projection: Some(proj),
                         filters,
                         ..
                     }) = push_down
                     {
                         let mut res = vec![];
                         if !filters.is_empty() {
-                            let parquet_source_builder =
+                            let filter_expr = &filters[0];
+
+                            let mut parquet_source_builder =
                                 ParquetSourceBuilder::create(Arc::new(bloom_index_schema.clone()));
 
                             // collects the column index that gonna be used
-                            //let mut projection = Vec::with_capacity(schema.fields().len());
-                            //for idx in proj {
-                            //    let field = &schema.fields()[*idx];
-                            //    if let Some(pos) = bloom_field_to_idx.get(field.name()) {
-                            //        projection.push(*pos)
-                            //    }
-                            //}
-                            //parquet_source_builder.projection(projection);
+                            let mut projection = Vec::with_capacity(schema.fields().len());
+                            for idx in proj {
+                                let field = &schema.fields()[*idx];
+                                let bloom_filter_col_name =
+                                    BloomFilterIndexer::to_bloom_column_name(field.name());
+                                if let Some(pos) = bloom_field_to_idx.get(&bloom_filter_col_name) {
+                                    projection.push(*pos)
+                                }
+                            }
+                            parquet_source_builder.projection(projection);
 
                             // load filters of columns
                             for (idx, meta) in blocks {
@@ -152,7 +160,7 @@ impl BlockPruner {
                                     );
                                 let object = dal.object(bloom_idx_location.as_str());
                                 let reader = object.seekable_reader(0..);
-                                let mut source = parquet_source_builder.build_ext(reader)?;
+                                let mut source = parquet_source_builder.build(reader)?;
                                 let block = source.read().await?.unwrap();
                                 let ctx = ctx.clone();
                                 let index = BloomFilterIndexer::from_bloom_block(
@@ -160,7 +168,7 @@ impl BlockPruner {
                                     block,
                                     ctx,
                                 )?;
-                                if BloomFilterExprEvalResult::Unknown == index.eval(&filters[0])? {
+                                if BloomFilterExprEvalResult::False != index.eval(filter_expr)? {
                                     res.push((idx, meta))
                                 }
                             }
