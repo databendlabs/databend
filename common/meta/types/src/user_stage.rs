@@ -118,6 +118,7 @@ impl FromStr for StageFileCompression {
 pub enum StageFileFormatType {
     Csv,
     Json,
+    NdJson,
     Avro,
     Orc,
     Parquet,
@@ -136,6 +137,7 @@ impl FromStr for StageFileFormatType {
         match s.to_uppercase().as_str() {
             "CSV" => Ok(StageFileFormatType::Csv),
             "JSON" => Ok(StageFileFormatType::Json),
+            "NDJSON" => Ok(StageFileFormatType::NdJson),
             "AVRO" => Ok(StageFileFormatType::Avro),
             "ORC" => Ok(StageFileFormatType::Orc),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
