@@ -164,11 +164,14 @@ impl Processor for MultiFileSplitter {
     }
 
     fn process(&mut self) -> Result<()> {
-        let progress_values = ProgressValues::default();
+        let mut progress_values = ProgressValues::default();
         let current = self.current_file.as_mut().unwrap();
+        let mut output_splits = VecDeque::default();
+        current.process(&mut output_splits, &mut progress_values)?;
         if matches!(current.state(), State::Finished) {
             self.current_file = None;
         }
+        self.output_splits.extend(output_splits.into_iter());
         self.scan_progress.incr(&progress_values);
         Ok(())
     }

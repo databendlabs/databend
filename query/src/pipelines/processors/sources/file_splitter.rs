@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::mem::replace;
 use std::sync::Arc;
 
+use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::InputFormat;
@@ -185,11 +186,15 @@ impl FileSplitter {
         Ok(())
     }
 
-    pub fn process(&mut self, output_splits: &mut VecDeque<Vec<u8>>) -> Result<()> {
+    pub fn process(
+        &mut self,
+        output_splits: &mut VecDeque<Vec<u8>>,
+        progress_values: &mut ProgressValues,
+    ) -> Result<()> {
         match replace(&mut self.state, State::NeedData) {
             State::ReceivedData(size) => {
                 self.split(size, output_splits)?;
-                // progress_values.bytes += size
+                progress_values.bytes += size
             }
             State::NeedFlush => {
                 self.flush(output_splits);
