@@ -16,6 +16,10 @@ export STORAGE_S3_ACCESS_KEY_ID=minioadmin
 export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
 export STORAGE_ALLOW_INSECURE=true
 
+# TODO: we need some refactor here
+export REPO_AWS_ACCESS_KEY_ID
+export REPO_AWS_SECRET_ACCESS_KEY
+
 echo "Install dependence"
 python3 -m pip install --quiet mysql-connector-python
 
