@@ -9,12 +9,6 @@ inputs:
     description: ""
     required: true
     default: "x86_64-unknown-linux-gnu"
-  aws_access_key_id:
-    description: "aws access key id"
-    required: true
-  aws_secret_access_key:
-    description: "aws secret access key"
-    required: true
 
 runs:
   using: "composite"
@@ -48,13 +42,7 @@ runs:
     - name: Run Stateful Tests with Standalone mode (ubuntu-latest only)
       shell: bash
       run: |
-        export REPO_AWS_ACCESS_KEY_ID
-        export REPO_AWS_SECRET_ACCESS_KEY
-
         ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
-      env:
-        REPO_AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
-        REPO_AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
 
     - name: Upload failure
       if: failure()
