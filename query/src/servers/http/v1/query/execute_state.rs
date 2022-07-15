@@ -54,7 +54,6 @@ use crate::sql::exec::PhysicalPlan;
 use crate::sql::exec::PipelineBuilder;
 use crate::sql::ColumnBinding;
 use crate::sql::DfParser;
-use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
 use crate::storages::result::block_buffer::BlockBuffer;
@@ -189,11 +188,13 @@ impl ExecuteState {
         };
 
         let settings = ctx.get_settings();
-        if settings.get_enable_new_processor_framework()? != 0
-            && !ctx.get_config().query.management_mode
-            && ctx.get_cluster().is_empty()
-            && settings.get_enable_planner_v2()? != 0
-            && matches!(stmts.get(0), Some(DfStatement::Query(_)))
+        if !ctx.get_config().query.management_mode
+            && (ctx.get_cluster().is_empty()
+                && settings.get_enable_planner_v2()? != 0
+                && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+                || stmts
+                    .get(0)
+                    .map_or(false, |stmt| InterpreterFactoryV2::enable_default(stmt)))
         {
             let mut planner = Planner::new(ctx.clone());
             let (plan, _, _) = planner.plan_sql(sql).await?;

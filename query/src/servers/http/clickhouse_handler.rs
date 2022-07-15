@@ -244,18 +244,17 @@ pub async fn clickhouse_handler_get(
         .unwrap_or_else(|_| (vec![], vec![]));
 
     let settings = context.get_settings();
-    if settings
-        .get_enable_new_processor_framework()
-        .map_err(InternalServerError)?
-        != 0
-        && !context.get_config().query.management_mode
-        && context.get_cluster().is_empty()
-        && settings
-            .get_enable_planner_v2()
-            .map_err(InternalServerError)?
-            != 0
-        && !stmts.is_empty()
-        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+    if !context.get_config().query.management_mode
+        && (context.get_cluster().is_empty()
+            && settings
+                .get_enable_planner_v2()
+                .map_err(InternalServerError)?
+                != 0
+            && !stmts.is_empty()
+            && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+            || stmts
+                .get(0)
+                .map_or(false, |stmt| InterpreterFactoryV2::enable_default(stmt)))
     {
         let mut planner = Planner::new(context.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
@@ -323,18 +322,17 @@ pub async fn clickhouse_handler_post(
 
     let (stmts, _) = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type())
         .unwrap_or_else(|_| (vec![], vec![]));
-    if settings
-        .get_enable_new_processor_framework()
-        .map_err(InternalServerError)?
-        != 0
-        && !ctx.get_config().query.management_mode
-        && ctx.get_cluster().is_empty()
-        && settings
-            .get_enable_planner_v2()
-            .map_err(InternalServerError)?
-            != 0
-        && !stmts.is_empty()
-        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+    if !ctx.get_config().query.management_mode
+        && (ctx.get_cluster().is_empty()
+            && settings
+                .get_enable_planner_v2()
+                .map_err(InternalServerError)?
+                != 0
+            && !stmts.is_empty()
+            && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+            || stmts
+                .get(0)
+                .map_or(false, |stmt| InterpreterFactoryV2::enable_default(stmt)))
     {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
