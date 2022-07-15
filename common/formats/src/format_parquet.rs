@@ -145,7 +145,7 @@ impl InputFormat for ParquetInputFormat {
         std::mem::take(&mut state.memory)
     }
 
-    fn skip_header(&self, _: &[u8], _: &mut Box<dyn InputState>) -> Result<usize> {
+    fn skip_header(&self, _: &[u8], _: &mut Box<dyn InputState>, _: usize) -> Result<usize> {
         Ok(0)
     }
 }

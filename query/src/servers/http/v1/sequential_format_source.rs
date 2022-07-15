@@ -273,9 +273,9 @@ impl Processor for SequentialInputFormatSource {
 
                 if !self.skipped_header {
                     let len = data_slice.len();
-                    let skip_size = self
-                        .input_format
-                        .skip_header(data_slice, &mut self.input_state)?;
+                    let skip_size =
+                        self.input_format
+                            .skip_header(data_slice, &mut self.input_state, 0)?;
 
                     data_slice = &data_slice[skip_size..];
 

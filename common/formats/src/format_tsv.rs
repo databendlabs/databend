@@ -307,8 +307,14 @@ impl InputFormat for TsvInputFormat {
         std::mem::take(&mut state.memory)
     }
 
-    fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
-        if self.skip_rows > 0 {
+    fn skip_header(
+        &self,
+        buf: &[u8],
+        state: &mut Box<dyn InputState>,
+        force: usize,
+    ) -> Result<usize> {
+        let rows_to_skip = if force > 0 { force } else { self.skip_rows };
+        if rows_to_skip > 0 {
             let mut index = 0;
             let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
 
@@ -318,7 +324,7 @@ impl InputFormat for TsvInputFormat {
                     false => self.find_delimiter(buf, index, state),
                 };
 
-                if state.accepted_rows == self.skip_rows {
+                if state.accepted_rows == rows_to_skip {
                     return Ok(index);
                 }
             }

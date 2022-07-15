@@ -116,7 +116,7 @@ impl MultipartWorker for ParallelMultipartWorker {
                                     if !skipped_header {
                                         let skip_size = match self
                                             .input_format
-                                            .skip_header(buf_slice, &mut state)
+                                            .skip_header(buf_slice, &mut state, 0)
                                         {
                                             Ok(skip_size) => skip_size,
                                             Err(cause) => {

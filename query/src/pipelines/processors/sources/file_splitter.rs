@@ -100,7 +100,7 @@ impl FileSplitter {
 
         if !*skipped_header {
             let len = data_slice.len();
-            let skip_size = input_format.skip_header(data_slice, format_state)?;
+            let skip_size = input_format.skip_header(data_slice, format_state, 1)?;
             if skip_size < len {
                 *skipped_header = true;
                 *format_state = input_format.create_state();
