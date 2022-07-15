@@ -28,6 +28,7 @@ use num::traits::AsPrimitive;
 use super::utils::*;
 use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
+use crate::scalars::new_mutable_bitmap;
 use crate::scalars::primitive_simd_op_boolean;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::ComparisonEqFunction;
@@ -295,16 +296,39 @@ where
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
         let func_ctx = FunctionContext::default();
         let lhs = if self.need_cast && l.data_type() != &self.least_supertype {
-            cast_column_field(l, l.data_type(), &self.least_supertype, &func_ctx)?
+            cast_column_field(
+                l,
+                l.data_type(),
+                &wrap_nullable(&self.least_supertype),
+                &func_ctx,
+            )?
         } else {
             l.column().clone()
         };
         let rhs = if self.need_cast && r.data_type() != &self.least_supertype {
-            cast_column_field(r, r.data_type(), &self.least_supertype, &func_ctx)?
+            cast_column_field(
+                r,
+                r.data_type(),
+                &wrap_nullable(&self.least_supertype),
+                &func_ctx,
+            )?
         } else {
             r.column().clone()
         };
-        scalar_binary_op(&lhs, &rhs, self.func.clone(), &mut EvalContext::default())
+
+        let (_, l_bitmap) = lhs.validity();
+        let (_, r_bitmap) = rhs.validity();
+        let bitmap = combine_validities(l_bitmap, r_bitmap);
+        let lhs = Series::remove_nullable(&lhs);
+        let rhs = Series::remove_nullable(&rhs);
+        let column = scalar_binary_op(&lhs, &rhs, self.func.clone(), &mut EvalContext::default())?;
+        match bitmap {
+            Some(bitmap) => {
+                let bitmap = combine_validities(Some(column.values()), Some(&bitmap)).unwrap();
+                Ok(BooleanColumn::from_arrow_data(bitmap))
+            }
+            None => Ok(column),
+        }
     }
 }
 
@@ -338,17 +362,40 @@ where
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
         let func_ctx = FunctionContext::default();
         let lhs = if self.need_cast && l.data_type() != &self.least_supertype {
-            cast_column_field(l, l.data_type(), &self.least_supertype, &func_ctx)?
+            cast_column_field(
+                l,
+                l.data_type(),
+                &wrap_nullable(&self.least_supertype),
+                &func_ctx,
+            )?
         } else {
             l.column().clone()
         };
 
         let rhs = if self.need_cast && r.data_type() != &self.least_supertype {
-            cast_column_field(r, r.data_type(), &self.least_supertype, &func_ctx)?
+            cast_column_field(
+                r,
+                r.data_type(),
+                &wrap_nullable(&self.least_supertype),
+                &func_ctx,
+            )?
         } else {
             r.column().clone()
         };
-        primitive_simd_op_boolean::<T, F>(&lhs, &rhs, self.func.clone())
+
+        let (_, l_bitmap) = lhs.validity();
+        let (_, r_bitmap) = rhs.validity();
+        let bitmap = combine_validities(l_bitmap, r_bitmap);
+        let lhs = Series::remove_nullable(&lhs);
+        let rhs = Series::remove_nullable(&rhs);
+        let column = primitive_simd_op_boolean::<T, F>(&lhs, &rhs, self.func.clone())?;
+        match bitmap {
+            Some(bitmap) => {
+                let bitmap = combine_validities(Some(column.values()), Some(&bitmap)).unwrap();
+                Ok(BooleanColumn::from_arrow_data(bitmap))
+            }
+            None => Ok(column),
+        }
     }
 }
 
@@ -371,7 +418,7 @@ impl<F: BooleanSimdImpl> ComparisonExpression for ComparisonBooleanImpl<F> {
             cast_column_field(
                 l,
                 l.data_type(),
-                &DataTypeImpl::Boolean(BooleanType::default()),
+                &wrap_nullable(&DataTypeImpl::Boolean(BooleanType::default())),
                 &func_ctx,
             )?
         } else {
@@ -381,27 +428,69 @@ impl<F: BooleanSimdImpl> ComparisonExpression for ComparisonBooleanImpl<F> {
             cast_column_field(
                 r,
                 r.data_type(),
-                &DataTypeImpl::Boolean(BooleanType::default()),
+                &wrap_nullable(&DataTypeImpl::Boolean(BooleanType::default())),
                 &func_ctx,
             )?
         } else {
             r.column().clone()
         };
+
         let res = match (lhs.is_const(), rhs.is_const()) {
             (false, false) => {
+                let (_, l_bitmap) = lhs.validity();
+                let (_, r_bitmap) = rhs.validity();
+                let bitmap = combine_validities(l_bitmap, r_bitmap);
+                let lhs = Series::remove_nullable(&lhs);
+                let rhs = Series::remove_nullable(&rhs);
                 let lhs: &BooleanColumn = Series::check_get(&lhs)?;
                 let rhs: &BooleanColumn = Series::check_get(&rhs)?;
-                F::vector_vector(lhs, rhs)
+                let column = F::vector_vector(lhs, rhs);
+                match bitmap {
+                    Some(bitmap) => {
+                        let bitmap =
+                            combine_validities(Some(column.values()), Some(&bitmap)).unwrap();
+                        BooleanColumn::from_arrow_data(bitmap)
+                    }
+                    None => column,
+                }
             }
             (false, true) => {
+                let (_, l_bitmap) = lhs.validity();
+                let lhs = Series::remove_nullable(&lhs);
                 let lhs: &BooleanColumn = Series::check_get(&lhs)?;
-                let r = rhs.get_bool(0)?;
-                F::vector_const(lhs, r)
+                let r = rhs.get_bool(0);
+                if r.is_err() {
+                    let bitmap = new_mutable_bitmap(lhs.len(), false);
+                    return Ok(BooleanColumn::from_arrow_data(bitmap.into()));
+                };
+                let column = F::vector_const(lhs, r.unwrap());
+                match l_bitmap {
+                    Some(bitmap) => {
+                        let bitmap =
+                            combine_validities(Some(column.values()), Some(bitmap)).unwrap();
+                        BooleanColumn::from_arrow_data(bitmap)
+                    }
+                    None => column,
+                }
             }
             (true, false) => {
-                let l = lhs.get_bool(0)?;
+                let (_, r_bitmap) = rhs.validity();
+                let rhs = Series::remove_nullable(&rhs);
                 let rhs: &BooleanColumn = Series::check_get(&rhs)?;
-                F::const_vector(l, rhs)
+                let l = lhs.get_bool(0);
+                if l.is_err() {
+                    let bitmap = new_mutable_bitmap(rhs.len(), false);
+                    return Ok(BooleanColumn::from_arrow_data(bitmap.into()));
+                }
+                let column = F::const_vector(l.unwrap(), rhs);
+                match r_bitmap {
+                    Some(bitmap) => {
+                        let bitmap =
+                            combine_validities(Some(column.values()), Some(bitmap)).unwrap();
+                        BooleanColumn::from_arrow_data(bitmap)
+                    }
+                    None => column,
+                }
             }
             (true, true) => unreachable!(),
         };
