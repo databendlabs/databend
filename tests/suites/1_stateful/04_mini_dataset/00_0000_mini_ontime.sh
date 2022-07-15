@@ -8,19 +8,19 @@ echo "drop table if exists ontime_mini;" | $MYSQL_CLIENT_CONNECT
 cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_mini/g' | $MYSQL_CLIENT_CONNECT
 
 ontime_statements=(
-    ## Load data
-    "COPY INTO ontime_mini FROM 's3://repo.databend.rs/dataset/stateful/ontime_2006_100000.csv' credentials=(aws_key_id='$REPO_AWS_ACCESS_KEY_ID' aws_secret_key='$REPO_AWS_SECRET_ACCESS_KEY') FILE_FORMAT = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 );"
-    ## run test
-    "SELECT DayOfWeek, count(*) AS c FROM ontime_mini WHERE (Year >= 2000) AND (Year <= 2008) GROUP BY DayOfWeek ORDER BY c DESC;"
-    "SELECT DayOfWeek, count(*) AS c FROM ontime_mini WHERE (DepDelay > 10) AND (Year >= 2000) AND (Year <= 2008) GROUP BY DayOfWeek ORDER BY c DESC;"
-    "SELECT Origin, count(*) AS c FROM ontime_mini WHERE (DepDelay > 10) AND (Year >= 2000) AND (Year <= 2008) GROUP BY Origin ORDER BY c DESC LIMIT 10;"
-    "SELECT IATA_CODE_Reporting_Airline AS Carrier, count() FROM ontime_mini WHERE (DepDelay > 10) AND (Year = 2007) GROUP BY Carrier ORDER BY count() DESC;"
-    "SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(CAST(DepDelay > 10, Int8)) * 1000 AS c3 FROM ontime_mini WHERE Year = 2007 GROUP BY Carrier ORDER BY c3 DESC;"
-    "SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(CAST(DepDelay > 10, Int8)) * 1000 AS c3 FROM ontime_mini WHERE (Year >= 2000) AND (Year <= 2008) GROUP BY Carrier ORDER BY c3 DESC;"
-    "SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(DepDelay) * 1000 AS c3 FROM ontime_mini WHERE (Year >= 2000) AND (Year <= 2008) GROUP BY Carrier;"
-    "SELECT Year, avg(DepDelay) FROM ontime_mini GROUP BY Year;"
-    "SELECT avg(c1) FROM ( SELECT Year, Month, count(*) AS c1 FROM ontime_mini GROUP BY Year, Month ) AS a;"
-    "SELECT OriginCityName, DestCityName, count(*) AS c FROM ontime_mini GROUP BY OriginCityName, DestCityName ORDER BY c DESC LIMIT 10;"
+  ## Load data
+  "COPY INTO ontime_mini FROM 's3://repo.databend.rs/dataset/stateful/ontime_2006_100000.csv' credentials=(aws_key_id='${REPO_AWS_ACCESS_KEY_ID}' aws_secret_key='${REPO_AWS_SECRET_ACCESS_KEY}') FILE_FORMAT = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 );"
+  ## run test
+  "SELECT DayOfWeek, count(*) AS c FROM ontime_mini WHERE (Year >= 2000) AND (Year <= 2008) GROUP BY DayOfWeek ORDER BY c DESC;"
+  "SELECT DayOfWeek, count(*) AS c FROM ontime_mini WHERE (DepDelay > 10) AND (Year >= 2000) AND (Year <= 2008) GROUP BY DayOfWeek ORDER BY c DESC;"
+  "SELECT Origin, count(*) AS c FROM ontime_mini WHERE (DepDelay > 10) AND (Year >= 2000) AND (Year <= 2008) GROUP BY Origin ORDER BY c DESC LIMIT 10;"
+  "SELECT IATA_CODE_Reporting_Airline AS Carrier, count() FROM ontime_mini WHERE (DepDelay > 10) AND (Year = 2007) GROUP BY Carrier ORDER BY count() DESC;"
+  "SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(CAST(DepDelay > 10, Int8)) * 1000 AS c3 FROM ontime_mini WHERE Year = 2007 GROUP BY Carrier ORDER BY c3 DESC;"
+  "SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(CAST(DepDelay > 10, Int8)) * 1000 AS c3 FROM ontime_mini WHERE (Year >= 2000) AND (Year <= 2008) GROUP BY Carrier ORDER BY c3 DESC;"
+  "SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(DepDelay) * 1000 AS c3 FROM ontime_mini WHERE (Year >= 2000) AND (Year <= 2008) GROUP BY Carrier;"
+  "SELECT Year, avg(DepDelay) FROM ontime_mini GROUP BY Year;"
+  "SELECT avg(c1) FROM ( SELECT Year, Month, count(*) AS c1 FROM ontime_mini GROUP BY Year, Month ) AS a;"
+  "SELECT OriginCityName, DestCityName, count(*) AS c FROM ontime_mini GROUP BY OriginCityName, DestCityName ORDER BY c DESC LIMIT 10;"
 )
 
 for i in "${ontime_statements[@]}"; do
