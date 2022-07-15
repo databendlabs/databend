@@ -144,6 +144,7 @@ message UserStageInfo {
     Parquet = 4;
     Xml = 5;
     NdJson = 6;
+    Tsv = 7;
   }
 
   enum StageFileCompression {

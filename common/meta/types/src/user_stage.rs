@@ -117,6 +117,7 @@ impl FromStr for StageFileCompression {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageFileFormatType {
     Csv,
+    Tsv,
     Json,
     NdJson,
     Avro,
@@ -136,6 +137,7 @@ impl FromStr for StageFileFormatType {
     fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
             "CSV" => Ok(StageFileFormatType::Csv),
+            "TSV" => Ok(StageFileFormatType::Tsv),
             "JSON" => Ok(StageFileFormatType::Json),
             "NDJSON" => Ok(StageFileFormatType::NdJson),
             "AVRO" => Ok(StageFileFormatType::Avro),
