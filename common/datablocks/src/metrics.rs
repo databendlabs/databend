@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use metrics::counter;
+use common_metrics::label_counter_with_val_and_labels;
 
 pub static METRIC_DATA_BLOCK_CREATED: &str = "data_block_created_total";
 pub static METRIC_DATA_BLOCK_DROPPED: &str = "data_block_dropped_total";
 
-fn incr_created_counter() {
-    counter!(super::metrics::METRIC_DATA_BLOCK_CREATED, 1);
+#[inline]
+pub fn incr_data_block_created() {
+    label_counter_with_val_and_labels(METRIC_DATA_BLOCK_CREATED, vec![], 1);
 }
 
-fn incr_dropped_counter() {
-    counter!(super::metrics::METRIC_DATA_BLOCK_DROPPED, 1);
+#[inline]
+pub fn incr_data_block_dropped() {
+    label_counter_with_val_and_labels(METRIC_DATA_BLOCK_DROPPED, vec![], 1);
 }

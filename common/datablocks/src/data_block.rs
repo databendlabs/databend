@@ -46,11 +46,13 @@ impl DataBlock {
                 .map(|c| c.data_type())
                 .collect::<Vec<DataTypeImpl>>()
         );
+        super::metrics::incr_data_block_created();
         DataBlock { schema, columns }
     }
 
     #[inline]
     pub fn empty() -> Self {
+        super::metrics::incr_data_block_created();
         DataBlock {
             schema: Arc::new(DataSchema::empty()),
             columns: vec![],
@@ -64,6 +66,7 @@ impl DataBlock {
             let col = f.data_type().create_column(&[]).unwrap();
             columns.push(col)
         }
+        super::metrics::incr_data_block_created();
         DataBlock { schema, columns }
     }
 
@@ -257,5 +260,11 @@ impl fmt::Debug for DataBlock {
 impl Default for DataBlock {
     fn default() -> Self {
         Self::empty()
+    }
+}
+
+impl Drop for DataBlock {
+    fn drop(&mut self) {
+        super::metrics::incr_data_block_dropped()
     }
 }

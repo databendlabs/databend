@@ -17,6 +17,7 @@ common-base = { path = "../base" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
+common-metrics = { path = "../metrics" }
 
 # Github dependencies
 
