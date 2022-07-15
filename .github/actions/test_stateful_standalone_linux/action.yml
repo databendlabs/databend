@@ -47,7 +47,11 @@ runs:
 
     - name: Run Stateful Tests with Standalone mode (ubuntu-latest only)
       shell: bash
-      run: bash ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
+      run: |
+        export REPO_AWS_ACCESS_KEY_ID
+        export REPO_AWS_SECRET_ACCESS_KEY
+
+        ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
       env:
         REPO_AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
         REPO_AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
