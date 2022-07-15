@@ -332,7 +332,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     (0, 0) => {
                         return Err(ErrorCode::UnknownException(
                             "Constant expression donot need to be handled",
-                        ))
+                        ));
                     }
                     (_, 0) => (vec![exprs[0].clone(), exprs[1].clone()], vec![lhs_cols], op),
                     (0, _) => {

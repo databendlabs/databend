@@ -67,7 +67,7 @@ impl ExpressionSyncAnalyzer {
                     return Err(ErrorCode::LogicalError(format!(
                         "Logical error: can't analyze {:?} in sync mode, it's a bug",
                         expr
-                    )))
+                    )));
                 }
             }
         }
@@ -142,7 +142,7 @@ impl ExpressionSyncAnalyzer {
                 true => {
                     return Err(ErrorCode::LogicalError(
                         "Unsupport aggregate function, it's a bug.",
-                    ))
+                    ));
                 }
                 false => match info.kind {
                     OperatorKind::Unary => Self::unary_function(info, &arguments),

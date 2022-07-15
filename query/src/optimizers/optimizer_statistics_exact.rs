@@ -47,12 +47,14 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
         ) {
             (
                 [],
-                [Expression::AggregateFunction {
-                    ref op,
-                    distinct: false,
-                    ref args,
-                    ..
-                }],
+                [
+                    Expression::AggregateFunction {
+                        ref op,
+                        distinct: false,
+                        ref args,
+                        ..
+                    },
+                ],
                 PlanNode::ReadSource(read_source_plan),
             ) if op.to_lowercase().as_str() == "count"
                 && args.is_empty()

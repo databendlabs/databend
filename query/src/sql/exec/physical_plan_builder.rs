@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::Itertools;
 
+use crate::sql::exec::util::check_physical;
 use crate::sql::exec::AggregateFunctionDesc;
 use crate::sql::exec::AggregateFunctionSignature;
 use crate::sql::exec::ColumnID;
@@ -40,6 +41,8 @@ impl PhysicalPlanBuilder {
     }
 
     pub fn build(&self, s_expr: &SExpr) -> Result<PhysicalPlan> {
+        debug_assert!(check_physical(s_expr));
+
         match s_expr.plan() {
             RelOperator::PhysicalScan(scan) => {
                 let mut name_mapping = BTreeMap::new();

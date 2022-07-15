@@ -337,7 +337,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     None => {
                         return Err(MetaError::AppError(AppError::UndropDbHasNoHistory(
                             UndropDbHasNoHistory::new(&name_key.db_name),
-                        )))
+                        )));
                     }
                 }
             };
@@ -348,7 +348,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 None => {
                     return Err(MetaError::AppError(AppError::UndropDbHasNoHistory(
                         UndropDbHasNoHistory::new(&name_key.db_name),
-                    )))
+                    )));
                 }
             };
 
@@ -1027,7 +1027,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     None => {
                         return Err(MetaError::AppError(AppError::UndropTableHasNoHistory(
                             UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                        )))
+                        )));
                     }
                 }
             };
@@ -1038,7 +1038,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 None => {
                     return Err(MetaError::AppError(AppError::UndropTableHasNoHistory(
                         UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                    )))
+                    )));
                 }
             };
 

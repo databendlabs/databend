@@ -95,7 +95,7 @@ impl ExpressionAnalyzer {
                     return Err(ErrorCode::LogicalError(format!(
                         "Logical error: can't analyze {:?} in sync mode, it's a bug",
                         expr
-                    )))
+                    )));
                 }
             }
         }

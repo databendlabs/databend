@@ -24,17 +24,17 @@ echo "set enable_planner_v2 = 1; list @s1 PATTERN = 'ontime.*'" | $MYSQL_CLIENT_
 
 copy_from_stage_cases=(
   # copy parquet
-  "copy into ontime200 from '@s1' PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = 'PARQUET');"
+  "copy into ontime200 from @s1 PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = 'PARQUET');"
   # copy gzip csv
-  "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.gz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1);"
+  "copy into ontime200 from @s1 FILES = ('ontime_200.csv.gz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1);"
   # copy zstd csv
-  "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1);"
+  "copy into ontime200 from @s1 FILES = ('ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1);"
   # copy bz2 csv
-  "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
+  "copy into ontime200 from @s1 FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
    # copy xz csv
-    "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'xz'  record_delimiter = '\n' skip_header = 1);"
+    "copy into ontime200 from @s1 FILES = ('ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'xz'  record_delimiter = '\n' skip_header = 1);"
   # copy auto csv
-  "copy into ontime200 from '@s1' FILES = ('ontime_200.csv.gz', 'ontime_200.csv.zst', 'ontime_200.csv.bz2', 'ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = AUTO  record_delimiter = '\n' skip_header = 1);"
+  "copy into ontime200 from @s1 FILES = ('ontime_200.csv.gz', 'ontime_200.csv.zst', 'ontime_200.csv.bz2', 'ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = AUTO  record_delimiter = '\n' skip_header = 1);"
 )
 
 for i in "${copy_from_stage_cases[@]}"; do
@@ -49,15 +49,15 @@ echo "set enable_planner_v2 = 1; list @named_external_stage PATTERN = 'ontime.*p
 
 copy_from_named_external_stage_cases=(
   # copy parquet
-  "copy into ontime200 from '@named_external_stage'  PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = 'PARQUET')"
+  "copy into ontime200 from @named_external_stage  PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = 'PARQUET')"
   # copy gzip csv
-  "copy into ontime200 from '@named_external_stage' FILES = ('ontime_200.csv.gz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1);"
+  "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.gz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1);"
   # copy zstd csv
-  "copy into ontime200 from '@named_external_stage' FILES = ('ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1);"
+  "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1);"
   # copy bz2 csv
-  "copy into ontime200 from '@named_external_stage' FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
+  "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
   # copy auto csv
-  "copy into ontime200 from '@named_external_stage' FILES = ('ontime_200.csv.gz','ontime_200.csv.bz2','ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1);"
+  "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.gz','ontime_200.csv.bz2','ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1);"
 )
 
 for i in "${copy_from_named_external_stage_cases[@]}"; do

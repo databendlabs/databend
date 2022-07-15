@@ -71,16 +71,14 @@ impl MySQLConnection {
 
     // TODO: move to ToBlockingStream trait
     fn convert_stream(stream: TcpStream) -> Result<std::net::TcpStream> {
-        let stream = stream
-            .into_std()
-            .map_err_to_code(ErrorCode::TokioError, || {
-                "Cannot to convert Tokio TcpStream to Std TcpStream"
-            })?;
-        stream
-            .set_nonblocking(false)
-            .map_err_to_code(ErrorCode::TokioError, || {
-                "Cannot to convert Tokio TcpStream to Std TcpStream"
-            })?;
+        let stream = stream.into_std().map_err_to_code(
+            ErrorCode::TokioError,
+            || "Cannot to convert Tokio TcpStream to Std TcpStream",
+        )?;
+        stream.set_nonblocking(false).map_err_to_code(
+            ErrorCode::TokioError,
+            || "Cannot to convert Tokio TcpStream to Std TcpStream",
+        )?;
 
         Ok(stream)
     }

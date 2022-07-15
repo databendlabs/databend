@@ -40,7 +40,7 @@ fn test_plan_builds() -> Result<()> {
             Projection: number:UInt64\
             \n  Expression: number:UInt64 ()\
             \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
-            err : "",
+            err: "",
         },
         TestCase {
             name: "constant-alias-pass",
@@ -52,7 +52,7 @@ fn test_plan_builds() -> Result<()> {
             Projection: (4 + 5) as 4_5:Int16\
             \n  Expression: (4 + 5):Int16, ((4 + 5) + 2):Int32 ()\
             \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
-             err : "",
+            err: "",
         },
         TestCase {
             name: "projection-simple-pass",
@@ -62,7 +62,7 @@ fn test_plan_builds() -> Result<()> {
             expect: "\
         Projection: number:UInt64\
         \n  ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
-        err : "",
+            err: "",
         },
         TestCase {
             name: "expression-merge-pass",
@@ -70,36 +70,42 @@ fn test_plan_builds() -> Result<()> {
                 .expression(&[col("number"), col("number").alias("c1")], "")?
                 .expression(&[col("number"), col("number").alias("c2")], "")?
                 .build()),
-            expect:"Expression: number:UInt64, number as c2:UInt64 ()\
+            expect: "Expression: number:UInt64, number as c2:UInt64 ()\
             \n  Expression: number:UInt64, number as c1:UInt64 ()\
             \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
-            err : "",
+            err: "",
         },
         TestCase {
             name: "expression-before-projection-pass",
             plan: (PlanBuilder::from(&source)
-                .expression(&[col("number"), col("number").alias("c1")], "Before Projection")?
+                .expression(
+                    &[col("number"), col("number").alias("c1")],
+                    "Before Projection",
+                )?
                 .project(&[col("c1")])?
                 .build()),
-            expect:"\
+            expect: "\
             Projection: c1:UInt64\
             \n  Expression: number:UInt64, number as c1:UInt64 (Before Projection)\
             \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
-            err : "",
+            err: "",
         },
         TestCase {
             name: "filter-pass",
             plan: (PlanBuilder::from(&source)
                 .filter(col("number").eq(lit(1i64)))?
-                .expression(&[col("number"), col("number").alias("c1")], "Before Projection")?
+                .expression(
+                    &[col("number"), col("number").alias("c1")],
+                    "Before Projection",
+                )?
                 .project(&[col("c1")])?
                 .build()),
-            expect:"\
+            expect: "\
             Projection: c1:UInt64\
             \n  Expression: number:UInt64, number as c1:UInt64 (Before Projection)\
             \n    Filter: (number = 1)\
             \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
-            err : "",
+            err: "",
         },
     ];
 

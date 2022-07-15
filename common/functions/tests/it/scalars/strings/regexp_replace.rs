@@ -130,8 +130,7 @@ fn test_regexp_replace_function() -> Result<()> {
                 Series::from_data(vec![-1]),
             ],
             expect: Series::from_data(Vec::<&str>::new()),
-            error:
-                "Incorrect arguments to regexp_replace: occurrence must not be negative, but got -1",
+            error: "Incorrect arguments to regexp_replace: occurrence must not be negative, but got -1",
         },
         ScalarFunctionTest {
             name: "regexp-replace-match-type-error",

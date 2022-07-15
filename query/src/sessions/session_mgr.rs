@@ -337,7 +337,8 @@ impl SessionManager {
         async move {
             tracing::info!(
                 "Waiting {} secs for connections to close. You can press Ctrl + C again to force shutdown.",
-                timeout_secs);
+                timeout_secs
+            );
             let mut signal = Box::pin(signal.next());
 
             for _index in 0..timeout_secs {

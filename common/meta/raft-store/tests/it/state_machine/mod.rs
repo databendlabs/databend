@@ -239,11 +239,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             None => None,
             Some(ref w) => {
                 // trick: in this test all expired timestamps are all 0
-                if w.get_expire_at() < now {
-                    None
-                } else {
-                    want
-                }
+                if w.get_expire_at() < now { None } else { want }
             }
         };
 

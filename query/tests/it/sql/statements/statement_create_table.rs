@@ -33,7 +33,12 @@ async fn test_statement_create_table_reserved_opt_keys() -> Result<()> {
             DfStatement::CreateTable(query) => match query.analyze(ctx.clone()).await {
                 Err(e) => {
                     assert_eq!(e.code(), ErrorCode::bad_option_code());
-                    assert_eq!(e.to_string(), format!("Code: 1022, displayText = the following table options are reserved, please do not specify them in the CREATE TABLE statement: {opt}."));
+                    assert_eq!(
+                        e.to_string(),
+                        format!(
+                            "Code: 1022, displayText = the following table options are reserved, please do not specify them in the CREATE TABLE statement: {opt}."
+                        )
+                    );
                 }
                 _ => panic!("create table with reserved option should return error"),
             },

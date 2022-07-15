@@ -67,7 +67,10 @@ pub fn init_temp_sled_db(temp_dir: TempDir) {
     };
 
     if !inited_as_temp {
-        panic!("sled db is already initialized with specified path: {}, can not re-init with temp path {}", curr_path, temp_path);
+        panic!(
+            "sled db is already initialized with specified path: {}, can not re-init with temp path {}",
+            curr_path, temp_path
+        );
     }
 }
 
