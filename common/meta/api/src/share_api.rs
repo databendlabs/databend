@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_app::share::AddShareAccountReply;
+use common_meta_app::share::AddShareAccountReq;
 use common_meta_app::share::CreateShareReply;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReply;
 use common_meta_app::share::DropShareReq;
+use common_meta_app::share::RemoveShareAccountReply;
+use common_meta_app::share::RemoveShareAccountReq;
 use common_meta_types::MetaResult;
 
 #[async_trait::async_trait]
@@ -23,4 +27,11 @@ pub trait ShareApi: Sync + Send {
     async fn create_share(&self, req: CreateShareReq) -> MetaResult<CreateShareReply>;
 
     async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply>;
+
+    async fn add_share_account(&self, req: AddShareAccountReq) -> MetaResult<AddShareAccountReply>;
+
+    async fn remove_share_account(
+        &self,
+        req: RemoveShareAccountReq,
+    ) -> MetaResult<RemoveShareAccountReply>;
 }
