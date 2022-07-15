@@ -321,7 +321,7 @@ impl SubqueryRewriter {
                     UnnestResult::Uncorrelated,
                 ))
             }
-            SubqueryType::Exists | SubqueryType::NotExists => {
+            SubqueryType::Exists => {
                 let mut subquery_expr = *subquery.subquery.clone();
                 // Wrap Limit to current subquery
                 let limit = Limit {
@@ -331,7 +331,6 @@ impl SubqueryRewriter {
                 subquery_expr = SExpr::create_unary(limit.into(), subquery_expr.clone());
 
                 // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
-                // In contrast, NOT EXISTS subquery will be rewritten into `COUNT(*) = 0`.
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
                 let agg_func = AggregateFunctionFactory::instance().get("count", vec![], vec![])?;
@@ -358,7 +357,7 @@ impl SubqueryRewriter {
                     from_distinct: false,
                 };
 
-                // COUNT(*) = 1 or COUNT(*) = 0
+                // COUNT(*) = 1
                 let compare_index = self.metadata.write().add_column(
                     "subquery".to_string(),
                     BooleanType::new_impl(),
@@ -381,11 +380,7 @@ impl SubqueryRewriter {
                     ),
                     right: Box::new(
                         ConstantExpr {
-                            value: if SubqueryType::Exists == subquery.typ {
-                                DataValue::Int64(1)
-                            } else {
-                                DataValue::Int64(0)
-                            },
+                            value: DataValue::Int64(1),
                             data_type: Box::new(agg_func.return_type()?),
                         }
                         .into(),
@@ -404,7 +399,7 @@ impl SubqueryRewriter {
                 };
 
                 // Project
-                //     EvalScalar: COUNT(*) = 1 or COUNT(*) = 0
+                //     EvalScalar: COUNT(*) = 1
                 //         Aggregate: COUNT(*)
                 let rewritten_subquery = SExpr::create_unary(
                     project.into(),

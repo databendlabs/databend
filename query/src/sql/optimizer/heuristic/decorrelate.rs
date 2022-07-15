@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::type_coercion::merge_types;
+use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::NullableType;
 use common_exception::ErrorCode;
@@ -306,13 +307,58 @@ impl SubqueryRewriter {
                 let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
-            SubqueryType::Exists | SubqueryType::NotExists => {
+            SubqueryType::Exists => {
                 if is_conjunctive_predicate {
                     if let Some(result) = self.try_decorrelate_simple_subquery(left, subquery)? {
                         return Ok((result, UnnestResult::SimpleJoin));
                     }
                 }
-                todo!()
+                let correlated_columns = subquery.outer_columns.clone();
+                let flatten_plan = self.flatten(&subquery.subquery, &correlated_columns)?;
+                // Construct mark join
+                let mut left_conditions = Vec::with_capacity(correlated_columns.len());
+                let mut right_conditions = Vec::with_capacity(correlated_columns.len());
+                let mut metadata = self.metadata.write();
+                for correlated_column in correlated_columns.iter() {
+                    let column_entry = metadata.column(correlated_column.clone());
+                    let right_column = Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: format!("subquery_{}", correlated_column),
+                            index: correlated_column.clone(),
+                            data_type: Box::from(column_entry.data_type.clone()),
+                            visible_in_unqualified_wildcard: false,
+                        },
+                    });
+                    let derive_column = self.derived_columns.get(&correlated_column).unwrap();
+                    let left_column = Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: format!("subquery_{}", derive_column),
+                            index: derive_column.clone(),
+                            data_type: Box::from(column_entry.data_type.clone()),
+                            visible_in_unqualified_wildcard: false,
+                        },
+                    });
+                    left_conditions.push(left_column.clone());
+                    right_conditions.push(right_column);
+                }
+                let marker_index = metadata.add_column(
+                    "marker".to_string(),
+                    NullableType::new_impl(BooleanType::new_impl()),
+                    None,
+                );
+                let join_plan = LogicalInnerJoin {
+                    left_conditions,
+                    right_conditions,
+                    other_conditions: vec![],
+                    join_type: JoinType::Mark,
+                    marker_index: Some(marker_index),
+                };
+                let s_expr = SExpr::create_binary(join_plan.into(), flatten_plan, left.clone());
+                Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             SubqueryType::Any => {
                 todo!()
