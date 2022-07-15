@@ -15,5 +15,5 @@
 mod stage_source;
 mod stage_table;
 
-pub use stage_source::StageSource;
+pub use stage_source::StageSourceHelper;
 pub use stage_table::StageTable;

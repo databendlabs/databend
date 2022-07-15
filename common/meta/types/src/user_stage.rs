@@ -72,7 +72,7 @@ impl Default for StageType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StageFileCompression {
     Auto,
     Gzip,
@@ -118,6 +118,7 @@ impl FromStr for StageFileCompression {
 pub enum StageFileFormatType {
     Csv,
     Json,
+    NdJson,
     Avro,
     Orc,
     Parquet,
@@ -136,6 +137,7 @@ impl FromStr for StageFileFormatType {
         match s.to_uppercase().as_str() {
             "CSV" => Ok(StageFileFormatType::Csv),
             "JSON" => Ok(StageFileFormatType::Json),
+            "NDJSON" => Ok(StageFileFormatType::NdJson),
             "AVRO" => Ok(StageFileFormatType::Avro),
             "ORC" => Ok(StageFileFormatType::Orc),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
