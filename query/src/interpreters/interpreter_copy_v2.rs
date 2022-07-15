@@ -159,6 +159,7 @@ impl CopyInterpreterV2 {
     async fn execute_copy_into_stage(
         &self,
         stage: &UserStageInfo,
+        path: &str,
         query: &Plan,
     ) -> Result<SendableDataBlockStream> {
         let (s_expr, metadata, bind_context) = match query {
@@ -191,9 +192,9 @@ impl CopyInterpreterV2 {
             .collect();
         let data_schema = DataSchemaRefExt::create(fields);
         let stage_table_info = StageTableInfo {
-            schema: data_schema,
+            schema: data_schema.clone(),
             stage_info: stage.clone(),
-            path: "".to_string(),
+            path: path.to_string(),
             files: vec![],
         };
 
@@ -211,12 +212,7 @@ impl CopyInterpreterV2 {
             )
             .await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            // TODO(xuanwo): Is this correct?
-            Arc::new(DataSchema::new(vec![])),
-            None,
-            vec![],
-        )))
+        Ok(Box::pin(DataBlockStream::create(data_schema, None, vec![])))
     }
 }
 
@@ -285,9 +281,9 @@ impl Interpreter for CopyInterpreterV2 {
                     vec![],
                 )))
             }
-            CopyPlanV2::IntoStage { stage, from, .. } => {
-                self.execute_copy_into_stage(stage, from).await
-            }
+            CopyPlanV2::IntoStage {
+                stage, from, path, ..
+            } => self.execute_copy_into_stage(stage, path, from).await,
         }
     }
 }

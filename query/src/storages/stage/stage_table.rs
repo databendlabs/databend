@@ -29,6 +29,7 @@ use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing::info;
 use parking_lot::Mutex;
 
 use super::StageSourceHelper;
@@ -140,10 +141,14 @@ impl Table for StageTable {
             self.table_info.stage_info.file_format_options.format
         );
         let path = format!(
-            "{}/{}.{}",
+            "{}{}.{}",
             self.table_info.path,
             uuid::Uuid::new_v4(),
             format_name.to_ascii_lowercase()
+        );
+        info!(
+            "try commit stage table {} to file {path}",
+            self.table_info.stage_info.stage_name
         );
 
         let op = StageSourceHelper::get_op(&ctx, &self.table_info.stage_info).await?;
