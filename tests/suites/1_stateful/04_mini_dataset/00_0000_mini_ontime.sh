@@ -7,6 +7,8 @@ echo "drop table if exists ontime_mini;" | $MYSQL_CLIENT_CONNECT
 ## Create table
 cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_mini/g' | $MYSQL_CLIENT_CONNECT
 
+export
+
 ontime_statements=(
   ## Load data
   "COPY INTO ontime_mini FROM 's3://repo.databend.rs/dataset/stateful/ontime_2006_100000.csv' credentials=(aws_key_id='${REPO_AWS_ACCESS_KEY_ID}' aws_secret_key='${REPO_AWS_SECRET_ACCESS_KEY}') FILE_FORMAT = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 );"
