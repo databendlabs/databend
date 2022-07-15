@@ -125,8 +125,7 @@ impl SubqueryRewriter {
 
             RelOperator::LogicalGet(_) => Ok(s_expr.clone()),
 
-            RelOperator::CrossApply(_)
-            | RelOperator::Max1Row(_)
+            RelOperator::Max1Row(_)
             | RelOperator::PhysicalHashJoin(_)
             | RelOperator::Pattern(_)
             | RelOperator::PhysicalScan(_) => Err(ErrorCode::LogicalError("Invalid plan type")),

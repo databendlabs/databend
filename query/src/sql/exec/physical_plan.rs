@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
@@ -80,11 +79,6 @@ pub enum PhysicalPlan {
         other_conditions: Vec<PhysicalScalar>,
         join_type: JoinType,
         marker_index: Option<IndexType>,
-    },
-    CrossApply {
-        input: Box<PhysicalPlan>,
-        subquery: Box<PhysicalPlan>,
-        correlated_columns: BTreeSet<ColumnID>,
     },
     Max1Row {
         input: Box<PhysicalPlan>,
@@ -205,17 +199,6 @@ impl PhysicalPlan {
                 }
                 Ok(DataSchemaRefExt::create(fields))
             }
-            PhysicalPlan::CrossApply {
-                input, subquery, ..
-            } => Ok(DataSchemaRefExt::create(
-                input
-                    .output_schema()?
-                    .fields()
-                    .iter()
-                    .chain(subquery.output_schema()?.fields().iter())
-                    .cloned()
-                    .collect(),
-            )),
             PhysicalPlan::Max1Row { input, .. } => input.output_schema(),
         }
     }

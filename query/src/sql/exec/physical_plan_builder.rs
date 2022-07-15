@@ -191,15 +191,6 @@ impl PhysicalPlanBuilder {
                 limit: limit.limit,
                 offset: limit.offset,
             }),
-            RelOperator::CrossApply(cross_apply) => Ok(PhysicalPlan::CrossApply {
-                input: Box::new(self.build(s_expr.child(0)?)?),
-                subquery: Box::new(self.build(s_expr.child(1)?)?),
-                correlated_columns: cross_apply
-                    .correlated_columns
-                    .iter()
-                    .map(|v| v.to_string())
-                    .collect(),
-            }),
             RelOperator::Max1Row(_) => Ok(PhysicalPlan::Max1Row {
                 input: Box::new(self.build(s_expr.child(0)?)?),
             }),

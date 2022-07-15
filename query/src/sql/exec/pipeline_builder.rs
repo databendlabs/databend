@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use common_datablocks::SortColumnDescription;
@@ -44,7 +43,6 @@ use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
-use crate::pipelines::processors::TransformApply;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformMax1Row;
@@ -172,20 +170,6 @@ impl PipelineBuilder {
                     pipeline,
                 )?;
                 Ok(())
-            }
-            v @ PhysicalPlan::CrossApply {
-                input,
-                subquery,
-                correlated_columns,
-            } => {
-                self.build_pipeline(context.clone(), input, pipeline)?;
-                self.build_apply(
-                    context,
-                    subquery,
-                    correlated_columns,
-                    v.output_schema()?,
-                    pipeline,
-                )
             }
             PhysicalPlan::Max1Row { input } => {
                 self.build_pipeline(context, input, pipeline)?;
@@ -578,28 +562,6 @@ impl PipelineBuilder {
         }
 
         pipeline.add_pipe(sink_pipeline_builder.finalize());
-        Ok(())
-    }
-
-    pub fn build_apply(
-        &mut self,
-        context: Arc<QueryContext>,
-        subquery: &PhysicalPlan,
-        outer_columns: &BTreeSet<ColumnID>,
-        output_schema: DataSchemaRef,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            Ok(TransformApply::create(
-                input,
-                output,
-                context.clone(),
-                outer_columns.clone(),
-                output_schema.clone(),
-                subquery.clone(),
-            ))
-        })?;
-
         Ok(())
     }
 

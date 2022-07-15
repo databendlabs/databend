@@ -58,7 +58,6 @@ pub use transforms::SortMergeCompactor;
 pub use transforms::SubQueriesPuller;
 pub use transforms::TransformAddOn;
 pub use transforms::TransformAggregator;
-pub use transforms::TransformApply;
 pub use transforms::TransformBlockCompact;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCompact;
