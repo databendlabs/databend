@@ -82,7 +82,6 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "Maximum block size for reading",
             },
-
             // max_threads
             SettingValue {
                 default_value: DataValue::UInt64(16),
@@ -90,7 +89,6 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
             },
-
             // flight_client_timeout
             SettingValue {
                 default_value: DataValue::UInt64(60),
@@ -98,19 +96,23 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
             },
-
             // storage_read_buffer_size
             SettingValue {
                 default_value: DataValue::UInt64(1024 * 1024),
-                user_setting: UserSetting::create("storage_read_buffer_size", DataValue::UInt64(1024 * 1024)),
+                user_setting: UserSetting::create(
+                    "storage_read_buffer_size",
+                    DataValue::UInt64(1024 * 1024),
+                ),
                 level: ScopeLevel::Session,
                 desc: "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
             },
-
             // enable_new_processor_framework
             SettingValue {
                 default_value: DataValue::UInt64(1),
-                user_setting: UserSetting::create("enable_new_processor_framework", DataValue::UInt64(1)),
+                user_setting: UserSetting::create(
+                    "enable_new_processor_framework",
+                    DataValue::UInt64(1),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Enable new processor framework if value != 0, default value: 1",
             },
@@ -123,13 +125,19 @@ impl Settings {
             },
             SettingValue {
                 default_value: DataValue::String("\n".as_bytes().to_vec()),
-                user_setting: UserSetting::create("record_delimiter", DataValue::String("\n".as_bytes().to_vec())),
+                user_setting: UserSetting::create(
+                    "record_delimiter",
+                    DataValue::String("\n".as_bytes().to_vec()),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Format record_delimiter, default value: \"\\n\"",
             },
             SettingValue {
                 default_value: DataValue::String(",".as_bytes().to_vec()),
-                user_setting: UserSetting::create("field_delimiter", DataValue::String(",".as_bytes().to_vec())),
+                user_setting: UserSetting::create(
+                    "field_delimiter",
+                    DataValue::String(",".as_bytes().to_vec()),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Format field delimiter, default value: ,",
             },
@@ -147,19 +155,28 @@ impl Settings {
             },
             SettingValue {
                 default_value: DataValue::String("None".as_bytes().to_vec()),
-                user_setting: UserSetting::create("compression", DataValue::String("None".as_bytes().to_vec())),
+                user_setting: UserSetting::create(
+                    "compression",
+                    DataValue::String("None".as_bytes().to_vec()),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Format compression, default value: None",
             },
             SettingValue {
                 default_value: DataValue::String("UTC".as_bytes().to_vec()),
-                user_setting: UserSetting::create("timezone", DataValue::String("UTC".as_bytes().to_vec())),
+                user_setting: UserSetting::create(
+                    "timezone",
+                    DataValue::String("UTC".as_bytes().to_vec()),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Timezone, default value: UTC,",
             },
             SettingValue {
                 default_value: DataValue::UInt64(10000),
-                user_setting: UserSetting::create("group_by_two_level_threshold", DataValue::UInt64(10000)),
+                user_setting: UserSetting::create(
+                    "group_by_two_level_threshold",
+                    DataValue::UInt64(10000),
+                ),
                 level: ScopeLevel::Session,
                 desc: "The threshold of keys to open two-level aggregation, default value: 10000",
             },
@@ -173,14 +190,17 @@ impl Settings {
                 default_value: DataValue::UInt64(1),
                 user_setting: UserSetting::create("wait_for_async_insert", DataValue::UInt64(1)),
                 level: ScopeLevel::Session,
-                desc: "Whether the client wait for the reply of async insert, default value: 1"
+                desc: "Whether the client wait for the reply of async insert, default value: 1",
             },
             SettingValue {
                 default_value: DataValue::UInt64(100),
-                user_setting: UserSetting::create("wait_for_async_insert_timeout", DataValue::UInt64(100)),
+                user_setting: UserSetting::create(
+                    "wait_for_async_insert_timeout",
+                    DataValue::UInt64(100),
+                ),
                 level: ScopeLevel::Session,
-                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100"
-            }
+                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100",
+            },
         ];
 
         let settings = Arc::new(RwLock::new(HashMap::default()));

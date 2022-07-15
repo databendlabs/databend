@@ -26,8 +26,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing_futures::Instrument;
-use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 
@@ -38,7 +36,6 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
@@ -270,6 +267,7 @@ struct HiveSource {
 }
 
 impl HiveSource {
+    #[allow(dead_code)]
     pub fn create(
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,

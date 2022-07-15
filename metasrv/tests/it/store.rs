@@ -243,10 +243,11 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
             sto.raft_state.write_state_machine_id(&(1, 2)).await?;
             let res = sto.install_snapshot(&data).await;
             assert!(res.is_err(), "different ids disallow installing snapshot");
-            assert!(res
-                .unwrap_err()
-                .to_string()
-                .starts_with("another snapshot install is not finished yet: 1 2"));
+            assert!(
+                res.unwrap_err()
+                    .to_string()
+                    .starts_with("another snapshot install is not finished yet: 1 2")
+            );
         }
 
         tracing::info!("--- install snapshot");

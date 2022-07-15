@@ -1250,9 +1250,18 @@ async fn test_func_object_keys() -> Result<()> {
     let route = create_endpoint();
 
     let sqls = vec![
-        ("CREATE TABLE IF NOT EXISTS objects_test1(id TINYINT, obj OBJECT, var VARIANT) Engine=Fuse;", 0),
-        ("INSERT INTO objects_test1 VALUES (1, parse_json('{\"a\": 1, \"b\": [1,2,3]}'), parse_json('{\"1\": 2}'));", 0),
-        ("SELECT id, object_keys(obj), object_keys(var) FROM objects_test1;", 1),
+        (
+            "CREATE TABLE IF NOT EXISTS objects_test1(id TINYINT, obj OBJECT, var VARIANT) Engine=Fuse;",
+            0,
+        ),
+        (
+            "INSERT INTO objects_test1 VALUES (1, parse_json('{\"a\": 1, \"b\": [1,2,3]}'), parse_json('{\"1\": 2}'));",
+            0,
+        ),
+        (
+            "SELECT id, object_keys(obj), object_keys(var) FROM objects_test1;",
+            1,
+        ),
     ];
 
     for (sql, data_len) in sqls {

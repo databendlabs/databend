@@ -237,11 +237,10 @@ impl InteractiveWorkerBase {
                 }
             }
         })?;
-        let query_result = query_result
-            .await
-            .map_err_to_code(ErrorCode::TokioError, || {
-                "Cannot join handle from context's runtime"
-            })?;
+        let query_result = query_result.await.map_err_to_code(
+            ErrorCode::TokioError,
+            || "Cannot join handle from context's runtime",
+        )?;
         query_result.map(|_| rx)
     }
 }

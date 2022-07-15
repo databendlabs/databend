@@ -218,7 +218,7 @@ pub fn try_create_aggregate_retention_function(
         let data_type = argument.data_type();
         if data_type.data_type_id() != TypeID::Boolean {
             return Err(ErrorCode::BadArguments(
-                "The arguments of AggregateRetention should be an expression which returns a Boolean result"
+                "The arguments of AggregateRetention should be an expression which returns a Boolean result",
             ));
         }
     }

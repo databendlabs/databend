@@ -33,14 +33,12 @@ impl ExchangeSink {
     fn via_merge_exchange(ctx: &Arc<QueryContext>, params: &MergeExchangeParams) -> Result<()> {
         match params.destination_id == ctx.get_cluster().local_id() {
             true => Ok(()), /* do nothing */
-            false => Err(ErrorCode::LogicalError(
-                format!(
-                    "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
-                    ctx.get_cluster().local_id(),
-                    params.destination_id,
-                    params.fragment_id
-                ),
-            )),
+            false => Err(ErrorCode::LogicalError(format!(
+                "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
+                ctx.get_cluster().local_id(),
+                params.destination_id,
+                params.fragment_id
+            ))),
         }
     }
 

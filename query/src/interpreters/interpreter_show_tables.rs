@@ -161,11 +161,7 @@ impl SimpleSelectBuilder {
     fn build(self) -> String {
         let columns = {
             let s = self.columns.join(",");
-            if !s.is_empty() {
-                s
-            } else {
-                "*".to_owned()
-            }
+            if !s.is_empty() { s } else { "*".to_owned() }
         };
 
         let order_bys = {

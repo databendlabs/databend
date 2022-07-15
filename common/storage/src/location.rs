@@ -63,23 +63,9 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
             account_name: l
                 .connection
                 .get("account_name")
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        anyhow!("account_name is required for storage azblob"),
-                    )
-                })?
-                .to_string(),
-            account_key: l
-                .connection
-                .get("account_key")
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        anyhow!("account_name is required for storage azblob"),
-                    )
-                })?
-                .to_string(),
+                .cloned()
+                .unwrap_or_default(),
+            account_key: l.connection.get("account_key").cloned().unwrap_or_default(),
             root: root.to_string(),
         }),
         #[cfg(feature = "storage-hdfs")]
@@ -108,24 +94,14 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .connection
                 .get("access_key_id")
                 .or_else(|| l.connection.get("aws_key_id"))
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        anyhow!("access_key_id is required for storage s3"),
-                    )
-                })?
-                .to_string(),
+                .cloned()
+                .unwrap_or_default(),
             secret_access_key: l
                 .connection
                 .get("secret_access_key")
                 .or_else(|| l.connection.get("aws_secret_key"))
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        anyhow!("secret_access_key is required for storage s3"),
-                    )
-                })?
-                .to_string(),
+                .cloned()
+                .unwrap_or_default(),
             master_key: l.connection.get("master_key").cloned().unwrap_or_default(),
             root: root.to_string(),
             disable_credential_loader: true,
@@ -146,7 +122,7 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 anyhow!("{v} is not allowed to be used as uri location"),
-            ))
+            ));
         }
     };
 
