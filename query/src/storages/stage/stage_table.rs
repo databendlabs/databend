@@ -96,7 +96,8 @@ impl Table for StageTable {
         let stage_source = StageSourceHelper::try_create(ctx, schema, table_info.clone(), files)?;
 
         for _index in 0..settings.get_max_threads()? {
-            builder.add_source(OutputPort::create(), stage_source.get_splitter()?);
+            let output = OutputPort::create();
+            builder.add_source(output.clone(), stage_source.get_splitter(output)?);
         }
         pipeline.add_pipe(builder.finalize());
 

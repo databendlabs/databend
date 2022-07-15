@@ -90,8 +90,7 @@ impl StageSourceHelper {
         Ok(src)
     }
 
-    pub fn get_splitter(&self) -> Result<ProcessorPtr> {
-        let output = OutputPort::create();
+    pub fn get_splitter(&self, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
         MultiFileSplitter::create(
             self.operator_info.clone(),
             self.ctx.get_scan_progress(),
