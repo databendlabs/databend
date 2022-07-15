@@ -25,7 +25,7 @@ use common_exception::Result;
 
 use crate::pretty_format_blocks;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct DataBlock {
     schema: DataSchemaRef,
     columns: Vec<ColumnRef>,
@@ -254,6 +254,12 @@ impl fmt::Debug for DataBlock {
         let formatted = pretty_format_blocks(&[self.clone()]).expect("Pretty format batches error");
         let lines: Vec<&str> = formatted.trim().lines().collect();
         write!(f, "\n{:#?}\n", lines)
+    }
+}
+
+impl Clone for DataBlock {
+    fn clone(&self) -> Self {
+        Self::create(self.schema.clone(), self.columns.clone())
     }
 }
 
