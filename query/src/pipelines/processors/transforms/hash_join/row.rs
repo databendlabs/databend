@@ -20,6 +20,8 @@ use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
+use crate::pipelines::processors::transforms::hash_join::join_hash_table::MarkerKind;
+
 pub type ColumnVector = Vec<ColumnRef>;
 
 pub struct Chunk {
@@ -38,6 +40,7 @@ impl Chunk {
 pub struct RowPtr {
     pub chunk_index: u32,
     pub row_index: u32,
+    pub marker: Option<MarkerKind>,
 }
 
 pub struct RowSpace {
@@ -107,6 +110,16 @@ impl RowSpace {
             Ok(data_block)
         } else {
             Ok(DataBlock::empty_with_schema(self.data_schema.clone()))
+        }
+    }
+}
+
+impl PartialEq for RowPtr {
+    fn eq(&self, other: &Self) -> bool {
+        if self.chunk_index == other.chunk_index && self.row_index == other.row_index {
+            true
+        } else {
+            false
         }
     }
 }
