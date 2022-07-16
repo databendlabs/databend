@@ -301,6 +301,7 @@ impl FromToProto<pb::user_stage_info::StageFileFormatType> for mt::StageFileForm
     where Self: Sized {
         match p {
             pb::user_stage_info::StageFileFormatType::Csv => Ok(mt::StageFileFormatType::Csv),
+            pb::user_stage_info::StageFileFormatType::Tsv => Ok(mt::StageFileFormatType::Tsv),
             pb::user_stage_info::StageFileFormatType::Json => Ok(mt::StageFileFormatType::Json),
             pb::user_stage_info::StageFileFormatType::NdJson => Ok(mt::StageFileFormatType::NdJson),
             pb::user_stage_info::StageFileFormatType::Avro => Ok(mt::StageFileFormatType::Avro),
@@ -315,6 +316,7 @@ impl FromToProto<pb::user_stage_info::StageFileFormatType> for mt::StageFileForm
     fn to_pb(&self) -> Result<pb::user_stage_info::StageFileFormatType, Incompatible> {
         match *self {
             mt::StageFileFormatType::Csv => Ok(pb::user_stage_info::StageFileFormatType::Csv),
+            mt::StageFileFormatType::Tsv => Ok(pb::user_stage_info::StageFileFormatType::Tsv),
             mt::StageFileFormatType::Json => Ok(pb::user_stage_info::StageFileFormatType::Json),
             mt::StageFileFormatType::NdJson => Ok(pb::user_stage_info::StageFileFormatType::NdJson),
             mt::StageFileFormatType::Avro => Ok(pb::user_stage_info::StageFileFormatType::Avro),
