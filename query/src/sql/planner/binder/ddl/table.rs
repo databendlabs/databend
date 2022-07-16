@@ -388,7 +388,7 @@ impl<'a> Binder {
                         )
                     })
                     .collect();
-                let  source_fields = source_schema.fields().clone();
+                let source_fields = source_schema.fields().clone();
                 let source_fields = self.concat_fields(source_fields, query_fields);
                 (
                     DataSchemaRefExt::create(source_fields.to_vec()),
@@ -396,8 +396,8 @@ impl<'a> Binder {
                 )
             }
             _ => Err(ErrorCode::BadArguments(
-                        "Incorrect CREATE query: required list of column descriptions or AS section or SELECT.."
-                ))?,
+                "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
+            ))?,
         };
 
         let mut table_meta = TableMeta {
