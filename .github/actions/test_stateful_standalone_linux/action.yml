@@ -42,10 +42,6 @@ runs:
     - name: Run Stateful Tests with Standalone mode (ubuntu-latest only)
       shell: bash
       run: |
-        export
-        export REPO_AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-        export REPO_AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-
         ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
 
     - name: Upload failure

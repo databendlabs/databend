@@ -123,9 +123,6 @@ jobs:
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
-      - uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-region: us-east-2
       - uses: ./.github/actions/test_stateful_standalone_linux
 
   test_fuzz_standalone_linux:
