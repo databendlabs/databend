@@ -82,6 +82,165 @@ evaluation (internal):
 +--------+------------------------------------------------------------------+
 
 
+ast            : minus(a, 10)
+raw expr       : minus(ColumnRef(0)::UInt8 NULL, 10_u8)
+checked expr   : minus<Int32 NULL, Int32 NULL>(cast<dest_type=Int32 NULL>(ColumnRef(0)), cast<dest_type=Int32 NULL>(10_u8))
+evaluation:
++--------+--------------------+--------------------+
+|        | a                  | Output             |
++--------+--------------------+--------------------+
+| Type   | UInt8 NULL         | Int32 NULL         |
+| Domain | {10..=12} ∪ {NULL} | {20..=22} ∪ {NULL} |
+| Row 0  | NULL               | NULL               |
+| Row 1  | 11                 | 1                  |
+| Row 2  | NULL               | NULL               |
++--------+--------------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] } |
+| Output | Nullable { column: Int32([0, 1, 2]), validity: [0b_____010] }    |
++--------+------------------------------------------------------------------+
+
+
+ast            : minus(a, b)
+raw expr       : minus(ColumnRef(0)::UInt16 NULL, ColumnRef(1)::Int16 NULL)
+checked expr   : minus<Int32 NULL, Int32 NULL>(cast<dest_type=Int32 NULL>(ColumnRef(0)), cast<dest_type=Int32 NULL>(ColumnRef(1)))
+evaluation:
++--------+--------------------+------------------+--------------------+
+|        | a                  | b                | Output             |
++--------+--------------------+------------------+--------------------+
+| Type   | UInt16 NULL        | Int16 NULL       | Int32 NULL         |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {11..=15} ∪ {NULL} |
+| Row 0  | NULL               | NULL             | NULL               |
+| Row 1  | 11                 | 2                | 9                  |
+| Row 2  | NULL               | 3                | NULL               |
++--------+--------------------+------------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------+
+| Column | Data                                                              |
++--------+-------------------------------------------------------------------+
+| a      | Nullable { column: UInt16([10, 11, 12]), validity: [0b_____010] } |
+| b      | Nullable { column: Int16([1, 2, 3]), validity: [0b_____110] }     |
+| Output | Nullable { column: Int32([9, 9, 9]), validity: [0b_____010] }     |
++--------+-------------------------------------------------------------------+
+
+
+ast            : minus(a, b)
+raw expr       : minus(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
+checked expr   : minus<Int32 NULL, NULL>(cast<dest_type=Int32 NULL>(ColumnRef(0)), ColumnRef(1))
+evaluation:
++--------+--------------------+--------+--------+
+|        | a                  | b      | Output |
++--------+--------------------+--------+--------+
+| Type   | UInt8 NULL         | NULL   | NULL   |
+| Domain | {10..=12} ∪ {NULL} | {NULL} | {NULL} |
+| Row 0  | NULL               | NULL   | NULL   |
+| Row 1  | 11                 | NULL   | NULL   |
+| Row 2  | NULL               | NULL   | NULL   |
++--------+--------------------+--------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] } |
+| b      | Null { len: 3 }                                                  |
+| Output | Null { len: 3 }                                                  |
++--------+------------------------------------------------------------------+
+
+
+ast            : multiply(a, 10)
+raw expr       : multiply(ColumnRef(0)::UInt8 NULL, 10_u8)
+checked expr   : multiply<Int64 NULL, Int64 NULL>(cast<dest_type=Int64 NULL>(ColumnRef(0)), cast<dest_type=Int64 NULL>(10_u8))
+evaluation:
++--------+--------------------+--------------------+
+|        | a                  | Output             |
++--------+--------------------+--------------------+
+| Type   | UInt8 NULL         | Int64 NULL         |
+| Domain | {10..=12} ∪ {NULL} | {20..=22} ∪ {NULL} |
+| Row 0  | NULL               | NULL               |
+| Row 1  | 11                 | 110                |
+| Row 2  | NULL               | NULL               |
++--------+--------------------+--------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------+
+| Column | Data                                                                |
++--------+---------------------------------------------------------------------+
+| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] }    |
+| Output | Nullable { column: Int64([100, 110, 120]), validity: [0b_____010] } |
++--------+---------------------------------------------------------------------+
+
+
+ast            : multiply(a, b)
+raw expr       : multiply(ColumnRef(0)::UInt16 NULL, ColumnRef(1)::Int16 NULL)
+checked expr   : multiply<Int64 NULL, Int64 NULL>(cast<dest_type=Int64 NULL>(ColumnRef(0)), cast<dest_type=Int64 NULL>(ColumnRef(1)))
+evaluation:
++--------+--------------------+------------------+--------------------+
+|        | a                  | b                | Output             |
++--------+--------------------+------------------+--------------------+
+| Type   | UInt16 NULL        | Int16 NULL       | Int64 NULL         |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {11..=15} ∪ {NULL} |
+| Row 0  | NULL               | NULL             | NULL               |
+| Row 1  | 11                 | 2                | 22                 |
+| Row 2  | NULL               | 3                | NULL               |
++--------+--------------------+------------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------+
+| Column | Data                                                              |
++--------+-------------------------------------------------------------------+
+| a      | Nullable { column: UInt16([10, 11, 12]), validity: [0b_____010] } |
+| b      | Nullable { column: Int16([1, 2, 3]), validity: [0b_____110] }     |
+| Output | Nullable { column: Int64([10, 22, 36]), validity: [0b_____010] }  |
++--------+-------------------------------------------------------------------+
+
+
+ast            : multiply(a, b)
+raw expr       : multiply(ColumnRef(0)::UInt32 NULL, ColumnRef(1)::Int32 NULL)
+checked expr   : multiply<Int64 NULL, Int64 NULL>(cast<dest_type=Int64 NULL>(ColumnRef(0)), cast<dest_type=Int64 NULL>(ColumnRef(1)))
+evaluation:
++--------+--------------------+------------------+--------------------+
+|        | a                  | b                | Output             |
++--------+--------------------+------------------+--------------------+
+| Type   | UInt32 NULL        | Int32 NULL       | Int64 NULL         |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {11..=15} ∪ {NULL} |
+| Row 0  | NULL               | NULL             | NULL               |
+| Row 1  | 11                 | 2                | 22                 |
+| Row 2  | NULL               | 3                | NULL               |
++--------+--------------------+------------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------+
+| Column | Data                                                              |
++--------+-------------------------------------------------------------------+
+| a      | Nullable { column: UInt32([10, 11, 12]), validity: [0b_____010] } |
+| b      | Nullable { column: Int32([1, 2, 3]), validity: [0b_____110] }     |
+| Output | Nullable { column: Int64([10, 22, 36]), validity: [0b_____010] }  |
++--------+-------------------------------------------------------------------+
+
+
+ast            : multiply(a, b)
+raw expr       : multiply(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
+checked expr   : multiply<Int64 NULL, NULL>(cast<dest_type=Int64 NULL>(ColumnRef(0)), ColumnRef(1))
+evaluation:
++--------+--------------------+--------+--------+
+|        | a                  | b      | Output |
++--------+--------------------+--------+--------+
+| Type   | UInt8 NULL         | NULL   | NULL   |
+| Domain | {10..=12} ∪ {NULL} | {NULL} | {NULL} |
+| Row 0  | NULL               | NULL   | NULL   |
+| Row 1  | 11                 | NULL   | NULL   |
+| Row 2  | NULL               | NULL   | NULL   |
++--------+--------------------+--------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] } |
+| b      | Null { len: 3 }                                                  |
+| Output | Null { len: 3 }                                                  |
++--------+------------------------------------------------------------------+
+
+
 ast            : bool_not(a)
 raw expr       : bool_not(ColumnRef(0)::Boolean NULL)
 checked expr   : bool_not<Boolean NULL>(ColumnRef(0))

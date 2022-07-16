@@ -118,6 +118,162 @@ pub fn test_pass() {
             Column::Null { len: 3 },
         ),
     ]);
+
+    run_ast(&mut file, "minus(a, 10)", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::UInt8)),
+        Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+        }),
+        Column::Nullable {
+            column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+            validity: vec![false, true, false].into(),
+        },
+    )]);
+
+    run_ast(&mut file, "minus(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt16)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::UInt16(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int16)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Int(IntDomain { min: 1, max: 3 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Int16(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "minus(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Null,
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            Column::Null { len: 3 },
+        ),
+    ]);
+
+    run_ast(&mut file, "multiply(a, 10)", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::UInt8)),
+        Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+        }),
+        Column::Nullable {
+            column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+            validity: vec![false, true, false].into(),
+        },
+    )]);
+
+    run_ast(&mut file, "multiply(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt16)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::UInt16(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int16)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Int(IntDomain { min: 1, max: 3 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Int16(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "multiply(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt32)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::UInt32(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int32)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Int(IntDomain { min: 1, max: 3 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Int32(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "multiply(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Null,
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            Column::Null { len: 3 },
+        ),
+    ]);
+
     run_ast(&mut file, "bool_not(a)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::Boolean)),
@@ -133,6 +289,7 @@ pub fn test_pass() {
             validity: vec![false, true, false].into(),
         },
     )]);
+
     run_ast(&mut file, "bool_not(a)", &[(
         "a",
         DataType::Null,
@@ -360,6 +517,30 @@ fn builtin_functions() -> FunctionRegistry {
             })
         },
         |lhs, rhs| lhs + rhs,
+    );
+
+    registry.register_2_arg::<NumberType<i32>, NumberType<i32>, NumberType<i32>, _, _>(
+        "minus",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            Some(IntDomain {
+                min: lhs.min.checked_add(rhs.min).unwrap_or(i32::MAX as i64),
+                max: lhs.max.checked_add(rhs.max).unwrap_or(i32::MAX as i64),
+            })
+        },
+        |lhs, rhs| lhs - rhs,
+    );
+
+    registry.register_2_arg::<NumberType<i64>, NumberType<i64>, NumberType<i64>, _, _>(
+        "multiply",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            Some(IntDomain {
+                min: lhs.min.checked_add(rhs.min).unwrap_or(i64::MAX),
+                max: lhs.max.checked_add(rhs.max).unwrap_or(i64::MAX),
+            })
+        },
+        |lhs, rhs| lhs * rhs,
     );
 
     registry.register_1_arg::<BooleanType, BooleanType, _, _>(
