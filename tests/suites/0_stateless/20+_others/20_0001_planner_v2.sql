@@ -376,6 +376,7 @@ create table t3 as select *  from numbers(10000);
 insert into t3 values(1);
 set enable_planner_v2 = 1;
 select count(*) from numbers(10000) as t4 where t4.number in (select t3.number from t3);
+select * from numbers(10) where number in (select * from numbers(5)) order by number;
 
 create table t1_null(a int null , b int null);
 create table t2_null(a int null , b int null);
