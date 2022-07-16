@@ -84,6 +84,9 @@ metactl-test:
 	bash ./tests/metactl/test-metactl.sh
 	bash ./tests/metactl/test-metactl-restore-new-cluster.sh
 
+meta-kvapi-test:
+	bash ./tests/meta-kvapi/test-meta-kvapi.sh
+
 meta-bench: build-release
 	bash ./scripts/benchmark/run-meta-benchmark.sh 10 1000
 

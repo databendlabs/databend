@@ -127,7 +127,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 }
 
 async fn run_kvapi_command(conf: &Config, op: &str) {
-    match cmd::KvApi::from_config(conf, op) {
+    match cmd::KvApiCommand::from_config(conf, op) {
         Ok(kv_cmd) => {
             let rpc_conf = RpcClientConf {
                 address: conf.grpc_api_address.clone(),

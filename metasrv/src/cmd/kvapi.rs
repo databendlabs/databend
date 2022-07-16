@@ -22,14 +22,14 @@ use common_meta_types::UpsertKVReq;
 
 use crate::configs::Config;
 
-pub enum KvApi {
+pub enum KvApiCommand {
     Get(String),
     Upsert(UpsertKVReq),
     MGet(Vec<String>),
     List(String),
 }
 
-impl KvApi {
+impl KvApiCommand {
     pub fn from_config(config: &Config, op: &str) -> std::result::Result<Self, String> {
         let api = match op {
             "upsert" => {
@@ -60,19 +60,19 @@ impl KvApi {
 
     pub async fn execute(&self, client: Arc<dyn KVApi>) -> Result<String> {
         let res_str = match self {
-            KvApi::Get(key) => {
+            KvApiCommand::Get(key) => {
                 let res = client.get_kv(key.as_str()).await?;
                 serde_json::to_string_pretty(&res)?
             }
-            KvApi::Upsert(req) => {
+            KvApiCommand::Upsert(req) => {
                 let res = client.upsert_kv(req.clone()).await?;
                 serde_json::to_string_pretty(&res)?
             }
-            KvApi::MGet(keys) => {
+            KvApiCommand::MGet(keys) => {
                 let res = client.mget_kv(keys.as_slice()).await?;
                 serde_json::to_string_pretty(&res)?
             }
-            KvApi::List(prefix) => {
+            KvApiCommand::List(prefix) => {
                 let res = client.prefix_list_kv(prefix.as_str()).await?;
                 serde_json::to_string_pretty(&res)?
             }
