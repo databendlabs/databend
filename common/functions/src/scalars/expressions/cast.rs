@@ -62,7 +62,7 @@ impl CastFunction {
             }));
         }
 
-        let nullable_type = NullableType::create(data_type.clone());
+        let nullable_type = NullableType::create(data_type);
         Ok(Box::new(Self {
             _display_name: display_name.to_string(),
             target_type: DataTypeImpl::Nullable(nullable_type),

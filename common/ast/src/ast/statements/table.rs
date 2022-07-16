@@ -485,7 +485,7 @@ pub struct ColumnDefinition<'a> {
 impl<'a> Display for ColumnDefinition<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
-       
+
         if let Some(default_expr) = &self.default_expr {
             write!(f, " DEFAULT {default_expr}")?;
         }

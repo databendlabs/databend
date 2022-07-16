@@ -1181,7 +1181,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             } else {
                 ty
             }
-        }
+        },
     )(i)
 }
 

@@ -123,11 +123,11 @@ impl<'a> Binder {
             .clone()
             .map(|ident| ident.name.to_lowercase())
             .unwrap_or_else(|| self.ctx.get_current_database());
-        
+
         if DatabaseCatalog::is_case_insensitive_db(database.as_str()) {
             database = database.to_uppercase();
         }
-        
+
         let mut select_builder = SelectBuilder::from("information_schema.tables");
 
         if *full {
@@ -723,9 +723,8 @@ impl<'a> Binder {
                 let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
                     let name = column.name.name.clone();
-                    let data_type = TypeFactory::instance()
-                        .get(column.data_type.to_string())?;
-                  
+                    let data_type = TypeFactory::instance().get(column.data_type.to_string())?;
+
                     let field = DataField::new(&name, data_type).with_default_expr({
                         if let Some(default_expr) = &column.default_expr {
                             scalar_binder.bind(default_expr).await?;

@@ -265,7 +265,7 @@ pub enum TypeName {
     Array { item_type: Option<Box<TypeName>> },
     Object,
     Variant,
-    Nullable(Box<TypeName>)
+    Nullable(Box<TypeName>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -14,14 +14,8 @@
 
 use common_exception::Result;
 use databend_query::sessions::SessionType;
-
 use databend_query::sql::*;
 use pretty_assertions::assert_eq;
-
-
-
-
-
 
 pub fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     let (statements, _) = DfParser::parse_sql(sql, SessionType::Dummy)?;

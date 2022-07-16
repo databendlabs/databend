@@ -78,24 +78,25 @@ impl TypeFactory {
     pub fn get(&self, name: impl AsRef<str>) -> Result<DataTypeImpl> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
-        
-        let is_nullable =  lowercase_name.ends_with(" null") || lowercase_name.starts_with("nullable(");
-        
+
+        let is_nullable =
+            lowercase_name.ends_with(" null") || lowercase_name.starts_with("nullable(");
+
         if is_nullable {
             if lowercase_name.ends_with("null") {
                 let name = lowercase_name[..lowercase_name.len() - 5].to_string();
-                return self.get(name).map(|dt| NullableType::new_impl(dt));
+                return self.get(name).map(NullableType::new_impl);
             } else {
                 let name = lowercase_name[10..lowercase_name.len() - 1].to_string();
-                return self.get(name).map(|dt|NullableType::new_impl(dt));
+                return self.get(name).map(NullableType::new_impl);
             }
         }
-        
+
         if lowercase_name.starts_with("array(") {
             let name = lowercase_name[6..lowercase_name.len() - 1].to_string();
-            return self.get(name).map(|dt| ArrayType::new_impl(dt));
+            return self.get(name).map(ArrayType::new_impl);
         }
-        
+
         // TODO TUPLE TYPE
         self.case_insensitive_types
             .get(&lowercase_name)
@@ -146,7 +147,7 @@ impl TypeFactory {
     //                 format!("Nullable({})", k).to_ascii_lowercase(),
     //                 data_type.clone(),
     //             );
-                
+
     //             nulls.insert(
     //                 format!("{} Null", k).to_ascii_lowercase(),
     //                 data_type.clone(),
