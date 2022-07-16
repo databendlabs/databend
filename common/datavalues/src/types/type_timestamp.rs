@@ -110,7 +110,7 @@ impl DataType for TimestampType {
             3 => &["DateTime(3)"],
             4 => &["DateTime(4)"],
             5 => &["DateTime(5)"],
-            6 => &["Timestamp", "DateTime"],
+            6 => &["Timestamp", "DateTime", "DateTime(6)"],
             _ => &[],
         }
     }

@@ -478,7 +478,6 @@ impl Display for TableOption {
 pub struct ColumnDefinition<'a> {
     pub name: Identifier<'a>,
     pub data_type: TypeName,
-    pub nullable: bool,
     pub default_expr: Option<Box<Expr<'a>>>,
     pub comment: Option<String>,
 }
@@ -486,11 +485,7 @@ pub struct ColumnDefinition<'a> {
 impl<'a> Display for ColumnDefinition<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
-        if self.nullable {
-            write!(f, " NULL")?;
-        } else {
-            write!(f, " NOT NULL")?;
-        }
+       
         if let Some(default_expr) = &self.default_expr {
             write!(f, " DEFAULT {default_expr}")?;
         }

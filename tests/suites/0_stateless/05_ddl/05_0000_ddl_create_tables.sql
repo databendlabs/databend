@@ -23,7 +23,7 @@ select a+b from t2;
 
 create table t2(a int,b int) Engine = Fuse; -- {ErrorCode 2302}
 create table t2(a int,b int) Engine = Fuse; -- {ErrorCode 2302}
-create table t2(a INT auto_increment); -- {ErrorCode 1022}
+create table t2(a INT auto_increment); -- {ErrorCode 1005}
 
 create table t3(a int,b int) engine=Memory CLUSTER BY(a); -- {ErrorCode 2703}
 

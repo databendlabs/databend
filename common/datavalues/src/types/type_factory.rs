@@ -60,9 +60,6 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
         }
     }
 
-    type_factory.add_array_wrapper();
-    type_factory.add_nullable_wrapper();
-
     Arc::new(type_factory)
 });
 
@@ -78,11 +75,31 @@ impl TypeFactory {
         TYPE_FACTORY.as_ref()
     }
 
-    pub fn get(&self, name: impl AsRef<str>) -> Result<&DataTypeImpl> {
+    pub fn get(&self, name: impl AsRef<str>) -> Result<DataTypeImpl> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
+        
+        let is_nullable =  lowercase_name.ends_with(" null") || lowercase_name.starts_with("nullable(");
+        
+        if is_nullable {
+            if lowercase_name.ends_with("null") {
+                let name = lowercase_name[..lowercase_name.len() - 5].to_string();
+                return self.get(name).map(|dt| NullableType::new_impl(dt));
+            } else {
+                let name = lowercase_name[10..lowercase_name.len() - 1].to_string();
+                return self.get(name).map(|dt|NullableType::new_impl(dt));
+            }
+        }
+        
+        if lowercase_name.starts_with("array(") {
+            let name = lowercase_name[6..lowercase_name.len() - 1].to_string();
+            return self.get(name).map(|dt| ArrayType::new_impl(dt));
+        }
+        
+        // TODO TUPLE TYPE
         self.case_insensitive_types
             .get(&lowercase_name)
+            .cloned()
             .ok_or_else(|| {
                 ErrorCode::IllegalDataType(format!("Unsupported data type: {}", origin_name))
             })
@@ -108,31 +125,36 @@ impl TypeFactory {
         }
     }
 
-    pub fn add_array_wrapper(&mut self) {
-        let mut arrays = HashMap::new();
-        for (k, v) in self.case_insensitive_types.iter() {
-            let data_type: DataTypeImpl = ArrayType::new_impl(v.clone());
-            arrays.insert(
-                format!("Array({})", k).to_ascii_lowercase(),
-                data_type.clone(),
-            );
-        }
-        self.case_insensitive_types.extend(arrays);
-    }
+    // pub fn add_array_wrapper(&mut self) {
+    //     let mut arrays = HashMap::new();
+    //     for (k, v) in self.case_insensitive_types.iter() {
+    //         let data_type: DataTypeImpl = ArrayType::new_impl(v.clone());
+    //         arrays.insert(
+    //             format!("Array({})", k).to_ascii_lowercase(),
+    //             data_type.clone(),
+    //         );
+    //     }
+    //     self.case_insensitive_types.extend(arrays);
+    // }
 
-    pub fn add_nullable_wrapper(&mut self) {
-        let mut nulls = HashMap::new();
-        for (k, v) in self.case_insensitive_types.iter() {
-            if v.can_inside_nullable() {
-                let data_type: DataTypeImpl = NullableType::new_impl(v.clone());
-                nulls.insert(
-                    format!("Nullable({})", k).to_ascii_lowercase(),
-                    data_type.clone(),
-                );
-            }
-        }
-        self.case_insensitive_types.extend(nulls);
-    }
+    // pub fn add_nullable_wrapper(&mut self) {
+    //     let mut nulls = HashMap::new();
+    //     for (k, v) in self.case_insensitive_types.iter() {
+    //         if v.can_inside_nullable() {
+    //             let data_type: DataTypeImpl = NullableType::new_impl(v.clone());
+    //             nulls.insert(
+    //                 format!("Nullable({})", k).to_ascii_lowercase(),
+    //                 data_type.clone(),
+    //             );
+                
+    //             nulls.insert(
+    //                 format!("{} Null", k).to_ascii_lowercase(),
+    //                 data_type.clone(),
+    //             );
+    //         }
+    //     }
+    //     self.case_insensitive_types.extend(nulls);
+    // }
 
     pub fn conversion_names(&self) -> Vec<&str> {
         self.conversion_types.iter().map(|s| s.as_str()).collect()

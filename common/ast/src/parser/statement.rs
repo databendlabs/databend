@@ -832,14 +832,9 @@ pub fn rest_tokens<'a>(i: Input<'a>) -> IResult<&'a [Token]> {
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     #[derive(Clone)]
     enum ColumnConstraint<'a> {
-        Nullable(bool),
         DefaultExpr(Box<Expr<'a>>),
     }
 
-    let nullable = alt((
-        value(ColumnConstraint::Nullable(true), rule! { NULL }),
-        value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
-    ));
     let default_expr = map(
         rule! {
             DEFAULT ~ ^#subexpr(NOT_PREC)
@@ -857,7 +852,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         rule! {
             #ident
             ~ #type_name
-            ~ ( #nullable | #default_expr )*
+            ~ ( #default_expr )*
             ~ ( #comment )?
             : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>] [COMMENT '<comment>']`"
         },
@@ -865,13 +860,11 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
-                nullable: false,
                 default_expr: None,
                 comment,
             };
             for constraint in constraints {
                 match constraint {
-                    ColumnConstraint::Nullable(nullable) => def.nullable = nullable,
                     ColumnConstraint::DefaultExpr(default_expr) => {
                         def.default_expr = Some(default_expr)
                     }

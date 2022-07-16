@@ -23,7 +23,6 @@ use common_ast::Backtrace;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_datavalues::NullableType;
 use common_datavalues::ToDataType;
 use common_datavalues::TypeFactory;
 use common_datavalues::Vu8;
@@ -724,12 +723,9 @@ impl<'a> Binder {
                 let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
                     let name = column.name.name.clone();
-                    let mut data_type = TypeFactory::instance()
-                        .get(column.data_type.to_string())?
-                        .clone();
-                    if column.nullable {
-                        data_type = NullableType::new_impl(data_type);
-                    }
+                    let data_type = TypeFactory::instance()
+                        .get(column.data_type.to_string())?;
+                  
                     let field = DataField::new(&name, data_type).with_default_expr({
                         if let Some(default_expr) = &column.default_expr {
                             scalar_binder.bind(default_expr).await?;

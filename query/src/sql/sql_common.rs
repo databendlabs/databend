@@ -89,7 +89,7 @@ impl SQLCommon {
                     name => {
                         let factory = TypeFactory::instance();
                         let data_type = factory.get(name)?;
-                        Ok(data_type.clone())
+                        Ok(data_type)
                     }
                 }
             }

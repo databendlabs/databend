@@ -265,6 +265,7 @@ pub enum TypeName {
     Array { item_type: Option<Box<TypeName>> },
     Object,
     Variant,
+    Nullable(Box<TypeName>)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -537,6 +538,9 @@ impl Display for TypeName {
             }
             TypeName::Variant => {
                 write!(f, "VARIANT")?;
+            }
+            TypeName::Nullable(ty) => {
+                write!(f, "{} NULL", ty)?;
             }
         }
         Ok(())

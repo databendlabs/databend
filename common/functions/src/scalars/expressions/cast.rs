@@ -41,7 +41,7 @@ impl CastFunction {
 
         Ok(Box::new(Self {
             _display_name: display_name.to_string(),
-            target_type: data_type.clone(),
+            target_type: data_type,
             from_type,
         }))
     }
@@ -57,7 +57,7 @@ impl CastFunction {
         if data_type.is_nullable() || !data_type.can_inside_nullable() {
             return Ok(Box::new(Self {
                 _display_name: display_name.to_string(),
-                target_type: data_type.clone(),
+                target_type: data_type,
                 from_type,
             }));
         }
