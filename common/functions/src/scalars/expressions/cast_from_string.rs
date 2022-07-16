@@ -23,7 +23,6 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use super::cast_with_type::arrow_cast_compute;
-use super::cast_with_type::new_mutable_bitmap;
 use super::cast_with_type::CastOptions;
 use crate::scalars::FunctionContext;
 
@@ -39,48 +38,59 @@ pub fn cast_from_string(
     let str_column = Series::remove_nullable(column);
     let str_column: &StringColumn = Series::check_get(&str_column)?;
     let size = str_column.len();
-    let mut bitmap = new_mutable_bitmap(size, true);
 
     match data_type.data_type_id() {
         TypeID::Date => {
-            let mut builder = ColumnBuilder::<i32>::with_capacity(size);
+            let mut builder = NullableColumnBuilder::<i32>::with_capacity(size);
 
-            for (row, v) in str_column.iter().enumerate() {
+            for v in str_column.iter() {
                 if let Some(d) = string_to_date(v) {
-                    builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32);
+                    builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32, true);
                 } else {
-                    bitmap.set(row, false)
+                    builder.append_null();
                 }
             }
-
-            Ok((builder.build(size), Some(bitmap.into())))
+            let column = builder.build(size);
+            let nullable_column: &NullableColumn = Series::check_get(&column)?;
+            Ok((
+                nullable_column.inner().clone(),
+                Some(nullable_column.ensure_validity().clone()),
+            ))
         }
 
         TypeID::Timestamp => {
-            let mut builder = ColumnBuilder::<i64>::with_capacity(size);
+            let mut builder = NullableColumnBuilder::<i64>::with_capacity(size);
             let tz = func_ctx.tz;
-            for (row, v) in str_column.iter().enumerate() {
+            for v in str_column.iter() {
                 match string_to_timestamp(v, &tz) {
-                    Some(d) => {
-                        builder.append(d.timestamp_micros());
-                    }
-                    None => bitmap.set(row, false),
+                    Some(d) => builder.append(d.timestamp_micros(), true),
+                    None => builder.append_null(),
                 }
             }
-            Ok((builder.build(size), Some(bitmap.into())))
+            let column = builder.build(size);
+            let nullable_column: &NullableColumn = Series::check_get(&column)?;
+            Ok((
+                nullable_column.inner().clone(),
+                Some(nullable_column.ensure_validity().clone()),
+            ))
         }
         TypeID::Boolean => {
-            let mut builder = ColumnBuilder::<bool>::with_capacity(size);
-            for (row, v) in str_column.iter().enumerate() {
+            let mut builder = NullableColumnBuilder::<bool>::with_capacity(size);
+            for v in str_column.iter() {
                 if v.eq_ignore_ascii_case("true".as_bytes()) {
-                    builder.append(true);
+                    builder.append(true, true);
                 } else if v.eq_ignore_ascii_case("false".as_bytes()) {
-                    builder.append(false);
+                    builder.append(false, true);
                 } else {
-                    bitmap.set(row, false);
+                    builder.append_null();
                 }
             }
-            Ok((builder.build(size), Some(bitmap.into())))
+            let column = builder.build(size);
+            let nullable_column: &NullableColumn = Series::check_get(&column)?;
+            Ok((
+                nullable_column.inner().clone(),
+                Some(nullable_column.ensure_validity().clone()),
+            ))
         }
         TypeID::Interval => todo!(),
         _ => arrow_cast_compute(column, from_type, data_type, cast_options, func_ctx),
