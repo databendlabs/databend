@@ -13,17 +13,19 @@
 // limitations under the License.
 
 #![feature(box_patterns)]
+#![feature(try_blocks)]
+
+mod parser;
 
 use std::io::Write;
 use std::iter::once;
 use std::sync::Arc;
 
 use comfy_table::Table;
+use common_ast::DisplayError;
 use common_expression::chunk::Chunk;
 use common_expression::evaluator::DomainCalculator;
 use common_expression::evaluator::Evaluator;
-use common_expression::expression::Literal;
-use common_expression::expression::RawExpr;
 use common_expression::function::vectorize_2_arg;
 use common_expression::function::Function;
 use common_expression::function::FunctionContext;
@@ -46,301 +48,112 @@ use common_expression::values::Scalar;
 use common_expression::values::Value;
 use common_expression::values::ValueRef;
 use goldenfile::Mint;
-
-fn run_ast(
-    file: &mut impl Write,
-    raw: &RawExpr,
-    columns: Vec<Column>,
-    columns_domain: Vec<Domain>,
-) {
-    writeln!(file, "raw expr       : {raw}").unwrap();
-
-    let fn_registry = builtin_functions();
-    let (expr, ty) = type_check::check(raw, &fn_registry).unwrap();
-
-    writeln!(file, "checked expr   : {expr}").unwrap();
-    writeln!(file, "type           : {ty}").unwrap();
-
-    let domain_calculator = DomainCalculator {
-        input_domains: columns_domain.clone(),
-    };
-    let output_domain = domain_calculator.calculate(&expr);
-    writeln!(
-        file,
-        "domain calculation:\n{}",
-        pretty_print_domain_test(&columns_domain, &output_domain)
-    )
-    .unwrap();
-
-    let chunk = Chunk::new(columns);
-    if chunk.num_columns() > 0 {
-        writeln!(file, "input chunk:\n{}", chunk).unwrap();
-        writeln!(file, "input chunk (internal):\n{:?}", chunk).unwrap();
-    }
-
-    let runtime = Evaluator {
-        input_columns: chunk,
-        context: FunctionContext::default(),
-    };
-    let result = runtime.run(&expr);
-    match result {
-        Value::Scalar(scalar) => writeln!(file, "evaluation result:\n{}", scalar.as_ref()).unwrap(),
-        Value::Column(col) => {
-            let chunk = Chunk::new(vec![col]);
-            writeln!(file, "evaluation result:\n{}", chunk).unwrap();
-            writeln!(file, "evaluation result (internal):\n{:?}", chunk).unwrap();
-        }
-    }
-
-    write!(file, "\n\n").unwrap();
-}
-
-fn pretty_print_domain_test(columns_domain: &[Domain], output_domain: &Domain) -> String {
-    let mut table = Table::new();
-    table.load_preset("||--+-++|    ++++++");
-
-    table.set_header(vec!["Column", "Domain"]);
-
-    for (i, domain) in columns_domain.iter().enumerate() {
-        table.add_row(vec![format!("Column {i}"), format!("{domain}")]);
-    }
-
-    table.add_row(vec!["Output".to_string(), format!("{output_domain}")]);
-
-    table.to_string()
-}
+use parser::parse_raw_expr;
 
 #[test]
-pub fn test() {
+pub fn test_pass() {
     let mut mint = Mint::new("tests/it/testdata");
-    let mut file = mint.new_goldenfile("run-ast.txt").unwrap();
+    let mut file = mint.new_goldenfile("run-pass.txt").unwrap();
 
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "and".to_string(),
-            args: vec![
-                RawExpr::Literal(Literal::Boolean(true)),
-                RawExpr::Literal(Literal::Boolean(false)),
-            ],
-            params: vec![],
-        },
-        vec![],
-        vec![],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "and".to_string(),
-            args: vec![
-                RawExpr::Literal(Literal::Null),
-                RawExpr::Literal(Literal::Boolean(false)),
-            ],
-            params: vec![],
-        },
-        vec![],
-        vec![],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "plus".to_string(),
-            args: vec![
-                RawExpr::ColumnRef {
-                    id: 0,
-                    data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                },
-                RawExpr::Literal(Literal::Int8(-10)),
-            ],
-            params: vec![],
-        },
-        vec![Column::Nullable {
-            column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
-            validity: vec![false, true, false].into(),
-        }],
-        vec![Domain::Nullable(NullableDomain {
+    run_ast(&mut file, "bool_and(true, false)", &[]);
+    run_ast(&mut file, "bool_and(null, false)", &[]);
+    run_ast(&mut file, "plus(a, 10)", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::UInt8)),
+        Domain::Nullable(NullableDomain {
             has_null: true,
             value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
-        })],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "plus".to_string(),
-            args: vec![
-                RawExpr::ColumnRef {
-                    id: 0,
-                    data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                },
-                RawExpr::ColumnRef {
-                    id: 1,
-                    data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                },
-            ],
-            params: vec![],
+        }),
+        Column::Nullable {
+            column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+            validity: vec![false, true, false].into(),
         },
-        vec![
-            Column::Nullable {
-                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
-                validity: vec![false, true, false].into(),
-            },
-            Column::Nullable {
-                column: Box::new(Column::UInt8(vec![1, 2, 3].into())),
-                validity: vec![false, true, true].into(),
-            },
-        ],
-        vec![
+    )]);
+    run_ast(&mut file, "plus(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt8)),
             Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
             }),
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::UInt8)),
             Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: Some(Box::new(Domain::UInt(UIntDomain { min: 1, max: 3 }))),
             }),
-        ],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "plus".to_string(),
-            args: vec![
-                RawExpr::ColumnRef {
-                    id: 0,
-                    data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                },
-                RawExpr::ColumnRef {
-                    id: 1,
-                    data_type: DataType::Null,
-                },
-            ],
-            params: vec![],
-        },
-        vec![
             Column::Nullable {
-                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
-                validity: vec![false, true, false].into(),
+                column: Box::new(Column::UInt8(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
             },
-            Column::Null { len: 3 },
-        ],
-        vec![
+        ),
+    ]);
+    run_ast(&mut file, "plus(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt8)),
             Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
             }),
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Null,
             Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: None,
             }),
-        ],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "not".to_string(),
-            args: vec![RawExpr::ColumnRef {
-                id: 0,
-                data_type: DataType::Nullable(Box::new(DataType::Boolean)),
-            }],
-            params: vec![],
-        },
-        vec![Column::Nullable {
-            column: Box::new(Column::Boolean(vec![true, false, true].into())),
-            validity: vec![false, true, false].into(),
-        }],
-        vec![Domain::Nullable(NullableDomain {
+            Column::Null { len: 3 },
+        ),
+    ]);
+    run_ast(&mut file, "bool_not(a)", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::Boolean)),
+        Domain::Nullable(NullableDomain {
             has_null: true,
             value: Some(Box::new(Domain::Boolean(BooleanDomain {
                 has_false: true,
                 has_true: true,
             }))),
-        })],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "not".to_string(),
-            args: vec![RawExpr::ColumnRef {
-                id: 0,
-                data_type: DataType::Null,
-            }],
-            params: vec![],
+        }),
+        Column::Nullable {
+            column: Box::new(Column::Boolean(vec![true, false, true].into())),
+            validity: vec![false, true, false].into(),
         },
-        vec![Column::Null { len: 10 }],
-        vec![Domain::Nullable(NullableDomain {
+    )]);
+    run_ast(&mut file, "bool_not(a)", &[(
+        "a",
+        DataType::Null,
+        Domain::Nullable(NullableDomain {
             has_null: true,
             value: None,
-        })],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "least".to_string(),
-            args: vec![
-                RawExpr::Literal(Literal::UInt8(10)),
-                RawExpr::Literal(Literal::UInt8(20)),
-                RawExpr::Literal(Literal::UInt8(30)),
-                RawExpr::Literal(Literal::UInt8(40)),
-            ],
-            params: vec![],
-        },
-        vec![],
-        vec![],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "create_tuple".to_string(),
-            args: vec![
-                RawExpr::Literal(Literal::Null),
-                RawExpr::Literal(Literal::Boolean(true)),
-            ],
-            params: vec![],
-        },
-        vec![],
-        vec![],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "get_tuple".to_string(),
-            args: vec![RawExpr::FunctionCall {
-                name: "create_tuple".to_string(),
-                args: vec![
-                    RawExpr::ColumnRef {
-                        id: 0,
-                        data_type: DataType::Int16,
-                    },
-                    RawExpr::ColumnRef {
-                        id: 1,
-                        data_type: DataType::Nullable(Box::new(DataType::String)),
-                    },
-                ],
-                params: vec![],
-            }],
-            params: vec![1],
-        },
-        vec![
-            Column::Int16(vec![0, 1, 2, 3, 4].into()),
-            Column::Nullable {
-                column: Box::new(Column::String {
-                    data: "abcde".as_bytes().to_vec().into(),
-                    offsets: vec![0, 1, 2, 3, 4, 5].into(),
-                }),
-                validity: vec![true, true, false, false, false].into(),
-            },
-        ],
-        vec![
+        }),
+        Column::Null { len: 5 },
+    )]);
+    run_ast(&mut file, "least(10, 20, 30, 40)", &[]);
+    run_ast(&mut file, "create_tuple(null, true)", &[]);
+    run_ast(&mut file, "get_tuple(1)(create_tuple(a, b))", &[
+        (
+            "a",
+            DataType::Int16,
             Domain::Int(IntDomain { min: 0, max: 4 }),
+            Column::Int16(vec![0, 1, 2, 3, 4].into()),
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::String)),
             Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: Some(Box::new(Domain::String(StringDomain {
@@ -348,180 +161,108 @@ pub fn test() {
                     max: Some("e".as_bytes().to_vec()),
                 }))),
             }),
-        ],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "get_tuple".to_string(),
-            args: vec![RawExpr::ColumnRef {
-                id: 0,
-                data_type: DataType::Nullable(Box::new(DataType::Tuple(vec![
-                    DataType::Boolean,
-                    DataType::String,
-                ]))),
-            }],
-            params: vec![1],
-        },
-        vec![Column::Nullable {
-            column: Box::new(Column::Tuple {
-                fields: vec![Column::Boolean(vec![false; 5].into()), Column::String {
+            Column::Nullable {
+                column: Box::new(Column::String {
                     data: "abcde".as_bytes().to_vec().into(),
                     offsets: vec![0, 1, 2, 3, 4, 5].into(),
-                }],
-                len: 5,
-            }),
-            validity: vec![true, true, false, false, false].into(),
-        }],
-        vec![Domain::Nullable(NullableDomain {
-            has_null: true,
-            value: Some(Box::new(Domain::Tuple(vec![
-                Domain::Boolean(BooleanDomain {
+                }),
+                validity: vec![true, true, false, false, false].into(),
+            },
+        ),
+    ]);
+    run_ast(&mut file, "get_tuple(1)(create_tuple(a, b))", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::Boolean)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Boolean(BooleanDomain {
                     has_false: true,
                     has_true: false,
-                }),
-                Domain::String(StringDomain {
+                }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Boolean(vec![false; 5].into())),
+                validity: vec![true, true, false, false, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::String)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::String(StringDomain {
                     min: "a".as_bytes().to_vec(),
                     max: Some("e".as_bytes().to_vec()),
+                }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::String {
+                    data: "abcde".as_bytes().to_vec().into(),
+                    offsets: vec![0, 1, 2, 3, 4, 5].into(),
                 }),
-            ]))),
-        })],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "create_array".to_string(),
-            args: vec![],
-            params: vec![],
-        },
-        vec![],
-        vec![],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "create_array".to_string(),
-            args: vec![
-                RawExpr::Literal(Literal::Null),
-                RawExpr::Literal(Literal::Boolean(true)),
-            ],
-            params: vec![],
-        },
-        vec![],
-        vec![],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "create_array".to_string(),
-            args: vec![
-                RawExpr::ColumnRef {
-                    id: 0,
-                    data_type: DataType::Int16,
-                },
-                RawExpr::ColumnRef {
-                    id: 1,
-                    data_type: DataType::Int16,
-                },
-            ],
-            params: vec![],
-        },
-        vec![
-            Column::Int16(vec![0, 1, 2, 3, 4].into()),
-            Column::Int16(vec![5, 6, 7, 8, 9].into()),
-        ],
-        vec![
+                validity: vec![true, true, false, false, false].into(),
+            },
+        ),
+    ]);
+    run_ast(&mut file, "create_array()", &[]);
+    run_ast(&mut file, "create_array(null, true)", &[]);
+    run_ast(&mut file, "create_array(a, b)", &[
+        (
+            "a",
+            DataType::Int16,
             Domain::Int(IntDomain { min: 0, max: 4 }),
-            Domain::Int(IntDomain { min: 5, max: 9 }),
-        ],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "create_array".to_string(),
-            args: vec![
-                RawExpr::FunctionCall {
-                    name: "create_array".to_string(),
-                    args: vec![
-                        RawExpr::ColumnRef {
-                            id: 0,
-                            data_type: DataType::Int16,
-                        },
-                        RawExpr::ColumnRef {
-                            id: 1,
-                            data_type: DataType::Int16,
-                        },
-                    ],
-                    params: vec![],
-                },
-                RawExpr::Literal(Literal::Null),
-                RawExpr::Literal(Literal::Null),
-            ],
-            params: vec![],
-        },
-        vec![
             Column::Int16(vec![0, 1, 2, 3, 4].into()),
-            Column::Int16(vec![5, 6, 7, 8, 9].into()),
-        ],
-        vec![
-            Domain::Int(IntDomain { min: 0, max: 4 }),
+        ),
+        (
+            "b",
+            DataType::Int16,
             Domain::Int(IntDomain { min: 5, max: 9 }),
-        ],
-    );
-
+            Column::Int16(vec![5, 6, 7, 8, 9].into()),
+        ),
+    ]);
     run_ast(
         &mut file,
-        &RawExpr::FunctionCall {
-            name: "get".to_string(),
-            args: vec![
-                RawExpr::ColumnRef {
-                    id: 0,
-                    data_type: DataType::Array(Box::new(DataType::Int16)),
-                },
-                RawExpr::ColumnRef {
-                    id: 1,
-                    data_type: DataType::UInt8,
-                },
-            ],
-            params: vec![],
-        },
-        vec![
+        "create_array(create_array(a, b), null, null)",
+        &[
+            (
+                "a",
+                DataType::Int16,
+                Domain::Int(IntDomain { min: 0, max: 4 }),
+                Column::Int16(vec![0, 1, 2, 3, 4].into()),
+            ),
+            (
+                "b",
+                DataType::Int16,
+                Domain::Int(IntDomain { min: 5, max: 9 }),
+                Column::Int16(vec![5, 6, 7, 8, 9].into()),
+            ),
+        ],
+    );
+    run_ast(&mut file, "get(a, b)", &[
+        (
+            "a",
+            DataType::Array(Box::new(DataType::Int16)),
+            Domain::Array(Some(Box::new(Domain::Int(IntDomain { min: 0, max: 99 })))),
             Column::Array {
                 array: Box::new(Column::Int16((0..100).collect())),
                 offsets: vec![0, 20, 40, 60, 80, 100].into(),
             },
-            Column::UInt8(vec![0, 1, 2, 3, 4].into()),
-        ],
-        vec![
-            Domain::Array(Some(Box::new(Domain::Int(IntDomain { min: 0, max: 99 })))),
+        ),
+        (
+            "b",
+            DataType::UInt8,
             Domain::UInt(UIntDomain { min: 0, max: 4 }),
-        ],
-    );
-
-    run_ast(
-        &mut file,
-        &RawExpr::FunctionCall {
-            name: "get".to_string(),
-            args: vec![
-                RawExpr::ColumnRef {
-                    id: 0,
-                    data_type: DataType::Array(Box::new(DataType::Array(Box::new(
-                        DataType::Int16,
-                    )))),
-                },
-                RawExpr::ColumnRef {
-                    id: 1,
-                    data_type: DataType::UInt8,
-                },
-            ],
-            params: vec![],
-        },
-        vec![
+            Column::UInt8(vec![0, 1, 2, 3, 4].into()),
+        ),
+    ]);
+    run_ast(&mut file, "get(a, b)", &[
+        (
+            "a",
+            DataType::Array(Box::new(DataType::Array(Box::new(DataType::Int16)))),
+            Domain::Array(Some(Box::new(Domain::Array(Some(Box::new(Domain::Int(
+                IntDomain { min: 0, max: 99 },
+            ))))))),
             Column::Array {
                 array: Box::new(Column::Array {
                     array: Box::new(Column::Int16((0..100).collect())),
@@ -533,22 +274,44 @@ pub fn test() {
                 }),
                 offsets: vec![0, 4, 8, 11, 15, 20].into(),
             },
+        ),
+        (
+            "b",
+            DataType::UInt8,
+            Domain::UInt(UIntDomain { min: 0, max: 4 }),
             Column::UInt8(vec![0, 1, 2, 3, 4].into()),
-        ],
-        vec![
-            Domain::Array(Some(Box::new(Domain::Array(Some(Box::new(Domain::Int(
-                IntDomain { min: 0, max: 99 },
-            ))))))),
-            Domain::Int(IntDomain { min: 0, max: 4 }),
-        ],
-    );
+        ),
+    ]);
+}
+
+#[test]
+pub fn test_fail() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("tyck-fail.txt").unwrap();
+
+    run_ast(&mut file, "bool_and(true, 1)", &[]);
+    run_ast(&mut file, "bool_and()", &[]);
+    run_ast(&mut file, "bool_not('a')", &[]);
+    run_ast(&mut file, "least(1, 2, 3, a)", &[(
+        "a",
+        DataType::Boolean,
+        Domain::Boolean(BooleanDomain {
+            has_false: true,
+            has_true: false,
+        }),
+        Column::Boolean(vec![false; 3].into()),
+    )]);
+    run_ast(&mut file, "create_array('a', 1)", &[]);
+    run_ast(&mut file, "create_array('a', null, 'b', true)", &[]);
+    run_ast(&mut file, "get(create_array(1, 2), 'a')", &[]);
+    run_ast(&mut file, "get_tuple(1)(create_tuple(true))", &[]);
 }
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::default();
 
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
-        "and",
+        "bool_and",
         FunctionProperty::default(),
         |lhs, rhs| {
             Some(BooleanDomain {
@@ -572,7 +335,7 @@ fn builtin_functions() -> FunctionRegistry {
     );
 
     registry.register_1_arg::<BooleanType, BooleanType, _, _>(
-        "not",
+        "bool_not",
         FunctionProperty::default(),
         |arg| {
             Some(BooleanDomain {
@@ -815,4 +578,113 @@ fn builtin_functions() -> FunctionRegistry {
     });
 
     registry
+}
+
+fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain, Column)]) {
+    let result = try {
+        let raw_expr = parse_raw_expr(
+            text,
+            &columns
+                .iter()
+                .map(|(name, ty, _, _)| (*name, ty.clone()))
+                .collect::<Vec<_>>(),
+        );
+
+        let fn_registry = builtin_functions();
+        let (expr, output_ty) = type_check::check(&raw_expr, &fn_registry)?;
+
+        let domain_calculator = DomainCalculator {
+            input_domains: columns
+                .iter()
+                .map(|(_, _, domain, _)| domain.clone())
+                .collect::<Vec<_>>(),
+        };
+        let output_domain = domain_calculator.calculate(&expr)?;
+
+        let chunk = Chunk::new(
+            columns
+                .iter()
+                .map(|(_, _, _, col)| col.clone())
+                .collect::<Vec<_>>(),
+        );
+        let evaluator = Evaluator {
+            input_columns: chunk,
+            context: FunctionContext::default(),
+        };
+        let result = evaluator.run(&expr)?;
+
+        (raw_expr, expr, output_ty, output_domain, result)
+    };
+
+    match result {
+        Ok((raw_expr, expr, output_ty, output_domain, result)) => {
+            writeln!(file, "ast            : {text}").unwrap();
+            writeln!(file, "raw expr       : {raw_expr}").unwrap();
+            writeln!(file, "checked expr   : {expr}").unwrap();
+
+            match result {
+                Value::Scalar(output_scalar) => {
+                    let mut table = Table::new();
+                    table.load_preset("||--+-++|-+++++++++");
+
+                    table.add_row(["Type".to_string(), output_ty.to_string()]);
+                    table.add_row(["Domain".to_string(), output_domain.to_string()]);
+                    table.add_row(["Output".to_string(), output_scalar.as_ref().to_string()]);
+
+                    writeln!(file, "evaluation:\n{table}",).unwrap()
+                }
+                Value::Column(output_col) => {
+                    let mut table = Table::new();
+                    table.load_preset("||--+-++|    ++++++");
+
+                    let mut header = vec!["".to_string()];
+                    header.extend(columns.iter().map(|(name, _, _, _)| name.to_string()));
+                    header.push("Output".to_string());
+                    table.set_header(header);
+
+                    let mut type_row = vec!["Type".to_string()];
+                    type_row.extend(columns.iter().map(|(_, ty, _, _)| ty.to_string()));
+                    type_row.push(output_ty.to_string());
+                    table.add_row(type_row);
+
+                    let mut domain_row = vec!["Domain".to_string()];
+                    domain_row.extend(columns.iter().map(|(_, _, domain, _)| domain.to_string()));
+                    domain_row.push(output_domain.to_string());
+                    table.add_row(domain_row);
+
+                    for i in 0..output_col.len() {
+                        let mut row = vec![format!("Row {i}")];
+                        for (_, _, _, col) in columns.iter() {
+                            let value = col.index(i);
+                            row.push(format!("{}", value));
+                        }
+                        row.push(format!("{}", output_col.index(i)));
+                        table.add_row(row);
+                    }
+
+                    writeln!(file, "evaluation:\n{table}").unwrap();
+
+                    let mut table = Table::new();
+                    table.load_preset("||--+-++|    ++++++");
+
+                    table.set_header(&["Column", "Data"]);
+
+                    for (name, _, _, col) in columns.iter() {
+                        table.add_row(&[name.to_string(), format!("{col:?}")]);
+                    }
+
+                    table.add_row(["Output".to_string(), format!("{output_col:?}")]);
+
+                    writeln!(file, "evaluation (internal):\n{table}").unwrap();
+                }
+            }
+            write!(file, "\n\n").unwrap();
+        }
+        Err((Some(span), msg)) => {
+            writeln!(file, "{}\n", span.display_error((text.to_string(), msg))).unwrap();
+        }
+        Err((None, msg)) => {
+            writeln!(file, "error: {}\n", msg).unwrap();
+        }
+    }
 }

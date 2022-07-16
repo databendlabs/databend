@@ -25,6 +25,7 @@ use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
 use crate::function::Function;
+use crate::function::FunctionSignature;
 use crate::property::BooleanDomain;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
@@ -101,9 +102,11 @@ impl<'a> Display for ScalarRef<'a> {
 impl Display for RawExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RawExpr::Literal(literal) => write!(f, "{literal}"),
-            RawExpr::ColumnRef { id, data_type } => write!(f, "ColumnRef({id})::{data_type}"),
-            RawExpr::FunctionCall { name, args, params } => {
+            RawExpr::Literal { lit, .. } => write!(f, "{lit}"),
+            RawExpr::ColumnRef { id, data_type, .. } => write!(f, "ColumnRef({id})::{data_type}"),
+            RawExpr::FunctionCall {
+                name, args, params, ..
+            } => {
                 write!(f, "{name}")?;
                 if !params.is_empty() {
                     write!(f, "(")?;
@@ -132,12 +135,12 @@ impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Literal::Null => write!(f, "NULL"),
-            Literal::Boolean(val) => write!(f, "{val}::Boolean"),
-            Literal::UInt8(val) => write!(f, "{val}::UInt8"),
-            Literal::UInt16(val) => write!(f, "{val}::UInt16"),
-            Literal::Int8(val) => write!(f, "{val}::Int8"),
-            Literal::Int16(val) => write!(f, "{val}::Int16"),
-            Literal::String(val) => write!(f, "{}::String", String::from_utf8_lossy(val)),
+            Literal::Boolean(val) => write!(f, "{val}"),
+            Literal::UInt8(val) => write!(f, "{val}_u8"),
+            Literal::UInt16(val) => write!(f, "{val}_u16"),
+            Literal::Int8(val) => write!(f, "{val}_i8"),
+            Literal::Int16(val) => write!(f, "{val}_i16"),
+            Literal::String(val) => write!(f, "{}", String::from_utf8_lossy(val)),
         }
     }
 }
@@ -151,8 +154,8 @@ impl Display for DataType {
             DataType::UInt16 => write!(f, "UInt16"),
             DataType::Int8 => write!(f, "Int8"),
             DataType::Int16 => write!(f, "Int16"),
-            DataType::Null => write!(f, "Nullable(Nothing)"),
-            DataType::Nullable(inner) => write!(f, "Nullable({inner})"),
+            DataType::Null => write!(f, "NULL"),
+            DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
             DataType::Array(inner) => write!(f, "Array({inner})"),
             DataType::Tuple(tys) => {
@@ -177,8 +180,8 @@ impl Display for DataType {
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::Literal(literal) => write!(f, "{literal}"),
-            Expr::ColumnRef { id } => write!(f, "ColumnRef({id})"),
+            Expr::Literal { lit, .. } => write!(f, "{lit}"),
+            Expr::ColumnRef { id, .. } => write!(f, "ColumnRef({id})"),
             Expr::FunctionCall {
                 function,
                 args,
@@ -213,7 +216,9 @@ impl Display for Expr {
                 }
                 write!(f, ")")
             }
-            Expr::Cast { expr, dest_type } => {
+            Expr::Cast {
+                expr, dest_type, ..
+            } => {
                 write!(f, "cast<dest_type={dest_type}>({expr})")
             }
         }
@@ -241,6 +246,18 @@ impl<'a, T: ValueType> Display for ValueRef<'a, T> {
 impl Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.signature)
+    }
+}
+
+impl Display for FunctionSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}({}) :: {}",
+            self.name,
+            self.args_type.iter().map(|t| t.to_string()).join(", "),
+            self.return_type
+        )
     }
 }
 

@@ -464,7 +464,9 @@ impl ColumnBuilder {
                     .collect(),
                 len: 0,
             },
-            DataType::Generic(_) => unreachable!(),
+            DataType::Generic(_) => {
+                unreachable!("unable to initialize column builder for generic type")
+            }
         }
     }
 
@@ -500,7 +502,7 @@ impl ColumnBuilder {
                 }
                 *len += 1;
             }
-            (c, s) => unreachable!("{c:?} {s:?}"),
+            (c, s) => unreachable!("unable to push {s:?} to {c:?}"),
         }
     }
 
@@ -600,7 +602,7 @@ impl ColumnBuilder {
                 }
                 *len += other_len;
             }
-            _ => unreachable!(),
+            (this, other) => unreachable!("unable append {other:?} onto {this:?}"),
         }
     }
 

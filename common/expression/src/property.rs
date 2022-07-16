@@ -208,7 +208,7 @@ impl Domain {
                     .map(|(self_tup, other_tup)| self_tup.merge(other_tup))
                     .collect(),
             ),
-            (a, b) => unreachable!("Cannot merge {:?} and {:?}", a, b),
+            (a, b) => unreachable!("unable to merge {:?} with {:?}", a, b),
         }
     }
 }

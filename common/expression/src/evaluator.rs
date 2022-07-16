@@ -15,8 +15,10 @@
 use itertools::Itertools;
 
 use crate::chunk::Chunk;
+use crate::error::Result;
 use crate::expression::Expr;
 use crate::expression::Literal;
+use crate::expression::Span;
 use crate::function::FunctionContext;
 use crate::property::BooleanDomain;
 use crate::property::Domain;
@@ -38,17 +40,22 @@ pub struct Evaluator {
 }
 
 impl Evaluator {
-    pub fn run(&self, expr: &Expr) -> Value<AnyType> {
+    pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         match expr {
-            Expr::Literal(lit) => Value::Scalar(self.run_lit(lit)),
-            Expr::ColumnRef { id } => Value::Column(self.input_columns.columns()[*id].clone()),
+            Expr::Literal { lit, .. } => Ok(Value::Scalar(self.run_lit(lit))),
+            Expr::ColumnRef { id, .. } => {
+                Ok(Value::Column(self.input_columns.columns()[*id].clone()))
+            }
             Expr::FunctionCall {
                 function,
                 args,
                 generics,
                 ..
             } => {
-                let cols = args.iter().map(|expr| self.run(expr)).collect::<Vec<_>>();
+                let cols = args
+                    .iter()
+                    .map(|expr| self.run(expr))
+                    .collect::<Result<Vec<_>>>()?;
                 assert!(
                     cols.iter()
                         .filter_map(|val| match val {
@@ -58,45 +65,51 @@ impl Evaluator {
                         .all_equal()
                 );
                 let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
-                (function.eval)(cols_ref.as_slice(), generics)
+                Ok((function.eval)(cols_ref.as_slice(), generics))
             }
-            Expr::Cast { expr, dest_type } => {
-                let value = self.run(expr);
-                // TODO: remove me
-                let desc_value = format!("{}", value);
-                self.run_cast(value, dest_type)
-                    .unwrap_or_else(|| panic!("{desc_value} can not be cast to {dest_type}"))
+            Expr::Cast {
+                span,
+                expr,
+                dest_type,
+            } => {
+                let value = self.run(expr)?;
+                self.run_cast(value, dest_type, span.clone())
             }
         }
     }
 
-    pub fn run_cast(&self, input: Value<AnyType>, dest_type: &DataType) -> Option<Value<AnyType>> {
+    pub fn run_cast(
+        &self,
+        input: Value<AnyType>,
+        dest_type: &DataType,
+        span: Span,
+    ) -> Result<Value<AnyType>> {
         match input {
             Value::Scalar(scalar) => match (scalar, dest_type) {
-                (Scalar::Null, DataType::Nullable(_)) => Some(Value::Scalar(Scalar::Null)),
+                (Scalar::Null, DataType::Nullable(_)) => Ok(Value::Scalar(Scalar::Null)),
                 (Scalar::EmptyArray, DataType::Array(dest_ty)) => {
                     let column = ColumnBuilder::with_capacity(dest_ty, 0).build();
-                    Some(Value::Scalar(Scalar::Array(column)))
+                    Ok(Value::Scalar(Scalar::Array(column)))
                 }
                 (scalar, DataType::Nullable(dest_ty)) => {
-                    self.run_cast(Value::Scalar(scalar), dest_ty)
+                    self.run_cast(Value::Scalar(scalar), dest_ty, span)
                 }
                 (Scalar::Array(array), DataType::Array(dest_ty)) => {
                     let array = self
-                        .run_cast(Value::Column(array), dest_ty)?
+                        .run_cast(Value::Column(array), dest_ty, span)?
                         .into_column()
                         .ok()
                         .unwrap();
-                    Some(Value::Scalar(Scalar::Array(array)))
+                    Ok(Value::Scalar(Scalar::Array(array)))
                 }
                 (Scalar::UInt8(val), DataType::UInt16) => {
-                    Some(Value::Scalar(Scalar::UInt16(val as u16)))
+                    Ok(Value::Scalar(Scalar::UInt16(val as u16)))
                 }
                 (Scalar::Int8(val), DataType::Int16) => {
-                    Some(Value::Scalar(Scalar::Int16(val as i16)))
+                    Ok(Value::Scalar(Scalar::Int16(val as i16)))
                 }
                 (Scalar::UInt8(val), DataType::Int16) => {
-                    Some(Value::Scalar(Scalar::Int16(val as i16)))
+                    Ok(Value::Scalar(Scalar::Int16(val as i16)))
                 }
                 (scalar @ Scalar::Boolean(_), DataType::Boolean)
                 | (scalar @ Scalar::String(_), DataType::String)
@@ -104,10 +117,11 @@ impl Evaluator {
                 | (scalar @ Scalar::Int8(_), DataType::Int8)
                 | (scalar @ Scalar::Int16(_), DataType::Int16)
                 | (scalar @ Scalar::Null, DataType::Null)
-                | (scalar @ Scalar::EmptyArray, DataType::EmptyArray) => {
-                    Some(Value::Scalar(scalar))
-                }
-                _ => None,
+                | (scalar @ Scalar::EmptyArray, DataType::EmptyArray) => Ok(Value::Scalar(scalar)),
+                (scalar, dest_ty) => Err((
+                    span,
+                    (format!("unable to cast {} to {dest_ty}", scalar.as_ref())),
+                )),
             },
             Value::Column(col) => match (col, dest_type) {
                 (Column::Null { len }, DataType::Nullable(_)) => {
@@ -115,54 +129,54 @@ impl Evaluator {
                     for _ in 0..len {
                         builder.push_default();
                     }
-                    Some(Value::Column(builder.build()))
+                    Ok(Value::Column(builder.build()))
                 }
                 (Column::EmptyArray { len }, DataType::Array(dest_ty)) => {
-                    Some(Value::Column(Column::Array {
+                    Ok(Value::Column(Column::Array {
                         array: Box::new(ColumnBuilder::with_capacity(dest_ty, 0).build()),
                         offsets: vec![0; len + 1].into(),
                     }))
                 }
                 (Column::Nullable { column, validity }, DataType::Nullable(dest_ty)) => {
                     let column = self
-                        .run_cast(Value::Column(*column), dest_ty)?
+                        .run_cast(Value::Column(*column), dest_ty, span)?
                         .into_column()
                         .ok()
                         .unwrap();
-                    Some(Value::Column(Column::Nullable {
+                    Ok(Value::Column(Column::Nullable {
                         column: Box::new(column),
                         validity,
                     }))
                 }
                 (col, DataType::Nullable(dest_ty)) => {
                     let column = self
-                        .run_cast(Value::Column(col), dest_ty)?
+                        .run_cast(Value::Column(col), dest_ty, span)?
                         .into_column()
                         .ok()
                         .unwrap();
-                    Some(Value::Column(Column::Nullable {
+                    Ok(Value::Column(Column::Nullable {
                         validity: constant_bitmap(true, column.len()).into(),
                         column: Box::new(column),
                     }))
                 }
                 (Column::Array { array, offsets }, DataType::Array(dest_ty)) => {
                     let array = self
-                        .run_cast(Value::Column(*array), dest_ty)?
+                        .run_cast(Value::Column(*array), dest_ty, span)?
                         .into_column()
                         .ok()
                         .unwrap();
-                    Some(Value::Column(Column::Array {
+                    Ok(Value::Column(Column::Array {
                         array: Box::new(array),
                         offsets,
                     }))
                 }
-                (Column::UInt8(column), DataType::UInt16) => Some(Value::Column(Column::UInt16(
+                (Column::UInt8(column), DataType::UInt16) => Ok(Value::Column(Column::UInt16(
                     column.iter().map(|v| *v as u16).collect(),
                 ))),
-                (Column::Int8(column), DataType::Int16) => Some(Value::Column(Column::Int16(
+                (Column::Int8(column), DataType::Int16) => Ok(Value::Column(Column::Int16(
                     column.iter().map(|v| *v as i16).collect(),
                 ))),
-                (Column::UInt8(column), DataType::Int16) => Some(Value::Column(Column::Int16(
+                (Column::UInt8(column), DataType::Int16) => Ok(Value::Column(Column::Int16(
                     column.iter().map(|v| *v as i16).collect(),
                 ))),
                 (col @ Column::Boolean(_), DataType::Boolean)
@@ -171,10 +185,8 @@ impl Evaluator {
                 | (col @ Column::Int8(_), DataType::Int8)
                 | (col @ Column::Int16(_), DataType::Int16)
                 | (col @ Column::Null { .. }, DataType::Null)
-                | (col @ Column::EmptyArray { .. }, DataType::EmptyArray) => {
-                    Some(Value::Column(col))
-                }
-                _ => None,
+                | (col @ Column::EmptyArray { .. }, DataType::EmptyArray) => Ok(Value::Column(col)),
+                (col, dest_ty) => Err((span, (format!("unable to cast {col:?} to {dest_ty}")))),
             },
         }
     }
@@ -197,14 +209,17 @@ pub struct DomainCalculator {
 }
 
 impl DomainCalculator {
-    pub fn calculate(&self, expr: &Expr) -> Domain {
+    pub fn calculate(&self, expr: &Expr) -> Result<Domain> {
         match expr {
-            Expr::Literal(lit) => self.calculate_literal(lit),
-            Expr::ColumnRef { id } => self.input_domains[*id].clone(),
-            Expr::Cast { expr, dest_type } => {
-                let domain = self.calculate(expr);
-                // TODO: unwrap may fail
-                self.calculate_cast(&domain, dest_type).unwrap()
+            Expr::Literal { lit, .. } => Ok(self.calculate_literal(lit)),
+            Expr::ColumnRef { id, .. } => Ok(self.input_domains[*id].clone()),
+            Expr::Cast {
+                span,
+                expr,
+                dest_type,
+            } => {
+                let domain = self.calculate(expr)?;
+                self.calculate_cast(&domain, dest_type, span.clone())
             }
             Expr::FunctionCall {
                 function,
@@ -215,8 +230,8 @@ impl DomainCalculator {
                 let args_domain = args
                     .iter()
                     .map(|arg| self.calculate(arg))
-                    .collect::<Vec<_>>();
-                (function.calc_domain)(&args_domain, generics)
+                    .collect::<Result<Vec<_>>>()?;
+                Ok((function.calc_domain)(&args_domain, generics))
             }
         }
     }
@@ -258,44 +273,47 @@ impl DomainCalculator {
         }
     }
 
-    pub fn calculate_cast(&self, input: &Domain, dest_type: &DataType) -> Option<Domain> {
+    pub fn calculate_cast(
+        &self,
+        input: &Domain,
+        dest_type: &DataType,
+        span: Span,
+    ) -> Result<Domain> {
         match (input, dest_type) {
             (
                 Domain::Nullable(NullableDomain { value: None, .. }),
                 DataType::Null | DataType::Nullable(_),
-            ) => Some(input.clone()),
-            (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => Some(input.clone()),
+            ) => Ok(input.clone()),
+            (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => Ok(input.clone()),
             (
                 Domain::Nullable(NullableDomain {
                     has_null,
                     value: Some(value),
                 }),
                 DataType::Nullable(ty),
-            ) => Some(Domain::Nullable(NullableDomain {
+            ) => Ok(Domain::Nullable(NullableDomain {
                 has_null: *has_null,
-                value: Some(Box::new(self.calculate_cast(value, ty)?)),
+                value: Some(Box::new(self.calculate_cast(value, ty, span)?)),
             })),
-            (domain, DataType::Nullable(ty)) => Some(Domain::Nullable(NullableDomain {
+            (domain, DataType::Nullable(ty)) => Ok(Domain::Nullable(NullableDomain {
                 has_null: false,
-                value: Some(Box::new(self.calculate_cast(domain, ty)?)),
+                value: Some(Box::new(self.calculate_cast(domain, ty, span)?)),
             })),
-            (Domain::Array(Some(domain)), DataType::Array(ty)) => Some(Domain::Array(Some(
-                Box::new(self.calculate_cast(domain, ty)?),
+            (Domain::Array(Some(domain)), DataType::Array(ty)) => Ok(Domain::Array(Some(
+                Box::new(self.calculate_cast(domain, ty, span)?),
             ))),
             (Domain::UInt(UIntDomain { min, max }), DataType::UInt16) => {
-                Some(Domain::UInt(UIntDomain {
+                Ok(Domain::UInt(UIntDomain {
                     min: (*min).min(u16::MAX as u64),
                     max: (*max).min(u16::MAX as u64),
                 }))
             }
-            (Domain::Int(IntDomain { min, max }), DataType::Int16) => {
-                Some(Domain::Int(IntDomain {
-                    min: (*min).max(i16::MIN as i64).min(i16::MAX as i64),
-                    max: (*max).max(i16::MIN as i64).min(i16::MAX as i64),
-                }))
-            }
+            (Domain::Int(IntDomain { min, max }), DataType::Int16) => Ok(Domain::Int(IntDomain {
+                min: (*min).max(i16::MIN as i64).min(i16::MAX as i64),
+                max: (*max).max(i16::MIN as i64).min(i16::MAX as i64),
+            })),
             (Domain::UInt(UIntDomain { min, max }), DataType::Int16) => {
-                Some(Domain::Int(IntDomain {
+                Ok(Domain::Int(IntDomain {
                     min: (*min).min(i16::MAX as u64) as i64,
                     max: (*max).min(i16::MAX as u64) as i64,
                 }))
@@ -303,8 +321,8 @@ impl DomainCalculator {
             (Domain::Boolean(_), DataType::Boolean)
             | (Domain::String(_), DataType::String)
             | (Domain::UInt(_), DataType::UInt8)
-            | (Domain::Int(_), DataType::Int8) => Some(input.clone()),
-            _ => None,
+            | (Domain::Int(_), DataType::Int8) => Ok(input.clone()),
+            (domain, dest_ty) => Err((span, (format!("unable to cast {domain} to {dest_ty}",)))),
         }
     }
 }
