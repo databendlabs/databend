@@ -123,10 +123,13 @@ jobs:
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: us-east-2
       - uses: ./.github/actions/test_stateful_standalone_linux
         env:
-          REPO_AWS_ACCESS_KEY_ID: ${{ secrets.REPO_ACCESS_KEY_ID }}
-          REPO_AWS_SECRET_ACCESS_KEY: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
+          REPO_AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          REPO_AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
   test_fuzz_standalone_linux:
     runs-on: [self-hosted, X64, Linux, development]
