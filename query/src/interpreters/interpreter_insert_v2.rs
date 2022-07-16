@@ -15,13 +15,11 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use common_base::base::TrySpawn;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
-use common_functions::scalars::FunctionContext;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
@@ -134,21 +132,11 @@ impl InsertInterpreterV2 {
                             let target_type_name = target_field.data_type().name();
                             let from_type = original_field.data_type().clone();
                             let cast_function =
-                                CastFunction::create("cast", &target_type_name, from_type).unwrap();
+                                CastFunction::create("cast", &target_type_name, from_type)?;
                             functions.push(cast_function);
                         }
-                        let tz = self.ctx.get_settings().get_timezone()?;
-                        let tz = String::from_utf8(tz).map_err(|_| {
-                            ErrorCode::LogicalError(
-                                "Timezone has been checked and should be valid.",
-                            )
-                        })?;
-                        let tz = tz.parse::<Tz>().map_err(|_| {
-                            ErrorCode::InvalidTimezone(
-                                "Timezone has been checked and should be valid",
-                            )
-                        })?;
-                        let func_ctx = FunctionContext { tz };
+                       
+                        let func_ctx = self.ctx.try_get_function_context()?;
                         pipeline.add_transform(|transform_input_port, transform_output_port| {
                             TransformCastSchema::try_create(
                                 transform_input_port,

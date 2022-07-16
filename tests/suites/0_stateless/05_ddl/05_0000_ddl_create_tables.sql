@@ -67,8 +67,8 @@ SELECT '====END TEST CREATE TABLE AS SELECT STATEMENT====';
 
 
 SELECT '====TIMESTAMP====';
-create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP); -- {ErrorCode 1006}
-create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); -- {ErrorCode 1006}
+create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP); -- {ErrorCode 1065}
+create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); -- {ErrorCode 1065}
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
 
 
@@ -84,7 +84,7 @@ desc db2.test8;
 DROP DATABASE db1;
 DROP DATABASE db2;
 
-CREATE TABLE system.test; -- {ErrorCode 1002}
+CREATE TABLE system.test(a INT); -- {ErrorCode 1002}
 
 
 

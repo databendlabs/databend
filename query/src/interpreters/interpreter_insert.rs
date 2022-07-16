@@ -148,18 +148,7 @@ impl Interpreter for InsertInterpreter {
                                 CastFunction::create("cast", &target_type_name, from_type).unwrap();
                             functions.push(cast_function);
                         }
-                        let tz = self.ctx.get_settings().get_timezone()?;
-                        let tz = String::from_utf8(tz).map_err(|_| {
-                            ErrorCode::LogicalError(
-                                "Timezone has been checked and should be valid.",
-                            )
-                        })?;
-                        let tz = tz.parse::<Tz>().map_err(|_| {
-                            ErrorCode::InvalidTimezone(
-                                "Timezone has been checked and should be valid",
-                            )
-                        })?;
-                        let func_ctx = FunctionContext { tz };
+                        let func_ctx = self.ctx.try_get_function_context()?;
                         pipeline.add_transform(|transform_input_port, transform_output_port| {
                             TransformCastSchema::try_create(
                                 transform_input_port,

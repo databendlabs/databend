@@ -93,7 +93,7 @@ b
 default
 
 statement ok
-ALTER DATABASE a RENAME TO A;
+ALTER DATABASE a RENAME TO a2;
 
 statement query T 
 SELECT * FROM system.databases;
@@ -101,12 +101,12 @@ SELECT * FROM system.databases;
 ----  
 system
 INFORMATION_SCHEMA
-A
+a2
 b
 default
 
 statement query I 
-SELECT * FROM A.t1;
+SELECT * FROM a2.t1;
 
 ----  
 1
@@ -129,7 +129,7 @@ SELECT * FROM system.databases;
 ----  
 system
 INFORMATION_SCHEMA
-A
+a2
 b
 default
 
@@ -137,5 +137,5 @@ statement ok
 DROP DATABASE b;
 
 statement ok
-DROP DATABASE A;
+DROP DATABASE a2;
 

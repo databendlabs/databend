@@ -83,11 +83,11 @@ impl TypeFactory {
             lowercase_name.ends_with(" null") || lowercase_name.starts_with("nullable(");
 
         if is_nullable {
-            if lowercase_name.ends_with("null") {
+            if lowercase_name.ends_with(" null") {
                 let name = lowercase_name[..lowercase_name.len() - 5].to_string();
                 return self.get(name).map(NullableType::new_impl);
             } else {
-                let name = lowercase_name[10..lowercase_name.len() - 1].to_string();
+                let name = lowercase_name[9..lowercase_name.len() - 1].to_string();
                 return self.get(name).map(NullableType::new_impl);
             }
         }

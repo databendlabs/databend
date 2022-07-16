@@ -234,7 +234,7 @@ Some(
 ---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (c Int32 DEFAULT 1, b STRING)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -262,7 +262,6 @@ CreateTable(
                             span: Ident(32..33),
                         },
                         data_type: Int32,
-                        nullable: false,
                         default_expr: Some(
                             Literal {
                                 span: [
@@ -282,7 +281,6 @@ CreateTable(
                             span: Ident(62..63),
                         },
                         data_type: String,
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
@@ -301,7 +299,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL) AS SELECT * FROM t
+CREATE TABLE IF NOT EXISTS a.b (c Int32 DEFAULT 1, b STRING) AS SELECT * FROM t
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -329,7 +327,6 @@ CreateTable(
                             span: Ident(32..33),
                         },
                         data_type: Int32,
-                        nullable: false,
                         default_expr: Some(
                             Literal {
                                 span: [
@@ -349,7 +346,6 @@ CreateTable(
                             span: Ident(62..63),
                         },
                         data_type: String,
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
@@ -750,7 +746,7 @@ DropDatabase(
 ---------- Input ----------
 create table c(a DateTime null, b DateTime(3));
 ---------- Output ---------
-CREATE TABLE c (a DATETIME NULL, b DATETIME(3) NOT NULL)
+CREATE TABLE c (a DATETIME NULL, b DATETIME(3))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -771,10 +767,11 @@ CreateTable(
                             quote: None,
                             span: Ident(15..16),
                         },
-                        data_type: DateTime {
-                            precision: None,
-                        },
-                        nullable: true,
+                        data_type: Nullable(
+                            DateTime {
+                                precision: None,
+                            },
+                        ),
                         default_expr: None,
                         comment: None,
                     },
@@ -789,7 +786,6 @@ CreateTable(
                                 3,
                             ),
                         },
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
@@ -1213,8 +1209,9 @@ CreateTable(
                             quote: None,
                             span: Ident(15..17),
                         },
-                        data_type: Int32,
-                        nullable: true,
+                        data_type: Nullable(
+                            Int32,
+                        ),
                         default_expr: None,
                         comment: None,
                     },
@@ -1224,8 +1221,9 @@ CreateTable(
                             quote: None,
                             span: Ident(28..30),
                         },
-                        data_type: Int64,
-                        nullable: true,
+                        data_type: Nullable(
+                            Int64,
+                        ),
                         default_expr: None,
                         comment: None,
                     },
@@ -1235,8 +1233,9 @@ CreateTable(
                             quote: None,
                             span: Ident(44..46),
                         },
-                        data_type: String,
-                        nullable: true,
+                        data_type: Nullable(
+                            String,
+                        ),
                         default_expr: None,
                         comment: None,
                     },
@@ -1255,7 +1254,7 @@ CreateTable(
 ---------- Input ----------
 CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);
 ---------- Output ---------
-CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 STRING NOT NULL)
+CREATE TABLE t (c1 Int32, c2 Int64, c3 STRING)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1277,7 +1276,6 @@ CreateTable(
                             span: Ident(15..17),
                         },
                         data_type: Int32,
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
@@ -1288,7 +1286,6 @@ CreateTable(
                             span: Ident(32..34),
                         },
                         data_type: Int64,
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
@@ -1299,7 +1296,6 @@ CreateTable(
                             span: Ident(52..54),
                         },
                         data_type: String,
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
@@ -1318,7 +1314,7 @@ CreateTable(
 ---------- Input ----------
 CREATE TABLE t(c1 int default 1);
 ---------- Output ---------
-CREATE TABLE t (c1 Int32 NOT NULL DEFAULT 1)
+CREATE TABLE t (c1 Int32 DEFAULT 1)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1340,7 +1336,6 @@ CreateTable(
                             span: Ident(15..17),
                         },
                         data_type: Int32,
-                        nullable: false,
                         default_expr: Some(
                             Literal {
                                 span: [
@@ -4700,7 +4695,7 @@ AlterDatabase(
 ---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
 ---------- Output ---------
-CREATE TABLE t (a Int32 NOT NULL COMMENT 'col comment')COMMENT = table comment
+CREATE TABLE t (a Int32 COMMENT 'col comment')COMMENT = table comment
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -4722,7 +4717,6 @@ CreateTable(
                             span: Ident(16..17),
                         },
                         data_type: Int32,
-                        nullable: false,
                         default_expr: None,
                         comment: Some(
                             "col comment",

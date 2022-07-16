@@ -832,15 +832,21 @@ pub fn rest_tokens<'a>(i: Input<'a>) -> IResult<&'a [Token]> {
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     #[derive(Clone)]
     enum ColumnConstraint<'a> {
+        Nullable(bool),
         DefaultExpr(Box<Expr<'a>>),
     }
 
+    let nullable = alt((
+        value(ColumnConstraint::Nullable(true), rule! { NULL }),
+        value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
+    ));
     let default_expr = map(
         rule! {
             DEFAULT ~ ^#subexpr(NOT_PREC)
         },
         |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
     );
+    
     let comment = map(
         rule! {
             COMMENT ~ #literal_string
@@ -852,9 +858,9 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         rule! {
             #ident
             ~ #type_name
-            ~ ( #default_expr )*
+            ~ ( #nullable | #default_expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>] [COMMENT '<comment>']`"
+            : "`<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`"
         },
         |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
@@ -868,6 +874,11 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                     ColumnConstraint::DefaultExpr(default_expr) => {
                         def.default_expr = Some(default_expr)
                     }
+                    ColumnConstraint::Nullable(nullable) => {
+                        if nullable {
+                            def.data_type = def.data_type.wrap_nullable();
+                        }
+                    },
                 }
             }
             def

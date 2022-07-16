@@ -268,6 +268,16 @@ pub enum TypeName {
     Nullable(Box<TypeName>),
 }
 
+impl TypeName {
+    pub fn wrap_nullable(self) -> Self {
+        if !matches!(&self, &Self::Nullable(_)) {
+            Self::Nullable(Box::new(self))
+        } else {
+            self
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrimWhere {
     Both,
