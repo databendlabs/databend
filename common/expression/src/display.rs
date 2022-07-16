@@ -281,7 +281,7 @@ impl Display for NullableDomain<AnyType> {
 impl Display for BooleanDomain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if self.contains_false && self.contains_true {
-            write!(f, "{{FALSE ∪ TRUE}}")
+            write!(f, "{{FALSE, TRUE}}")
         } else if self.contains_false {
             write!(f, "{{FALSE}}")
         } else {

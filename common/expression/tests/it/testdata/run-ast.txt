@@ -152,12 +152,12 @@ raw expr       : not(ColumnRef(0)::Nullable(Boolean))
 checked expr   : not<Nullable(Boolean)>(ColumnRef(0))
 type           : Nullable(Boolean)
 domain calculation:
-+----------+-------------------------+
-| Column   | Domain                  |
-+----------+-------------------------+
-| Column 0 | {FALSE ∪ TRUE} ∪ {NULL} |
-| Output   | {FALSE ∪ TRUE} ∪ {NULL} |
-+----------+-------------------------+
++----------+------------------------+
+| Column   | Domain                 |
++----------+------------------------+
+| Column 0 | {FALSE, TRUE} ∪ {NULL} |
+| Output   | {FALSE, TRUE} ∪ {NULL} |
++----------+------------------------+
 input chunk:
 +----------+
 | Column 0 |
