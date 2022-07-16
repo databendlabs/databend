@@ -1,6 +1,6 @@
 raw expr       : and(true::Boolean, false::Boolean)
-type           : Boolean
 checked expr   : and<Boolean, Boolean>(true::Boolean, false::Boolean)
+type           : Boolean
 domain calculation:
 +--------+---------+
 | Column | Domain  |
@@ -12,8 +12,8 @@ false
 
 
 raw expr       : and(NULL, false::Boolean)
-type           : Nullable(Nothing)
 checked expr   : and<Nullable(Nothing), Nullable(Boolean)>(NULL, cast<dest_type=Nullable(Boolean)>(false::Boolean))
+type           : Nullable(Nothing)
 domain calculation:
 +--------+--------+
 | Column | Domain |
@@ -25,8 +25,8 @@ NULL
 
 
 raw expr       : plus(ColumnRef(0)::Nullable(UInt8), -10::Int8)
-type           : Nullable(Int16)
 checked expr   : plus<Nullable(Int16), Nullable(Int16)>(cast<dest_type=Nullable(Int16)>(ColumnRef(0)), cast<dest_type=Nullable(Int16)>(-10::Int8))
+type           : Nullable(Int16)
 domain calculation:
 +----------+--------------------+
 | Column   | Domain             |
@@ -65,8 +65,8 @@ evaluation result (internal):
 
 
 raw expr       : plus(ColumnRef(0)::Nullable(UInt8), ColumnRef(1)::Nullable(UInt8))
-type           : Nullable(Int16)
 checked expr   : plus<Nullable(Int16), Nullable(Int16)>(cast<dest_type=Nullable(Int16)>(ColumnRef(0)), cast<dest_type=Nullable(Int16)>(ColumnRef(1)))
+type           : Nullable(Int16)
 domain calculation:
 +----------+--------------------+
 | Column   | Domain             |
@@ -107,8 +107,8 @@ evaluation result (internal):
 
 
 raw expr       : plus(ColumnRef(0)::Nullable(UInt8), ColumnRef(1)::Nullable(Nothing))
-type           : Nullable(Nothing)
 checked expr   : plus<Nullable(Int16), Nullable(Nothing)>(cast<dest_type=Nullable(Int16)>(ColumnRef(0)), ColumnRef(1))
+type           : Nullable(Nothing)
 domain calculation:
 +----------+--------------------+
 | Column   | Domain             |
@@ -149,8 +149,8 @@ evaluation result (internal):
 
 
 raw expr       : not(ColumnRef(0)::Nullable(Boolean))
-type           : Nullable(Boolean)
 checked expr   : not<Nullable(Boolean)>(ColumnRef(0))
+type           : Nullable(Boolean)
 domain calculation:
 +----------+-------------------------+
 | Column   | Domain                  |
@@ -189,8 +189,8 @@ evaluation result (internal):
 
 
 raw expr       : not(ColumnRef(0)::Nullable(Nothing))
-type           : Nullable(Nothing)
 checked expr   : not<Nullable(Nothing)>(ColumnRef(0))
+type           : Nullable(Nothing)
 domain calculation:
 +----------+--------+
 | Column   | Domain |
@@ -243,8 +243,8 @@ evaluation result (internal):
 
 
 raw expr       : least(10::UInt8, 20::UInt8, 30::UInt8, 40::UInt8)
-type           : Int16
 checked expr   : least<Int16, Int16, Int16, Int16>(cast<dest_type=Int16>(10::UInt8), cast<dest_type=Int16>(20::UInt8), cast<dest_type=Int16>(30::UInt8), cast<dest_type=Int16>(40::UInt8))
+type           : Int16
 domain calculation:
 +--------+-----------+
 | Column | Domain    |
@@ -256,8 +256,8 @@ evaluation result:
 
 
 raw expr       : create_tuple(NULL, true::Boolean)
-type           : (Nullable(Nothing), Boolean)
 checked expr   : create_tuple<Nullable(Nothing), Boolean>(NULL, true::Boolean)
+type           : (Nullable(Nothing), Boolean)
 domain calculation:
 +--------+------------------+
 | Column | Domain           |
@@ -269,8 +269,8 @@ evaluation result:
 
 
 raw expr       : get_tuple(1)(create_tuple(ColumnRef(0)::Int16, ColumnRef(1)::Nullable(String)))
-type           : Nullable(String)
 checked expr   : get_tuple<(Int16, Nullable(String))>(create_tuple<Int16, Nullable(String)>(ColumnRef(0), ColumnRef(1)))
+type           : Nullable(String)
 domain calculation:
 +----------+----------------------+
 | Column   | Domain               |
@@ -315,8 +315,8 @@ evaluation result (internal):
 
 
 raw expr       : get_tuple(1)(ColumnRef(0)::Nullable((Boolean, String)))
-type           : Nullable(String)
 checked expr   : get_tuple<Nullable((Boolean, String))>(ColumnRef(0))
+type           : Nullable(String)
 domain calculation:
 +----------+---------------------------------+
 | Column   | Domain                          |
@@ -359,8 +359,8 @@ evaluation result (internal):
 
 
 raw expr       : create_array()
-type           : Array(Nothing)
 checked expr   : create_array<>()
+type           : Array(Nothing)
 domain calculation:
 +--------+--------+
 | Column | Domain |
@@ -372,8 +372,8 @@ evaluation result:
 
 
 raw expr       : create_array(NULL, true::Boolean)
-type           : Array(Nullable(Boolean))
 checked expr   : create_array<T0=Nullable(Boolean)><T0, T0>(cast<dest_type=Nullable(Boolean)>(NULL), cast<dest_type=Nullable(Boolean)>(true::Boolean))
+type           : Array(Nullable(Boolean))
 domain calculation:
 +--------+-------------------+
 | Column | Domain            |
@@ -385,8 +385,8 @@ evaluation result:
 
 
 raw expr       : create_array(ColumnRef(0)::Int16, ColumnRef(1)::Int16)
-type           : Array(Int16)
 checked expr   : create_array<T0=Int16><T0, T0>(ColumnRef(0), ColumnRef(1))
+type           : Array(Int16)
 domain calculation:
 +----------+-----------+
 | Column   | Domain    |
@@ -431,8 +431,8 @@ evaluation result (internal):
 
 
 raw expr       : create_array(create_array(ColumnRef(0)::Int16, ColumnRef(1)::Int16), NULL, NULL)
-type           : Array(Nullable(Array(Int16)))
 checked expr   : create_array<T0=Nullable(Array(Int16))><T0, T0, T0>(cast<dest_type=Nullable(Array(Int16))>(create_array<T0=Int16><T0, T0>(ColumnRef(0), ColumnRef(1))), cast<dest_type=Nullable(Array(Int16))>(NULL), cast<dest_type=Nullable(Array(Int16))>(NULL))
+type           : Array(Nullable(Array(Int16)))
 domain calculation:
 +----------+----------------------+
 | Column   | Domain               |
@@ -477,8 +477,8 @@ evaluation result (internal):
 
 
 raw expr       : get(ColumnRef(0)::Array(Int16), ColumnRef(1)::UInt8)
-type           : Int16
 checked expr   : get<T0=Int16><Array(T0), Int16>(ColumnRef(0), cast<dest_type=Int16>(ColumnRef(1)))
+type           : Int16
 domain calculation:
 +----------+------------+
 | Column   | Domain     |
@@ -523,8 +523,8 @@ evaluation result (internal):
 
 
 raw expr       : get(ColumnRef(0)::Array(Array(Int16)), ColumnRef(1)::UInt8)
-type           : Array(Int16)
 checked expr   : get<T0=Array(Int16)><Array(T0), Int16>(ColumnRef(0), cast<dest_type=Int16>(ColumnRef(1)))
+type           : Array(Int16)
 domain calculation:
 +----------+--------------+
 | Column   | Domain       |

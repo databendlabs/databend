@@ -58,8 +58,8 @@ fn run_ast(
     let fn_registry = builtin_functions();
     let (expr, ty) = type_check::check(raw, &fn_registry).unwrap();
 
-    writeln!(file, "type           : {ty}").unwrap();
     writeln!(file, "checked expr   : {expr}").unwrap();
+    writeln!(file, "type           : {ty}").unwrap();
 
     let domain_calculator = DomainCalculator {
         input_domains: columns_domain.clone(),
