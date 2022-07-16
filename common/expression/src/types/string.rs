@@ -17,6 +17,8 @@ use std::ops::Range;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
+use crate::property::Domain;
+use crate::property::StringDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -31,6 +33,7 @@ impl ValueType for StringType {
     type Scalar = Vec<u8>;
     type ScalarRef<'a> = &'a [u8];
     type Column = (Buffer<u8>, Buffer<u64>);
+    type Domain = StringDomain;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.to_vec()
@@ -58,12 +61,27 @@ impl ArgType for StringType {
             .map(|(data, offsets)| (data.clone(), offsets.clone()))
     }
 
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        domain.as_string().map(StringDomain::clone)
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Scalar::String(scalar)
     }
 
     fn upcast_column((data, offsets): Self::Column) -> Column {
         Column::String { data, offsets }
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::String(domain)
+    }
+
+    fn full_domain(_: &GenericMap) -> Self::Domain {
+        StringDomain {
+            min: vec![],
+            max: None,
+        }
     }
 
     fn column_len<'a>((_, offsets): &'a Self::Column) -> usize {

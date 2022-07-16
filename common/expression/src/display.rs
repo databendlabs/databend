@@ -25,8 +25,14 @@ use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
 use crate::function::Function;
+use crate::property::BooleanDomain;
+use crate::property::Domain;
 use crate::property::FunctionProperty;
-use crate::property::ValueProperty;
+use crate::property::IntDomain;
+use crate::property::NullableDomain;
+use crate::property::StringDomain;
+use crate::property::UIntDomain;
+use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::ValueType;
 use crate::values::ScalarRef;
@@ -96,11 +102,7 @@ impl Display for RawExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RawExpr::Literal(literal) => write!(f, "{literal}"),
-            RawExpr::ColumnRef {
-                id,
-                data_type,
-                property,
-            } => write!(f, "ColumnRef({id})::{data_type}{property}"),
+            RawExpr::ColumnRef { id, data_type } => write!(f, "ColumnRef({id})::{data_type}"),
             RawExpr::FunctionCall { name, args, params } => {
                 write!(f, "{name}")?;
                 if !params.is_empty() {
@@ -172,17 +174,6 @@ impl Display for DataType {
     }
 }
 
-impl Display for ValueProperty {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        if self.not_null {
-            write!(f, "{{not_null}}")?;
-        } else {
-            write!(f, "{{}}")?;
-        }
-        Ok(())
-    }
-}
-
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -214,11 +205,11 @@ impl Display for Expr {
                 }
                 write!(f, ">")?;
                 write!(f, "(")?;
-                for (i, (arg, prop)) in args.iter().enumerate() {
+                for (i, arg) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{arg}{prop}")?;
+                    write!(f, "{arg}")?;
                 }
                 write!(f, ")")
             }
@@ -256,15 +247,9 @@ impl Debug for Function {
 impl Display for FunctionProperty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut properties = Vec::new();
-        if self.preserve_not_null {
-            properties.push("preserve_not_null");
-        }
         if self.commutative {
             properties.push("commutative");
         }
-        // if self.domain_to_range.is_some() {
-        //     properties.push("monotonic");
-        // }
         if !properties.is_empty() {
             write!(f, "{{{}}}", properties.join(", "))?;
         }
@@ -275,5 +260,83 @@ impl Display for FunctionProperty {
 impl Debug for FunctionProperty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self}")
+    }
+}
+
+impl Display for NullableDomain<AnyType> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if let Some(value) = &self.value {
+            if self.contains_null {
+                write!(f, "{} ∪ {{NULL}}", value)
+            } else {
+                write!(f, "{}", value)
+            }
+        } else {
+            assert!(self.contains_null);
+            write!(f, "{{NULL}}")
+        }
+    }
+}
+
+impl Display for BooleanDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if self.contains_false && self.contains_true {
+            write!(f, "{{FALSE ∪ TRUE}}")
+        } else if self.contains_false {
+            write!(f, "{{FALSE}}")
+        } else {
+            write!(f, "{{TRUE}}")
+        }
+    }
+}
+
+impl Display for StringDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if let Some(max) = &self.max {
+            write!(
+                f,
+                "{{{:?}..={:?}}}",
+                String::from_utf8_lossy(&self.min),
+                String::from_utf8_lossy(max)
+            )
+        } else {
+            write!(f, "{{{:?}..}}", String::from_utf8_lossy(&self.min))
+        }
+    }
+}
+
+impl Display for IntDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{{{}..={}}}", self.min, self.max)
+    }
+}
+
+impl Display for UIntDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{{{}..={}}}", self.min, self.max)
+    }
+}
+
+impl Display for Domain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Domain::Int(domain) => write!(f, "{domain}"),
+            Domain::UInt(domain) => write!(f, "{domain}"),
+            Domain::Boolean(domain) => write!(f, "{domain}"),
+            Domain::String(domain) => write!(f, "{domain}"),
+            Domain::Nullable(domain) => write!(f, "{domain}"),
+            Domain::Array(None) => write!(f, "[]"),
+            Domain::Array(Some(domain)) => write!(f, "[{domain}]"),
+            Domain::Tuple(fields) => {
+                write!(f, "(")?;
+                for (i, domain) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{domain}")?;
+                }
+                write!(f, ")")
+            }
+        }
     }
 }

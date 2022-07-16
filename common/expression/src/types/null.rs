@@ -14,6 +14,8 @@
 
 use std::ops::Range;
 
+use crate::property::Domain;
+use crate::property::NullableDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -27,6 +29,7 @@ impl ValueType for NullType {
     type Scalar = ();
     type ScalarRef<'a> = ();
     type Column = usize;
+    type Domain = ();
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -59,6 +62,16 @@ impl ArgType for NullType {
         }
     }
 
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        match domain {
+            Domain::Nullable(NullableDomain {
+                contains_null: true,
+                value: None,
+            }) => Some(()),
+            _ => None,
+        }
+    }
+
     fn upcast_scalar(_: Self::Scalar) -> Scalar {
         Scalar::Null
     }
@@ -66,6 +79,15 @@ impl ArgType for NullType {
     fn upcast_column(len: Self::Column) -> Column {
         Column::Null { len }
     }
+
+    fn upcast_domain(_: Self::Domain) -> Domain {
+        Domain::Nullable(NullableDomain {
+            contains_null: true,
+            value: None,
+        })
+    }
+
+    fn full_domain(_: &GenericMap) -> Self::Domain {}
 
     fn column_len<'a>(len: &'a Self::Column) -> usize {
         *len
