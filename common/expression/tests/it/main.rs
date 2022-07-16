@@ -624,14 +624,9 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain
 
             match result {
                 Value::Scalar(output_scalar) => {
-                    let mut table = Table::new();
-                    table.load_preset("||--+-++|-+++++++++");
-
-                    table.add_row(["Type".to_string(), output_ty.to_string()]);
-                    table.add_row(["Domain".to_string(), output_domain.to_string()]);
-                    table.add_row(["Output".to_string(), output_scalar.as_ref().to_string()]);
-
-                    writeln!(file, "evaluation:\n{table}",).unwrap()
+                    writeln!(file, "output type    : {output_ty}").unwrap();
+                    writeln!(file, "output domain  : {output_domain}").unwrap();
+                    writeln!(file, "output         : {}", output_scalar.as_ref()).unwrap();
                 }
                 Value::Column(output_col) => {
                     let mut table = Table::new();

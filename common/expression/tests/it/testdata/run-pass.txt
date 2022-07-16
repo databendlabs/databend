@@ -1,27 +1,17 @@
 ast            : bool_and(true, false)
 raw expr       : bool_and(true, false)
 checked expr   : bool_and<Boolean, Boolean>(true, false)
-evaluation:
-+--------+---------+
-| Type   | Boolean |
-+--------+---------+
-| Domain | {FALSE} |
-+--------+---------+
-| Output | false   |
-+--------+---------+
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
 
 
 ast            : bool_and(null, false)
 raw expr       : bool_and(NULL, false)
 checked expr   : bool_and<NULL, Boolean NULL>(NULL, cast<dest_type=Boolean NULL>(false))
-evaluation:
-+--------+--------+
-| Type   | NULL   |
-+--------+--------+
-| Domain | {NULL} |
-+--------+--------+
-| Output | NULL   |
-+--------+--------+
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : plus(a, 10)
@@ -141,27 +131,17 @@ evaluation (internal):
 ast            : least(10, 20, 30, 40)
 raw expr       : least(10_u8, 20_u8, 30_u8, 40_u8)
 checked expr   : least<Int16, Int16, Int16, Int16>(cast<dest_type=Int16>(10_u8), cast<dest_type=Int16>(20_u8), cast<dest_type=Int16>(30_u8), cast<dest_type=Int16>(40_u8))
-evaluation:
-+--------+-----------+
-| Type   | Int16     |
-+--------+-----------+
-| Domain | {10..=10} |
-+--------+-----------+
-| Output | 10        |
-+--------+-----------+
+output type    : Int16
+output domain  : {10..=10}
+output         : 10
 
 
 ast            : create_tuple(null, true)
 raw expr       : create_tuple(NULL, true)
 checked expr   : create_tuple<NULL, Boolean>(NULL, true)
-evaluation:
-+--------+------------------+
-| Type   | (NULL, Boolean)  |
-+--------+------------------+
-| Domain | ({NULL}, {TRUE}) |
-+--------+------------------+
-| Output | (NULL, true)     |
-+--------+------------------+
+output type    : (NULL, Boolean)
+output domain  : ({NULL}, {TRUE})
+output         : (NULL, true)
 
 
 ast            : get_tuple(1)(create_tuple(a, b))
@@ -217,27 +197,17 @@ evaluation (internal):
 ast            : create_array()
 raw expr       : create_array()
 checked expr   : create_array<>()
-evaluation:
-+--------+----------------+
-| Type   | Array(Nothing) |
-+--------+----------------+
-| Domain | []             |
-+--------+----------------+
-| Output | []             |
-+--------+----------------+
+output type    : Array(Nothing)
+output domain  : []
+output         : []
 
 
 ast            : create_array(null, true)
 raw expr       : create_array(NULL, true)
 checked expr   : create_array<T0=Boolean NULL><T0, T0>(cast<dest_type=Boolean NULL>(NULL), cast<dest_type=Boolean NULL>(true))
-evaluation:
-+--------+---------------------+
-| Type   | Array(Boolean NULL) |
-+--------+---------------------+
-| Domain | [{TRUE} ∪ {NULL}]   |
-+--------+---------------------+
-| Output | [NULL, true]        |
-+--------+---------------------+
+output type    : Array(Boolean NULL)
+output domain  : [{TRUE} ∪ {NULL}]
+output         : [NULL, true]
 
 
 ast            : create_array(a, b)
