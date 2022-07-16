@@ -794,7 +794,7 @@ fn builtin_functions() -> FunctionRegistry {
                     value,
                 } = args_domain[0].as_nullable().unwrap();
                 let value = value.as_ref().map(|value| {
-                    let fields = (&value).as_tuple().unwrap();
+                    let fields = value.as_tuple().unwrap();
                     Box::new(fields[idx].clone())
                 });
                 Domain::Nullable(NullableDomain {
