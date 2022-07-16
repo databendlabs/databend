@@ -34,6 +34,7 @@ use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
+use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Filter;
 use crate::sql::plans::FunctionCall;
@@ -363,7 +364,77 @@ impl SubqueryRewriter {
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             SubqueryType::Any => {
-                todo!()
+                let correlated_columns = subquery.outer_columns.clone();
+                let flatten_plan = self.flatten(&subquery.subquery, &correlated_columns)?;
+                let rel_expr = RelExpr::with_s_expr(&flatten_plan);
+                let output_columns: HashSet<_> = rel_expr
+                    .derive_relational_prop()?
+                    .output_columns
+                    .difference(
+                        &self
+                            .derived_columns
+                            .values()
+                            .cloned()
+                            .collect::<HashSet<_>>(),
+                    )
+                    .cloned()
+                    .collect();
+                assert_eq!(output_columns.len(), 1);
+                let index = output_columns
+                    .iter()
+                    .take(1)
+                    .next()
+                    .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
+                let column_name = format!("subquery_{}", index);
+                let left_condition = Scalar::BoundColumnRef(BoundColumnRef {
+                    column: ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        column_name,
+                        index: *index,
+                        data_type: subquery.data_type.clone(),
+                        visible_in_unqualified_wildcard: false,
+                    },
+                });
+                let right_condition = *subquery.child_expr.as_ref().unwrap().clone();
+                let op = subquery.compare_op.as_ref().unwrap().clone();
+                let (left_conditions, right_conditions, other_conditions) =
+                    if op == ComparisonOp::Equal {
+                        (vec![left_condition], vec![right_condition], vec![])
+                    } else {
+                        let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
+                            op,
+                            left: Box::new(right_condition),
+                            right: Box::new(left_condition),
+                            return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                        });
+                        (vec![], vec![], vec![other_condition])
+                    };
+                // Add a marker column to save comparison result.
+                // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
+                // If subquery contains NULL, the comparison result is TRUE or NULL.
+                // Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
+                // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
+                let marker_index = self.metadata.write().add_column(
+                    "marker".to_string(),
+                    NullableType::new_impl(BooleanType::new_impl()),
+                    None,
+                );
+                // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
+                // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
+                // Note that subquery is the left table, and it'll be the probe side.
+                let mark_join = LogicalInnerJoin {
+                    left_conditions,
+                    right_conditions,
+                    other_conditions,
+                    join_type: JoinType::Mark,
+                    marker_index: Some(marker_index),
+                }
+                .into();
+                Ok((
+                    SExpr::create_binary(mark_join, flatten_plan.clone(), left.clone()),
+                    UnnestResult::MarkJoin { marker_index },
+                ))
             }
             _ => unreachable!(),
         }
