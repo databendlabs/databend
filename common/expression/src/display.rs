@@ -266,13 +266,13 @@ impl Debug for FunctionProperty {
 impl Display for NullableDomain<AnyType> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(value) = &self.value {
-            if self.contains_null {
+            if self.has_null {
                 write!(f, "{} ∪ {{NULL}}", value)
             } else {
                 write!(f, "{}", value)
             }
         } else {
-            assert!(self.contains_null);
+            assert!(self.has_null);
             write!(f, "{{NULL}}")
         }
     }
@@ -280,9 +280,9 @@ impl Display for NullableDomain<AnyType> {
 
 impl Display for BooleanDomain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if self.contains_false && self.contains_true {
+        if self.has_false && self.has_true {
             write!(f, "{{FALSE, TRUE}}")
-        } else if self.contains_false {
+        } else if self.has_false {
             write!(f, "{{FALSE}}")
         } else {
             write!(f, "{{TRUE}}")

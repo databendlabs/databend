@@ -84,8 +84,8 @@ impl ArgType for BooleanType {
 
     fn full_domain(_: &GenericMap) -> Self::Domain {
         BooleanDomain {
-            contains_false: true,
-            contains_true: true,
+            has_false: true,
+            has_true: true,
         }
     }
 

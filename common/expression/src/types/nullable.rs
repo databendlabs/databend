@@ -73,10 +73,10 @@ impl<T: ArgType> ArgType for NullableType<T> {
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
             Domain::Nullable(NullableDomain {
-                contains_null,
+                has_null,
                 value: Some(value),
             }) => Some(NullableDomain {
-                contains_null: *contains_null,
+                has_null: *has_null,
                 value: Some(Box::new(T::try_downcast_domain(value)?)),
             }),
             _ => None,
@@ -99,14 +99,14 @@ impl<T: ArgType> ArgType for NullableType<T> {
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
         Domain::Nullable(NullableDomain {
-            contains_null: domain.contains_null,
+            has_null: domain.has_null,
             value: domain.value.map(|value| Box::new(T::upcast_domain(*value))),
         })
     }
 
     fn full_domain(generics: &GenericMap) -> Self::Domain {
         NullableDomain {
-            contains_null: true,
+            has_null: true,
             value: Some(Box::new(T::full_domain(generics))),
         }
     }

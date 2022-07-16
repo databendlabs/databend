@@ -161,7 +161,7 @@ pub fn test() {
             validity: vec![false, true, false].into(),
         }],
         vec![Domain::Nullable(NullableDomain {
-            contains_null: true,
+            has_null: true,
             value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
         })],
     );
@@ -194,11 +194,11 @@ pub fn test() {
         ],
         vec![
             Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
             }),
             Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: Some(Box::new(Domain::UInt(UIntDomain { min: 1, max: 3 }))),
             }),
         ],
@@ -229,11 +229,11 @@ pub fn test() {
         ],
         vec![
             Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
             }),
             Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: None,
             }),
         ],
@@ -254,10 +254,10 @@ pub fn test() {
             validity: vec![false, true, false].into(),
         }],
         vec![Domain::Nullable(NullableDomain {
-            contains_null: true,
+            has_null: true,
             value: Some(Box::new(Domain::Boolean(BooleanDomain {
-                contains_false: true,
-                contains_true: true,
+                has_false: true,
+                has_true: true,
             }))),
         })],
     );
@@ -274,7 +274,7 @@ pub fn test() {
         },
         vec![Column::Null { len: 10 }],
         vec![Domain::Nullable(NullableDomain {
-            contains_null: true,
+            has_null: true,
             value: None,
         })],
     );
@@ -342,7 +342,7 @@ pub fn test() {
         vec![
             Domain::Int(IntDomain { min: 0, max: 4 }),
             Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: Some(Box::new(Domain::String(StringDomain {
                     min: "a".as_bytes().to_vec(),
                     max: Some("e".as_bytes().to_vec()),
@@ -375,11 +375,11 @@ pub fn test() {
             validity: vec![true, true, false, false, false].into(),
         }],
         vec![Domain::Nullable(NullableDomain {
-            contains_null: true,
+            has_null: true,
             value: Some(Box::new(Domain::Tuple(vec![
                 Domain::Boolean(BooleanDomain {
-                    contains_false: true,
-                    contains_true: false,
+                    has_false: true,
+                    has_true: false,
                 }),
                 Domain::String(StringDomain {
                     min: "a".as_bytes().to_vec(),
@@ -552,8 +552,8 @@ fn builtin_functions() -> FunctionRegistry {
         FunctionProperty::default(),
         |lhs, rhs| {
             Some(BooleanDomain {
-                contains_false: lhs.contains_false || rhs.contains_false,
-                contains_true: lhs.contains_true && rhs.contains_true,
+                has_false: lhs.has_false || rhs.has_false,
+                has_true: lhs.has_true && rhs.has_true,
             })
         },
         |lhs, rhs| lhs && rhs,
@@ -576,8 +576,8 @@ fn builtin_functions() -> FunctionRegistry {
         FunctionProperty::default(),
         |arg| {
             Some(BooleanDomain {
-                contains_false: arg.contains_true,
-                contains_true: arg.contains_false,
+                has_false: arg.has_true,
+                has_true: arg.has_false,
             })
         },
         |val| !val,
@@ -789,16 +789,13 @@ fn builtin_functions() -> FunctionRegistry {
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(move |args_domain, _| {
-                let NullableDomain {
-                    contains_null,
-                    value,
-                } = args_domain[0].as_nullable().unwrap();
+                let NullableDomain { has_null, value } = args_domain[0].as_nullable().unwrap();
                 let value = value.as_ref().map(|value| {
                     let fields = value.as_tuple().unwrap();
                     Box::new(fields[idx].clone())
                 });
                 Domain::Nullable(NullableDomain {
-                    contains_null: *contains_null,
+                    has_null: *has_null,
                     value,
                 })
             }),

@@ -65,7 +65,7 @@ impl ArgType for NullType {
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
             Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: None,
             }) => Some(()),
             _ => None,
@@ -82,7 +82,7 @@ impl ArgType for NullType {
 
     fn upcast_domain(_: Self::Domain) -> Domain {
         Domain::Nullable(NullableDomain {
-            contains_null: true,
+            has_null: true,
             value: None,
         })
     }

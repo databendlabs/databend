@@ -199,7 +199,7 @@ impl FunctionRegistry {
                     None => None,
                 };
                 Some(NullableDomain {
-                    contains_null: arg1.contains_null,
+                    has_null: arg1.has_null,
                     value: value.map(Box::new),
                 })
             },
@@ -250,7 +250,7 @@ impl FunctionRegistry {
                     None => None,
                 };
                 Some(NullableDomain {
-                    contains_null: arg1.contains_null,
+                    has_null: arg1.has_null,
                     value: value.map(Box::new),
                 })
             },
@@ -338,7 +338,7 @@ impl FunctionRegistry {
                     _ => None,
                 };
                 Some(NullableDomain {
-                    contains_null: arg1.contains_null || arg2.contains_null,
+                    has_null: arg1.has_null || arg2.has_null,
                     value: value.map(Box::new),
                 })
             },
@@ -401,7 +401,7 @@ impl FunctionRegistry {
                     _ => None,
                 };
                 Some(NullableDomain {
-                    contains_null: arg1.contains_null || arg2.contains_null,
+                    has_null: arg1.has_null || arg2.has_null,
                     value: value.map(Box::new),
                 })
             },

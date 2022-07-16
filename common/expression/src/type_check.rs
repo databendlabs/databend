@@ -32,7 +32,10 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Option<(Expr, Dat
             Some((Expr::ColumnRef { id: *id }, data_type.clone()))
         }
         RawExpr::FunctionCall { name, args, params } => {
-            let (mut args_expr, mut args_type) = (Vec::new(), Vec::new());
+            let (mut args_expr, mut args_type) = (
+                Vec::with_capacity(args.len()),
+                Vec::with_capacity(args.len()),
+            );
 
             for arg in args {
                 let (arg, ty) = check(arg, fn_registry)?;

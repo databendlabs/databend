@@ -224,7 +224,7 @@ impl DomainCalculator {
     pub fn calculate_literal(&self, lit: &Literal) -> Domain {
         match lit {
             Literal::Null => Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: None,
             }),
             Literal::Int8(i) => Domain::Int(IntDomain {
@@ -244,12 +244,12 @@ impl DomainCalculator {
                 max: *i as u64,
             }),
             Literal::Boolean(true) => Domain::Boolean(BooleanDomain {
-                contains_false: false,
-                contains_true: true,
+                has_false: false,
+                has_true: true,
             }),
             Literal::Boolean(false) => Domain::Boolean(BooleanDomain {
-                contains_false: true,
-                contains_true: false,
+                has_false: true,
+                has_true: false,
             }),
             Literal::String(s) => Domain::String(StringDomain {
                 min: s.clone(),
@@ -267,16 +267,16 @@ impl DomainCalculator {
             (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => Some(input.clone()),
             (
                 Domain::Nullable(NullableDomain {
-                    contains_null,
+                    has_null,
                     value: Some(value),
                 }),
                 DataType::Nullable(ty),
             ) => Some(Domain::Nullable(NullableDomain {
-                contains_null: *contains_null,
+                has_null: *has_null,
                 value: Some(Box::new(self.calculate_cast(value, ty)?)),
             })),
             (domain, DataType::Nullable(ty)) => Some(Domain::Nullable(NullableDomain {
-                contains_null: false,
+                has_null: false,
                 value: Some(Box::new(self.calculate_cast(domain, ty)?)),
             })),
             (Domain::Array(Some(domain)), DataType::Array(ty)) => Some(Domain::Array(Some(

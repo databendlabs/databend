@@ -60,8 +60,8 @@ pub struct UIntDomain {
 
 #[derive(Debug, Clone)]
 pub struct BooleanDomain {
-    pub contains_false: bool,
-    pub contains_true: bool,
+    pub has_false: bool,
+    pub has_true: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -71,14 +71,14 @@ pub struct StringDomain {
 }
 
 pub struct NullableDomain<T: ValueType> {
-    pub contains_null: bool,
+    pub has_null: bool,
     pub value: Option<Box<T::Domain>>,
 }
 
 impl<T: ValueType> Clone for NullableDomain<T> {
     fn clone(&self) -> Self {
         NullableDomain {
-            contains_null: self.contains_null,
+            has_null: self.has_null,
             value: self.value.clone(),
         }
     }
@@ -86,11 +86,10 @@ impl<T: ValueType> Clone for NullableDomain<T> {
 
 impl<T: ValueType> std::fmt::Debug for NullableDomain<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "NullableDomain {{ contains_null: {}, value: {:?} }}",
-            self.contains_null, self.value
-        )
+        f.debug_struct("NullableDomain")
+            .field("has_null", &self.has_null)
+            .field("value", &self.value)
+            .finish()
     }
 }
 
@@ -98,7 +97,7 @@ impl Domain {
     pub fn full(ty: &DataType, generics: &GenericMap) -> Self {
         match ty {
             DataType::Null => Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: None,
             }),
             DataType::EmptyArray => Domain::Array(None),
@@ -109,7 +108,7 @@ impl Domain {
             DataType::Boolean => Domain::Boolean(BooleanType::full_domain(generics)),
             DataType::String => Domain::String(StringType::full_domain(generics)),
             DataType::Nullable(ty) => Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: Some(Box::new(Domain::full(ty, generics))),
             }),
             DataType::Tuple(tys) => {
@@ -132,8 +131,8 @@ impl Domain {
             }),
             (Domain::Boolean(self_bool), Domain::Boolean(other_bool)) => {
                 Domain::Boolean(BooleanDomain {
-                    contains_false: self_bool.contains_false || other_bool.contains_false,
-                    contains_true: self_bool.contains_true || other_bool.contains_true,
+                    has_false: self_bool.has_false || other_bool.has_false,
+                    has_true: self_bool.has_true || other_bool.has_true,
                 })
             }
             (Domain::String(self_str), Domain::String(other_str)) => Domain::String(StringDomain {
@@ -146,54 +145,54 @@ impl Domain {
             }),
             (
                 Domain::Nullable(NullableDomain {
-                    contains_null: true,
+                    has_null: true,
                     value: None,
                 }),
                 Domain::Nullable(NullableDomain {
-                    contains_null: true,
+                    has_null: true,
                     value: None,
                 }),
             ) => Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: None,
             }),
             (
                 Domain::Nullable(NullableDomain {
-                    contains_null: _,
+                    has_null: _,
                     value: Some(self_value),
                 }),
                 Domain::Nullable(NullableDomain {
-                    contains_null: true,
+                    has_null: true,
                     value: None,
                 }),
             ) => Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: Some(self_value.clone()),
             }),
             (
                 Domain::Nullable(NullableDomain {
-                    contains_null: true,
+                    has_null: true,
                     value: None,
                 }),
                 Domain::Nullable(NullableDomain {
-                    contains_null: _,
+                    has_null: _,
                     value: Some(other_value),
                 }),
             ) => Domain::Nullable(NullableDomain {
-                contains_null: true,
+                has_null: true,
                 value: Some(other_value.clone()),
             }),
             (
                 Domain::Nullable(NullableDomain {
-                    contains_null: self_contains_null,
+                    has_null: self_has_null,
                     value: Some(self_value),
                 }),
                 Domain::Nullable(NullableDomain {
-                    contains_null: other_contains_null,
+                    has_null: other_has_null,
                     value: Some(other_value),
                 }),
             ) => Domain::Nullable(NullableDomain {
-                contains_null: *self_contains_null || *other_contains_null,
+                has_null: *self_has_null || *other_has_null,
                 value: Some(Box::new(self_value.merge(other_value))),
             }),
             (Domain::Array(None), Domain::Array(None)) => Domain::Array(None),
