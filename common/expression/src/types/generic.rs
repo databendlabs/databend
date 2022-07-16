@@ -14,6 +14,7 @@
 
 use std::ops::Range;
 
+use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -30,6 +31,7 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
     type Scalar = Scalar;
     type ScalarRef<'a> = ScalarRef<'a>;
     type Column = Column;
+    type Domain = Domain;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.to_owned()
@@ -56,12 +58,24 @@ impl<const INDEX: usize> ArgType for GenericType<INDEX> {
         Some(col.clone())
     }
 
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        Some(domain.clone())
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         scalar
     }
 
     fn upcast_column(col: Self::Column) -> Column {
         col
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        domain
+    }
+
+    fn full_domain(generics: &GenericMap) -> Self::Domain {
+        Domain::full(&generics[INDEX], generics)
     }
 
     fn column_len<'a>(col: &'a Self::Column) -> usize {

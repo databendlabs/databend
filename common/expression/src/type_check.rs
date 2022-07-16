@@ -19,60 +19,44 @@ use crate::expression::Literal;
 use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
-use crate::property::ValueProperty;
 use crate::types::DataType;
 
 // TODO: return result instead of option
-pub fn check(
-    ast: &RawExpr,
-    fn_registry: &FunctionRegistry,
-) -> Option<(Expr, DataType, ValueProperty)> {
+pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Option<(Expr, DataType)> {
     match ast {
         RawExpr::Literal(lit) => {
-            let (ty, prop) = check_literal(lit);
-            Some((Expr::Literal(lit.clone()), ty, prop))
+            let ty = check_literal(lit);
+            Some((Expr::Literal(lit.clone()), ty))
         }
-        RawExpr::ColumnRef {
-            id,
-            data_type,
-            property,
-        } => Some((
-            Expr::ColumnRef { id: *id },
-            data_type.clone(),
-            property.clone(),
-        )),
+        RawExpr::ColumnRef { id, data_type } => {
+            Some((Expr::ColumnRef { id: *id }, data_type.clone()))
+        }
         RawExpr::FunctionCall { name, args, params } => {
-            let (mut args_expr, mut args_type, mut args_prop) =
-                (Vec::new(), Vec::new(), Vec::new());
+            let (mut args_expr, mut args_type) = (
+                Vec::with_capacity(args.len()),
+                Vec::with_capacity(args.len()),
+            );
 
             for arg in args {
-                let (arg, ty, prop) = check(arg, fn_registry)?;
+                let (arg, ty) = check(arg, fn_registry)?;
                 args_expr.push(arg);
                 args_type.push(ty);
-                args_prop.push(prop);
             }
 
-            check_function(
-                name,
-                params,
-                &args_expr,
-                &args_type,
-                &args_prop,
-                fn_registry,
-            )
+            check_function(name, params, &args_expr, &args_type, fn_registry)
         }
     }
 }
 
-pub fn check_literal(literal: &Literal) -> (DataType, ValueProperty) {
+pub fn check_literal(literal: &Literal) -> DataType {
     match literal {
-        Literal::Null => (DataType::Null, ValueProperty::default()),
-        Literal::Int8(_) => (DataType::Int8, ValueProperty::default().not_null(true)),
-        Literal::Int16(_) => (DataType::Int16, ValueProperty::default().not_null(true)),
-        Literal::UInt8(_) => (DataType::UInt8, ValueProperty::default().not_null(true)),
-        Literal::UInt16(_) => (DataType::UInt16, ValueProperty::default().not_null(true)),
-        Literal::Boolean(_) => (DataType::Boolean, ValueProperty::default().not_null(true)),
-        Literal::String(_) => (DataType::String, ValueProperty::default().not_null(true)),
+        Literal::Null => DataType::Null,
+        Literal::Int8(_) => DataType::Int8,
+        Literal::Int16(_) => DataType::Int16,
+        Literal::UInt8(_) => DataType::UInt8,
+        Literal::UInt16(_) => DataType::UInt16,
+        Literal::Boolean(_) => DataType::Boolean,
+        Literal::String(_) => DataType::String,
     }
 }
 
@@ -81,12 +65,11 @@ pub fn check_function(
     params: &[usize],
     args: &[Expr],
     args_type: &[DataType],
-    args_prop: &[ValueProperty],
     fn_registry: &FunctionRegistry,
-) -> Option<(Expr, DataType, ValueProperty)> {
+) -> Option<(Expr, DataType)> {
     for (id, func) in fn_registry.search_candidates(name, params, args_type) {
-        if let Some((checked_args, return_ty, generics, prop)) =
-            try_check_function(args, args_type, args_prop, &func.signature)
+        if let Some((checked_args, return_ty, generics)) =
+            try_check_function(args, args_type, &func.signature)
         {
             return Some((
                 Expr::FunctionCall {
@@ -96,7 +79,6 @@ pub fn check_function(
                     args: checked_args,
                 },
                 return_ty,
-                prop,
             ));
         }
     }
@@ -145,14 +127,8 @@ impl Subsitution {
 pub fn try_check_function(
     args: &[Expr],
     args_type: &[DataType],
-    args_prop: &[ValueProperty],
     sig: &FunctionSignature,
-) -> Option<(
-    Vec<(Expr, ValueProperty)>,
-    DataType,
-    Vec<DataType>,
-    ValueProperty,
-)> {
+) -> Option<(Vec<Expr>, DataType, Vec<DataType>)> {
     assert_eq!(args.len(), sig.args_type.len());
 
     let substs = args_type
@@ -167,22 +143,17 @@ pub fn try_check_function(
 
     let checked_args = args
         .iter()
-        .zip(args_prop)
         .zip(args_type)
         .zip(&sig.args_type)
-        .map(|(((arg, arg_prop), arg_type), sig_type)| {
+        .map(|((arg, arg_type), sig_type)| {
             let sig_type = subst.apply(sig_type.clone())?;
             Some(if *arg_type == sig_type {
-                (arg.clone(), arg_prop.clone())
+                arg.clone()
             } else {
-                (
-                    Expr::Cast {
-                        expr: Box::new(arg.clone()),
-                        dest_type: sig_type,
-                    },
-                    // TODO: properly calculate the cast value property
-                    ValueProperty::default().not_null(arg_prop.not_null),
-                )
+                Expr::Cast {
+                    expr: Box::new(arg.clone()),
+                    dest_type: sig_type,
+                }
             })
         })
         .collect::<Option<Vec<_>>>()?;
@@ -204,11 +175,7 @@ pub fn try_check_function(
         })
         .unwrap_or_default();
 
-    let not_null = (return_type.as_nullable().is_none() && !return_type.is_null())
-        || (sig.property.preserve_not_null && args_prop.iter().all(|prop| prop.not_null));
-    let prop = ValueProperty::default().not_null(not_null);
-
-    Some((checked_args, return_type, generics, prop))
+    Some((checked_args, return_type, generics))
 }
 
 pub fn unify(src_ty: &DataType, dest_ty: &DataType) -> Option<Subsitution> {

@@ -18,7 +18,9 @@ use std::io::Write;
 use std::iter::once;
 use std::sync::Arc;
 
+use comfy_table::Table;
 use common_expression::chunk::Chunk;
+use common_expression::evaluator::DomainCalculator;
 use common_expression::evaluator::Evaluator;
 use common_expression::expression::Literal;
 use common_expression::expression::RawExpr;
@@ -27,8 +29,13 @@ use common_expression::function::Function;
 use common_expression::function::FunctionContext;
 use common_expression::function::FunctionRegistry;
 use common_expression::function::FunctionSignature;
+use common_expression::property::BooleanDomain;
+use common_expression::property::Domain;
 use common_expression::property::FunctionProperty;
-use common_expression::property::ValueProperty;
+use common_expression::property::IntDomain;
+use common_expression::property::NullableDomain;
+use common_expression::property::StringDomain;
+use common_expression::property::UIntDomain;
 use common_expression::type_check;
 use common_expression::types::ArrayType;
 use common_expression::types::DataType;
@@ -40,15 +47,30 @@ use common_expression::values::Value;
 use common_expression::values::ValueRef;
 use goldenfile::Mint;
 
-fn run_ast(file: &mut impl Write, raw: &RawExpr, columns: Vec<Column>) {
+fn run_ast(
+    file: &mut impl Write,
+    raw: &RawExpr,
+    columns: Vec<Column>,
+    columns_domain: Vec<Domain>,
+) {
     writeln!(file, "raw expr       : {raw}").unwrap();
 
     let fn_registry = builtin_functions();
-    let (expr, ty, prop) = type_check::check(raw, &fn_registry).unwrap();
+    let (expr, ty) = type_check::check(raw, &fn_registry).unwrap();
 
-    writeln!(file, "type           : {ty}").unwrap();
-    writeln!(file, "property       : {prop}").unwrap();
     writeln!(file, "checked expr   : {expr}").unwrap();
+    writeln!(file, "type           : {ty}").unwrap();
+
+    let domain_calculator = DomainCalculator {
+        input_domains: columns_domain.clone(),
+    };
+    let output_domain = domain_calculator.calculate(&expr);
+    writeln!(
+        file,
+        "domain calculation:\n{}",
+        pretty_print_domain_test(&columns_domain, &output_domain)
+    )
+    .unwrap();
 
     let chunk = Chunk::new(columns);
     if chunk.num_columns() > 0 {
@@ -73,6 +95,21 @@ fn run_ast(file: &mut impl Write, raw: &RawExpr, columns: Vec<Column>) {
     write!(file, "\n\n").unwrap();
 }
 
+fn pretty_print_domain_test(columns_domain: &[Domain], output_domain: &Domain) -> String {
+    let mut table = Table::new();
+    table.load_preset("||--+-++|    ++++++");
+
+    table.set_header(vec!["Column", "Domain"]);
+
+    for (i, domain) in columns_domain.iter().enumerate() {
+        table.add_row(vec![format!("Column {i}"), format!("{domain}")]);
+    }
+
+    table.add_row(vec!["Output".to_string(), format!("{output_domain}")]);
+
+    table.to_string()
+}
+
 #[test]
 pub fn test() {
     let mut mint = Mint::new("tests/it/testdata");
@@ -89,6 +126,7 @@ pub fn test() {
             params: vec![],
         },
         vec![],
+        vec![],
     );
 
     run_ast(
@@ -102,6 +140,7 @@ pub fn test() {
             params: vec![],
         },
         vec![],
+        vec![],
     );
 
     run_ast(
@@ -112,7 +151,6 @@ pub fn test() {
                 RawExpr::ColumnRef {
                     id: 0,
                     data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                    property: ValueProperty::default(),
                 },
                 RawExpr::Literal(Literal::Int8(-10)),
             ],
@@ -122,6 +160,10 @@ pub fn test() {
             column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
             validity: vec![false, true, false].into(),
         }],
+        vec![Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+        })],
     );
 
     run_ast(
@@ -132,12 +174,10 @@ pub fn test() {
                 RawExpr::ColumnRef {
                     id: 0,
                     data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                    property: ValueProperty::default(),
                 },
                 RawExpr::ColumnRef {
                     id: 1,
                     data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                    property: ValueProperty::default(),
                 },
             ],
             params: vec![],
@@ -152,6 +192,16 @@ pub fn test() {
                 validity: vec![false, true, true].into(),
             },
         ],
+        vec![
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 1, max: 3 }))),
+            }),
+        ],
     );
 
     run_ast(
@@ -162,12 +212,10 @@ pub fn test() {
                 RawExpr::ColumnRef {
                     id: 0,
                     data_type: DataType::Nullable(Box::new(DataType::UInt8)),
-                    property: ValueProperty::default(),
                 },
                 RawExpr::ColumnRef {
                     id: 1,
                     data_type: DataType::Null,
-                    property: ValueProperty::default(),
                 },
             ],
             params: vec![],
@@ -179,6 +227,16 @@ pub fn test() {
             },
             Column::Null { len: 3 },
         ],
+        vec![
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+        ],
     );
 
     run_ast(
@@ -188,7 +246,6 @@ pub fn test() {
             args: vec![RawExpr::ColumnRef {
                 id: 0,
                 data_type: DataType::Nullable(Box::new(DataType::Boolean)),
-                property: ValueProperty::default(),
             }],
             params: vec![],
         },
@@ -196,6 +253,13 @@ pub fn test() {
             column: Box::new(Column::Boolean(vec![true, false, true].into())),
             validity: vec![false, true, false].into(),
         }],
+        vec![Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::Boolean(BooleanDomain {
+                has_false: true,
+                has_true: true,
+            }))),
+        })],
     );
 
     run_ast(
@@ -205,11 +269,14 @@ pub fn test() {
             args: vec![RawExpr::ColumnRef {
                 id: 0,
                 data_type: DataType::Null,
-                property: ValueProperty::default(),
             }],
             params: vec![],
         },
         vec![Column::Null { len: 10 }],
+        vec![Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: None,
+        })],
     );
 
     run_ast(
@@ -225,6 +292,7 @@ pub fn test() {
             params: vec![],
         },
         vec![],
+        vec![],
     );
 
     run_ast(
@@ -238,6 +306,7 @@ pub fn test() {
             params: vec![],
         },
         vec![],
+        vec![],
     );
 
     run_ast(
@@ -250,12 +319,10 @@ pub fn test() {
                     RawExpr::ColumnRef {
                         id: 0,
                         data_type: DataType::Int16,
-                        property: ValueProperty::default().not_null(true),
                     },
                     RawExpr::ColumnRef {
                         id: 1,
                         data_type: DataType::Nullable(Box::new(DataType::String)),
-                        property: ValueProperty::default(),
                     },
                 ],
                 params: vec![],
@@ -272,6 +339,16 @@ pub fn test() {
                 validity: vec![true, true, false, false, false].into(),
             },
         ],
+        vec![
+            Domain::Int(IntDomain { min: 0, max: 4 }),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::String(StringDomain {
+                    min: "a".as_bytes().to_vec(),
+                    max: Some("e".as_bytes().to_vec()),
+                }))),
+            }),
+        ],
     );
 
     run_ast(
@@ -284,7 +361,6 @@ pub fn test() {
                     DataType::Boolean,
                     DataType::String,
                 ]))),
-                property: ValueProperty::default(),
             }],
             params: vec![1],
         },
@@ -298,6 +374,19 @@ pub fn test() {
             }),
             validity: vec![true, true, false, false, false].into(),
         }],
+        vec![Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::Tuple(vec![
+                Domain::Boolean(BooleanDomain {
+                    has_false: true,
+                    has_true: false,
+                }),
+                Domain::String(StringDomain {
+                    min: "a".as_bytes().to_vec(),
+                    max: Some("e".as_bytes().to_vec()),
+                }),
+            ]))),
+        })],
     );
 
     run_ast(
@@ -307,7 +396,8 @@ pub fn test() {
             args: vec![],
             params: vec![],
         },
-        [].into_iter().collect(),
+        vec![],
+        vec![],
     );
 
     run_ast(
@@ -320,7 +410,8 @@ pub fn test() {
             ],
             params: vec![],
         },
-        [].into_iter().collect(),
+        vec![],
+        vec![],
     );
 
     run_ast(
@@ -331,12 +422,10 @@ pub fn test() {
                 RawExpr::ColumnRef {
                     id: 0,
                     data_type: DataType::Int16,
-                    property: ValueProperty::default().not_null(true),
                 },
                 RawExpr::ColumnRef {
                     id: 1,
                     data_type: DataType::Int16,
-                    property: ValueProperty::default().not_null(true),
                 },
             ],
             params: vec![],
@@ -344,6 +433,10 @@ pub fn test() {
         vec![
             Column::Int16(vec![0, 1, 2, 3, 4].into()),
             Column::Int16(vec![5, 6, 7, 8, 9].into()),
+        ],
+        vec![
+            Domain::Int(IntDomain { min: 0, max: 4 }),
+            Domain::Int(IntDomain { min: 5, max: 9 }),
         ],
     );
 
@@ -358,12 +451,10 @@ pub fn test() {
                         RawExpr::ColumnRef {
                             id: 0,
                             data_type: DataType::Int16,
-                            property: ValueProperty::default().not_null(true),
                         },
                         RawExpr::ColumnRef {
                             id: 1,
                             data_type: DataType::Int16,
-                            property: ValueProperty::default().not_null(true),
                         },
                     ],
                     params: vec![],
@@ -377,6 +468,10 @@ pub fn test() {
             Column::Int16(vec![0, 1, 2, 3, 4].into()),
             Column::Int16(vec![5, 6, 7, 8, 9].into()),
         ],
+        vec![
+            Domain::Int(IntDomain { min: 0, max: 4 }),
+            Domain::Int(IntDomain { min: 5, max: 9 }),
+        ],
     );
 
     run_ast(
@@ -387,12 +482,10 @@ pub fn test() {
                 RawExpr::ColumnRef {
                     id: 0,
                     data_type: DataType::Array(Box::new(DataType::Int16)),
-                    property: ValueProperty::default().not_null(true),
                 },
                 RawExpr::ColumnRef {
                     id: 1,
                     data_type: DataType::UInt8,
-                    property: ValueProperty::default().not_null(true),
                 },
             ],
             params: vec![],
@@ -403,6 +496,10 @@ pub fn test() {
                 offsets: vec![0, 20, 40, 60, 80, 100].into(),
             },
             Column::UInt8(vec![0, 1, 2, 3, 4].into()),
+        ],
+        vec![
+            Domain::Array(Some(Box::new(Domain::Int(IntDomain { min: 0, max: 99 })))),
+            Domain::UInt(UIntDomain { min: 0, max: 4 }),
         ],
     );
 
@@ -416,12 +513,10 @@ pub fn test() {
                     data_type: DataType::Array(Box::new(DataType::Array(Box::new(
                         DataType::Int16,
                     )))),
-                    property: ValueProperty::default().not_null(true),
                 },
                 RawExpr::ColumnRef {
                     id: 1,
                     data_type: DataType::UInt8,
-                    property: ValueProperty::default().not_null(true),
                 },
             ],
             params: vec![],
@@ -440,27 +535,51 @@ pub fn test() {
             },
             Column::UInt8(vec![0, 1, 2, 3, 4].into()),
         ],
+        vec![
+            Domain::Array(Some(Box::new(Domain::Array(Some(Box::new(Domain::Int(
+                IntDomain { min: 0, max: 99 },
+            ))))))),
+            Domain::Int(IntDomain { min: 0, max: 4 }),
+        ],
     );
 }
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::default();
 
-    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _>(
+    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "and",
         FunctionProperty::default(),
+        |lhs, rhs| {
+            Some(BooleanDomain {
+                has_false: lhs.has_false || rhs.has_false,
+                has_true: lhs.has_true && rhs.has_true,
+            })
+        },
         |lhs, rhs| lhs && rhs,
     );
 
-    registry.register_2_arg::<NumberType<i16>, NumberType<i16>, NumberType<i16>, _>(
+    registry.register_2_arg::<NumberType<i16>, NumberType<i16>, NumberType<i16>, _, _>(
         "plus",
         FunctionProperty::default(),
+        |lhs, rhs| {
+            Some(IntDomain {
+                min: lhs.min.checked_add(rhs.min).unwrap_or(i16::MAX as i64),
+                max: lhs.max.checked_add(rhs.max).unwrap_or(i16::MAX as i64),
+            })
+        },
         |lhs, rhs| lhs + rhs,
     );
 
-    registry.register_1_arg::<BooleanType, BooleanType, _>(
+    registry.register_1_arg::<BooleanType, BooleanType, _, _>(
         "not",
         FunctionProperty::default(),
+        |arg| {
+            Some(BooleanDomain {
+                has_false: arg.has_true,
+                has_true: arg.has_false,
+            })
+        },
         |val| !val,
     );
 
@@ -470,8 +589,21 @@ fn builtin_functions() -> FunctionRegistry {
                 name: "least",
                 args_type: vec![DataType::Int16; args_type.len()],
                 return_type: DataType::Int16,
-                property: FunctionProperty::default().preserve_not_null(true),
+                property: FunctionProperty::default().commutative(true),
             },
+            calc_domain: Box::new(|args_domain, _| {
+                let min = args_domain
+                    .iter()
+                    .map(|domain| domain.as_int().unwrap().min)
+                    .min()
+                    .unwrap_or(0);
+                let max = args_domain
+                    .iter()
+                    .map(|domain| domain.as_int().unwrap().max)
+                    .min()
+                    .unwrap_or(0);
+                Domain::Int(IntDomain { min, max })
+            }),
             eval: Box::new(|args, generics| {
                 if args.is_empty() {
                     Value::Scalar(Scalar::Int16(0))
@@ -499,9 +631,10 @@ fn builtin_functions() -> FunctionRegistry {
         }))
     });
 
-    registry.register_0_arg_core::<EmptyArrayType, _>(
+    registry.register_0_arg_core::<EmptyArrayType, _, _>(
         "create_array",
         FunctionProperty::default(),
+        || None,
         |_| Value::Scalar(()),
     );
 
@@ -511,8 +644,13 @@ fn builtin_functions() -> FunctionRegistry {
                 name: "create_array",
                 args_type: vec![DataType::Generic(0); args_type.len()],
                 return_type: DataType::Array(Box::new(DataType::Generic(0))),
-                property: FunctionProperty::default().preserve_not_null(true),
+                property: FunctionProperty::default(),
             },
+            calc_domain: Box::new(|args_domain, _| {
+                args_domain.iter().fold(Domain::Array(None), |acc, x| {
+                    acc.merge(&Domain::Array(Some(Box::new(x.clone()))))
+                })
+            }),
             eval: Box::new(|args, generics| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
@@ -556,9 +694,10 @@ fn builtin_functions() -> FunctionRegistry {
         }))
     });
 
-    registry.register_with_writer_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>, _>(
+    registry.register_with_writer_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>,_, _>(
         "get",
         FunctionProperty::default(),
+        |item_domain, _| Some(item_domain.clone()),
         |array, idx, output| output.push(array.index(idx as usize)),
     );
 
@@ -568,8 +707,9 @@ fn builtin_functions() -> FunctionRegistry {
                 name: "create_tuple",
                 args_type: args_type.to_vec(),
                 return_type: DataType::Tuple(args_type.to_vec()),
-                property: FunctionProperty::default().preserve_not_null(true),
+                property: FunctionProperty::default(),
             },
+            calc_domain: Box::new(|args_domain, _| Domain::Tuple(args_domain.to_vec())),
             eval: Box::new(move |args, _generics| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
@@ -614,8 +754,11 @@ fn builtin_functions() -> FunctionRegistry {
                 name: "get_tuple",
                 args_type: vec![DataType::Tuple(tuple_tys.to_vec())],
                 return_type: tuple_tys[idx].clone(),
-                property: FunctionProperty::default().preserve_not_null(true),
+                property: FunctionProperty::default(),
             },
+            calc_domain: Box::new(move |args_domain, _| {
+                args_domain[0].as_tuple().unwrap()[idx].clone()
+            }),
             eval: Box::new(move |args, _| match &args[0] {
                 ValueRef::Scalar(Scalar::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
                 ValueRef::Column(Column::Tuple { fields, .. }) => {
@@ -643,8 +786,19 @@ fn builtin_functions() -> FunctionRegistry {
                     tuple_tys.to_vec(),
                 )))],
                 return_type: DataType::Nullable(Box::new(tuple_tys[idx].clone())),
-                property: FunctionProperty::default().preserve_not_null(true),
+                property: FunctionProperty::default(),
             },
+            calc_domain: Box::new(move |args_domain, _| {
+                let NullableDomain { has_null, value } = args_domain[0].as_nullable().unwrap();
+                let value = value.as_ref().map(|value| {
+                    let fields = value.as_tuple().unwrap();
+                    Box::new(fields[idx].clone())
+                });
+                Domain::Nullable(NullableDomain {
+                    has_null: *has_null,
+                    value,
+                })
+            }),
             eval: Box::new(move |args, _| match &args[0] {
                 ValueRef::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
                 ValueRef::Scalar(Scalar::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
