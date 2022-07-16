@@ -302,7 +302,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
 
     fn query(&mut self, elem: &WithSpan<ExprElement>) -> pratt::Result<Affix> {
         let affix = match &elem.elem {
-            ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(10)),
+            ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(25)),
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
             ExprElement::Between { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::IsDistinctFrom { .. } => {

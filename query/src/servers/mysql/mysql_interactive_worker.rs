@@ -338,14 +338,15 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         let res = Self::exec_query(interpreter, &context).await;
                         match res {
                             Ok(_) => Err(ErrorCode::UnexpectedError(format!(
-                                "Expected server error code: {} but got: Ok.",
+                                "Expected server error code: {} but got: Ok",
                                 code
                             ))),
                             Err(e) => {
                                 if code != e.code() {
                                     return Err(ErrorCode::UnexpectedError(format!(
-                                        "Expected server error code: {} but got: Ok.",
-                                        code
+                                        "Expected server error code: {} but got: {}",
+                                        code,
+                                        e.code()
                                     )));
                                 }
                                 Ok((vec![DataBlock::empty()], String::from("")))
@@ -360,8 +361,9 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         if code != e.code() {
                             InterpreterQueryLog::fail_to_start(context, e.clone()).await;
                             return Err(ErrorCode::UnexpectedError(format!(
-                                "Expected server error code: {} but got: Ok.",
-                                code
+                                "Expected server error code: {} but got: {}",
+                                code,
+                                e.code()
                             )));
                         }
                         Ok((vec![DataBlock::empty()], String::from("")))
