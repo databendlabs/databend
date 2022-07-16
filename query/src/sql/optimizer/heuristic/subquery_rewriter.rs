@@ -252,17 +252,10 @@ impl SubqueryRewriter {
                         s_expr,
                     ));
                 }
-                let rel_expr = if subquery.typ == SubqueryType::Any {
-                    RelExpr::with_s_expr(s_expr.child(0)?)
-                } else {
-                    RelExpr::with_s_expr(s_expr.child(1)?)
-                };
-                let prop = rel_expr.derive_relational_prop()?;
-
-                // Extract the subquery and replace it with the ColumnBinding from it.
                 let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
                     (marker_index, "marker".to_string())
                 } else {
+                    let prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
                     let index = *prop
                         .output_columns
                         .iter()
@@ -271,6 +264,7 @@ impl SubqueryRewriter {
                         .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
                     (index, format!("subquery_{}", index))
                 };
+
                 let data_type = if subquery.typ == SubqueryType::Scalar {
                     if let DataTypeImpl::Nullable(_) = *subquery.data_type {
                         subquery.data_type.clone()

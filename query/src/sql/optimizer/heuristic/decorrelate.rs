@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
@@ -417,8 +419,25 @@ impl SubqueryRewriter {
         match plan.plan() {
             RelOperator::Project(project) => {
                 let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
-                // Add correlated columns to the project list.
-                let mut columns = project.columns.clone();
+                let mut columns = HashSet::with_capacity(project.columns.len());
+                for column_idx in project.columns.iter() {
+                    let scalar = {
+                        let metadata = self.metadata.read();
+                        let column_entry = metadata.column(*column_idx);
+                        Scalar::BoundColumnRef(BoundColumnRef {
+                            column: ColumnBinding {
+                                database_name: None,
+                                table_name: None,
+                                column_name: "".to_string(),
+                                index: column_entry.column_index,
+                                data_type: Box::from(column_entry.data_type.clone()),
+                                visible_in_unqualified_wildcard: false,
+                            },
+                        })
+                    };
+                    let flatten_scalar = self.flatten_scalar(&scalar, correlated_columns)?;
+                    columns.extend(flatten_scalar.used_columns().iter());
+                }
                 columns.extend(self.derived_columns.values());
                 return Ok(SExpr::create_unary(
                     Project { columns }.into(),
@@ -427,8 +446,14 @@ impl SubqueryRewriter {
             }
             RelOperator::EvalScalar(eval_scalar) => {
                 let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
-                // Add correlated columns to the  scalar item list.
-                let mut items = eval_scalar.items.clone();
+                let mut items = Vec::with_capacity(eval_scalar.items.len());
+                for item in eval_scalar.items.iter() {
+                    let new_item = ScalarItem {
+                        scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
+                        index: item.index,
+                    };
+                    items.push(new_item);
+                }
                 let metadata = self.metadata.read();
                 for derived_column in self.derived_columns.values() {
                     let column_entry = metadata.column(derived_column.clone());
@@ -483,17 +508,26 @@ impl SubqueryRewriter {
             }
             RelOperator::Aggregate(aggregate) => {
                 let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
-                let mut group_items = aggregate.group_items.clone();
-                let metadata = self.metadata.read();
-                for (idx, derived_column) in self.derived_columns.values().enumerate() {
-                    let column_entry = metadata.column(derived_column.clone());
-                    let column_binding = ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_name: format!("subquery_{}", idx),
-                        index: derived_column.clone(),
-                        data_type: Box::from(column_entry.data_type.clone()),
-                        visible_in_unqualified_wildcard: false,
+                let mut group_items = Vec::with_capacity(aggregate.group_items.len());
+                for item in aggregate.group_items.iter() {
+                    let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
+                    group_items.push(ScalarItem {
+                        scalar,
+                        index: item.index,
+                    })
+                }
+                for derived_column in self.derived_columns.values() {
+                    let column_binding = {
+                        let metadata = self.metadata.read();
+                        let column_entry = metadata.column(derived_column.clone());
+                        ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: format!("subquery_{}", derived_column),
+                            index: derived_column.clone(),
+                            data_type: Box::from(column_entry.data_type.clone()),
+                            visible_in_unqualified_wildcard: false,
+                        }
                     };
                     group_items.push(ScalarItem {
                         scalar: Scalar::BoundColumnRef(BoundColumnRef {
@@ -502,10 +536,18 @@ impl SubqueryRewriter {
                         index: derived_column.clone(),
                     });
                 }
+                let mut agg_items = Vec::with_capacity(aggregate.aggregate_functions.len());
+                for item in aggregate.aggregate_functions.iter() {
+                    let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
+                    agg_items.push(ScalarItem {
+                        scalar,
+                        index: item.index,
+                    })
+                }
                 return Ok(SExpr::create_unary(
                     Aggregate {
                         group_items,
-                        aggregate_functions: aggregate.aggregate_functions.clone(),
+                        aggregate_functions: agg_items,
                         from_distinct: aggregate.from_distinct,
                     }
                     .into(),
