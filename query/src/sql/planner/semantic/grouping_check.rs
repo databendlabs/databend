@@ -65,7 +65,10 @@ impl<'a> GroupingChecker<'a> {
         match scalar {
             Scalar::BoundColumnRef(column) => {
                 // If this is a group item, then it should have been replaced with `group_items_map`
-                let mut err_msg = format!("column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function", &column.column.column_name);
+                let mut err_msg = format!(
+                    "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
+                    &column.column.column_name
+                );
                 err_msg = span.map_or(err_msg.clone(), |span| span.display_error(err_msg.clone()));
                 Err(ErrorCode::SemanticError(err_msg))
             }

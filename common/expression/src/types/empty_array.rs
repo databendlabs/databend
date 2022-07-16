@@ -14,6 +14,7 @@
 
 use std::ops::Range;
 
+use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -27,6 +28,7 @@ impl ValueType for EmptyArrayType {
     type Scalar = ();
     type ScalarRef<'a> = ();
     type Column = usize;
+    type Domain = ();
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -59,6 +61,13 @@ impl ArgType for EmptyArrayType {
         }
     }
 
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        match domain {
+            Domain::Array(None) => Some(()),
+            _ => None,
+        }
+    }
+
     fn upcast_scalar(_: Self::Scalar) -> Scalar {
         Scalar::EmptyArray
     }
@@ -66,6 +75,12 @@ impl ArgType for EmptyArrayType {
     fn upcast_column(len: Self::Column) -> Column {
         Column::EmptyArray { len }
     }
+
+    fn upcast_domain(_: Self::Domain) -> Domain {
+        Domain::Array(None)
+    }
+
+    fn full_domain(_: &GenericMap) -> Self::Domain {}
 
     fn column_len<'a>(len: &'a Self::Column) -> usize {
         *len

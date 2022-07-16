@@ -30,7 +30,7 @@ use crate::format_parquet::ParquetInputFormat;
 use crate::output_format::OutputFormatType;
 
 pub type InputFormatFactoryCreator =
-    Box<dyn Fn(&str, DataSchemaRef, FormatSettings) -> Result<Box<dyn InputFormat>> + Send + Sync>;
+    Box<dyn Fn(&str, DataSchemaRef, FormatSettings) -> Result<Arc<dyn InputFormat>> + Send + Sync>;
 
 pub struct FormatFactory {
     case_insensitive_desc: HashMap<String, InputFormatFactoryCreator>,
@@ -76,7 +76,7 @@ impl FormatFactory {
         name: impl AsRef<str>,
         schema: DataSchemaRef,
         settings: FormatSettings,
-    ) -> Result<Box<dyn InputFormat>> {
+    ) -> Result<Arc<dyn InputFormat>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 

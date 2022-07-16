@@ -28,15 +28,15 @@ use common_formats::InputFormat;
 use common_formats::InputState;
 use poem::web::Multipart;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 use crate::servers::http::v1::multipart_format::MultipartWorker;
 
 pub struct ParallelMultipartWorker {
     multipart: Multipart,
-    input_format: Box<dyn InputFormat>,
+    input_format: Arc<dyn InputFormat>,
     tx: Option<Sender<Result<Box<dyn InputState>>>>,
 }
 
@@ -44,7 +44,7 @@ impl ParallelMultipartWorker {
     pub fn create(
         multipart: Multipart,
         tx: Sender<Result<Box<dyn InputState>>>,
-        input_format: Box<dyn InputFormat>,
+        input_format: Arc<dyn InputFormat>,
     ) -> ParallelMultipartWorker {
         ParallelMultipartWorker {
             multipart,
@@ -116,7 +116,7 @@ impl MultipartWorker for ParallelMultipartWorker {
                                     if !skipped_header {
                                         let skip_size = match self
                                             .input_format
-                                            .skip_header(buf_slice, &mut state)
+                                            .skip_header(buf_slice, &mut state, 0)
                                         {
                                             Ok(skip_size) => skip_size,
                                             Err(cause) => {
@@ -235,7 +235,7 @@ pub struct ParallelInputFormatSource {
     output: Arc<OutputPort>,
     data_block: Vec<DataBlock>,
     scan_progress: Arc<Progress>,
-    input_format: Box<dyn InputFormat>,
+    input_format: Arc<dyn InputFormat>,
     data_receiver: Receiver<Result<Box<dyn InputState>>>,
 }
 
@@ -243,7 +243,7 @@ impl ParallelInputFormatSource {
     pub fn create(
         output: Arc<OutputPort>,
         scan_progress: Arc<Progress>,
-        input_format: Box<dyn InputFormat>,
+        input_format: Arc<dyn InputFormat>,
         data_receiver: Receiver<Result<Box<dyn InputState>>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(ParallelInputFormatSource {

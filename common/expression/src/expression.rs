@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use crate::function::Function;
 use crate::function::FunctionID;
-use crate::property::ValueProperty;
 use crate::types::DataType;
 
 #[derive(Debug, Clone)]
@@ -25,7 +24,6 @@ pub enum RawExpr {
     ColumnRef {
         id: usize,
         data_type: DataType,
-        property: ValueProperty,
     },
     // TODO: support user cast
     // Cast {
@@ -55,7 +53,7 @@ pub enum Expr {
         id: FunctionID,
         function: Arc<Function>,
         generics: Vec<DataType>,
-        args: Vec<(Expr, ValueProperty)>,
+        args: Vec<Expr>,
     },
 }
 

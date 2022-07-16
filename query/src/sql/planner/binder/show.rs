@@ -29,7 +29,8 @@ impl<'a> Binder {
         limit: &Option<ShowLimit<'a>>,
     ) -> Result<Plan> {
         // rewrite show functions to select * from system.functions ...
-        let query = format!("SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions {} ORDER BY name",
+        let query = format!(
+            "SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions {} ORDER BY name",
             match limit {
                 None => {
                     "".to_string()
@@ -61,7 +62,10 @@ impl<'a> Binder {
             .clone()
             .map(|s| format!("WHERE name LIKE '{s}'"))
             .unwrap_or_else(|| "".to_string());
-        let query = format!("SELECT name, value, default, level, description, type FROM system.settings {} ORDER BY name", sub_query);
+        let query = format!(
+            "SELECT name, value, default, level, description, type FROM system.settings {} ORDER BY name",
+            sub_query
+        );
 
         let tokens = tokenize_sql(query.as_str())?;
         let backtrace = Backtrace::new();

@@ -156,7 +156,10 @@ impl Debug for ErrorCode {
                 match backtrace {
                     ErrorCodeBacktrace::Origin(backtrace) => {
                         if backtrace.status() == BacktraceStatus::Disabled {
-                            write!(f, "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> ")
+                            write!(
+                                f,
+                                "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> "
+                            )
                         } else {
                             write!(f, "\n\n{}", backtrace)
                         }

@@ -30,7 +30,7 @@ use common_planners::ExpressionMonotonicityVisitor;
 use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
 
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 
 pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;
@@ -332,7 +332,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     (0, 0) => {
                         return Err(ErrorCode::UnknownException(
                             "Constant expression donot need to be handled",
-                        ))
+                        ));
                     }
                     (_, 0) => (vec![exprs[0].clone(), exprs[1].clone()], vec![lhs_cols], op),
                     (0, _) => {

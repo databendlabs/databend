@@ -19,6 +19,8 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
+use crate::property::Domain;
+use crate::property::NullableDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -33,6 +35,7 @@ impl<T: ValueType> ValueType for NullableType<T> {
     type Scalar = Option<T::Scalar>;
     type ScalarRef<'a> = Option<T::ScalarRef<'a>>;
     type Column = (T::Column, Bitmap);
+    type Domain = NullableDomain<T>;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.map(T::to_owned_scalar)
@@ -67,6 +70,19 @@ impl<T: ArgType> ArgType for NullableType<T> {
         }
     }
 
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        match domain {
+            Domain::Nullable(NullableDomain {
+                has_null,
+                value: Some(value),
+            }) => Some(NullableDomain {
+                has_null: *has_null,
+                value: Some(Box::new(T::try_downcast_domain(value)?)),
+            }),
+            _ => None,
+        }
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         match scalar {
             Some(scalar) => T::upcast_scalar(scalar),
@@ -78,6 +94,20 @@ impl<T: ArgType> ArgType for NullableType<T> {
         Column::Nullable {
             column: Box::new(T::upcast_column(col)),
             validity,
+        }
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Nullable(NullableDomain {
+            has_null: domain.has_null,
+            value: domain.value.map(|value| Box::new(T::upcast_domain(*value))),
+        })
+    }
+
+    fn full_domain(generics: &GenericMap) -> Self::Domain {
+        NullableDomain {
+            has_null: true,
+            value: Some(Box::new(T::full_domain(generics))),
         }
     }
 
@@ -172,11 +202,7 @@ impl<'a, T: ArgType> Iterator for NullableIterator<'a, T> {
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().zip(self.validity.next()).map(
             |(scalar, is_null)| {
-                if is_null {
-                    None
-                } else {
-                    Some(scalar)
-                }
+                if is_null { None } else { Some(scalar) }
             },
         )
     }

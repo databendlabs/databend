@@ -337,7 +337,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     None => {
                         return Err(MetaError::AppError(AppError::UndropDbHasNoHistory(
                             UndropDbHasNoHistory::new(&name_key.db_name),
-                        )))
+                        )));
                     }
                 }
             };
@@ -348,7 +348,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 None => {
                     return Err(MetaError::AppError(AppError::UndropDbHasNoHistory(
                         UndropDbHasNoHistory::new(&name_key.db_name),
-                    )))
+                    )));
                 }
             };
 
@@ -1027,7 +1027,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     None => {
                         return Err(MetaError::AppError(AppError::UndropTableHasNoHistory(
                             UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                        )))
+                        )));
                     }
                 }
             };
@@ -1038,7 +1038,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 None => {
                     return Err(MetaError::AppError(AppError::UndropTableHasNoHistory(
                         UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                    )))
+                    )));
                 }
             };
 
@@ -1253,7 +1253,7 @@ impl<KV: KVApi> SchemaApi for KV {
             let (table_id_to_name_seq, _): (_, Option<DBIdTableName>) =
                 get_struct_value(self, &table_id_to_name_key).await?;
             let db_id_table_name = DBIdTableName {
-                db_id,
+                db_id: new_db_id,
                 table_name: req.new_table_name.clone(),
             };
 

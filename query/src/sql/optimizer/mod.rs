@@ -45,6 +45,7 @@ use crate::sessions::QueryContext;
 pub use crate::sql::optimizer::heuristic::RuleList;
 pub use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::RuleSet;
+use crate::sql::plans::CopyPlanV2;
 use crate::sql::MetadataRef;
 
 pub fn optimize(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
@@ -62,6 +63,25 @@ pub fn optimize(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
             kind,
             plan: Box::new(optimize(ctx, *plan)?),
         }),
+        Plan::Copy(v) => {
+            Ok(Plan::Copy(Box::new(match *v {
+                CopyPlanV2::IntoStage {
+                    stage,
+                    path,
+                    validation_mode,
+                    from,
+                } => {
+                    CopyPlanV2::IntoStage {
+                        stage,
+                        path,
+                        validation_mode,
+                        // Make sure the subquery has been optimized.
+                        from: Box::new(optimize(ctx, *from)?),
+                    }
+                }
+                into_table => into_table,
+            })))
+        }
         // Passthrough statements
         _ => Ok(plan),
     }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -97,7 +98,7 @@ impl CsvInputFormat {
         skip_rows: usize,
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
-    ) -> Result<Box<dyn InputFormat>> {
+    ) -> Result<Arc<dyn InputFormat>> {
         let field_delimiter = match settings.field_delimiter.len() {
             n if n >= 1 => settings.field_delimiter[0],
             _ => b',',
@@ -114,7 +115,7 @@ impl CsvInputFormat {
 
         settings.null_bytes = settings.csv_null_bytes.clone();
 
-        Ok(Box::new(CsvInputFormat {
+        Ok(Arc::new(CsvInputFormat {
             schema,
             settings,
             skip_rows,
@@ -338,8 +339,24 @@ impl InputFormat for CsvInputFormat {
         Ok(index)
     }
 
-    fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
-        if self.skip_rows > 0 {
+    fn set_buf(&self, buf: Vec<u8>, state: &mut Box<dyn InputState>) {
+        let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
+        state.memory = buf;
+    }
+
+    fn take_buf(&self, state: &mut Box<dyn InputState>) -> Vec<u8> {
+        let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
+        std::mem::take(&mut state.memory)
+    }
+
+    fn skip_header(
+        &self,
+        buf: &[u8],
+        state: &mut Box<dyn InputState>,
+        force: usize,
+    ) -> Result<usize> {
+        let rows_to_skip = if force > 0 { force } else { self.skip_rows };
+        if rows_to_skip > 0 {
             let mut index = 0;
             let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
 
@@ -349,7 +366,7 @@ impl InputFormat for CsvInputFormat {
                     false => self.find_delimiter(buf, index, state),
                 };
 
-                if state.accepted_rows == self.skip_rows {
+                if state.accepted_rows == rows_to_skip {
                     return Ok(index);
                 }
             }

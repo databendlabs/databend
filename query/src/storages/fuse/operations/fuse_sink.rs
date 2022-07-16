@@ -25,10 +25,10 @@ use common_exception::Result;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;

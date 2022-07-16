@@ -37,7 +37,7 @@ impl FromToProto<pb::TableInfo> for mt::TableInfo {
             None => {
                 return Err(Incompatible {
                     reason: "TableInfo.ident can not be None".to_string(),
-                })
+                });
             }
             Some(x) => x,
         };
@@ -142,7 +142,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             None => {
                 return Err(Incompatible {
                     reason: "TableMeta.schema can not be None".to_string(),
-                })
+                });
             }
             Some(x) => x,
         };

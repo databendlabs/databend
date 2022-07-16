@@ -21,10 +21,10 @@ use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_merge::ExchangeMergeSink;
 use crate::api::rpc::exchange::exchange_sink_shuffle::ExchangePublisherSink;
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SinkPipeBuilder;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeSink;
@@ -33,14 +33,12 @@ impl ExchangeSink {
     fn via_merge_exchange(ctx: &Arc<QueryContext>, params: &MergeExchangeParams) -> Result<()> {
         match params.destination_id == ctx.get_cluster().local_id() {
             true => Ok(()), /* do nothing */
-            false => Err(ErrorCode::LogicalError(
-                format!(
-                    "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
-                    ctx.get_cluster().local_id(),
-                    params.destination_id,
-                    params.fragment_id
-                ),
-            )),
+            false => Err(ErrorCode::LogicalError(format!(
+                "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
+                ctx.get_cluster().local_id(),
+                params.destination_id,
+                params.fragment_id
+            ))),
         }
     }
 
@@ -53,7 +51,7 @@ impl ExchangeSink {
     pub fn publisher_sink(
         ctx: &Arc<QueryContext>,
         params: &ExchangeParams,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => {
@@ -92,7 +90,7 @@ impl ExchangeSink {
     pub fn via_exchange(
         ctx: &Arc<QueryContext>,
         params: &ExchangeParams,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => Self::via_merge_exchange(ctx, params),

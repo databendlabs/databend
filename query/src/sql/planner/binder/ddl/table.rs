@@ -792,9 +792,10 @@ impl<'a> Binder {
         value: String,
     ) -> Result<()> {
         if is_reserved_opt_key(&key) {
-            Err(ErrorCode::BadOption(format!("the following table options are reserved, please do not specify them in the CREATE TABLE statement: {}",
-                        key
-                        )))
+            Err(ErrorCode::BadOption(format!(
+                "the following table options are reserved, please do not specify them in the CREATE TABLE statement: {}",
+                key
+            )))
         } else if options.insert(key.clone(), value).is_some() {
             Err(ErrorCode::BadOption(format!(
                 "Duplicated table option: {key}"

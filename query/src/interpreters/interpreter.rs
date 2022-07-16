@@ -18,8 +18,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
 
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode
@@ -42,7 +42,7 @@ pub trait Interpreter: Sync + Send {
     /// Create the new pipeline for databend's new execution model
     /// Currently databend is developing a new execution model with a hybrid pull-based & push-based strategy
     /// The method now only is implemented by SelectInterpreter
-    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
+    async fn create_new_pipeline(&self) -> Result<Pipeline> {
         Err(ErrorCode::UnImplement(format!(
             "UnImplement create_new_pipeline method for {:?}",
             self.name()

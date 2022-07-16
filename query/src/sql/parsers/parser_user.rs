@@ -75,7 +75,7 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::NOT | Keyword::IDENTIFIED => Some(self.parse_auth_option()?),
                 _ => {
-                    return self.expected("IDENTIFIED or NOT IDENTIFIED", self.parser.peek_token())
+                    return self.expected("IDENTIFIED or NOT IDENTIFIED", self.parser.peek_token());
                 }
             },
             Token::EOF => None,

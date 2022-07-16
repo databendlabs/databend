@@ -34,7 +34,7 @@ chmod +x ./target/${BUILD_PROFILE}/databend-meta
 ./target/${BUILD_PROFILE}/databend-meta --single &
 METASRV_PID=$!
 echo $METASRV_PID
-sleep 1
+sleep 3
 
 
 echo " === export data from a running databend-meta to $grpc_exported"
@@ -45,6 +45,11 @@ cat $grpc_exported
 echo " === exported file data end"
 
 echo " === check if there is a node record in it"
-grep -Fxq '["raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":0}}}]' $grpc_exported
+if grep -Fxq '["raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":0}}}]' $grpc_exported;  then
+    echo " === node record found, good!"
+else
+    echo " === No node record found!!!"
+    exit 1
+fi
 
 kill $METASRV_PID

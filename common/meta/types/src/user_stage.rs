@@ -72,7 +72,7 @@ impl Default for StageType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StageFileCompression {
     Auto,
     Gzip,
@@ -117,7 +117,9 @@ impl FromStr for StageFileCompression {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageFileFormatType {
     Csv,
+    Tsv,
     Json,
+    NdJson,
     Avro,
     Orc,
     Parquet,
@@ -135,7 +137,9 @@ impl FromStr for StageFileFormatType {
     fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
             "CSV" => Ok(StageFileFormatType::Csv),
+            "TSV" => Ok(StageFileFormatType::Tsv),
             "JSON" => Ok(StageFileFormatType::Json),
+            "NDJSON" => Ok(StageFileFormatType::NdJson),
             "AVRO" => Ok(StageFileFormatType::Avro),
             "ORC" => Ok(StageFileFormatType::Orc),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
@@ -202,13 +206,12 @@ impl FromStr for OnErrorMode {
             v => {
                 let num_str = v.replace("SKIP_FILE_", "");
                 let nums = num_str.parse::<u64>();
-                match nums{
-                    Ok(v) => { Ok(OnErrorMode::SkipFileNum(v)) }
-                    Err(_) => {
-                        Err(
-                            format!("Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT_STATEMENT }}", v)
-                        )
-                    }
+                match nums {
+                    Ok(v) => Ok(OnErrorMode::SkipFileNum(v)),
+                    Err(_) => Err(format!(
+                        "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT_STATEMENT }}",
+                        v
+                    )),
                 }
             }
         }

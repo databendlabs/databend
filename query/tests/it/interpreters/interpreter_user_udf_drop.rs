@@ -26,8 +26,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
 
-    static CREATE_UDF: &str =
-        "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
+    static CREATE_UDF: &str = "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
 
     static DROP_UDF_IF_EXISTS: &str = "DROP FUNCTION IF EXISTS isnotempty";
     static DROP_UDF: &str = "DROP FUNCTION isnotempty";

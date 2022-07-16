@@ -17,7 +17,9 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 
+use crate::property::Domain;
 use crate::property::FunctionProperty;
+use crate::property::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 use crate::values::ValueRef;
@@ -54,9 +56,9 @@ pub enum FunctionID {
 pub struct Function {
     pub signature: FunctionSignature,
     #[allow(clippy::type_complexity)]
+    pub calc_domain: Box<dyn Fn(&[Domain], &GenericMap) -> Domain>,
+    #[allow(clippy::type_complexity)]
     pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &GenericMap) -> Value<AnyType>>,
-    // #[allow(clippy::type_complexity)]
-    // pub domain_to_range: Option<Box<dyn Fn(&[ValueRange<AnyType>]) -> Option<ValueRange<AnyType>>>>,
 }
 
 #[derive(Default)]
@@ -129,13 +131,15 @@ impl FunctionRegistry {
             .unwrap_or_default()
     }
 
-    pub fn register_0_arg_core<O: ArgType, F>(
+    pub fn register_0_arg_core<O: ArgType, F, G>(
         &mut self,
         name: &'static str,
         property: FunctionProperty,
-        func: F,
+        calc_domain: F,
+        func: G,
     ) where
-        F: Fn(&GenericMap) -> Value<O> + 'static + Clone + Copy,
+        F: Fn() -> Option<O::Domain> + 'static + Clone + Copy,
+        G: Fn(&GenericMap) -> Value<O> + 'static + Clone + Copy,
     {
         self.funcs
             .entry(name)
@@ -147,17 +151,20 @@ impl FunctionRegistry {
                     return_type: O::data_type(),
                     property,
                 },
+                calc_domain: Box::new(erase_calc_domain_generic_0_arg::<O>(calc_domain)),
                 eval: Box::new(erase_function_generic_0_arg(func)),
             }));
     }
 
-    pub fn register_1_arg<I1: ArgType, O: ArgType, F>(
+    pub fn register_1_arg<I1: ArgType, O: ArgType, F, G>(
         &mut self,
         name: &'static str,
         property: FunctionProperty,
-        func: F,
+        calc_domain: F,
+        func: G,
     ) where
-        F: Fn(I1::ScalarRef<'_>) -> O::Scalar + 'static + Clone + Copy,
+        F: Fn(&I1::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        G: Fn(I1::ScalarRef<'_>) -> O::Scalar + 'static + Clone + Copy,
     {
         let has_nullable = &[I1::data_type(), O::data_type()]
             .iter()
@@ -169,30 +176,46 @@ impl FunctionRegistry {
             name
         );
 
-        let property = property.preserve_not_null(true);
-
-        self.register_1_arg_core::<NullType, NullType, _>(
+        self.register_1_arg_core::<NullType, NullType, _, _>(
             name,
             property.clone(),
+            |_| None,
             vectorize_1_arg::<NullType, NullType>(|_| ()),
         );
 
-        self.register_1_arg_core::<I1, O, _>(name, property.clone(), vectorize_1_arg(func));
+        self.register_1_arg_core::<I1, O, _, _>(
+            name,
+            property.clone(),
+            calc_domain,
+            vectorize_1_arg(func),
+        );
 
-        self.register_1_arg_core::<NullableType<I1>, NullableType<O>, _>(
+        self.register_1_arg_core::<NullableType<I1>, NullableType<O>, _, _>(
             name,
             property,
+            move |arg1| {
+                let value = match &arg1.value {
+                    Some(value) => calc_domain(value),
+                    None => None,
+                };
+                Some(NullableDomain {
+                    has_null: arg1.has_null,
+                    value: value.map(Box::new),
+                })
+            },
             vectorize_passthrough_nullable_1_arg(func),
         );
     }
 
-    pub fn register_with_writer_1_arg<I1: ArgType, O: ArgType, F>(
+    pub fn register_with_writer_1_arg<I1: ArgType, O: ArgType, F, G>(
         &mut self,
         name: &'static str,
         property: FunctionProperty,
-        func: F,
+        calc_domain: F,
+        func: G,
     ) where
-        F: Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder) + 'static + Clone + Copy,
+        F: Fn(&I1::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        G: Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder) + 'static + Clone + Copy,
     {
         let has_nullable = &[I1::data_type(), O::data_type()]
             .iter()
@@ -204,34 +227,46 @@ impl FunctionRegistry {
             name
         );
 
-        let property = property.preserve_not_null(true);
-
-        self.register_1_arg_core::<NullType, NullType, _>(
+        self.register_1_arg_core::<NullType, NullType, _, _>(
             name,
             property.clone(),
+            |_| None,
             vectorize_1_arg::<NullType, NullType>(|_| ()),
         );
 
-        self.register_1_arg_core::<I1, O, _>(
+        self.register_1_arg_core::<I1, O, _, _>(
             name,
             property.clone(),
+            calc_domain,
             vectorize_with_writer_1_arg(func),
         );
 
-        self.register_1_arg_core::<NullableType<I1>, NullableType<O>, _>(
+        self.register_1_arg_core::<NullableType<I1>, NullableType<O>, _, _>(
             name,
             property,
+            move |arg1| {
+                let value = match &arg1.value {
+                    Some(value) => calc_domain(value),
+                    None => None,
+                };
+                Some(NullableDomain {
+                    has_null: arg1.has_null,
+                    value: value.map(Box::new),
+                })
+            },
             vectorize_with_writer_passthrough_nullable_1_arg(func),
         );
     }
 
-    pub fn register_1_arg_core<I1: ArgType, O: ArgType, F>(
+    pub fn register_1_arg_core<I1: ArgType, O: ArgType, F, G>(
         &mut self,
         name: &'static str,
         property: FunctionProperty,
-        func: F,
+        calc_domain: F,
+        func: G,
     ) where
-        F: Fn(ValueRef<I1>, &GenericMap) -> Value<O> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        G: Fn(ValueRef<I1>, &GenericMap) -> Value<O> + 'static + Clone + Copy,
     {
         self.funcs
             .entry(name)
@@ -243,17 +278,20 @@ impl FunctionRegistry {
                     return_type: O::data_type(),
                     property,
                 },
+                calc_domain: Box::new(erase_calc_domain_generic_1_arg::<I1, O>(calc_domain)),
                 eval: Box::new(erase_function_generic_1_arg(func)),
             }));
     }
 
-    pub fn register_2_arg<I1: ArgType, I2: ArgType, O: ArgType, F>(
+    pub fn register_2_arg<I1: ArgType, I2: ArgType, O: ArgType, F, G>(
         &mut self,
         name: &'static str,
         property: FunctionProperty,
-        func: F,
+        calc_domain: F,
+        func: G,
     ) where
-        F: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>) -> O::Scalar + Sized + 'static + Clone + Copy,
+        F: Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        G: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>) -> O::Scalar + 'static + Clone + Copy,
     {
         let has_nullable = &[I1::data_type(), I2::data_type(), O::data_type()]
             .iter()
@@ -265,44 +303,58 @@ impl FunctionRegistry {
             name
         );
 
-        let property = property.preserve_not_null(true);
-
-        self.register_2_arg_core::<NullableType<I1>, NullType, NullType, _>(
+        self.register_2_arg_core::<NullableType<I1>, NullType, NullType, _, _>(
             name,
             property.clone(),
+            |_, _| None,
             vectorize_2_arg::<NullableType<I1>, NullType, NullType>(|_, _| ()),
         );
-        self.register_2_arg_core::<NullType, NullableType<I2>, NullType, _>(
+        self.register_2_arg_core::<NullType, NullableType<I2>, NullType, _, _>(
             name,
             property.clone(),
+            |_, _| None,
             vectorize_2_arg::<NullType, NullableType<I2>, NullType>(|_, _| ()),
         );
-        self.register_2_arg_core::<NullType, NullType, NullType, _>(
+        self.register_2_arg_core::<NullType, NullType, NullType, _, _>(
             name,
             property.clone(),
+            |_, _| None,
             vectorize_2_arg::<NullType, NullType, NullType>(|_, _| ()),
         );
 
-        self.register_2_arg_core::<I1, I2, O, _>(name, property.clone(), vectorize_2_arg(func));
+        self.register_2_arg_core::<I1, I2, O, _, _>(
+            name,
+            property.clone(),
+            calc_domain,
+            vectorize_2_arg(func),
+        );
 
-        self.register_2_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<O>, _>(
+        self.register_2_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<O>, _, _>(
             name,
             property,
+            move |arg1, arg2| {
+                let value = match (&arg1.value, &arg2.value) {
+                    (Some(value1), Some(value2)) => calc_domain(value1, value2),
+                    _ => None,
+                };
+                Some(NullableDomain {
+                    has_null: arg1.has_null || arg2.has_null,
+                    value: value.map(Box::new),
+                })
+            },
             vectorize_passthrough_nullable_2_arg(func),
         );
     }
 
-    pub fn register_with_writer_2_arg<I1: ArgType, I2: ArgType, O: ArgType, F>(
+    pub fn register_with_writer_2_arg<I1: ArgType, I2: ArgType, O: ArgType, F, G>(
         &mut self,
         name: &'static str,
         property: FunctionProperty,
-        func: F,
+        calc_domain: F,
+        func: G,
     ) where
-        F: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder)
-            + Sized
-            + 'static
-            + Clone
-            + Copy,
+        F: Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        G: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder) + 'static + Clone + Copy,
     {
         let has_nullable = &[I1::data_type(), I2::data_type(), O::data_type()]
             .iter()
@@ -314,44 +366,58 @@ impl FunctionRegistry {
             name
         );
 
-        let property = property.preserve_not_null(true);
-
-        self.register_2_arg_core::<NullableType<I1>, NullType, NullType, _>(
+        self.register_2_arg_core::<NullableType<I1>, NullType, NullType, _, _>(
             name,
             property.clone(),
+            |_, _| None,
             vectorize_2_arg::<NullableType<I1>, NullType, NullType>(|_, _| ()),
         );
-        self.register_2_arg_core::<NullType, NullableType<I2>, NullType, _>(
+        self.register_2_arg_core::<NullType, NullableType<I2>, NullType, _, _>(
             name,
             property.clone(),
+            |_, _| None,
             vectorize_2_arg::<NullType, NullableType<I2>, NullType>(|_, _| ()),
         );
-        self.register_2_arg_core::<NullType, NullType, NullType, _>(
+        self.register_2_arg_core::<NullType, NullType, NullType, _, _>(
             name,
             property.clone(),
+            |_, _| None,
             vectorize_2_arg::<NullType, NullType, NullType>(|_, _| ()),
         );
 
-        self.register_2_arg_core::<I1, I2, O, _>(
+        self.register_2_arg_core::<I1, I2, O, _, _>(
             name,
             property.clone(),
+            calc_domain,
             vectorize_with_writer_2_arg(func),
         );
 
-        self.register_2_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<O>, _>(
+        self.register_2_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<O>, _, _>(
             name,
             property,
+            move |arg1, arg2| {
+                let value = match (&arg1.value, &arg2.value) {
+                    (Some(value1), Some(value2)) => calc_domain(value1, value2),
+                    _ => None,
+                };
+                Some(NullableDomain {
+                    has_null: arg1.has_null || arg2.has_null,
+                    value: value.map(Box::new),
+                })
+            },
             vectorize_with_writer_passthrough_nullable_2_arg(func),
         );
     }
 
-    pub fn register_2_arg_core<I1: ArgType, I2: ArgType, O: ArgType, F>(
+    pub fn register_2_arg_core<I1: ArgType, I2: ArgType, O: ArgType, F, G>(
         &mut self,
         name: &'static str,
         property: FunctionProperty,
-        func: F,
+        calc_domain: F,
+        func: G,
     ) where
-        F: Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Value<O> + Sized + 'static + Clone + Copy,
+        F: Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        G: Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Value<O> + 'static + Clone + Copy,
     {
         self.funcs
             .entry(name)
@@ -363,6 +429,7 @@ impl FunctionRegistry {
                     return_type: O::data_type(),
                     property,
                 },
+                calc_domain: Box::new(erase_calc_domain_generic_2_arg::<I1, I2, O>(calc_domain)),
                 eval: Box::new(erase_function_generic_2_arg(func)),
             }));
     }
@@ -376,6 +443,36 @@ impl FunctionRegistry {
             .entry(name)
             .or_insert_with(Vec::new)
             .push(Box::new(factory));
+    }
+}
+
+fn erase_calc_domain_generic_0_arg<O: ArgType>(
+    func: impl Fn() -> Option<O::Domain>,
+) -> impl Fn(&[Domain], &GenericMap) -> Domain {
+    move |_args, generics| {
+        let domain = func().unwrap_or_else(|| O::full_domain(generics));
+        O::upcast_domain(domain)
+    }
+}
+
+fn erase_calc_domain_generic_1_arg<I1: ArgType, O: ArgType>(
+    func: impl Fn(&I1::Domain) -> Option<O::Domain>,
+) -> impl Fn(&[Domain], &GenericMap) -> Domain {
+    move |args, generics| {
+        let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
+        let domain = func(&arg1).unwrap_or_else(|| O::full_domain(generics));
+        O::upcast_domain(domain)
+    }
+}
+
+fn erase_calc_domain_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
+    func: impl Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain>,
+) -> impl Fn(&[Domain], &GenericMap) -> Domain {
+    move |args, generics| {
+        let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
+        let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
+        let domain = func(&arg1, &arg2).unwrap_or_else(|| O::full_domain(generics));
+        O::upcast_domain(domain)
     }
 }
 
@@ -542,7 +639,7 @@ pub fn vectorize_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType
     ValueRef<NullableType<I2>>,
     &GenericMap,
 ) -> Value<NullableType<O>>
-       + Copy {
++ Copy {
     move |arg1, arg2, generics| match (arg1, arg2) {
         (ValueRef::Scalar(None), _) | (_, ValueRef::Scalar(None)) => Value::Scalar(None),
         (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2))) => {
@@ -576,7 +673,7 @@ pub fn vectorize_with_writer_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType
     ValueRef<NullableType<I2>>,
     &GenericMap,
 ) -> Value<NullableType<O>>
-       + Copy {
++ Copy {
     move |arg1, arg2, generics| match (arg1, arg2) {
         (ValueRef::Scalar(None), _) | (_, ValueRef::Scalar(None)) => Value::Scalar(None),
         (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2))) => {

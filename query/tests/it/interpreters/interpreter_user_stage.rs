@@ -28,8 +28,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
 
     // add
     {
-        let query =
-            "CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
+        let query = "CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
@@ -76,8 +75,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
             ..Default::default()
         };
         quota_api.set_quota(&quota, None).await?;
-        let query =
-            "CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
+        let query = "CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");

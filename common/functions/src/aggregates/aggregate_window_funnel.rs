@@ -400,7 +400,8 @@ pub fn try_create_aggregate_window_funnel_function(
         if arg.data_type().data_type_id() != TypeID::Boolean {
             return Err(ErrorCode::BadDataValueType(format!(
                 "Illegal type of the argument {:?} in AggregateWindowFunnelFunction, must be boolean, got: {:?}",
-                 idx + 1, arg.data_type()
+                idx + 1,
+                arg.data_type()
             )));
         }
     }

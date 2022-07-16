@@ -24,7 +24,7 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_tracing::tracing;
 
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::index::IndexSchemaVersion;
 
@@ -371,7 +371,12 @@ impl BloomFilter {
         let power_of_ln2 = core::f32::consts::LN_2 as f64 * core::f32::consts::LN_2 as f64;
         let m = -(num_items as f64 * false_positive_rate.ln()) / power_of_ln2;
         let num_bits = m.ceil() as usize;
-        tracing::info!("Bloom filter calculate optimal bits, num_bits: {}, num_items: {}, false_positive_rate: {}", num_bits, num_items, false_positive_rate);
+        tracing::info!(
+            "Bloom filter calculate optimal bits, num_bits: {}, num_items: {}, false_positive_rate: {}",
+            num_bits,
+            num_items,
+            false_positive_rate
+        );
         num_bits
     }
 

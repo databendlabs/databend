@@ -102,7 +102,7 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
     async fn list_tables_history(&self, tenant: &str, db_name: &str)
-        -> Result<Vec<Arc<dyn Table>>>;
+    -> Result<Vec<Arc<dyn Table>>>;
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 

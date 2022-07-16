@@ -35,12 +35,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
 use common_tracing::tracing;
-use common_tracing::tracing::debug_span;
 use common_tracing::tracing::warn;
-use common_tracing::tracing::Instrument;
 use futures::AsyncReadExt;
-use futures::StreamExt;
-use futures::TryStreamExt;
 use opendal::Object;
 use opendal::Operator;
 

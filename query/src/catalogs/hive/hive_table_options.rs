@@ -53,11 +53,7 @@ impl TryFrom<&BTreeMap<String, String>> for HiveTableOptions {
         let partition_keys = options.get(PARTITION_KEYS);
         let partition_keys = if let Some(partition_keys) = partition_keys {
             let a: Vec<String> = partition_keys.split(' ').map(str::to_string).collect();
-            if !a.is_empty() {
-                Some(a)
-            } else {
-                None
-            }
+            if !a.is_empty() { Some(a) } else { None }
         } else {
             None
         };

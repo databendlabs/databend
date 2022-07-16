@@ -26,21 +26,18 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing_futures::Instrument;
-use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 
 use super::hive_table_options::HiveTableOptions;
 use crate::catalogs::hive::hive_table_source::HiveTableSource;
 use crate::catalogs::hive::HivePartInfo;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::hive::HiveParquetBlockReader;
 use crate::storages::Table;
@@ -69,7 +66,7 @@ impl HiveTable {
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let push_downs = &plan.push_downs;
         let block_reader = self.create_block_reader(&ctx, push_downs)?;
@@ -212,7 +209,7 @@ impl Table for HiveTable {
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_read2(ctx, plan, pipeline)
     }
@@ -270,6 +267,7 @@ struct HiveSource {
 }
 
 impl HiveSource {
+    #[allow(dead_code)]
     pub fn create(
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,

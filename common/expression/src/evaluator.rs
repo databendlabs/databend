@@ -18,6 +18,12 @@ use crate::chunk::Chunk;
 use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::function::FunctionContext;
+use crate::property::BooleanDomain;
+use crate::property::Domain;
+use crate::property::IntDomain;
+use crate::property::NullableDomain;
+use crate::property::StringDomain;
+use crate::property::UIntDomain;
 use crate::types::any::AnyType;
 use crate::types::DataType;
 use crate::util::constant_bitmap;
@@ -42,17 +48,15 @@ impl Evaluator {
                 generics,
                 ..
             } => {
-                let cols = args
-                    .iter()
-                    .map(|(expr, _)| self.run(expr))
-                    .collect::<Vec<_>>();
-                assert!(cols
-                    .iter()
-                    .filter_map(|val| match val {
-                        Value::Column(col) => Some(col.len()),
-                        Value::Scalar(_) => None,
-                    })
-                    .all_equal());
+                let cols = args.iter().map(|expr| self.run(expr)).collect::<Vec<_>>();
+                assert!(
+                    cols.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
                 let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
                 (function.eval)(cols_ref.as_slice(), generics)
             }
@@ -184,6 +188,123 @@ impl Evaluator {
             Literal::UInt16(val) => Scalar::UInt16(*val),
             Literal::Boolean(val) => Scalar::Boolean(*val),
             Literal::String(val) => Scalar::String(val.clone()),
+        }
+    }
+}
+
+pub struct DomainCalculator {
+    pub input_domains: Vec<Domain>,
+}
+
+impl DomainCalculator {
+    pub fn calculate(&self, expr: &Expr) -> Domain {
+        match expr {
+            Expr::Literal(lit) => self.calculate_literal(lit),
+            Expr::ColumnRef { id } => self.input_domains[*id].clone(),
+            Expr::Cast { expr, dest_type } => {
+                let domain = self.calculate(expr);
+                // TODO: unwrap may fail
+                self.calculate_cast(&domain, dest_type).unwrap()
+            }
+            Expr::FunctionCall {
+                function,
+                generics,
+                args,
+                ..
+            } => {
+                let args_domain = args
+                    .iter()
+                    .map(|arg| self.calculate(arg))
+                    .collect::<Vec<_>>();
+                (function.calc_domain)(&args_domain, generics)
+            }
+        }
+    }
+
+    pub fn calculate_literal(&self, lit: &Literal) -> Domain {
+        match lit {
+            Literal::Null => Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            Literal::Int8(i) => Domain::Int(IntDomain {
+                min: *i as i64,
+                max: *i as i64,
+            }),
+            Literal::Int16(i) => Domain::Int(IntDomain {
+                min: *i as i64,
+                max: *i as i64,
+            }),
+            Literal::UInt8(i) => Domain::UInt(UIntDomain {
+                min: *i as u64,
+                max: *i as u64,
+            }),
+            Literal::UInt16(i) => Domain::UInt(UIntDomain {
+                min: *i as u64,
+                max: *i as u64,
+            }),
+            Literal::Boolean(true) => Domain::Boolean(BooleanDomain {
+                has_false: false,
+                has_true: true,
+            }),
+            Literal::Boolean(false) => Domain::Boolean(BooleanDomain {
+                has_false: true,
+                has_true: false,
+            }),
+            Literal::String(s) => Domain::String(StringDomain {
+                min: s.clone(),
+                max: Some(s.clone()),
+            }),
+        }
+    }
+
+    pub fn calculate_cast(&self, input: &Domain, dest_type: &DataType) -> Option<Domain> {
+        match (input, dest_type) {
+            (
+                Domain::Nullable(NullableDomain { value: None, .. }),
+                DataType::Null | DataType::Nullable(_),
+            ) => Some(input.clone()),
+            (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => Some(input.clone()),
+            (
+                Domain::Nullable(NullableDomain {
+                    has_null,
+                    value: Some(value),
+                }),
+                DataType::Nullable(ty),
+            ) => Some(Domain::Nullable(NullableDomain {
+                has_null: *has_null,
+                value: Some(Box::new(self.calculate_cast(value, ty)?)),
+            })),
+            (domain, DataType::Nullable(ty)) => Some(Domain::Nullable(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(self.calculate_cast(domain, ty)?)),
+            })),
+            (Domain::Array(Some(domain)), DataType::Array(ty)) => Some(Domain::Array(Some(
+                Box::new(self.calculate_cast(domain, ty)?),
+            ))),
+            (Domain::UInt(UIntDomain { min, max }), DataType::UInt16) => {
+                Some(Domain::UInt(UIntDomain {
+                    min: (*min).min(u16::MAX as u64),
+                    max: (*max).min(u16::MAX as u64),
+                }))
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::Int16) => {
+                Some(Domain::Int(IntDomain {
+                    min: (*min).max(i16::MIN as i64).min(i16::MAX as i64),
+                    max: (*max).max(i16::MIN as i64).min(i16::MAX as i64),
+                }))
+            }
+            (Domain::UInt(UIntDomain { min, max }), DataType::Int16) => {
+                Some(Domain::Int(IntDomain {
+                    min: (*min).min(i16::MAX as u64) as i64,
+                    max: (*max).min(i16::MAX as u64) as i64,
+                }))
+            }
+            (Domain::Boolean(_), DataType::Boolean)
+            | (Domain::String(_), DataType::String)
+            | (Domain::UInt(_), DataType::UInt8)
+            | (Domain::Int(_), DataType::Int8) => Some(input.clone()),
+            _ => None,
         }
     }
 }

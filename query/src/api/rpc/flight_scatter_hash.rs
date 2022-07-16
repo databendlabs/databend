@@ -21,7 +21,7 @@ use common_exception::Result;
 use common_planners::Expression;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 
 #[derive(Clone)]
