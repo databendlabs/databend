@@ -88,8 +88,15 @@ impl ArgType for StringType {
         offsets.len() - 1
     }
 
-    fn index_column<'a>((data, offsets): &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        &data[(offsets[index] as usize)..(offsets[index + 1] as usize)]
+    fn index_column<'a>(
+        (data, offsets): &'a Self::Column,
+        index: usize,
+    ) -> Option<Self::ScalarRef<'a>> {
+        if index + 1 < offsets.len() {
+            Some(&data[(offsets[index] as usize)..(offsets[index + 1] as usize)])
+        } else {
+            None
+        }
     }
 
     fn slice_column<'a>((data, offsets): &'a Self::Column, range: Range<usize>) -> Self::Column {

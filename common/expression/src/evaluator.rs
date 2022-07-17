@@ -47,6 +47,7 @@ impl Evaluator {
                 Ok(Value::Column(self.input_columns.columns()[*id].clone()))
             }
             Expr::FunctionCall {
+                span,
                 function,
                 args,
                 generics,
@@ -65,7 +66,7 @@ impl Evaluator {
                         .all_equal()
                 );
                 let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
-                Ok((function.eval)(cols_ref.as_slice(), generics))
+                (function.eval)(cols_ref.as_slice(), generics).map_err(|msg| (span.clone(), msg))
             }
             Expr::Cast {
                 span,

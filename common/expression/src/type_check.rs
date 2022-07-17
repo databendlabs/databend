@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Write;
 
 use itertools::Itertools;
 
@@ -118,12 +119,19 @@ pub fn check_function(
         }
     }
 
-    let msg = if candidates.is_empty() {
+    let mut msg = if params.is_empty() {
         format!(
             "no overload satisfies `{name}({})`",
             args_type.iter().map(ToString::to_string).join(", ")
         )
     } else {
+        format!(
+            "no overload satisfies `{name}({})({})`",
+            params.iter().join(", "),
+            args_type.iter().map(ToString::to_string).join(", ")
+        )
+    };
+    if !candidates.is_empty() {
         let candidates_sig: Vec<_> = candidates
             .iter()
             .map(|(_, func)| func.signature.to_string())
@@ -137,12 +145,12 @@ pub fn check_function(
             .map(|(sig, (_, reason))| format!("  {sig:<max_len$}  : {reason}"))
             .join("\n");
 
-        format!(
-            "no overload satisfies `{name}({})`\n\n\
-            has tried possible overloads:\n{}",
-            args_type.iter().map(ToString::to_string).join(", "),
+        write!(
+            &mut msg,
+            "\n\nhas tried possible overloads:\n{}",
             candidates_fail_reason
         )
+        .unwrap();
     };
 
     Err((span, msg))

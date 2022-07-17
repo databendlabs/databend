@@ -274,33 +274,44 @@ impl Column {
         }
     }
 
-    pub fn index(&self, index: usize) -> ScalarRef {
+    pub fn index(&self, index: usize) -> Option<ScalarRef> {
         match self {
-            Column::Null { .. } => ScalarRef::Null,
-            Column::EmptyArray { .. } => ScalarRef::EmptyArray,
-            Column::Int8(col) => ScalarRef::Int8(col[index]),
-            Column::Int16(col) => ScalarRef::Int16(col[index]),
-            Column::UInt8(col) => ScalarRef::UInt8(col[index]),
-            Column::UInt16(col) => ScalarRef::UInt16(col[index]),
-            Column::Boolean(col) => ScalarRef::Boolean(col.get(index).unwrap()),
+            Column::Null { .. } => Some(ScalarRef::Null),
+            Column::EmptyArray { .. } => Some(ScalarRef::EmptyArray),
+            Column::Int8(col) => Some(ScalarRef::Int8(col.get(index).cloned()?)),
+            Column::Int16(col) => Some(ScalarRef::Int16(col.get(index).cloned()?)),
+            Column::UInt8(col) => Some(ScalarRef::UInt8(col.get(index).cloned()?)),
+            Column::UInt16(col) => Some(ScalarRef::UInt16(col.get(index).cloned()?)),
+            Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
             Column::String { data, offsets } => {
-                ScalarRef::String(&data[(offsets[index] as usize)..(offsets[index + 1] as usize)])
-            }
-            Column::Array { array, offsets } => ScalarRef::Array(
-                array
-                    .clone()
-                    .slice((offsets[index] as usize)..(offsets[index + 1] as usize)),
-            ),
-            Column::Nullable { column, validity } => {
-                if validity.get(index).unwrap() {
-                    column.index(index)
+                if offsets.len() > index + 1 {
+                    Some(ScalarRef::String(
+                        &data[(offsets[index] as usize)..(offsets[index + 1] as usize)],
+                    ))
                 } else {
-                    ScalarRef::Null
+                    None
                 }
             }
-            Column::Tuple { fields, .. } => {
-                ScalarRef::Tuple(fields.iter().map(|field| field.index(index)).collect())
+            Column::Array { array, offsets } => {
+                if offsets.len() > index + 1 {
+                    Some(ScalarRef::Array(array.slice(
+                        (offsets[index] as usize)..(offsets[index + 1] as usize),
+                    )))
+                } else {
+                    None
+                }
             }
+            Column::Nullable { column, validity } => Some(if validity.get(index)? {
+                column.index(index).unwrap()
+            } else {
+                ScalarRef::Null
+            }),
+            Column::Tuple { fields, .. } => Some(ScalarRef::Tuple(
+                fields
+                    .iter()
+                    .map(|field| field.index(index))
+                    .collect::<Option<Vec<_>>>()?,
+            )),
         }
     }
 
@@ -502,7 +513,7 @@ impl ColumnBuilder {
                 }
                 *len += 1;
             }
-            (c, s) => unreachable!("unable to push {s:?} to {c:?}"),
+            (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         }
     }
 
@@ -680,7 +691,7 @@ impl<'a> Iterator for ColumnIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.len {
-            let item = self.column.index(self.index);
+            let item = self.column.index(self.index)?;
             self.index += 1;
             Some(item)
         } else {

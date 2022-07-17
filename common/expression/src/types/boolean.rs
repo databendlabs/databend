@@ -93,8 +93,8 @@ impl ArgType for BooleanType {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        col.get(index).unwrap()
+    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+        col.get(index)
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {

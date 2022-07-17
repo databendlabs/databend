@@ -285,13 +285,13 @@ pub fn test_pass() {
 }
 
 #[test]
-pub fn test_fail() {
+pub fn test_tyck_fail() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("tyck-fail.txt").unwrap();
 
     run_ast(&mut file, "bool_and(true, 1)", &[]);
     run_ast(&mut file, "bool_and()", &[]);
-    run_ast(&mut file, "bool_not('a')", &[]);
+    run_ast(&mut file, "bool_not(bool_not('a'))", &[]);
     run_ast(&mut file, "least(1, 2, 3, a)", &[(
         "a",
         DataType::Boolean,
@@ -305,6 +305,34 @@ pub fn test_fail() {
     run_ast(&mut file, "create_array('a', null, 'b', true)", &[]);
     run_ast(&mut file, "get(create_array(1, 2), 'a')", &[]);
     run_ast(&mut file, "get_tuple(1)(create_tuple(true))", &[]);
+}
+
+#[test]
+pub fn test_eval_fail() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("eval-fail.txt").unwrap();
+
+    run_ast(&mut file, "get(create_array(1, 2), 2)", &[]);
+    run_ast(&mut file, "get(create_array(a, b), idx)", &[
+        (
+            "a",
+            DataType::Int16,
+            Domain::Int(IntDomain { min: 0, max: 4 }),
+            Column::Int16(vec![0, 1, 2, 3, 4].into()),
+        ),
+        (
+            "b",
+            DataType::Int16,
+            Domain::Int(IntDomain { min: 5, max: 9 }),
+            Column::Int16(vec![5, 6, 7, 8, 9].into()),
+        ),
+        (
+            "idx",
+            DataType::Int16,
+            Domain::Int(IntDomain { min: 0, max: 4 }),
+            Column::Int16(vec![0, 1, 2, 3, 4].into()),
+        ),
+    ]);
 }
 
 fn builtin_functions() -> FunctionRegistry {
@@ -369,9 +397,9 @@ fn builtin_functions() -> FunctionRegistry {
             }),
             eval: Box::new(|args, generics| {
                 if args.is_empty() {
-                    Value::Scalar(Scalar::Int16(0))
+                    Ok(Value::Scalar(Scalar::Int16(0)))
                 } else if args.len() == 1 {
-                    args[0].clone().to_owned()
+                    Ok(args[0].clone().to_owned())
                 } else {
                     let mut min =
                         vectorize_2_arg::<NumberType<i16>, NumberType<i16>, NumberType<i16>>(
@@ -380,15 +408,15 @@ fn builtin_functions() -> FunctionRegistry {
                             args[0].try_downcast().unwrap(),
                             args[1].try_downcast().unwrap(),
                             generics,
-                        );
+                        )?;
                     for arg in &args[2..] {
                         min = vectorize_2_arg::<NumberType<i16>, NumberType<i16>, NumberType<i16>>(
                             |lhs, rhs| lhs.min(rhs),
                         )(
                             min.as_ref(), arg.try_downcast().unwrap(), generics
-                        );
+                        )?;
                     }
-                    min.upcast()
+                    Ok(min.upcast())
                 }
             }),
         }))
@@ -398,7 +426,7 @@ fn builtin_functions() -> FunctionRegistry {
         "create_array",
         FunctionProperty::default(),
         || None,
-        |_| Value::Scalar(()),
+        |_| Ok(Value::Scalar(())),
     );
 
     registry.register_function_factory("create_array", |_, args_type| {
@@ -428,7 +456,7 @@ fn builtin_functions() -> FunctionRegistry {
                                     array_builder.push(scalar.as_ref());
                                 }
                                 ValueRef::Column(col) => {
-                                    array_builder.push(col.index(idx));
+                                    array_builder.push(col.index(idx).unwrap());
                                 }
                             }
                         }
@@ -436,10 +464,10 @@ fn builtin_functions() -> FunctionRegistry {
                     let offsets = once(0)
                         .chain((0..len).map(|row| (args.len() * (row + 1)) as u64))
                         .collect();
-                    Value::Column(Column::Array {
+                    Ok(Value::Column(Column::Array {
                         array: Box::new(array_builder.build()),
                         offsets,
-                    })
+                    }))
                 } else {
                     // All args are scalars, so we return a scalar as result
                     let mut array = ColumnBuilder::with_capacity(&generics[0], 0);
@@ -451,7 +479,7 @@ fn builtin_functions() -> FunctionRegistry {
                             ValueRef::Column(_) => unreachable!(),
                         }
                     }
-                    Value::Scalar(Scalar::Array(array.build()))
+                    Ok(Value::Scalar(Scalar::Array(array.build())))
                 }
             }),
         }))
@@ -461,7 +489,12 @@ fn builtin_functions() -> FunctionRegistry {
         "get",
         FunctionProperty::default(),
         |item_domain, _| Some(item_domain.clone()),
-        |array, idx, output| output.push(array.index(idx as usize)),
+        |array, idx, output| {
+            Ok(output.push(
+                array
+                    .index(idx as usize)
+                    .ok_or_else(|| format!("index out of bounds: the len is {} but the index is {}", array.len(), idx))?))
+        },
     );
 
     registry.register_function_factory("create_tuple", |_, args_type| {
@@ -486,7 +519,7 @@ fn builtin_functions() -> FunctionRegistry {
                             ValueRef::Column(col) => col.clone(),
                         })
                         .collect();
-                    Value::Column(Column::Tuple { fields, len })
+                    Ok(Value::Column(Column::Tuple { fields, len }))
                 } else {
                     // All args are scalars, so we return a scalar as result
                     let fields = args
@@ -496,7 +529,7 @@ fn builtin_functions() -> FunctionRegistry {
                             ValueRef::Column(_) => unreachable!(),
                         })
                         .collect();
-                    Value::Scalar(Scalar::Tuple(fields))
+                    Ok(Value::Scalar(Scalar::Tuple(fields)))
                 }
             }),
         }))
@@ -523,9 +556,11 @@ fn builtin_functions() -> FunctionRegistry {
                 args_domain[0].as_tuple().unwrap()[idx].clone()
             }),
             eval: Box::new(move |args, _| match &args[0] {
-                ValueRef::Scalar(Scalar::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
+                ValueRef::Scalar(Scalar::Tuple(fields)) => {
+                    Ok(Value::Scalar(fields[idx].to_owned()))
+                }
                 ValueRef::Column(Column::Tuple { fields, .. }) => {
-                    Value::Column(fields[idx].to_owned())
+                    Ok(Value::Column(fields[idx].to_owned()))
                 }
                 _ => unreachable!(),
             }),
@@ -563,15 +598,17 @@ fn builtin_functions() -> FunctionRegistry {
                 })
             }),
             eval: Box::new(move |args, _| match &args[0] {
-                ValueRef::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
-                ValueRef::Scalar(Scalar::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
+                ValueRef::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
+                ValueRef::Scalar(Scalar::Tuple(fields)) => {
+                    Ok(Value::Scalar(fields[idx].to_owned()))
+                }
                 ValueRef::Column(Column::Nullable {
                     column: box Column::Tuple { fields, .. },
                     validity,
-                }) => Value::Column(Column::Nullable {
+                }) => Ok(Value::Column(Column::Nullable {
                     column: Box::new(fields[idx].to_owned()),
                     validity: validity.clone(),
-                }),
+                })),
                 _ => unreachable!(),
             }),
         }))
@@ -650,10 +687,10 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain
                     for i in 0..output_col.len() {
                         let mut row = vec![format!("Row {i}")];
                         for (_, _, _, col) in columns.iter() {
-                            let value = col.index(i);
+                            let value = col.index(i).unwrap();
                             row.push(format!("{}", value));
                         }
-                        row.push(format!("{}", output_col.index(i)));
+                        row.push(format!("{}", output_col.index(i).unwrap()));
                         table.add_row(row);
                     }
 

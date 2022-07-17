@@ -101,8 +101,8 @@ impl<T: Number> ArgType for NumberType<T> {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        col[index]
+    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+        col.get(index).cloned()
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
