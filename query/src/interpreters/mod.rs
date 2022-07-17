@@ -63,6 +63,7 @@ mod interpreter_show_tables;
 mod interpreter_show_tables_status;
 mod interpreter_show_users;
 mod interpreter_table_create;
+mod interpreter_table_create_v2;
 mod interpreter_table_describe;
 mod interpreter_table_drop;
 mod interpreter_table_exists;

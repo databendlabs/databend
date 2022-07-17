@@ -110,7 +110,7 @@ pub fn cast_with_type(
     }
 
     if from_type.data_type_id() == TypeID::Null {
-        //all is null
+        // all is null
         if target_type.is_nullable() {
             return target_type.create_constant_column(&DataValue::Null, column.len());
         }

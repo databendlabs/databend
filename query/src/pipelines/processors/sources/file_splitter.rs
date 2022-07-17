@@ -75,7 +75,7 @@ impl FileSplitter {
     }
 
     fn split(&mut self, size: usize, output_splits: &mut VecDeque<Vec<u8>>) -> Result<()> {
-        //let data = &self.input_buf[..size];
+        // let data = &self.input_buf[..size];
         if self.decoder.is_some() {
             self.dec_and_split(size, output_splits)
         } else {

@@ -127,6 +127,7 @@ impl StageSourceHelper {
     ) -> Result<Arc<dyn InputFormat>> {
         let name = match format {
             StageFileFormatType::Csv => "csv",
+            StageFileFormatType::Tsv => "tsv",
             StageFileFormatType::NdJson => "ndjson",
             StageFileFormatType::Parquet => "parquet",
             format => {

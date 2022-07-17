@@ -15,10 +15,11 @@
 mod aggregate;
 mod apply;
 mod copy_v2;
+pub mod create_table_v2;
 mod eval_scalar;
 mod filter;
 mod hash_join;
-mod insert;
+pub mod insert;
 mod limit;
 mod logical_get;
 mod logical_join;
@@ -50,7 +51,6 @@ use common_planners::AlterViewPlan;
 use common_planners::CallPlan;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateRolePlan;
-use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
 use common_planners::CreateUserStagePlan;
 use common_planners::CreateUserUDFPlan;
@@ -87,6 +87,7 @@ use common_planners::TruncateTablePlan;
 use common_planners::UndropTablePlan;
 pub use copy_v2::CopyPlanV2;
 pub use copy_v2::ValidationMode;
+pub use create_table_v2::CreateTablePlanV2;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use filter::Filter;
@@ -150,7 +151,7 @@ pub enum Plan {
     ShowCreateTable(Box<ShowCreateTablePlan>),
     DescribeTable(Box<DescribeTablePlan>),
     ShowTablesStatus(Box<ShowTablesStatusPlan>),
-    CreateTable(Box<CreateTablePlan>),
+    CreateTable(Box<CreateTablePlanV2>),
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),

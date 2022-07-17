@@ -179,10 +179,18 @@ pub trait DisplayError {
     fn display_error(&self, message: Self::Message) -> String;
 }
 
+impl DisplayError for std::ops::Range<usize> {
+    type Message = (String, String);
+
+    fn display_error(&self, (source, message): Self::Message) -> String {
+        pretty_print_error(&source, vec![(self.clone(), message)])
+    }
+}
+
 impl<'a> DisplayError for Token<'a> {
     type Message = String;
 
-    fn display_error(&self, message: String) -> String {
+    fn display_error(&self, message: Self::Message) -> String {
         pretty_print_error(self.source, vec![(self.span.clone(), message)])
     }
 }
@@ -190,7 +198,7 @@ impl<'a> DisplayError for Token<'a> {
 impl<'a> DisplayError for &'a [Token<'a>] {
     type Message = String;
 
-    fn display_error(&self, message: String) -> String {
+    fn display_error(&self, message: Self::Message) -> String {
         assert!(!self.is_empty());
         let source = self.first().unwrap().source;
         let span_start = self.first().unwrap().span.start;
@@ -202,7 +210,7 @@ impl<'a> DisplayError for &'a [Token<'a>] {
 impl<'a> DisplayError for Error<'a> {
     type Message = ();
 
-    fn display_error(&self, _: ()) -> String {
+    fn display_error(&self, _: Self::Message) -> String {
         let inner = &*self.backtrace.inner.borrow();
         let inner = match inner {
             Some(inner) => inner,

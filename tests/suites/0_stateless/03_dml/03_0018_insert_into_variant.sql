@@ -86,8 +86,17 @@ select '==Map==';
 CREATE TABLE IF NOT EXISTS t5(id Int null, m Map null) Engine = Fuse;
 
 INSERT INTO t5 SELECT 1, parse_json('["a","b","c"]');  -- {ErrorCode 1010}
-INSERT INTO t5 SELECT 1, parse_json('{"a":1,"b":{"k":2},"c":[10,11,12]}');
+INSERT INTO t5 SELECT 1, parse_json('{"a":2,"b":{"k":2},"c":[10,11,12]}');
+INSERT INTO t5 SELECT 2, parse_json('{"a":true,"b":{"k":false},"c":[1,2,3]}');
+INSERT INTO t5 SELECT 3, parse_json('{"a":"v","b":{"k":"vv"},"c":[]}');
 
-select * from t5;
+select * from t5 order by id asc;
+
+select * from t5 where id >= 1 and m:a = 2;
+select * from t5 where id >= 1 and m:a = true;
+select * from t5 where id >= 1 and m:a = 'v';
+select * from t5 where id >= 1 and 2 = m:b:k;
+select * from t5 where id >= 1 and false = m:b:k;
+select * from t5 where id >= 1 and 'vv' = m:b:k;
 
 DROP DATABASE db1;

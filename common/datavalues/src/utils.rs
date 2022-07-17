@@ -60,7 +60,6 @@ pub fn combine_validities_2(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<
 /// Forked from Arrow until their API stabilizes.
 ///
 /// Note that the bound checks are optimized away.
-///
 #[cfg(feature = "simd")]
 use packed_simd::u8x64;
 

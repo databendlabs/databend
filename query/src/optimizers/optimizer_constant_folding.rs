@@ -128,11 +128,10 @@ impl ConstantFoldingImpl {
 
 impl PlanRewriter for ConstantFoldingImpl {
     fn rewrite_expr(&mut self, schema: &DataSchemaRef, origin: &Expression) -> Result<Expression> {
-        /* TODO: constant folding for subquery and scalar subquery
-         * For example:
-         *   before optimize: SELECT (SELECT 1 + 2)
-         *   after optimize: SELECT 3
-         */
+        // TODO: constant folding for subquery and scalar subquery
+        // For example:
+        //   before optimize: SELECT (SELECT 1 + 2)
+        //   after optimize: SELECT 3
         struct ConstantExpressionRewriter(*mut ConstantFoldingImpl, DataSchemaRef);
 
         impl ExpressionRewriter for ConstantExpressionRewriter {

@@ -16,16 +16,20 @@ use std::sync::Arc;
 
 use crate::function::Function;
 use crate::function::FunctionID;
-use crate::property::ValueProperty;
 use crate::types::DataType;
+
+pub type Span = Option<std::ops::Range<usize>>;
 
 #[derive(Debug, Clone)]
 pub enum RawExpr {
-    Literal(Literal),
+    Literal {
+        span: Span,
+        lit: Literal,
+    },
     ColumnRef {
+        span: Span,
         id: usize,
         data_type: DataType,
-        property: ValueProperty,
     },
     // TODO: support user cast
     // Cast {
@@ -34,6 +38,7 @@ pub enum RawExpr {
     //     dest_type: DataType,
     // },
     FunctionCall {
+        span: Span,
         name: String,
         params: Vec<usize>,
         args: Vec<RawExpr>,
@@ -42,20 +47,26 @@ pub enum RawExpr {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Literal(Literal),
+    Literal {
+        span: Span,
+        lit: Literal,
+    },
     ColumnRef {
+        span: Span,
         id: usize,
     },
     Cast {
+        span: Span,
         // is_try: bool,
         expr: Box<Expr>,
         dest_type: DataType,
     },
     FunctionCall {
+        span: Span,
         id: FunctionID,
         function: Arc<Function>,
         generics: Vec<DataType>,
-        args: Vec<(Expr, ValueProperty)>,
+        args: Vec<Expr>,
     },
 }
 
