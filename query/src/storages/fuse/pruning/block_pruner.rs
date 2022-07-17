@@ -21,6 +21,10 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
+use common_storage_cache::meta::BlockMeta;
+use common_storage_cache::meta::SegmentInfo;
+use common_storage_cache::meta::StatisticsOfColumns;
+use common_storage_cache::meta::TableSnapshot;
 use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -28,11 +32,7 @@ use futures::TryStreamExt;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::index::RangeFilter;
-use crate::storages::index::StatisticsOfColumns;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,

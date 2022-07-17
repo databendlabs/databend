@@ -18,12 +18,12 @@ use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
+use common_storage_cache::meta::ColumnStatistics;
+use common_storage_cache::meta::StatisticsOfColumns;
 use databend_query::storages::index::range_filter::build_verifiable_expr;
 use databend_query::storages::index::range_filter::left_bound_for_like_pattern;
 use databend_query::storages::index::range_filter::right_bound_for_like_pattern;
 use databend_query::storages::index::range_filter::StatColumns;
-use databend_query::storages::index::range_filter::StatisticsOfColumns;
-use databend_query::storages::index::ColumnStatistics;
 use databend_query::storages::index::RangeFilter;
 
 use crate::tests::create_query_context;

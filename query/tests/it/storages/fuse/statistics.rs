@@ -17,9 +17,9 @@ use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_storage_cache::meta::ColumnStatistics;
 use databend_query::storages::fuse::statistics::accumulator;
 use databend_query::storages::fuse::statistics::reducers;
-use databend_query::storages::index::ColumnStatistics;
 
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::table_test_fixture::TestFixture;

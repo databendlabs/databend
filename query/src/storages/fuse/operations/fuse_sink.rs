@@ -22,6 +22,8 @@ use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage_cache::meta::SegmentInfo;
+use common_storage_cache::meta::Statistics;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;
@@ -32,8 +34,6 @@ use crate::pipelines::new::processors::Processor;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::index::ClusterKeyInfo;

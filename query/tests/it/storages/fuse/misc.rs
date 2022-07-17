@@ -13,7 +13,7 @@
 //  limitations under the License.
 
 use common_datavalues::DataValue;
-use databend_query::storages::index::ColumnStatistics;
+use common_storage_cache::meta::ColumnStatistics;
 use serde_json::Value;
 
 // A non-backward compatible change has been introduced by [PR#6067](https://github.com/datafuselabs/databend/pull/6067/files#diff-20030750809780d6492d2fe215a8eb80294aa6a8a5af2cf1bebe17eb740cae35)

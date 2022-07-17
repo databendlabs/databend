@@ -20,12 +20,12 @@ use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
+use common_storage_cache::meta::TableSnapshot;
 use futures::TryStreamExt;
 
 use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {

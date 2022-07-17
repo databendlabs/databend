@@ -17,10 +17,10 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_storage_cache::meta::TableSnapshot;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::FuseTable;
 
 pub struct FuseSegment<'a> {

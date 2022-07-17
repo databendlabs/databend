@@ -15,7 +15,7 @@
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use databend_query::sessions::query_ctx::QryCtx;
+
 use databend_query::sql::statements::AnalyzableStatement;
 use databend_query::sql::statements::AnalyzedResult;
 use databend_query::sql::DfParser;

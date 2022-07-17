@@ -16,6 +16,9 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_storage_cache::meta::BlockMeta;
+use common_storage_cache::meta::SegmentInfo;
+use common_storage_cache::meta::TableSnapshot;
 use opendal::Operator;
 
 use super::block_filter::all_the_columns_ids;
@@ -26,9 +29,6 @@ use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::SegmentWriter;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::statistics::reducers::reduce_block_metas;
 use crate::storages::fuse::statistics::reducers::reduce_statistics;
 use crate::storages::fuse::FuseTable;

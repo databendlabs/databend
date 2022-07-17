@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_storage_cache::cache::new_memory_cache;
+use common_storage_cache::cache::MemoryCache;
+use common_storage_cache::cache::SegmentInfoCache;
+use common_storage_cache::cache::TableSnapshotCache;
+
 use crate::config::QueryConfig;
-use crate::storages::fuse::cache;
-use crate::storages::fuse::cache::MemoryCache;
-use crate::storages::fuse::cache::SegmentInfoCache;
-use crate::storages::fuse::cache::TableSnapshotCache;
 
 /// Where all the caches reside
 pub struct CacheManager {
@@ -68,7 +69,7 @@ impl CacheManager {
 
     fn with_capacity<T>(capacity: u64) -> Option<MemoryCache<T>> {
         if capacity > 0 {
-            Some(cache::new_memory_cache(capacity))
+            Some(new_memory_cache(capacity))
         } else {
             None
         }

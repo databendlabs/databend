@@ -17,14 +17,14 @@ use std::sync::Arc;
 
 use common_cache::Cache;
 use common_exception::Result;
+use common_storage_cache::cache::SegmentInfoCache;
+use common_storage_cache::meta::Location;
+use common_storage_cache::meta::SegmentInfo;
+use common_storage_cache::meta::Versioned;
 use opendal::Operator;
 
-use crate::storages::fuse::cache::SegmentInfoCache;
 use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::Location;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::Versioned;
 
 pub struct SegmentWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,

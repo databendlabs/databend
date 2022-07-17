@@ -55,6 +55,7 @@ common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
 common-storage = { path = "../common/storage" }
+common-storage-cache = { path = "../common/storage-cache" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 common-users = { path = "../common/users" }

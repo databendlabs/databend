@@ -201,6 +201,52 @@ impl QueryContext {
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         self.shared.session.session_mgr.get_data_exchange_manager()
     }
+
+    pub fn try_create_abortable(&self, input: SendableDataBlockStream) -> Result<AbortStream> {
+        let (abort_handle, abort_stream) = AbortStream::try_create(input)?;
+        self.shared.add_source_abort_handle(abort_handle);
+        Ok(abort_stream)
+    }
+
+    pub fn add_source_abort_handle(&self, abort_handle: AbortHandle) {
+        self.shared.add_source_abort_handle(abort_handle);
+    }
+
+    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
+        self.shared.attach_http_query_handle(handle);
+    }
+    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
+        self.shared.get_http_query()
+    }
+
+    // Get user manager api.
+    pub fn get_user_manager(&self) -> Arc<UserApiProvider> {
+        self.shared.get_user_manager()
+    }
+    pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
+        self.shared.get_auth_manager()
+    }
+    // Get the current session.
+    pub fn get_current_session(self: &Arc<Self>) -> Arc<Session> {
+        self.shared.session.clone()
+    }
+
+    /// Get the client socket address.
+    pub fn get_client_address(&self) -> Option<SocketAddr> {
+        self.shared.session.session_ctx.get_client_host()
+    }
+
+    pub fn query_need_abort(self: &Arc<Self>) -> Arc<AtomicBool> {
+        self.shared.query_need_abort()
+    }
+
+    pub fn get_settings(&self) -> Arc<Settings> {
+        self.shared.get_settings()
+    }
+
+    pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
+        self.shared.session.session_mgr.get_query_logger()
+    }
 }
 
 impl QryCtx for QueryContext {
@@ -280,12 +326,6 @@ impl QryCtx for QueryContext {
         *self.statistics.write() = val.clone();
         Ok(())
     }
-    fn attach_http_query(&self, handle: HttpQueryHandle) {
-        self.shared.attach_http_query_handle(handle);
-    }
-    fn get_http_query(&self) -> Option<HttpQueryHandle> {
-        self.shared.get_http_query()
-    }
     fn attach_query_str(&self, query: &str) {
         self.shared.attach_query_str(query);
     }
@@ -309,14 +349,6 @@ impl QryCtx for QueryContext {
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
     }
-    fn try_create_abortable(&self, input: SendableDataBlockStream) -> Result<AbortStream> {
-        let (abort_handle, abort_stream) = AbortStream::try_create(input)?;
-        self.shared.add_source_abort_handle(abort_handle);
-        Ok(abort_stream)
-    }
-    fn add_source_abort_handle(&self, abort_handle: AbortHandle) {
-        self.shared.add_source_abort_handle(abort_handle);
-    }
     fn get_current_catalog(&self) -> String {
         self.shared.get_current_catalog()
     }
@@ -331,9 +363,6 @@ impl QryCtx for QueryContext {
     }
     fn get_fuse_version(&self) -> String {
         self.version.clone()
-    }
-    fn get_settings(&self) -> Arc<Settings> {
-        self.shared.get_settings()
     }
     fn get_changed_settings(&self) -> Arc<Settings> {
         self.shared.get_changed_settings()
@@ -357,19 +386,8 @@ impl QryCtx for QueryContext {
         let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
         format!("_subquery_{}", index)
     }
-    // Get user manager api.
-    fn get_user_manager(&self) -> Arc<UserApiProvider> {
-        self.shared.get_user_manager()
-    }
-    fn get_auth_manager(&self) -> Arc<AuthMgr> {
-        self.shared.get_auth_manager()
-    }
     fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
         self.shared.get_role_cache_manager()
-    }
-    // Get the current session.
-    fn get_current_session(self: &Arc<Self>) -> Arc<Session> {
-        self.shared.session.clone()
     }
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics {
@@ -378,10 +396,6 @@ impl QryCtx for QueryContext {
     /// Get the session running query.
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
-    }
-    /// Get the client socket address.
-    fn get_client_address(&self) -> Option<SocketAddr> {
-        self.shared.session.session_ctx.get_client_host()
     }
     /// Get the storage cache manager
     fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
@@ -398,9 +412,6 @@ impl QryCtx for QueryContext {
     }
     fn get_storage_runtime(&self) -> Arc<Runtime> {
         self.shared.session.session_mgr.get_storage_runtime()
-    }
-    fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
-        self.shared.session.session_mgr.get_query_logger()
     }
     fn push_precommit_block(&self, block: DataBlock) {
         let mut blocks = self.precommit_blocks.write();
@@ -424,9 +435,6 @@ impl QryCtx for QueryContext {
     }
     fn get_connection_id(&self) -> String {
         self.shared.get_connection_id()
-    }
-    fn query_need_abort(self: &Arc<Self>) -> Arc<AtomicBool> {
-        self.shared.query_need_abort()
     }
 }
 
@@ -452,8 +460,6 @@ pub trait QryCtx {
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn try_get_statistics(&self) -> Result<Statistics>;
     fn try_set_statistics(&self, val: &Statistics) -> Result<()>;
-    fn attach_http_query(&self, handle: HttpQueryHandle);
-    fn get_http_query(&self) -> Option<HttpQueryHandle>;
     fn attach_query_str(&self, query: &str);
     fn attach_query_plan(&self, query_plan: &PlanNode);
     fn get_cluster(&self) -> Arc<Cluster>;
@@ -461,14 +467,11 @@ pub trait QryCtx {
     fn get_catalogs(&self) -> Arc<CatalogManager>;
     fn get_catalog(&self, catalog_name: impl AsRef<str>) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
-    fn try_create_abortable(&self, input: SendableDataBlockStream) -> Result<AbortStream>;
-    fn add_source_abort_handle(&self, abort_handle: AbortHandle);
     fn get_current_catalog(&self) -> String;
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn set_current_user(&self, user: UserInfo);
     fn get_fuse_version(&self) -> String;
-    fn get_settings(&self) -> Arc<Settings>;
     fn get_changed_settings(&self) -> Arc<Settings>;
     fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
     fn get_format_settings(&self) -> Result<FormatSettings>;
@@ -476,30 +479,21 @@ pub trait QryCtx {
     fn get_tenant(&self) -> String;
     fn set_current_tenant(&self, tenant: String);
     fn get_subquery_name(&self, _query: &PlanNode) -> String;
-    // Get user manager api.
-    fn get_user_manager(&self) -> Arc<UserApiProvider>;
-    fn get_auth_manager(&self) -> Arc<AuthMgr>;
     fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr>;
-    // Get the current session.
-    fn get_current_session(self: &Arc<Self>) -> Arc<Session>;
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics;
     /// Get the session running query.
     fn get_query_str(&self) -> String;
-    /// Get the client socket address.
-    fn get_client_address(&self) -> Option<SocketAddr>;
     /// Get the storage cache manager
     fn get_storage_cache_manager(&self) -> Arc<CacheManager>;
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator>;
     fn get_dal_context(&self) -> &DalContext;
     fn get_storage_runtime(&self) -> Arc<Runtime>;
-    fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>>;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
     fn try_get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
-    fn query_need_abort(self: &Arc<Self>) -> Arc<AtomicBool>;
 }
 
 impl TrySpawn for QueryContext {

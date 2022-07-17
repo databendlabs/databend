@@ -15,14 +15,13 @@
 use std::marker::PhantomData;
 
 use common_exception::Result;
+use common_storage_cache::meta::SegmentInfo;
+use common_storage_cache::meta::SegmentInfoVersion;
+use common_storage_cache::meta::SnapshotVersion;
+use common_storage_cache::meta::TableSnapshot;
 use futures::AsyncRead;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;
-
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::SegmentInfoVersion;
-use crate::storages::fuse::meta::SnapshotVersion;
-use crate::storages::fuse::meta::TableSnapshot;
 
 #[async_trait::async_trait]
 pub trait VersionedReader<T> {

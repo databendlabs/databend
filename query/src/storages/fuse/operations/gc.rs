@@ -19,6 +19,8 @@ use std::sync::Arc;
 use common_cache::Cache;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage_cache::meta::Location;
+use common_storage_cache::meta::SnapshotId;
 use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use opendal::Operator;
@@ -26,8 +28,6 @@ use opendal::Operator;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::Location;
-use crate::storages::fuse::meta::SnapshotId;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {

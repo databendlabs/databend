@@ -22,11 +22,11 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
+use common_storage_cache::meta::BlockMeta;
 use serde_json::json;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
 

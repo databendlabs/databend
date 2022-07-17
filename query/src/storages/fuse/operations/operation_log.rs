@@ -22,8 +22,7 @@ use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
-
-use crate::storages::fuse::meta::SegmentInfo;
+use common_storage_cache::meta::SegmentInfo;
 
 // currently, only support append,
 pub type TableOperationLog = Vec<AppendOperationLogEntry>;

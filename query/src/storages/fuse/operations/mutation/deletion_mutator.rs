@@ -18,6 +18,10 @@ use std::collections::HashMap;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage_cache::meta::BlockMeta;
+use common_storage_cache::meta::Location;
+use common_storage_cache::meta::SegmentInfo;
+use common_storage_cache::meta::TableSnapshot;
 use opendal::Operator;
 
 use crate::sessions::query_ctx::QryCtx;
@@ -27,10 +31,6 @@ use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::SegmentWriter;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::Location;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::statistics::reducers::reduce_block_metas;
 use crate::storages::fuse::statistics::reducers::reduce_statistics;
 

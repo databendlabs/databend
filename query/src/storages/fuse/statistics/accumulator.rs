@@ -20,15 +20,15 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::eval_aggr;
+use common_storage_cache::meta::BlockMeta;
+use common_storage_cache::meta::ClusterStatistics;
+use common_storage_cache::meta::ColumnId;
+use common_storage_cache::meta::ColumnMeta;
+use common_storage_cache::meta::ColumnStatistics;
+use common_storage_cache::meta::StatisticsOfColumns;
+use common_storage_cache::meta::Versioned;
 
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::ColumnId;
-use crate::storages::fuse::meta::ColumnMeta;
-use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::column_metas;
-use crate::storages::index::ClusterStatistics;
-use crate::storages::index::ColumnStatistics;
-use crate::storages::index::StatisticsOfColumns;
 
 #[derive(Default)]
 pub struct StatisticsAccumulator {

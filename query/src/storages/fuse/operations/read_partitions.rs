@@ -21,13 +21,13 @@ use common_planners::Extras;
 use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::Statistics;
+use common_storage_cache::meta::BlockMeta;
+use common_storage_cache::meta::TableSnapshot;
 
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
 

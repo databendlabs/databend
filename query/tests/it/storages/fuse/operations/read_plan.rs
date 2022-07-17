@@ -20,13 +20,13 @@ use common_base::base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Extras;
+use common_storage_cache::meta::BlockMeta;
+use common_storage_cache::meta::ColumnMeta;
+use common_storage_cache::meta::ColumnStatistics;
 use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::storages::fuse::meta::BlockMeta;
-use databend_query::storages::fuse::meta::ColumnMeta;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::index::ColumnStatistics;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;

@@ -17,9 +17,9 @@ use std::marker::PhantomData;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 
-use crate::storages::fuse::meta::common::Versioned;
-use crate::storages::fuse::meta::v0;
-use crate::storages::fuse::meta::v1;
+use crate::meta::v0;
+use crate::meta::v1;
+use crate::meta::Versioned;
 
 // Here versions of meta are tagged with numeric values
 //

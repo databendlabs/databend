@@ -25,7 +25,7 @@ use common_planners::SelectPlan;
 use common_tracing::tracing;
 
 use super::statements::ExpressionSyncAnalyzer;
-use crate::sessions::query_ctx::QryCtx;
+
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

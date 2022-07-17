@@ -25,7 +25,6 @@ use crate::auth::Credential;
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::to_clickhouse_err;
 use crate::servers::clickhouse::writers::QueryWriter;
-use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::SessionRef;
 
 pub struct InteractiveWorker {

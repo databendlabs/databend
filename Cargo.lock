@@ -1574,6 +1574,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storage-cache"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-cache",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-metrics",
+ "serde",
+]
+
+[[package]]
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
@@ -2183,6 +2196,7 @@ dependencies = [
  "common-metrics",
  "common-planners",
  "common-storage",
+ "common-storage-cache",
  "common-streams",
  "common-tracing",
  "common-users",

@@ -19,8 +19,8 @@ use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
 
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
+use crate::meta::SegmentInfo;
+use crate::meta::TableSnapshot;
 
 pub type MemoryCache<V> = Arc<RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>>;
 

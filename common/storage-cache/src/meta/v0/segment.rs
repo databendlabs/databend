@@ -15,9 +15,9 @@
 
 use std::collections::HashMap;
 
-use crate::storages::fuse::meta::common::ColumnId;
-use crate::storages::fuse::meta::common::Statistics;
-use crate::storages::index::ColumnStatistics;
+use crate::meta::common::ColumnStatistics;
+use crate::meta::ColumnId;
+use crate::meta::Statistics;
 
 /// A segment comprised of one or more blocks
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -40,6 +40,7 @@ pub struct BlockMeta {
     pub location: BlockLocation,
 }
 
+// TODO move it to common
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ColumnMeta {
     /// where the data of column start

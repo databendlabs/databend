@@ -32,7 +32,6 @@ use poem::Request;
 use super::v1::HttpQueryContext;
 use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
-use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 

@@ -25,6 +25,7 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
+use common_storage_cache::meta::SegmentInfo;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -35,7 +36,6 @@ use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
-use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::FuseTable;
 use crate::storages::result::result_locations::ResultLocations;
 use crate::storages::result::result_table_source::ResultTableSource;

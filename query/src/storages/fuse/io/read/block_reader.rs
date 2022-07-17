@@ -31,6 +31,8 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
+use common_storage_cache::meta::BlockMeta;
+use common_storage_cache::meta::Compression;
 use common_tracing::tracing;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::warn;
@@ -45,8 +47,6 @@ use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
 use crate::storages::fuse::io::retry;
 use crate::storages::fuse::io::retry::Retryable;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::Compression;
 
 #[derive(Clone)]
 pub struct BlockReader {

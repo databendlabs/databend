@@ -18,10 +18,10 @@ use common_exception::Result;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
+use common_storage_cache::meta::TableSnapshot;
 use common_tracing::tracing::debug;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::mutation::delete_from_block;
 use crate::storages::fuse::operations::mutation::deletion_mutator::Deletion;
 use crate::storages::fuse::operations::mutation::deletion_mutator::DeletionMutator;

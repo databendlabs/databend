@@ -17,6 +17,11 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage_cache::cache::TenantLabel;
+use common_storage_cache::meta::SegmentInfo;
+use common_storage_cache::meta::SegmentInfoVersion;
+use common_storage_cache::meta::SnapshotVersion;
+use common_storage_cache::meta::TableSnapshot;
 use futures::io::BufReader;
 use futures::stream;
 use opendal::BytesReader;
@@ -27,12 +32,7 @@ use super::cached_reader::Loader;
 use super::versioned_reader::VersionedReader;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::cache::TenantLabel;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::SegmentInfoVersion;
-use crate::storages::fuse::meta::SnapshotVersion;
-use crate::storages::fuse::meta::TableSnapshot;
 
 /// Provider of [BufReader]
 ///

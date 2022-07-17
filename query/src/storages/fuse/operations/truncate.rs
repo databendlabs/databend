@@ -19,13 +19,13 @@ use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
+use common_storage_cache::meta::TableSnapshot;
+use common_storage_cache::meta::Versioned;
 use uuid::Uuid;
 
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
-use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {

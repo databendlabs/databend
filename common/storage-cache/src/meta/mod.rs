@@ -22,11 +22,14 @@ mod v1;
 mod versions;
 
 pub use common::ClusterKey;
+pub use common::ClusterStatistics;
 pub use common::ColumnId;
+pub use common::ColumnStatistics;
 pub use common::Compression;
 pub use common::Location;
 pub use common::SnapshotId;
 pub use common::Statistics;
+pub use common::StatisticsOfColumns;
 pub use common::Versioned;
 pub use current::*;
 pub use versions::SegmentInfoVersion;

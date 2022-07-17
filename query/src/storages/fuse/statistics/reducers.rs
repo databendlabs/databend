@@ -18,12 +18,11 @@ use std::collections::HashMap;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
-
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::ColumnId;
-use crate::storages::fuse::meta::Statistics;
-use crate::storages::index::ColumnStatistics;
-use crate::storages::index::StatisticsOfColumns;
+use common_storage_cache::meta::BlockMeta;
+use common_storage_cache::meta::ColumnId;
+use common_storage_cache::meta::ColumnStatistics;
+use common_storage_cache::meta::Statistics;
+use common_storage_cache::meta::StatisticsOfColumns;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],

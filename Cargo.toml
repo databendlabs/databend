@@ -35,6 +35,7 @@ members = [
     "common/tracing",
     "common/users",
     "common/storage",
+    "common/storage-cache",
 
     # Query
     "query",

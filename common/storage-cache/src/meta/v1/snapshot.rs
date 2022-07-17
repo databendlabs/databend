@@ -14,19 +14,19 @@
 
 use std::ops::Add;
 
-use chrono::DateTime;
-use chrono::Utc;
+use common_base::base::uuid::Uuid;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use uuid::Uuid;
 
-use crate::storages::fuse::meta::common::ClusterKey;
-use crate::storages::fuse::meta::common::FormatVersion;
-use crate::storages::fuse::meta::common::Location;
-use crate::storages::fuse::meta::common::SnapshotId;
-use crate::storages::fuse::meta::common::Statistics;
-use crate::storages::fuse::meta::common::Versioned;
+use crate::meta::common::FormatVersion;
+use crate::meta::ClusterKey;
+use crate::meta::Location;
+use crate::meta::SnapshotId;
+use crate::meta::Statistics;
+use crate::meta::Versioned;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
@@ -129,6 +129,8 @@ mod util {
     use chrono::Datelike;
     use chrono::TimeZone;
     use chrono::Timelike;
+    use common_datavalues::chrono;
+    use common_datavalues::chrono::Utc;
 
     use super::*;
     pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
