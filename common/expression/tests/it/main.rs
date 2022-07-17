@@ -490,10 +490,11 @@ fn builtin_functions() -> FunctionRegistry {
         FunctionProperty::default(),
         |item_domain, _| Some(item_domain.clone()),
         |array, idx, output| {
-            Ok(output.push(
-                array
-                    .index(idx as usize)
-                    .ok_or_else(|| format!("index out of bounds: the len is {} but the index is {}", array.len(), idx))?))
+            let item = array
+                .index(idx as usize)
+                .ok_or_else(|| format!("index out of bounds: the len is {} but the index is {}", array.len(), idx))?;
+            output.push(item);
+            Ok(())
         },
     );
 
