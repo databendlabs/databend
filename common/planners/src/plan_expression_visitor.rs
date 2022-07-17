@@ -141,7 +141,6 @@ impl Expression {
     /// ```
     ///
     /// If an Err result is returned, recursion is stopped immediately
-    ///
     pub fn accept<V: ExpressionVisitor>(&self, visitor: V) -> Result<V> {
         let visitor = match visitor.pre_visit(self)? {
             Recursion::Continue(visitor) => visitor,

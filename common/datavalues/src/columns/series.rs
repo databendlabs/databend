@@ -99,7 +99,7 @@ impl Series {
 
     pub fn remove_nullable(column: &ColumnRef) -> ColumnRef {
         if column.is_nullable() {
-            //constant nullable ?
+            // constant nullable ?
             if column.is_const() {
                 let col: &ConstColumn = unsafe { Self::static_cast(column) };
                 let inner = Self::remove_nullable(col.inner());

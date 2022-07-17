@@ -242,7 +242,7 @@ async fn execute(client: &mut Connection, query: &str) -> Result<()> {
     }
 }
 
-//block contains table name
+// block contains table name
 async fn insert<'a>(client: &mut Connection, block: &Block<'a>) -> Result<()> {
     match client.insert(block).await {
         Ok(mut isrt) => isrt

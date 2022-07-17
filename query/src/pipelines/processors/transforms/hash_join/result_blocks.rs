@@ -295,7 +295,7 @@ impl JoinHashTable {
                 }
 
                 (None, false) => {
-                    //dummy row ptr
+                    // dummy row ptr
                     build_indexs.push(RowPtr {
                         chunk_index: 0,
                         row_index: 0,
@@ -379,7 +379,7 @@ impl JoinHashTable {
                     validity.extend_constant(probe_result_ptrs.len(), true);
                 }
                 None => {
-                    //dummy row ptr
+                    // dummy row ptr
                     build_indexs.push(RowPtr {
                         chunk_index: 0,
                         row_index: 0,
