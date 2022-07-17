@@ -25,6 +25,7 @@ use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeSink;

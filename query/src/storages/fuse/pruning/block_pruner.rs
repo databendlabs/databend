@@ -25,6 +25,7 @@ use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::BlockMeta;

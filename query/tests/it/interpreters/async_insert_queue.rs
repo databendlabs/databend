@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_planners::InsertPlan;
 use common_planners::PlanNode::Insert;
 use databend_query::interpreters::*;
+use databend_query::sessions::query_ctx::QryCtx;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionManager;
 use databend_query::sql::*;

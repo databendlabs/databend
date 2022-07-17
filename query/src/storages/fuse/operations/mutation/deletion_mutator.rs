@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::BlockWriter;

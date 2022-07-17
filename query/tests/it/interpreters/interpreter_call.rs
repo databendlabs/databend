@@ -19,6 +19,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
+use databend_query::sessions::query_ctx::QryCtx;
 use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;

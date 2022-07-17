@@ -24,6 +24,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use databend_query::sessions::query_ctx::QryCtx;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::optimizer::HeuristicOptimizer;
 use databend_query::sql::optimizer::RuleID;

@@ -25,6 +25,7 @@ use crate::catalogs::DatabaseCatalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 

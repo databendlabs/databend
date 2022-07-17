@@ -42,6 +42,7 @@ use common_streams::Source;
 use common_tracing::tracing;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;

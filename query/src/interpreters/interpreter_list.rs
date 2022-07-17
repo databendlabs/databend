@@ -25,6 +25,7 @@ use common_tracing::tracing;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub struct ListInterpreter {

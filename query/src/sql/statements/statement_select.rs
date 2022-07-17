@@ -31,6 +31,7 @@ use sqlparser::ast::OrderByExpr;
 use sqlparser::ast::SelectItem;
 use sqlparser::ast::TableWithJoins;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
 use crate::sql::statements::query::JoinedSchema;

@@ -30,6 +30,7 @@ use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use common_tracing::tracing::debug;
 use sqlparser::ast::ObjectName;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 /// Named stage(start with `@`):

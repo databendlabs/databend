@@ -47,6 +47,7 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::SyncReceiverCkSource;
 use crate::pipelines::new::SourcePipeBuilder;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;

@@ -41,6 +41,7 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSource;
 use crate::pipelines::new::processors::AsyncSourcer;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub struct StageSource {

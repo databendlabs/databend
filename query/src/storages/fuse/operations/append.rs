@@ -33,6 +33,7 @@ use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::BlockStreamWriter;

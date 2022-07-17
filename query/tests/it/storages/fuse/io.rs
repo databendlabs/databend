@@ -21,6 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use databend_query::sessions::query_ctx::QryCtx;
 use databend_query::storages::fuse::io::write_block;
 use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockReader;

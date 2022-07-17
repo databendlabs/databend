@@ -40,6 +40,7 @@ use crate::pipelines::new::processors::SyncSourcer;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
 use crate::pipelines::new::SourcePipeBuilder;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
 use crate::storages::StorageContext;

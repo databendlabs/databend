@@ -25,6 +25,7 @@ use super::cached_reader::CachedReader;
 use super::cached_reader::HasTenantLabel;
 use super::cached_reader::Loader;
 use super::versioned_reader::VersionedReader;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::cache::TenantLabel;
 use crate::storages::fuse::io::TableMetaLocationGenerator;

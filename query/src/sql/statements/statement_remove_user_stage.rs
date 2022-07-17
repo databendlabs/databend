@@ -20,6 +20,7 @@ use common_planners::RemoveUserStagePlan;
 use common_tracing::tracing;
 
 use super::parse_stage_location;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

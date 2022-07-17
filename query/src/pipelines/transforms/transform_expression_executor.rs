@@ -27,6 +27,7 @@ use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
 use common_tracing::tracing;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 /// ExpressionExecutor is a helper struct for expressions and projections

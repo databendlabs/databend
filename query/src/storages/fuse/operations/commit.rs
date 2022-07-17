@@ -33,6 +33,7 @@ use common_tracing::tracing::info;
 use common_tracing::tracing::warn;
 use uuid::Uuid;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
@@ -332,6 +333,7 @@ mod utils {
     use std::collections::BTreeMap;
 
     use super::*;
+    use crate::sessions::query_ctx::QryCtx;
     #[inline]
     pub async fn abort_operations(
         ctx: &QueryContext,

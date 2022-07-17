@@ -30,6 +30,7 @@ use crate::servers::http::v1::parallel_format_source::ParallelInputFormatSource;
 use crate::servers::http::v1::parallel_format_source::ParallelMultipartWorker;
 use crate::servers::http::v1::sequential_format_source::SequentialInputFormatSource;
 use crate::servers::http::v1::sequential_format_source::SequentialMultipartWorker;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]

@@ -21,6 +21,7 @@ use common_streams::SendableDataBlockStream;
 use crate::interpreters::ProcessorExecutorStream;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::NewPipeline;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 

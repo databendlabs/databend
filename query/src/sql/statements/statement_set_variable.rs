@@ -23,6 +23,7 @@ use common_tracing::tracing;
 use sqlparser::ast::Ident;
 use sqlparser::ast::SetVariableValue;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::sessions::query_ctx::QryCtx;
 use databend_query::sql::PlanParser;
 use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;

@@ -23,6 +23,7 @@ use common_meta_types::StageType;
 use crate::interpreters::list_files_from_dal;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub struct SyncStageFileProcedure;

@@ -27,6 +27,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::SessionType;
 use crate::storages::stage::StageSource;
 

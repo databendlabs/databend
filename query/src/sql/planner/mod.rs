@@ -40,6 +40,7 @@ pub use metadata::MetadataRef;
 pub use metadata::TableEntry;
 
 use self::plans::Plan;
+use crate::sessions::query_ctx::QryCtx;
 
 pub struct Planner {
     ctx: Arc<QueryContext>,

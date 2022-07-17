@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowPlan;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub struct ManagementModeAccess {

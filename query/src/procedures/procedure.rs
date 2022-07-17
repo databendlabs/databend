@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_planners::validate_function_arg;
 
 use crate::procedures::ProcedureFeatures;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]

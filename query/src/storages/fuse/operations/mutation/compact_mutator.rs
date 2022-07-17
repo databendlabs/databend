@@ -19,6 +19,7 @@ use common_exception::Result;
 use opendal::Operator;
 
 use super::block_filter::all_the_columns_ids;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockCompactor;
 use crate::storages::fuse::io::BlockWriter;

@@ -32,6 +32,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::NewPipeline;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;

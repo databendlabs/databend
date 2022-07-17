@@ -23,6 +23,7 @@ use common_meta_app::schema::TableMeta;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::CATALOG_DEFAULT;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;

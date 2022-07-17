@@ -22,6 +22,7 @@ use common_tracing::tracing;
 
 use super::Interpreter;
 use crate::procedures::ProcedureFactory;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub struct CallInterpreter {

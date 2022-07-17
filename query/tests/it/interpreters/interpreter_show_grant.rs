@@ -21,6 +21,7 @@ use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::sessions::query_ctx::QryCtx;
 use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 

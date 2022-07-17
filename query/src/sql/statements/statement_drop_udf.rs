@@ -19,6 +19,7 @@ use common_planners::DropUserUDFPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

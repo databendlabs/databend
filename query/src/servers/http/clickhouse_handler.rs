@@ -50,6 +50,7 @@ use crate::pipelines::new::processors::StreamSource;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::servers::clickhouse::CLickHouseFederated;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::plans::Plan;

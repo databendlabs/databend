@@ -22,6 +22,7 @@ use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::Statistics;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;

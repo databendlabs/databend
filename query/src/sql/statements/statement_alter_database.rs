@@ -21,6 +21,7 @@ use common_planners::RenameDatabasePlan;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::statements::resolve_database;
 use crate::sql::statements::AnalyzableStatement;

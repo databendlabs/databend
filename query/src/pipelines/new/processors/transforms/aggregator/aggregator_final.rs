@@ -41,6 +41,7 @@ use crate::pipelines::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::transforms::group_by::KeysColumnIter;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::transforms::group_by::StateEntity;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub type KeysU8FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU8>;

@@ -21,6 +21,7 @@ use common_planners::ShowDatabasesPlan;
 use common_planners::ShowPlan;
 use common_tracing::tracing;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

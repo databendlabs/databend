@@ -25,6 +25,7 @@ use common_meta_types::UserOptionFlag;
 
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub struct TenantTablesProcedure {}

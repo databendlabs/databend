@@ -24,6 +24,7 @@ use common_tracing::tracing;
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 

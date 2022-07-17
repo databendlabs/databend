@@ -17,6 +17,7 @@ use common_exception::Result;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
+use databend_query::sessions::query_ctx::QryCtx;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 use wiremock::Mock;

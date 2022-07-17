@@ -20,6 +20,7 @@ use common_exception::Result;
 
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::table_functions::get_cluster_keys;
 use crate::storages::fuse::table_functions::ClusteringInformation;

@@ -35,6 +35,7 @@ use common_planners::WindowFuncPlan;
 use enum_extract::let_extract;
 
 use crate::optimizers::Optimizer;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub struct ScattersOptimizer {

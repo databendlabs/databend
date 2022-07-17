@@ -43,6 +43,7 @@ use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::pipelines::transforms::get_sort_descriptions;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 use crate::table_functions::generate_numbers_parts;

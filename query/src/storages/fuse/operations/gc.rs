@@ -23,6 +23,7 @@ use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use opendal::Operator;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::Location;

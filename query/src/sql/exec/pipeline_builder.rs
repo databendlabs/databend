@@ -52,6 +52,7 @@ use crate::pipelines::new::processors::TransformSortMerge;
 use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::exec::physical_plan::ColumnID;
 use crate::sql::exec::physical_plan::PhysicalPlan;

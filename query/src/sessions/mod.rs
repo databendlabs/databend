@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod metrics;
-mod query_ctx;
+pub mod query_ctx;
 mod query_ctx_shared;
 mod session;
 mod session_ctx;

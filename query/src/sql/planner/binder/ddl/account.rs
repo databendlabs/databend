@@ -30,6 +30,7 @@ use common_planners::GrantRolePlan;
 use common_planners::RevokePrivilegePlan;
 use common_planners::RevokeRolePlan;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sql::plans::Plan;
 use crate::sql::Binder;
 

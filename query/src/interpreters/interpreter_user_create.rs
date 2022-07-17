@@ -24,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]

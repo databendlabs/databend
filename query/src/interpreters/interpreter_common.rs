@@ -27,6 +27,7 @@ use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use regex::Regex;
 
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::stage::StageSource;
 
