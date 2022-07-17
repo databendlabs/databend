@@ -88,6 +88,7 @@ impl PhysicalPlanBuilder {
                         })
                         .collect::<Result<_>>()?,
                     marker_index: join.marker_index,
+                    from_correlated_subquery: join.from_correlated_subquery,
                 })
             }
             RelOperator::Project(project) => {

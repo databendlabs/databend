@@ -186,6 +186,7 @@ impl SubqueryRewriter {
                 SubqueryType::NotExists => JoinType::Anti,
             },
             marker_index: None,
+            from_correlated_subquery: true,
         };
 
         // Rewrite plan to semi-join.
@@ -306,6 +307,7 @@ impl SubqueryRewriter {
                     other_conditions: vec![],
                     join_type: JoinType::Single,
                     marker_index: None,
+                    from_correlated_subquery: true,
                 };
                 let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::SingleJoin))
@@ -359,6 +361,7 @@ impl SubqueryRewriter {
                     other_conditions: vec![],
                     join_type: JoinType::Mark,
                     marker_index: Some(marker_index),
+                    from_correlated_subquery: true,
                 };
                 let s_expr = SExpr::create_binary(join_plan.into(), flatten_plan, left.clone());
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
@@ -367,6 +370,35 @@ impl SubqueryRewriter {
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan = self.flatten(&subquery.subquery, &correlated_columns)?;
                 let rel_expr = RelExpr::with_s_expr(&flatten_plan);
+                let mut left_conditions = Vec::with_capacity(correlated_columns.len());
+                let mut right_conditions = Vec::with_capacity(correlated_columns.len());
+                let mut metadata = self.metadata.write();
+                for correlated_column in correlated_columns.iter() {
+                    let column_entry = metadata.column(correlated_column.clone());
+                    let right_column = Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: format!("subquery_{}", correlated_column),
+                            index: correlated_column.clone(),
+                            data_type: Box::from(column_entry.data_type.clone()),
+                            visible_in_unqualified_wildcard: false,
+                        },
+                    });
+                    let derive_column = self.derived_columns.get(&correlated_column).unwrap();
+                    let left_column = Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: format!("subquery_{}", derive_column),
+                            index: derive_column.clone(),
+                            data_type: Box::from(column_entry.data_type.clone()),
+                            visible_in_unqualified_wildcard: false,
+                        },
+                    });
+                    left_conditions.push(left_column.clone());
+                    right_conditions.push(right_column);
+                }
                 let output_columns: HashSet<_> = rel_expr
                     .derive_relational_prop()?
                     .output_columns
@@ -396,26 +428,29 @@ impl SubqueryRewriter {
                         visible_in_unqualified_wildcard: false,
                     },
                 });
-                let right_condition = *subquery.child_expr.as_ref().unwrap().clone();
+                let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
-                let (left_conditions, right_conditions, other_conditions) =
-                    if op == ComparisonOp::Equal {
-                        (vec![left_condition], vec![right_condition], vec![])
-                    } else {
-                        let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
-                            op,
-                            left: Box::new(right_condition),
-                            right: Box::new(left_condition),
-                            return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
-                        });
-                        (vec![], vec![], vec![other_condition])
-                    };
+                let (right_condition, is_other_condition) =
+                    check_child_expr_in_subquery(&child_expr, &op)?;
+                let (left_conditions, right_conditions, other_conditions) = if !is_other_condition {
+                    left_conditions.push(left_condition.clone());
+                    right_conditions.push(right_condition);
+                    (left_conditions, right_conditions, vec![])
+                } else {
+                    let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
+                        op: op.clone(),
+                        left: Box::new(right_condition),
+                        right: Box::new(left_condition),
+                        return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                    });
+                    (left_conditions, right_conditions, vec![other_condition])
+                };
                 // Add a marker column to save comparison result.
                 // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
                 // If subquery contains NULL, the comparison result is TRUE or NULL.
                 // Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
                 // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
-                let marker_index = self.metadata.write().add_column(
+                let marker_index = metadata.add_column(
                     "marker".to_string(),
                     NullableType::new_impl(BooleanType::new_impl()),
                     None,
@@ -429,6 +464,7 @@ impl SubqueryRewriter {
                     other_conditions,
                     join_type: JoinType::Mark,
                     marker_index: Some(marker_index),
+                    from_correlated_subquery: true,
                 }
                 .into();
                 Ok((
@@ -482,6 +518,7 @@ impl SubqueryRewriter {
                 other_conditions: vec![],
                 join_type: JoinType::Cross,
                 marker_index: None,
+                from_correlated_subquery: true,
             }
             .into();
             return Ok(SExpr::create_binary(cross_join, logical_get, plan.clone()));
@@ -571,6 +608,7 @@ impl SubqueryRewriter {
                         other_conditions: join.other_conditions.clone(),
                         join_type: join.join_type.clone(),
                         marker_index: join.marker_index,
+                        from_correlated_subquery: false,
                     }
                     .into(),
                     left_flatten_plan,
@@ -734,6 +772,24 @@ impl SubqueryRewriter {
             _ => Err(ErrorCode::LogicalError(
                 "Invalid scalar for flattening subquery",
             )),
+        }
+    }
+}
+
+pub fn check_child_expr_in_subquery(
+    child_expr: &Scalar,
+    op: &ComparisonOp,
+) -> Result<(Scalar, bool)> {
+    match child_expr {
+        Scalar::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
+        Scalar::ConstantExpr(_) => Ok((child_expr.clone(), true)),
+        Scalar::CastExpr(cast) => {
+            let arg = &cast.argument;
+            let (_, is_other_condition) = check_child_expr_in_subquery(arg, op)?;
+            Ok((child_expr.clone(), is_other_condition))
+        }
+        _ => {
+            return Err(ErrorCode::LogicalError("Invalid child expr in subquery"));
         }
     }
 }

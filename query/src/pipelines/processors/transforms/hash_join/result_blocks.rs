@@ -59,7 +59,11 @@ impl JoinHashTable {
         match self.hash_join_desc.join_type {
             JoinType::Inner => {
                 for (i, key) in keys_iter.enumerate() {
-                    let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+                    let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                        hash_table.find_key(&key)
+                    } else {
+                        Self::probe_key(hash_table, key, valids, i)
+                    };
                     match probe_result_ptr {
                         Some(v) => {
                             let probe_result_ptrs = v.get_value();
@@ -150,25 +154,14 @@ impl JoinHashTable {
             }
             Mark => {
                 results.push(DataBlock::empty());
-                // Either there is only non-equi condition, or there is only equi-condition
-                // It's impossible for both to coexist.
-                if self.hash_join_desc.other_predicate.is_some() {
-                    self.mark_join_with_other_condition(input, probe_state)?;
-                } else {
-                    self.mark_join_without_other_condition(
-                        hash_table,
-                        probe_state,
-                        keys_iter,
-                        input,
-                    )?;
-                }
+                self.mark_join(hash_table, probe_state, keys_iter, input)?;
             }
             _ => unreachable!(),
         }
         Ok(results)
     }
 
-    fn mark_join_without_other_condition<Key, IT>(
+    fn mark_join<Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
@@ -189,56 +182,67 @@ impl JoinHashTable {
                 *has_null = true;
             }
         }
+        let probe_indexs = &mut probe_state.probe_indexs;
+        let build_indexs = &mut probe_state.build_indexs;
         let valids = &probe_state.valids;
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+            let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                hash_table.find_key(&key)
+            } else {
+                Self::probe_key(hash_table, key, valids, i)
+            };
             if let Some(v) = probe_result_ptr {
                 let probe_result_ptrs = v.get_value();
+                build_indexs.extend_from_slice(probe_result_ptrs);
+                probe_indexs.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
                 for ptr in probe_result_ptrs {
                     // If find join partner, set the marker to true.
                     let mut self_row_ptrs = self.row_ptrs.write();
                     if let Some(p) = self_row_ptrs.iter_mut().find(|p| (*p).eq(&ptr)) {
-                        p.marker = Some(MarkerKind::True);
+                        if self.hash_join_desc.other_predicate.is_none() {
+                            p.marker = Some(MarkerKind::True);
+                        }
                     }
                 }
             }
         }
-        Ok(())
-    }
-
-    fn mark_join_with_other_condition(
-        &self,
-        input: &DataBlock,
-        probe_state: &mut ProbeState,
-    ) -> Result<()> {
-        let cross_join_blocks = self.probe_cross_join(input, probe_state)?;
+        if self.hash_join_desc.other_predicate.is_none() {
+            return Ok(());
+        }
+        let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
+        let build_block = self.row_space.gather(build_indexs)?;
+        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
         let func_ctx = self.ctx.try_get_function_context()?;
-        for block in cross_join_blocks.iter() {
-            let type_vector = self
-                .hash_join_desc
-                .other_predicate
-                .as_ref()
-                .unwrap()
-                .eval(&func_ctx, block)?;
-            let filter_column = type_vector.vector();
-            assert_eq!(filter_column.len(), block.num_rows());
-            let mut row_ptrs = self.row_ptrs.write();
-            for idx in 0..filter_column.len() {
-                match filter_column.get(idx) {
-                    DataValue::Null => {
-                        if row_ptrs[idx].marker == Some(MarkerKind::False) {
-                            row_ptrs[idx].marker = Some(MarkerKind::Null);
-                        }
+        let type_vector = self
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap()
+            .eval(&func_ctx, &merged_block)?;
+        let filter_column = type_vector.vector();
+        let mut row_ptrs = self.row_ptrs.write();
+        dbg!(build_indexs.clone());
+        dbg!(filter_column.clone());
+        for idx in 0..filter_column.len() {
+            let row_ptr = build_indexs[idx];
+            let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(&&row_ptr)).unwrap();
+            dbg!(self_row_ptr.clone());
+            match filter_column.get(idx) {
+                DataValue::Null => {
+                    if self_row_ptr.marker == Some(MarkerKind::False) {
+                        self_row_ptr.marker = Some(MarkerKind::Null);
                     }
-                    DataValue::Boolean(value) => {
-                        if value {
-                            row_ptrs[idx].marker = Some(MarkerKind::True);
-                        }
-                    }
-                    _ => unreachable!(),
                 }
+                DataValue::Boolean(value) => {
+                    if value {
+                        self_row_ptr.marker = Some(MarkerKind::True);
+                    } else {
+                    }
+                }
+                _ => unreachable!(),
             }
         }
+        dbg!(&*row_ptrs);
         Ok(())
     }
 
@@ -257,7 +261,11 @@ impl JoinHashTable {
         let valids = &probe_state.valids;
 
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+            let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                hash_table.find_key(&key)
+            } else {
+                Self::probe_key(hash_table, key, valids, i)
+            };
 
             match (probe_result_ptr, SEMI) {
                 (Some(_), true) | (None, false) => {
@@ -291,7 +299,11 @@ impl JoinHashTable {
         let mut dummys = 0;
 
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+            let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                hash_table.find_key(&key)
+            } else {
+                Self::probe_key(hash_table, key, valids, i)
+            };
 
             match (probe_result_ptr, SEMI) {
                 (Some(v), _) => {
@@ -375,7 +387,11 @@ impl JoinHashTable {
 
         let mut validity = MutableBitmap::new();
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+            let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                hash_table.find_key(&key)
+            } else {
+                Self::probe_key(hash_table, key, valids, i)
+            };
 
             match probe_result_ptr {
                 Some(v) => {

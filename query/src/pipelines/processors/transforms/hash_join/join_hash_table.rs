@@ -127,6 +127,7 @@ pub struct HashJoinDesc {
     pub(crate) join_type: JoinType,
     pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
     pub(crate) marker_join_desc: MarkJoinDesc,
+    pub(crate) from_correlated_subquery: bool,
 }
 
 pub struct JoinHashTable {
@@ -150,6 +151,7 @@ impl JoinHashTable {
         other_predicate: Option<&PhysicalScalar>,
         build_schema: DataSchemaRef,
         marker_index: Option<IndexType>,
+        from_correlated_subquery: bool,
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types: Vec<DataTypeImpl> =
             build_keys.iter().map(|expr| expr.data_type()).collect();
@@ -171,6 +173,7 @@ impl JoinHashTable {
                 marker_index,
                 has_null: RwLock::new(false),
             },
+            from_correlated_subquery,
         };
         Ok(match method {
             HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(

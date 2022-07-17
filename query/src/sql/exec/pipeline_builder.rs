@@ -152,6 +152,7 @@ impl PipelineBuilder {
                 other_conditions,
                 join_type,
                 marker_index,
+                from_correlated_subquery,
             } => {
                 let mut build_side_pipeline = Pipeline::create();
                 let build_side_context = QueryContext::create_from(context.clone());
@@ -166,6 +167,7 @@ impl PipelineBuilder {
                     other_conditions,
                     join_type.clone(),
                     *marker_index,
+                    *from_correlated_subquery,
                     build_side_pipeline,
                     pipeline,
                 )?;
@@ -478,6 +480,7 @@ impl PipelineBuilder {
         other_conditions: &[PhysicalScalar],
         join_type: JoinType,
         marker_index: Option<IndexType>,
+        from_correlated_subquery: bool,
         mut child_pipeline: Pipeline,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -512,6 +515,7 @@ impl PipelineBuilder {
             predicate.as_ref(),
             build_schema,
             marker_index,
+            from_correlated_subquery,
         )?;
 
         // Build side

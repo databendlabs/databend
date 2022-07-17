@@ -79,6 +79,7 @@ pub enum PhysicalPlan {
         other_conditions: Vec<PhysicalScalar>,
         join_type: JoinType,
         marker_index: Option<IndexType>,
+        from_correlated_subquery: bool,
     },
     Max1Row {
         input: Box<PhysicalPlan>,

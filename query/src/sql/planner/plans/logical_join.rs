@@ -82,6 +82,7 @@ pub struct LogicalInnerJoin {
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
+    pub from_correlated_subquery: bool,
 }
 
 impl Operator for LogicalInnerJoin {

@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::sql::binder::ColumnBinding;
+use crate::sql::optimizer::heuristic::decorrelate::check_child_expr_in_subquery;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
@@ -303,6 +304,7 @@ impl SubqueryRewriter {
                     other_conditions: vec![],
                     join_type: JoinType::Cross,
                     marker_index: None,
+                    from_correlated_subquery: false,
                 }
                 .into();
                 Ok((
@@ -407,6 +409,7 @@ impl SubqueryRewriter {
                     other_conditions: vec![],
                     join_type: JoinType::Cross,
                     marker_index: None,
+                    from_correlated_subquery: false,
                 }
                 .into();
                 Ok((
@@ -434,20 +437,21 @@ impl SubqueryRewriter {
                         visible_in_unqualified_wildcard: false,
                     },
                 });
-                let right_condition = *subquery.child_expr.as_ref().unwrap().clone();
+                let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
-                let (left_conditions, right_conditions, other_conditions) =
-                    if op == ComparisonOp::Equal {
-                        (vec![left_condition], vec![right_condition], vec![])
-                    } else {
-                        let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
-                            op,
-                            left: Box::new(right_condition),
-                            right: Box::new(left_condition),
-                            return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
-                        });
-                        (vec![], vec![], vec![other_condition])
-                    };
+                let (right_condition, is_other_condition) =
+                    check_child_expr_in_subquery(&child_expr, &op)?;
+                let (left_conditions, right_conditions, other_conditions) = if !is_other_condition {
+                    (vec![left_condition], vec![right_condition], vec![])
+                } else {
+                    let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
+                        op,
+                        left: Box::new(right_condition),
+                        right: Box::new(left_condition),
+                        return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                    });
+                    (vec![], vec![], vec![other_condition])
+                };
                 // Add a marker column to save comparison result.
                 // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
                 // If subquery contains NULL, the comparison result is TRUE or NULL.
@@ -467,6 +471,7 @@ impl SubqueryRewriter {
                     other_conditions,
                     join_type: JoinType::Mark,
                     marker_index: Some(marker_index),
+                    from_correlated_subquery: false,
                 }
                 .into();
                 Ok((
