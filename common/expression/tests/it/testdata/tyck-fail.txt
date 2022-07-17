@@ -22,10 +22,10 @@ error:
 
 
 error: 
-  --> SQL:1:1
+  --> SQL:1:10
   |
-1 | bool_not('a')
-  | ^^^^^^^^^^^^^ no overload satisfies `bool_not(String)`
+1 | bool_not(bool_not('a'))
+  |          ^^^^^^^^^^^^^ no overload satisfies `bool_not(String)`
 
 has tried possible overloads:
   bool_not(NULL) :: NULL                  : unable to unify `String` with `NULL`
@@ -86,7 +86,7 @@ error:
   --> SQL:1:1
   |
 1 | get_tuple(1)(create_tuple(true))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `get_tuple((Boolean,))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `get_tuple(1)((Boolean,))`
 
 
 

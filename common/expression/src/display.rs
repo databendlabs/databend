@@ -66,7 +66,7 @@ impl Display for Chunk {
             let row: Vec<_> = self
                 .columns()
                 .iter()
-                .map(|col| col.index(index).to_string())
+                .map(|col| col.index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
             table.add_row(row);

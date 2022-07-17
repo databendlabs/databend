@@ -115,13 +115,16 @@ impl<T: ArgType> ArgType for NullableType<T> {
         validity.len()
     }
 
-    fn index_column<'a>((col, validity): &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        let scalar = T::index_column(col, index);
-        if validity.get(index).unwrap() {
+    fn index_column<'a>(
+        (col, validity): &'a Self::Column,
+        index: usize,
+    ) -> Option<Self::ScalarRef<'a>> {
+        let scalar = T::index_column(col, index)?;
+        Some(if validity.get(index).unwrap() {
             Some(scalar)
         } else {
             None
-        }
+        })
     }
 
     fn slice_column<'a>((col, validity): &'a Self::Column, range: Range<usize>) -> Self::Column {
