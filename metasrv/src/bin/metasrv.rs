@@ -19,12 +19,15 @@ use std::sync::Arc;
 use common_base::base::RuntimeTracker;
 use common_base::base::StopHandle;
 use common_base::base::Stoppable;
+use common_grpc::RpcClientConf;
 use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
+use common_meta_store::MetaStoreProvider;
 use common_tracing::init_global_tracing;
 use common_tracing::tracing;
 use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
+use databend_meta::cmd;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::init_meta_metrics_recorder;
@@ -32,11 +35,13 @@ use databend_meta::version::METASRV_COMMIT_VERSION;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 
+const CMD_KVAPI_PREFIX: &str = "kvapi::";
+
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     let conf = Config::load()?;
 
-    if run_cmd(&conf) {
+    if run_cmd(&conf).await {
         return Ok(());
     }
 
@@ -121,7 +126,39 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     Ok(())
 }
 
-fn run_cmd(conf: &Config) -> bool {
+async fn run_kvapi_command(conf: &Config, op: &str) {
+    match cmd::KvApiCommand::from_config(conf, op) {
+        Ok(kv_cmd) => {
+            let rpc_conf = RpcClientConf {
+                address: conf.grpc_api_address.clone(),
+                username: conf.username.clone(),
+                password: conf.password.clone(),
+                ..Default::default()
+            };
+            let client = match MetaStoreProvider::new(rpc_conf).try_get_meta_store().await {
+                Ok(s) => Arc::new(s),
+                Err(e) => {
+                    eprintln!("{}", e.message());
+                    return;
+                }
+            };
+
+            match kv_cmd.execute(client).await {
+                Ok(res) => {
+                    println!("{}", res);
+                }
+                Err(e) => {
+                    eprintln!("{}", e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+        }
+    }
+}
+
+async fn run_cmd(conf: &Config) -> bool {
     if conf.cmd.is_empty() {
         return false;
     }
@@ -137,13 +174,21 @@ fn run_cmd(conf: &Config) -> bool {
                 pretty(&conf).unwrap_or_else(|e| format!("error format config: {}", e))
             );
         }
-        _ => {
+        cmd => {
+            if cmd.starts_with(CMD_KVAPI_PREFIX) {
+                if let Some(op) = cmd.strip_prefix(CMD_KVAPI_PREFIX) {
+                    run_kvapi_command(conf, op).await;
+                    return true;
+                }
+            }
             eprintln!("Invalid cmd: {}", conf.cmd);
             eprintln!("Available cmds:");
             eprintln!("  --cmd ver");
             eprintln!("    Print version and min compatible meta-client version");
             eprintln!("  --cmd show-config");
             eprintln!("    Print effective config");
+            eprintln!("  --cmd kvapi::<cmd>");
+            eprintln!("    Run kvapi command (upsert, get, mget, list)");
         }
     }
 

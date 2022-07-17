@@ -33,7 +33,7 @@ pub use crate::DataSchema;
 pub use crate::DataSchemaRef;
 pub use crate::DataSchemaRefExt;
 pub use crate::DataValue;
-//operators
+// operators
 pub use crate::DataValueBinaryOperator;
 pub use crate::DataValueComparisonOperator;
 pub use crate::DataValueLogicOperator;

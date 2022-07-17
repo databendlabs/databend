@@ -33,7 +33,6 @@ use crate::state::RaftStateValue;
 /// hard_state:
 ///      current_term,
 ///      voted_for,
-///
 #[derive(Debug)]
 pub struct RaftState {
     pub id: NodeId,

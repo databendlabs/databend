@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::property::Domain;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -22,6 +23,7 @@ impl ValueType for AnyType {
     type Scalar = Scalar;
     type ScalarRef<'a> = &'a Scalar;
     type Column = Column;
+    type Domain = Domain;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.clone()

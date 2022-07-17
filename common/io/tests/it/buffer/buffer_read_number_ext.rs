@@ -17,7 +17,7 @@ use common_io::prelude::*;
 
 #[test]
 fn test_read_number_ext() -> Result<()> {
-    //impl Write for Cursor<&mut [u8]>
+    // impl Write for Cursor<&mut [u8]>
 
     let mut reader = BufferReader::new("3,032,00000789.2,+2,-2.33333,-23,".as_bytes());
     let expected = vec![3, 32, 789, 2, -2, -23];

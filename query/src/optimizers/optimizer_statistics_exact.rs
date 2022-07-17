@@ -114,14 +114,12 @@ impl Optimizer for StatisticsExactOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
-        /*
-            TODO:
-                SELECT COUNT(1), COUNT(1) FROM (
-                    SELECT COUNT(1) FROM (
-                        SELECT * FROM system.settings LIMIT 1
-                    )
-                )
-        */
+        // TODO:
+        // SELECT COUNT(1), COUNT(1) FROM (
+        // SELECT COUNT(1) FROM (
+        // SELECT * FROM system.settings LIMIT 1
+        // )
+        // )
 
         let mut visitor = StatisticsExactImpl {
             ctx: &self.ctx,
