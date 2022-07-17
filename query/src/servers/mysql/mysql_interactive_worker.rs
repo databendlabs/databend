@@ -74,7 +74,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         match self.session.get_mysql_conn_id() {
             Some(conn_id) => conn_id,
             None => {
-                //default conn id
+                // default conn id
                 u32::from_le_bytes([0x08, 0x00, 0x00, 0x00])
             }
         }

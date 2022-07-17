@@ -115,8 +115,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_day32(2020, 2, 29), /* 2020-2-29 */
-                        to_day32(2016, 2, 29), /* 2016-2-29 */
+                        to_day32(2020, 2, 29), // 2020-2-29
+                        to_day32(2016, 2, 29), // 2016-2-29
                     ]),
                     DataField::new("dummy_0", DateType::new_impl()),
                 ),
@@ -126,8 +126,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_day32(2019, 2, 28), /* 2019-2-28 */
-                to_day32(2020, 2, 29), /* 2020-2-29 */
+                to_day32(2019, 2, 28), // 2019-2-28
+                to_day32(2020, 2, 29), // 2020-2-29
             ]),
             error: "",
         }),
@@ -136,8 +136,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_day32(2400, 2, 29), /* 2400-2-29 */
-                        to_day32(1960, 2, 29), /* 1960-2-29 */
+                        to_day32(2400, 2, 29), // 2400-2-29
+                        to_day32(1960, 2, 29), // 1960-2-29
                     ]),
                     DataField::new("dummy_0", DateType::new_impl()),
                 ),
@@ -147,8 +147,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_day32(2399, 2, 28), /* 2399-2-28 */
-                to_day32(1964, 2, 29), /* 1964-2-29 */
+                to_day32(2399, 2, 28), // 2399-2-28
+                to_day32(1964, 2, 29), // 1964-2-29
             ]),
             error: "",
         }),
@@ -157,8 +157,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_microseconds(2020, 2, 29, 10, 30, 00, 00), /* 2020-2-29 10:30:00 */
-                        to_microseconds(2021, 2, 28, 10, 30, 00, 00), /* 2021-2-28 10:30:00 */
+                        to_microseconds(2020, 2, 29, 10, 30, 00, 00), // 2020-2-29 10:30:00
+                        to_microseconds(2021, 2, 28, 10, 30, 00, 00), // 2021-2-28 10:30:00
                     ]),
                     DataField::new("dummy_0", TimestampType::new_impl(0)),
                 ),
@@ -168,8 +168,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_microseconds(2021, 2, 28, 10, 30, 00, 00), /* 2021-2-28 10:30:00 */
-                to_microseconds(2020, 2, 28, 10, 30, 00, 00), /* 2020-2-28 10:30:00 */
+                to_microseconds(2021, 2, 28, 10, 30, 00, 00), // 2021-2-28 10:30:00
+                to_microseconds(2020, 2, 28, 10, 30, 00, 00), // 2020-2-28 10:30:00
             ]),
             error: "",
         }),
@@ -178,8 +178,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_microseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
-                        to_microseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
+                        to_microseconds(2020, 2, 29, 10, 30, 00, 000), // 2020-2-29 10:30:00.000
+                        to_microseconds(1960, 2, 29, 10, 30, 00, 000), // 1960-2-29 10:30:00.000
                     ]),
                     DataField::new("dummy_0", TimestampType::new_impl(3)),
                 ),
@@ -189,8 +189,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_microseconds(2019, 2, 28, 10, 30, 00, 000), /* 2019-2-28 10:30:00.000 */
-                to_microseconds(1964, 2, 29, 10, 30, 00, 000), /* 1964-2-29 10:30:00.000 */
+                to_microseconds(2019, 2, 28, 10, 30, 00, 000), // 2019-2-28 10:30:00.000
+                to_microseconds(1964, 2, 29, 10, 30, 00, 000), // 1964-2-29 10:30:00.000
             ]),
             error: "",
         }),
@@ -199,8 +199,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_day32(2020, 3, 31), /* 2020-3-31 */
-                        to_day32(2000, 1, 31), /* 2000-1-31 */
+                        to_day32(2020, 3, 31), // 2020-3-31
+                        to_day32(2000, 1, 31), // 2000-1-31
                     ]),
                     DataField::new("dummy_0", DateType::new_impl()),
                 ),
@@ -210,8 +210,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_day32(2020, 2, 29), /* 2020-2-29 */
-                to_day32(2020, 2, 29), /* 2020-2-29 */
+                to_day32(2020, 2, 29), // 2020-2-29
+                to_day32(2020, 2, 29), // 2020-2-29
             ]),
             error: "",
         }),
@@ -220,8 +220,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_microseconds(2020, 3, 31, 10, 30, 00, 00), /* 2020-3-31 10:30:00 */
-                        to_microseconds(2000, 1, 31, 10, 30, 00, 00), /* 2000-1-31 10:30:00 */
+                        to_microseconds(2020, 3, 31, 10, 30, 00, 00), // 2020-3-31 10:30:00
+                        to_microseconds(2000, 1, 31, 10, 30, 00, 00), // 2000-1-31 10:30:00
                     ]),
                     DataField::new("dummy_0", TimestampType::new_impl(0)),
                 ),
@@ -231,8 +231,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_microseconds(2020, 2, 29, 10, 30, 00, 00), /* 2020-2-29 10:30:00 */
-                to_microseconds(2020, 2, 29, 10, 30, 00, 00), /* 2020-2-29 10:30:00 */
+                to_microseconds(2020, 2, 29, 10, 30, 00, 00), // 2020-2-29 10:30:00
+                to_microseconds(2020, 2, 29, 10, 30, 00, 00), // 2020-2-29 10:30:00
             ]),
             error: "",
         }),
@@ -241,8 +241,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_day32(2400, 2, 29), /* 2400-2-29 */
-                        to_day32(1960, 2, 29), /* 1960-2-29 */
+                        to_day32(2400, 2, 29), // 2400-2-29
+                        to_day32(1960, 2, 29), // 1960-2-29
                     ]),
                     DataField::new("dummy_0", DateType::new_impl()),
                 ),
@@ -252,8 +252,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_day32(2400, 1, 30), /* 2400-1-30 */
-                to_day32(1960, 3, 30), /* 1960-3-30 */
+                to_day32(2400, 1, 30), // 2400-1-30
+                to_day32(1960, 3, 30), // 1960-3-30
             ]),
             error: "",
         }),
@@ -262,8 +262,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_microseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
-                        to_microseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
+                        to_microseconds(2020, 2, 29, 10, 30, 00, 000), // 2020-2-29 10:30:00.000
+                        to_microseconds(1960, 2, 29, 10, 30, 00, 000), // 1960-2-29 10:30:00.000
                     ]),
                     DataField::new("dummy_0", TimestampType::new_impl(6)),
                 ),
@@ -273,8 +273,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_microseconds(2020, 1, 30, 10, 30, 00, 000), /* 2020-1-30 10:30:00.000 */
-                to_microseconds(1960, 3, 30, 10, 30, 00, 000), /* 1960-3-30 10:30:00.000 */
+                to_microseconds(2020, 1, 30, 10, 30, 00, 000), // 2020-1-30 10:30:00.000
+                to_microseconds(1960, 3, 30, 10, 30, 00, 000), // 1960-3-30 10:30:00.000
             ]),
             error: "",
         }),
@@ -283,8 +283,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_day32(2020, 3, 1),  /* 2020-3-31 */
-                        to_day32(2000, 1, 31), /* 2000-1-31 */
+                        to_day32(2020, 3, 1),  // 2020-3-31
+                        to_day32(2000, 1, 31), // 2000-1-31
                     ]),
                     DataField::new("dummy_0", DateType::new_impl()),
                 ),
@@ -294,8 +294,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_microseconds(2020, 2, 29, 23, 00, 00, 00), /* 2020-2-29 23:00:00 */
-                to_microseconds(2000, 1, 31, 1, 00, 00, 00),  /* 2000-1-31 1:00:00 */
+                to_microseconds(2020, 2, 29, 23, 00, 00, 00), // 2020-2-29 23:00:00
+                to_microseconds(2000, 1, 31, 1, 00, 00, 00),  // 2000-1-31 1:00:00
             ]),
             error: "",
         }),
@@ -304,8 +304,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_day32(2100, 2, 28), /* 2400-2-29 */
-                        to_day32(1960, 2, 29), /* 1960-2-29 */
+                        to_day32(2100, 2, 28), // 2400-2-29
+                        to_day32(1960, 2, 29), // 1960-2-29
                     ]),
                     DataField::new("dummy_0", DateType::new_impl()),
                 ),
@@ -315,8 +315,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_microseconds(2100, 2, 27, 22, 59, 00, 000), /* 2400-2-28 22:59:00 */
-                to_microseconds(1960, 2, 29, 00, 30, 00, 000), /* 1960-2-29 00:30:00 */
+                to_microseconds(2100, 2, 27, 22, 59, 00, 000), // 2400-2-28 22:59:00
+                to_microseconds(1960, 2, 29, 00, 30, 00, 000), // 1960-2-29 00:30:00
             ]),
             error: "",
         }),
@@ -325,8 +325,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_microseconds(2020, 3, 31, 10, 30, 00, 00), /* 2020-3-31 10:30:00 */
-                        to_microseconds(2000, 1, 31, 10, 30, 00, 00), /* 2000-1-31 10:30:00 */
+                        to_microseconds(2020, 3, 31, 10, 30, 00, 00), // 2020-3-31 10:30:00
+                        to_microseconds(2000, 1, 31, 10, 30, 00, 00), // 2000-1-31 10:30:00
                     ]),
                     DataField::new("dummy_0", TimestampType::new_impl(6)),
                 ),
@@ -336,8 +336,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_microseconds(2020, 3, 31, 10, 32, 00, 00), /* 2020-3-31 10:32:00 */
-                to_microseconds(2000, 1, 31, 10, 29, 37, 00), /* 2000-1-31 10:29:37 */
+                to_microseconds(2020, 3, 31, 10, 32, 00, 00), // 2020-3-31 10:32:00
+                to_microseconds(2000, 1, 31, 10, 29, 37, 00), // 2000-1-31 10:29:37
             ]),
             error: "",
         }),

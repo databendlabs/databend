@@ -45,7 +45,7 @@ use super::hive_database::HIVE_DATABASE_ENGIE;
 use super::hive_table::HIVE_TABLE_ENGIE;
 use super::hive_table_options::HiveTableOptions;
 
-///! Skeleton of mappers
+/// ! Skeleton of mappers
 impl From<hms::Database> for HiveDatabase {
     fn from(hms_database: hms::Database) -> Self {
         HiveDatabase {

@@ -21,34 +21,32 @@ use common_storage::StorageParams;
 
 use crate::UserIdentity;
 
-/*
--- Internal stage
-CREATE [ OR REPLACE ] [ TEMPORARY ] STAGE [ IF NOT EXISTS ] <internal_stage_name>
-    internalStageParams
-    directoryTableParams
-  [ FILE_FORMAT = ( { FORMAT_NAME = '<file_format_name>' | TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ) } ]
-  [ COPY_OPTIONS = ( copyOptions ) ]
-  [ COMMENT = '<string_literal>' ]
-
--- External stage
-CREATE [ OR REPLACE ] [ TEMPORARY ] STAGE [ IF NOT EXISTS ] <external_stage_name>
-    externalStageParams
-    directoryTableParams
-  [ FILE_FORMAT = ( { FORMAT_NAME = '<file_format_name>' | TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ) } ]
-  [ COPY_OPTIONS = ( copyOptions ) ]
-  [ COMMENT = '<string_literal>' ]
-
-
-WHERE
-
-externalStageParams (for Amazon S3) ::=
-  URL = 's3://<bucket>[/<path>/]'
-  [ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' [ AWS_TOKEN = '<string>' ] } | AWS_ROLE = '<string>'  } ) ) } ]
-
-copyOptions ::=
-     ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
-     SIZE_LIMIT = <num>
- */
+// -- Internal stage
+// CREATE [ OR REPLACE ] [ TEMPORARY ] STAGE [ IF NOT EXISTS ] <internal_stage_name>
+// internalStageParams
+// directoryTableParams
+// [ FILE_FORMAT = ( { FORMAT_NAME = '<file_format_name>' | TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ) } ]
+// [ COPY_OPTIONS = ( copyOptions ) ]
+// [ COMMENT = '<string_literal>' ]
+//
+// -- External stage
+// CREATE [ OR REPLACE ] [ TEMPORARY ] STAGE [ IF NOT EXISTS ] <external_stage_name>
+// externalStageParams
+// directoryTableParams
+// [ FILE_FORMAT = ( { FORMAT_NAME = '<file_format_name>' | TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ) } ]
+// [ COPY_OPTIONS = ( copyOptions ) ]
+// [ COMMENT = '<string_literal>' ]
+//
+//
+// WHERE
+//
+// externalStageParams (for Amazon S3) ::=
+// URL = 's3://<bucket>[/<path>/]'
+// [ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' [ AWS_TOKEN = '<string>' ] } | AWS_ROLE = '<string>'  } ) ) } ]
+//
+// copyOptions ::=
+// ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
+// SIZE_LIMIT = <num>
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {

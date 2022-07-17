@@ -255,7 +255,7 @@ impl<'a> DfParser<'a> {
     fn parse_create(&mut self) -> Result<DfStatement<'a>, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => {
-                //TODO:make stage to sql parser keyword
+                // TODO:make stage to sql parser keyword
                 match w.keyword {
                     Keyword::TABLE => self.parse_create_table(false),
                     Keyword::DATABASE | Keyword::SCHEMA => self.parse_create_database(),

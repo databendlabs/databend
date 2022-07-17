@@ -193,14 +193,14 @@ where
             AddFile::AbsPath(ref p) => p.strip_prefix(&self.root).expect("Bad path?").as_os_str(),
             AddFile::RelPath(p) => p,
         };
-        //TODO: ideally Cache::put would give us back the entries it had to remove.
+        // TODO: ideally Cache::put would give us back the entries it had to remove.
         while self.cache.size() as u64 + size > self.cache.capacity() as u64 {
             let (rel_path, _) = self
                 .cache
                 .pop_by_policy()
                 .expect("Unexpectedly empty cache!");
             let remove_path = self.rel_to_abs_path(rel_path);
-            //TODO: check that files are removable during `init`, so that this is only
+            // TODO: check that files are removable during `init`, so that this is only
             // due to outside interference.
             fs::remove_file(&remove_path).unwrap_or_else(|e| {
                 panic!("Error removing file from cache: `{:?}`: {}", remove_path, e)
