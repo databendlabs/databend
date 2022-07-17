@@ -12,21 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(generic_associated_types)]
-#![feature(iterator_try_reduce)]
-#![feature(box_patterns)]
-#![feature(associated_type_defaults)]
-#![allow(clippy::len_without_is_empty)]
-#![allow(clippy::needless_lifetimes)]
+use crate::expression::Span;
 
-pub mod chunk;
-mod display;
-pub mod error;
-pub mod evaluator;
-pub mod expression;
-pub mod function;
-pub mod property;
-pub mod type_check;
-pub mod types;
-pub mod util;
-pub mod values;
+pub type Result<T> = std::result::Result<T, (Span, String)>;
