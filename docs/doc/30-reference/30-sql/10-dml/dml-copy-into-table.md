@@ -165,11 +165,11 @@ Then, PUT a local file to `my_internal_s1` stage with [PUT to Stage](../../00-ap
 curl  -H "stage_name:my_internal_s1" -F "upload=@books.parquet" -XPUT "http://localhost:8081/v1/upload_to_stage"
 ```
 
-Final, copy the file into `mytable` from the `my_internal_s1` named internal stage:
+Finally, copy the file into `mytable` from the `my_internal_s1` named internal stage:
 
 ```sql
 LIST @my_internal_s1;
-COPY INTO mytable FROM '@my_internal_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
 ### Loading Files from External Stage
@@ -183,7 +183,7 @@ CREATE STAGE my_external_s1 url = 's3://testbucket/admin/data/' credentials=(aws
 Then, copy the file into `mytable` from the `my_external_s1` named external stage:
 
 ```sql
-COPY INTO mytable FROM '@my_external_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
 ### Loading Files Directly from External Location
