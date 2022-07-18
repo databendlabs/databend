@@ -135,7 +135,7 @@ impl InsertInterpreterV2 {
                                 CastFunction::create("cast", &target_type_name, from_type)?;
                             functions.push(cast_function);
                         }
-                       
+
                         let func_ctx = self.ctx.try_get_function_context()?;
                         pipeline.add_transform(|transform_input_port, transform_output_port| {
                             TransformCastSchema::try_create(

@@ -15,13 +15,11 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use common_base::base::TrySpawn;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
-use common_functions::scalars::FunctionContext;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
 use common_planners::PlanNode;

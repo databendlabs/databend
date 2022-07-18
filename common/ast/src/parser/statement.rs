@@ -214,6 +214,21 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
+    // parse `show fields from` statement
+    let show_fields = map(
+        rule! {
+            SHOW ~ FIELDS ~ FROM ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, _, (catalog, database, table))| {
+            Statement::DescribeTable(DescribeTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
     let show_tables_status = map(
         rule! {
             SHOW ~ ( TABLES | TABLE ) ~ STATUS ~ ( FROM ~ ^#ident )? ~ #show_limit?
@@ -230,9 +245,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ #peroid_separated_idents_1_to_3
             ~ #create_table_source?
-            ~ ( #table_option )*
-            ~ ( COMMENT ~ "=" ~ #literal_string )?
+            ~ ( #engine )?
             ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ ( #table_option )?
             ~ ( AS ~ ^#query )?
         },
         |(
@@ -242,9 +257,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             opt_if_not_exists,
             (catalog, database, table),
             source,
-            table_options,
-            opt_comment,
+            engine,
             opt_cluster_by,
+            opt_table_options,
             opt_as_query,
         )| {
             Statement::CreateTable(CreateTableStmt {
@@ -253,11 +268,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 database,
                 table,
                 source,
-                table_options,
-                comment: opt_comment.map(|(_, _, comment)| comment),
+                engine,
                 cluster_by: opt_cluster_by
                     .map(|(_, _, _, exprs, _)| exprs)
                     .unwrap_or_default(),
+                table_options: opt_table_options.unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 transient: opt_transient.is_some(),
             })
@@ -721,6 +736,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
+            | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
             | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
@@ -730,7 +746,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
-            | #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
+        ),
+        rule!(
+            #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
         ),
@@ -846,7 +864,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         },
         |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
     );
-    
+
     let comment = map(
         rule! {
             COMMENT ~ #literal_string
@@ -878,7 +896,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                         if nullable {
                             def.data_type = def.data_type.wrap_nullable();
                         }
-                    },
+                    }
                 }
             }
             def
@@ -1181,16 +1199,23 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     )(i)
 }
 
-pub fn table_option(i: Input) -> IResult<TableOption> {
-    alt((
-        map(engine, TableOption::Engine),
-        map(
-            rule! {
-                COMMENT ~ ^"=" ~ #literal_string
-            },
-            |(_, _, comment)| TableOption::Comment(comment),
-        ),
-    ))(i)
+pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
+    let opt_key = map_res(ident, |ident| {
+        if ident.quote.is_none() && ident.name != "AS" {
+            Ok(ident.to_string())
+        } else {
+            Err(ErrorKind::Other(
+                "unexpected identifier, must not eq AS or quoted",
+            ))
+        }
+    });
+
+    map(
+        rule! {
+           ( #opt_key ~ "=" ~ #parameter_to_string )*
+        },
+        |opts| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone()))),
+    )(i)
 }
 
 pub fn engine(i: Input) -> IResult<Engine> {

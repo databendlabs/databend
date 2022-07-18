@@ -321,8 +321,8 @@ impl<'a> Binder {
             table_options,
             cluster_by,
             as_query,
-            comment: _,
             transient,
+            engine,
         } = stmt;
 
         let catalog = catalog
@@ -336,19 +336,14 @@ impl<'a> Binder {
         let table = table.name.to_lowercase();
 
         // Take FUSE engine as default engine
-        let mut engine = Engine::Fuse;
+        let engine = engine.clone().unwrap_or(Engine::Fuse);
         let mut options: BTreeMap<String, String> = BTreeMap::new();
         for table_option in table_options.iter() {
-            match table_option {
-                TableOption::Engine(table_engine) => {
-                    engine = table_engine.clone();
-                }
-                TableOption::Comment(comment) => self.insert_table_option_with_validation(
-                    &mut options,
-                    "COMMENT".to_string(),
-                    comment.clone(),
-                )?,
-            }
+            self.insert_table_option_with_validation(
+                &mut options,
+                table_option.0.to_lowercase(),
+                table_option.1.to_string(),
+            )?;
         }
 
         // If table is TRANSIENT, set a flag in table option
