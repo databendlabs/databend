@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod cache;
 mod memory_cache;
 mod metrics;
 
+pub use cache::CacheManager;
 pub use memory_cache::new_memory_cache;
 pub use memory_cache::MemoryCache;
 pub use memory_cache::SegmentInfoCache;

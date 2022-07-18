@@ -1,0 +1,28 @@
+[package]
+name = "common-table-context"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-base = { path = "../base" }
+common-exception = { path = "../exception"}
+common-planners = { path = "../planners"}
+common-streams = { path = "../streams"}
+common-config = { path = "../config"}
+common-meta-types= { path = "../meta/types"}
+common-users= { path = "../users"}
+common-functions= { path = "../functions"}
+common-datablocks = { path = "../datablocks"}
+common-contexts = { path = "../contexts"}
+common-storage-cache = { path = "../storage-cache"}
+common-io = { path = "../io"}
+
+async-trait = "0.1.56"
+opendal = { version = "0.11.0", features = ["retry"] }
+parking_lot = "0.12.1"
+time = "0.3.10"

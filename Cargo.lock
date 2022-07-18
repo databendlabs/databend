@@ -1062,6 +1062,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-config"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 3.2.6",
+ "common-base",
+ "common-exception",
+ "common-grpc",
+ "common-storage",
+ "common-tracing",
+ "once_cell",
+ "opendal",
+ "semver",
+ "serde",
+ "serfig",
+ "time 0.3.11",
+]
+
+[[package]]
 name = "common-contexts"
 version = "0.1.0"
 dependencies = [
@@ -1580,6 +1599,7 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-cache",
+ "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1608,6 +1628,28 @@ dependencies = [
  "pin-project-lite",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "common-table-context"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common-base",
+ "common-config",
+ "common-contexts",
+ "common-datablocks",
+ "common-exception",
+ "common-functions",
+ "common-io",
+ "common-meta-types",
+ "common-planners",
+ "common-storage-cache",
+ "common-streams",
+ "common-users",
+ "opendal",
+ "parking_lot 0.12.1",
+ "time 0.3.11",
 ]
 
 [[package]]
@@ -2174,6 +2216,7 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
+ "common-config",
  "common-contexts",
  "common-datablocks",
  "common-datavalues",
