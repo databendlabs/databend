@@ -267,7 +267,7 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'de> {
     unsupported_type!(deserialize_map, "map");
     unsupported_type!(deserialize_identifier, "identifier");
 
-    //special case for boolean
+    // special case for boolean
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where V: Visitor<'de> {
         let v = self.value.parse();

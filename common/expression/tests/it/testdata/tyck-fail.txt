@@ -1,0 +1,92 @@
+error: 
+  --> SQL:1:1
+  |
+1 | bool_and(true, 1)
+  | ^^^^^^^^^^^^^^^^^ no overload satisfies `bool_and(Boolean, UInt8)`
+
+has tried possible overloads:
+  bool_and(Boolean NULL, NULL) :: NULL                  : unable to unify `UInt8` with `NULL`
+  bool_and(NULL, Boolean NULL) :: NULL                  : unable to unify `Boolean` with `NULL`
+  bool_and(NULL, NULL) :: NULL                          : unable to unify `Boolean` with `NULL`
+  bool_and(Boolean, Boolean) :: Boolean                 : unable to unify `UInt8` with `Boolean`
+  bool_and(Boolean NULL, Boolean NULL) :: Boolean NULL  : unable to unify `UInt8` with `Boolean`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | bool_and()
+  | ^^^^^^^^^^ no overload satisfies `bool_and()`
+
+
+
+error: 
+  --> SQL:1:10
+  |
+1 | bool_not(bool_not('a'))
+  |          ^^^^^^^^^^^^^ no overload satisfies `bool_not(String)`
+
+has tried possible overloads:
+  bool_not(NULL) :: NULL                  : unable to unify `String` with `NULL`
+  bool_not(Boolean) :: Boolean            : unable to unify `String` with `Boolean`
+  bool_not(Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | least(1, 2, 3, a)
+  | ^^^^^^^^^^^^^^^^^ no overload satisfies `least(UInt8, UInt8, UInt8, Boolean)`
+
+has tried possible overloads:
+  least(Int16, Int16, Int16, Int16) :: Int16  : unable to unify `Boolean` with `Int16`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | create_array('a', 1)
+  | ^^^^^^^^^^^^^^^^^^^^ no overload satisfies `create_array(String, UInt8)`
+
+has tried possible overloads:
+  create_array(T0, T0) :: Array(T0)  : unable to find a common super type for `String` and `UInt8`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | create_array('a', null, 'b', true)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `create_array(String, NULL, String, Boolean)`
+
+has tried possible overloads:
+  create_array(T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `String NULL` and `Boolean`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | get(create_array(1, 2), 'a')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `get(Array(UInt8), String)`
+
+has tried possible overloads:
+  get(Array(T0) NULL, NULL) :: NULL           : unable to unify `String` with `NULL`
+  get(NULL, Int16 NULL) :: NULL               : unable to unify `Array(UInt8)` with `NULL`
+  get(NULL, NULL) :: NULL                     : unable to unify `Array(UInt8)` with `NULL`
+  get(Array(T0), Int16) :: T0                 : unable to unify `String` with `Int16`
+  get(Array(T0) NULL, Int16 NULL) :: T0 NULL  : unable to unify `String` with `Int16`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | get_tuple(1)(create_tuple(true))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `get_tuple(1)((Boolean,))`
+
+
+

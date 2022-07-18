@@ -86,18 +86,13 @@ impl ArgType for EmptyArrayType {
         *len
     }
 
-    fn index_column<'a>(len: &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        if index >= *len {
-            panic!("index {index} out of 0..{len}");
-        }
+    fn index_column<'a>(len: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+        if index < *len { Some(()) } else { None }
     }
 
     fn slice_column<'a>(len: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        if range.end <= *len {
-            range.end - range.start
-        } else {
-            panic!("range {range:?} out of 0..{len}");
-        }
+        assert!(range.end <= *len, "range {range:?} out of 0..{len}");
+        range.end - range.start
     }
 
     fn iter_column<'a>(len: &'a Self::Column) -> Self::ColumnIterator<'a> {

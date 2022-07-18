@@ -37,6 +37,14 @@ pub struct FunctionContext {
     pub tz: Tz,
 }
 
+impl Default for FunctionContext {
+    fn default() -> Self {
+        Self {
+            tz: "UTC".parse::<Tz>().unwrap(),
+        }
+    }
+}
+
 /// `FunctionID` is a unique identifier for a function. It's used to construct
 /// the exactly same function from the remote execution nodes.
 #[derive(Debug, Clone)]
@@ -58,7 +66,7 @@ pub struct Function {
     #[allow(clippy::type_complexity)]
     pub calc_domain: Box<dyn Fn(&[Domain], &GenericMap) -> Domain>,
     #[allow(clippy::type_complexity)]
-    pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &GenericMap) -> Value<AnyType>>,
+    pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String>>,
 }
 
 #[derive(Default)]
@@ -139,7 +147,7 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn() -> Option<O::Domain> + 'static + Clone + Copy,
-        G: Fn(&GenericMap) -> Value<O> + 'static + Clone + Copy,
+        G: Fn(&GenericMap) -> Result<Value<O>, String> + 'static + Clone + Copy,
     {
         self.funcs
             .entry(name)
@@ -215,7 +223,10 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn(&I1::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
-        G: Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder) + 'static + Clone + Copy,
+        G: Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder) -> Result<(), String>
+            + 'static
+            + Clone
+            + Copy,
     {
         let has_nullable = &[I1::data_type(), O::data_type()]
             .iter()
@@ -266,7 +277,7 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn(&I1::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
-        G: Fn(ValueRef<I1>, &GenericMap) -> Value<O> + 'static + Clone + Copy,
+        G: Fn(ValueRef<I1>, &GenericMap) -> Result<Value<O>, String> + 'static + Clone + Copy,
     {
         self.funcs
             .entry(name)
@@ -354,7 +365,10 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
-        G: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder) + 'static + Clone + Copy,
+        G: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder) -> Result<(), String>
+            + 'static
+            + Clone
+            + Copy,
     {
         let has_nullable = &[I1::data_type(), I2::data_type(), O::data_type()]
             .iter()
@@ -417,7 +431,10 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
-        G: Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Value<O> + 'static + Clone + Copy,
+        G: Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Result<Value<O>, String>
+            + 'static
+            + Clone
+            + Copy,
     {
         self.funcs
             .entry(name)
@@ -477,157 +494,160 @@ fn erase_calc_domain_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 }
 
 fn erase_function_generic_0_arg<O: ArgType>(
-    func: impl Fn(&GenericMap) -> Value<O>,
-) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Value<AnyType> {
-    move |_args, generics| func(generics).upcast()
+    func: impl Fn(&GenericMap) -> Result<Value<O>, String>,
+) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {
+    move |_args, generics| func(generics).map(Value::upcast)
 }
 
 fn erase_function_generic_1_arg<I1: ArgType, O: ArgType>(
-    func: impl Fn(ValueRef<I1>, &GenericMap) -> Value<O>,
-) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Value<AnyType> {
+    func: impl Fn(ValueRef<I1>, &GenericMap) -> Result<Value<O>, String>,
+) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {
     move |args, generics| {
         let arg1 = args[0].try_downcast().unwrap();
 
-        func(arg1, generics).upcast()
+        func(arg1, generics).map(Value::upcast)
     }
 }
 
 fn erase_function_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Value<O>,
-) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Value<AnyType> {
+    func: impl Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Result<Value<O>, String>,
+) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {
     move |args, generics| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
 
-        func(arg1, arg2, generics).upcast()
+        func(arg1, arg2, generics).map(Value::upcast)
     }
 }
 
 pub fn vectorize_1_arg<I1: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>) -> O::Scalar + Copy,
-) -> impl Fn(ValueRef<I1>, &GenericMap) -> Value<O> + Copy {
+) -> impl Fn(ValueRef<I1>, &GenericMap) -> Result<Value<O>, String> + Copy {
     move |arg1, generics| match arg1 {
-        ValueRef::Scalar(val) => Value::Scalar(func(val)),
+        ValueRef::Scalar(val) => Ok(Value::Scalar(func(val))),
         ValueRef::Column(col) => {
             let iter = I1::iter_column(&col).map(func);
             let col = O::column_from_iter(iter, generics);
-            Value::Column(col)
+            Ok(Value::Column(col))
         }
     }
 }
 
 pub fn vectorize_with_writer_1_arg<I1: ArgType, O: ArgType>(
-    func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder) + Copy,
-) -> impl Fn(ValueRef<I1>, &GenericMap) -> Value<O> + Copy {
+    func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder) -> Result<(), String> + Copy,
+) -> impl Fn(ValueRef<I1>, &GenericMap) -> Result<Value<O>, String> + Copy {
     move |arg1, generics| match arg1 {
         ValueRef::Scalar(val) => {
             let mut builder = O::create_builder(1, generics);
-            func(val, &mut builder);
-            Value::Scalar(O::build_scalar(builder))
+            func(val, &mut builder)?;
+            Ok(Value::Scalar(O::build_scalar(builder)))
         }
         ValueRef::Column(col) => {
             let iter = I1::iter_column(&col);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for val in I1::iter_column(&col) {
-                func(val, &mut builder);
+                func(val, &mut builder)?;
             }
-            Value::Column(O::build_column(builder))
+            Ok(Value::Column(O::build_column(builder)))
         }
     }
 }
 
 pub fn vectorize_passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>) -> O::Scalar + Copy,
-) -> impl Fn(ValueRef<NullableType<I1>>, &GenericMap) -> Value<NullableType<O>> + Copy {
+) -> impl Fn(ValueRef<NullableType<I1>>, &GenericMap) -> Result<Value<NullableType<O>>, String> + Copy
+{
     move |arg1, generics| match arg1 {
-        ValueRef::Scalar(None) => Value::Scalar(None),
-        ValueRef::Scalar(Some(val)) => Value::Scalar(Some(func(val))),
+        ValueRef::Scalar(None) => Ok(Value::Scalar(None)),
+        ValueRef::Scalar(Some(val)) => Ok(Value::Scalar(Some(func(val)))),
         ValueRef::Column((col, validity)) => {
             let iter = I1::iter_column(&col).map(func);
             let col = O::column_from_iter(iter, generics);
-            Value::Column((col, validity))
+            Ok(Value::Column((col, validity)))
         }
     }
 }
 
 pub fn vectorize_with_writer_passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
-    func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder) + Copy,
-) -> impl Fn(ValueRef<NullableType<I1>>, &GenericMap) -> Value<NullableType<O>> + Copy {
+    func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder) -> Result<(), String> + Copy,
+) -> impl Fn(ValueRef<NullableType<I1>>, &GenericMap) -> Result<Value<NullableType<O>>, String> + Copy
+{
     move |arg1, generics| match arg1 {
-        ValueRef::Scalar(None) => Value::Scalar(None),
+        ValueRef::Scalar(None) => Ok(Value::Scalar(None)),
         ValueRef::Scalar(Some(val)) => {
             let mut builder = O::create_builder(1, generics);
-            func(val, &mut builder);
-            Value::Scalar(Some(O::build_scalar(builder)))
+            func(val, &mut builder)?;
+            Ok(Value::Scalar(Some(O::build_scalar(builder))))
         }
         ValueRef::Column((col, validity)) => {
             let iter = I1::iter_column(&col);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for val in I1::iter_column(&col) {
-                func(val, &mut builder);
+                func(val, &mut builder)?;
             }
-            Value::Column((O::build_column(builder), validity))
+            Ok(Value::Column((O::build_column(builder), validity)))
         }
     }
 }
 
 pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>) -> O::Scalar + Copy,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Value<O> + Copy {
+) -> impl Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Result<Value<O>, String> + Copy {
     move |arg1, arg2, generics| match (arg1, arg2) {
-        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => Value::Scalar(func(arg1, arg2)),
+        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => Ok(Value::Scalar(func(arg1, arg2))),
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
             let iter = I2::iter_column(&arg2).map(|arg2| func(arg1.clone(), arg2));
             let col = O::column_from_iter(iter, generics);
-            Value::Column(col)
+            Ok(Value::Column(col))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let iter = I1::iter_column(&arg1).map(|arg1| func(arg1, arg2.clone()));
             let col = O::column_from_iter(iter, generics);
-            Value::Column(col)
+            Ok(Value::Column(col))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
             let iter = I1::iter_column(&arg1)
                 .zip(I2::iter_column(&arg2))
                 .map(|(arg1, arg2)| func(arg1, arg2));
             let col = O::column_from_iter(iter, generics);
-            Value::Column(col)
+            Ok(Value::Column(col))
         }
     }
 }
 
 pub fn vectorize_with_writer_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder) + Copy,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Value<O> + Copy {
+    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder) -> Result<(), String>
+    + Copy,
+) -> impl Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Result<Value<O>, String> + Copy {
     move |arg1, arg2, generics| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
             let mut builder = O::create_builder(1, generics);
-            func(arg1, arg2, &mut builder);
-            Value::Scalar(O::build_scalar(builder))
+            func(arg1, arg2, &mut builder)?;
+            Ok(Value::Scalar(O::build_scalar(builder)))
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
             let iter = I2::iter_column(&arg2);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg2 in iter {
-                func(arg1.clone(), arg2, &mut builder);
+                func(arg1.clone(), arg2, &mut builder)?;
             }
-            Value::Column(O::build_column(builder))
+            Ok(Value::Column(O::build_column(builder)))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let iter = I1::iter_column(&arg1);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg1 in iter {
-                func(arg1, arg2.clone(), &mut builder);
+                func(arg1, arg2.clone(), &mut builder)?;
             }
-            Value::Column(O::build_column(builder))
+            Ok(Value::Column(O::build_column(builder)))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
             let iter = I1::iter_column(&arg1).zip(I2::iter_column(&arg2));
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg2) in iter {
-                func(arg1, arg2, &mut builder);
+                func(arg1, arg2, &mut builder)?;
             }
-            Value::Column(O::build_column(builder))
+            Ok(Value::Column(O::build_column(builder)))
         }
     }
 }
@@ -638,22 +658,22 @@ pub fn vectorize_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType
     ValueRef<NullableType<I1>>,
     ValueRef<NullableType<I2>>,
     &GenericMap,
-) -> Value<NullableType<O>>
+) -> Result<Value<NullableType<O>>, String>
 + Copy {
     move |arg1, arg2, generics| match (arg1, arg2) {
-        (ValueRef::Scalar(None), _) | (_, ValueRef::Scalar(None)) => Value::Scalar(None),
+        (ValueRef::Scalar(None), _) | (_, ValueRef::Scalar(None)) => Ok(Value::Scalar(None)),
         (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2))) => {
-            Value::Scalar(Some(func(arg1, arg2)))
+            Ok(Value::Scalar(Some(func(arg1, arg2))))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column((arg2, arg2_validity))) => {
             let iter = I2::iter_column(&arg2).map(|arg2| func(arg1.clone(), arg2));
             let col = O::column_from_iter(iter, generics);
-            Value::Column((col, arg2_validity))
+            Ok(Value::Column((col, arg2_validity)))
         }
         (ValueRef::Column((arg1, arg1_validity)), ValueRef::Scalar(Some(arg2))) => {
             let iter = I1::iter_column(&arg1).map(|arg1| func(arg1, arg2.clone()));
             let col = O::column_from_iter(iter, generics);
-            Value::Column((col, arg1_validity))
+            Ok(Value::Column((col, arg1_validity)))
         }
         (ValueRef::Column((arg1, arg1_validity)), ValueRef::Column((arg2, arg2_validity))) => {
             let iter = I1::iter_column(&arg1)
@@ -661,58 +681,51 @@ pub fn vectorize_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType
                 .map(|(arg1, arg2)| func(arg1, arg2));
             let col = O::column_from_iter(iter, generics);
             let validity = common_arrow::arrow::bitmap::and(&arg1_validity, &arg2_validity);
-            Value::Column((col, validity))
+            Ok(Value::Column((col, validity)))
         }
     }
 }
 
 pub fn vectorize_with_writer_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder) + Copy,
+    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder) -> Result<(), String>
+    + Copy,
 ) -> impl Fn(
     ValueRef<NullableType<I1>>,
     ValueRef<NullableType<I2>>,
     &GenericMap,
-) -> Value<NullableType<O>>
+) -> Result<Value<NullableType<O>>, String>
 + Copy {
     move |arg1, arg2, generics| match (arg1, arg2) {
-        (ValueRef::Scalar(None), _) | (_, ValueRef::Scalar(None)) => Value::Scalar(None),
+        (ValueRef::Scalar(None), _) | (_, ValueRef::Scalar(None)) => Ok(Value::Scalar(None)),
         (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2))) => {
             let mut builder = O::create_builder(1, generics);
-            func(arg1, arg2, &mut builder);
-            Value::Scalar(Some(O::build_scalar(builder)))
+            func(arg1, arg2, &mut builder)?;
+            Ok(Value::Scalar(Some(O::build_scalar(builder))))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column((arg2, arg2_validity))) => {
             let iter = I2::iter_column(&arg2);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg2 in iter {
-                func(arg1.clone(), arg2, &mut builder);
+                func(arg1.clone(), arg2, &mut builder)?;
             }
-            Value::Column((O::build_column(builder), arg2_validity))
+            Ok(Value::Column((O::build_column(builder), arg2_validity)))
         }
         (ValueRef::Column((arg1, arg1_validity)), ValueRef::Scalar(Some(arg2))) => {
             let iter = I1::iter_column(&arg1);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg1 in iter {
-                func(arg1, arg2.clone(), &mut builder);
+                func(arg1, arg2.clone(), &mut builder)?;
             }
-            Value::Column((O::build_column(builder), arg1_validity))
+            Ok(Value::Column((O::build_column(builder), arg1_validity)))
         }
         (ValueRef::Column((arg1, arg1_validity)), ValueRef::Column((arg2, arg2_validity))) => {
             let iter = I1::iter_column(&arg1).zip(I2::iter_column(&arg2));
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg2) in iter {
-                func(arg1, arg2, &mut builder);
+                func(arg1, arg2, &mut builder)?;
             }
             let validity = common_arrow::arrow::bitmap::and(&arg1_validity, &arg2_validity);
-            Value::Column((O::build_column(builder), validity))
-        }
-    }
-}
-
-impl Default for FunctionContext {
-    fn default() -> Self {
-        Self {
-            tz: "UTC".parse::<Tz>().unwrap(),
+            Ok(Value::Column((O::build_column(builder), validity)))
         }
     }
 }

@@ -13,25 +13,48 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Write;
 
+use itertools::Itertools;
+
+use crate::error::Result;
 use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
+use crate::expression::Span;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
 use crate::types::DataType;
 
-// TODO: return result instead of option
-pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Option<(Expr, DataType)> {
+pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<(Expr, DataType)> {
     match ast {
-        RawExpr::Literal(lit) => {
+        RawExpr::Literal { span, lit } => {
             let ty = check_literal(lit);
-            Some((Expr::Literal(lit.clone()), ty))
+            Ok((
+                Expr::Literal {
+                    span: span.clone(),
+                    lit: lit.clone(),
+                },
+                ty,
+            ))
         }
-        RawExpr::ColumnRef { id, data_type } => {
-            Some((Expr::ColumnRef { id: *id }, data_type.clone()))
-        }
-        RawExpr::FunctionCall { name, args, params } => {
+        RawExpr::ColumnRef {
+            span,
+            id,
+            data_type,
+        } => Ok((
+            Expr::ColumnRef {
+                span: span.clone(),
+                id: *id,
+            },
+            data_type.clone(),
+        )),
+        RawExpr::FunctionCall {
+            span,
+            name,
+            args,
+            params,
+        } => {
             let (mut args_expr, mut args_type) = (
                 Vec::with_capacity(args.len()),
                 Vec::with_capacity(args.len()),
@@ -43,7 +66,14 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Option<(Expr, Dat
                 args_type.push(ty);
             }
 
-            check_function(name, params, &args_expr, &args_type, fn_registry)
+            check_function(
+                span.clone(),
+                name,
+                params,
+                &args_expr,
+                &args_type,
+                fn_registry,
+            )
         }
     }
 }
@@ -61,29 +91,69 @@ pub fn check_literal(literal: &Literal) -> DataType {
 }
 
 pub fn check_function(
+    span: Span,
     name: &str,
     params: &[usize],
     args: &[Expr],
     args_type: &[DataType],
     fn_registry: &FunctionRegistry,
-) -> Option<(Expr, DataType)> {
-    for (id, func) in fn_registry.search_candidates(name, params, args_type) {
-        if let Some((checked_args, return_ty, generics)) =
-            try_check_function(args, args_type, &func.signature)
-        {
-            return Some((
-                Expr::FunctionCall {
-                    id,
-                    function: func.clone(),
-                    generics,
-                    args: checked_args,
-                },
-                return_ty,
-            ));
+) -> Result<(Expr, DataType)> {
+    let candidates = fn_registry.search_candidates(name, params, args_type);
+
+    let mut fail_resaons = Vec::with_capacity(candidates.len());
+    for (id, func) in &candidates {
+        match try_check_function(span.clone(), args, args_type, &func.signature) {
+            Ok((checked_args, return_ty, generics)) => {
+                return Ok((
+                    Expr::FunctionCall {
+                        span,
+                        id: id.clone(),
+                        function: func.clone(),
+                        generics,
+                        args: checked_args,
+                    },
+                    return_ty,
+                ));
+            }
+            Err(err) => fail_resaons.push(err),
         }
     }
 
-    None
+    let mut msg = if params.is_empty() {
+        format!(
+            "no overload satisfies `{name}({})`",
+            args_type.iter().map(ToString::to_string).join(", ")
+        )
+    } else {
+        format!(
+            "no overload satisfies `{name}({})({})`",
+            params.iter().join(", "),
+            args_type.iter().map(ToString::to_string).join(", ")
+        )
+    };
+    if !candidates.is_empty() {
+        let candidates_sig: Vec<_> = candidates
+            .iter()
+            .map(|(_, func)| func.signature.to_string())
+            .collect();
+
+        let max_len = candidates_sig.iter().map(|s| s.len()).max().unwrap_or(0);
+
+        let candidates_fail_reason = candidates_sig
+            .into_iter()
+            .zip(fail_resaons)
+            .map(|(sig, (_, reason))| format!("  {sig:<max_len$}  : {reason}"))
+            .join("\n");
+
+        write!(
+            &mut msg,
+            "\n\nhas tried possible overloads:\n{}",
+            candidates_fail_reason
+        )
+        .unwrap();
+    };
+
+    Err((span, msg))
 }
 
 #[derive(Debug)]
@@ -100,45 +170,55 @@ impl Subsitution {
         subst
     }
 
-    pub fn merge(mut self, other: Self) -> Option<Self> {
-        for (idx, ty1) in other.0 {
-            if let Some(ty2) = self.0.remove(&idx) {
-                let common_ty = common_super_type(ty1, ty2)?;
+    pub fn merge(mut self, other: Self) -> Result<Self> {
+        for (idx, ty2) in other.0 {
+            if let Some(ty1) = self.0.remove(&idx) {
+                let common_ty = common_super_type(ty2.clone(), ty1.clone()).ok_or_else(|| {
+                    (
+                        None,
+                        (format!("unable to find a common super type for `{ty1}` and `{ty2}`")),
+                    )
+                })?;
                 self.0.insert(idx, common_ty);
             } else {
-                self.0.insert(idx, ty1);
+                self.0.insert(idx, ty2);
             }
         }
 
-        Some(self)
+        Ok(self)
     }
 
-    pub fn apply(&self, ty: DataType) -> Option<DataType> {
+    pub fn apply(&self, ty: DataType) -> Result<DataType> {
         match ty {
-            DataType::Generic(idx) => self.0.get(&idx).cloned(),
-            DataType::Nullable(box ty) => Some(DataType::Nullable(Box::new(self.apply(ty)?))),
-            DataType::Array(box ty) => Some(DataType::Array(Box::new(self.apply(ty)?))),
-            ty => Some(ty),
+            DataType::Generic(idx) => self
+                .0
+                .get(&idx)
+                .cloned()
+                .ok_or_else(|| (None, (format!("unbound generic type `T{idx}`")))),
+            DataType::Nullable(box ty) => Ok(DataType::Nullable(Box::new(self.apply(ty)?))),
+            DataType::Array(box ty) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
+            ty => Ok(ty),
         }
     }
 }
 
 #[allow(clippy::type_complexity)]
 pub fn try_check_function(
+    span: Span,
     args: &[Expr],
     args_type: &[DataType],
     sig: &FunctionSignature,
-) -> Option<(Vec<Expr>, DataType, Vec<DataType>)> {
+) -> Result<(Vec<Expr>, DataType, Vec<DataType>)> {
     assert_eq!(args.len(), sig.args_type.len());
 
     let substs = args_type
         .iter()
         .zip(&sig.args_type)
-        .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty))
-        .collect::<Option<Vec<_>>>()?;
+        .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty).map_err(|(_, err)| (span.clone(), err)))
+        .collect::<Result<Vec<_>>>()?;
     let subst = substs
         .into_iter()
-        .try_reduce(|subst1, subst2| subst1.merge(subst2))?
+        .try_reduce(|subst1, subst2| subst1.merge(subst2).map_err(|(_, err)| (span.clone(), err)))?
         .unwrap_or_else(Subsitution::empty);
 
     let checked_args = args
@@ -147,16 +227,17 @@ pub fn try_check_function(
         .zip(&sig.args_type)
         .map(|((arg, arg_type), sig_type)| {
             let sig_type = subst.apply(sig_type.clone())?;
-            Some(if *arg_type == sig_type {
+            Ok(if *arg_type == sig_type {
                 arg.clone()
             } else {
                 Expr::Cast {
+                    span: span.clone(),
                     expr: Box::new(arg.clone()),
                     dest_type: sig_type,
                 }
             })
         })
-        .collect::<Option<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let return_type = subst.apply(sig.return_type.clone())?;
 
@@ -175,15 +256,15 @@ pub fn try_check_function(
         })
         .unwrap_or_default();
 
-    Some((checked_args, return_type, generics))
+    Ok((checked_args, return_type, generics))
 }
 
-pub fn unify(src_ty: &DataType, dest_ty: &DataType) -> Option<Subsitution> {
+pub fn unify(src_ty: &DataType, dest_ty: &DataType) -> Result<Subsitution> {
     match (src_ty, dest_ty) {
         (DataType::Generic(_), _) => unreachable!("source type must not contain generic type"),
-        (ty, DataType::Generic(idx)) => Some(Subsitution::equation(*idx, ty.clone())),
-        (DataType::Null, DataType::Nullable(_)) => Some(Subsitution::empty()),
-        (DataType::EmptyArray, DataType::Array(_)) => Some(Subsitution::empty()),
+        (ty, DataType::Generic(idx)) => Ok(Subsitution::equation(*idx, ty.clone())),
+        (DataType::Null, DataType::Nullable(_)) => Ok(Subsitution::empty()),
+        (DataType::EmptyArray, DataType::Array(_)) => Ok(Subsitution::empty()),
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty),
         (src_ty, DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty),
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => unify(src_ty, dest_ty),
@@ -194,15 +275,18 @@ pub fn unify(src_ty: &DataType, dest_ty: &DataType) -> Option<Subsitution> {
                 .iter()
                 .zip(dest_tys)
                 .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty))
-                .collect::<Option<Vec<_>>>()?;
+                .collect::<Result<Vec<_>>>()?;
             let subst = substs
                 .into_iter()
                 .try_reduce(|subst1, subst2| subst1.merge(subst2))?
                 .unwrap_or_else(Subsitution::empty);
-            Some(subst)
+            Ok(subst)
         }
-        (src_ty, dest_ty) if can_cast_to(src_ty, dest_ty) => Some(Subsitution::empty()),
-        _ => None,
+        (src_ty, dest_ty) if can_cast_to(src_ty, dest_ty) => Ok(Subsitution::empty()),
+        _ => Err((
+            None,
+            (format!("unable to unify `{}` with `{}`", src_ty, dest_ty)),
+        )),
     }
 }
 

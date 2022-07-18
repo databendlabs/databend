@@ -34,7 +34,6 @@ impl From<MetaError> for ErrorCode {
 
             // Except application error and part of network error,
             // all other errors are not handleable and can only be converted to a fatal error.
-            //
             MetaError::MetaRaftError(raft_err) => ErrorCode::MetaServiceError(raft_err.to_string())
                 .set_backtrace(raft_err.backtrace()),
             MetaError::MetaStorageError(sto_err) => {

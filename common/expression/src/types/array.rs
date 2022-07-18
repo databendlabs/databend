@@ -97,11 +97,14 @@ impl<T: ArgType> ArgType for ArrayType<T> {
         offsets.len()
     }
 
-    fn index_column<'a>((col, offsets): &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        T::slice_column(
+    fn index_column<'a>(
+        (col, offsets): &'a Self::Column,
+        index: usize,
+    ) -> Option<Self::ScalarRef<'a>> {
+        Some(T::slice_column(
             col,
             (offsets[index] as usize)..(offsets[index + 1] as usize),
-        )
+        ))
     }
 
     fn slice_column<'a>((col, offsets): &'a Self::Column, range: Range<usize>) -> Self::Column {

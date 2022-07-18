@@ -24,8 +24,8 @@ use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
-//now impl need same as CurrentUserFunction
-//compatible MySQL user function
+// now impl need same as CurrentUserFunction
+// compatible MySQL user function
 pub struct UserFunction {}
 
 impl UserFunction {

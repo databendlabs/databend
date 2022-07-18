@@ -82,7 +82,7 @@ impl<const INDEX: usize> ArgType for GenericType<INDEX> {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
+    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
         col.index(index)
     }
 

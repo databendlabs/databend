@@ -94,7 +94,7 @@ pub trait ArgType: ValueType {
     fn full_domain(generics: &GenericMap) -> Self::Domain;
 
     fn column_len<'a>(col: &'a Self::Column) -> usize;
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Self::ScalarRef<'a>;
+    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>>;
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a>;
     fn column_from_iter(
