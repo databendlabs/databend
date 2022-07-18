@@ -131,55 +131,49 @@ impl<'a> Binder {
             database = database.to_uppercase();
         }
 
-        let mut select_builder = SelectBuilder::from("information_schema.tables");
+        let mut select_builder = if stmt.with_history {
+            SelectBuilder::from("system.tables_with_history")
+        } else {
+            SelectBuilder::from("system.tables")
+        };
 
         if *full {
             select_builder
-                .with_column(format!("table_name as Tables_in_{database}"))
-                .with_column("table_type as Table_type")
-                .with_column("table_catalog")
+                .with_column(format!("name AS Tables_in_{database}"))
+                .with_column("'BASE TABLE' AS Table_type")
+                .with_column("database AS table_catalog")
                 .with_column("engine")
-                .with_column("create_time");
+                .with_column("created_on AS create_time");
             if *with_history {
-                select_builder.with_column("drop_time");
-            } else {
-                select_builder
-                    .with_column("num_rows")
-                    .with_column("data_size")
-                    .with_column("data_compressed_size")
-                    .with_column("index_size");
-            };
+                select_builder.with_column("dropped_on AS drop_time");
+            }
+
+            select_builder
+                .with_column("num_rows")
+                .with_column("data_size")
+                .with_column("data_compressed_size")
+                .with_column("index_size");
         } else {
-            select_builder.with_column(format!("table_name as Tables_in_{database}"));
+            select_builder.with_column(format!("name AS Tables_in_{database}"));
             if *with_history {
-                select_builder.with_column("drop_time");
+                select_builder.with_column("dropped_on AS drop_time");
             };
         }
 
         select_builder
-            .with_order_by("table_schema")
-            .with_order_by("table_name");
+            .with_order_by("database")
+            .with_order_by("name");
 
-        // filter out dropped tables if not showing history
-        if !with_history {
-            select_builder.with_filter("drop_time = 'NULL'");
-        };
+        select_builder.with_filter(format!("database = '{database}'"));
 
         let query = match limit {
-            None => {
-                select_builder.with_filter(format!("table_schema = '{database}'"));
-                select_builder.build()
-            }
+            None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder
-                    .with_filter(format!("table_schema = '{database}'"))
-                    .with_filter(format!("table_name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE '{pattern}'"));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {
-                select_builder
-                    .with_filter(format!("table_schema = '{database}'"))
-                    .with_filter(format!("({selection})"));
+                select_builder.with_filter(format!("({selection})"));
                 select_builder.build()
             }
         };
@@ -279,11 +273,11 @@ impl<'a> Binder {
         NULL AS Checksum, '' AS Comment"
             .to_string();
 
-        // Use `system.tables` as the "base" table to construct the result-set of `SHOW TABLE STATUS ..`
+        // Use `system.tables` AS the "base" table to construct the result-set of `SHOW TABLE STATUS ..`
         //
         // To constraint the schema of the final result-set,
         //  `(select ${select_cols} from system.tables where ..)`
-        // is used as a derived table.
+        // is used AS a derived table.
         // (unlike mysql, alias of derived table is not required in databend).
         let query = match limit {
             None => format!(
@@ -335,7 +329,7 @@ impl<'a> Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = table.name.to_lowercase();
 
-        // Take FUSE engine as default engine
+        // Take FUSE engine AS default engine
         let engine = engine.clone().unwrap_or(Engine::Fuse);
         let mut options: BTreeMap<String, String> = BTreeMap::new();
         for table_option in table_options.iter() {
@@ -411,7 +405,7 @@ impl<'a> Binder {
 
         if engine == Engine::Fuse {
             // Currently, [Table] can not accesses its database id yet, thus
-            // here we keep the db id as an entry of `table_meta.options`.
+            // here we keep the db id AS an entry of `table_meta.options`.
             //
             // To make the unit/stateless test cases (`show create ..`) easier,
             // here we care about the FUSE engine only.

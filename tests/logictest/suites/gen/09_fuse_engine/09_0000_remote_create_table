@@ -22,16 +22,16 @@ DROP TABLE IF EXISTS t1;
 statement error 1025
 DROP TABLE t1; 
 
-statement error 1005
+statement error 1022
 CREATE TABLE t(c int) Engine = fuse database_id = 1; 
 
-statement error 1005
+statement error 1022
 CREATE TABLE t(c int) Engine = fuse DATABASE_ID = 1; 
 
-statement error 1005
+statement error 1022
 CREATE TABLE t(c int) Engine = fuse snapshot_loc = 1; 
 
-statement error 1005
+statement error 1022
 CREATE TABLE t(c int) Engine = fuse SNAPSHOT_LOC = 1; 
 
 statement ok
