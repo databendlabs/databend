@@ -287,10 +287,10 @@ CreateTable(
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -352,8 +352,9 @@ CreateTable(
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: Some(
             Query {
                 span: [
@@ -405,7 +406,6 @@ CreateTable(
                 format: None,
             },
         ),
-        comment: None,
         transient: false,
     },
 )
@@ -449,10 +449,10 @@ CreateTable(
                 },
             },
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -461,7 +461,7 @@ CreateTable(
 ---------- Input ----------
 create table t like t2 engine = memory;
 ---------- Output ---------
-CREATE TABLE t LIKE t2ENGINE = MEMORY
+CREATE TABLE t LIKE t2 ENGINE=MEMORY
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -484,14 +484,12 @@ CreateTable(
                 },
             },
         ),
-        table_options: [
-            Engine(
-                Memory,
-            ),
-        ],
+        engine: Some(
+            Memory,
+        ),
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -792,10 +790,10 @@ CreateTable(
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -1242,10 +1240,10 @@ CreateTable(
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -1302,10 +1300,10 @@ CreateTable(
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -1351,10 +1349,10 @@ CreateTable(
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -4695,7 +4693,7 @@ AlterDatabase(
 ---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
 ---------- Output ---------
-CREATE TABLE t (a Int32 COMMENT 'col comment')COMMENT = table comment
+CREATE TABLE t (a Int32 COMMENT 'col comment')comment='table comment'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -4725,14 +4723,12 @@ CreateTable(
                 ],
             ),
         ),
-        table_options: [
-            Comment(
-                "table comment",
-            ),
-        ],
+        engine: None,
         cluster_by: [],
+        table_options: {
+            "comment": "table comment",
+        },
         as_query: None,
-        comment: None,
         transient: false,
     },
 )

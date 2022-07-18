@@ -232,7 +232,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE role1;
-  |      ^^^^^ expected `SETTINGS`, `STAGES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, `DATABASES`, or 8 more ...
+  |      ^^^^^ expected `SETTINGS`, `STAGES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, `DATABASES`, or 9 more ...
 
 
 ---------- Input ----------
