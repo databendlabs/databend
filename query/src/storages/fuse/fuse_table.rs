@@ -427,9 +427,9 @@ impl Table for FuseTable {
             NavigationPoint::SnapshotID(snapshot_id) => Ok(self
                 .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
                 .await?),
-            NavigationPoint::TimePoint(time_point) => {
-                Ok(self.navigate_to_time_point(&ctx, *time_point).await?)
-            }
+            NavigationPoint::TimePoint(time_point) => Ok(self
+                .navigate_to_time_point(ctx.as_ref(), *time_point)
+                .await?),
         }
     }
 

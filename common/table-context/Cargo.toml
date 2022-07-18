@@ -10,22 +10,21 @@ test = false
 
 [dependencies]
 common-base = { path = "../base" }
-common-config = { path = "../config"}
-common-contexts = { path = "../contexts"}
-common-datablocks = { path = "../datablocks"}
-common-datavalues= { path = "../datavalues"}
-common-exception = { path = "../exception"}
-common-functions= { path = "../functions"}
-common-io = { path = "../io"}
-common-meta-types= { path = "../meta/types"}
-common-meta-app= { path = "../meta/app"}
-common-pipeline= { path = "../pipeline"}
-common-planners = { path = "../planners"}
-common-storage-cache = { path = "../storage-cache"}
-common-settings = { path = "../settings"}
-common-streams = { path = "../streams"}
-common-users= { path = "../users"}
-
+common-config = { path = "../config" }
+common-contexts = { path = "../contexts" }
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../exception" }
+common-functions = { path = "../functions" }
+common-io = { path = "../io" }
+common-meta-app = { path = "../meta/app" }
+common-meta-types = { path = "../meta/types" }
+common-pipeline = { path = "../pipeline" }
+common-planners = { path = "../planners" }
+common-settings = { path = "../settings" }
+common-storage-cache = { path = "../storage-cache" }
+common-streams = { path = "../streams" }
+common-users = { path = "../users" }
 
 async-trait = "0.1.56"
 dyn-clone = "1.0.6"

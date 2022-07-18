@@ -15,28 +15,31 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
+use common_config::Config;
 use common_exception::Result;
+use common_table_context::catalog::Catalog;
+pub use common_table_context::catalog::CatalogManager;
 
-use crate::catalogs::default::DatabaseCatalog;
-#[cfg(feature = "hive")]
-use crate::catalogs::hive::HiveCatalog;
-use crate::catalogs::Catalog;
-use crate::config::Config;
+use crate::catalogs::DatabaseCatalog;
 
 // TODO catalogs are hard coded
-
 pub const CATALOG_DEFAULT: &str = "default";
-
 #[cfg(feature = "hive")]
 pub const CATALOG_HIVE: &str = "hive";
 
-pub struct CatalogManager {
-    catalogs: HashMap<String, Arc<dyn Catalog>>,
+#[async_trait::async_trait]
+pub trait CatalogManagerHelper {
+    async fn try_new(conf: &Config) -> Result<CatalogManager>;
+
+    async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()>;
+
+    #[cfg(feature = "hive")]
+    fn register_external_catalogs(&mut self, conf: &Config) -> Result<()>;
 }
 
-impl CatalogManager {
-    pub async fn new(conf: &Config) -> Result<CatalogManager> {
+#[async_trait::async_trait]
+impl CatalogManagerHelper for CatalogManager {
+    async fn try_new(conf: &Config) -> Result<CatalogManager> {
         let catalogs = HashMap::new();
         let mut manager = CatalogManager { catalogs };
 
@@ -50,13 +53,6 @@ impl CatalogManager {
         Ok(manager)
     }
 
-    pub fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
-        self.catalogs
-            .get(catalog_name)
-            .cloned()
-            .ok_or_else(|| ErrorCode::BadArguments(format!("not such catalog {}", catalog_name)))
-    }
-
     async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()> {
         let default_catalog: Arc<dyn Catalog> =
             Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
@@ -67,6 +63,7 @@ impl CatalogManager {
 
     #[cfg(feature = "hive")]
     fn register_external_catalogs(&mut self, conf: &Config) -> Result<()> {
+        use crate::catalogs::hive::HiveCatalog;
         let hms_address = &conf.catalog.meta_store_address;
         if !hms_address.is_empty() {
             // register hive catalog

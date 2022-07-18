@@ -15,7 +15,6 @@
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-
 use databend_query::sql::statements::query::JoinedSchemaAnalyzer;
 use databend_query::sql::statements::query::QualifiedRewriter;
 use databend_query::sql::statements::query::QueryNormalizer;

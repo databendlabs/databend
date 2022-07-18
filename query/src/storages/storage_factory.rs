@@ -44,12 +44,7 @@ where
     }
 }
 
-#[derive(Default, Clone)]
-pub struct StorageDescription {
-    pub engine_name: String,
-    pub comment: String,
-    pub support_cluster_key: bool,
-}
+pub use common_table_context::catalog::StorageDescription;
 
 pub trait StorageDescriptor: Send + Sync {
     fn description(&self) -> StorageDescription;

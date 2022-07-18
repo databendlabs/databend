@@ -22,7 +22,7 @@ use once_cell::sync::Lazy;
 
 use crate::procedures::admins::AdminProcedure;
 use crate::procedures::stats::StatsProcedure;
-//use crate::procedures::systems::SystemProcedure;
+// use crate::procedures::systems::SystemProcedure;
 use crate::procedures::Procedure;
 
 pub type Factory2Creator = Box<dyn Fn() -> Result<Box<dyn Procedure>> + Send + Sync>;
@@ -79,7 +79,7 @@ pub struct ProcedureFactory {
 
 static FUNCTION_FACTORY: Lazy<Arc<ProcedureFactory>> = Lazy::new(|| {
     let mut factory = ProcedureFactory::create();
-    //SystemProcedure::register(&mut factory);
+    // SystemProcedure::register(&mut factory);
     StatsProcedure::register(&mut factory);
     AdminProcedure::register(&mut factory);
     Arc::new(factory)

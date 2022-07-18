@@ -32,12 +32,12 @@ mod storage_table_read_wrap;
 pub mod system;
 pub mod view;
 
+pub use common_table_context::table::NavigationPoint;
+pub use common_table_context::table::TableStatistics;
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageDescription;
 pub use storage_factory::StorageFactory;
-pub use storage_table::NavigationPoint;
 pub use storage_table::Table;
-pub use storage_table::TableStatistics;
 pub use storage_table_read_plan::ToReadDataSourcePlan;
 pub use storage_table_read_wrap::TableStreamReadWrap;

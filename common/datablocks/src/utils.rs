@@ -41,7 +41,7 @@ pub fn serialize_data_blocks(
     };
     let batches = blocks
         .into_iter()
-        .map(|b| Chunk::try_from(b))
+        .map(Chunk::try_from)
         .collect::<Result<Vec<_>>>()?;
 
     let encodings: Vec<Vec<_>> = arrow_schema

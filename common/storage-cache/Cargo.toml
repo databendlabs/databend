@@ -9,12 +9,12 @@ edition = "2021"
 [features]
 
 [dependencies]
-common-base= { path = "../base"}
-common-cache = { path = "../cache"}
-common-config = { path = "../config"}
-common-datablocks= { path = "../datablocks"}
-common-datavalues= { path = "../datavalues"}
-common-exception = { path = "../exception"}
-common-metrics= { path = "../metrics"}
+common-base = { path = "../base" }
+common-cache = { path = "../cache" }
+common-config = { path = "../config" }
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../exception" }
+common-metrics = { path = "../metrics" }
 
 serde = { version = "1.0.137", features = ["derive"] }

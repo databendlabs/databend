@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_cache::Cache;
 use common_exception::Result;
-use common_storage_cache::cache::SegmentInfoCache;
+use common_storage_cache::caches::SegmentInfoCache;
 use common_storage_cache::meta::Location;
 use common_storage_cache::meta::SegmentInfo;
 use common_storage_cache::meta::Versioned;

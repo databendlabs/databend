@@ -10,13 +10,13 @@ test = false
 
 [dependencies]
 common-base = { path = "../base" }
-common-config = { path = "../config"}
-common-datavalues = {path = "../datavalues"}
-common-exception = { path = "../exception"}
-common-grpc = { path = "../grpc"}
-common-meta-types= {path = "../meta/types"}
-common-storage = { path = "../storage"}
-common-tracing = { path = "../tracing"}
+common-config = { path = "../config" }
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../exception" }
+common-grpc = { path = "../grpc" }
+common-meta-types = { path = "../meta/types" }
+common-storage = { path = "../storage" }
+common-tracing = { path = "../tracing" }
 common-users = { path = "../users" }
 
 async-trait = "0.1.56"

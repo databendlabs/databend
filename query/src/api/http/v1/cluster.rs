@@ -21,6 +21,7 @@ use poem::web::Data;
 use poem::web::IntoResponse;
 use poem::web::Json;
 
+use crate::clusters::ClusterHelper;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;

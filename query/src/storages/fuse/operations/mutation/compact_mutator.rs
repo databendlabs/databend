@@ -69,7 +69,7 @@ impl<'a> CompactMutator<'a> {
         // The new segments.
         let mut segments = Vec::new();
         let mut summarys = Vec::new();
-        let reader = MetaReaders::segment_info_reader(self.ctx);
+        let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
         for segment_location in &snapshot.segments {
             let (x, ver) = (segment_location.0.clone(), segment_location.1);
             let mut need_merge = false;

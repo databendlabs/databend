@@ -73,7 +73,7 @@ impl<'a> FuseSegment<'a> {
 
         for segment_location in &snapshot.segments {
             let (location, version) = (segment_location.0.clone(), segment_location.1);
-            let reader = MetaReaders::segment_info_reader(&self.ctx);
+            let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
             let segment_info = reader.read(&location, None, version).await?;
 
             format_versions.push(version);

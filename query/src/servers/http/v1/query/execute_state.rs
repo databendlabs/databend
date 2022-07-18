@@ -39,6 +39,7 @@ use serde::Serialize;
 use ExecuteState::*;
 
 use super::http_query::HttpQueryRequest;
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;

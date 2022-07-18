@@ -29,6 +29,7 @@ use crate::api::ExecutePartialQueryPacket;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
+use crate::clusters::ClusterHelper;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 

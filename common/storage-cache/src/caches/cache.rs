@@ -14,10 +14,10 @@
 
 use common_config::QueryConfig;
 
-use crate::cache::new_memory_cache;
-use crate::cache::MemoryCache;
-use crate::cache::SegmentInfoCache;
-use crate::cache::TableSnapshotCache;
+use crate::caches::new_memory_cache;
+use crate::caches::MemoryCache;
+use crate::caches::SegmentInfoCache;
+use crate::caches::TableSnapshotCache;
 
 /// Where all the caches reside
 pub struct CacheManager {

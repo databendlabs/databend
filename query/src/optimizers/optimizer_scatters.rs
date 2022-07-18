@@ -34,6 +34,7 @@ use common_planners::StagePlan;
 use common_planners::WindowFuncPlan;
 use enum_extract::let_extract;
 
+use crate::clusters::ClusterHelper;
 use crate::optimizers::Optimizer;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;

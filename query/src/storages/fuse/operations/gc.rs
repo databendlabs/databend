@@ -70,7 +70,7 @@ impl FuseTable {
                 // just drop the whole snapshot,
                 let snapshots = vec![(last_snapshot.snapshot_id, self.snapshot_format_version())];
                 let segments = HashSet::from_iter(last_snapshot.segments.clone());
-                self.purge_blocks(ctx, segments.iter(), &HashSet::new())
+                self.purge_blocks(ctx.as_ref(), segments.iter(), &HashSet::new())
                     .await?;
                 self.collect(ctx.as_ref(), segments, snapshots).await
             };
@@ -118,12 +118,12 @@ impl FuseTable {
         }
 
         let blocks_referenced_by_gc_root: HashSet<String> = self
-            .blocks_of(ctx, segments_referenced_by_gc_root.iter())
+            .blocks_of(ctx.as_ref(), segments_referenced_by_gc_root.iter())
             .await?;
 
         // removed un-referenced blocks
         self.purge_blocks(
-            ctx,
+            ctx.as_ref(),
             segments_to_be_deleted.iter(),
             &blocks_referenced_by_gc_root,
         )

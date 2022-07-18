@@ -49,7 +49,15 @@ use crate::table_args::TableArgs;
 use crate::table_function::TableFunction;
 
 pub struct CatalogManager {
-    catalogs: HashMap<String, Arc<dyn Catalog>>,
+    pub catalogs: HashMap<String, Arc<dyn Catalog>>,
+}
+impl CatalogManager {
+    pub fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+        self.catalogs
+            .get(catalog_name)
+            .cloned()
+            .ok_or_else(|| ErrorCode::BadArguments(format!("not such catalog {}", catalog_name)))
+    }
 }
 
 #[derive(Default, Clone)]

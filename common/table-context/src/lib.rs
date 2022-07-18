@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod catalog;
-mod database;
-mod qry_ctx;
-mod table;
-mod table_args;
-mod table_function;
+pub mod catalog;
+pub mod cluster_info;
+pub mod database;
+pub mod qry_ctx;
+pub mod table;
+pub mod table_args;
+pub mod table_function;

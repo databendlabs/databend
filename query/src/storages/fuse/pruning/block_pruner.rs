@@ -53,8 +53,7 @@ impl BlockPruner {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
                 // for the time being, we only handle the first expr
-                let range_filter =
-                    RangeFilter::try_create(Arc::new(ctx.clone()), &exprs.filters[0], schema)?;
+                let range_filter = RangeFilter::try_create(ctx.clone(), &exprs.filters[0], schema)?;
                 Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
             }
             _ => Box::new(|_: &StatisticsOfColumns| Ok(true)),
@@ -95,7 +94,7 @@ impl BlockPruner {
                 let version = { u }.0; // use block expression to force moving
                 let idx = { idx }.0;
                 if accumulated_rows.load(Ordering::Acquire) < limit {
-                    let reader = MetaReaders::segment_info_reader(ctx);
+                    let reader = MetaReaders::segment_info_reader(ctx.as_ref());
                     let segment_info = reader.read(seg_loc, None, version).await?;
                     Ok::<_, ErrorCode>(
                         Self::filter_segment(

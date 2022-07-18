@@ -20,9 +20,7 @@ use common_exception::Result;
 use common_storage_cache::meta::ColumnId;
 use common_storage_cache::meta::ColumnMeta;
 
-pub fn column_metas<'a>(
-    file_meta: &'a ThriftFileMetaData,
-) -> Result<HashMap<ColumnId, ColumnMeta>> {
+pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, ColumnMeta>> {
     // currently we use one group only
     let num_row_groups = file_meta.row_groups.len();
     if num_row_groups != 1 {

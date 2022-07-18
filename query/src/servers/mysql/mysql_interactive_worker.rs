@@ -35,6 +35,7 @@ use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;

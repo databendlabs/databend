@@ -43,6 +43,7 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::pipelines::processors::port::OutputPort;

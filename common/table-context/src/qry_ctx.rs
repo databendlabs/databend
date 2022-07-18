@@ -32,7 +32,7 @@ use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_settings::Settings;
-use common_storage_cache::cache::CacheManager;
+use common_storage_cache::caches::CacheManager;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use opendal::Operator;
@@ -40,6 +40,7 @@ use parking_lot::Mutex;
 
 use crate::catalog::Catalog;
 use crate::catalog::CatalogManager;
+use crate::cluster_info::Cluster;
 use crate::table::Table;
 
 pub struct ProcessInfo {
@@ -118,5 +119,6 @@ pub trait QryCtx: Send + Sync {
     // Get user manager api.
     fn get_user_manager(&self) -> Arc<UserApiProvider>;
 
+    fn get_cluster(&self) -> Arc<Cluster>;
     async fn get_processes_info(&self) -> Vec<ProcessInfo>;
 }

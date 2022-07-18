@@ -104,7 +104,7 @@ impl FuseTable {
                                 tbl.table_info.ident
                             );
 
-                            let latest = tbl.latest(&ctx, catalog_name).await?;
+                            let latest = tbl.latest(ctx.as_ref(), catalog_name).await?;
                             tbl = FuseTable::try_from_table(latest.as_ref())?;
 
                             let keep_last_snapshot = true;
@@ -133,7 +133,7 @@ impl FuseTable {
                             tbl.table_info.ident
                         );
                         common_base::base::tokio::time::sleep(d).await;
-                        latest = tbl.latest(&ctx, catalog_name).await?;
+                        latest = tbl.latest(ctx.as_ref(), catalog_name).await?;
                         tbl = FuseTable::try_from_table(latest.as_ref())?;
                         retry_times += 1;
                         continue;

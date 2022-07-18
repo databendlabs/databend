@@ -18,9 +18,9 @@ use std::sync::Arc;
 use common_cache::Cache;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage_cache::cache::CacheDeferMetrics;
-use common_storage_cache::cache::MemoryCache;
-use common_storage_cache::cache::TenantLabel;
+use common_storage_cache::caches::CacheDeferMetrics;
+use common_storage_cache::caches::MemoryCache;
+use common_storage_cache::caches::TenantLabel;
 use common_tracing::tracing::log::warn;
 
 use crate::storages::fuse::io::retry;

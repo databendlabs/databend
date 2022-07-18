@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage_cache::cache::TenantLabel;
+use common_storage_cache::caches::TenantLabel;
 use common_storage_cache::meta::SegmentInfo;
 use common_storage_cache::meta::SegmentInfoVersion;
 use common_storage_cache::meta::SnapshotVersion;
@@ -215,7 +215,7 @@ impl HasTenantLabel for &dyn QryCtx {
 
 impl HasTenantLabel for Arc<dyn QryCtx> {
     fn tenant_label(&self) -> TenantLabel {
-        ctx_tenant_label(self)
+        ctx_tenant_label(self.as_ref())
     }
 }
 
