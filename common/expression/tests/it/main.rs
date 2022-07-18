@@ -524,8 +524,8 @@ fn builtin_functions() -> FunctionRegistry {
         FunctionProperty::default(),
         |lhs, rhs| {
             Some(IntDomain {
-                min: lhs.min.checked_add(rhs.min).unwrap_or(i32::MAX as i64),
-                max: lhs.max.checked_add(rhs.max).unwrap_or(i32::MAX as i64),
+                min: lhs.min.checked_sub(rhs.max).unwrap_or(i32::MAX as i64),
+                max: lhs.max.checked_sub(rhs.min).unwrap_or(i32::MAX as i64),
             })
         },
         |lhs, rhs| lhs - rhs,
@@ -534,12 +534,7 @@ fn builtin_functions() -> FunctionRegistry {
     registry.register_2_arg::<NumberType<i64>, NumberType<i64>, NumberType<i64>, _, _>(
         "multiply",
         FunctionProperty::default(),
-        |lhs, rhs| {
-            Some(IntDomain {
-                min: lhs.min.checked_add(rhs.min).unwrap_or(i64::MAX),
-                max: lhs.max.checked_add(rhs.max).unwrap_or(i64::MAX),
-            })
-        },
+        |_, _| None,
         |lhs, rhs| lhs * rhs,
     );
 

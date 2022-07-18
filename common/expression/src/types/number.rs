@@ -250,6 +250,7 @@ impl Number for u32 {
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         domain.as_u_int().cloned()
     }
+
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
         Scalar::UInt32(scalar)
     }
@@ -261,6 +262,7 @@ impl Number for u32 {
     fn upcast_domain(domain: Self::Domain) -> Domain {
         Domain::UInt(domain)
     }
+
     fn full_domain() -> Self::Domain {
         UIntDomain {
             min: 0,

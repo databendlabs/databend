@@ -338,6 +338,9 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
                 }
                 (Some((size1, true)), Some((size2, false))) if size2 > size1 => Some(ty2),
                 (Some((size1, false)), Some((size2, true))) if size1 > size2 => Some(ty1),
+                (Some((1, _)), Some((1, _))) => Some(DataType::Int16),
+                (Some((2, _)), Some((2, _))) => Some(DataType::Int32),
+                (Some((4, _)), Some((4, _))) => Some(DataType::Int64),
                 _ => None,
             }
         }
