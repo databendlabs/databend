@@ -171,7 +171,7 @@ pub async fn streaming_load(
             InsertInputSource::StreamingWithFormat(format) => {
                 if FormatFactory::instance().has_input(format.as_str()) {
                     let new_format = format!("{}WithNames", format);
-                    if format_settings.skip_header
+                    if format_settings.skip_header > 0
                         && FormatFactory::instance().has_input(new_format.as_str())
                     {
                         *format = new_format;

@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::InputFormat;
 use common_formats::InputState;
+use common_io::prelude::FormatSettings;
 use futures::AsyncRead;
 use futures::AsyncReadExt;
 use opendal::io_util::CompressAlgorithm;
@@ -48,19 +49,20 @@ pub struct FileSplitter {
     decompress_buf: Vec<u8>,
 
     format_state: Box<dyn InputState>,
-    skipped_header: bool,
+    rows_to_skip: u64,
 }
 
 impl FileSplitter {
     pub fn create<R: AsyncRead + Unpin + Send + 'static>(
         reader: R,
         input_format: Arc<dyn InputFormat>,
+        format_settings: FormatSettings,
         compress_algorithm: Option<CompressAlgorithm>,
     ) -> FileSplitter {
         let decoder = compress_algorithm.map(DecompressDecoder::new);
         FileSplitter {
             state: State::NeedData,
-            skipped_header: false,
+            rows_to_skip: format_settings.skip_header,
             reader: Box::new(reader),
             input_buf: vec![0; 1024 * 1024],
             decompress_buf: vec![0; 1024 * 1024],
@@ -84,7 +86,7 @@ impl FileSplitter {
                 &self.input_format,
                 output_splits,
                 &mut self.format_state,
-                &mut self.skipped_header,
+                &mut self.rows_to_skip,
             )
         }
     }
@@ -94,18 +96,23 @@ impl FileSplitter {
         input_format: &Arc<dyn InputFormat>,
         output_splits: &mut VecDeque<Vec<u8>>,
         format_state: &mut Box<dyn InputState>,
-        skipped_header: &mut bool,
+        rows_to_skip: &mut u64,
     ) -> Result<()> {
         let mut data_slice = data;
 
-        if !*skipped_header {
+        if *rows_to_skip > 0 {
             let len = data_slice.len();
-            let skip_size = input_format.skip_header(data_slice, format_state, 1)?;
-            if skip_size < len {
-                *skipped_header = true;
-                *format_state = input_format.create_state();
+            let mut skip_size = 0;
+            while *rows_to_skip > 0 {
+                skip_size += input_format.skip_header(data_slice, format_state, 1)?;
+                *rows_to_skip -= 1;
             }
-            data_slice = &data_slice[skip_size..];
+            if skip_size < len {
+                *format_state = input_format.create_state();
+                data_slice = &data_slice[skip_size..];
+            } else {
+                return Ok(());
+            }
         }
 
         while !data_slice.is_empty() {
@@ -147,7 +154,7 @@ impl FileSplitter {
                         &self.input_format,
                         output_splits,
                         &mut self.format_state,
-                        &mut self.skipped_header,
+                        &mut self.rows_to_skip,
                     )?;
                 }
                 DecompressState::Flushing => {
@@ -159,7 +166,7 @@ impl FileSplitter {
                         &self.input_format,
                         output_splits,
                         &mut self.format_state,
-                        &mut self.skipped_header,
+                        &mut self.rows_to_skip,
                     )?;
                 }
                 DecompressState::Done => break,
