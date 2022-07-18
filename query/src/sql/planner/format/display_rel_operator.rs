@@ -92,8 +92,7 @@ pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
             } else {
                 format!(
                     "{} (#{})",
-                    column_ref.column.column_name.to_string(),
-                    column_ref.column.index
+                    column_ref.column.column_name, column_ref.column.index
                 )
             }
         }

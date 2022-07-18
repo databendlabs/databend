@@ -36,7 +36,9 @@ pub enum JoinType {
     Semi,
     Anti,
     Cross,
+    /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
     Mark,
+    /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     Single,
 }
 

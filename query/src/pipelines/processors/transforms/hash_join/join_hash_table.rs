@@ -35,7 +35,6 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
 use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -128,6 +127,7 @@ pub struct HashJoinDesc {
     pub(crate) join_type: JoinType,
     pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
     pub(crate) marker_join_desc: MarkJoinDesc,
+    /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
 }
 
@@ -146,36 +146,13 @@ pub struct JoinHashTable {
 impl JoinHashTable {
     pub fn create_join_state(
         ctx: Arc<QueryContext>,
-        join_type: JoinType,
         build_keys: &[PhysicalScalar],
-        probe_keys: &[PhysicalScalar],
-        other_predicate: Option<&PhysicalScalar>,
         build_schema: DataSchemaRef,
-        marker_index: Option<IndexType>,
-        from_correlated_subquery: bool,
+        hash_join_desc: HashJoinDesc,
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types: Vec<DataTypeImpl> =
             build_keys.iter().map(|expr| expr.data_type()).collect();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
-        let hash_join_desc = HashJoinDesc {
-            build_keys: build_keys
-                .iter()
-                .map(Evaluator::eval_physical_scalar)
-                .collect::<Result<_>>()?,
-            probe_keys: probe_keys
-                .iter()
-                .map(Evaluator::eval_physical_scalar)
-                .collect::<Result<_>>()?,
-            join_type,
-            other_predicate: other_predicate
-                .map(Evaluator::eval_physical_scalar)
-                .transpose()?,
-            marker_join_desc: MarkJoinDesc {
-                marker_index,
-                has_null: RwLock::new(false),
-            },
-            from_correlated_subquery,
-        };
         Ok(match method {
             HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -514,34 +491,36 @@ impl HashJoinState for JoinHashTable {
         for chunk_index in 0..chunks.len() {
             let chunk = &mut chunks[chunk_index];
             let mut columns = Vec::with_capacity(chunk.cols.len());
-            let mut markers = if self.hash_join_desc.join_type == Mark {
-                vec![Some(MarkerKind::False); chunk.num_rows()]
+            let markers = if self.hash_join_desc.join_type == Mark {
+                let mut markers = vec![Some(MarkerKind::False); chunk.num_rows()];
+                // Only all columns' values are NULL, we set the marker to Null.
+                if chunk.cols.iter().any(|c| c.is_nullable() || c.is_null()) {
+                    let mut valids = None;
+                    for col in chunk.cols.iter() {
+                        let (is_all_null, tmp_valids) = col.validity();
+                        if is_all_null {
+                            let mut m = MutableBitmap::with_capacity(chunk.num_rows());
+                            m.extend_constant(chunk.num_rows(), false);
+                            valids = Some(m.into());
+                            break;
+                        } else {
+                            valids = combine_validities_3(valids, tmp_valids.cloned());
+                        }
+                    }
+                    if let Some(v) = valids {
+                        for idx in 0..chunk.num_rows() {
+                            if !v.get_bit(idx) {
+                                markers[idx] = Some(MarkerKind::Null);
+                            }
+                        }
+                    }
+                }
+                markers
             } else {
                 vec![None; chunk.num_rows()]
             };
             for col in chunk.cols.iter() {
                 columns.push(col);
-            }
-            if chunk.cols.iter().any(|c| c.is_nullable() || c.is_null()) {
-                let mut valids = None;
-                for col in chunk.cols.iter() {
-                    let (is_all_null, tmp_valids) = col.validity();
-                    if is_all_null {
-                        let mut m = MutableBitmap::with_capacity(chunk.num_rows());
-                        m.extend_constant(chunk.num_rows(), false);
-                        valids = Some(m.into());
-                        break;
-                    } else {
-                        valids = combine_validities_3(valids, tmp_valids.cloned());
-                    }
-                }
-                if let Some(v) = valids {
-                    for idx in 0..chunk.num_rows() {
-                        if !v.get_bit(idx) {
-                            markers[idx] = Some(MarkerKind::Null);
-                        }
-                    }
-                }
             }
             match (*self.hash_table.write()).borrow_mut() {
                 HashTable::SerializerHashTable(table) => {
@@ -639,7 +618,6 @@ impl HashJoinState for JoinHashTable {
 
     fn mark_join_blocks(&self) -> Result<Vec<DataBlock>> {
         let mut row_ptrs = self.row_ptrs.write();
-        dbg!(&*row_ptrs);
         let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
         let mut validity = MutableBitmap::with_capacity(row_ptrs.len());
         let mut boolean_bit_map = MutableBitmap::with_capacity(row_ptrs.len());
@@ -674,7 +652,6 @@ impl HashJoinState for JoinHashTable {
         let marker_block =
             DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
         let build_block = self.row_space.gather(&row_ptrs)?;
-        dbg!(&*row_ptrs);
         Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
     }
 }

@@ -25,10 +25,12 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::FunctionFactory;
 use common_planners::ReadDataSourcePlan;
+use parking_lot::RwLock;
 
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::transforms::hash_join::MarkJoinDesc;
 use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::pipelines::processors::transforms::TransformFilterV2;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
@@ -36,6 +38,7 @@ use crate::pipelines::processors::transforms::TransformProject;
 use crate::pipelines::processors::transforms::TransformRename;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
+use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::MarkJoinCompactor;
@@ -507,15 +510,31 @@ impl PipelineBuilder {
                 }
             },
         )?;
+        let hash_join_desc = HashJoinDesc {
+            build_keys: build_keys
+                .iter()
+                .map(Evaluator::eval_physical_scalar)
+                .collect::<Result<_>>()?,
+            probe_keys: probe_keys
+                .iter()
+                .map(Evaluator::eval_physical_scalar)
+                .collect::<Result<_>>()?,
+            join_type: join_type.clone(),
+            other_predicate: predicate
+                .as_ref()
+                .map(Evaluator::eval_physical_scalar)
+                .transpose()?,
+            marker_join_desc: MarkJoinDesc {
+                marker_index,
+                has_null: RwLock::new(false),
+            },
+            from_correlated_subquery,
+        };
         let hash_join_state = JoinHashTable::create_join_state(
             ctx.clone(),
-            join_type.clone(),
             build_keys,
-            probe_keys,
-            predicate.as_ref(),
             build_schema,
-            marker_index,
-            from_correlated_subquery,
+            hash_join_desc,
         )?;
 
         // Build side

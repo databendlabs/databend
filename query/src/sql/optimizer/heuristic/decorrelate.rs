@@ -34,7 +34,6 @@ use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
-use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Filter;
 use crate::sql::plans::FunctionCall;
@@ -51,17 +50,21 @@ use crate::sql::plans::ScalarItem;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
 use crate::sql::ColumnBinding;
+use crate::sql::IndexType;
 use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 
 /// Decorrelate subqueries inside `s_expr`.
 ///
-/// It will first hoist all the subqueries from `Scalar`s, and transform the hoisted operator
-/// into `CrossApply`(if the subquery is correlated) or `CrossJoin`(if the subquery is uncorrelated).
+/// We only need to process three kinds of join: Scalar Subquery, Any Subquery, and Exists Subquery.
+/// Other kinds of subqueries have be converted to one of the above subqueries in `type_check`.
 ///
-/// After hoisted all the subqueries, we will try to decorrelate the subqueries by pushing the `CrossApply`
-/// down. Get more detail by reading the paper `Orthogonal Optimization of Subqueries and Aggregation`,
-/// which published by Microsoft SQL Server team.
+/// It will rewrite `s_expr` to all kinds of join.
+/// Correlated scalar subquery -> Single join
+/// Any subquery -> Marker join
+/// Correlated exists subquery -> Marker join
+///
+/// More information can be found in the paper: Unnesting Arbitrary Queries
 pub fn decorrelate_subquery(metadata: MetadataRef, s_expr: SExpr) -> Result<SExpr> {
     let mut rewriter = SubqueryRewriter::new(metadata);
     let hoisted = rewriter.rewrite(&s_expr)?;
@@ -274,33 +277,11 @@ impl SubqueryRewriter {
                 // Construct single join
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
-                let metadata = self.metadata.read();
-                for correlated_column in correlated_columns.iter() {
-                    let column_entry = metadata.column(correlated_column.clone());
-                    let right_column = Scalar::BoundColumnRef(BoundColumnRef {
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_name: format!("subquery_{}", correlated_column),
-                            index: correlated_column.clone(),
-                            data_type: Box::from(column_entry.data_type.clone()),
-                            visible_in_unqualified_wildcard: false,
-                        },
-                    });
-                    let derive_column = self.derived_columns.get(&correlated_column).unwrap();
-                    let left_column = Scalar::BoundColumnRef(BoundColumnRef {
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_name: format!("subquery_{}", derive_column),
-                            index: derive_column.clone(),
-                            data_type: Box::from(column_entry.data_type.clone()),
-                            visible_in_unqualified_wildcard: false,
-                        },
-                    });
-                    left_conditions.push(left_column);
-                    right_conditions.push(right_column.clone());
-                }
+                self.add_equi_conditions(
+                    &correlated_columns,
+                    &mut left_conditions,
+                    &mut right_conditions,
+                )?;
                 let join_plan = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
@@ -323,33 +304,12 @@ impl SubqueryRewriter {
                 // Construct mark join
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
+                self.add_equi_conditions(
+                    &correlated_columns,
+                    &mut left_conditions,
+                    &mut right_conditions,
+                )?;
                 let mut metadata = self.metadata.write();
-                for correlated_column in correlated_columns.iter() {
-                    let column_entry = metadata.column(correlated_column.clone());
-                    let right_column = Scalar::BoundColumnRef(BoundColumnRef {
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_name: format!("subquery_{}", correlated_column),
-                            index: correlated_column.clone(),
-                            data_type: Box::from(column_entry.data_type.clone()),
-                            visible_in_unqualified_wildcard: false,
-                        },
-                    });
-                    let derive_column = self.derived_columns.get(&correlated_column).unwrap();
-                    let left_column = Scalar::BoundColumnRef(BoundColumnRef {
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_name: format!("subquery_{}", derive_column),
-                            index: derive_column.clone(),
-                            data_type: Box::from(column_entry.data_type.clone()),
-                            visible_in_unqualified_wildcard: false,
-                        },
-                    });
-                    left_conditions.push(left_column.clone());
-                    right_conditions.push(right_column);
-                }
                 let marker_index = metadata.add_column(
                     "marker".to_string(),
                     NullableType::new_impl(BooleanType::new_impl()),
@@ -372,33 +332,11 @@ impl SubqueryRewriter {
                 let rel_expr = RelExpr::with_s_expr(&flatten_plan);
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
-                let mut metadata = self.metadata.write();
-                for correlated_column in correlated_columns.iter() {
-                    let column_entry = metadata.column(correlated_column.clone());
-                    let right_column = Scalar::BoundColumnRef(BoundColumnRef {
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_name: format!("subquery_{}", correlated_column),
-                            index: correlated_column.clone(),
-                            data_type: Box::from(column_entry.data_type.clone()),
-                            visible_in_unqualified_wildcard: false,
-                        },
-                    });
-                    let derive_column = self.derived_columns.get(&correlated_column).unwrap();
-                    let left_column = Scalar::BoundColumnRef(BoundColumnRef {
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_name: format!("subquery_{}", derive_column),
-                            index: derive_column.clone(),
-                            data_type: Box::from(column_entry.data_type.clone()),
-                            visible_in_unqualified_wildcard: false,
-                        },
-                    });
-                    left_conditions.push(left_column.clone());
-                    right_conditions.push(right_column);
-                }
+                self.add_equi_conditions(
+                    &correlated_columns,
+                    &mut left_conditions,
+                    &mut right_conditions,
+                )?;
                 let output_columns: HashSet<_> = rel_expr
                     .derive_relational_prop()?
                     .output_columns
@@ -418,7 +356,7 @@ impl SubqueryRewriter {
                     .next()
                     .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
                 let column_name = format!("subquery_{}", index);
-                let left_condition = Scalar::BoundColumnRef(BoundColumnRef {
+                let right_condition = Scalar::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
@@ -430,25 +368,20 @@ impl SubqueryRewriter {
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
+                // Make <child_expr op right_condition> as other_conditions even if op is equal operator.
+                // Because it's not null-safe.
                 let other_conditions = vec![Scalar::ComparisonExpr(ComparisonExpr {
-                    op: op.clone(),
+                    op,
                     left: Box::new(child_expr),
-                    right: Box::new(left_condition),
+                    right: Box::new(right_condition),
                     return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
                 })];
-                // Add a marker column to save comparison result.
-                // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
-                // If subquery contains NULL, the comparison result is TRUE or NULL.
-                // Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
-                // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
+                let mut metadata = self.metadata.write();
                 let marker_index = metadata.add_column(
                     "marker".to_string(),
                     NullableType::new_impl(BooleanType::new_impl()),
                     None,
                 );
-                // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
-                // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
-                // Note that subquery is the left table, and it'll be the probe side.
                 let mark_join = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
@@ -472,16 +405,15 @@ impl SubqueryRewriter {
         let prop = rel_expr.derive_relational_prop()?;
         if prop.outer_columns.is_empty() {
             // Construct a LogicalGet plan by correlated columns.
-            // Wrap the plan with distinct to eliminate duplicates rows
             // Finally generate a cross join, so we finish flattening the subquery.
             let mut metadata = self.metadata.write();
             let table_index = metadata
                 .table_index_by_column_indexes(correlated_columns)
                 .unwrap();
             for correlated_column in correlated_columns.iter() {
-                let column_entry = metadata.column(correlated_column.clone()).clone();
+                let column_entry = metadata.column(*correlated_column).clone();
                 self.derived_columns.insert(
-                    correlated_column.clone(),
+                    *correlated_column,
                     metadata.add_column(
                         column_entry.name.clone(),
                         if let DataTypeImpl::Nullable(_) = column_entry.data_type {
@@ -517,7 +449,7 @@ impl SubqueryRewriter {
 
         match plan.plan() {
             RelOperator::Project(project) => {
-                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
+                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
                 let mut columns = HashSet::with_capacity(project.columns.len());
                 for column_idx in project.columns.iter() {
                     let scalar = {
@@ -538,13 +470,13 @@ impl SubqueryRewriter {
                     columns.extend(flatten_scalar.used_columns().iter());
                 }
                 columns.extend(self.derived_columns.values());
-                return Ok(SExpr::create_unary(
+                Ok(SExpr::create_unary(
                     Project { columns }.into(),
                     flatten_plan,
-                ));
+                ))
             }
             RelOperator::EvalScalar(eval_scalar) => {
-                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
+                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
                 let mut items = Vec::with_capacity(eval_scalar.items.len());
                 for item in eval_scalar.items.iter() {
                     let new_item = ScalarItem {
@@ -571,13 +503,13 @@ impl SubqueryRewriter {
                         index: derived_column.clone(),
                     });
                 }
-                return Ok(SExpr::create_unary(
+                Ok(SExpr::create_unary(
                     EvalScalar { items }.into(),
                     flatten_plan,
-                ));
+                ))
             }
             RelOperator::Filter(filter) => {
-                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
+                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
                 let mut predicates = Vec::with_capacity(filter.predicates.len());
                 for predicate in filter.predicates.iter() {
                     predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
@@ -587,12 +519,13 @@ impl SubqueryRewriter {
                     is_having: filter.is_having,
                 }
                 .into();
-                return Ok(SExpr::create_unary(filter_plan, flatten_plan));
+                Ok(SExpr::create_unary(filter_plan, flatten_plan))
             }
             RelOperator::LogicalInnerJoin(join) => {
+                // Currently, we don't support join conditions contain subquery
                 let left_flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
                 let right_flatten_plan = self.flatten(plan.child(1)?, correlated_columns)?;
-                return Ok(SExpr::create_binary(
+                Ok(SExpr::create_binary(
                     LogicalInnerJoin {
                         left_conditions: join.left_conditions.clone(),
                         right_conditions: join.right_conditions.clone(),
@@ -604,10 +537,10 @@ impl SubqueryRewriter {
                     .into(),
                     left_flatten_plan,
                     right_flatten_plan,
-                ));
+                ))
             }
             RelOperator::Aggregate(aggregate) => {
-                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
+                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
                 let mut group_items = Vec::with_capacity(aggregate.group_items.len());
                 for item in aggregate.group_items.iter() {
                     let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
@@ -644,7 +577,7 @@ impl SubqueryRewriter {
                         index: item.index,
                     })
                 }
-                return Ok(SExpr::create_unary(
+                Ok(SExpr::create_unary(
                     Aggregate {
                         group_items,
                         aggregate_functions: agg_items,
@@ -652,21 +585,20 @@ impl SubqueryRewriter {
                     }
                     .into(),
                     flatten_plan,
-                ));
+                ))
             }
             RelOperator::Sort(_) | RelOperator::Limit(_) => {
-                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
-                return Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan));
+                // Currently, we don't support sort and limit contain subquery.
+                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
+                Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
             }
             RelOperator::Max1Row(_)
             | RelOperator::Pattern(_)
             | RelOperator::LogicalGet(_)
             | RelOperator::PhysicalScan(_)
-            | RelOperator::PhysicalHashJoin(_) => {
-                return Err(ErrorCode::LogicalError(
-                    "Invalid plan type for flattening subquery",
-                ));
-            }
+            | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::LogicalError(
+                "Invalid plan type for flattening subquery",
+            )),
         }
     }
 
@@ -685,11 +617,10 @@ impl SubqueryRewriter {
                             database_name: None,
                             table_name: None,
                             column_name: format!("subquery_{}", index),
-                            index: index.clone(),
+                            index: *index,
                             data_type: column_binding.data_type.clone(),
                             visible_in_unqualified_wildcard: column_binding
-                                .visible_in_unqualified_wildcard
-                                .clone(),
+                                .visible_in_unqualified_wildcard,
                         },
                     }));
                 }
@@ -763,22 +694,43 @@ impl SubqueryRewriter {
             )),
         }
     }
-}
 
-pub fn check_child_expr_in_subquery(
-    child_expr: &Scalar,
-    op: &ComparisonOp,
-) -> Result<(Scalar, bool)> {
-    match child_expr {
-        Scalar::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
-        Scalar::ConstantExpr(_) => Ok((child_expr.clone(), true)),
-        Scalar::CastExpr(cast) => {
-            let arg = &cast.argument;
-            let (_, is_other_condition) = check_child_expr_in_subquery(arg, op)?;
-            Ok((child_expr.clone(), is_other_condition))
+    fn add_equi_conditions(
+        &self,
+        correlated_columns: &HashSet<IndexType>,
+        left_conditions: &mut Vec<Scalar>,
+        right_conditions: &mut Vec<Scalar>,
+    ) -> Result<()> {
+        for correlated_column in correlated_columns.iter() {
+            let data_type = {
+                let metadata = self.metadata.read();
+                let column_entry = metadata.column(*correlated_column);
+                column_entry.data_type.clone()
+            };
+            let right_column = Scalar::BoundColumnRef(BoundColumnRef {
+                column: ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: format!("subquery_{}", correlated_column),
+                    index: *correlated_column,
+                    data_type: Box::from(data_type.clone()),
+                    visible_in_unqualified_wildcard: false,
+                },
+            });
+            let derive_column = self.derived_columns.get(correlated_column).unwrap();
+            let left_column = Scalar::BoundColumnRef(BoundColumnRef {
+                column: ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: format!("subquery_{}", derive_column),
+                    index: *derive_column,
+                    data_type: Box::from(data_type),
+                    visible_in_unqualified_wildcard: false,
+                },
+            });
+            left_conditions.push(left_column);
+            right_conditions.push(right_column);
         }
-        _ => {
-            return Err(ErrorCode::LogicalError("Invalid child expr in subquery"));
-        }
+        Ok(())
     }
 }

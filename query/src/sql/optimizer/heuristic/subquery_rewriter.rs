@@ -23,7 +23,6 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::sql::binder::ColumnBinding;
-use crate::sql::optimizer::heuristic::decorrelate::check_child_expr_in_subquery;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
@@ -263,12 +262,7 @@ impl SubqueryRewriter {
                     (marker_index, "marker".to_string())
                 } else if let UnnestResult::SingleJoin = result {
                     assert_eq!(subquery_output_columns.len(), 1);
-                    let mut output_column = subquery_output_columns
-                        .iter()
-                        .take(1)
-                        .next()
-                        .unwrap()
-                        .clone();
+                    let mut output_column = *subquery_output_columns.iter().take(1).next().unwrap();
                     if let Some(index) = self.derived_columns.get(&output_column) {
                         output_column = *index;
                     }
@@ -440,7 +434,7 @@ impl SubqueryRewriter {
             SubqueryType::Any => {
                 let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                 let prop = rel_expr.derive_relational_prop()?;
-                let output_columns = prop.output_columns.clone();
+                let output_columns = prop.output_columns;
                 let index = output_columns
                     .iter()
                     .take(1)
@@ -500,6 +494,24 @@ impl SubqueryRewriter {
                 ))
             }
             _ => unreachable!(),
+        }
+    }
+}
+
+pub fn check_child_expr_in_subquery(
+    child_expr: &Scalar,
+    op: &ComparisonOp,
+) -> Result<(Scalar, bool)> {
+    match child_expr {
+        Scalar::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
+        Scalar::ConstantExpr(_) => Ok((child_expr.clone(), true)),
+        Scalar::CastExpr(cast) => {
+            let arg = &cast.argument;
+            let (_, is_other_condition) = check_child_expr_in_subquery(arg, op)?;
+            Ok((child_expr.clone(), is_other_condition))
+        }
+        _ => {
+            return Err(ErrorCode::LogicalError("Invalid child expr in subquery"));
         }
     }
 }
