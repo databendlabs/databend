@@ -19,6 +19,8 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
+use crate::property::Domain;
+use crate::property::NullableDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -33,6 +35,7 @@ impl<T: ValueType> ValueType for NullableType<T> {
     type Scalar = Option<T::Scalar>;
     type ScalarRef<'a> = Option<T::ScalarRef<'a>>;
     type Column = (T::Column, Bitmap);
+    type Domain = NullableDomain<T>;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.map(T::to_owned_scalar)
@@ -67,6 +70,19 @@ impl<T: ArgType> ArgType for NullableType<T> {
         }
     }
 
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        match domain {
+            Domain::Nullable(NullableDomain {
+                has_null,
+                value: Some(value),
+            }) => Some(NullableDomain {
+                has_null: *has_null,
+                value: Some(Box::new(T::try_downcast_domain(value)?)),
+            }),
+            _ => None,
+        }
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         match scalar {
             Some(scalar) => T::upcast_scalar(scalar),
@@ -81,17 +97,34 @@ impl<T: ArgType> ArgType for NullableType<T> {
         }
     }
 
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Nullable(NullableDomain {
+            has_null: domain.has_null,
+            value: domain.value.map(|value| Box::new(T::upcast_domain(*value))),
+        })
+    }
+
+    fn full_domain(generics: &GenericMap) -> Self::Domain {
+        NullableDomain {
+            has_null: true,
+            value: Some(Box::new(T::full_domain(generics))),
+        }
+    }
+
     fn column_len<'a>((_, validity): &'a Self::Column) -> usize {
         validity.len()
     }
 
-    fn index_column<'a>((col, validity): &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        let scalar = T::index_column(col, index);
-        if validity.get(index).unwrap() {
+    fn index_column<'a>(
+        (col, validity): &'a Self::Column,
+        index: usize,
+    ) -> Option<Self::ScalarRef<'a>> {
+        let scalar = T::index_column(col, index)?;
+        Some(if validity.get(index).unwrap() {
             Some(scalar)
         } else {
             None
-        }
+        })
     }
 
     fn slice_column<'a>((col, validity): &'a Self::Column, range: Range<usize>) -> Self::Column {

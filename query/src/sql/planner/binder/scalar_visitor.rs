@@ -126,7 +126,6 @@ impl Scalar {
     /// ```
     ///
     /// If an Err result is returned, recursion is stopped immediately
-    ///
     pub fn accept<V: ScalarVisitor>(&self, visitor: V) -> Result<V> {
         let visitor = match visitor.pre_visit(self)? {
             Recursion::Continue(visitor) => visitor,

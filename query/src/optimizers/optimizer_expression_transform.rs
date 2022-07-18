@@ -354,7 +354,7 @@ impl PlanRewriter for ExprTransformImpl {
                 catalog: plan.catalog.clone(),
                 source_info: plan.source_info.clone(),
                 scan_fields: plan.scan_fields.clone(),
-                parts: vec![], // set parts to empty vector, read_table should return None immediately
+                parts: vec![], /* set parts to empty vector, read_table should return None immediately */
                 statistics: Statistics {
                     read_rows: 0,
                     read_bytes: 0,

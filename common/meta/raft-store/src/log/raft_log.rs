@@ -95,7 +95,6 @@ impl RaftLog {
     /// 2. Overriding uncommitted logs of an old term by some new leader that did not see these logs:
     ///    In this case, atomic delete is quite enough(to not leave a hole).
     ///    If the system allows logs hole, non-atomic delete is quite enough(depends on the upper layer).
-    ///
     pub async fn range_remove<R>(&self, range: R) -> MetaStorageResult<()>
     where R: RangeBounds<LogIndex> {
         self.logs().range_remove(range, true).await

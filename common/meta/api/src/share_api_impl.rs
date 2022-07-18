@@ -101,7 +101,7 @@ impl<KV: KVApi> ShareApi for KV {
                 let txn_req = TxnRequest {
                     condition: vec![txn_cond_seq(name_key, Eq, 0)],
                     if_then: vec![
-                        txn_op_put(name_key, serialize_u64(share_id)?), // (tenant, share_name) -> share_id
+                        txn_op_put(name_key, serialize_u64(share_id)?), /* (tenant, share_name) -> share_id */
                         txn_op_put(
                             &id_key,
                             serialize_struct(&ShareMeta::new(now, req.comment.clone()))?,

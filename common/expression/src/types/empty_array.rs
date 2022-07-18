@@ -14,6 +14,7 @@
 
 use std::ops::Range;
 
+use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -27,6 +28,7 @@ impl ValueType for EmptyArrayType {
     type Scalar = ();
     type ScalarRef<'a> = ();
     type Column = usize;
+    type Domain = ();
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -59,6 +61,13 @@ impl ArgType for EmptyArrayType {
         }
     }
 
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        match domain {
+            Domain::Array(None) => Some(()),
+            _ => None,
+        }
+    }
+
     fn upcast_scalar(_: Self::Scalar) -> Scalar {
         Scalar::EmptyArray
     }
@@ -67,22 +76,23 @@ impl ArgType for EmptyArrayType {
         Column::EmptyArray { len }
     }
 
+    fn upcast_domain(_: Self::Domain) -> Domain {
+        Domain::Array(None)
+    }
+
+    fn full_domain(_: &GenericMap) -> Self::Domain {}
+
     fn column_len<'a>(len: &'a Self::Column) -> usize {
         *len
     }
 
-    fn index_column<'a>(len: &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        if index >= *len {
-            panic!("index {index} out of 0..{len}");
-        }
+    fn index_column<'a>(len: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+        if index < *len { Some(()) } else { None }
     }
 
     fn slice_column<'a>(len: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        if range.end <= *len {
-            range.end - range.start
-        } else {
-            panic!("range {range:?} out of 0..{len}");
-        }
+        assert!(range.end <= *len, "range {range:?} out of 0..{len}");
+        range.end - range.start
     }
 
     fn iter_column<'a>(len: &'a Self::Column) -> Self::ColumnIterator<'a> {

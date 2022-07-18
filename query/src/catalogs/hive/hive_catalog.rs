@@ -229,9 +229,7 @@ impl Catalog for HiveCatalog {
         unimplemented!()
     }
 
-    ///
     /// Table function
-    ///
 
     // Get function by name.
     fn get_table_function(

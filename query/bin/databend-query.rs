@@ -75,7 +75,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
     }
 
-    //let _guards = init_tracing_with_file(
+    // let _guards = init_tracing_with_file(
     let _guards = init_global_tracing(
         app_name.as_str(),
         conf.log.dir.as_str(),

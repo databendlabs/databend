@@ -21,6 +21,7 @@
 
 pub mod chunk;
 mod display;
+pub mod error;
 pub mod evaluator;
 pub mod expression;
 pub mod function;
