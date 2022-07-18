@@ -77,7 +77,7 @@ pub enum ScalarRef<'a> {
     Tuple(Vec<ScalarRef<'a>>),
 }
 
-#[derive(Debug, Clone, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Column {
     Null {
         len: usize,
@@ -432,6 +432,346 @@ impl Column {
             column: self,
             index: 0,
             len: self.len(),
+        }
+    }
+
+    pub fn as_arrow(&self) -> Box<dyn common_arrow::arrow::array::Array> {
+        match self {
+            Column::Null { len } => Box::new(common_arrow::arrow::array::NullArray::new_null(
+                self.arrow_type(),
+                *len,
+            )),
+            Column::EmptyArray { len } => Box::new(
+                common_arrow::arrow::array::NullArray::new_null(self.arrow_type(), *len),
+            ),
+            Column::Int8(col) => {
+                Box::new(common_arrow::arrow::array::PrimitiveArray::<i8>::from_data(
+                    self.arrow_type(),
+                    col.clone(),
+                    None,
+                ))
+            }
+            Column::Int16(col) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<i16>::from_data(
+                    self.arrow_type(),
+                    col.clone(),
+                    None,
+                ),
+            ),
+            Column::Int32(col) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<i32>::from_data(
+                    self.arrow_type(),
+                    col.clone(),
+                    None,
+                ),
+            ),
+            Column::Int64(col) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<i64>::from_data(
+                    self.arrow_type(),
+                    col.clone(),
+                    None,
+                ),
+            ),
+            Column::UInt8(col) => {
+                Box::new(common_arrow::arrow::array::PrimitiveArray::<u8>::from_data(
+                    self.arrow_type(),
+                    col.clone(),
+                    None,
+                ))
+            }
+            Column::UInt16(col) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<u16>::from_data(
+                    self.arrow_type(),
+                    col.clone(),
+                    None,
+                ),
+            ),
+            Column::UInt32(col) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<u32>::from_data(
+                    self.arrow_type(),
+                    col.clone(),
+                    None,
+                ),
+            ),
+            Column::UInt64(col) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<u64>::from_data(
+                    self.arrow_type(),
+                    col.clone(),
+                    None,
+                ),
+            ),
+            Column::Boolean(col) => Box::new(common_arrow::arrow::array::BooleanArray::from_data(
+                self.arrow_type(),
+                col.clone(),
+                None,
+            )),
+            Column::String { data, offsets } => {
+                Box::new(common_arrow::arrow::array::BinaryArray::<i64>::from_data(
+                    self.arrow_type(),
+                    offsets.iter().map(|offset| *offset as i64).collect(),
+                    data.clone(),
+                    None,
+                ))
+            }
+            Column::Array { array, offsets } => {
+                Box::new(common_arrow::arrow::array::ListArray::<i64>::from_data(
+                    self.arrow_type(),
+                    offsets.iter().map(|offset| *offset as i64).collect(),
+                    array.as_arrow(),
+                    None,
+                ))
+            }
+            Column::Nullable { column, validity } => {
+                column.as_arrow().with_validity(Some(validity.clone()))
+            }
+            Column::Tuple { fields, .. } => {
+                Box::new(common_arrow::arrow::array::StructArray::from_data(
+                    self.arrow_type(),
+                    fields.iter().map(|field| field.as_arrow()).collect(),
+                    None,
+                ))
+            }
+        }
+    }
+
+    pub fn arrow_type(&self) -> common_arrow::arrow::datatypes::DataType {
+        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+        use common_arrow::arrow::datatypes::Field;
+
+        match self {
+            Column::Null { .. } => ArrowDataType::Null,
+            Column::EmptyArray { .. } => ArrowDataType::Extension(
+                "EmptyArray".to_owned(),
+                Box::new(ArrowDataType::Null),
+                None,
+            ),
+            Column::Int8(_) => ArrowDataType::Int8,
+            Column::Int16(_) => ArrowDataType::Int16,
+            Column::Int32(_) => ArrowDataType::Int32,
+            Column::Int64(_) => ArrowDataType::Int64,
+            Column::UInt8(_) => ArrowDataType::UInt8,
+            Column::UInt16(_) => ArrowDataType::UInt16,
+            Column::UInt32(_) => ArrowDataType::UInt32,
+            Column::UInt64(_) => ArrowDataType::UInt64,
+            Column::Boolean(_) => ArrowDataType::Boolean,
+            Column::String { .. } => ArrowDataType::LargeBinary,
+            Column::Array {
+                array: box Column::Nullable { column, .. },
+                ..
+            } => ArrowDataType::LargeList(Box::new(Field::new(
+                "list".to_string(),
+                column.arrow_type(),
+                true,
+            ))),
+            Column::Array { array, .. } => ArrowDataType::LargeList(Box::new(Field::new(
+                "list".to_string(),
+                array.arrow_type(),
+                false,
+            ))),
+            Column::Nullable { column, .. } => column.arrow_type(),
+            Column::Tuple { fields, .. } => {
+                let arrow_fields = fields
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, field)| match field {
+                        Column::Nullable { column, .. } => {
+                            Field::new((idx + 1).to_string(), column.arrow_type(), true)
+                        }
+                        _ => Field::new((idx + 1).to_string(), field.arrow_type(), false),
+                    })
+                    .collect();
+                ArrowDataType::Struct(arrow_fields)
+            }
+        }
+    }
+
+    pub fn from_arrow(arrow_col: &dyn common_arrow::arrow::array::Array) -> Column {
+        use common_arrow::arrow::array::Array as _;
+        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+
+        let col = match arrow_col.data_type() {
+            ArrowDataType::Null => Column::Null {
+                len: arrow_col.len(),
+            },
+            ArrowDataType::Extension(name, _, _) if name == "EmptyArray" => Column::EmptyArray {
+                len: arrow_col.len(),
+            },
+            ArrowDataType::Int8 => Column::Int8(
+                arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::Int8Array>()
+                    .unwrap()
+                    .values()
+                    .clone(),
+            ),
+            ArrowDataType::Int16 => Column::Int16(
+                arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::Int16Array>()
+                    .unwrap()
+                    .values()
+                    .clone(),
+            ),
+            ArrowDataType::Int32 => Column::Int32(
+                arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::Int32Array>()
+                    .unwrap()
+                    .values()
+                    .clone(),
+            ),
+            ArrowDataType::Int64 => Column::Int64(
+                arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::Int64Array>()
+                    .unwrap()
+                    .values()
+                    .clone(),
+            ),
+            ArrowDataType::UInt8 => Column::UInt8(
+                arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::UInt8Array>()
+                    .unwrap()
+                    .values()
+                    .clone(),
+            ),
+            ArrowDataType::UInt16 => Column::UInt16(
+                arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::UInt16Array>()
+                    .unwrap()
+                    .values()
+                    .clone(),
+            ),
+            ArrowDataType::UInt32 => Column::UInt32(
+                arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::UInt32Array>()
+                    .unwrap()
+                    .values()
+                    .clone(),
+            ),
+            ArrowDataType::UInt64 => Column::UInt64(
+                arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::UInt64Array>()
+                    .unwrap()
+                    .values()
+                    .clone(),
+            ),
+            ArrowDataType::Boolean => Column::Boolean(
+                arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::BooleanArray>()
+                    .unwrap()
+                    .values()
+                    .clone(),
+            ),
+            ArrowDataType::LargeBinary => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                    .unwrap();
+                let offsets = arrow_col
+                    .offsets()
+                    .iter()
+                    .map(|x| *x as u64)
+                    .collect::<Vec<_>>();
+                Column::String {
+                    data: arrow_col.values().clone(),
+                    offsets: offsets.into(),
+                }
+            }
+            // TODO: deprecate it and use LargeBinary instead
+            ArrowDataType::Binary => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                    .unwrap();
+                let offsets = arrow_col
+                    .offsets()
+                    .iter()
+                    .map(|x| *x as u64)
+                    .collect::<Vec<_>>();
+                Column::String {
+                    data: arrow_col.values().clone(),
+                    offsets: offsets.into(),
+                }
+            }
+            // TODO: deprecate it and use LargeBinary instead
+            ArrowDataType::Utf8 => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::Utf8Array<i32>>()
+                    .unwrap();
+                let offsets = arrow_col
+                    .offsets()
+                    .iter()
+                    .map(|x| *x as u64)
+                    .collect::<Vec<_>>();
+                Column::String {
+                    data: arrow_col.values().clone(),
+                    offsets: offsets.into(),
+                }
+            }
+            // TODO: deprecate it and use LargeBinary instead
+            ArrowDataType::LargeUtf8 => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::Utf8Array<i64>>()
+                    .unwrap();
+                let offsets = arrow_col
+                    .offsets()
+                    .iter()
+                    .map(|x| *x as u64)
+                    .collect::<Vec<_>>();
+                Column::String {
+                    data: arrow_col.values().clone(),
+                    offsets: offsets.into(),
+                }
+            }
+            ArrowDataType::LargeList(_) => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
+                    .unwrap();
+                let array = Column::from_arrow(&**arrow_col.values());
+                let offsets = arrow_col
+                    .offsets()
+                    .iter()
+                    .map(|x| *x as u64)
+                    .collect::<Vec<_>>();
+                Column::Array {
+                    array: Box::new(array),
+                    offsets: offsets.into(),
+                }
+            }
+            ArrowDataType::Struct(_) => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::StructArray>()
+                    .unwrap();
+                let fields = arrow_col
+                    .values()
+                    .iter()
+                    .map(|field| Column::from_arrow(&**field))
+                    .collect::<Vec<_>>();
+                Column::Tuple {
+                    fields,
+                    len: arrow_col.len(),
+                }
+            }
+            ty => unimplemented!("unsupported arrow type {ty:?}"),
+        };
+
+        if let Some(validity) = arrow_col.validity() {
+            Column::Nullable {
+                column: Box::new(col),
+                validity: validity.clone(),
+            }
+        } else {
+            col
         }
     }
 }

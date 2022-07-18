@@ -821,6 +821,10 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain
                 .map(|(_, _, _, col)| col.clone())
                 .collect::<Vec<_>>(),
         );
+        chunk.columns().iter().for_each(|col| {
+            test_arrow_conversion(col);
+        });
+
         let evaluator = Evaluator {
             input_columns: chunk,
             context: FunctionContext::default(),
@@ -843,6 +847,8 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain
                     writeln!(file, "output         : {}", output_scalar.as_ref()).unwrap();
                 }
                 Value::Column(output_col) => {
+                    test_arrow_conversion(&output_col);
+
                     let mut table = Table::new();
                     table.load_preset("||--+-++|    ++++++");
 
@@ -896,4 +902,10 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain
             writeln!(file, "error: {}\n", msg).unwrap();
         }
     }
+}
+
+fn test_arrow_conversion(col: &Column) {
+    let arrow_col = col.as_arrow();
+    let new_col = Column::from_arrow(&*arrow_col);
+    assert_eq!(col, &new_col, "arrow conversion went wrong");
 }
