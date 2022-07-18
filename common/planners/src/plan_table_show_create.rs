@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::ToDataType;
-use common_datavalues::Vu8;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShowCreateTablePlan {
@@ -32,10 +28,6 @@ pub struct ShowCreateTablePlan {
 
 impl ShowCreateTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        let show_fields = vec![
-            DataField::new("Table", Vu8::to_data_type()),
-            DataField::new("Create Table", Vu8::to_data_type()),
-        ];
-        DataSchemaRefExt::create(show_fields)
+        self.schema.clone()
     }
 }

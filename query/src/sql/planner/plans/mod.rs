@@ -282,7 +282,7 @@ impl Plan {
             Plan::ShowProcessList => Arc::new(DataSchema::empty()),
             Plan::ShowSettings => Arc::new(DataSchema::empty()),
             Plan::ShowDatabases(_) => Arc::new(DataSchema::empty()),
-            Plan::ShowCreateDatabase(_) => Arc::new(DataSchema::empty()),
+            Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::CreateDatabase(plan) => plan.schema(),
             Plan::DropDatabase(plan) => plan.schema(),
             Plan::RenameDatabase(plan) => plan.schema(),
