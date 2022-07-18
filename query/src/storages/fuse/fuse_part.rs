@@ -18,9 +18,9 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::Compression;
 use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
-use common_storage_cache::meta::Compression;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ColumnMeta {

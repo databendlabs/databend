@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_storage_cache::meta::BlockMeta;
-use common_storage_cache::meta::SegmentInfo;
-use common_storage_cache::meta::TableSnapshot;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
 use super::block_filter::all_the_columns_ids;

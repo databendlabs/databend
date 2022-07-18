@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_storage_cache::meta::ColumnStatistics;
+use common_fuse_meta::meta::ColumnStatistics;
 use databend_query::storages::fuse::statistics::accumulator;
 use databend_query::storages::fuse::statistics::reducers;
 

@@ -20,8 +20,8 @@ use common_datavalues::BooleanColumn;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::Series;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
 use common_planners::Expression;
-use common_storage_cache::meta::BlockMeta;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::query_ctx::TableContext;

@@ -17,8 +17,8 @@ use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_storage_cache::meta::BlockMeta;
-use common_storage_cache::meta::Versioned;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::Versioned;
 use common_tracing::tracing::warn;
 use opendal::Operator;
 

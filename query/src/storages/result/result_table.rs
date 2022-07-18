@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::SegmentInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_types::UserIdentity;
@@ -25,7 +26,6 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
-use common_storage_cache::meta::SegmentInfo;
 use serde::Deserialize;
 use serde::Serialize;
 

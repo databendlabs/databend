@@ -22,8 +22,8 @@ use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage_cache::meta::SegmentInfo;
-use common_storage_cache::meta::Statistics;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::Statistics;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;

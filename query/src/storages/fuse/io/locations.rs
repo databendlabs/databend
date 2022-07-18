@@ -17,9 +17,9 @@ use std::marker::PhantomData;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_storage_cache::meta::SegmentInfo;
-use common_storage_cache::meta::SnapshotVersion;
-use common_storage_cache::meta::Versioned;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::SnapshotVersion;
+use common_fuse_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::storages::fuse::constants::FUSE_TBL_BLOCK_PREFIX;

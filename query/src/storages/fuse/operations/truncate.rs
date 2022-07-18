@@ -16,11 +16,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
+use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_storage_cache::meta::TableSnapshot;
-use common_storage_cache::meta::Versioned;
 use uuid::Uuid;
 
 use crate::sessions::query_ctx::TableContext;

@@ -1072,13 +1072,13 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-fuse-meta",
  "common-io",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline",
  "common-planners",
  "common-settings",
- "common-storage-cache",
  "common-streams",
  "common-users",
  "dyn-clone",
@@ -1264,6 +1264,20 @@ dependencies = [
  "strength_reduce",
  "twox-hash",
  "uuid 1.1.2",
+]
+
+[[package]]
+name = "common-fuse-meta"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-cache",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-metrics",
+ "serde",
 ]
 
 [[package]]
@@ -1667,20 +1681,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "opendal",
- "serde",
-]
-
-[[package]]
-name = "common-storage-cache"
-version = "0.1.0"
-dependencies = [
- "common-base",
- "common-cache",
- "common-config",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-metrics",
  "serde",
 ]
 
@@ -2279,6 +2279,7 @@ dependencies = [
  "common-exception",
  "common-formats",
  "common-functions",
+ "common-fuse-meta",
  "common-grpc",
  "common-hashtable",
  "common-hive-meta-store",
@@ -2299,7 +2300,6 @@ dependencies = [
  "common-planners",
  "common-settings",
  "common-storage",
- "common-storage-cache",
  "common-streams",
  "common-tracing",
  "common-users",

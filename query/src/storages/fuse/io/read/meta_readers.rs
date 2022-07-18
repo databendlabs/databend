@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage_cache::caches::TenantLabel;
-use common_storage_cache::meta::SegmentInfo;
-use common_storage_cache::meta::SegmentInfoVersion;
-use common_storage_cache::meta::SnapshotVersion;
-use common_storage_cache::meta::TableSnapshot;
+use common_fuse_meta::caches::TenantLabel;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::SegmentInfoVersion;
+use common_fuse_meta::meta::SnapshotVersion;
+use common_fuse_meta::meta::TableSnapshot;
 use futures::io::BufReader;
 use futures::stream;
 use opendal::BytesReader;

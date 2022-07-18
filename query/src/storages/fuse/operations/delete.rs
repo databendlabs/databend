@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
-use common_storage_cache::meta::TableSnapshot;
 use common_tracing::tracing::debug;
 
 use crate::sessions::query_ctx::TableContext;

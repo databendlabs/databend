@@ -1,5 +1,5 @@
 [package]
-name = "common-storage-cache"
+name = "common-fuse-meta"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"

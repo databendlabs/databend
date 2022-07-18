@@ -21,8 +21,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
 use common_planners::Expression;
-use common_storage_cache::meta::BlockMeta;
 use serde_json::json;
 
 use crate::sessions::query_ctx::TableContext;

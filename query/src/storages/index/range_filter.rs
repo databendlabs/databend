@@ -24,12 +24,12 @@ use common_exception::Result;
 use common_functions::scalars::check_pattern_type;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
+use common_fuse_meta::meta::StatisticsOfColumns;
 use common_planners::lit;
 use common_planners::Expression;
 use common_planners::ExpressionMonotonicityVisitor;
 use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
-use common_storage_cache::meta::StatisticsOfColumns;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::query_ctx::TableContext;

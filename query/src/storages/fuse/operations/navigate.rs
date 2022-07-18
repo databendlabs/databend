@@ -19,8 +19,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
 use common_meta_app::schema::TableStatistics;
-use common_storage_cache::meta::TableSnapshot;
 use futures::TryStreamExt;
 
 use crate::sessions::query_ctx::TableContext;

@@ -17,12 +17,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
 use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::Statistics;
-use common_storage_cache::meta::BlockMeta;
-use common_storage_cache::meta::TableSnapshot;
 
 use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;

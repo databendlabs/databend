@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_storage_cache::meta::TableSnapshot;
+use common_fuse_meta::meta::TableSnapshot;
 
 use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::io::MetaReaders;

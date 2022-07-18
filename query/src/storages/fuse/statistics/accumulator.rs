@@ -20,13 +20,13 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::eval_aggr;
-use common_storage_cache::meta::BlockMeta;
-use common_storage_cache::meta::ClusterStatistics;
-use common_storage_cache::meta::ColumnId;
-use common_storage_cache::meta::ColumnMeta;
-use common_storage_cache::meta::ColumnStatistics;
-use common_storage_cache::meta::StatisticsOfColumns;
-use common_storage_cache::meta::Versioned;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::ClusterStatistics;
+use common_fuse_meta::meta::ColumnId;
+use common_fuse_meta::meta::ColumnMeta;
+use common_fuse_meta::meta::ColumnStatistics;
+use common_fuse_meta::meta::StatisticsOfColumns;
+use common_fuse_meta::meta::Versioned;
 
 use crate::storages::fuse::operations::column_metas;
 
