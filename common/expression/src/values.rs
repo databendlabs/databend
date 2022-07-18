@@ -77,7 +77,7 @@ pub enum ScalarRef<'a> {
     Tuple(Vec<ScalarRef<'a>>),
 }
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum Column {
     Null {
         len: usize,
