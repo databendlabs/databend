@@ -234,7 +234,7 @@ impl ExecuteState {
                     }
                 };
 
-                InterpreterFactory::get(ctx.clone(), plan.clone())
+                InterpreterFactory::get(ctx.clone(), plan)
             }?;
 
             // Write Start to query log table.

@@ -265,6 +265,7 @@ impl Display for Plan {
     }
 }
 
+// TODO the schema is not completed
 impl Plan {
     pub fn schema(&self) -> DataSchemaRef {
         match self {
@@ -286,7 +287,7 @@ impl Plan {
             Plan::DropDatabase(plan) => plan.schema(),
             Plan::RenameDatabase(plan) => plan.schema(),
             Plan::ShowTables(_) => Arc::new(DataSchema::empty()),
-            Plan::ShowCreateTable(_) => Arc::new(DataSchema::empty()),
+            Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::ShowTablesStatus(_) => Arc::new(DataSchema::empty()),
             Plan::CreateTable(plan) => plan.schema(),

@@ -134,6 +134,7 @@ async fn execute_v2(
             rb
         }
     };
+
     let stream = stream! {
         yield compress_fn(prefix);
         while let Some(block) = data_stream.next().await {
