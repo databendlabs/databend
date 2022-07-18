@@ -122,11 +122,20 @@ pub trait BufferReadExt: BufferRead {
     }
 
     fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>) -> Result<()> {
-        self.keep_read(buf, |f| f != b'\t' && f != b'\n' && f != b'\\')?;
-        if self.ignore_byte(b'\\')? {
-            // TODO parse complex escape sequence
-            buf.push(b'\\');
-            self.read_escaped_string_text(buf)?;
+        loop {
+            self.keep_read(buf, |f| f != b'\t' && f != b'\n' && f != b'\\')?;
+            if self.ignore_byte(b'\\')? {
+                let buffer = self.fill_buf()?;
+                let c = buffer[0];
+                match c {
+                    b'\'' | b'\"' | b'\\' => {}
+                    _ => buf.push(b'\\'),
+                }
+                buf.push(c);
+                self.consume(1);
+            } else {
+                break;
+            }
         }
         Ok(())
     }
