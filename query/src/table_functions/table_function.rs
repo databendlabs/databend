@@ -12,4 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_table_context::table_function::TableFunction;
+pub use common_catalog::table_function::TableFunction;

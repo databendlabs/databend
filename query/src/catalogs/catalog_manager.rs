@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::catalog::Catalog;
+pub use common_catalog::catalog::CatalogManager;
 use common_config::Config;
 use common_exception::Result;
-use common_table_context::catalog::Catalog;
-pub use common_table_context::catalog::CatalogManager;
 
 use crate::catalogs::DatabaseCatalog;
 

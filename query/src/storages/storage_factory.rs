@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+pub use common_catalog::catalog::StorageDescription;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
@@ -43,8 +44,6 @@ where
         self(ctx, table_info)
     }
 }
-
-pub use common_table_context::catalog::StorageDescription;
 
 pub trait StorageDescriptor: Send + Sync {
     fn description(&self) -> StorageDescription;

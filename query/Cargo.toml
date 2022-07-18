@@ -31,6 +31,7 @@ common-arrow = { path = "../common/arrow" }
 common-ast = { path = "../common/ast" }
 common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
+common-catalog = { path = "../common/catalog" }
 common-config = { path = "../common/config" }
 common-contexts = { path = "../common/contexts" }
 common-datablocks = { path = "../common/datablocks" }
@@ -60,7 +61,6 @@ common-settings = { path = "../common/settings" }
 common-storage = { path = "../common/storage" }
 common-storage-cache = { path = "../common/storage-cache" }
 common-streams = { path = "../common/streams" }
-common-table-context = { path = "../common/catalog" }
 common-tracing = { path = "../common/tracing" }
 common-users = { path = "../common/users" }
 

@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_base::base::ProgressValues;
+pub use common_catalog::table_context::ProcessInfo;
 use common_contexts::DalMetrics;
-pub use common_table_context::table_context::ProcessInfo;
 
 use crate::sessions::Session;
 use crate::sessions::SessionContext;

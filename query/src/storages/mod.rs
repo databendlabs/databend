@@ -15,8 +15,8 @@
 pub mod cache;
 pub mod fuse;
 pub mod github;
-//#[cfg(feature = "hive")]
-// pub mod hive;
+#[cfg(feature = "hive")]
+pub mod hive;
 pub mod index;
 pub mod information_schema;
 pub mod memory;
@@ -32,8 +32,8 @@ mod storage_table_read_wrap;
 pub mod system;
 pub mod view;
 
-pub use common_table_context::table::NavigationPoint;
-pub use common_table_context::table::TableStatistics;
+pub use common_catalog::table::NavigationPoint;
+pub use common_catalog::table::TableStatistics;
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageDescription;

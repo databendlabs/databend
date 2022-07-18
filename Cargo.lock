@@ -1062,6 +1062,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-catalog"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common-base",
+ "common-config",
+ "common-contexts",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-io",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline",
+ "common-planners",
+ "common-settings",
+ "common-storage-cache",
+ "common-streams",
+ "common-users",
+ "dyn-clone",
+ "opendal",
+ "parking_lot 0.12.1",
+ "time 0.3.11",
+]
+
+[[package]]
 name = "common-config"
 version = "0.1.0"
 dependencies = [
@@ -1691,33 +1718,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-table-context"
-version = "0.1.0"
-dependencies = [
- "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "common-base",
- "common-config",
- "common-contexts",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-functions",
- "common-io",
- "common-meta-app",
- "common-meta-types",
- "common-pipeline",
- "common-planners",
- "common-settings",
- "common-storage-cache",
- "common-streams",
- "common-users",
- "dyn-clone",
- "opendal",
- "parking_lot 0.12.1",
- "time 0.3.11",
-]
-
-[[package]]
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
@@ -2281,6 +2281,7 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
+ "common-catalog",
  "common-config",
  "common-contexts",
  "common-datablocks",
@@ -2310,7 +2311,6 @@ dependencies = [
  "common-storage",
  "common-storage-cache",
  "common-streams",
- "common-table-context",
  "common-tracing",
  "common-users",
  "criterion",

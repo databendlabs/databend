@@ -27,6 +27,7 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
+pub use common_catalog::table_context::TableContext;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
@@ -46,7 +47,6 @@ use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
-pub use common_table_context::table_context::TableContext;
 use common_tracing::tracing;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
@@ -317,9 +317,6 @@ impl TableContext for QueryContext {
     fn attach_query_plan(&self, query_plan: &PlanNode) {
         self.shared.attach_query_plan(query_plan);
     }
-    fn get_cluster(&self) -> Arc<Cluster> {
-        self.shared.get_cluster()
-    }
     fn get_fragment_id(&self) -> usize {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }
@@ -340,6 +337,9 @@ impl TableContext for QueryContext {
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
+    fn get_config(&self) -> Config {
+        self.shared.get_config()
+    }
     fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
@@ -357,9 +357,6 @@ impl TableContext for QueryContext {
     }
     fn get_format_settings(&self) -> Result<FormatSettings> {
         self.shared.get_format_settings()
-    }
-    fn get_config(&self) -> Config {
-        self.shared.get_config()
     }
     fn get_tenant(&self) -> String {
         self.shared.get_tenant()
@@ -421,13 +418,16 @@ impl TableContext for QueryContext {
     fn get_connection_id(&self) -> String {
         self.shared.get_connection_id()
     }
-
     fn get_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
     }
 
     fn get_user_manager(&self) -> Arc<UserApiProvider> {
         self.shared.get_user_manager()
+    }
+
+    fn get_cluster(&self) -> Arc<Cluster> {
+        self.shared.get_cluster()
     }
 
     // Get all the processes list info.

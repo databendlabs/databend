@@ -12,4 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_table_context::table::Table;
+pub use common_catalog::table::Table;

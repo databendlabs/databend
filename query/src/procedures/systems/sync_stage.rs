@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageType;
-use common_table_context::table_context::TableContext;
 
 use crate::interpreters::list_files_from_dal;
 use crate::procedures::Procedure;

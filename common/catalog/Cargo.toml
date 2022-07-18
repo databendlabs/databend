@@ -1,5 +1,5 @@
 [package]
-name = "common-table-context"
+name = "common-catalog"
 version = "0.1.0"
 edition = "2021"
 

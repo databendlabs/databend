@@ -115,10 +115,8 @@ pub trait TableContext: Send + Sync {
     fn try_get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;
-
     // Get user manager api.
     fn get_user_manager(&self) -> Arc<UserApiProvider>;
-
     fn get_cluster(&self) -> Arc<Cluster>;
     async fn get_processes_info(&self) -> Vec<ProcessInfo>;
 }
