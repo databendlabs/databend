@@ -80,10 +80,10 @@ skipif clickhouse
 statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
 
-statement error ok
+statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test'; 
 
-statement error ok
+statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE Create_time = 'test'; 
 
 statement ok
