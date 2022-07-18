@@ -59,7 +59,7 @@ impl QueryFragment for RootQueryFragment {
     fn finalize(&self, actions: &mut QueryFragmentsActions) -> Result<()> {
         self.input.finalize(actions)?;
         let input_actions = actions.get_root_actions()?;
-        let fragment_id = self.ctx.get_fragment_id();
+        let fragment_id = self.ctx.get_and_inc_fragment_id();
         let mut fragment_actions = QueryFragmentActions::create(false, fragment_id);
 
         if PartitionState::NotPartition == self.input.get_out_partition()? {

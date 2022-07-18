@@ -1,75 +1,44 @@
-// Copyright 2022 Datafuse Labs.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-use std::fmt::Debug;
-use std::fmt::Formatter;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
-use common_planners::AggregatorPartialPlan;
-use common_planners::PlanBuilder;
-use common_planners::PlanNode;
-use common_planners::PlanRewriter;
-use common_planners::RemotePlan;
-use common_planners::StageKind;
-use common_planners::StagePlan;
-
-use crate::api::MergeExchange;
-use crate::api::ShuffleDataExchange;
+use common_datavalues::DataSchemaRef;
+use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, AlterTableClusterKeyPlan, AlterUserPlan, AlterUserUDFPlan, AlterViewPlan, BroadcastPlan, CallPlan, CopyPlan, CreateDatabasePlan, CreateRolePlan, CreateTablePlan, CreateUserPlan, CreateUserStagePlan, CreateUserUDFPlan, CreateViewPlan, DeletePlan, DescribeTablePlan, DescribeUserStagePlan, DropDatabasePlan, DropRolePlan, DropTableClusterKeyPlan, DropTablePlan, DropUserPlan, DropUserStagePlan, DropUserUDFPlan, DropViewPlan, EmptyPlan, ExistsTablePlan, ExplainPlan, Expression, ExpressionPlan, Expressions, FilterPlan, GrantPrivilegePlan, GrantRolePlan, HavingPlan, InsertPlan, KillPlan, LimitByPlan, LimitPlan, ListPlan, OptimizeTablePlan, PlanBuilder, PlanNode, PlanRewriter, ProjectionPlan, ReadDataSourcePlan, RemotePlan, RemoveUserStagePlan, RenameDatabasePlan, RenameTablePlan, RevokePrivilegePlan, RevokeRolePlan, SelectPlan, SettingPlan, ShowCreateDatabasePlan, ShowCreateTablePlan, ShowPlan, SinkPlan, SortPlan, SubQueriesSetPlan, TruncateTablePlan, UndropDatabasePlan, UndropTablePlan, UseDatabasePlan, WindowFuncPlan};
 use crate::interpreters::fragments::partition_state::PartitionState;
-use crate::interpreters::fragments::query_fragment::QueryFragment;
-use crate::interpreters::fragments::query_fragment_actions::QueryFragmentAction;
-use crate::interpreters::fragments::query_fragment_actions::QueryFragmentActions;
-use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
+use crate::interpreters::fragments::QueryFragment;
+use crate::interpreters::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
 use crate::sessions::QueryContext;
+use common_exception::{ErrorCode, Result};
+use crate::api::BroadcastExchange;
 
-pub struct StageQueryFragment {
+pub struct BroadcastQueryFragment {
     id: usize,
-    stage: StagePlan,
     ctx: Arc<QueryContext>,
+    broadcast_plan: BroadcastPlan,
     input: Box<dyn QueryFragment>,
 }
 
-impl StageQueryFragment {
+impl BroadcastQueryFragment {
     pub fn create(
         ctx: Arc<QueryContext>,
-        node: &StagePlan,
+        node: &BroadcastPlan,
         input: Box<dyn QueryFragment>,
     ) -> Result<Box<dyn QueryFragment>> {
         let id = ctx.get_and_inc_fragment_id();
-        Ok(Box::new(StageQueryFragment {
+        Ok(Box::new(BroadcastQueryFragment {
             id,
-            stage: node.clone(),
             ctx,
             input,
+            broadcast_plan: node.clone(),
         }))
     }
 }
 
-impl QueryFragment for StageQueryFragment {
+impl QueryFragment for BroadcastQueryFragment {
     fn distribute_query(&self) -> Result<bool> {
         Ok(true)
     }
 
     fn get_out_partition(&self) -> Result<PartitionState> {
-        match self.stage.kind {
-            StageKind::Normal => Ok(PartitionState::HashPartition),
-            StageKind::Expansive => Ok(PartitionState::HashPartition),
-            StageKind::Merge => Ok(PartitionState::NotPartition),
-        }
+        Ok(PartitionState::Broadcast)
     }
 
     fn finalize(&self, actions: &mut QueryFragmentsActions) -> Result<()> {
@@ -88,7 +57,7 @@ impl QueryFragment for StageQueryFragment {
             let fragment_action = QueryFragmentAction::create(
                 actions.get_local_executor(),
                 self.input
-                    .rewrite_remote_plan(&self.stage.input, &action.node)?,
+                    .rewrite_remote_plan(&self.broadcast_plan.input, &action.node)?,
             );
 
             fragment_actions.add_action(fragment_action);
@@ -98,21 +67,14 @@ impl QueryFragment for StageQueryFragment {
                 let fragment_action = QueryFragmentAction::create(
                     action.executor.clone(),
                     self.input
-                        .rewrite_remote_plan(&self.stage.input, &action.node)?,
+                        .rewrite_remote_plan(&self.broadcast_plan.input, &action.node)?,
                 );
 
                 fragment_actions.add_action(fragment_action);
             }
         }
 
-        fragment_actions.set_exchange(match self.stage.kind {
-            StageKind::Expansive => unimplemented!(),
-            StageKind::Merge => MergeExchange::create(actions.get_local_executor()),
-            StageKind::Normal => ShuffleDataExchange::create(
-                actions.get_executors(),
-                self.stage.scatters_expr.clone(),
-            ),
-        });
+        fragment_actions.set_exchange(BroadcastExchange::create(actions.get_executors()));
 
         match input_actions.exchange_actions {
             true => actions.add_fragment_actions(fragment_actions),
@@ -122,26 +84,26 @@ impl QueryFragment for StageQueryFragment {
 
     fn rewrite_remote_plan(&self, node: &PlanNode, _: &PlanNode) -> Result<PlanNode> {
         let query_id = self.ctx.get_id();
-        let mut stage_rewrite = StageRewrite::create(query_id, self.id);
+        let mut stage_rewrite = BroadcastRewrite::create(query_id, self.id);
         stage_rewrite.rewrite_plan_node(node)
     }
 }
 
-struct StageRewrite {
+struct BroadcastRewrite {
     query_id: String,
     fragment_id: usize,
 }
 
-impl StageRewrite {
-    pub fn create(query_id: String, fragment_id: usize) -> StageRewrite {
-        StageRewrite {
+impl BroadcastRewrite {
+    pub fn create(query_id: String, fragment_id: usize) -> BroadcastRewrite {
+        BroadcastRewrite {
             query_id,
             fragment_id,
         }
     }
 }
 
-impl PlanRewriter for StageRewrite {
+impl PlanRewriter for BroadcastRewrite {
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
         PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
             .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
@@ -157,19 +119,17 @@ impl PlanRewriter for StageRewrite {
             .build()
     }
 
-    fn rewrite_stage(&mut self, stage: &StagePlan) -> Result<PlanNode> {
+    fn rewrite_broadcast(&mut self, broadcast: &BroadcastPlan) -> Result<PlanNode> {
         Ok(PlanNode::Remote(RemotePlan::create_v2(
-            stage.schema(),
+            broadcast.schema(),
             self.query_id.to_owned(),
             self.fragment_id,
         )))
     }
 }
 
-impl Debug for StageQueryFragment {
+impl Debug for BroadcastQueryFragment {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StageQueryFragment")
-            .field("input", &self.input)
-            .finish()
+        unimplemented!()
     }
 }

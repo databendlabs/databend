@@ -38,6 +38,10 @@ impl<'a> DfParser<'a> {
                     self.parser.next_token();
                     ExplainType::Graph
                 }
+                "FRAGMENTS" => {
+                    self.parser.next_token();
+                    ExplainType::Fragments
+                }
                 _ => ExplainType::Syntax,
             },
             _ => ExplainType::Syntax,

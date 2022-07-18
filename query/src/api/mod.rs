@@ -25,6 +25,7 @@ pub use rpc::FlightClient;
 pub use rpc::FragmentPlanPacket;
 pub use rpc::InitNodesChannelPacket;
 pub use rpc::MergeExchange;
+pub use rpc::BroadcastExchange;
 pub use rpc::QueryFragmentsPlanPacket;
 pub use rpc::ShuffleDataExchange;
 pub use rpc_service::RpcService;

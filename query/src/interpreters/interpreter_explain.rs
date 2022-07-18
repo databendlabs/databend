@@ -22,7 +22,8 @@ use common_planners::ExplainType;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::plan_schedulers;
+use crate::interpreters::{plan_schedulers, QueryFragmentActions, QueryFragmentsActions};
+use crate::interpreters::fragments::{QueryFragmentsBuilder, RootQueryFragment};
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
 use crate::pipelines::QueryPipelineBuilder;
@@ -53,6 +54,7 @@ impl Interpreter for ExplainInterpreter {
             ExplainType::Graph => self.explain_graph(),
             ExplainType::Syntax => self.explain_syntax(),
             ExplainType::Pipeline => self.explain_pipeline(),
+            ExplainType::Fragments => self.explain_fragments(),
         }?;
 
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
@@ -110,5 +112,29 @@ impl ExplainInterpreter {
                 .collect::<Vec<_>>(),
         );
         Ok(DataBlock::create(schema, vec![formatted_pipeline]))
+    }
+
+    fn explain_fragments(&self) -> Result<DataBlock> {
+        let ctx = self.ctx.clone();
+        let plan = plan_schedulers::apply_plan_rewrite(
+            Optimizers::create(ctx.clone()),
+            &self.explain.input,
+        )?;
+
+
+        let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), &plan)?;
+        let root_query_fragment = RootQueryFragment::create(query_fragments, ctx.clone(), &plan)?;
+
+        let mut fragments_actions = QueryFragmentsActions::create(ctx);
+        root_query_fragment.finalize(&mut fragments_actions)?;
+
+        let formatted_fragments = Series::from_data(
+            fragments_actions.display_indent()
+                .to_string()
+                .lines()
+                .map(|s| s.as_bytes())
+                .collect::<Vec<_>>(),
+        );
+        Ok(DataBlock::create(self.schema(), vec![formatted_fragments]))
     }
 }

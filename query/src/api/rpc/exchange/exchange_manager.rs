@@ -720,6 +720,7 @@ impl FragmentCoordinator {
                     )?)),
                 }))
             }
+            Some(DataExchange::Broadcast(_)) => Err(ErrorCode::LogicalError("Cannot found data exchange.")),
         }
     }
 

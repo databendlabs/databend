@@ -16,16 +16,16 @@ use common_planners::Expression;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DataExchange {
-    // None,
     Merge(MergeExchange),
+    Broadcast(BroadcastExchange),
     ShuffleDataExchange(ShuffleDataExchange),
 }
 
 impl DataExchange {
     pub fn get_destinations(&self) -> Vec<String> {
         match self {
-            // DataExchange::None => vec![],
             DataExchange::Merge(exchange) => vec![exchange.destination_id.clone()],
+            DataExchange::Broadcast(exchange) => exchange.destination_ids.clone(),
             DataExchange::ShuffleDataExchange(exchange) => exchange.destination_ids.clone(),
         }
     }
@@ -54,5 +54,16 @@ pub struct MergeExchange {
 impl MergeExchange {
     pub fn create(destination_id: String) -> DataExchange {
         DataExchange::Merge(MergeExchange { destination_id })
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BroadcastExchange {
+    pub destination_ids: Vec<String>,
+}
+
+impl BroadcastExchange {
+    pub fn create(destination_ids: Vec<String>) -> DataExchange {
+        DataExchange::Broadcast(BroadcastExchange { destination_ids })
     }
 }
