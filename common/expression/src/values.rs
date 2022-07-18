@@ -435,6 +435,57 @@ impl Column {
         }
     }
 
+    pub fn arrow_type(&self) -> common_arrow::arrow::datatypes::DataType {
+        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+        use common_arrow::arrow::datatypes::Field;
+
+        match self {
+            Column::Null { .. } => ArrowDataType::Null,
+            Column::EmptyArray { .. } => ArrowDataType::Extension(
+                "EmptyArray".to_owned(),
+                Box::new(ArrowDataType::Null),
+                None,
+            ),
+            Column::Int8(_) => ArrowDataType::Int8,
+            Column::Int16(_) => ArrowDataType::Int16,
+            Column::Int32(_) => ArrowDataType::Int32,
+            Column::Int64(_) => ArrowDataType::Int64,
+            Column::UInt8(_) => ArrowDataType::UInt8,
+            Column::UInt16(_) => ArrowDataType::UInt16,
+            Column::UInt32(_) => ArrowDataType::UInt32,
+            Column::UInt64(_) => ArrowDataType::UInt64,
+            Column::Boolean(_) => ArrowDataType::Boolean,
+            Column::String { .. } => ArrowDataType::LargeBinary,
+            Column::Array {
+                array: box Column::Nullable { column, .. },
+                ..
+            } => ArrowDataType::LargeList(Box::new(Field::new(
+                "list".to_string(),
+                column.arrow_type(),
+                true,
+            ))),
+            Column::Array { array, .. } => ArrowDataType::LargeList(Box::new(Field::new(
+                "list".to_string(),
+                array.arrow_type(),
+                false,
+            ))),
+            Column::Nullable { column, .. } => column.arrow_type(),
+            Column::Tuple { fields, .. } => {
+                let arrow_fields = fields
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, field)| match field {
+                        Column::Nullable { column, .. } => {
+                            Field::new((idx + 1).to_string(), column.arrow_type(), true)
+                        }
+                        _ => Field::new((idx + 1).to_string(), field.arrow_type(), false),
+                    })
+                    .collect();
+                ArrowDataType::Struct(arrow_fields)
+            }
+        }
+    }
+
     pub fn as_arrow(&self) -> Box<dyn common_arrow::arrow::array::Array> {
         match self {
             Column::Null { len } => Box::new(common_arrow::arrow::array::NullArray::new_null(
@@ -534,57 +585,6 @@ impl Column {
         }
     }
 
-    pub fn arrow_type(&self) -> common_arrow::arrow::datatypes::DataType {
-        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-        use common_arrow::arrow::datatypes::Field;
-
-        match self {
-            Column::Null { .. } => ArrowDataType::Null,
-            Column::EmptyArray { .. } => ArrowDataType::Extension(
-                "EmptyArray".to_owned(),
-                Box::new(ArrowDataType::Null),
-                None,
-            ),
-            Column::Int8(_) => ArrowDataType::Int8,
-            Column::Int16(_) => ArrowDataType::Int16,
-            Column::Int32(_) => ArrowDataType::Int32,
-            Column::Int64(_) => ArrowDataType::Int64,
-            Column::UInt8(_) => ArrowDataType::UInt8,
-            Column::UInt16(_) => ArrowDataType::UInt16,
-            Column::UInt32(_) => ArrowDataType::UInt32,
-            Column::UInt64(_) => ArrowDataType::UInt64,
-            Column::Boolean(_) => ArrowDataType::Boolean,
-            Column::String { .. } => ArrowDataType::LargeBinary,
-            Column::Array {
-                array: box Column::Nullable { column, .. },
-                ..
-            } => ArrowDataType::LargeList(Box::new(Field::new(
-                "list".to_string(),
-                column.arrow_type(),
-                true,
-            ))),
-            Column::Array { array, .. } => ArrowDataType::LargeList(Box::new(Field::new(
-                "list".to_string(),
-                array.arrow_type(),
-                false,
-            ))),
-            Column::Nullable { column, .. } => column.arrow_type(),
-            Column::Tuple { fields, .. } => {
-                let arrow_fields = fields
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, field)| match field {
-                        Column::Nullable { column, .. } => {
-                            Field::new((idx + 1).to_string(), column.arrow_type(), true)
-                        }
-                        _ => Field::new((idx + 1).to_string(), field.arrow_type(), false),
-                    })
-                    .collect();
-                ArrowDataType::Struct(arrow_fields)
-            }
-        }
-    }
-
     pub fn from_arrow(arrow_col: &dyn common_arrow::arrow::array::Array) -> Column {
         use common_arrow::arrow::array::Array as _;
         use common_arrow::arrow::datatypes::DataType as ArrowDataType;
@@ -600,7 +600,7 @@ impl Column {
                 arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Int8Array>()
-                    .unwrap()
+                    .expect("fail to read from arrow: array should be `Int8Array`")
                     .values()
                     .clone(),
             ),
@@ -608,7 +608,7 @@ impl Column {
                 arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Int16Array>()
-                    .unwrap()
+                    .expect("fail to read from arrow: array should be `Int16Array`")
                     .values()
                     .clone(),
             ),
@@ -616,7 +616,7 @@ impl Column {
                 arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Int32Array>()
-                    .unwrap()
+                    .expect("fail to read from arrow: array should be `Int32Array`")
                     .values()
                     .clone(),
             ),
@@ -624,7 +624,7 @@ impl Column {
                 arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Int64Array>()
-                    .unwrap()
+                    .expect("fail to read from arrow: array should be `Int64Array`")
                     .values()
                     .clone(),
             ),
@@ -632,7 +632,7 @@ impl Column {
                 arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::UInt8Array>()
-                    .unwrap()
+                    .expect("fail to read from arrow: array should be `UInt8Array`")
                     .values()
                     .clone(),
             ),
@@ -640,7 +640,7 @@ impl Column {
                 arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::UInt16Array>()
-                    .unwrap()
+                    .expect("fail to read from arrow: array should be `UInt16Array`")
                     .values()
                     .clone(),
             ),
@@ -648,7 +648,7 @@ impl Column {
                 arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::UInt32Array>()
-                    .unwrap()
+                    .expect("fail to read from arrow: array should be `UInt32Array`")
                     .values()
                     .clone(),
             ),
@@ -656,7 +656,7 @@ impl Column {
                 arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::UInt64Array>()
-                    .unwrap()
+                    .expect("fail to read from arrow: array should be `UInt64Array`")
                     .values()
                     .clone(),
             ),
@@ -664,7 +664,7 @@ impl Column {
                 arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::BooleanArray>()
-                    .unwrap()
+                    .expect("fail to read from arrow: array should be `BooleanArray`")
                     .values()
                     .clone(),
             ),
@@ -672,7 +672,7 @@ impl Column {
                 let arrow_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                    .unwrap();
+                    .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
                 let offsets = arrow_col
                     .offsets()
                     .iter()
@@ -688,7 +688,7 @@ impl Column {
                 let arrow_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
-                    .unwrap();
+                    .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
                 let offsets = arrow_col
                     .offsets()
                     .iter()
@@ -704,7 +704,7 @@ impl Column {
                 let arrow_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Utf8Array<i32>>()
-                    .unwrap();
+                    .expect("fail to read from arrow: array should be `Utf8Array<i32>`");
                 let offsets = arrow_col
                     .offsets()
                     .iter()
@@ -720,7 +720,7 @@ impl Column {
                 let arrow_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Utf8Array<i64>>()
-                    .unwrap();
+                    .expect("fail to read from arrow: array should be `Utf8Array<i64>`");
                 let offsets = arrow_col
                     .offsets()
                     .iter()
@@ -735,7 +735,7 @@ impl Column {
                 let arrow_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
-                    .unwrap();
+                    .expect("fail to read from arrow: array should be `ListArray<i64>`");
                 let array = Column::from_arrow(&**arrow_col.values());
                 let offsets = arrow_col
                     .offsets()
@@ -751,7 +751,7 @@ impl Column {
                 let arrow_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::StructArray>()
-                    .unwrap();
+                    .expect("fail to read from arrow: array should be `StructArray`");
                 let fields = arrow_col
                     .values()
                     .iter()
