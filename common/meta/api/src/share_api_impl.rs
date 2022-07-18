@@ -245,8 +245,8 @@ impl<KV: KVApi> ShareApi for KV {
                         txn_cond_seq(&share_account_key, Eq, 0),
                     ],
                     if_then: vec![
-                        txn_op_put(&id_key, serialize_struct(&share_meta)?), // (share_id) -> share_meta
-                        txn_op_put(&share_account_key, serialize_struct(&share_account_meta)?), // (account, share_id) -> share_account_meta
+                        txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
+                        txn_op_put(&share_account_key, serialize_struct(&share_account_meta)?), /* (account, share_id) -> share_account_meta */
                     ],
                     else_then: vec![],
                 };
@@ -329,16 +329,14 @@ impl<KV: KVApi> ShareApi for KV {
             // return share_id
             {
                 share_meta.del_account(&req.account);
-                //let name_key = ShareNameIdent {};
 
                 let txn_req = TxnRequest {
                     condition: vec![
-                        //txn_cond_seq(name_key, Eq, share_id_seq),
                         txn_cond_seq(&id_key, Eq, share_meta_seq),
                         txn_cond_seq(&share_account_key, Eq, share_meta_account_seq),
                     ],
                     if_then: vec![
-                        txn_op_put(&id_key, serialize_struct(&share_meta)?), // (share_id) -> share_meta
+                        txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
                         txn_op_del(&share_account_key), // del (account, share_id)
                     ],
                     else_then: vec![],
