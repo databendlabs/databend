@@ -22,7 +22,7 @@ use common_planners::RevokePrivilegePlan;
 use common_planners::RevokeRolePlan;
 use common_tracing::tracing;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

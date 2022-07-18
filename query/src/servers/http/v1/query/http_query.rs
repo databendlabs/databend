@@ -35,7 +35,7 @@ use crate::servers::http::v1::query::Executor;
 use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::SessionType;
 use crate::storages::result::block_buffer::BlockBuffer;
 

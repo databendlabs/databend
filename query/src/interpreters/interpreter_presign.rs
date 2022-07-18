@@ -24,14 +24,14 @@ use common_tracing::tracing;
 use serde_json::Value;
 
 use crate::interpreters::Interpreter;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sql::plans::PresignAction;
 use crate::sql::plans::PresignPlan;
 use crate::storages::stage::StageSourceHelper;
 
 pub struct PresignInterpreter {
-    ctx: Arc<dyn QryCtx>,
+    ctx: Arc<dyn TableContext>,
     plan: PresignPlan,
 }
 

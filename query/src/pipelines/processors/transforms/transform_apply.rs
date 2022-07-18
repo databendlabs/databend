@@ -32,7 +32,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::pipelines::Pipeline;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sql::exec::ColumnID;
 use crate::sql::exec::PhysicalPlan;

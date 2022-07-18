@@ -17,7 +17,7 @@ use common_exception::Result;
 use common_meta_types::StageFile;
 use common_meta_types::UserIdentity;
 use databend_query::interpreters::*;
-use databend_query::sessions::query_ctx::QryCtx;
+use databend_query::sessions::query_ctx::TableContext;
 use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 

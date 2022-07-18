@@ -50,7 +50,7 @@ use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 
 use crate::common::Evaluator;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::Binder;

@@ -30,7 +30,7 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;

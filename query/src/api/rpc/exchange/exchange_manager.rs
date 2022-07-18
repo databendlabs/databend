@@ -56,7 +56,7 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pipelines::QueryPipelineBuilder;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::Config;
 

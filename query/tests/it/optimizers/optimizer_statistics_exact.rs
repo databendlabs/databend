@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_planners::*;
 use databend_query::optimizers::*;
-use databend_query::sessions::query_ctx::QryCtx;
+use databend_query::sessions::query_ctx::TableContext;
 use pretty_assertions::assert_eq;
 
 use crate::optimizers::optimizer::*;

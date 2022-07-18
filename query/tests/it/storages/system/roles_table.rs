@@ -15,7 +15,7 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
-use databend_query::sessions::query_ctx::QryCtx;
+use databend_query::sessions::query_ctx::TableContext;
 use databend_query::storages::system::RolesTable;
 use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;

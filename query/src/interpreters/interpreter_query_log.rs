@@ -30,7 +30,7 @@ use serde_json;
 use serde_repr::Serialize_repr;
 
 use crate::catalogs::CATALOG_DEFAULT;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 
 #[derive(Clone, Copy, Serialize_repr)]

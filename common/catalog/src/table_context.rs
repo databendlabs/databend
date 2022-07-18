@@ -59,7 +59,7 @@ pub struct ProcessInfo {
 }
 
 #[async_trait::async_trait]
-pub trait QryCtx: Send + Sync {
+pub trait TableContext: Send + Sync {
     /// Build a table instance the plan wants to operate on.
     ///
     /// A plan just contains raw information about a table or table function.

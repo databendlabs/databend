@@ -49,7 +49,7 @@ use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::exec::PhysicalPlan;

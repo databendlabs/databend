@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_planners::ExplainType;
 use common_tracing::tracing;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

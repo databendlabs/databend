@@ -27,7 +27,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::processors::Sink;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 
 pub struct SinkBuildHashTable {

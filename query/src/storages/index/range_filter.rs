@@ -32,7 +32,7 @@ use common_planners::RequireColumnsVisitor;
 use common_storage_cache::meta::StatisticsOfColumns;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 
 #[derive(Clone)]
 pub struct ClusterKeyInfo {
@@ -53,7 +53,7 @@ pub struct RangeFilter {
 
 impl RangeFilter {
     pub fn try_create(
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         expr: &Expression,
         schema: DataSchemaRef,
     ) -> Result<Self> {

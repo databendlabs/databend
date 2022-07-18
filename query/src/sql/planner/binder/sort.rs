@@ -22,7 +22,7 @@ use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Binder;

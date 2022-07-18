@@ -30,7 +30,7 @@ use super::cached_reader::CachedReader;
 use super::cached_reader::HasTenantLabel;
 use super::cached_reader::Loader;
 use super::versioned_reader::VersionedReader;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 
 /// Provider of [BufReader]
@@ -42,13 +42,13 @@ pub trait BufReaderProvider {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>>;
 }
 
-pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a dyn QryCtx>;
-pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a dyn QryCtx>;
+pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a dyn TableContext>;
+pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a dyn TableContext>;
 
 pub struct MetaReaders;
 
 impl MetaReaders {
-    pub fn segment_info_reader(ctx: &dyn QryCtx) -> SegmentInfoReader {
+    pub fn segment_info_reader(ctx: &dyn TableContext) -> SegmentInfoReader {
         SegmentInfoReader::new(
             ctx.get_storage_cache_manager().get_table_segment_cache(),
             ctx,
@@ -56,7 +56,7 @@ impl MetaReaders {
         )
     }
 
-    pub fn table_snapshot_reader(ctx: &dyn QryCtx) -> TableSnapshotReader {
+    pub fn table_snapshot_reader(ctx: &dyn TableContext) -> TableSnapshotReader {
         TableSnapshotReader::new(
             ctx.get_storage_cache_manager().get_table_snapshot_cache(),
             ctx,
@@ -184,7 +184,7 @@ where T: BufReaderProvider + Sync
 }
 
 #[async_trait::async_trait]
-impl BufReaderProvider for &dyn QryCtx {
+impl BufReaderProvider for &dyn TableContext {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>> {
         let operator = self.get_storage_operator()?;
         let object = operator.object(path);
@@ -207,19 +207,19 @@ impl BufReaderProvider for &dyn QryCtx {
     }
 }
 
-impl HasTenantLabel for &dyn QryCtx {
+impl HasTenantLabel for &dyn TableContext {
     fn tenant_label(&self) -> TenantLabel {
         ctx_tenant_label(*self)
     }
 }
 
-impl HasTenantLabel for Arc<dyn QryCtx> {
+impl HasTenantLabel for Arc<dyn TableContext> {
     fn tenant_label(&self) -> TenantLabel {
         ctx_tenant_label(self.as_ref())
     }
 }
 
-fn ctx_tenant_label(ctx: &dyn QryCtx) -> TenantLabel {
+fn ctx_tenant_label(ctx: &dyn TableContext) -> TenantLabel {
     let mgr = ctx.get_storage_cache_manager();
     TenantLabel {
         tenant_id: mgr.get_tenant_id().to_owned(),

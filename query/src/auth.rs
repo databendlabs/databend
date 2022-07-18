@@ -21,7 +21,7 @@ use common_meta_types::UserInfo;
 use common_users::JwtAuthenticator;
 use common_users::UserApiProvider;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 pub use crate::Config;
 

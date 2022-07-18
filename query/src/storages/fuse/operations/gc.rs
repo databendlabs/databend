@@ -25,12 +25,12 @@ use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use opendal::Operator;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
-    pub async fn do_gc(&self, ctx: &Arc<dyn QryCtx>, keep_last_snapshot: bool) -> Result<()> {
+    pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         let r = self.read_table_snapshot(ctx.as_ref()).await;
         let snapshot_opt = match r {
             Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
@@ -139,7 +139,7 @@ impl FuseTable {
 
     async fn blocks_of(
         &self,
-        ctx: &dyn QryCtx,
+        ctx: &dyn TableContext,
         segments: impl Iterator<Item = &Location>,
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
@@ -171,7 +171,7 @@ impl FuseTable {
     /// - but NOT referenced by `root`
     async fn purge_blocks(
         &self,
-        ctx: &dyn QryCtx,
+        ctx: &dyn TableContext,
         segments: impl Iterator<Item = &Location>,
         root: &HashSet<String>,
     ) -> Result<()> {
@@ -222,7 +222,7 @@ impl FuseTable {
     // collect in the sense of GC
     async fn collect(
         &self,
-        ctx: &dyn QryCtx,
+        ctx: &dyn TableContext,
         segments_to_be_deleted: HashSet<Location>,
         snapshots_to_be_deleted: Vec<(SnapshotId, u64)>,
     ) -> Result<()> {

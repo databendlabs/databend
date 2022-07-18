@@ -33,7 +33,7 @@ members = [
     "common/protos",
     "common/meta/app",
     "common/streams",
-    "common/table-context",
+    "common/catalog",
     "common/tracing",
     "common/users",
     "common/storage",

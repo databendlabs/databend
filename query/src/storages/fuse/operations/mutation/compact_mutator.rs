@@ -22,7 +22,7 @@ use common_storage_cache::meta::TableSnapshot;
 use opendal::Operator;
 
 use super::block_filter::all_the_columns_ids;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::io::BlockCompactor;
 use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;
@@ -33,7 +33,7 @@ use crate::storages::fuse::statistics::reducers::reduce_statistics;
 use crate::storages::fuse::FuseTable;
 
 pub struct CompactMutator<'a> {
-    ctx: &'a Arc<dyn QryCtx>,
+    ctx: &'a Arc<dyn TableContext>,
     location_generator: &'a TableMetaLocationGenerator,
     base_snapshot: &'a TableSnapshot,
     data_accessor: Operator,
@@ -43,7 +43,7 @@ pub struct CompactMutator<'a> {
 
 impl<'a> CompactMutator<'a> {
     pub fn try_create(
-        ctx: &'a Arc<dyn QryCtx>,
+        ctx: &'a Arc<dyn TableContext>,
         location_generator: &'a TableMetaLocationGenerator,
         base_snapshot: &'a TableSnapshot,
         row_per_block: usize,

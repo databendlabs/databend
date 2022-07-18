@@ -27,7 +27,7 @@ use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use regex::Regex;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::storages::stage::StageSourceHelper;
 
@@ -91,7 +91,7 @@ pub async fn list_files_from_dal(
     path: &str,
     pattern: &str,
 ) -> Result<Vec<StageFile>> {
-    let rename_me_qry_ctx: Arc<dyn QryCtx> = ctx.clone();
+    let rename_me_qry_ctx: Arc<dyn TableContext> = ctx.clone();
     let op = StageSourceHelper::get_op(&rename_me_qry_ctx, stage).await?;
     let mut files = Vec::new();
 

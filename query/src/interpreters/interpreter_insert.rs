@@ -39,7 +39,7 @@ use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 
 pub struct InsertInterpreter {

@@ -38,7 +38,7 @@ use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::Table;
 
 pub struct QueryLogTable {
@@ -132,7 +132,7 @@ impl Table for QueryLogTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<dyn QryCtx>,
+        _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
@@ -140,7 +140,7 @@ impl Table for QueryLogTable {
 
     fn read2(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -159,7 +159,7 @@ impl Table for QueryLogTable {
 
     async fn append_data(
         &self,
-        _ctx: Arc<dyn QryCtx>,
+        _ctx: Arc<dyn TableContext>,
         mut stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         while let Some(block) = stream.next().await {
@@ -184,7 +184,7 @@ impl Table for QueryLogTable {
 
     async fn truncate(
         &self,
-        _ctx: Arc<dyn QryCtx>,
+        _ctx: Arc<dyn TableContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         let mut data = self.data.write();
@@ -199,7 +199,7 @@ struct QueryLogSource {
 
 impl QueryLogSource {
     pub fn create(
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         data: &VecDeque<DataBlock>,
     ) -> Result<ProcessorPtr> {

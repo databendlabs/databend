@@ -32,7 +32,7 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::statements::ExpressionAnalyzer;

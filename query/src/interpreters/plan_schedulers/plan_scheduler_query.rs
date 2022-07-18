@@ -24,7 +24,7 @@ use crate::interpreters::fragments::QueryFragmentsBuilder;
 use crate::interpreters::fragments::RootQueryFragment;
 use crate::pipelines::Pipeline;
 use crate::pipelines::QueryPipelineBuilder;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 
 async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<Pipeline> {

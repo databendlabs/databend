@@ -33,7 +33,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::FuseTable;
 use crate::storages::result::result_locations::ResultLocations;
@@ -84,7 +84,7 @@ pub struct ResultTable {
 }
 
 impl ResultTable {
-    pub async fn try_get(ctx: Arc<dyn QryCtx>, query_id: &str) -> Result<Arc<ResultTable>> {
+    pub async fn try_get(ctx: Arc<dyn TableContext>, query_id: &str) -> Result<Arc<ResultTable>> {
         let locations = ResultLocations::new(query_id);
         let data_accessor = ctx.get_storage_operator()?;
         let location = locations.get_meta_location();
@@ -116,7 +116,7 @@ impl ResultTable {
     #[allow(unused)]
     fn create_block_reader(
         &self,
-        ctx: &Arc<dyn QryCtx>,
+        ctx: &Arc<dyn TableContext>,
         _push_downs: &Option<Extras>,
     ) -> Result<Arc<BlockReader>> {
         let projection = (0..self.get_table_info().schema().fields().len())
@@ -141,7 +141,7 @@ impl Table for ResultTable {
 
     async fn read_partitions(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let data_accessor = ctx.get_storage_operator()?;
@@ -160,7 +160,7 @@ impl Table for ResultTable {
 
     fn read2(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {

@@ -50,7 +50,7 @@ use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::HashJoinState;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sql::exec::ColumnID;
 use crate::sql::exec::PhysicalScalar;

@@ -23,7 +23,7 @@ use common_tracing::tracing;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::storages::stage::StageSourceHelper;
 
@@ -56,7 +56,7 @@ impl Interpreter for RemoveUserStageInterpreter {
 
         let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
         let files = files.iter().map(|f| f.path.clone()).collect::<Vec<_>>();
-        let rename_me: Arc<dyn QryCtx> = self.ctx.clone();
+        let rename_me: Arc<dyn TableContext> = self.ctx.clone();
         let op = StageSourceHelper::get_op(&rename_me, &self.plan.stage).await?;
         if plan.stage.stage_type == StageType::Internal {
             user_mgr

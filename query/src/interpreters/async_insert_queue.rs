@@ -41,7 +41,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
 use crate::pipelines::SinkPipeBuilder;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;

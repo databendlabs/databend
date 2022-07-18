@@ -24,14 +24,14 @@ use common_planners::Expression;
 use common_storage_cache::meta::BlockMeta;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::operations::mutation::deletion_mutator::Deletion;
 use crate::storages::fuse::FuseTable;
 
 pub async fn delete_from_block(
     table: &FuseTable,
     block_meta: &BlockMeta,
-    ctx: &Arc<dyn QryCtx>,
+    ctx: &Arc<dyn TableContext>,
     filter_column_ids: Vec<usize>,
     filter_expr: &Expression,
 ) -> Result<Deletion> {

@@ -24,7 +24,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 
 #[async_trait::async_trait]
 pub trait AsyncSource: Send {
@@ -48,7 +48,11 @@ pub struct AsyncSourcer<T: 'static + AsyncSource> {
 }
 
 impl<T: 'static + AsyncSource> AsyncSourcer<T> {
-    pub fn create(ctx: Arc<dyn QryCtx>, output: Arc<OutputPort>, inner: T) -> Result<ProcessorPtr> {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        output: Arc<OutputPort>,
+        inner: T,
+    ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(Self {
             inner,

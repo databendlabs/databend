@@ -25,7 +25,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::InsertInterpreterV2;
 use crate::interpreters::Interpreter;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::insert::Insert;

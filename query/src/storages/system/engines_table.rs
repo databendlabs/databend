@@ -22,7 +22,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use crate::catalogs::CATALOG_DEFAULT;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
@@ -39,7 +39,7 @@ impl AsyncSystemTable for EnginesTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn QryCtx>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         // TODO passin catalog name
         let table_engine_descriptors = ctx.get_catalog(CATALOG_DEFAULT)?.get_table_engines();
         let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());

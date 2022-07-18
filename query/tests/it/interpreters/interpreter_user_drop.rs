@@ -18,7 +18,7 @@ use common_meta_types::AuthInfo;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use databend_query::interpreters::*;
-use databend_query::sessions::query_ctx::QryCtx;
+use databend_query::sessions::query_ctx::TableContext;
 use databend_query::sql::*;
 use pretty_assertions::assert_eq;
 

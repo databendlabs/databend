@@ -33,7 +33,7 @@ use super::ProbeState;
 use crate::common::EvalNode;
 use crate::pipelines::processors::transforms::hash_join::join_hash_table::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sql::exec::ColumnID;
 use crate::sql::planner::plans::JoinType;
 use crate::sql::plans::JoinType::Mark;

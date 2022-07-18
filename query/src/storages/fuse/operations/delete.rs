@@ -21,7 +21,7 @@ use common_planners::Extras;
 use common_storage_cache::meta::TableSnapshot;
 use common_tracing::tracing::debug;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::operations::mutation::delete_from_block;
 use crate::storages::fuse::operations::mutation::deletion_mutator::Deletion;
 use crate::storages::fuse::operations::mutation::deletion_mutator::DeletionMutator;
@@ -30,7 +30,7 @@ use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
 
 impl FuseTable {
-    pub async fn do_delete(&self, ctx: Arc<dyn QryCtx>, plan: &DeletePlan) -> Result<()> {
+    pub async fn do_delete(&self, ctx: Arc<dyn TableContext>, plan: &DeletePlan) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot(ctx.as_ref()).await?;
 
         // check if table is empty
@@ -63,7 +63,7 @@ impl FuseTable {
 
     async fn delete_rows(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         snapshot: &Arc<TableSnapshot>,
         filter: &Expression,
         plan: &DeletePlan,
@@ -107,7 +107,7 @@ impl FuseTable {
 
     async fn commit_deletion(
         &self,
-        ctx: &dyn QryCtx,
+        ctx: &dyn TableContext,
         del_holder: DeletionMutator<'_>,
         catalog_name: &str,
     ) -> Result<()> {

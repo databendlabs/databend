@@ -43,7 +43,7 @@ use futures::StreamExt;
 use uuid::Uuid;
 
 use crate::pipelines::Pipeline;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
@@ -120,7 +120,7 @@ impl FuseTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub(crate) async fn read_table_snapshot(
         &self,
-        ctx: &dyn QryCtx,
+        ctx: &dyn TableContext,
     ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc() {
             let reader = MetaReaders::table_snapshot_reader(ctx);
@@ -174,7 +174,7 @@ impl FuseTable {
 
     pub async fn update_table_meta(
         &self,
-        ctx: &dyn QryCtx,
+        ctx: &dyn TableContext,
         catalog_name: &str,
         snapshot: &TableSnapshot,
         meta: &mut TableMeta,
@@ -254,7 +254,7 @@ impl Table for FuseTable {
 
     async fn alter_table_cluster_keys(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         catalog_name: &str,
         cluster_key_str: String,
     ) -> Result<()> {
@@ -294,7 +294,7 @@ impl Table for FuseTable {
 
     async fn drop_table_cluster_keys(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         catalog_name: &str,
     ) -> Result<()> {
         if self.cluster_key_meta.is_none() {
@@ -339,7 +339,7 @@ impl Table for FuseTable {
     #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn read_partitions(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
@@ -348,14 +348,14 @@ impl Table for FuseTable {
     #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
     fn read2(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_read2(ctx, plan, pipeline)
     }
 
-    fn append2(&self, ctx: Arc<dyn QryCtx>, pipeline: &mut Pipeline) -> Result<()> {
+    fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         self.check_mutable()?;
         self.do_append2(ctx, pipeline)
     }
@@ -363,7 +363,7 @@ impl Table for FuseTable {
     #[tracing::instrument(level = "debug", name = "fuse_table_append_data", skip(self, ctx, stream), fields(ctx.id = ctx.get_id().as_str()))]
     async fn append_data(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         self.check_mutable()?;
@@ -379,7 +379,7 @@ impl Table for FuseTable {
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]
     async fn commit_insertion(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         catalog_name: &str,
         operations: Vec<DataBlock>,
         overwrite: bool,
@@ -395,19 +395,23 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn truncate(&self, ctx: Arc<dyn QryCtx>, truncate_plan: TruncateTablePlan) -> Result<()> {
+    async fn truncate(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        truncate_plan: TruncateTablePlan,
+    ) -> Result<()> {
         self.check_mutable()?;
         self.do_truncate(ctx, truncate_plan.purge, truncate_plan.catalog.as_str())
             .await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn optimize(&self, ctx: Arc<dyn QryCtx>, keep_last_snapshot: bool) -> Result<()> {
+    async fn optimize(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         self.check_mutable()?;
         self.do_gc(&ctx, keep_last_snapshot).await
     }
 
-    async fn statistics(&self, _ctx: Arc<dyn QryCtx>) -> Result<Option<TableStatistics>> {
+    async fn statistics(&self, _ctx: Arc<dyn TableContext>) -> Result<Option<TableStatistics>> {
         let s = &self.table_info.meta.statistics;
         Ok(Some(TableStatistics {
             num_rows: Some(s.number_of_rows),
@@ -420,7 +424,7 @@ impl Table for FuseTable {
     #[tracing::instrument(level = "debug", name = "fuse_table_navigate_to", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn navigate_to(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         point: &NavigationPoint,
     ) -> Result<Arc<dyn Table>> {
         match point {
@@ -434,12 +438,12 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_delete", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn delete(&self, ctx: Arc<dyn QryCtx>, delete_plan: DeletePlan) -> Result<()> {
+    async fn delete(&self, ctx: Arc<dyn TableContext>, delete_plan: DeletePlan) -> Result<()> {
         self.do_delete(ctx, &delete_plan).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_compact", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn compact(&self, ctx: Arc<dyn QryCtx>, plan: OptimizeTablePlan) -> Result<()> {
+    async fn compact(&self, ctx: Arc<dyn TableContext>, plan: OptimizeTablePlan) -> Result<()> {
         self.do_compact(ctx, &plan).await
     }
 }

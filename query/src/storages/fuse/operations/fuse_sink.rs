@@ -31,7 +31,7 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
@@ -58,7 +58,7 @@ enum State {
 pub struct FuseTableSink {
     state: State,
     input: Arc<InputPort>,
-    ctx: Arc<dyn QryCtx>,
+    ctx: Arc<dyn TableContext>,
     data_accessor: Operator,
     num_block_threshold: u64,
     meta_locations: TableMetaLocationGenerator,
@@ -69,7 +69,7 @@ pub struct FuseTableSink {
 impl FuseTableSink {
     pub fn create(
         input: Arc<InputPort>,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         num_block_threshold: usize,
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,

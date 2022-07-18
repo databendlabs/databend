@@ -20,7 +20,7 @@ use common_exception::Result;
 
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::table_functions::FuseSegment;
 use crate::storages::fuse::FuseTable;

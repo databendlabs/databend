@@ -26,7 +26,7 @@ use common_storage_cache::meta::SegmentInfo;
 use common_storage_cache::meta::Statistics;
 use common_storage_cache::meta::TableSnapshot;
 use common_storage_cache::meta::Versioned;
-use databend_query::sessions::query_ctx::QryCtx;
+use databend_query::sessions::query_ctx::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::DeletionMutator;

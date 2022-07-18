@@ -39,7 +39,7 @@ use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::group_by::StateEntity;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 
 pub type KeysU8PartialAggregator<const HAS_AGG: bool> =

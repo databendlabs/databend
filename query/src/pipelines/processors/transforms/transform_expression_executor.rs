@@ -27,7 +27,7 @@ use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
 use common_tracing::tracing;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 
 /// ExpressionExecutor is a helper struct for expressions and projections
 /// Aggregate functions is not covered, because all expressions in aggregate functions functions are executed.
@@ -40,12 +40,12 @@ pub struct ExpressionExecutor {
     chain: Arc<ExpressionChain>,
     // whether to perform alias action in executor
     alias_project: bool,
-    ctx: Arc<dyn QryCtx>,
+    ctx: Arc<dyn TableContext>,
 }
 
 impl ExpressionExecutor {
     pub fn try_create(
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         description: &str,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,

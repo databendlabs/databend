@@ -39,7 +39,7 @@ use common_tracing::tracing::info;
 use common_tracing::tracing::warn;
 use uuid::Uuid;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
@@ -55,7 +55,7 @@ const OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS: Duration = Duration::from_millis(120 *
 impl FuseTable {
     pub async fn do_commit(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         catalog_name: impl AsRef<str>,
         operation_log: TableOperationLog,
         overwrite: bool,
@@ -160,7 +160,7 @@ impl FuseTable {
     #[inline]
     pub async fn try_commit(
         &self,
-        ctx: &dyn QryCtx,
+        ctx: &dyn TableContext,
         catalog_name: &str,
         operation_log: &TableOperationLog,
         overwrite: bool,
@@ -252,7 +252,7 @@ impl FuseTable {
     }
 
     pub async fn commit_to_meta_server(
-        ctx: &dyn QryCtx,
+        ctx: &dyn TableContext,
         catalog_name: &str,
         table_info: &TableInfo,
         new_snapshot_location: String,
@@ -318,7 +318,7 @@ impl FuseTable {
         Ok((seg_locs, s))
     }
 
-    async fn latest(&self, ctx: &dyn QryCtx, catalog_name: &str) -> Result<Arc<dyn Table>> {
+    async fn latest(&self, ctx: &dyn TableContext, catalog_name: &str) -> Result<Arc<dyn Table>> {
         let name = self.table_info.name.clone();
         let tid = self.table_info.ident.table_id;
         let catalog = ctx.get_catalog(catalog_name)?;
@@ -337,10 +337,10 @@ mod utils {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::sessions::query_ctx::QryCtx;
+    use crate::sessions::query_ctx::TableContext;
     #[inline]
     pub async fn abort_operations(
-        ctx: &dyn QryCtx,
+        ctx: &dyn TableContext,
         operation_log: TableOperationLog,
     ) -> Result<()> {
         let operator = ctx.get_storage_operator()?;

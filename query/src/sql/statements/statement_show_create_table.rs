@@ -21,7 +21,7 @@ use common_planners::ShowCreateTablePlan;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

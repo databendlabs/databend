@@ -37,7 +37,7 @@ use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::table_functions::string_literal;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
@@ -97,7 +97,7 @@ impl Table for ClusteringInformationTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<dyn QryCtx>,
+        _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
@@ -112,7 +112,7 @@ impl Table for ClusteringInformationTable {
 
     fn read2(
         &self,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -135,7 +135,7 @@ impl Table for ClusteringInformationTable {
 
 struct ClusteringInformationSource {
     finish: bool,
-    ctx: Arc<dyn QryCtx>,
+    ctx: Arc<dyn TableContext>,
     arg_database_name: String,
     arg_table_name: String,
     arg_cluster_keys: String,
@@ -143,7 +143,7 @@ struct ClusteringInformationSource {
 
 impl ClusteringInformationSource {
     pub fn create(
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,

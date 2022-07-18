@@ -31,7 +31,7 @@ use common_storage_cache::meta::TableSnapshot;
 use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::sessions::query_ctx::QryCtx;
+use databend_query::sessions::query_ctx::TableContext;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
@@ -49,7 +49,7 @@ async fn apply_block_pruning(
     push_down: &Option<Extras>,
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
-    let ctx: Arc<dyn QryCtx> = ctx;
+    let ctx: Arc<dyn TableContext> = ctx;
     BlockPruner::new(table_snapshot)
         .apply(&ctx, schema, push_down)
         .await

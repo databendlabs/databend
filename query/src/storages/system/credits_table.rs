@@ -21,7 +21,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;
@@ -37,7 +37,7 @@ impl SyncSystemTable for CreditsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<dyn QryCtx>) -> Result<DataBlock> {
+    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
         let names: Vec<&[u8]> = env!("DATABEND_CREDITS_NAMES")
             .split_terminator(',')
             .map(|x| x.trim().as_bytes())

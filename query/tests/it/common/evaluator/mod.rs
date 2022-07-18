@@ -23,7 +23,7 @@ use common_datavalues::Int64Type;
 use common_datavalues::PrimitiveColumn;
 use common_exception::Result;
 use databend_query::common::Evaluator;
-use databend_query::sessions::query_ctx::QryCtx;
+use databend_query::sessions::query_ctx::TableContext;
 use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::FunctionCall;

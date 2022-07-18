@@ -32,7 +32,7 @@ use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::sessions::query_ctx::QryCtx;
+use databend_query::sessions::query_ctx::TableContext;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
 use databend_query::sql::OPT_KEY_DATABASE_ID;

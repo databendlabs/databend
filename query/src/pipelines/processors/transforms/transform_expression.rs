@@ -25,7 +25,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 
 pub type ProjectionTransform = ExpressionTransformImpl<true>;
 pub type ExpressionTransform = ExpressionTransformImpl<false>;
@@ -43,7 +43,7 @@ where Self: Transform
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
-        ctx: Arc<dyn QryCtx>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<ProcessorPtr> {
         let executor = ExpressionExecutor::try_create(
             ctx,

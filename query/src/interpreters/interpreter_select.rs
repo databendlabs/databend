@@ -29,7 +29,7 @@ use crate::optimizers::Optimizers;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::pipelines::QueryPipelineBuilder;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 
 /// SelectInterpreter struct which interprets SelectPlan

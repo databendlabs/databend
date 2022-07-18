@@ -46,7 +46,7 @@ use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
-pub use common_table_context::qry_ctx::QryCtx;
+pub use common_table_context::table_context::TableContext;
 use common_tracing::tracing;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
@@ -234,7 +234,7 @@ impl QueryContext {
 }
 
 #[async_trait::async_trait]
-impl QryCtx for QueryContext {
+impl TableContext for QueryContext {
     /// Build a table instance the plan wants to operate on.
     ///
     /// A plan just contains raw information about a table or table function.

@@ -21,7 +21,7 @@ use databend_query::api::http::v1::status::status_handler;
 use databend_query::api::http::v1::status::Status;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::sessions::query_ctx::QryCtx;
+use databend_query::sessions::query_ctx::TableContext;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::PlanParser;

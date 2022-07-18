@@ -37,7 +37,7 @@ use crate::api::rpc::packets::PrecommitBlock;
 use crate::api::rpc::packets::ProgressInfo;
 use crate::api::FlightClient;
 use crate::api::InitNodesChannelPacket;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::Config;
 

@@ -29,7 +29,7 @@ use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::index::RangeFilter;
 
@@ -46,7 +46,7 @@ impl BlockPruner {
     #[tracing::instrument(level = "debug", name="block_pruner_apply", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn apply(
         &self,
-        ctx: &Arc<dyn QryCtx>,
+        ctx: &Arc<dyn TableContext>,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
     ) -> Result<Vec<(usize, BlockMeta)>> {

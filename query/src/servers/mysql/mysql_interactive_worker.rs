@@ -44,7 +44,7 @@ use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::DfParser;

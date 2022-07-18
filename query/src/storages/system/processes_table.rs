@@ -25,7 +25,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_types::UserInfo;
 
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
@@ -42,7 +42,7 @@ impl AsyncSystemTable for ProcessesTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn QryCtx>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let processes_info = ctx.get_processes_info().await;
 
         let mut processes_id = Vec::with_capacity(processes_info.len());

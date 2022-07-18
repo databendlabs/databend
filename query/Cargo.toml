@@ -60,7 +60,7 @@ common-settings = { path = "../common/settings" }
 common-storage = { path = "../common/storage" }
 common-storage-cache = { path = "../common/storage-cache" }
 common-streams = { path = "../common/streams" }
-common-table-context = { path = "../common/table-context" }
+common-table-context = { path = "../common/catalog" }
 common-tracing = { path = "../common/tracing" }
 common-users = { path = "../common/users" }
 

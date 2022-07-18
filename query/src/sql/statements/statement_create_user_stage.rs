@@ -27,7 +27,7 @@ use common_tracing::tracing;
 
 use super::parse_copy_file_format_options;
 use super::parse_uri_location;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

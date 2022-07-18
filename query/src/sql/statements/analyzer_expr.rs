@@ -40,7 +40,7 @@ use sqlparser::ast::Value;
 use sqlparser::ast::WindowSpec;
 
 use crate::procedures::ContextFunction;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;

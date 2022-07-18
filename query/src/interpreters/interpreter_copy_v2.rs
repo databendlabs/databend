@@ -32,7 +32,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipeline;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
@@ -75,7 +75,7 @@ impl CopyInterpreterV2 {
                     }
                     files_with_path
                 } else if !path.ends_with('/') {
-                    let rename_me: Arc<dyn QryCtx> = self.ctx.clone();
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     if op.object(path).is_exist().await? {
                         vec![path.to_string()]
@@ -83,7 +83,7 @@ impl CopyInterpreterV2 {
                         vec![]
                     }
                 } else {
-                    let rename_me: Arc<dyn QryCtx> = self.ctx.clone();
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     let mut list = vec![];
 

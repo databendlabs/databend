@@ -23,7 +23,7 @@ use common_tracing::tracing;
 
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]

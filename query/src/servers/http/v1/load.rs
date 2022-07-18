@@ -46,7 +46,7 @@ use crate::pipelines::processors::StreamSourceV2;
 use crate::pipelines::SourcePipeBuilder;
 use crate::servers::http::v1::multipart_format::MultipartFormat;
 use crate::servers::http::v1::multipart_format::MultipartWorker;
-use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
