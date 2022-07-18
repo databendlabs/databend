@@ -92,11 +92,6 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
                  // for all the timestamp column we will cast to int64 with microsecond precision
                 ArrowDataType::Timestamp(x, _) => {
                     let p = convert_precision_to_micros(x);
-                
-                    println!("timeunit -> {:?}", x);
-                    println!("array-> {:?}", array);
-                    println!("p-> {:?}", p);
-                    
                     let array = array
                         .as_any()
                         .downcast_ref::<PrimitiveArray<i64>>()
