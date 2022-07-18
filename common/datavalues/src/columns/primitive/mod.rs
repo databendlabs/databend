@@ -79,7 +79,7 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
                         .expect("primitive cast should be ok");
                     Self::from_arrow_array(array.as_ref())
                 }
-                
+
                 ArrowDataType::Date64 => {
                     let array = cast::cast(array, &ArrowDataType::Int32, cast_options)
                         .expect("primitive cast should be ok");
@@ -88,8 +88,8 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
 
                     Self::from_arrow_array(array.as_ref())
                 }
-                
-                 // for all the timestamp column we will cast to int64 with microsecond precision
+
+                // for all the timestamp column we will cast to int64 with microsecond precision
                 ArrowDataType::Timestamp(x, _) => {
                     let p = convert_precision_to_micros(x);
                     let array = array
@@ -100,7 +100,7 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
 
                     Self::from_arrow_array(&array)
                 }
-                
+
                 ArrowDataType::Time32(x) => {
                     let p = convert_precision_to_micros(x);
                     let array = array
@@ -108,7 +108,7 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
                         .downcast_ref::<PrimitiveArray<i32>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(array, |x|  x as i64 * p.0 / p.1, expected_arrow);
+                    let array = unary(array, |x| x as i64 * p.0 / p.1, expected_arrow);
 
                     Self::from_arrow_array(&array)
                 }
@@ -119,7 +119,7 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
                         .downcast_ref::<PrimitiveArray<i64>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(array, |x|x as i64 * p.0 / p.1, expected_arrow);
+                    let array = unary(array, |x| x as i64 * p.0 / p.1, expected_arrow);
                     Self::from_arrow_array(&array)
                 }
                 _ => unreachable!(),

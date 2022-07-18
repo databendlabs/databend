@@ -213,7 +213,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
         let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
         match custom_name.as_str() {
             "Date" => return DateType::new_impl(),
-            
+
             // OLD COMPATIBLE Behavior
             "Timestamp" => match metadata {
                 Some(meta) => {
