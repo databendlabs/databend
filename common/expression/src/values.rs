@@ -46,8 +46,12 @@ pub enum Scalar {
     EmptyArray,
     Int8(i8),
     Int16(i16),
+    Int32(i32),
+    Int64(i64),
     UInt8(u8),
     UInt16(u16),
+    UInt32(u32),
+    UInt64(u64),
     Boolean(bool),
     String(Vec<u8>),
     Array(Column),
@@ -61,8 +65,12 @@ pub enum ScalarRef<'a> {
     EmptyArray,
     Int8(i8),
     Int16(i16),
+    Int32(i32),
+    Int64(i64),
     UInt8(u8),
     UInt16(u16),
+    UInt32(u32),
+    UInt64(u64),
     Boolean(bool),
     String(&'a [u8]),
     Array(Column),
@@ -79,8 +87,12 @@ pub enum Column {
     },
     Int8(Buffer<i8>),
     Int16(Buffer<i16>),
+    Int32(Buffer<i32>),
+    Int64(Buffer<i64>),
     UInt8(Buffer<u8>),
     UInt16(Buffer<u16>),
+    UInt32(Buffer<u32>),
+    UInt64(Buffer<u64>),
     Boolean(Bitmap),
     String {
         data: Buffer<u8>,
@@ -110,8 +122,12 @@ pub enum ColumnBuilder {
     },
     Int8(Vec<i8>),
     Int16(Vec<i16>),
+    Int32(Vec<i32>),
+    Int64(Vec<i64>),
     UInt8(Vec<u8>),
     UInt16(Vec<u16>),
+    UInt32(Vec<u32>),
+    UInt64(Vec<u64>),
     Boolean(MutableBitmap),
     String {
         data: Vec<u8>,
@@ -183,8 +199,12 @@ impl Scalar {
             Scalar::EmptyArray => ScalarRef::EmptyArray,
             Scalar::Int8(i) => ScalarRef::Int8(*i),
             Scalar::Int16(i) => ScalarRef::Int16(*i),
+            Scalar::Int32(i) => ScalarRef::Int32(*i),
+            Scalar::Int64(i) => ScalarRef::Int64(*i),
             Scalar::UInt8(i) => ScalarRef::UInt8(*i),
             Scalar::UInt16(i) => ScalarRef::UInt16(*i),
+            Scalar::UInt32(i) => ScalarRef::UInt32(*i),
+            Scalar::UInt64(i) => ScalarRef::UInt64(*i),
             Scalar::Boolean(b) => ScalarRef::Boolean(*b),
             Scalar::String(s) => ScalarRef::String(s.as_slice()),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
@@ -200,8 +220,12 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::EmptyArray => Scalar::EmptyArray,
             ScalarRef::Int8(i) => Scalar::Int8(*i),
             ScalarRef::Int16(i) => Scalar::Int16(*i),
+            ScalarRef::Int32(i) => Scalar::Int32(*i),
+            ScalarRef::Int64(i) => Scalar::Int64(*i),
             ScalarRef::UInt8(i) => Scalar::UInt8(*i),
             ScalarRef::UInt16(i) => Scalar::UInt16(*i),
+            ScalarRef::UInt32(i) => Scalar::UInt32(*i),
+            ScalarRef::UInt64(i) => Scalar::UInt64(*i),
             ScalarRef::Boolean(b) => Scalar::Boolean(*b),
             ScalarRef::String(s) => Scalar::String(s.to_vec()),
             ScalarRef::Array(col) => Scalar::Array(col.clone()),
@@ -217,8 +241,12 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::EmptyArray => ColumnBuilder::EmptyArray { len: n },
             ScalarRef::Int8(i) => ColumnBuilder::Int8(vec![*i; n]),
             ScalarRef::Int16(i) => ColumnBuilder::Int16(vec![*i; n]),
+            ScalarRef::Int32(i) => ColumnBuilder::Int32(vec![*i; n]),
+            ScalarRef::Int64(i) => ColumnBuilder::Int64(vec![*i; n]),
             ScalarRef::UInt8(i) => ColumnBuilder::UInt8(vec![*i; n]),
             ScalarRef::UInt16(i) => ColumnBuilder::UInt16(vec![*i; n]),
+            ScalarRef::UInt32(i) => ColumnBuilder::UInt32(vec![*i; n]),
+            ScalarRef::UInt64(i) => ColumnBuilder::UInt64(vec![*i; n]),
             ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
             ScalarRef::String(s) => {
                 let len = s.len();
@@ -261,8 +289,12 @@ impl Column {
             Column::EmptyArray { len } => *len,
             Column::Int8(col) => col.len(),
             Column::Int16(col) => col.len(),
+            Column::Int32(col) => col.len(),
+            Column::Int64(col) => col.len(),
             Column::UInt8(col) => col.len(),
             Column::UInt16(col) => col.len(),
+            Column::UInt32(col) => col.len(),
+            Column::UInt64(col) => col.len(),
             Column::Boolean(col) => col.len(),
             Column::String { data: _, offsets } => offsets.len() - 1,
             Column::Array { array: _, offsets } => offsets.len() - 1,
@@ -280,8 +312,12 @@ impl Column {
             Column::EmptyArray { .. } => Some(ScalarRef::EmptyArray),
             Column::Int8(col) => Some(ScalarRef::Int8(col.get(index).cloned()?)),
             Column::Int16(col) => Some(ScalarRef::Int16(col.get(index).cloned()?)),
+            Column::Int32(col) => Some(ScalarRef::Int32(col.get(index).cloned()?)),
+            Column::Int64(col) => Some(ScalarRef::Int64(col.get(index).cloned()?)),
             Column::UInt8(col) => Some(ScalarRef::UInt8(col.get(index).cloned()?)),
             Column::UInt16(col) => Some(ScalarRef::UInt16(col.get(index).cloned()?)),
+            Column::UInt32(col) => Some(ScalarRef::UInt32(col.get(index).cloned()?)),
+            Column::UInt64(col) => Some(ScalarRef::UInt64(col.get(index).cloned()?)),
             Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
             Column::String { data, offsets } => {
                 if offsets.len() > index + 1 {
@@ -335,11 +371,23 @@ impl Column {
             Column::Int16(col) => {
                 Column::Int16(col.clone().slice(range.start, range.end - range.start))
             }
+            Column::Int32(col) => {
+                Column::Int32(col.clone().slice(range.start, range.end - range.start))
+            }
+            Column::Int64(col) => {
+                Column::Int64(col.clone().slice(range.start, range.end - range.start))
+            }
             Column::UInt8(col) => {
                 Column::UInt8(col.clone().slice(range.start, range.end - range.start))
             }
             Column::UInt16(col) => {
                 Column::UInt16(col.clone().slice(range.start, range.end - range.start))
+            }
+            Column::UInt32(col) => {
+                Column::UInt32(col.clone().slice(range.start, range.end - range.start))
+            }
+            Column::UInt64(col) => {
+                Column::UInt64(col.clone().slice(range.start, range.end - range.start))
             }
             Column::Boolean(col) => {
                 Column::Boolean(col.clone().slice(range.start, range.end - range.start))
@@ -395,8 +443,12 @@ impl ColumnBuilder {
             Column::EmptyArray { len } => ColumnBuilder::EmptyArray { len },
             Column::Int8(col) => ColumnBuilder::Int8(buffer_into_mut(col)),
             Column::Int16(col) => ColumnBuilder::Int16(buffer_into_mut(col)),
+            Column::Int32(col) => ColumnBuilder::Int32(buffer_into_mut(col)),
+            Column::Int64(col) => ColumnBuilder::Int64(buffer_into_mut(col)),
             Column::UInt8(col) => ColumnBuilder::UInt8(buffer_into_mut(col)),
             Column::UInt16(col) => ColumnBuilder::UInt16(buffer_into_mut(col)),
+            Column::UInt32(col) => ColumnBuilder::UInt32(buffer_into_mut(col)),
+            Column::UInt64(col) => ColumnBuilder::UInt64(buffer_into_mut(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
             Column::String { data, offsets } => ColumnBuilder::String {
                 data: buffer_into_mut(data),
@@ -426,8 +478,12 @@ impl ColumnBuilder {
             ColumnBuilder::EmptyArray { len } => *len,
             ColumnBuilder::Int8(col) => col.len(),
             ColumnBuilder::Int16(col) => col.len(),
+            ColumnBuilder::Int32(col) => col.len(),
+            ColumnBuilder::Int64(col) => col.len(),
             ColumnBuilder::UInt8(col) => col.len(),
             ColumnBuilder::UInt16(col) => col.len(),
+            ColumnBuilder::UInt32(col) => col.len(),
+            ColumnBuilder::UInt64(col) => col.len(),
             ColumnBuilder::Boolean(col) => col.len(),
             ColumnBuilder::String { data: _, offsets } => offsets.len() - 1,
             ColumnBuilder::Array { array: _, offsets } => offsets.len() - 1,
@@ -454,8 +510,12 @@ impl ColumnBuilder {
             }
             DataType::UInt8 => ColumnBuilder::UInt8(Vec::with_capacity(capacity)),
             DataType::UInt16 => ColumnBuilder::UInt16(Vec::with_capacity(capacity)),
+            DataType::UInt32 => ColumnBuilder::UInt32(Vec::with_capacity(capacity)),
+            DataType::UInt64 => ColumnBuilder::UInt64(Vec::with_capacity(capacity)),
             DataType::Int8 => ColumnBuilder::Int8(Vec::with_capacity(capacity)),
             DataType::Int16 => ColumnBuilder::Int16(Vec::with_capacity(capacity)),
+            DataType::Int32 => ColumnBuilder::Int32(Vec::with_capacity(capacity)),
+            DataType::Int64 => ColumnBuilder::Int64(Vec::with_capacity(capacity)),
             DataType::Nullable(ty) => ColumnBuilder::Nullable {
                 column: Box::new(Self::with_capacity(ty, capacity)),
                 validity: MutableBitmap::with_capacity(capacity),
@@ -523,8 +583,12 @@ impl ColumnBuilder {
             ColumnBuilder::EmptyArray { len } => *len += 1,
             ColumnBuilder::Int8(col) => col.push(0),
             ColumnBuilder::Int16(col) => col.push(0),
+            ColumnBuilder::Int32(col) => col.push(0),
+            ColumnBuilder::Int64(col) => col.push(0),
             ColumnBuilder::UInt8(col) => col.push(0),
             ColumnBuilder::UInt16(col) => col.push(0),
+            ColumnBuilder::UInt32(col) => col.push(0),
+            ColumnBuilder::UInt64(col) => col.push(0),
             ColumnBuilder::Boolean(col) => col.push(false),
             ColumnBuilder::String { data, offsets } => {
                 offsets.push(data.len() as u64);
@@ -623,8 +687,12 @@ impl ColumnBuilder {
             ColumnBuilder::EmptyArray { len } => Column::EmptyArray { len },
             ColumnBuilder::Int8(builder) => Column::Int8(builder.into()),
             ColumnBuilder::Int16(builder) => Column::Int16(builder.into()),
+            ColumnBuilder::Int32(builder) => Column::Int32(builder.into()),
+            ColumnBuilder::Int64(builder) => Column::Int64(builder.into()),
             ColumnBuilder::UInt8(builder) => Column::UInt8(builder.into()),
             ColumnBuilder::UInt16(builder) => Column::UInt16(builder.into()),
+            ColumnBuilder::UInt32(builder) => Column::UInt32(builder.into()),
+            ColumnBuilder::UInt64(builder) => Column::UInt64(builder.into()),
             ColumnBuilder::Boolean(builder) => Column::Boolean(builder.into()),
             ColumnBuilder::String { data, offsets } => Column::String {
                 data: data.into(),
@@ -652,8 +720,12 @@ impl ColumnBuilder {
             ColumnBuilder::EmptyArray { .. } => Scalar::EmptyArray,
             ColumnBuilder::Int8(builder) => Scalar::Int8(builder[0]),
             ColumnBuilder::Int16(builder) => Scalar::Int16(builder[0]),
+            ColumnBuilder::Int32(builder) => Scalar::Int32(builder[0]),
+            ColumnBuilder::Int64(builder) => Scalar::Int64(builder[0]),
             ColumnBuilder::UInt8(builder) => Scalar::UInt8(builder[0]),
             ColumnBuilder::UInt16(builder) => Scalar::UInt16(builder[0]),
+            ColumnBuilder::UInt32(builder) => Scalar::UInt32(builder[0]),
+            ColumnBuilder::UInt64(builder) => Scalar::UInt64(builder[0]),
             ColumnBuilder::Boolean(builder) => Scalar::Boolean(builder.get(0)),
             ColumnBuilder::String { data, offsets } => {
                 Scalar::String(data[(offsets[0] as usize)..(offsets[1] as usize)].to_vec())

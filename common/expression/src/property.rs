@@ -103,8 +103,12 @@ impl Domain {
             DataType::EmptyArray => Domain::Array(None),
             DataType::Int8 => Domain::Int(NumberType::<i8>::full_domain(generics)),
             DataType::Int16 => Domain::Int(NumberType::<i16>::full_domain(generics)),
+            DataType::Int32 => Domain::Int(NumberType::<i32>::full_domain(generics)),
+            DataType::Int64 => Domain::Int(NumberType::<i64>::full_domain(generics)),
             DataType::UInt8 => Domain::UInt(NumberType::<u8>::full_domain(generics)),
             DataType::UInt16 => Domain::UInt(NumberType::<u16>::full_domain(generics)),
+            DataType::UInt32 => Domain::UInt(NumberType::<u32>::full_domain(generics)),
+            DataType::UInt64 => Domain::UInt(NumberType::<u64>::full_domain(generics)),
             DataType::Boolean => Domain::Boolean(BooleanType::full_domain(generics)),
             DataType::String => Domain::String(StringType::full_domain(generics)),
             DataType::Nullable(ty) => Domain::Nullable(NullableDomain {
